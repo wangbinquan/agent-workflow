@@ -1547,10 +1547,11 @@ test('WF-51 工作流权限面板：授权让对方看得见但改不动、移�
       carolPage.getByTestId(`workflow-card-${wf.name}`),
       '授权之后对方的列表里还是没有这张卡片 ⇒ 授权等于没做，用户会反复重授',
     ).toBeVisible({ timeout: 60_000 })
-    expect(
-      await badgeChips(carolPage, wf.name),
-      '别人共享给我的工作流不标出归属人 ⇒ 我看到一份来路不明的东西，出问题也不知道找谁',
-    ).toEqual(['Private', alice.username])
+    await expect
+      .poll(() => badgeChips(carolPage, wf.name), {
+        message: '别人共享给我的工作流不标出归属人 ⇒ 我看到一份来路不明的东西，出问题也不知道找谁',
+      })
+      .toEqual(['Private', alice.username])
 
     await carolPage.goto(`${daemon.baseUrl}/workflows/${wf.id}`)
     await expect(

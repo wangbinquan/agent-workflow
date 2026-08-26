@@ -242,7 +242,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
     sourceLaneId: string
     grabOffsetY: number
     laneHeight: number
-    moved: boolean
+    mapTop: number
     slotTops: number[]
     slotBoundaries: number[]
   } | null>(null)
@@ -378,12 +378,22 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
   const updatePointerDrag = (sourceLaneId: string, clientY: number) => {
     const session = pointerDrag.current
     if (session === null || session.sourceLaneId !== sourceLaneId) return
-    session.moved = true
+    // Reordering tall lanes can make the browser's scroll anchoring move the
+    // containing page between pointer events. Slot geometry was captured in
+    // viewport coordinates, so carry the map's viewport shift into those
+    // coordinates; otherwise the dragged lane jumps away from the pointer by
+    // exactly the scroll adjustment.
+    const currentMapTop = mapElement.current?.getBoundingClientRect().top ?? session.mapTop
+    const viewportShiftY = currentMapTop - session.mapTop
     const draggedCenterY = clientY - session.grabOffsetY + session.laneHeight / 2
-    let targetIndex = session.slotBoundaries.findIndex((boundary) => draggedCenterY < boundary)
+    let targetIndex = session.slotBoundaries.findIndex(
+      (boundary) => draggedCenterY < boundary + viewportShiftY,
+    )
     if (targetIndex < 0) targetIndex = session.slotTops.length - 1
     const nextTranslateY =
-      clientY - session.grabOffsetY - (session.slotTops[targetIndex] ?? session.slotTops[0] ?? 0)
+      clientY -
+      session.grabOffsetY -
+      ((session.slotTops[targetIndex] ?? session.slotTops[0] ?? 0) + viewportShiftY)
     dragTranslateYRef.current = nextTranslateY
     setDragTranslateY(nextTranslateY)
     previewPriorityIndex(sourceLaneId, targetIndex)
@@ -505,7 +515,10 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
         const session = pointerDrag.current
         if (session === null || session.pointerId !== event.pointerId) return
         event.preventDefault()
-        if (!session.moved) updatePointerDrag(session.sourceLaneId, event.clientY)
+        // Pointer-move delivery may be coalesced while keyed lanes are being
+        // reordered. The release coordinate is authoritative for the committed
+        // slot even when the final intermediate move was not delivered.
+        updatePointerDrag(session.sourceLaneId, event.clientY)
         finishPriorityDrag(true)
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId)
@@ -963,7 +976,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 sourceLaneId: lane.laneId,
                                 grabOffsetY: event.clientY - sourceRect.top,
                                 laneHeight: sourceRect.height,
-                                moved: false,
+                                mapTop: mapElement.current?.getBoundingClientRect().top ?? 0,
                                 slotTops: slotRects.map((rect) => rect.top),
                                 slotBoundaries: slotCenters
                                   .slice(0, -1)

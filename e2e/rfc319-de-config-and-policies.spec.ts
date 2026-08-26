@@ -1282,8 +1282,7 @@ test('RFC-319 DE-38: 指派按 scope 分组呈现、编辑钉住已发布修订�
 
   // 分组：三级解析的顺序（全局 < 仓库组 < 仓库）在页面上体现为分组的呈现顺序。
   // 分组若乱了或塌成一张表，用户读不出「哪一条会赢」。
-  const sectionHeadings = await page.locator('.page__section h3').allInnerTexts()
-  expect(sectionHeadings.map((text) => text.trim())).toEqual(['Global default', 'Repository'])
+  await expect(page.locator('.page__section h3')).toHaveText(['Global default', 'Repository'])
   const repoTable = page.getByTestId('assignments-repository')
   const globalTable = page.getByTestId('assignments-global-default')
   await expect(repoTable.locator('tbody tr')).toHaveCount(2)

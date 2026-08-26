@@ -539,13 +539,20 @@ test('RFC-319 IAM-28: /users 的搜索与状态/角色筛选真的在过滤，�
     (await rows.locator('.user-directory__identity-meta code').allInnerTexts())
       .map((text) => text.trim())
       .sort()
+  const expectUsernames = async (expected: string[], message: string): Promise<void> => {
+    // A route change can preserve the previous row while the replacement query
+    // is in flight, then briefly unmount it before the new row lands. A count
+    // alone is therefore not a receipt for the identities it is meant to prove.
+    await expect.poll(usernamesOf, { message }).toEqual([...expected].sort())
+  }
 
   // ① 搜索：只剩匹配的四行，且**条件写进了 URL**。写不进 URL 的筛选是不可分享、
   //    刷新即丢的——用户把链接发给同事，对方看到的是没筛过的全量目录。
   await search.fill(tag)
   await expect(rows).toHaveCount(4)
-  expect(await usernamesOf()).toEqual(
-    [adminUser, plainUser, disabledUser, invitedUser].map((u) => `@${u.username}`).sort(),
+  await expectUsernames(
+    [adminUser, plainUser, disabledUser, invitedUser].map((u) => `@${u.username}`),
+    '搜索结果行数对了，但四个账号身份还没收敛到目标集合',
   )
   await expect
     .poll(() => new URL(page.url()).searchParams.get('q'), {
@@ -566,7 +573,7 @@ test('RFC-319 IAM-28: /users 的搜索与状态/角色筛选真的在过滤，�
     })
     .toBe('admin')
   await expect(rows).toHaveCount(1)
-  expect(await usernamesOf()).toEqual([`@${adminUser.username}`])
+  await expectUsernames([`@${adminUser.username}`], 'admin 角色筛选没有收敛到管理员账号')
 
   // ③ 后退键回到上一档筛选。角色 / 状态筛选是 push
   //    （packages/frontend/src/routes/users.tsx:346-347 传 replace=false），
@@ -584,16 +591,19 @@ test('RFC-319 IAM-28: /users 的搜索与状态/角色筛选真的在过滤，�
   await page.getByTestId('users-status-filter-disabled').click()
   await expect.poll(() => new URL(page.url()).searchParams.get('status')).toBe('disabled')
   await expect(rows).toHaveCount(1)
-  expect(await usernamesOf()).toEqual([`@${disabledUser.username}`])
+  await expectUsernames([`@${disabledUser.username}`], 'disabled 状态筛选没有收敛到停用账号')
   await page.getByTestId('users-status-filter-invited').click()
   await expect(rows).toHaveCount(1)
-  expect(
-    await usernamesOf(),
+  await expectUsernames(
+    [`@${invitedUser.username}`],
     '「等待首次登录」筛出来的不是那个没有密码的账号 ⇒ 管理员分不清谁还没进过门',
-  ).toEqual([`@${invitedUser.username}`])
+  )
   await page.getByTestId('users-status-filter-active').click()
   await expect(rows).toHaveCount(2)
-  expect(await usernamesOf()).toEqual([`@${adminUser.username}`, `@${plainUser.username}`].sort())
+  await expectUsernames(
+    [`@${adminUser.username}`, `@${plainUser.username}`],
+    'active 状态筛选没有收敛到两个活跃账号',
+  )
 
   // ⑤ 筛空：必须是**带出路的空态**，不是一个什么都没有的白屏。
   //    白屏时用户无从判断「是没有人，还是我筛错了」。
@@ -614,7 +624,10 @@ test('RFC-319 IAM-28: /users 的搜索与状态/角色筛选真的在过滤，�
   //    只写不读的话，同事收到的链接打开还是全量目录。
   await page.goto(`${daemon.baseUrl}/users?q=${tag}&status=disabled`)
   await expect(rows).toHaveCount(1)
-  expect(await usernamesOf()).toEqual([`@${disabledUser.username}`])
+  await expectUsernames(
+    [`@${disabledUser.username}`],
+    '深链的行数先到 1，但账号身份没有收敛到 URL 指定的 disabled 用户',
+  )
   await expect(search, '深链没有把搜索词回填进输入框 ⇒ 用户看到的结果没有任何解释').toHaveValue(tag)
   await expect(page.getByTestId('users-status-filter-disabled')).toHaveAttribute(
     'aria-checked',

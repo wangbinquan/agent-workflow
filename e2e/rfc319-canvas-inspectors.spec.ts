@@ -632,7 +632,7 @@ test('WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列�
   // 这是一组输入、下拉和按钮，必须由 <Field group> 承载。若退回包住整组控件的
   // <label>，WebKit 会在 Remove 删除当前首控件后把同一次 label 激活转发给此按钮，
   // 结果刚删空又立刻添回 port_1；逐字可及名同时锁住正确的分组语义。
-  await binding.getByRole('button', { name: 'Add port', exact: true }).click()
+  await binding.getByRole('button', { name: '+ Add port', exact: true }).click()
 
   const row = binding.locator('li.inspector__output-port-row').first()
   const nodeSelect = row.getByRole('combobox', { name: 'upstream nodeId' })

@@ -406,7 +406,18 @@ test('RFC-319 UX-32: 实时通道断掉后自己接回来，并补上断线那�
       () => (window.__rfc319Sockets ?? []).filter((s) => s.url.includes('/ws/memories')).length,
     )
 
+  const daemonOrigin = new URL(daemon.baseUrl).origin
+  const initialCandidates = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return (
+      response.request().method() === 'GET' &&
+      url.origin === daemonOrigin &&
+      url.pathname === '/api/memories' &&
+      url.searchParams.get('status') === 'candidate'
+    )
+  })
   await page.goto(`${daemon.baseUrl}/memory?tab=approval-queue`)
+  expect((await initialCandidates).ok(), '候选记忆首屏请求失败，断线窗口的基线不成立').toBe(true)
   await expect(page.getByTestId('memory-section-panel')).toBeVisible({ timeout: 30_000 })
   await expect.poll(memorySockets, { message: '页面根本没有建立实时通道', timeout: 30_000 }).toBe(1)
 

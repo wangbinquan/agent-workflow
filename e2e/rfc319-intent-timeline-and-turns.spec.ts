@@ -541,8 +541,10 @@ test('RFC-319 INTENT-16: 取消生成——服务端轮次落成 intent-run-abor
   const runningTurn = page.getByTestId('intent-turn-running')
   await expect(runningTurn, '在跑的轮次不进时间线 ⇒ 用户看不到「它正在做」').toHaveCount(1)
   await expect(
-    runningTurn.getByTestId('loading-state'),
-    '在跑轮次自己的加载状态没有显示',
+    page.getByTestId('intent-build-workspace').getByTestId('loading-state').filter({
+      hasText: 'Generating…',
+    }),
+    '生成中的工作区没有显示自己的加载状态',
   ).toBeVisible()
   const cancel = page.getByRole('button', { name: 'Cancel generation' })
   await expect(cancel, '生成中不给取消入口 ⇒ 一轮跑错只能干等到超时').toBeVisible()
@@ -1232,11 +1234,13 @@ test('RFC-319 INTENT-X4: 翻历史时新 turn 不抢滚动位置，「回到最�
       return card.top < view.bottom && card.bottom > view.top
     })
 
+  await expect
+    .poll(async () => (await metrics()).scrollTop, {
+      timeout: 15_000,
+      message: '时间线没有完成初始贴底，或根本不需要滚动 ⇒ 「回到最新」的前提没成立',
+    })
+    .toBeGreaterThan(0)
   const initial = await metrics()
-  expect(
-    initial.scrollTop,
-    '时间线根本不需要滚动 ⇒ 这条用例的前提没成立（回到最新按钮永远不会出现）',
-  ).toBeGreaterThan(0)
   expect(
     initial.distanceToBottom,
     '打开会话没有停在最新一轮 ⇒ 用户每次进来都要自己滚到底',

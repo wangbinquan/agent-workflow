@@ -551,6 +551,10 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         () => task(lineage.task.id),
         (row) => row.status === 'done',
         `manually retried task ${lineage.task.id} done`,
+        // The retry receipt proves the driver released; a saturated macOS
+        // WebKit worker can still wait behind other runnable tasks before the
+        // fresh process owns a slot. Keep the eventual state exact and bounded.
+        60_000,
       )
       expect(recovered.status).toBe('done')
       const recoveredData = await nodeRuns(lineage.task.id)

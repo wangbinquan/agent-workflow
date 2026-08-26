@@ -332,10 +332,35 @@ async function waitForCameraSettled(page: Page): Promise<void> {
     .toBe(true)
 }
 
+/**
+ * The app shell and canvas rail finish their responsive layout on separate
+ * frames. Wait until the control's real click point belongs to the control;
+ * a persistent overlap still fails with the same product-level contract.
+ */
+async function waitForCanvasControlReachable(page: Page, testId: string): Promise<void> {
+  const control = page.getByTestId(testId)
+  await expect(control).toBeAttached()
+  await expect
+    .poll(
+      () =>
+        control.evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+          return hit !== null && (hit === element || element.contains(hit))
+        }),
+      {
+        message: `画布控件 [data-testid=${testId}] 的点击中心一直被其他界面遮挡`,
+        intervals: [120, 120, 120, 120, 120, 120, 120, 120],
+      },
+    )
+    .toBe(true)
+}
+
 /** 取全图视角，让每个节点都进入可点区域（画布是 transform 视口，视口外点不到）。 */
 async function showFullGraph(page: Page): Promise<void> {
   const canvas = page.locator('.workflow-canvas')
   if ((await canvas.getAttribute('data-camera-mode')) !== 'overview') {
+    await waitForCanvasControlReachable(page, 'workflow-camera-overview')
     await clickCanvasControl(page, 'workflow-camera-overview')
   }
   await expect(canvas).toHaveAttribute('data-camera-mode', 'overview')

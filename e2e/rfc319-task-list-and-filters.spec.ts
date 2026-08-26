@@ -99,6 +99,13 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { initGitRepo, repoRemoteUrl, runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
+declare global {
+  interface Window {
+    /** TASK-16: page-clock arrival times for each incremental search input. */
+    __rfc319TaskSearchInputTimes?: number[]
+  }
+}
+
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(240_000)
 
@@ -793,13 +800,26 @@ test('RFC-319 TASK-16：四个视图页签的计数与行数一致、搜索去�
   //   ① 那样等于把生产常量抄进测试，改常量的变异咬不中；
   //   ② 慢机器上「等够 350ms」也不代表导航已经发生。
   // 改成两条互补的约束：
-  //   · 上界（数量）：逐字符敲完 11 个字母，发出去的带 q 的目录查询必须**远少于**击键数。
-  //     去抖被删掉时每一击都会 navigate → 一次查询，11 次；留着时塌成 1～2 次。
-  //     阈值取 4，给慢机器留出多刷一两次的余量，同时把「11」牢牢挡在外面。
+  //   · 上界（数量）：逐字符敲完 11 个字母，发出去的带 q 的目录查询不得超过页面时钟
+  //     实际观察到的输入 burst 数。去抖被删掉时每一击都会 navigate → 一次查询，11 次；
+  //     留着时，同一个 350ms burst 塌成一次。按页面时钟分 burst，避免把 hosted runner
+  //     在两次 Playwright 按键之间卡住 350ms 误判成产品逐键查询。
   //   · 上界（时延）：敲完之后 URL 必须在 3 秒内收敛。去抖被调成 30 秒之类的值时，
   //     用户打完字盯着旧结果看，这条会红。
   const before = catalogRequests.length
   const search = page.getByTestId('tasks-search')
+  await page.evaluate(() => {
+    window.__rfc319TaskSearchInputTimes = []
+    document.addEventListener(
+      'input',
+      (event) => {
+        if ((event.target as HTMLElement | null)?.dataset.testid === 'tasks-search') {
+          window.__rfc319TaskSearchInputTimes?.push(performance.now())
+        }
+      },
+      true,
+    )
+  })
   await search.click()
   await search.pressSequentially('quicksilver', { delay: 10 })
   await expect(
@@ -822,12 +842,20 @@ test('RFC-319 TASK-16：四个视图页签的计数与行数一致、搜索去�
   ).toHaveText('1')
 
   const typedQueries = catalogRequests.slice(before).filter((qs) => qs.includes('q='))
+  const inputTimes = await page.evaluate(() => window.__rfc319TaskSearchInputTimes ?? [])
+  expect(inputTimes, '11 次输入事件没有逐次到达页面 ⇒ 数查询请求的前提不成立').toHaveLength(11)
+  // On a saturated hosted macOS runner Playwright can pause longer than the
+  // production 350ms window between two nominally 10ms key presses. Each such
+  // observed user-visible pause legitimately closes one debounce burst; only
+  // requests beyond those page-clock bursts indicate per-keystroke querying.
+  const distinctBursts =
+    1 + inputTimes.slice(1).filter((time, index) => time - inputTimes[index]! >= 350).length
   expect(
     typedQueries.length,
     `逐字符敲入 11 个字母发出了 ${typedQueries.length} 次带 q 的目录查询` +
       `（${JSON.stringify(typedQueries)}）⇒ 去抖没起作用：每一次击键都在打一次全表检索，` +
       '列表页的目标尺度是十万任务，这会把 daemon 拖垮',
-  ).toBeLessThanOrEqual(4)
+  ).toBeLessThanOrEqual(distinctBursts)
   expect(
     typedQueries.length,
     '敲完整个词一次带 q 的查询都没发出 ⇒ 搜索结果不可能是真的，界面在拿旧数据糊弄用户',

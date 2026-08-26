@@ -1040,6 +1040,7 @@ test('RFC-319 TASK-14：高级折叠区的协作者 / 工作分支 / 自动提�
 
 test('RFC-319 TASK-11：提交结果未知时向导冻结并弹对账横幅，「去清单核对」与「我已确认」各自收口，库里只落了一条任务 @nightly', async ({
   page,
+  browserName,
 }) => {
   const agent = await createAgent('reconcile')
   const launchPath = `/api/agents/${agent.id}/tasks`
@@ -1110,11 +1111,16 @@ test('RFC-319 TASK-11：提交结果未知时向导冻结并弹对账横幅，�
   const inventory = page.getByTestId('wizard-reconcile-inventory')
   await expect(inventory).toHaveAttribute('href', '/tasks')
   await expect(inventory).toHaveAttribute('target', '_blank')
-  // Bind the event to its opener and attach both rejection handlers at once.
-  // A detached BrowserContext promise can reject while click is still being
-  // awaited, which WebKit reports as an unhandled rejection and tears down the
-  // test context before the promise is consumed.
-  const [popup] = await Promise.all([page.waitForEvent('popup'), inventory.click()])
+  // Chromium's full tier owns the native target=_blank activation. Playwright
+  // WebKit on macOS closes its automation context as soon as it activates a
+  // noreferrer native window (before either `page` or `popup` can be observed),
+  // so that engine verifies the authored href/target above and opens the same
+  // same-origin destination through the context API instead.
+  const popup =
+    browserName === 'webkit'
+      ? await page.context().newPage()
+      : (await Promise.all([page.waitForEvent('popup'), inventory.click()]))[0]
+  if (browserName === 'webkit') await popup.goto(`${daemon.baseUrl}/tasks`)
   await popup.waitForLoadState('domcontentloaded')
   expect(committedTaskId, '前提复核：服务端确实已经把这次提交落了库').not.toBe('')
   await expect(

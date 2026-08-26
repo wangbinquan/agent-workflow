@@ -849,10 +849,9 @@ async function runComplexCameraScenario(
     const focusTarget = page.locator('.react-flow__node[data-id="agent_01"]')
     await clickCanvasControl(page, 'workflow-camera-readable')
     await waitForZoom(page, (zoom) => zoom >= READABLE_MIN_ZOOM, 'readable before selecting')
-    // A normal physical node click already opened the Inspector near the start of this scenario.
-    // Here selection is only the precondition for the camera command, so dispatch the same
-    // bubbling handler without making the assertion depend on a late composed hit-test.
-    await focusTarget.dispatchEvent('click')
+    // Select through the same physical card-header target a user clicks. A synthetic click on
+    // the React Flow wrapper does not traverse WebKit's pointer selection path reliably.
+    await focusTarget.locator('.canvas-node__header').click()
     await expect(focusTarget).toHaveClass(/selected/)
     // 选中本身就会带来一次 readable-focus（前面几段已锁）。先退回 overview，
     // 这样「点按钮之后缩放上去」才是这个按钮的功劳，而不是选中的副作用。

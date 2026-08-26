@@ -557,8 +557,16 @@ export function CreateTokenDialog({
               type="button"
               className="btn btn--sm"
               data-testid="token-copy"
-              onClick={() => {
-                void copyText(created.token).then((ok) => setCopied(ok ? 'ok' : 'failed'))
+              onClick={(event) => {
+                // macOS WebKit does not focus a button on mouse activation. The
+                // insecure-context fallback must focus a temporary textarea,
+                // so explicitly return to the action the user invoked instead
+                // of relying on document.activeElement having been the button.
+                const trigger = event.currentTarget
+                void copyText(created.token).then((ok) => {
+                  setCopied(ok ? 'ok' : 'failed')
+                  if (trigger.isConnected) trigger.focus({ preventScroll: true })
+                })
               }}
             >
               {t('account.copy')}

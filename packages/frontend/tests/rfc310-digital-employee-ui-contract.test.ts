@@ -285,7 +285,12 @@ describe('RFC-310 Digital Employee OS information architecture', () => {
     expect(graph).toContain('slotBoundaries')
     expect(graph).toContain('onPointerMove')
     expect(graph).toContain('updatePointerDrag(session.sourceLaneId, event.clientY)')
+    expect(graph).toContain('const viewportShiftY = currentMapTop - session.mapTop')
+    expect(graph).toContain('boundary + viewportShiftY')
     expect(graph).toContain('onPointerUp')
+    expect(graph).not.toContain(
+      'if (!session.moved) updatePointerDrag(session.sourceLaneId, event.clientY)',
+    )
     expect(graph).toContain('mapElement.current?.setPointerCapture')
     expect(graph).toContain('for (const animation of element?.getAnimations() ?? [])')
     expect(graph).toContain('animation.cancel()')

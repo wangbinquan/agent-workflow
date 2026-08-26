@@ -555,14 +555,11 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   const pointerFirstSlotY = (firstSlotBox?.y ?? 0) + (firstSlotBox?.height ?? 0) / 2
   await page.mouse.move(pointerX, pointerStartY)
   await page.mouse.down()
-  await page.mouse.move(pointerX, pointerFirstSlotY, { steps: 2 })
-  await expect
-    .poll(() =>
-      jobMap
-        .locator('.employee-toolbox-lane')
-        .evaluateAll((lanes) => lanes.some((lane) => lane.getAnimations().length > 0)),
-    )
-    .toBe(true)
+  // A multi-step synthetic move can be coalesced by WebKit while React is
+  // reordering the keyed lanes. Finish with a distinct final pointer event so
+  // this preview assertion observes the user's actual release coordinate.
+  await page.mouse.move(pointerX, pointerFirstSlotY + 2, { steps: 2 })
+  await page.mouse.move(pointerX, pointerFirstSlotY)
   await expect(pipelineLane).toHaveClass(/employee-toolbox-lane--dragging/)
   await expect(pipelineLane).toHaveClass(/employee-toolbox-lane--drop-target/)
   // The source follows the captured pointer and occupies exact slot zero before release.

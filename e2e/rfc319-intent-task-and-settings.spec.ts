@@ -78,7 +78,8 @@
 //   * e2e/rfc319-intent-create-and-list.spec.ts —— INTENT-05 守的是**创建**进行中的
 //     同一族守卫；X6 守的是**提交**进行中的那一份（两处各有自己的 pending 判据）。
 
-import { readFileSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
@@ -984,73 +985,89 @@ test.describe('RFC-319 intent', () => {
   test('RFC-319 INTENT-46: 别处发生的会话变化经 /ws/intent-sessions 推到已经打开的列表页——不刷新就出现、不刷新就改状态 @nightly', async ({
     page,
   }) => {
-    await primeToken(page, daemon)
-    await page.goto(`${daemon.baseUrl}/intent`)
-    await expect(
-      page.getByRole('heading', { name: 'Recent sessions', exact: true }),
-      '/intent 连「最近会话」这一栏都没渲染出来',
-    ).toBeVisible({ timeout: 30_000 })
-    // 列表首帧必须先落定：不等它，后面「新卡片出现」可能只是首屏数据姗姗来迟。
-    await expect(page.locator('.intent-recent__grid, .empty-state')).toBeVisible({
-      timeout: 30_000,
-    })
+    const holdDir = mkdtempSync(join(tmpdir(), 'aw-rfc319-intent46-'))
+    const holdFile = join(holdDir, 'turn.hold')
+    writeFileSync(holdFile, 'held')
+    let realtimeDaemon: DaemonHandle | undefined
+    try {
+      realtimeDaemon = await startDaemon({
+        stubMode: 'intent',
+        extraEnv: { STUB_INTENT_HOLD_FILE: holdFile },
+      })
+      await primeToken(page, realtimeDaemon)
+      await page.goto(`${realtimeDaemon.baseUrl}/intent`)
+      await expect(
+        page.getByRole('heading', { name: 'Recent sessions', exact: true }),
+        '/intent 连「最近会话」这一栏都没渲染出来',
+      ).toBeVisible({ timeout: 30_000 })
+      // 列表首帧必须先落定：不等它，后面「新卡片出现」可能只是首屏数据姗姗来迟。
+      await expect(page.locator('.intent-recent__grid, .empty-state')).toBeVisible({
+        timeout: 30_000,
+      })
 
-    // 带外创建：整个过程浏览器**没有**发生任何用户动作，页面也不失焦
-    // （query-client.ts:47-54 关掉了 refetchOnWindowFocus，且这条查询没有轮询），
-    // 所以列表要是更新了，只可能是 WS 推的。
-    const created = await apiJson<{ id: string; title: string }>(
-      daemon,
-      '/api/intent-sessions',
-      {
-        method: 'POST',
-        body: JSON.stringify({ message: 'RFC-319 realtime fixture session.' }),
-      },
-      'create intent session out of band',
-    )
-    const card = page.locator(`a[href$="/intent/${created.id}"]`)
-    await expect(
-      card,
-      '别处新建的会话没有推到已经打开的列表页 ⇒ 多标签页 / 多人协作下，' +
-        '用户看到的永远是自己打开那一刻的快照，只能靠 F5 才知道多了什么',
-    ).toHaveCount(1, { timeout: 60_000 })
-
-    // 轮次是后台跑的：它跑完之后阶段 chip 必须跟着走。停在「生成中」不动的话，
-    // 用户会一直等一个其实早就结束了的轮次。
-    const chip = page.getByTestId(`intent-stage-status-${created.id}`)
-    await expect(chip, '列表卡片上没有阶段 chip').toBeVisible()
-    await expect(chip, '会话刚建出来，阶段 chip 却不是「生成中」⇒ 这条用例的起点不成立').toHaveText(
-      'Step 2/4 · Generate',
-    )
-    await expect
-      .poll(
-        async () =>
-          (
-            await apiJson<{ items: Array<{ id: string; inFlight: boolean }> }>(
-              daemon,
-              '/api/intent-sessions?page=1&limit=50',
-              {},
-              'list intent sessions',
-            )
-          ).items.find((s) => s.id === created.id)?.inFlight,
-        { timeout: 120_000, intervals: [500], message: '后台轮次始终没有落定' },
+      // 带外创建：整个过程浏览器**没有**发生任何用户动作，页面也不失焦
+      // （query-client.ts:47-54 关掉了 refetchOnWindowFocus，且这条查询没有轮询），
+      // 所以列表要是更新了，只可能是 WS 推的。
+      const created = await apiJson<{ id: string; title: string }>(
+        realtimeDaemon,
+        '/api/intent-sessions',
+        {
+          method: 'POST',
+          body: JSON.stringify({ message: 'RFC-319 realtime fixture session.' }),
+        },
+        'create intent session out of band',
       )
-      .toBe(false)
-    await expect(
-      chip,
-      '后台轮次已经落定，页面上的阶段 chip 还停在「生成中」⇒ 用户在等一个早就结束的轮次',
-    ).not.toHaveText('Step 2/4 · Generate', { timeout: 60_000 })
+      const card = page.locator(`a[href$="/intent/${created.id}"]`)
+      await expect(
+        card,
+        '别处新建的会话没有推到已经打开的列表页 ⇒ 多标签页 / 多人协作下，' +
+          '用户看到的永远是自己打开那一刻的快照，只能靠 F5 才知道多了什么',
+      ).toHaveCount(1, { timeout: 60_000 })
 
-    // 归档同理：它在别处发生，这一页要当场跟上，而不是等下一次刷新。
-    await apiJson<Json>(
-      daemon,
-      `/api/intent-sessions/${created.id}/archive`,
-      { method: 'POST' },
-      'archive intent session',
-    )
-    await expect(
-      chip,
-      '别处归档的会话在已经打开的列表页上仍然显示成活跃 ⇒ 两个标签页各说各话',
-    ).toContainText('Archived', { timeout: 60_000 })
+      // 轮次是后台跑的：它跑完之后阶段 chip 必须跟着走。停在「生成中」不动的话，
+      // 用户会一直等一个其实早就结束了的轮次。
+      const chip = page.getByTestId(`intent-stage-status-${created.id}`)
+      await expect(chip, '列表卡片上没有阶段 chip').toBeVisible()
+      await expect(
+        chip,
+        '会话刚建出来，阶段 chip 却不是「生成中」⇒ 这条用例的起点不成立',
+      ).toHaveText('Step 2/4 · Generate')
+      rmSync(holdFile, { force: true })
+      await expect
+        .poll(
+          async () =>
+            (
+              await apiJson<{ items: Array<{ id: string; inFlight: boolean }> }>(
+                realtimeDaemon,
+                '/api/intent-sessions?page=1&limit=50',
+                {},
+                'list intent sessions',
+              )
+            ).items.find((s) => s.id === created.id)?.inFlight,
+          { timeout: 120_000, intervals: [500], message: '后台轮次始终没有落定' },
+        )
+        .toBe(false)
+      await expect(
+        chip,
+        '后台轮次已经落定，页面上的阶段 chip 还停在「生成中」⇒ 用户在等一个早就结束的轮次',
+      ).not.toHaveText('Step 2/4 · Generate', { timeout: 60_000 })
+
+      // 归档同理：它在别处发生，这一页要当场跟上，而不是等下一次刷新。
+      await apiJson<Json>(
+        realtimeDaemon,
+        `/api/intent-sessions/${created.id}/archive`,
+        { method: 'POST' },
+        'archive intent session',
+      )
+      await expect(
+        chip,
+        '别处归档的会话在已经打开的列表页上仍然显示成活跃 ⇒ 两个标签页各说各话',
+      ).toContainText('Archived', { timeout: 60_000 })
+    } finally {
+      rmSync(holdFile, { force: true })
+      if (realtimeDaemon !== undefined) await realtimeDaemon.stop()
+      rmSync(holdDir, { recursive: true, force: true })
+    }
   })
   // -------------------------------------------------------------------------
   // INTENT-X6 P3 —— 提交进行中的页面级离开守卫 + 不可关闭的对话框

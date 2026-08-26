@@ -188,6 +188,31 @@ async function openEditor(page: Page, expectedNodeCount = 3): Promise<void> {
     await page.waitForSelector('.react-flow__node', { state: 'visible' })
   }
   await expect(page.locator('.react-flow__node')).toHaveCount(expectedNodeCount)
+  await waitForCameraSettled(page)
+}
+
+/**
+ * React Flow updates the viewport through an animated transform. Geometry and
+ * hit-testing are trustworthy only after the same transform is observed on
+ * two consecutive frames.
+ */
+async function waitForCameraSettled(page: Page): Promise<void> {
+  const viewport = page.locator('.react-flow__viewport')
+  let previous: string | null = null
+  await expect
+    .poll(
+      async () => {
+        const current = await viewport.getAttribute('style')
+        const stable = current !== null && current === previous
+        previous = current
+        return stable
+      },
+      {
+        message: 'React Flow camera did not settle before geometry was sampled',
+        intervals: [120, 120, 120, 120, 120, 120, 120, 120],
+      },
+    )
+    .toBe(true)
 }
 
 async function expectEditorAxeClean(page: Page, label: string): Promise<void> {
@@ -251,10 +276,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await openEditor(page)
     await page.getByTestId('workflow-camera-overview').click()
     await expect(page.locator('.workflow-canvas')).toHaveAttribute('data-camera-mode', 'overview')
-    // fitView animates the viewport. Measure and press the source handle only
-    // after that transform settles, otherwise the captured centre can move
-    // away before mouse.down and no connection gesture starts.
-    await page.waitForTimeout(300)
+    await waitForCameraSettled(page)
 
     const source = page.locator('.react-flow__node[data-id="brief"] .react-flow__handle-right')
     const targetCard = page.locator('.react-flow__node[data-id="target"] .canvas-node')
@@ -626,9 +648,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await openEditor(page)
     await page.getByTestId('workflow-camera-overview').click()
     await expect(page.locator('.workflow-canvas')).toHaveAttribute('data-camera-mode', 'overview')
-    // fitView animates after the mode flips; sample drag coordinates only
-    // once the same camera transition used elsewhere in this suite settles.
-    await page.waitForTimeout(250)
+    await waitForCameraSettled(page)
 
     const candidate = page.locator('.react-flow__node[data-id="candidate"]')
     const wrapper = page.locator('.react-flow__node[data-id="wrapper"]')
@@ -982,13 +1002,13 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     // displacement (covered separately by workflow-placement.test.ts).
     await page.getByTestId('workflow-camera-overview').click()
     await expect(page.locator('.workflow-canvas')).toHaveAttribute('data-camera-mode', 'overview')
-    await page.waitForTimeout(250)
+    await waitForCameraSettled(page)
 
     const pane = page.locator('.react-flow__pane')
     const zoomIn = page.locator('.react-flow__controls-zoomin')
     await zoomIn.click()
     await zoomIn.click()
-    await page.waitForTimeout(250)
+    await waitForCameraSettled(page)
     const transform = await page
       .locator('.react-flow__viewport')
       .evaluate((element) => getComputedStyle(element).transform)
@@ -1059,13 +1079,13 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
   }) => {
     await page.setViewportSize({ width: 1536, height: 900 })
     await openEditor(page)
-    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    await page.locator('.react-flow__node[data-id="agent_1"] .canvas-node__header').click()
     await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
     await expectEditorAxeClean(page, '1536 editor inspector rail')
 
     await page.setViewportSize({ width: 1280, height: 800 })
     await openEditor(page)
-    await page.locator('.react-flow__node[data-id="agent_1"]').click()
+    await page.locator('.react-flow__node[data-id="agent_1"] .canvas-node__header').click()
     await expect(page.locator('.editor-layout > .inspector')).toBeVisible()
     await expectEditorAxeClean(page, '1280 editor inspector rail')
 

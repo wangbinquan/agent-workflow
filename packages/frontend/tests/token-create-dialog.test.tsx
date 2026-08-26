@@ -600,7 +600,7 @@ describe('RFC-247 — the secret is shown once', () => {
     expect(screen.getByText(enUS.account.token.shownOnceTitle)).toBeTruthy()
   })
 
-  test('a failed copy says so instead of silently doing nothing', async () => {
+  test('a failed copy says so and returns focus to its action', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async () =>
         new Response(
@@ -620,9 +620,11 @@ describe('RFC-247 — the secret is shown once', () => {
     await renderDialog('admin')
     fireEvent.change(screen.getByTestId('token-create-name'), { target: { value: 'ci' } })
     fireEvent.click(screen.getByTestId('token-create-confirm'))
-    fireEvent.click(await screen.findByTestId('token-copy'))
+    const copy = await screen.findByTestId('token-copy')
+    fireEvent.click(copy)
 
     expect(await screen.findByText(enUS.account.token.copyFailed)).toBeTruthy()
+    expect(document.activeElement).toBe(copy)
     vi.unstubAllGlobals()
   })
 })

@@ -64,11 +64,12 @@ interface CliResult {
 function runCli(home: string, args: string[]): CliResult {
   const result = runCommandResult(defaultBinaryPath(), args, {
     env: { AGENT_WORKFLOW_HOME: home },
-    // Argon2id is intentionally memory-hard. Four saturated WebKit workers can
-    // push a password command past the generic 15s fixture fence even though
-    // the same command completes normally on retry. Keep every other probe on
-    // the shared deadline and give only password-bearing invocations 30s.
-    ...(args.includes('--password') ? { timeoutMs: 30_000 } : {}),
+    // Every call boots the release binary, resolves its embedded migrations,
+    // and opens an isolated SQLite home; password calls add memory-hard
+    // Argon2id. A saturated macOS WebKit shard can push even a non-password
+    // `user create` past the generic 15s fixture fence. Keep the boundary hard,
+    // but budget this intentionally process-heavy CLI suite as a whole.
+    timeoutMs: 30_000,
   })
   return { out: result.output, code: result.status }
 }

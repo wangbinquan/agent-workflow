@@ -1562,13 +1562,14 @@ test('RFC-319 IAM-X1: 管理员勾了「下次登录必须改密」之后，后�
     const daemonOrigin = new URL(daemon.baseUrl).origin
     // 本文件前面的用例会在同一个 daemon 上留下启用的 provider，于是登录页的首选
     // 方法变成 OIDC（auth.tsx:40-46 把 oidc 排在 password 之前）。方法选择器只在
-    // 「不止一种方法」时渲染。先等 discovery 真把密码表单挂上；立即 count tab 会在
-    // loading 首帧读到 0，然后把隐藏的密码表单一直等到超时。
+    // 「不止一种方法」时渲染，而且 auth.tsx:370-378 刻意只挂载当前方法的凭证表单。
+    // 先等 discovery 收敛，再切到 Password；抢首个 success render 里短暂挂载的密码
+    // 表单会和随后把 active 改成 OIDC 的 effect 竞争。
     const passwordForm = page.getByTestId('auth-password-form')
-    await expect(passwordForm, '密码登录已启用，discovery 却没有挂出密码表单').toBeAttached()
     const passwordTab = page.getByRole('tab', { name: 'Password', exact: true })
-    if (!(await passwordForm.isVisible())) {
-      await expect(passwordTab, 'OIDC 是首选方法时没有密码切换页签').toBeVisible()
+    await expect(page.getByTestId('auth-discovery-loading')).toHaveCount(0)
+    if ((await passwordTab.count()) > 0) {
+      await expect(passwordTab, 'OIDC 是首选方法时没有可操作的密码切换页签').toBeVisible()
       await passwordTab.click()
     }
     await expect(passwordForm, '密码登录仍然开着，登录页却拿不出密码表单').toBeVisible()
