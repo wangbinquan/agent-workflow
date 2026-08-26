@@ -26,62 +26,82 @@
 
 ## 2. 审计方法与总账
 
-**不是读文档，是动态跑出来的**。把 `createApp` 真实挂出的**全量 440 条路由**
-（`allRouteMeta()`，`routes/registry.ts:108`）与**29 个 MCP 工具实际 dispatch 到的路径**
-（recording dispatcher 逐个真调 `tool.handler`，收敛工具遍历 11 kind × 6 method）做双向 diff。
-技术沿用 `tests/architecture/rfc326-review-tool-route-guard.test.ts:66-105` 的记录式调度。
+**不是读文档，是动态跑出来的**。把 `createApp` 真实挂出的全量路由（`allRouteMeta()`，
+`routes/registry.ts:108`）与 MCP 工具**实际 dispatch 到的路径**（recording dispatcher 逐个真调
+`tool.handler`，收敛工具遍历 11 kind × 6 method）做双向 diff。技术沿用
+`tests/architecture/rfc326-review-tool-route-guard.test.ts:66-105` 的记录式调度。
 
-| 口径                                                                 | 数      |
-| -------------------------------------------------------------------- | ------- |
-| 已注册路由                                                           | 440     |
-| MCP 工具                                                             | 29      |
-| 工具可达路由                                                         | **77**  |
-| 未覆盖                                                               | 363     |
-| 其中 `tokenAccess:'never'`（PAT 天然不可达，认证 / 发令牌 / 改 ACL） | 50      |
-| **PAT 可达但 MCP 无工具**                                            | **313** |
+> **v2 勘误（2026-08-26 设计门 P1-1 / P1-11）**：v1 的数字全部作废。两处错：①deps 用 stub 建
+> app，条件挂载的路由（需要 `secretBox` 的那批）根本没挂上，分母偏小；②**漏了一整个维度**——
+> 一条路由即使 `tokenAccess:'allow'`，只要它的权限点落在 `SYSTEM_DOMAIN_POINTS`
+> （`shared/schemas/permission.ts:806-851`），`resolveTokenPermissions` 就会显式
+> `out.delete(p)`（同文件 `:1293-1301`），**任何 PAT 都永远够不着**。v2 用
+> `buildContractHarness` 同款 deps（含 `secretBox`）重跑，并把这一维补进判据。
 
-313 条按性质分四类。**一类必修、二类本 RFC 补、三类挂账、四类是范围问题**。
+| 口径                                      | v1（错） | **v2（准）** |
+| ----------------------------------------- | -------- | ------------ |
+| 已注册路由                                | 440      | **470**      |
+| `tokenAccess:'never'`（PAT 不得开这扇门） | 50       | **63**       |
+| **权限点 PAT 永不可持**（v1 漏掉的维度）  | —        | **61**       |
+| PAT 真正可达                              | 313      | **346**      |
+| 已有工具覆盖                              | 77       | **79**       |
+| **真实缺口**                              | 313      | **267**      |
 
-### 一类：闭环断裂 / 死路径（bug 级）
+一条附带的好消息：`toolsHitSysBlockedOrNever` 实测为空——现有 29 个工具没有一个打向
+PAT 结构上够不着的路由。唯一的例外是 A1 那条**根本不存在**的路由（属 `unroutedTools`，见下）。
+
+267 条按性质分四类。**一类必修、二类本 RFC 补、三类挂账、四类是范围问题**。
+另有独立于四类之外的 61 条「结构不可达」，它们**不是缺口**——见 §2.5。
+
+### 2.1 一类：闭环断裂 / 死路径（bug 级）
 
 | #   | 缺陷                                                                               | 证据                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | --- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A1  | **`resource_read(kind='repos', method='get')` 恒 404**                             | `RESOURCE_ROUTES.repos.get` 指向 `GET /api/cached-repos/:id`（`mcp/tools.ts:936`），该路由**根本不存在**——`routes/cached-repos.ts` 只注册了 list / `:id/refresh` / `:id`(DELETE) / batch-import / imports 五条。实测 `404 {"code":"route-not-found"}`。`describe_resource(kind='repos')` 还照表宣称支持 get。前端也从没读过单条（`repos.tsx:156` 只有 delete）——这条路由是 MCP 表凭空发明的                                                                  |
+| A1  | **`resource_read(kind='repos', method='get')` 恒 404**                             | `RESOURCE_ROUTES.repos.get` 指向 `GET /api/cached-repos/:id`（`mcp/tools.ts:936`），该路由**根本没注册**——`routes/cached-repos.ts` 只有 list / `:id/refresh` / `:id`(DELETE) / batch-import / imports 五条。实测 `404 {"code":"route-not-found"}`。`describe_resource(kind='repos')` 还照表宣称支持 get。前端也从没读过单条（`repos.tsx:156` 只有 delete）——这条路由是 MCP 表凭空发明的                                                                      |
 | A2  | **alerts 闭环断裂：`repair_alert` / `list_repair_options` 在 MCP-only 场景是死的** | 两者都必须传 `alertId`；`repair_alert` 的描述说「call get_task first to read the alert」，但 `GET /api/tasks/:id` 走 `serializeTaskFor`（`services/tokenRedaction.ts:224-227`）**只对 workflowSnapshot 脱敏并返回 task 行本身，不含 alerts**。alerts 在独立端点 `GET /api/tasks/:id/alerts`（实测 200 `{alerts:[]}`），**无任何工具**。讽刺的是 `list_repair_options` 的描述自陈「没有它 MCP 调用方拿不到 option id」——它补上了 optionId，alertId 仍然拿不到 |
-| A3  | **`launch_task` 的两个入参在 MCP 上无法解析**                                      | `ref` ← `GET /api/repos/refs` 无工具；`collaboratorUserIds` ← `GET /api/users/search` / `POST /api/users/lookup` 无工具。模型只能猜 ULID                                                                                                                                                                                                                                                                                                                     |
-| A4  | **repos 批量导入提交完就瞎了**                                                     | `resource_write(kind='repos', method='create')` = `POST /api/cached-repos/batch-import`，但 `GET /api/cached-repos/imports/:batchId`（进度）与 `POST .../rows/:rowId/retry`（失败行重试）都无工具                                                                                                                                                                                                                                                            |
-| A5  | **`answer_clarify` 描述里的状态码是错的**                                          | 描述写 `mismatched answers are refused with 412`（`mcp/tools.ts:584`），实际 409——`ConflictError` 硬编码 409（`util/errors.ts:53-57`），`routes/clarify.ts:10-13` 还专门注释说「刻意保持 409 而非 412」。这段文字是给模型读的，错的状态码让调用方写错重试分支                                                                                                                                                                                                |
+| A3  | **`launch_task` 的 `ref` 在 MCP 上无法解析**                                       | `GET /api/repos/refs` 无工具，模型只能猜分支名                                                                                                                                                                                                                                                                                                                                                                                                               |
+| A4  | **`answer_clarify` 描述里的状态码是错的**                                          | 描述写 `mismatched answers are refused with 412`（`mcp/tools.ts:584`），实际 409——`ConflictError` 硬编码 409（`util/errors.ts:53-57`），`routes/clarify.ts:10-13` 还专门注释说「刻意保持 409 而非 412」。**同一个错还残留在 shared schema 的注释里**（`shared/schemas/clarify.ts:137-142`，设计门 P2-5）。这段文字是给模型读的，错的状态码让调用方写错重试分支                                                                                               |
 
-### 二类：人工门不全（本 RFC 的主体）
+> **v1 的 A3 / A4 各砍掉一半**（设计门 P1-1 / P1-8，用户 D11 / D12 拍板）：
+> `find_users` 与两个 batch-import 工具**从本 RFC 删除**，理由见 §3 非目标与 `plan.md §5`。
+
+### 2.2 二类：人工门不全（本 RFC 的主体）
 
 `list_pending_gates` 自称 _"everything waiting on a human"_，实际只 dispatch
-`GET /api/reviews` + `GET /api/clarify` 两路。**同档的门漏了三个**：
+`GET /api/reviews` + `GET /api/clarify` 两路。**同档的门漏了两个**：
 
 - **反问门自身的控制通道**：`defer` / `questionIds` / `resubmitQuestionIds` 表达不了；
-  问题看板 5 条（list / manual / confirm / reassign / stage / dispatch）、节点级
+  问题看板 6 条（list / manual / confirm / reassign / stage / dispatch）、节点级
   继续-停止开关 2 条、协作草稿 1 条，全部无工具。
-- **工作组任务门**（`/api/workgroup-tasks/*`，9 条全无工具）：confirm / dw-confirm /
+- **工作组任务门**（`/api/workgroup-tasks/*`，8 条无工具）：confirm / dw-confirm /
   dw-save-as-workflow / messages / assignments deliver·cancel / room / pending-count。
   它与 clarify **同一个可见性边界**（`canViewTask`，`routes/workgroupTasks.ts:6-7`）、
-  **同样停在 `awaiting_human`**（`resolveRoomPauseReason`，同文件 :34-40）。
-- **fusion 审批门**（`/api/fusions/*`，7 条全无工具）：记忆→技能融合的 approve / reject /
+  **同样停在 `awaiting_human`**（`resolveRoomPauseReason`，同文件 `:34-40`）。
+- **fusion 审批门**（`/api/fusions/*`，7 条无工具）：记忆→技能融合的 approve / reject /
   cancel + list / get / pending-count。
-- **memory 人审发布门**：`POST /api/memories/:id/promote`——RFC-285 Q4 规定
-  `status='candidate'` 的未审蒸馏行仅资源管理员可读，人审发布后才回到全员面；
-  RFC-327 刚补完它的**读**面（scope / 标签 / facets），**审**面还没有。
 
-### 三类：资源域运维面（`docs/audit-backlog.md:97` 已挂账，本 RFC 不做）
+> **memory 人审发布门本来也在这一档，v2 移除**（设计门 P1-6，用户 D11）：
+> `POST /api/memories/:id/promote` 本身 PAT 可达，但**发现 candidate 需要
+> `resource-acl:bypass`**——`routes/memories.ts:139-143` 对非 bypass 者过滤掉全部
+> `status='candidate'` 行，而该点在 `SYSTEM_DOMAIN_POINTS` 里（`permission.ts:846`）。
+> 于是 MCP 上「看不到、却能对已知 id 下决定」，与 G2 承诺的「可发现、可读、可处置」
+> 直接矛盾。真因是权限目录而不是缺工具，**不能靠加一个工具解决**。
+
+### 2.3 三类：资源域运维面（`docs/audit-backlog.md:97` 已挂账，本 RFC 不做）
 
 skills 内容面整块不可达（content / files / file / versions / diff / restore，读写共 11 条）、
 workflows `validate` / `validate-draft`、四类 rename、workflows·workgroups `copy`、
-`cached-repos refresh`、mcps probe + runtime-test 9 条、全部 `GET .../acl` 读面、
-`scheduled-tasks run-now`、capability-template copy·upstream-merge、
-memory `archive` / `unarchive`。
+`cached-repos refresh` 与 batch-import 的进度 / 重试、mcps probe + runtime-test 9 条、
+全部 `GET .../acl` 读面、`scheduled-tasks run-now`、capability-template copy·upstream-merge、
+memory `archive` / `unarchive` / `promote`、`POST /api/fusions`（发起融合）。
 
-### 四类：整块从未纳入（**不是缺口，是范围**）
+### 2.4 四类：整块从未纳入（**不是缺口，是范围**）
 
-`/api/code`(72)、`/api/intent-sessions`(20)、`/api/digital-employee*`(30)、
-`/api/event-center`(11)、`/api/integrations`(8)、`/api/webhook-*`(11)。
+`/api/code`(72)、`/api/digital-employee-types`(14)、`/api/digital-employees`(8)、
+`/api/employee-cases`(5)、`/api/digital-employee-job-templates`(2)、
+`/api/digital-employee-input-uploads`(2)、`/api/event-center`(11)、
+`/api/webhook-triggers`(7)、`/api/webhook-deliveries`(3)、`/api/webhook-endpoints`(2)、
+`/api/integrations`(7)、`/api/resource-packages`(2)、`/api/execution-contracts`(3)。
 
 **这一类真正的问题不是"没有工具"，是"没人看管"**：这些域的权限点不在
 `MATRIX_RESOURCES`（`shared/schemas/permission.ts:40-56` 只有 11 类），所以
@@ -89,18 +109,35 @@ memory `archive` / `unarchive`。
 新域可以无声长出来，而没有任何机器会说一句「MCP 没跟」。RFC-326 建的双向守卫
 只扫 `/api/reviews*`，管不到这里。
 
+### 2.5 结构不可达（61 条，**不是缺口**）
+
+权限点落在 `SYSTEM_DOMAIN_POINTS` 的路由，任何 PAT 都够不着——给它们做 MCP 工具
+**没有意义**（工具要么因声明该权限而永不出现在 `tools/list`，要么因声明空权限而恒 403）。
+
+整域落在此类的有：`/api/intent-sessions/*` 与 `/api/intent-provenance/*`（`intent:read|write`）、
+`/api/users/*`（`users:read|write|search`）、`/api/runtimes/*` 与 `/api/runtime/models`
+（`runtime:read` / `settings:write`）、`/api/config`、`/api/daemon`、`/api/maintenance/*`
+（`settings:*`）、`/api/oidc/*`（`oidc:*`）、`/api/backup` 与 `/api/restore/*`（`backup:run`）、
+`/api/memory-distill-jobs/*`（`memory-distill-jobs:manage`）。
+
+**这一节直接证伪了设计门 P1-9**：该 finding 说 `POST /api/intent-sessions/:id/mount-approvals`
+是被误分类的人工门、应当纳入。但 `intent:write` 是系统域点——整个 intent 域 PAT 结构上
+进不去，纳入它只会造出第二个 `find_users`。重算后该域从缺口列表里整体消失。
+
 ## 3. 目标 / 非目标
 
 ### 目标
 
-1. **G1（一类全修）**：五条死路径全部修掉，每条带回归用例 + 变异实证。
-2. **G2（人工门完整面）**：反问门、工作组任务门、fusion 审批门、memory 人审发布门
-   在 MCP 上可**发现、可读、可处置**；`list_pending_gates` 名副其实。
+1. **G1（一类全修）**：四条死路径全部修掉，每条带回归用例 + 变异实证。
+2. **G2（人工门完整面）**：反问门、工作组任务门、fusion 审批门在 MCP 上可**发现、可读、
+   可处置**；`list_pending_gates` 名副其实。memory 人审门 v2 移出（§2.2 的框，权限目录问题）。
 3. **G3（REST 补一条）**：新增 `GET /api/workgroup-tasks/pending`——让「哪些工作组任务
    在等人」有可列的端点（今天只有三个数字）。
-4. **G4（全域守卫）**：一条覆盖**全部 440 条路由**的「路由 ⟷ MCP 工具」双向守卫 +
-   逐条登记理由的豁免账本，接进 `architecture/ledger-baselines.json` 的高水位机制。
-   **这一条是本 RFC 里唯一能保证"不会有第三次"的东西**。
+4. **G4（全域守卫）**：一条覆盖**全部已注册路由**（分母取运行期 `allRouteMeta()`，不硬编码）
+   的「路由 ⟷ MCP 工具」守卫，判定**三维**：路径、请求字段、权限（设计门 P1-2，用户 D10）；
+   配**域分组 + 组内逐条精确叶子**的豁免账本（设计门 P1-4，用户 D9），接进
+   `architecture/ledger-baselines.json` 的高水位机制、盯**叶子总数**。
+   **这一条是本 RFC 里唯一能保证「不会有第三次」的东西**。
 
 ### 非目标
 
@@ -109,6 +146,17 @@ memory `archive` / `unarchive`。
 - **不做 RFC-294 W4-A 的 operation catalog**（见 §6 的架构对齐）。
 - **不扩 `resource_read` / `resource_write` 的 `method` 枚举**——`docs/audit-backlog.md:97`
   明禁（会往 generic invoker 方向加固，RFC-294 design §13.1 禁止）。本 RFC 全部走具名工具。
+- **不做 `find_users`**（设计门 P1-1，用户 D11）：`users:search` 在 `SYSTEM_DOMAIN_POINTS` 里，
+  PAT 永不持有，该工具声明该权限则永不出现在 `tools/list`、声明空权限则恒 403。
+  `launch_task` 的 `collaboratorUserIds` 在 MCP 上因此暂无解——**真因是权限目录，不是缺工具**。
+- **不做 batch-import 的进度 / 重试工具**（设计门 P1-8，用户 D12）：这两条 REST 路由只按
+  batch/row id 操作、**不读 actor**，无 owner 门（`docs/audit-backlog.md:88` 已挂账）。
+  general PAT 今天走 REST 已能做，但 `mcp_only` PAT 被 purpose 门挡着
+  （`routes/registry.ts:188-193`），而 MCP dispatch 会按 RFC-247 D2 清除 purpose
+  （`mcp/dispatch.ts:125-139`）——补工具等于把一个已知无门的跨用户能力推给自动化通道。
+- **不做 memory 的 `promote`**（设计门 P1-6，用户 D11）：见 §2.2 的框。
+- **不改权限目录**：不新增 `users:lookup:minimal` / `memory:candidate:decide` 这类窄点。
+  那是跨 RFC 的面（连带令牌矩阵 UI 与文档），另立。
 - **不改任何网页端行为**。前端不需要任何改动。
 - **不动 `PUT /api/workgroup-tasks/:taskId/config`**：它的 `addMembers` 写
   `task_collaborators`，属 RFC-247 D5 的四种 URL 形状之一，`tokenAccess:'never'` 保持。
@@ -124,7 +172,16 @@ memory `archive` / `unarchive`。
 | D5  | 工作组门怎么列                                         | **新增 `GET /api/workgroup-tasks/pending`**；`pending-count` 保持不变（前端 badge 在用）                         |
 | D6  | `defer` 半边怎么暴露                                   | **扩既有 `answer_clarify`**（照抄 RFC-326 给 `submit_review` 加 `comments[]`/`selections[]` 的先例），不新开工具 |
 | D7  | memory 三个动词补哪些                                  | **只 `promote`**（人审发布门）。`archive` / `unarchive` 是普通生命周期，归三类                                   |
-| D8  | 双向守卫做多宽                                         | **全域 440 条 + 豁免账本**（逐条登记理由），不是只盖本次触及的域                                                 |
+| D8  | 双向守卫做多宽                                         | **全域（分母取运行期路由表）+ 豁免账本**（逐条登记理由），不是只盖本次触及的域                                   |
+
+设计门（2026-08-26，0 P0 / 11 P1 / 11 P2）后用户追加拍板：
+
+| #   | 决策                                                                     | 取值                                                            |
+| --- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| D9  | 豁免账本结构（P1-4：prefix 会静默吞掉未来新增路由）                      | **域分组 + 组内逐条精确叶子**；高水位盯**叶子总数**而非组数     |
+| D10 | 守卫深度（P1-2：只比路径抓不住 `answer_clarify` 那类「路径对、字段缺」） | **加深到三维**：路径 + 请求字段 + 权限                          |
+| D11 | 两个权限结构上不可行的工具（P1-1 `find_users` / P1-6 `promote_memory`）  | **都从本 RFC 删掉**，登记延期并写明真因是权限目录而非缺工具     |
+| D12 | A4 两个导入工具对 `mcp_only` 令牌是能力扩张（P1-8）                      | **删掉，明确延期**；不在「补工具」的 RFC 里顺手扩大跨用户读取面 |
 
 ## 5. 能力影响清单
 
@@ -159,7 +216,7 @@ CLAUDE.md §RFC workflow 第 7 条要求：凡**关闭或收缩既有能力**的
   operation catalog 的**输入清单**：W4-A 要求「HTTP RouteMeta 与 MCP tool 映射引用同一
   operation id/handler」（`RFC-294/plan.md` W4-A，`design.md §13.1` 的
   `McpBinding = {operationId, toolName}` 一对一），而今天没有任何地方能一次说清
-  「哪 440 条路由里哪些有 tool、哪些没有、为什么」。本 RFC 把它变成一份**受高水位约束的
+  「已注册的每条路由里哪些有 tool、哪些没有、为什么」。本 RFC 把它变成一份**受高水位约束的
   账本**，W4-A 落地时直接读它，而不是再审一次。
 
 **留下的债**（显式声明，不掩盖）：
@@ -186,83 +243,104 @@ CLAUDE.md §RFC workflow 第 7 条要求：凡**关闭或收缩既有能力**的
 4. **本地 agent 参与工作组房间**：`list_pending_gates` 看到工作组任务在等人 →
    `get_workgroup_room` 读房间 → `post_workgroup_message` 发言或
    `confirm_workgroup_step` 确认，任务继续。**（今天 MCP 完全做不到）**
-5. **本地 agent 处理知识蒸馏与融合的审批**：`list_fusions` 看待批融合 →
-   `get_fusion` 读内容 → `approve_fusion` / `reject_fusion`；`promote_memory` 把
-   人审通过的 candidate 发布到全员面。**（今天 MCP 完全做不到）**
+5. **本地 agent 处理融合审批**：`list_fusions` 看待批融合 → `get_fusion` 读内容 →
+   `approve_fusion` / `reject_fusion`。**（今天 MCP 完全做不到）**
+   （v1 这条还含 memory candidate 的人审发布，v2 移除——见 §2.2 的框：那是权限目录问题。）
+
 6. **我不用担心下次又漏**：新域长出来而 MCP 没跟时，全域守卫当场红，
    要么补工具、要么在账本里写下一行有署名的理由。**（今天无人看管）**
 
 ## 8. 验收标准
 
+> AC 编号在 v2 重排（删掉 `find_users` / batch-import / memory promote 三项后不留空号）。
+> `plan.md §4` 的证据表逐条对应——**这两处必须同批改**，否则
+> `tests/rfc-index-status-drift.test.ts` 的 AC 证据台账当场红（2026-08-26 主干实撞，
+> owning commit 是本 RFC 的落档笔）。
+
 ### 一类（死路径）
 
-- **AC-1**：`describe_resource(kind:'repos')` 不再宣称支持 `get`；
-  `resource_write(kind:'repos', method:'delete')` 的 note 明确写出「confirm 用的
-  `urlRedacted` 从 list 取」。变异实证：把 `get` 加回表里 → 守卫红。
-- **AC-2**：新增 `list_task_alerts`；`repair_alert` 的描述不再说「call get_task」，
-  改为指向 `list_task_alerts`。存在一条端到端用例：`list_task_alerts` →
-  `list_repair_options` → `repair_alert` 全链走通，**全程不经网页端**。
+- **AC-1**：`describe_resource(kind:'repos')` 不再宣称支持 `get`；`resource_write(kind:'repos',
+method:'delete')` 的 note 写明「confirm 用的 `urlRedacted` 从 list 取」。变异实证：把 `get`
+  加回表里 → 守卫的 `unroutedTools` 命中 → 红。
+- **AC-2**：新增 `list_task_alerts`；`repair_alert` 的描述不再说「call get_task」，改为指向
+  `list_task_alerts`。存在一条端到端用例：`list_task_alerts` → `list_repair_options` →
+  `repair_alert` 全链走通，**全程不经网页端**。
 - **AC-3**：新增 `list_repo_refs`（接 `cachedRepoId`，工具内部两跳解析 `localPath`，
-  **不把绝对路径交给模型**）与 `find_users`。存在一条用例证明
-  `launch_task` 的 `ref` 与 `collaboratorUserIds` 可以纯由 MCP 解析得到。
-- **AC-4**：新增 `get_repo_import` 与 `retry_repo_import_row`；存在一条用例覆盖
-  「batch-import → 查进度 → 重试失败行」。
-- **AC-5**：`answer_clarify` 的描述里状态码是 **409**，且有一条断言把
-  「描述中出现的状态码」与 `ConflictError` 的真实状态码钉在一起（防止再次漂移）。
+  **不把绝对路径交给模型**）；存在一条用例证明 `launch_task` 的 `ref` 可以纯由 MCP 解析得到。
+  第一跳查不到该 id 时抛业务拒绝 `cached-repo-not-found`（**不是** 500）。
+- **AC-4**：`answer_clarify` 的描述里状态码是 **409**，`shared/schemas/clarify.ts` 的注释
+  **同批订正**；断言从描述中提取的状态码**精确等于** `new ConflictError(...).status`
+  （不是「不含 412」——那允许描述干脆不写状态码，见设计门 P2-5）。
 
 ### 二类（人工门）
 
-- **AC-6**：`answer_clarify` 接受 `defer` / `questionIds` / `resubmitQuestionIds`，
-  三者的路由级互斥校验（`clarify-question-ids-requires-defer` /
-  `clarify-resubmit-requires-defer`，`routes/clarify.ts:240-257`）在 MCP 通道上
-  **原样生效**——有专测覆盖两条拒绝分支。
-- **AC-7**：`directive:'continue' | 'stop'` 在**快通道与控制通道**上都生效，
-  且 `stop` 会按 RFC-123 回写节点级开关；有一条用例从 MCP 侧验证
-  `list_clarify_directives` 能读到刚写入的 `stop`。
-- **AC-8**：问题看板六条（list / manual / confirm / reassign / stage / dispatch）
-  各有工具，且 `reassign` 的路由 `tokenAccess` 已改 `allow`。
-- **AC-9**：工作组门七个工具 + 新 REST 端点 `GET /api/workgroup-tasks/pending` 全部就位；
-  新端点的可见性与 `pending-count` **逐行一致**（同一批候选、同一个 `visibleTaskIdsOf`），
-  有一条用例用两个不同 actor 证明两端点看见的行集合相同。
-- **AC-10**：fusion 五个工具 + `promote_memory` 就位。
-- **AC-11**：`list_pending_gates` 返回 `{reviews, clarify, workgroupTasks, fusions}` 四键，
-  前两键的**形状与既有逐字一致**（golden lock）。
+- **AC-5**：`answer_clarify` 接受 `defer` / `questionIds` / `resubmitQuestionIds`；两条路由级
+  互斥校验（`clarify-question-ids-requires-defer` / `clarify-resubmit-requires-defer`，
+  `routes/clarify.ts:240-257`）在 MCP 通道上**原样生效**——两条拒绝分支各有专测。
+- **AC-6**：`directive:'continue'|'stop'` 在**快通道与控制通道**上都生效，且 `stop` 按 RFC-123
+  回写节点级开关；有一条用例从 MCP 侧验证 `list_clarify_directives` 能读到刚写入的 `stop`。
+- **AC-7**：问题看板六工具就位，`reassign` 路由的 `tokenAccess` 已改 `allow`；非成员 PAT 调用
+  `reassign` 被拒（成员门 `gateMemberEntry` 与凭据类型无关）。
+- **AC-8**：工作组七工具 + 新端点 `GET /api/workgroup-tasks/pending` 就位；断言
+  **`reduce(pendingRows(actor)) === pendingCount(actor)`**（逐 actor 的聚合等式，不是「两个
+  HTTP 端点行集合相同」——旧端点只返回三个数字，那句话无法证伪，见设计门 P2-9/P2-3），
+  覆盖 owner / stranger / admin 三种 actor、畸形 config、以及一行同时有 gate 与 delivery。
+- **AC-9**：fusion 五工具就位；`list_fusions` 的 `status` 入参用 `z.enum` 收口（路由对未知值
+  静默退化为「无过滤」，`routes/fusions.ts:94-97`，宽容不得传染给工具）；描述写明 **MCP 上
+  始终 owner-only**——`hasResourceAclBypass` 读的 `resource-acl:bypass` 是系统域点，PAT 永不
+  持有（设计门 P2-4），不得暗示存在能看全局的管理员 PAT。
+- **AC-10**：`list_pending_gates` 返回 `{reviews, clarify, workgroupTasks, fusions}` 四键，
+  前两键的形状与既有**逐字一致**（golden lock）；单路失败**在该路内先 `unwrap`** 后返回
+  `{ok:false, error}`，不拖垮其余三路，且聚合调用的审计状态有明确定义——`Promise.allSettled`
+  本身抓不到 HTTP 4xx/5xx（dispatcher 对它们返回 fulfilled，`mcp/dispatch.ts:109-121`，
+  设计门 P1-10）。
 
 ### 全域守卫
 
-- **AC-12**：`tests/architecture/rfc329-mcp-surface-guard.test.ts` 覆盖**全部 440 条路由**，
-  三向判定：`uncovered`（有路由无工具且不在账本）/ `staleExemptions`（账本里的条目
-  已经有工具了，或路由已不存在）/ `unroutedTools`（工具打向不存在的路由）。
-  **A1 那条缺陷必须能被 `unroutedTools` 抓到**——有一条负向 fixture 证明它会红。
-- **AC-13**：豁免账本逐条带理由，按域分组；登记进
-  `architecture/ledger-baselines.json`，受 `rfc317-ledger-highwater.test.ts` 的
-  「逐字相等 + 只降不升」两层规则约束。
-- **AC-14**：变异实证——删掉任意一个新工具，其路由出现在 `uncovered` → 红；
-  给任意一条豁免路由加上工具而不改账本 → `staleExemptions` → 红。
+- **AC-11**：守卫覆盖**运行期 `allRouteMeta()` 的全部路由**（分母不硬编码任何数字），判定
+  四向 + 三维：`uncovered` / `staleExemptions` / `unroutedTools` / **权限一致性**。权限判据是
+  「扣除 PAT 恒有的读权限后**精确等价**」而非子集——工具少声明权限会让它出现在 `tools/list`
+  却每次调用被路由拒（设计门 P1-5）；`resource_write` 这类按参数分派的工具以
+  `requiredPermissions(args)` 声明，不套用等价规则。**A1 那条缺陷必须能被 `unroutedTools`
+  抓到**，有负向 fixture 证明它会红。
+- **AC-12**：豁免账本按**域分组 + 组内逐条精确 `METHOD /api/x/:id` 叶子**；每组一条理由，
+  五个 category（`never` / `system-point` / `system` / `not-in-scope` / `deliberate`）。
+  登记进 `architecture/ledger-baselines.json`，高水位盯**叶子总数**，受
+  `rfc317-ledger-highwater.test.ts` 的「逐字相等 + 只降不升」两层规则约束。
+- **AC-13**：八条变异各**固化为一条永久负向 fixture**（不是一次性实跑记录，设计门 P2-9）：
+  加回 `repos.get` / 删任一新工具 / 给豁免叶子加工具而不改账本 / 账本改数而不改基线 /
+  写一条已不存在的叶子 / 工具权限与路由不等价 / 删 `answer_clarify` 的 `defer` /
+  `pendingRows` 去掉 `visibleTaskIdsOf`。
 
 ## 9. 工具数量的正视（对 RFC-247 D11 的回应）
 
 D11（`mcp/tools.ts:12-21`）担心的是：「11 类资源 × 4 动词 = 44 个只有名词不同的工具，
-会淹没真正重要的任务工具」。本 RFC 让工具数从 **29 → 56**，必须正面回应：
+会淹没真正重要的任务工具」。本 RFC 让工具数从 **29 → 52**（v1 是 56；删掉 `find_users`、
+两个 batch-import 工具与 `promote_memory` 后 23 个新工具），必须正面回应：
 
 - **D11 反对的是"描述只差一个名词"的 CRUD 排列**，不是「一个操作一个工具」本身。
   它自己就把任务域的 13 个动词全部具名（launch / cancel / retry / resume / diagnose …），
   理由是「模型在这里花时间、错了代价大」。**人工门恰恰是同一类地方**——RFC-326 已经
   按这个逻辑给评审门补了 7 个具名工具。
-- 新增的 27 个工具**没有一个是 CRUD 排列**：它们是 confirm / stage / dispatch / reassign /
+- 新增的 23 个工具**没有一个是 CRUD 排列**：它们是 confirm / stage / dispatch / reassign /
   deliver / approve / reject / promote 这样的**领域动词**，每个都有自己的前置条件和失败模式。
 - `toolsFor()` 按 token 权限过滤（`mcp/tools.ts:1261-1265`）：一个只读令牌看到的新工具
   只有读面那几个；只有同时持 `tasks:execute` + `skills:update` + `memory:update` 的宽令牌
-  才会看到全部 56 个。**实际暴露面由令牌决定，不是 56 个恒定。**
+  才会看到全部 52 个。**实际暴露面由令牌决定，不是 52 个恒定。**
+- **但过滤不等于可理解**（设计门 P2-11）：`ALL_TOOLS` 今天把四个数组扁平合并
+  （`mcp/tools.ts:1246-1252`），过滤条件只有权限。本 RFC 同批把源码按域拆组
+  （task / clarify-gate / workgroup-gate / fusion-gate / resource / introspection），
+  并让 `list_pending_gates` 每行返回 `{kind, id, state, nextTools}`——**模型先发现门，
+  再从该门自己声明的下一步工具里选**，而不是在 52 个名字里找。
 
 ## 10. 风险
 
-| 风险                                                                     | 处置                                                                                                                                                                    |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 全域守卫初次落地会暴露出更多今天没意识到的不一致                         | 这正是它的价值。落地时若发现新的 `unroutedTools`（即又一个 A1 类死路径），当场修；若是新的 `uncovered`，按四类归类后入账本                                              |
-| 280 条豁免账本又臭又长，没人读                                           | 按**域前缀分组** + 每组一条理由，而非 280 条各写一句。高水位机制保证它只降不升                                                                                          |
-| `GET /api/workgroup-tasks/pending` 与 `pending-count` 两处可见性判定漂移 | 两者共用同一个内部候选集函数（重构 `pendingCount` 抽出 `pendingRows`，count 由 rows 派生）。AC-9 有双 actor 一致性用例                                                  |
-| 27 个新工具的描述质量参差，模型误用                                      | 每个工具的描述必须写明**前置条件**与**这一步会不会推进任务**（`dispatch_task_questions` / `confirm_workgroup_step` 会，`stage_task_question` 不会）——这是 review 的硬项 |
+| 风险                                                                     | 处置                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 全域守卫初次落地会暴露出更多今天没意识到的不一致                         | 这正是它的价值。落地时若发现新的 `unroutedTools`（即又一个 A1 类死路径），当场修；若是新的 `uncovered`，按四类归类后入账本                                                                                                                                                                                                                                                                    |
+| 280 条豁免账本又臭又长，没人读                                           | 按**域前缀分组** + 每组一条理由，而非 280 条各写一句。高水位机制保证它只降不升                                                                                                                                                                                                                                                                                                                |
+| `GET /api/workgroup-tasks/pending` 与 `pending-count` 两处可见性判定漂移 | 两者共用同一个内部候选集函数（重构 `pendingCount` 抽出 `pendingRows`，count 由 rows 派生）。AC-9 有双 actor 一致性用例                                                                                                                                                                                                                                                                        |
+| 27 个新工具的描述质量参差，模型误用                                      | 每个工具的描述必须写明**前置条件**与**这一步会不会推进任务**（`dispatch_task_questions` / `confirm_workgroup_step` 会，`stage_task_question` 不会）——这是 review 的硬项。**「推进」还要分两段**：`dispatch_task_questions` 落库成功后 resume 仍可能失败，路由以 HTTP 200 带嵌套 `{resume:{ok:false}}` 返回（`routes/taskQuestions.ts:231-269`，设计门 P2-7），描述必须要求调用方检查 `resume` |
 
 ## 11. 设计门 / 实现门
 
