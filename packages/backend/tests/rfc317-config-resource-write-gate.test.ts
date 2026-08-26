@@ -408,3 +408,76 @@ describe('RFC-317 C1 —— 配置资源写门只认 owner', () => {
     })
   })
 })
+
+// RFC-330 D-② —— 旧 `/code/config/employees` 详情页的 playbook 保存路径此前误挂治理门
+// （`requireGovernable`）：被授权的 `write` 编辑者在那一页保存一律 403，而同一资源的
+// 新式 PUT 早已按 RFC-324 放行。现在同为内容写：write 档放行、read 档 403、改名归 owner。
+describe('RFC-330 D-② —— digital_employee playbook 保存是内容写', () => {
+  const PLAYBOOK = (id: string): string => `/api/code/digital-employees/${id}/playbook`
+
+  async function seedWithGrant(level: 'read' | 'write'): Promise<{ harness: Harness; id: string }> {
+    const harness = await buildHarness()
+    const subject = CASES.find((c) => c.type === 'digital_employee')!
+    const id = await seed(harness.db, subject, harness.owner.id, 'private')
+    await harness.db
+      .insert(resourceGrants)
+      .values({
+        resourceType: 'digital_employee',
+        resourceId: id,
+        userId: harness.grantee.id,
+        level,
+        addedBy: harness.owner.id,
+        addedAt: NOW,
+      })
+      .run()
+    return { harness, id }
+  }
+
+  const VALID_PLAYBOOK = {
+    schemaVersion: 1,
+    description: 'saved by a write grantee',
+    supportedRepositoryFacts: [],
+    capabilityRoutes: [],
+    requirementSources: [],
+    pipelineProviders: [],
+    defaultPolicyRef: { id: 'rfc330-policy', revision: 1 },
+  }
+
+  test('write 档：保存合法 playbook → 200 且落库（不再 403 govern）', async () => {
+    const { harness, id } = await seedWithGrant('write')
+    const subject = CASES.find((c) => c.type === 'digital_employee')!
+    const before = await readRow(harness.db, subject, id)
+    const res = await req(harness.app, harness.grantee.token, PLAYBOOK(id), {
+      method: 'PUT',
+      body: JSON.stringify({ playbook: VALID_PLAYBOOK }),
+    })
+    expect(res.status, await res.clone().text()).toBe(200)
+    const after = await readRow(harness.db, subject, id)
+    expect(after.draftJson).not.toBe(before.draftJson)
+    expect(JSON.parse(after.draftJson) as { description?: string }).toMatchObject({
+      description: 'saved by a write grantee',
+    })
+  })
+
+  test('write 档带改名 ⇒ 403 resource-rename-owner-only', async () => {
+    const { harness, id } = await seedWithGrant('write')
+    const res = await req(harness.app, harness.grantee.token, PLAYBOOK(id), {
+      method: 'PUT',
+      body: JSON.stringify({ name: 'renamed-by-editor', playbook: VALID_PLAYBOOK }),
+    })
+    expect(res.status).toBe(403)
+    expect((await res.json()) as { code: string }).toMatchObject({
+      code: 'resource-rename-owner-only',
+    })
+  })
+
+  test('read 档 ⇒ 403 resource-read-only', async () => {
+    const { harness, id } = await seedWithGrant('read')
+    const res = await req(harness.app, harness.grantee.token, PLAYBOOK(id), {
+      method: 'PUT',
+      body: JSON.stringify({ playbook: VALID_PLAYBOOK }),
+    })
+    expect(res.status).toBe(403)
+    expect((await res.json()) as { code: string }).toMatchObject({ code: 'resource-read-only' })
+  })
+})

@@ -2849,7 +2849,7 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    带 `?token=` 也 401。`worktree-files.ts` 顶部注释宣称的用途（"the frontend resolves these
    to this endpoint so the browser can fetch them"）在今天的鉴权面下不成立。失败是 fail-closed
    （无安全风险）但功能已死。修法：给这条路由开受控的 query/cookie 通道，或让 `ProseImage` 走 blob 取数。
-2. **【中】数字员工的「编辑」写门自相矛盾，且 govern 门可被通用端点绕过（实测确认）。**
+2. ✅ **RFC-330 已修（2026-08-26，D-②）**：`PUT /api/code/digital-employees/:id/playbook` 改走 `requireEditable` + `assertNameUnchangedForEditor`（write 档可保存 playbook、改名仍归 owner；`rfc317-config-resource-write-gate.test.ts` 三态锁定）。原文保留如下。~~**【中】数字员工的「编辑」写门自相矛盾，且 govern 门可被通用端点绕过（实测确认）。**~~
    同一份员工、同一段内容、同一个 `write` 授权者：
    `PUT /api/code/digital-employees/:id/playbook`（**业务 UI 唯一的保存路径**，
    `routes/developmentConfig.ts:635` 用 `requireGovernable`）→ **403 `resource-govern-owner-only`**；
@@ -3800,3 +3800,17 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
    （它按状态派发 retry / resume / attach-merge-request / submit-answers）。
    起草时先照那两个 testid 写，跑出来才发现它们恒不可见。后续若要清理死路径，
    这两支是候选；在那之前，写这块用例的人别再被它们误导。
+
+## RFC-330 落地时登记的功能缺口（2026-08-26，数字员工域授权面）
+
+RFC-330 按用户裁定 D21/D22 只做功能核心，下面两条是落地时明确**不做**、但仍是功能缺口的项：
+
+1. **【低】成员案例不进统一任务列表的 `mine` / `shared`。** 案例成员制（observer / collaborator）
+   已落地（`services/employeeCaseMembers.ts`），但 `task-catalog-adapter.ts` 的案例来源仍只按
+   owner 过滤：被加为成员的人只能从案例页直达（例如通过 WS 帧 / 链接），列表里找不到它。
+   补法：给 `listCasesPage` / `listTerminalOutcomeGroups` 加 `all / mine / shared` scope（成员
+   子查询），与任务侧 `taskOwnershipScopeCondition` 同语义。
+2. **【低】任务侧 `shared` scope 对 null-owner 任务不成立。** `services/taskAuthorization.ts:44-47`
+   用 `ne(owner, me)`，对 `owner_user_id IS NULL` 的协作任务不为真，于是「我是 collaborator 的
+   系统任务」不会出现在「共享给我」。补法：`owner IS NULL OR owner <> ?`（与上一条共用一个
+   null-safe helper 时一并修）。

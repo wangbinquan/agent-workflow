@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 899,
+    "entries": 900,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -8110,7 +8110,7 @@
       },
       "file": "packages/backend/src/routes/digitalEmployees.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:179",
+      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:260",
       "missingControls": [
         "audit",
         "authority",
@@ -8120,7 +8120,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
-      "symbol": "$http:delete:179",
+      "symbol": "$http:delete:260",
       "targetContext": "source-control",
       "targetLayer": "inbound"
     },
@@ -9888,6 +9888,30 @@
       "ownerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#runDynamicWorkflowGenerate",
       "symbol": "runDynamicWorkflowGenerate",
       "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/employeeCaseMembers.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/employeeCaseMembers.ts#updateCaseMembers",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/employeeCaseMembers.ts#updateCaseMembers",
+      "symbol": "updateCaseMembers",
+      "targetContext": "digital-employee",
       "targetLayer": "application"
     },
     {
@@ -21113,7 +21137,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:676",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:699",
       "missingControls": [
         "audit",
         "authority",
@@ -21123,7 +21147,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:676",
+      "symbol": "$http:delete:699",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -21138,7 +21162,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:711",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:734",
       "missingControls": [
         "audit",
         "authority",
@@ -21148,7 +21172,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:711",
+      "symbol": "$http:delete:734",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -21163,7 +21187,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:716",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:739",
       "missingControls": [
         "audit",
         "authority",
@@ -21173,7 +21197,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:716",
+      "symbol": "$http:delete:739",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -21188,7 +21212,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:744",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:767",
       "missingControls": [
         "audit",
         "authority",
@@ -21198,7 +21222,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:744",
+      "symbol": "$http:delete:767",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -21213,7 +21237,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:749",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:772",
       "missingControls": [
         "audit",
         "authority",
@@ -21223,7 +21247,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:749",
+      "symbol": "$http:delete:772",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -21351,7 +21375,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5",
+  "sourceDigest": "sha256:39b59c4d6281d0a9b07df3693337bf6f8f0e4e8e3324c49d141373f43bd1b68a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -21461,7 +21485,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 156,
+      "durableWriterSites": 157,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -23891,8 +23915,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/terminalSweep.ts",
-        "id": "task-authority:packages/backend/src/services/terminalSweep.ts#121:nodeRuns",
-        "line": 121,
+        "id": "task-authority:packages/backend/src/services/terminalSweep.ts#122:nodeRuns",
+        "line": 122,
         "ownerEntryId": "owner:packages/backend/src/services/terminalSweep.ts#sealOpenHumanGatesForTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -23907,8 +23931,24 @@
         "controlSubtype": "terminal-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/terminalSweep.ts",
-        "id": "task-authority:packages/backend/src/services/terminalSweep.ts#129:nodeRuns",
-        "line": 129,
+        "id": "task-authority:packages/backend/src/services/terminalSweep.ts#133:nodeRuns",
+        "line": 133,
+        "ownerEntryId": "owner:packages/backend/src/services/terminalSweep.ts#sealOpenHumanGatesForTask",
+        "requiredBrandedProof": "ExactTerminalControlTuple",
+        "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
+        "symbol": "sealOpenHumanGatesForTask"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "sealOpenHumanGatesForTask",
+        "controlSubtype": "terminal-control",
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/services/terminalSweep.ts",
+        "id": "task-authority:packages/backend/src/services/terminalSweep.ts#141:nodeRuns",
+        "line": 141,
         "ownerEntryId": "owner:packages/backend/src/services/terminalSweep.ts#sealOpenHumanGatesForTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",

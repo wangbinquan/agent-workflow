@@ -119,6 +119,7 @@ function toTool(row: typeof employeeToolRegistrations.$inferSelect): ToolDraftRe
     validationReceipt: toolValidationReceiptSchema.parse(draft.validationReceipt),
     publishedRevision: row.publishedRevision,
     ownerUserId: row.ownerUserId,
+    visibility: row.visibility,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     retiredAt: row.retiredAt,
@@ -147,6 +148,7 @@ function toJobTemplate(row: typeof employeeJobTemplates.$inferSelect): JobTempla
     draft: employeeJobTemplateContentSchema.parse(parseJson(row.draftJson)),
     publishedRevision: row.publishedRevision,
     ownerUserId: row.ownerUserId,
+    visibility: row.visibility,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     archivedAt: row.archivedAt,
@@ -298,6 +300,9 @@ export function createSqliteDigitalEmployeeAuthoringStore(
           }),
           publishedRevision: input.publishedRevision,
           ownerUserId: input.ownerUserId,
+          // RFC-330 —— `name` 镜像 displayName（ACL kernel 的 table.name 契约）。
+          name: input.content.displayName,
+          visibility: input.visibility,
           createdAt: input.createdAt,
           updatedAt: input.updatedAt,
           retiredAt: input.retiredAt,
@@ -310,6 +315,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .update(employeeToolRegistrations)
         .set({
           draftJson: JSON.stringify({ content, validationReceipt: receipt }),
+          name: content.displayName,
           updatedAt,
         })
         .where(
@@ -328,6 +334,21 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .where(eq(employeeToolRegistrations.id, id))
         .get()
       return row === undefined ? null : toTool(row)
+    },
+
+    getToolAcl(id) {
+      const row = db
+        .select({
+          id: employeeToolRegistrations.id,
+          name: employeeToolRegistrations.name,
+          ownerUserId: employeeToolRegistrations.ownerUserId,
+          visibility: employeeToolRegistrations.visibility,
+          retiredAt: employeeToolRegistrations.retiredAt,
+        })
+        .from(employeeToolRegistrations)
+        .where(eq(employeeToolRegistrations.id, id))
+        .get()
+      return row === undefined ? null : row
     },
 
     listTools(typeRef, workItemRef) {
@@ -419,6 +440,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
             draftJson: JSON.stringify(input.draft),
             publishedRevision: input.publishedRevision,
             ownerUserId: input.ownerUserId,
+            visibility: input.visibility,
             createdAt: input.createdAt,
             updatedAt: input.updatedAt,
             archivedAt: input.archivedAt,
@@ -463,6 +485,21 @@ export function createSqliteDigitalEmployeeAuthoringStore(
         .where(eq(employeeJobTemplates.id, id))
         .get()
       return row === undefined ? null : toJobTemplate(row)
+    },
+
+    getJobTemplateAcl(id) {
+      const row = db
+        .select({
+          id: employeeJobTemplates.id,
+          name: employeeJobTemplates.name,
+          ownerUserId: employeeJobTemplates.ownerUserId,
+          visibility: employeeJobTemplates.visibility,
+          archivedAt: employeeJobTemplates.archivedAt,
+        })
+        .from(employeeJobTemplates)
+        .where(eq(employeeJobTemplates.id, id))
+        .get()
+      return row === undefined ? null : row
     },
 
     listJobTemplates(typeRef) {

@@ -1,3 +1,5 @@
+import type { ResourceAccess, ResourceVisibility } from '@agent-workflow/shared'
+
 export interface LocalizedText {
   'zh-CN': string
   'en-US': string
@@ -271,6 +273,10 @@ export interface ToolRegistration {
   origin: 'custom' | 'platform'
   editable: boolean
   selection: 'selectable' | 'automatic'
+  /** RFC-330 —— 行级 ACL 事实 + 调用者档位（平台工具恒 public / null / read）。 */
+  ownerUserId: string | null
+  visibility: ResourceVisibility
+  access: ResourceAccess
   updatedAt: number
 }
 
@@ -338,6 +344,10 @@ export interface JobTemplate {
     reactionLaneOrder: string[]
   }
   publishedRevision: number | null
+  /** RFC-330 —— 行级 ACL 事实 + 调用者档位。 */
+  ownerUserId: string | null
+  visibility: ResourceVisibility
+  access: ResourceAccess
 }
 
 export interface DigitalEmployeeDefinition {
@@ -388,6 +398,10 @@ export interface DigitalEmployeeDefinition {
     exactReactionLaneOrder: string[]
     enabledWorkItemRefs: string[]
   }
+  /** RFC-330 —— 行级 ACL 事实 + 调用者档位（employee_definition 已是第 13 类 ACL 资源）。 */
+  ownerUserId: string | null
+  visibility: ResourceVisibility
+  access: ResourceAccess
 }
 
 export function localized(text: LocalizedText, language: string): string {

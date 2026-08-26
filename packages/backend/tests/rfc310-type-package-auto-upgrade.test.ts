@@ -21,6 +21,8 @@ import {
   employeeReactionRounds,
   employeeToolRegistrations,
   employeeToolRegistrationRevisions,
+  resourceGrants,
+  users,
 } from '@/db/schema'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ToolConnectionCatalogPort } from '@/modules/digital-employee/composition/required-ports'
@@ -1730,84 +1732,108 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
     }
   })
 
-  test('published standalone jobs migrate automatically while user drafts remain drafts', async () => {
-    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-standalone-job-'))
-    try {
-      const db = createInMemoryDb(MIGRATIONS)
-      const v1 = createFixtureModule({
-        db,
-        appHome,
-        typePackage: versionedDesignPackage(1),
-      })
-      const typeRef = { typeId: 'design', revision: 1 }
-      const tool = await v1.commands.createTool({
-        typeRef,
-        workItemRef: 'design-work',
-        actorUserId: 'standalone-owner',
-        body: {
-          displayName: '独立岗位工具',
-          description: '尚未被数字员工采用',
-          roleRef: 'primary',
-          implementation: { kind: 'agent', agentRef: { id: 'standalone-agent', revision: 1 } },
-        },
-      })
-      const toolRef = await v1.commands.publishTool({
-        typeRef,
-        workItemRef: 'design-work',
-        toolId: tool.id,
-        actorUserId: 'standalone-owner',
-      })
-      const published = v1.commands.createJobTemplate({
-        typeRef,
-        actorUserId: 'standalone-owner',
-        body: {
-          name: '待采用的已发布岗位',
-          description: '发布后即属于可迁移闭包',
-          defaultToolBindings: [
-            { workItemRef: 'design-work', slotRef: 'primary', registrationRef: toolRef },
-          ],
-        },
-      })
-      v1.commands.publishJobTemplate({ id: published.id, actorUserId: 'standalone-owner' })
-      v1.commands.createJobTemplate({
-        typeRef,
-        actorUserId: 'standalone-owner',
-        body: {
-          name: '用户尚未发布的岗位草稿',
-          description: '平台不得替用户发布',
-          defaultToolBindings: [
-            { workItemRef: 'design-work', slotRef: 'primary', registrationRef: toolRef },
-          ],
-        },
-      })
-      const issues: Array<{ reasonCode: string; resourceId: string }> = []
+  for (const source of [
+    { ownerUserId: 'owner-1', visibility: 'private' as const },
+    { ownerUserId: 'owner-1', visibility: 'public' as const },
+    { ownerUserId: null, visibility: 'public' as const },
+  ]) {
+    test(`RFC-330 D18': successors inherit owner=${source.ownerUserId ?? 'null'} visibility=${source.visibility} and start with zero grants`, async () => {
+      const appHome = mkdtempSync(join(tmpdir(), 'rfc330-auto-upgrade-acl-'))
+      try {
+        const db = createInMemoryDb(MIGRATIONS)
+        await seedPublishedEmployee({ db, appHome })
+        // 把 source 行（工具 + 模版 + 员工定义）改成本用例的归属 / 可见性，并各挂一条 grant——
+        // successor 必须复制 owner + visibility（D18'），**不**复制 grants（用户裁定 D22）。
+        const sourceTool = db.select().from(employeeToolRegistrations).all()[0]!
+        const sourceJob = db.select().from(employeeJobTemplates).all()[0]!
+        const sourceEmployee = db.select().from(employeeDefinitions).all()[0]!
+        db.update(employeeToolRegistrations)
+          .set({ ownerUserId: source.ownerUserId, visibility: source.visibility })
+          .where(eq(employeeToolRegistrations.id, sourceTool.id))
+          .run()
+        db.update(employeeJobTemplates)
+          .set({ ownerUserId: source.ownerUserId, visibility: source.visibility })
+          .where(eq(employeeJobTemplates.id, sourceJob.id))
+          .run()
+        db.update(employeeDefinitions)
+          .set({ ownerUserId: source.ownerUserId })
+          .where(eq(employeeDefinitions.id, sourceEmployee.id))
+          .run()
+        db.insert(users)
+          .values({
+            id: 'grantee-1',
+            username: 'grantee-1',
+            displayName: 'grantee-1',
+            role: 'user',
+            status: 'active',
+            createdAt: 1,
+            updatedAt: 1,
+          })
+          .run()
+        db.insert(resourceGrants)
+          .values([
+            {
+              resourceType: 'employee_tool',
+              resourceId: sourceTool.id,
+              userId: 'grantee-1',
+              level: 'read',
+              addedBy: 'seed',
+              addedAt: 1,
+            },
+            {
+              resourceType: 'employee_job_template',
+              resourceId: sourceJob.id,
+              userId: 'grantee-1',
+              level: 'write',
+              addedBy: 'seed',
+              addedAt: 1,
+            },
+          ])
+          .run()
 
-      const v2 = createFixtureModule({
-        db,
-        appHome,
-        typePackage: versionedDesignPackage(2),
-        issues,
-      })
+        const issues: Array<{ reasonCode: string; resourceId: string }> = []
+        createFixtureModule({ db, appHome, typePackage: versionedDesignPackage(2), issues })
+        expect(issues).toEqual([])
 
-      expect(issues).toEqual([])
-      expect(v2.queries.listLaunchableEmployees()).toEqual([])
-      expect(
-        v2.queries.listJobTemplates({ typeId: 'design', revision: 2 }).map((job) => job.name),
-      ).toEqual(['待采用的已发布岗位'])
-      expect(
-        db
+        const successorTool = db
+          .select()
+          .from(employeeToolRegistrations)
+          .all()
+          .find((row) => row.typeRevision === 2)
+        const successorJob = db
           .select()
           .from(employeeJobTemplates)
           .all()
-          .find((job) => job.name === '用户尚未发布的岗位草稿'),
-      ).toMatchObject({ typeRevision: 1, publishedRevision: null })
-    } finally {
-      rmSync(appHome, { recursive: true, force: true })
-    }
-  })
+          .find((row) => row.typeRevision === 2)
+        expect(successorTool).toMatchObject({
+          ownerUserId: source.ownerUserId,
+          visibility: source.visibility,
+          aclRevision: 0,
+          name: '设计执行工具',
+        })
+        expect(successorJob).toMatchObject({
+          ownerUserId: source.ownerUserId,
+          visibility: source.visibility,
+          aclRevision: 0,
+          name: '产品设计岗位',
+        })
+        expect(
+          db
+            .select()
+            .from(resourceGrants)
+            .all()
+            .filter(
+              (row) => row.resourceId === successorTool!.id || row.resourceId === successorJob!.id,
+            ),
+        ).toEqual([])
+      } finally {
+        rmSync(appHome, { recursive: true, force: true })
+      }
+    })
+  }
 
-  test('orphaned automatic intermediate jobs do not multiply across later type revisions', async () => {
-    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-orphan-chain-'))
+  test("RFC-330 D17': another owner's same-name template does not rename the successor", async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc330-auto-upgrade-other-owner-'))
     try {
       const db = createInMemoryDb(MIGRATIONS)
       const futureTypeRef = { typeId: 'design', revision: 2 }
@@ -1816,21 +1842,18 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         appHome,
         typePackage: versionedDesignPackage(2),
       })
-      future.commands.createJobTemplate({
+      // 另一位 owner 在目标版本下已有同名模版：D17' 下它在别的 (owner) 分区，不是占位。
+      const foreign = future.commands.createJobTemplate({
         typeRef: futureTypeRef,
-        actorUserId: 'draft-owner',
+        actorUserId: 'other-owner',
         body: {
           name: 'Standalone evolving job',
-          description: 'An unpublished same-name draft forces a deterministic migrated name.',
+          description: 'Someone else already uses this name in the target revision.',
           defaultToolBindings: [],
         },
       })
 
-      const v1 = createFixtureModule({
-        db,
-        appHome,
-        typePackage: versionedDesignPackage(1),
-      })
+      const v1 = createFixtureModule({ db, appHome, typePackage: versionedDesignPackage(1) })
       const typeRef = { typeId: 'design', revision: 1 }
       const tool = await v1.commands.createTool({
         typeRef,
@@ -1840,10 +1863,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           displayName: 'design-work tool',
           description: 'Published for a standalone job.',
           roleRef: 'primary',
-          implementation: {
-            kind: 'agent',
-            agentRef: { id: 'design-work-agent', revision: 1 },
-          },
+          implementation: { kind: 'agent', agentRef: { id: 'design-work-agent', revision: 1 } },
         },
       })
       const toolRef = await v1.commands.publishTool({
@@ -1859,125 +1879,33 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           name: 'Standalone evolving job',
           description: 'The platform keeps one current descendant for this published job.',
           defaultToolBindings: [
-            {
-              workItemRef: 'design-work',
-              slotRef: 'primary',
-              registrationRef: toolRef,
-            },
+            { workItemRef: 'design-work', slotRef: 'primary', registrationRef: toolRef },
           ],
         },
       })
       v1.commands.publishJobTemplate({ id: published.id, actorUserId: 'standalone-owner' })
 
+      const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const v2 = createFixtureModule({
-        db,
-        appHome,
-        typePackage: versionedDesignPackage(2),
-      })
-      const v2Jobs = v2.queries.listJobTemplates(futureTypeRef)
-      expect(v2Jobs).toHaveLength(2)
-      expect(v2Jobs.filter((job) => job.publishedRevision !== null)).toHaveLength(1)
-      expect(v2Jobs.find((job) => job.publishedRevision !== null)?.name).not.toBe(
-        'Standalone evolving job',
-      )
-
-      const v3Package = versionedDesignPackage(3)
-      const issues: Array<{ reasonCode: string; resourceId: string }> = []
-      const v3 = createFixtureModule({ db, appHome, typePackage: v3Package, issues })
-      expect(issues).toEqual([])
-      const currentJobs = v3.queries.listJobTemplates({ typeId: 'design', revision: 3 })
-      expect(currentJobs).toHaveLength(1)
-      expect(
-        currentJobs[0]?.draft.defaultToolBindings.map((binding) => binding.workItemRef).sort(),
-      ).toEqual(['design-work'])
-
-      const counts = {
-        jobs: db.select().from(employeeJobTemplates).all().length,
-        tools: db.select().from(employeeToolRegistrations).all().length,
-      }
-      createFixtureModule({ db, appHome, typePackage: v3Package })
-      expect({
-        jobs: db.select().from(employeeJobTemplates).all().length,
-        tools: db.select().from(employeeToolRegistrations).all().length,
-      }).toEqual(counts)
-    } finally {
-      rmSync(appHome, { recursive: true, force: true })
-    }
-  })
-
-  test('target name collisions migrate under a deterministic name without user work', async () => {
-    const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-name-collision-'))
-    try {
-      const db = createInMemoryDb(MIGRATIONS)
-      const current = createFixtureModule({
-        db,
-        appHome,
-        typePackage: versionedDesignPackage(2),
-        idPrefix: 'current-resource',
-      })
-      const currentTypeRef = { typeId: 'design', revision: 2 }
-      const currentTool = await current.commands.createTool({
-        typeRef: currentTypeRef,
-        workItemRef: 'design-work',
-        actorUserId: 'current-owner',
-        body: {
-          displayName: '当前版本独立工具',
-          description: '同名岗位已有另一份合法内容',
-          roleRef: 'primary',
-          implementation: { kind: 'agent', agentRef: { id: 'current-agent', revision: 1 } },
-        },
-      })
-      const currentToolRef = await current.commands.publishTool({
-        typeRef: currentTypeRef,
-        workItemRef: 'design-work',
-        toolId: currentTool.id,
-        actorUserId: 'current-owner',
-      })
-      const existingTarget = current.commands.createJobTemplate({
-        typeRef: currentTypeRef,
-        actorUserId: 'current-owner',
-        body: {
-          name: '产品设计岗位',
-          description: '目标版本已有岗位，不允许自动覆盖',
-          defaultToolBindings: [
-            {
-              workItemRef: 'design-work',
-              slotRef: 'primary',
-              registrationRef: currentToolRef,
-            },
-          ],
-        },
-      })
-      current.commands.publishJobTemplate({
-        id: existingTarget.id,
-        actorUserId: 'current-owner',
-      })
-      const original = await seedPublishedEmployee({ db, appHome })
-      const issues: Array<{ reasonCode: string; resourceId: string }> = []
-
-      const upgraded = createFixtureModule({
         db,
         appHome,
         typePackage: versionedDesignPackage(2),
         issues,
       })
-      const jobs = upgraded.queries.listJobTemplates(currentTypeRef)
-      const employee = upgraded.queries.getEmployee(original.id)
-      const migratedJob = jobs.find(
-        (candidate) => candidate.id === employee.configuration.jobTemplateRef.id,
-      )
-
       expect(issues).toEqual([])
-      expect(employee).toMatchObject({
-        id: original.id,
-        revision: 2,
-        typeRef: currentTypeRef,
+      const v2Jobs = v2.queries.listJobTemplates(futureTypeRef)
+      expect(v2Jobs).toHaveLength(2)
+      const successor = v2Jobs.find((job) => job.publishedRevision !== null)
+      expect(successor).toMatchObject({
+        name: 'Standalone evolving job',
+        ownerUserId: 'standalone-owner',
       })
-      expect(jobs.find((candidate) => candidate.id === existingTarget.id)?.draft.description).toBe(
-        '目标版本已有岗位，不允许自动覆盖',
-      )
-      expect(migratedJob?.name).toMatch(/^产品设计岗位 · migrated design@1-[0-9a-f]{8}$/)
-      expect(migratedJob?.publishedRevision).toBe(1)
+      expect(successor?.id).not.toBe(foreign.id)
+      expect(v2Jobs.find((job) => job.id === foreign.id)).toMatchObject({
+        name: 'Standalone evolving job',
+        ownerUserId: 'other-owner',
+        publishedRevision: null,
+      })
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }

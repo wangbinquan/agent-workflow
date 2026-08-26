@@ -100,6 +100,9 @@ export interface ToolRegistrationView {
   readonly origin: 'custom' | 'platform'
   readonly editable: boolean
   readonly selection: 'selectable' | 'automatic'
+  /** RFC-330 —— 行级 ACL 事实（判据留在 transport，与员工定义同形）；平台工具恒 public / null。 */
+  readonly ownerUserId: string | null
+  readonly visibility: 'private' | 'public'
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -114,6 +117,9 @@ export interface JobTemplateView {
   readonly name: string
   readonly draft: EmployeeJobTemplateContent
   readonly publishedRevision: number | null
+  /** RFC-330 —— 行级 ACL 事实（判据留在 transport）。 */
+  readonly ownerUserId: string | null
+  readonly visibility: 'private' | 'public'
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -222,6 +228,26 @@ export interface DigitalEmployeeQueries {
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
   } | null
+  /**
+   * RFC-330 —— 工具的只读 ACL 窄查询。平台目录工具没有 DB 行：投影为
+   * `builtin: true` / public / 无 owner（D9），transport 据此让 `/acl` 404、写 403。
+   * retired 行仍返回（retiredAt 非空），由调用方决定是否视为消失。
+   */
+  getToolAcl(id: string): {
+    readonly id: string
+    readonly name: string
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+    readonly builtin: boolean
+    readonly retiredAt: number | null
+  } | null
+  /** RFC-330 —— 岗位模版的只读 ACL 窄查询；archived 视为消失（返回 null）。 */
+  getJobTemplateAcl(id: string): {
+    readonly id: string
+    readonly name: string
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+  } | null
   getExecutionPolicy(): ExecutionPolicyView
   getMigrationStatus(): ReturnType<typeof analyzeDigitalEmployeeMigration>
 }
@@ -259,9 +285,22 @@ export interface DigitalEmployeeModule {
       applyPolicyUpgrade(previewToken: string): EmployeeCaseProjectionDocument
       terminate(caseId: string, terminalKind: string): EmployeeCaseProjectionDocument
       resume(caseId: string): EmployeeCaseProjectionDocument
+      /** RFC-330 D19/D20 —— 同一事务内改 owner + 全量替换成员；输入已由调用方规范化。 */
+      replaceCaseMembers(
+        input: Parameters<DigitalEmployeeRuntimeService['replaceCaseMembers']>[0],
+      ): ReturnType<DigitalEmployeeRuntimeService['replaceCaseMembers']>
     }
     readonly queries: {
       getCase(caseId: string): EmployeeCaseProjectionDocument
+      /** RFC-330 —— 案例归属窄查询；不存在 ⇒ null（transport 给出与不可见同形的 404）。 */
+      getCaseAcl(caseId: string): ReturnType<DigitalEmployeeRuntimeService['getCaseAcl']>
+      /** RFC-330 —— apply 前解出 preview token 指向的案例 id（完整校验仍在 apply）。 */
+      peekPolicyUpgradeCaseId(previewToken: string): string
+      listCaseMembers(caseId: string): ReturnType<DigitalEmployeeRuntimeService['listCaseMembers']>
+      getCaseMemberRole(
+        caseId: string,
+        userId: string,
+      ): ReturnType<DigitalEmployeeRuntimeService['getCaseMemberRole']>
       listCases(employeeId?: string, state?: string): string
       listTerminalOutcomeGroups(): string
       listCasePage(input: Parameters<DigitalEmployeeRuntimeService['listCasePage']>[0]): string
@@ -400,6 +439,8 @@ function toolView(
     origin: record.origin ?? 'custom',
     editable: record.origin !== 'platform',
     selection: record.selection ?? 'selectable',
+    ownerUserId: record.origin === 'platform' ? null : record.ownerUserId,
+    visibility: record.origin === 'platform' ? 'public' : record.visibility,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }
@@ -414,6 +455,8 @@ const platformToolDraftSchema = z
     validationReceipt: toolValidationReceiptSchema,
     publishedRevision: z.number().int().positive().nullable(),
     ownerUserId: z.string().nullable(),
+    // RFC-330 —— 平台目录项没有 ACL 行，恒 public（参与者 JSON 里不带这一列）。
+    visibility: z.enum(['private', 'public']).default('public'),
     createdAt: z.number().int().nonnegative(),
     updatedAt: z.number().int().nonnegative(),
     retiredAt: z.number().int().nonnegative().nullable(),
@@ -480,6 +523,8 @@ function jobView(
     name: record.name,
     draft: record.draft,
     publishedRevision: record.publishedRevision,
+    ownerUserId: record.ownerUserId,
+    visibility: record.visibility,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }
@@ -671,6 +716,30 @@ export function composeDigitalEmployee(
           visibility: record.visibility,
         }
       },
+      getToolAcl: (id) => {
+        if (platformTools.isPlatformTool(id)) {
+          return {
+            id,
+            name: id,
+            ownerUserId: null,
+            visibility: 'public',
+            builtin: true,
+            retiredAt: null,
+          }
+        }
+        const record = store.getToolAcl(id)
+        return record === null ? null : { ...record, builtin: false }
+      },
+      getJobTemplateAcl: (id) => {
+        const record = store.getJobTemplateAcl(id)
+        if (record === null || record.archivedAt !== null) return null
+        return {
+          id: record.id,
+          name: record.name,
+          ownerUserId: record.ownerUserId,
+          visibility: record.visibility,
+        }
+      },
       getExecutionPolicy: policyView,
       getMigrationStatus: () =>
         analyzeDigitalEmployeeMigration(
@@ -741,9 +810,16 @@ export function composeDigitalEmployee(
                 const record = runtimeService.resume(caseId)
                 return runtimeDocument(record.id)
               },
+              replaceCaseMembers: (input) => runtimeService.replaceCaseMembers(input),
             },
             queries: {
               getCase: runtimeDocument,
+              getCaseAcl: (caseId) => runtimeService.getCaseAcl(caseId),
+              peekPolicyUpgradeCaseId: (previewToken) =>
+                runtimeService.peekPolicyUpgradeCaseId(previewToken),
+              listCaseMembers: (caseId) => runtimeService.listCaseMembers(caseId),
+              getCaseMemberRole: (caseId, userId) =>
+                runtimeService.getCaseMemberRole(caseId, userId),
               listCases: (employeeId, state) =>
                 JSON.stringify(runtimeService.listCases(employeeId, state)),
               listTerminalOutcomeGroups: () =>

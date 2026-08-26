@@ -1284,7 +1284,7 @@
         "packages/shared/src/schemas/resourceAcl.ts"
       ],
       "singleSourceOf": "The canonical enum of ACL'd resource types. Deliberately forked into two narrower sibling lists (BUNDLE_RESOURCE_TYPES:56-69, INTENT_RESOURCE_TYPES:95-102) with explicit narrowing functions asBundleResourceType / asIntentResourceType.",
-      "claimAudit": "Claims (and the sibling-list comments argue well) to be the one list of ACL types. It IS the only definition \u2014 but it is now 12 entries while the file's own header (line 3) still says 'Six resource types', and it is consumed only to build a zod enum: nothing in the repo iterates ACL_RESOURCE_TYPES, so per-type symmetry is enforced nowhere.",
+      "claimAudit": "Claims (and the sibling-list comments argue well) to be the one list of ACL types. It IS the only definition \u2014 but it is now 15 entries (RFC-330 added employee_tool / employee_job_template) while the file's own header (line 3) still says 'Six resource types', and it is consumed only to build a zod enum: nothing in the repo iterates ACL_RESOURCE_TYPES, so per-type symmetry is enforced nowhere.",
       "auditedBy": "resource-acl-catalog",
       "guards": [],
       "canonicalOwnerEntryIds": [
@@ -1412,7 +1412,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5",
+    "sourceDigest": "sha256:39b59c4d6281d0a9b07df3693337bf6f8f0e4e8e3324c49d141373f43bd1b68a",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {

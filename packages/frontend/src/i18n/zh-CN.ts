@@ -13533,6 +13533,7 @@ export const zhCN: Resources = {
     repo: '仓库操作失败',
     lifecycle: '任务生命周期操作失败',
     auth: '账号或权限校验失败',
+    digitalEmployee: '数字员工操作失败',
     misc: '请求失败',
   },
   validation: {
@@ -14052,6 +14053,12 @@ export const zhCN: Resources = {
       '重命名只有资源所有者可以操作——「可编辑」授权只覆盖内容，不覆盖名字。',
     'task-observer-read-only':
       '你在这个任务里是观察者：可以查看进展、日志与改动，但取消 / 恢复 / 重试与评审、反问的回答保留给任务成员。',
+    // --- RFC-330 数字员工域 ---
+    'employee-case-observer-read-only':
+      '你是这个案例的观察者：可以查看进度，但恢复、终止与策略升级只有发起人与协作者可以操作。',
+    'employee-case-not-found': '案例不存在，或你不是它的成员。',
+    'employee-tool-not-found': '工具不存在，或你没有它的查看权限。',
+    'employee-job-template-not-found': '岗位模板不存在，或你没有它的查看权限。',
     'acl-invalid': '授权参数不合法。',
     'acl-missing-refs': '你没有其中部分引用资源的访问权限。',
     'acl-revision-conflict': '授权配置已被他人更新，请刷新后重试。',

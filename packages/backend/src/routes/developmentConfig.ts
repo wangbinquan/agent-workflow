@@ -632,13 +632,16 @@ export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       const id = c.req.param('id')
-      await requireGovernable(
+      // RFC-330 D-② —— 保存 playbook 是内容写：`write` 授权者放行（此前误用治理门，
+      // 被授权的编辑者在旧详情页保存一律 403）；改名仍归 owner（RFC-324 D3）。
+      const { row: current, access } = await requireEditable(
         deps,
         actor,
         'digital_employee',
         await getDigitalEmployee(deps.db, id),
       )
       const body = employeePlaybookBody.parse(await safeJsonOrEmpty(c.req.raw))
+      assertNameUnchangedForEditor(access, current.name, body.name)
       // Reject an incomplete browser write before replacing the previous draft;
       // cross-resource closure violations remain visible and publish-blocking.
       digitalEmployeeContentSchema.parse(body.playbook)

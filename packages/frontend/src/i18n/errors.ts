@@ -46,6 +46,7 @@ export type ErrorDomain =
   | 'repo'
   | 'lifecycle'
   | 'auth'
+  | 'digitalEmployee'
   | 'misc'
 
 /**
@@ -139,6 +140,8 @@ const DOMAIN_PREFIXES: ReadonlyArray<readonly [readonly string[], ErrorDomain]> 
     ],
     'auth',
   ],
+  // RFC-330 —— 数字员工域（工具 / 模版 / 员工定义 / 案例）整族；此前落 misc。
+  [['employee-'], 'digitalEmployee'],
   // `task-` LAST among t-prefixes so task-question wins above.
   [['task-'], 'task'],
 ]

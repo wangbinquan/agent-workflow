@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 438,
-    "architectureExceptions": 941,
+    "ambientWiring": 440,
+    "architectureExceptions": 942,
     "backgroundJobs": 215,
-    "crossContextImports": 961,
-    "facades": 369,
+    "crossContextImports": 962,
+    "facades": 370,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17444,
-    "mutationEntrypoints": 899,
+    "moduleSymbolOwners": 17492,
+    "mutationEntrypoints": 900,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 286,
-    "transactionExternalEffects": 244
+    "transactionExternalEffects": 245
   },
   "metrics": {
-    "ambientWiringEntries": 438,
+    "ambientWiringEntries": 440,
     "appDepsConsumers": [
       "packages/backend/src/mcp/dispatch.ts",
       "packages/backend/src/mcp/server.ts",
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 840,
+    "backendProductionFiles": 841,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -247,10 +247,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 369,
+    "serviceFiles": 370,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5"
+  "sourceDigest": "sha256:39b59c4d6281d0a9b07df3693337bf6f8f0e4e8e3324c49d141373f43bd1b68a"
 }

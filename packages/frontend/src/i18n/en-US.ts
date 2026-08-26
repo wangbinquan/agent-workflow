@@ -7466,6 +7466,7 @@ export const enUS: Resources = {
     repo: 'Repository action failed',
     lifecycle: 'Task lifecycle action failed',
     auth: 'Authentication or permission check failed',
+    digitalEmployee: 'Digital employee action failed',
     misc: 'Request failed',
   },
   validation: {
@@ -8085,6 +8086,13 @@ export const enUS: Resources = {
       'Renaming is reserved for the resource owner — an edit grant covers content, not the name.',
     'task-observer-read-only':
       'You are an observer on this task: you can follow progress, logs and changes, but cancelling, resuming, retrying and answering reviews or clarifications stay with the task members.',
+    // --- RFC-330 digital employee domain ---
+    'employee-case-observer-read-only':
+      'You are an observer on this employee case: you can follow its progress, but resuming, terminating and policy upgrades are reserved for its owner and collaborators.',
+    'employee-case-not-found':
+      'This employee case does not exist, or you are not one of its members.',
+    'employee-tool-not-found': 'This tool does not exist, or you cannot view it.',
+    'employee-job-template-not-found': 'This job template does not exist, or you cannot view it.',
     'acl-invalid': 'Invalid sharing payload.',
     'acl-missing-refs': 'You lack access to some referenced resources.',
     'acl-revision-conflict': 'The sharing settings changed; reload and retry.',

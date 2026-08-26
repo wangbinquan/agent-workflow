@@ -93,6 +93,8 @@ let daemon: DaemonHandle
 let mocks: SystemMockClient
 let repositoryId = ''
 let employeeId = ''
+// RFC-330 —— 案例段启动的案例 id，供最后的成员制用例复用（serial）。
+let launchedCaseId = ''
 let employeeName = ''
 let defaultPipelineAdapterName = ''
 
@@ -1050,6 +1052,7 @@ test('body and repository-bound files enter a stateful employee case and the uni
 
   await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
   const caseId = page.url().split('/').at(-1)!
+  launchedCaseId = caseId
   const runtimeCase = await requestJson<{
     capabilityActivation: {
       activeWorkItemRefs: string[]
@@ -1221,4 +1224,99 @@ test('body and repository-bound files enter a stateful employee case and the uni
       .filter({ hasText: 'Deterministic output / program output' })
       .locator('pre'),
   ).toContainText('"deliveryContent"')
+})
+
+// RFC-330 D19/D20 —— 案例成员制：与编排任务同形的成员面板复用在案例页上。
+// 打到 GET/PUT /api/employee-cases/:id/members 两条新路由；bypass（admin）能管理成员，
+// 被加为成员的普通用户从此看得见案例（此前任何持 digital-employees:read 的账号都能读）。
+test('RFC-330: employee case members panel — admin adds a collaborator, who can then open the case', async ({
+  browser,
+}) => {
+  expect(launchedCaseId, 'the case launched by the previous test').not.toBe('')
+  const mkUser = async (username: string, role: 'admin' | 'user') => {
+    const created = await requestJson<{ id: string }>('/api/users', {
+      method: 'POST',
+      body: { username, displayName: username, role, password: 'longEnoughPassword' },
+    })
+    const login = await fetch(`${daemon.baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password: 'longEnoughPassword' }),
+    })
+    expect(login.ok, `login ${username}`).toBe(true)
+    const { sessionToken } = (await login.json()) as { sessionToken: string }
+    return { id: created.id, username, sessionToken }
+  }
+  const admin = await mkUser(`rfc330-admin-${RUN_TAG}`, 'admin')
+  const bob = await mkUser(`rfc330-bob-${RUN_TAG}`, 'user')
+  const humanContext = async (token: string) => {
+    const context = await browser.newContext()
+    await context.addInitScript(
+      ({ baseUrl, tok }) => {
+        localStorage.setItem('agent-workflow.baseUrl', baseUrl)
+        localStorage.setItem('agent-workflow.token', tok)
+        localStorage.setItem('aw-language', 'en-US')
+      },
+      { baseUrl: daemon.baseUrl, tok: token },
+    )
+    return context
+  }
+
+  // bob 还不是成员：案例对他 404（与不存在同形）。
+  const before = await fetch(
+    `${daemon.baseUrl}/api/employee-cases/${encodeURIComponent(launchedCaseId)}`,
+    { headers: { authorization: `Bearer ${bob.sessionToken}` } },
+  )
+  expect(before.status).toBe(404)
+
+  const adminCtx = await humanContext(admin.sessionToken)
+  const adminPage = await adminCtx.newPage()
+  await adminPage.goto(`${daemon.baseUrl}/tasks/employee-cases/${launchedCaseId}`)
+  await adminPage.getByTestId('employee-case-members-dialog-button').click()
+  const panel = adminPage.getByTestId('task-members-panel')
+  await expect(panel).toBeVisible()
+  await panel.getByTestId('members-users-input').click()
+  await panel.getByTestId('members-users-input').fill('rfc330-bob')
+  await adminPage.getByTestId(`members-users-option-${bob.username}`).click()
+  await adminPage.getByTestId('members-save').click()
+  await expect(adminPage.getByTestId('task-members-panel')).toHaveCount(0)
+
+  const members = await requestJson<{ members: Array<{ user: { id: string }; role: string }> }>(
+    `/api/employee-cases/${encodeURIComponent(launchedCaseId)}/members`,
+  )
+  expect(members.members).toEqual([expect.objectContaining({ role: 'collaborator' })])
+  expect(members.members[0]?.user.id).toBe(bob.id)
+
+  // 成为成员后 bob 看得见案例页，也能打开只读的成员面板（collaborator 不能管理成员）。
+  const bobCtx = await humanContext(bob.sessionToken)
+  const bobPage = await bobCtx.newPage()
+  await bobPage.goto(`${daemon.baseUrl}/tasks/employee-cases/${launchedCaseId}`)
+  await expect(bobPage.getByTestId('employee-case-members-dialog-button')).toBeVisible()
+  await bobPage.getByTestId('employee-case-members-dialog-button').click()
+  await expect(bobPage.getByTestId('task-members-panel')).toBeVisible()
+  await expect(bobPage.getByTestId('members-save')).toHaveCount(0)
+  await bobPage.keyboard.press('Escape')
+
+  // D20 —— admin 把案例转移给 bob：bob 成为 owner（前任是系统，不降为成员）。
+  await adminPage.getByTestId('employee-case-members-dialog-button').click()
+  await expect(adminPage.getByTestId('task-members-panel')).toBeVisible()
+  await adminPage.getByTestId('members-transfer-owner').click()
+  await adminPage.getByTestId('members-transfer-input').click()
+  await adminPage.getByTestId('members-transfer-input').fill('rfc330-bob')
+  await adminPage.getByTestId(`members-transfer-option-${bob.username}`).click()
+  await adminPage.getByTestId('members-transfer-confirm').click()
+  await expect
+    .poll(async () => {
+      const after = await requestJson<{ ownerUserId: string | null }>(
+        `/api/employee-cases/${encodeURIComponent(launchedCaseId)}/members`,
+      )
+      return after.ownerUserId
+    })
+    .toBe(bob.id)
+  // 新 owner 的面板拿到管理控件（不刷新：WS 帧让成员查询失效）。
+  await bobPage.getByTestId('employee-case-members-dialog-button').click()
+  await expect(bobPage.getByTestId('members-save')).toBeVisible({ timeout: 20_000 })
+
+  await adminCtx.close()
+  await bobCtx.close()
 })

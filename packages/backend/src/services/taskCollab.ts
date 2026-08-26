@@ -236,6 +236,65 @@ export async function getTaskMembers(
  * their own task's controls (mirror of the resource-ACL rule, which keeps the
  * previous owner as a grantee).
  */
+/**
+ * RFC-330 —— 任务与数字员工案例共用的成员替换规则（纯函数）：
+ *   - `members` 给了就全量替换，没给就沿用现状；同一用户出现两次取**最后**一条
+ *     （与旧 `new Set(userIds)` 的去重一致；PK 含 role，写两档会出现两行）；
+ *   - owner 转移时，前任（非 null、非系统、未另列）自动降为 collaborator，
+ *     不让人丢掉自己任务的控制权（镜像资源 ACL 保留前任 grant 的规则）；
+ *   - owner 永远不是成员行。
+ */
+export function planMembersReplacement(input: {
+  readonly prevOwner: string | null
+  readonly requestedOwner: string | undefined
+  readonly requestedMembers:
+    | ReadonlyArray<{ readonly userId: string; readonly role: AssignableTaskMemberRole }>
+    | undefined
+  readonly currentMembers: ReadonlyArray<{
+    readonly userId: string
+    readonly role: AssignableTaskMemberRole
+  }>
+}): { nextOwner: string | null; nextMembers: Map<string, AssignableTaskMemberRole> } {
+  const nextOwner = input.requestedOwner !== undefined ? input.requestedOwner : input.prevOwner
+  const nextMembers = new Map<string, AssignableTaskMemberRole>(
+    (input.requestedMembers ?? input.currentMembers).map((m) => [m.userId, m.role] as const),
+  )
+  if (
+    nextOwner !== input.prevOwner &&
+    input.prevOwner !== null &&
+    input.prevOwner !== SYSTEM_USER_ID &&
+    !nextMembers.has(input.prevOwner)
+  ) {
+    nextMembers.set(input.prevOwner, 'collaborator')
+  }
+  if (nextOwner !== null) nextMembers.delete(nextOwner)
+  return { nextOwner, nextMembers }
+}
+
+/** RFC-330 —— 引用的用户必须 active 且非系统用户（422 `members-user-invalid`）；任务 / 案例共用。 */
+export async function assertMembersUsersActive(
+  db: DbClient,
+  body: {
+    readonly ownerUserId?: string
+    readonly members?: ReadonlyArray<{ readonly userId: string }>
+  },
+): Promise<void> {
+  const referenced = new Set<string>((body.members ?? []).map((m) => m.userId))
+  if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
+  if (referenced.size === 0) return
+  const rows = await db
+    .select({ id: users.id, status: users.status })
+    .from(users)
+    .where(inArray(users.id, [...referenced]))
+  const active = new Set(rows.filter((r) => r.status === 'active').map((r) => r.id))
+  const bad = [...referenced].filter((id) => id === SYSTEM_USER_ID || !active.has(id))
+  if (bad.length > 0) {
+    throw new ValidationError('members-user-invalid', 'referenced user(s) not active', {
+      userIds: bad,
+    })
+  }
+}
+
 /** RFC-326 — what the locked section hands to the post-commit section. */
 interface MembersCommit {
   prevOwner: string | null
@@ -314,24 +373,10 @@ async function updateTaskMembersLocked(
     )
   }
 
-  const referenced = new Set<string>((body.members ?? []).map((m) => m.userId))
-  if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
-  if (referenced.size > 0) {
-    const rows = await db
-      .select({ id: users.id, status: users.status })
-      .from(users)
-      .where(inArray(users.id, [...referenced]))
-    const active = new Set(rows.filter((r) => r.status === 'active').map((r) => r.id))
-    const bad = [...referenced].filter((id) => id === SYSTEM_USER_ID || !active.has(id))
-    if (bad.length > 0) {
-      throw new ValidationError('members-user-invalid', 'referenced user(s) not active', {
-        userIds: bad,
-      })
-    }
-  }
+  await assertMembersUsersActive(db, body)
 
   const prevOwner = task.ownerUserId ?? null
-  const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : prevOwner
+  let nextOwner: string | null = prevOwner
   let beforeCollaborators: (typeof taskCollaborators.$inferSelect)[] = []
   let nextMembers = new Map<string, AssignableTaskMemberRole>()
 
@@ -345,26 +390,16 @@ async function updateTaskMembersLocked(
       .from(taskCollaborators)
       .where(eq(taskCollaborators.taskId, task.id))
       .all()
-    // A user appearing twice collapses to the LAST entry (same dedupe the old
-    // `new Set(userIds)` gave); the table's PK is (task,user,role), so writing
-    // both grades for one user would produce two rows and an ambiguous member.
-    nextMembers =
-      body.members !== undefined
-        ? new Map(body.members.map((m) => [m.userId, m.role] as const))
-        : new Map(
-            beforeCollaborators
-              .filter((r) => r.role === 'collaborator' || r.role === 'observer')
-              .map((r) => [r.userId, r.role as AssignableTaskMemberRole] as const),
-          )
-    if (
-      nextOwner !== prevOwner &&
-      prevOwner !== null &&
-      prevOwner !== SYSTEM_USER_ID &&
-      !nextMembers.has(prevOwner)
-    ) {
-      nextMembers.set(prevOwner, 'collaborator')
-    }
-    if (nextOwner !== null) nextMembers.delete(nextOwner)
+    const plan = planMembersReplacement({
+      prevOwner,
+      requestedOwner: body.ownerUserId,
+      requestedMembers: body.members,
+      currentMembers: beforeCollaborators
+        .filter((r) => r.role === 'collaborator' || r.role === 'observer')
+        .map((r) => ({ userId: r.userId, role: r.role as AssignableTaskMemberRole })),
+    })
+    nextOwner = plan.nextOwner
+    nextMembers = plan.nextMembers
 
     if (nextOwner !== prevOwner) {
       tx.update(tasksTable).set({ ownerUserId: nextOwner }).where(eq(tasksTable.id, task.id)).run()

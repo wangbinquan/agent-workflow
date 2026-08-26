@@ -3,6 +3,7 @@ import { createRoute, Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { CaseMembers } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
 import type {
@@ -16,8 +17,13 @@ import {
   type ResponsibilityDispatchNode,
   type ResponsibilityReviewGate,
 } from '@/components/digital-employees/EmployeeCapabilityPanorama'
+import {
+  CASE_MEMBERS_PAGE_QUERY_KEY,
+  CaseMembersDialogButton,
+} from '@/components/digital-employees/CaseMembersDialogButton'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { usePermission } from '@/hooks/useActor'
+import { usePermission, useAuthSessionRevision } from '@/hooks/useActor'
+import { useTasksSync } from '@/hooks/useTasksSync'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
@@ -355,7 +361,19 @@ function EmployeeCaseDetailPage(): ReactElement {
   const language = i18n.resolvedLanguage ?? i18n.language
   const zh = language.startsWith('zh')
   const queryClient = useQueryClient()
-  const canResume = usePermission('development-missions:retry')
+  const authRevision = useAuthSessionRevision()
+  // RFC-330 —— 订阅统一列表频道：`employee-case.members.changed` 帧让本页投影与成员
+  // 查询失效（owner 转移 / 成员变更后 canOperate 与恢复按钮随之收敛，不必刷新）。
+  useTasksSync()
+  const canResumePoint = usePermission('development-missions:retry')
+  // RFC-330 D19 —— 恢复按钮 = 权限点 ∧ 成员面的 canOperate（observer 只能看）。
+  // 成员面尚未取到 / 取失败时**不**渲染按钮：这是一个会发起写的控件，不能靠乐观值。
+  const members = useQuery<CaseMembers>({
+    queryKey: CASE_MEMBERS_PAGE_QUERY_KEY(caseId, authRevision),
+    queryFn: ({ signal }) =>
+      api.get(`/api/employee-cases/${encodeURIComponent(caseId)}/members`, undefined, signal),
+  })
+  const canResume = canResumePoint && members.data?.canOperate === true
   const [selectedWorkItemRef, setSelectedWorkItemRef] = useState<string | null>(null)
   const [selectedReviewOptionRef, setSelectedReviewOptionRef] = useState<string | null>(null)
   const [selectedDispatchNodeKey, setSelectedDispatchNodeKey] = useState<string | null>(null)
@@ -579,19 +597,23 @@ function EmployeeCaseDetailPage(): ReactElement {
           title={data.case.name}
           meta={<StatusChip kind={status.kind}>{status.label}</StatusChip>}
           actions={
-            typeRef === null ? null : (
-              <Link
-                to="/digital-employees/$typeRef"
-                params={{ typeRef }}
-                search={{
-                  view: 'jobs',
-                  jobTemplateId: data.capabilityActivation.jobTemplateRef.id,
-                }}
-                className="btn btn--sm"
-              >
-                {zh ? '查看岗位模板' : 'View job template'}
-              </Link>
-            )
+            <>
+              <CaseMembersDialogButton caseId={caseId} />
+              {typeRef === null ? null : (
+                <Link
+                  to="/digital-employees/$typeRef"
+                  params={{ typeRef }}
+                  search={{
+                    view: 'jobs',
+                    jobTemplateId: data.capabilityActivation.jobTemplateRef.id,
+                  }}
+                  // 与旁边的「任务成员」入口（MembersDialogButton，标准 `btn`）同尺寸。
+                  className="btn"
+                >
+                  {zh ? '查看岗位模板' : 'View job template'}
+                </Link>
+              )}
+            </>
           }
         >
           <p className="operations-surface__subtitle">

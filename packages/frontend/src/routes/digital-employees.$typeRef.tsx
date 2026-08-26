@@ -54,8 +54,16 @@ import { PageHeader } from '@/components/PageHeader'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
+import { AclDialogButton } from '@/components/AclPanel'
+import {
+  cardControls,
+  jobTemplateOptionLabel,
+  requestedJobTemplateDecision,
+} from '@/components/digital-employees/access'
+import { ResourceBadges } from '@/components/ResourceBadges'
+import { useUserLookup } from '@/hooks/useUserLookup'
 import { TabBar, tabDomIds } from '@/components/TabBar'
-import { usePermission } from '@/hooks/useActor'
+import { useActor, usePermission } from '@/hooks/useActor'
 import { Route as RootRoute } from './__root'
 
 type WorkspaceView = 'employees' | 'jobs' | 'toolbox'
@@ -684,12 +692,19 @@ function ToolboxPanel(props: {
           {props.tools.length === 0 ? (
             <p className="node-tool-list__empty">
               {zh
-                ? '这个工作项还没有工具。增加后可在岗位模板中选择。'
-                : 'No tools yet. Add one, then select it in a job template.'}
+                ? '这个工作项还没有你可见的工具（别人的私有工具需要授权后才会出现）。增加后可在岗位模板中选择。'
+                : 'No tools visible to you yet (private tools of others appear once shared). Add one, then select it in a job template.'}
             </p>
           ) : (
             props.tools.map((tool) => {
               const status = toolStatus(tool, zh)
+              // RFC-330 —— 卡片控件按调用者档位收敛（design §7.2）。
+              const controls = cardControls({
+                access: tool.access,
+                canUpdate,
+                canArchive,
+                builtin: tool.origin === 'platform',
+              })
               return (
                 <article key={tool.id} className="node-tool-row">
                   <div>
@@ -774,7 +789,17 @@ function ToolboxPanel(props: {
                   </div>
                   <div className="employee-summary-card__actions">
                     <StatusChip kind={status.kind}>{status.label}</StatusChip>
-                    {canUpdate && tool.editable ? (
+                    {controls.readOnlyBadge && tool.editable ? (
+                      <StatusChip kind="neutral">{zh ? '只读授权' : 'Read-only access'}</StatusChip>
+                    ) : null}
+                    {controls.aclEntry ? (
+                      <AclDialogButton
+                        resourceBaseUrl={`/api/digital-employee-tools/${encodeURIComponent(tool.id)}`}
+                        invalidateKey={['digital-employee-tools']}
+                        size="sm"
+                      />
+                    ) : null}
+                    {controls.edit && tool.editable ? (
                       <button
                         type="button"
                         className="btn btn--sm"
@@ -786,7 +811,7 @@ function ToolboxPanel(props: {
                         {zh ? '编辑' : 'Edit'}
                       </button>
                     ) : null}
-                    {canArchive && tool.editable ? (
+                    {controls.govern && tool.editable ? (
                       <ConfirmButton
                         label={
                           tool.publishedRevision === null
@@ -1504,7 +1529,16 @@ function AddToolDialog(props: {
           />
         )}
         <Field label={zh ? '工具名称' : 'Tool name'} required>
-          <TextInput value={name} onChange={setName} autoFocus />
+          <TextInput
+            value={name}
+            onChange={setName}
+            autoFocus
+            // RFC-330 —— 显示名视同改名，归 owner（RFC-324 D3）：编辑者锁定。
+            disabled={
+              props.tool !== null &&
+              cardControls({ access: props.tool.access, canUpdate: true }).nameLocked
+            }
+          />
         </Field>
         <Field label={zh ? '说明' : 'Description'}>
           <TextArea value={description} onChange={setDescription} />
@@ -2149,6 +2183,14 @@ function JobTemplatesPanel(props: {
 }): ReactElement {
   const zh = props.language.startsWith('zh')
   const qc = useQueryClient()
+  const canUpdate = usePermission('digital-employees:update')
+  // usePermission 在 /me 加载 / 刷新期间恒答 false；深链分流要等它就绪（与 usePermission 同判据）。
+  const actorQuery = useActor()
+  const permissionsSettled =
+    actorQuery.status === 'success' &&
+    actorQuery.fetchStatus === 'idle' &&
+    actorQuery.data !== null &&
+    actorQuery.data !== undefined
   const requestedWorkItem =
     props.type.authoringManifest.workItems.find(
       (item) => item.workItemRef === props.requestedWorkItemRef,
@@ -2205,6 +2247,8 @@ function JobTemplatesPanel(props: {
         signal,
       ),
   })
+  // RFC-330 D17' —— 同一类型版本下不同 owner 可以同名：卡片带 owner 徽标。
+  const owners = useUserLookup((query.data?.items ?? []).map((job) => job.ownerUserId))
   const employees = useQuery<{ items: DigitalEmployeeDefinition[] }>({
     queryKey: ['digital-employees', 'all'],
     enabled: open,
@@ -2458,9 +2502,21 @@ function JobTemplatesPanel(props: {
     if (openedRequestedJobTemplateId.current === requestedId) return
     const requestedJobTemplate = query.data?.items.find((job) => job.id === requestedId)
     if (requestedJobTemplate === undefined) return
+    // RFC-330 —— 深链（案例页「查看岗位模板」）也按档位分流：read 档不能进可发布的编辑器，
+    // 停留在卡片列表（卡片自带只读徽标与权限入口）。权限点未就绪时不消费深链。
+    const decision = requestedJobTemplateDecision({
+      permissionsSettled,
+      canUpdate,
+      access: requestedJobTemplate.access,
+    })
+    if (decision === 'wait') return
     openedRequestedJobTemplateId.current = requestedId
+    if (decision === 'close') {
+      props.onRequestedJobTemplateClose()
+      return
+    }
     openExistingRef.current(requestedJobTemplate)
-  }, [props.requestedJobTemplateId, query.data?.items])
+  }, [canUpdate, permissionsSettled, props, query.data?.items])
   const openIdentityEditor = () => {
     setIdentityName(name)
     setIdentityDescription(description)
@@ -3061,7 +3117,12 @@ function JobTemplatesPanel(props: {
           {query.data?.items.map((job) => (
             <article key={job.id} className="employee-summary-card">
               <div>
-                <strong>{job.name}</strong>
+                <strong>{job.name}</strong>{' '}
+                <ResourceBadges
+                  visibility={job.visibility}
+                  ownerUserId={job.ownerUserId}
+                  owners={owners}
+                />
                 <p>{job.draft.description}</p>
               </div>
               <div className="employee-summary-card__actions">
@@ -3074,15 +3135,25 @@ function JobTemplatesPanel(props: {
                       ? `可用 · v${job.publishedRevision}`
                       : `Published · v${job.publishedRevision}`}
                 </StatusChip>
-                <button type="button" className="btn btn--sm" onClick={() => openExisting(job)}>
-                  {requestedWorkItem !== null
-                    ? zh
-                      ? '配置此职责'
-                      : 'Configure this duty'
-                    : zh
-                      ? '修改'
-                      : 'Edit'}
-                </button>
+                {cardControls({ access: job.access, canUpdate }).readOnlyBadge ? (
+                  <StatusChip kind="neutral">{zh ? '只读授权' : 'Read-only access'}</StatusChip>
+                ) : null}
+                <AclDialogButton
+                  resourceBaseUrl={`/api/digital-employee-job-templates/${encodeURIComponent(job.id)}`}
+                  invalidateKey={['digital-employee-job-templates']}
+                  size="sm"
+                />
+                {cardControls({ access: job.access, canUpdate }).edit ? (
+                  <button type="button" className="btn btn--sm" onClick={() => openExisting(job)}>
+                    {requestedWorkItem !== null
+                      ? zh
+                        ? '配置此职责'
+                        : 'Configure this duty'
+                      : zh
+                        ? '修改'
+                        : 'Edit'}
+                  </button>
+                ) : null}
               </div>
             </article>
           ))}
@@ -3831,7 +3902,16 @@ function JobTemplatesPanel(props: {
           onSubmit={confirmIdentity}
         >
           <Field label={zh ? '岗位名称' : 'Template name'} required>
-            <TextInput value={identityName} onChange={setIdentityName} autoFocus />
+            <TextInput
+              value={identityName}
+              onChange={setIdentityName}
+              autoFocus
+              // RFC-330 —— 改名归 owner（RFC-324 D3）：编辑者锁定。
+              disabled={
+                editingJob !== null &&
+                cardControls({ access: editingJob.access, canUpdate }).nameLocked
+              }
+            />
           </Field>
           <Field label={zh ? '说明' : 'Description'}>
             <TextArea value={identityDescription} onChange={setIdentityDescription} />
@@ -3850,6 +3930,7 @@ function EmployeesPanel(props: {
 }): ReactElement {
   const zh = props.language.startsWith('zh')
   const qc = useQueryClient()
+  const canUpdate = usePermission('digital-employees:update')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DigitalEmployeeDefinition | null>(null)
   const [name, setName] = useState('')
@@ -3886,6 +3967,11 @@ function EmployeesPanel(props: {
         signal,
       ),
   })
+  // RFC-330 —— 员工卡 owner 徽标 + 重名模版选项的 owner 区分。
+  const owners = useUserLookup([
+    ...(employees.data?.items ?? []).map((employee) => employee.ownerUserId),
+    ...(jobs.data?.items ?? []).map((job) => job.ownerUserId),
+  ])
   const adapters = useQuery<{ items: LaneAdapterChoice[] }>({
     queryKey: ['digital-employee-adapters'],
     enabled: responsibilityEmployee !== null,
@@ -4138,7 +4224,12 @@ function EmployeesPanel(props: {
               className="employee-summary-card employee-summary-card--employee"
             >
               <div>
-                <strong>{employee.name}</strong>
+                <strong>{employee.name}</strong>{' '}
+                <ResourceBadges
+                  visibility={employee.visibility}
+                  ownerUserId={employee.ownerUserId}
+                  owners={owners}
+                />
                 <p>
                   {jobs.data?.items.find(
                     (job) => job.id === employee.configuration.jobTemplateRef.id,
@@ -4171,17 +4262,33 @@ function EmployeesPanel(props: {
                 )}
               </div>
               <div className="employee-summary-card__actions">
-                <button type="button" className="btn btn--sm" onClick={() => openEditor(employee)}>
-                  {zh ? '编辑' : 'Edit'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  data-testid={`digital-employee-configure-responsibilities-${employee.id}`}
-                  onClick={() => openResponsibilities(employee)}
-                >
-                  {zh ? '配置职责' : 'Configure responsibilities'}
-                </button>
+                {cardControls({ access: employee.access, canUpdate }).readOnlyBadge ? (
+                  <StatusChip kind="neutral">{zh ? '只读授权' : 'Read-only access'}</StatusChip>
+                ) : null}
+                <AclDialogButton
+                  resourceBaseUrl={`/api/digital-employees/${encodeURIComponent(employee.id)}`}
+                  invalidateKey={['digital-employees']}
+                  size="sm"
+                />
+                {cardControls({ access: employee.access, canUpdate }).edit ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => openEditor(employee)}
+                    >
+                      {zh ? '编辑' : 'Edit'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      data-testid={`digital-employee-configure-responsibilities-${employee.id}`}
+                      onClick={() => openResponsibilities(employee)}
+                    >
+                      {zh ? '配置职责' : 'Configure responsibilities'}
+                    </button>
+                  </>
+                ) : null}
                 <Link
                   to="/tasks/new"
                   search={{ kind: 'digital-employee', employeeId: employee.id }}
@@ -4233,14 +4340,25 @@ function EmployeesPanel(props: {
           }}
         >
           <Field label={zh ? '员工名称' : 'Employee name'} required>
-            <TextInput value={name} onChange={setName} autoFocus />
+            <TextInput
+              value={name}
+              onChange={setName}
+              autoFocus
+              // RFC-330 —— 改名归 owner（RFC-324 D3）：编辑者锁定。
+              disabled={
+                editing !== null && cardControls({ access: editing.access, canUpdate }).nameLocked
+              }
+            />
           </Field>
           <Field label={zh ? '岗位模板' : 'Job template'} required>
             <Select
               value={jobId}
               onChange={setJobId}
               placeholder={zh ? '请选择岗位模板' : 'Choose a job template'}
-              options={publishedJobs.map((job) => ({ value: job.id, label: job.name }))}
+              options={publishedJobs.map((job) => ({
+                value: job.id,
+                label: jobTemplateOptionLabel(job, publishedJobs, owners, zh ? '系统' : 'system'),
+              }))}
             />
           </Field>
           <Field

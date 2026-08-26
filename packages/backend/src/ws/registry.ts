@@ -520,6 +520,9 @@ function extractTaskIdFromListMessage(msg: TasksListWsMessage): string | null {
     case 'task.members.changed':
     case 'lifecycle.alert.resolved':
       return msg.taskId
+    case 'employee-case.members.changed':
+      // RFC-330 —— not a task frame; gated by its own audience snapshot below.
+      return null
     case 'lifecycle.alert':
       // lifecycle.alert carries the alert payload's taskId.
       // Defensive narrowing — payload shape may evolve.
@@ -536,7 +539,13 @@ function taskAudienceContextVisible(
   taskId: string,
   context: TasksListBroadcastContext | undefined,
 ): boolean | null {
-  if (context === undefined || context.taskId !== taskId) return null
+  if (
+    context === undefined ||
+    context.kind === 'employee-case.members-changed-audience' ||
+    context.taskId !== taskId
+  ) {
+    return null
+  }
   if (actor.permissions.has('tasks:read:all')) return true
   return context.visibleUserIds.has(actor.user.id)
 }
@@ -666,6 +675,20 @@ export const WS_CHANNELS: WsChannelRegistry = {
     // canViewTask short-circuits internally on `tasks:read:all`, keeping those frames on
     // the same async path as before the registry.
     frameGate: async (ctx, msg, deliveryContext) => {
+      if (msg.type === 'employee-case.members.changed') {
+        // RFC-330 —— employee cases have no per-row visibility oracle on this
+        // channel; the frame is delivered ONLY to the before ∪ after audience
+        // frozen by the mutation (or to tasks:read:all). No snapshot ⇒ drop.
+        if (
+          deliveryContext === undefined ||
+          deliveryContext.kind !== 'employee-case.members-changed-audience' ||
+          deliveryContext.caseId !== msg.caseId
+        ) {
+          return false
+        }
+        if (ctx.actor.permissions.has('tasks:read:all')) return true
+        return deliveryContext.visibleUserIds.has(ctx.actor.user.id)
+      }
       const taskId = extractTaskIdFromListMessage(msg)
       if (taskId === null) return false
       if (msg.type === 'task.members.changed' || msg.type === 'task.deleted') {

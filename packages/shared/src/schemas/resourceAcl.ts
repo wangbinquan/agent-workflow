@@ -50,6 +50,13 @@ export const ACL_RESOURCE_TYPES = [
   // D2(a)：立为第 13 类，权限点复用既有的 digital-employees:* 前缀（见
   // routes/resourceAcl.ts 的 ACL_PERMISSION_PREFIX）。
   'employee_definition',
+  // RFC-330 —— 数字员工 OS 的工具注册（第 14 类）与岗位模版（第 15 类）。两张表
+  // 自 RFC-310 起只有一列 `owner_user_id` 做记录、不参与任何判定：持有
+  // `digital-employees:update` 的任何账户都能改 / 发布 / 退休别人的工具与模版，
+  // 也不存在私有工具。用户裁决 D1/D2：与 13 类同形（owner + visibility +
+  // read/write 分档），权限点复用 digital-employees:* 前缀（D5）。
+  'employee_tool',
+  'employee_job_template',
 ] as const
 
 /**

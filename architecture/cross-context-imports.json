@@ -11835,6 +11835,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bac5b4c7c1dbcd76ffa4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W4/W5/W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseMembers",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "employeeCaseMembers",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
       "fromPath": "packages/backend/src/routes/developmentMissions.ts",
       "fromSymbol": "$file",
@@ -15999,9 +16016,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 941,
+    "architectureExceptions": 942,
     "implementationSccs": 0,
-    "observedEdges": 961,
+    "observedEdges": 962,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -27243,6 +27260,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#$file",
+      "id": "import:bac5b4c7c1dbcd76ffa4",
+      "owner": "digital-employee",
+      "removeAfterWave": "W4/W5/W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "employeeCaseMembers",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseMembers"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/developmentMissions.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
@@ -31796,7 +31829,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5",
+  "sourceDigest": "sha256:39b59c4d6281d0a9b07df3693337bf6f8f0e4e8e3324c49d141373f43bd1b68a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

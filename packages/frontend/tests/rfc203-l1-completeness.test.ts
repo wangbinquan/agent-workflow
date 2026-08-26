@@ -3,7 +3,7 @@
 // interface），一旦漂移（只加一边 / 键名打错 / 孤儿 hint）用户就会看到
 // 英文键名或缺失文案。本文件把 proposal §5-A3 的验收固化成可跑断言：
 //   1. zh/en 键集完全同构；L1 基础键 ≥150；hint 必须配对基础键；
-//   2. errorDomains 恒为 19 域（与 resolver 的 ErrorDomain 并集一致）；
+//   2. errorDomains 恒为 20 域（与 resolver 的 ErrorDomain 并集一致；RFC-330 加 digitalEmployee）；
 //   3. skill-source-* 孤儿键清零且不得回潮；
 //   4. 文案风格铁律：值非空、不含未插值的 ${、不含内部术语、标题不等于
 //      code 本身（防「机器码泄漏为标题」）；
@@ -36,11 +36,13 @@ describe('RFC-203 L1 词条完整性', () => {
     expect(orphans).toEqual([])
   })
 
-  test('errorDomains 19 域齐全且与 resolver 域集一致', () => {
+  test('errorDomains 20 域齐全且与 resolver 域集一致', () => {
     const expected = [
       'agent',
       'auth',
       'clarify',
+      // RFC-330 —— 数字员工域（employee-* 整族），此前落 misc。
+      'digitalEmployee',
       'fusion',
       'lifecycle',
       'mcp',

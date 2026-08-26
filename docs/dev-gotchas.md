@@ -3195,3 +3195,27 @@ tracked = {x.split('/')[1] for x in git('ls-files','design').split() if x.starts
 两边对不上的条目，先看它是不是别人的未提交产物——是的话本地那条红与你无关，别动台账。
 同族的还有「凡是 `readdirSync` / `glob` 语料的守卫」：语料面越接近文件系统，越容易被共享
 工作树污染；`git ls-files` 才是与 CI 同构的那一面。
+
+## 只有 `owner_user_id` 的表不是权限（RFC-330，2026-08-26）
+
+`employee_tool_registrations` / `employee_job_templates` 自 RFC-310 起带着 `owner_user_id`，看起来
+像「有归属」，但它们不在 `ACL_RESOURCE_TYPES` / `ACL_TABLES` 里、也没有 `visibility` 列——kernel
+的任何判据都作用不到，那一列只是记录。持有 `digital-employees:update` 的任何账户都能改 / 发布 /
+退休别人的工具与模版，还逃过了 `rfc317-acl-column-enrolment-guard`（守卫只对 owner + visibility
+**双列**发作）。判「有没有权限控制」的唯一依据是**类型是否在 `ACL_RESOURCE_TYPES` 里且路由接了
+`requireResource*` / `filterVisibleRows`**，不是表里有没有 owner 列。
+
+接一类新 ACL 资源要同步的登记点（RFC-330 逐条实撞）：shared `ACL_RESOURCE_TYPES`、schema
+`resource_grants.resource_type` 枚举、`ACL_TABLES`、`OWNER_NAME_UNIQUE_PARTITIONS`（有 owner×name
+唯一索引的才登记；分区列写在描述符里）、`routes/resourceAcl.ts` 的 `ACL_PERMISSION_PREFIX`、
+`rfc099-acl-endpoints-matrix` CASES、`api-contract-coverage` 的精确 `/acl` 清单、`contracts/registry.ts`、
+`rfc329McpSurfaceLedger.ts` 叶子（GET `not-in-scope` / PUT `never`）+ `ledger-baselines.json` 的
+`allowGrowth`。路由上的成员 / 协作面**别挂类型专属权限点**（`development-missions:*`）——
+`rfc317-permission-domain-ownership` 的泄漏账本只减不增，用 `tasks:update` 这类通用点。
+
+## RFC 文档里的 `file:line` 锚点按已提交 blob 取（RFC-330 设计门实撞）
+
+共享工作树里躺着别人的未提交改动时，`sed -n` 读磁盘得到的行号会随他们的在制品漂移
+（RFC-330 落档时 `db/schema.ts` / `services/task.ts` 就被 RFC-328 的在制品挪了几十行，
+设计门当场判「锚点对不上」）。写进 `design/**/*.md` 的锚点一律 `git show <sha>:<path> | nl -ba |
+sed -n 'a,bp'` 取，并在文档头写明基线 sha；复核也用同一条命令。

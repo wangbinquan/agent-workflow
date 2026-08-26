@@ -14,6 +14,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   AssignableTaskMemberRole,
+  MembersBase,
   TaskMember,
   TaskMembers,
   UserPublic,
@@ -28,6 +29,39 @@ import { usePresenceOf } from '@/hooks/usePresence'
 import { Dialog } from '../Dialog'
 import { Segmented } from '../Segmented'
 import { UserPicker } from '../UserPicker'
+
+/**
+ * RFC-330 —— 成员面板的**资源适配器**：任务与数字员工案例共用同一个面板（wire 基础
+ * `MembersBase` 相同），只有「这是哪个资源 / 打哪条 URL / 缓存键 / 响应里的 id 字段 /
+ * 保存后要失效谁」五件事因资源而异。任务的默认适配器逐字保留今天的行为。
+ */
+export interface MembersPanelAdapter {
+  readonly resourceId: string
+  /** 任务：/api/tasks/:id/members；案例：/api/employee-cases/:id/members。 */
+  readonly membersUrl: string
+  queryKey(authRevision: number): readonly unknown[]
+  /** 响应里标识资源的 id（任务 taskId / 案例 caseId）——用于串线检测。 */
+  responseId(data: MembersBase): string
+  readonly invalidateKeys: ReadonlyArray<readonly unknown[]>
+}
+
+export function taskMembersAdapter(taskId: string): MembersPanelAdapter {
+  return {
+    resourceId: taskId,
+    membersUrl: `/api/tasks/${encodeURIComponent(taskId)}/members`,
+    queryKey: (authRevision) => TASK_QUERY_KEYS.members(taskId, authRevision),
+    responseId: (data) => (data as TaskMembers).taskId,
+    invalidateKeys: [['tasks']],
+  }
+}
+
+interface MembersPanelProps {
+  adapter: MembersPanelAdapter
+  /** Called after a successful save — the hosting dialog closes itself. */
+  onSaved?: () => void
+  /** Called by the 取消/关闭 footer button. */
+  onCancel?: () => void
+}
 
 interface TaskMembersPanelProps {
   taskId: string
@@ -51,6 +85,19 @@ interface MembersSaveRequest {
  * panel. Hidden under the daemon token (single-user mode).
  */
 export function TaskMembersDialogButton({ taskId }: { taskId: string }) {
+  return (
+    <MembersDialogButton adapter={taskMembersAdapter(taskId)} testid="task-members-dialog-button" />
+  )
+}
+
+/** RFC-330 —— 资源中立的入口：header 按钮 → Dialog → 面板；任务 / 案例各给适配器。 */
+export function MembersDialogButton({
+  adapter,
+  testid,
+}: {
+  adapter: MembersPanelAdapter
+  testid: string
+}) {
   const { t } = useTranslation()
   const actor = useActor()
   const authRevision = useAuthSessionRevision()
@@ -72,17 +119,12 @@ export function TaskMembersDialogButton({ taskId }: { taskId: string }) {
   }
   return (
     <>
-      <button
-        type="button"
-        className="btn"
-        data-testid="task-members-dialog-button"
-        onClick={() => setOpen(true)}
-      >
+      <button type="button" className="btn" data-testid={testid} onClick={() => setOpen(true)}>
         {t('members.title')}
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} title={t('members.title')} size="md">
-        <TaskMembersPanel
-          taskId={taskId}
+        <MembersPanel
+          adapter={adapter}
           onSaved={() => setOpen(false)}
           onCancel={() => setOpen(false)}
         />
@@ -92,15 +134,20 @@ export function TaskMembersDialogButton({ taskId }: { taskId: string }) {
 }
 
 export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanelProps) {
+  return <MembersPanel adapter={taskMembersAdapter(taskId)} onSaved={onSaved} onCancel={onCancel} />
+}
+
+export function MembersPanel({ adapter, onSaved, onCancel }: MembersPanelProps) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const actor = useActor()
   const authRevision = useAuthSessionRevision()
-  const url = `/api/tasks/${encodeURIComponent(taskId)}/members`
+  const resourceId = adapter.resourceId
+  const url = adapter.membersUrl
   // 编辑快照的 key 刻意不在 `['tasks', taskId]` 之下——理由见 TASK_QUERY_KEYS.members 的注释
   // （useTaskSync 的 reconcile 前缀会把它打成 fetching，下面的 liveCanManage 就会误判「失去
   // 管理权」并把草稿整体重置；task-members-manage-loss.test.tsx 锁着这两面）。
-  const queryKey = TASK_QUERY_KEYS.members(taskId, authRevision)
+  const queryKey = adapter.queryKey(authRevision)
   const actorIsSettledHuman =
     actor.status === 'success' &&
     actor.fetchStatus === 'idle' &&
@@ -108,10 +155,14 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
     actor.data !== undefined &&
     actor.data.source !== 'daemon'
 
-  const query = useQuery<TaskMembers>({
+  const query = useQuery<MembersBase>({
     queryKey,
     queryFn: ({ signal }) => api.get(url, undefined, signal),
     enabled: actorIsSettledHuman,
+    // RFC-330 —— 每次打开弹窗都取一次新鲜的判定：这是一个权限承载面（canManage /
+    // canOperate），全局 5s staleTime 会让「刚被转移为 owner 又立刻重开面板」的人看到
+    // 上一次的只读态；面板的管理会话从首次 idle 起算，多一次 refetch 不影响它。
+    refetchOnMount: 'always',
   })
 
   // RFC-324 —— 成员带档位：collaborator 与 owner 同权（cancel / resume / 回答评审），
@@ -123,30 +174,32 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
   const [transferTo, setTransferTo] = useState<UserPublic[]>([])
   const manageSessionRef = useRef(0)
   const previousCanManageRef = useRef(false)
-  const activeTaskIdRef = useRef(taskId)
+  const activeResourceIdRef = useRef(resourceId)
   const activeAuthRevisionRef = useRef(authRevision)
-  const responseTaskIdRef = useRef<string | null>(null)
+  const responseResourceIdRef = useRef<string | null>(null)
   const resetSaveRef = useRef<() => void>(() => {})
   const liveCanManage =
     actorIsSettledHuman &&
     query.status === 'success' &&
     query.fetchStatus === 'idle' &&
-    query.data?.taskId === taskId &&
-    query.data?.canManage === true
+    query.data !== undefined &&
+    adapter.responseId(query.data) === resourceId &&
+    query.data.canManage === true
   const hasCurrentManageAuthority = (expectedAuthRevision: number): boolean => {
     if (getAuthSessionRevision() !== expectedAuthRevision) return false
     const liveActor = currentActorAtRequest(qc)
-    const expectedQueryKey = TASK_QUERY_KEYS.members(taskId, expectedAuthRevision)
+    const expectedQueryKey = adapter.queryKey(expectedAuthRevision)
     const membersState = qc.getQueryState(expectedQueryKey)
-    const liveMembers = qc.getQueryData<TaskMembers>(expectedQueryKey)
+    const liveMembers = qc.getQueryData<MembersBase>(expectedQueryKey)
     return (
       liveActor !== null &&
       liveActor !== undefined &&
       liveActor.source !== 'daemon' &&
       membersState?.status === 'success' &&
       membersState.fetchStatus === 'idle' &&
-      liveMembers?.taskId === taskId &&
-      liveMembers?.canManage === true
+      liveMembers !== undefined &&
+      adapter.responseId(liveMembers) === resourceId &&
+      liveMembers.canManage === true
     )
   }
 
@@ -155,7 +208,7 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
       if (!hasCurrentManageAuthority(requestAuthRevision) || session !== manageSessionRef.current) {
         throw new Error('Task member management session ended')
       }
-      return api.put<TaskMembers>(url, body)
+      return api.put<MembersBase>(url, body)
     },
     onSuccess: (next, request) => {
       if (
@@ -168,7 +221,9 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
       setDirty(false)
       setTransferOpen(false)
       setTransferTo([])
-      void qc.invalidateQueries({ queryKey: ['tasks'] })
+      for (const key of adapter.invalidateKeys) {
+        void qc.invalidateQueries({ queryKey: [...key] })
+      }
       if (request.body.ownerUserId === undefined) onSaved?.()
     },
   })
@@ -178,15 +233,15 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
     const data = query.data
     const lostManage = previousCanManageRef.current && !liveCanManage
     previousCanManageRef.current = liveCanManage
-    const taskChanged = activeTaskIdRef.current !== taskId
-    activeTaskIdRef.current = taskId
+    const taskChanged = activeResourceIdRef.current !== resourceId
+    activeResourceIdRef.current = resourceId
     const authChanged = activeAuthRevisionRef.current !== authRevision
     activeAuthRevisionRef.current = authRevision
     const responseTaskChanged =
       data !== undefined &&
-      responseTaskIdRef.current !== null &&
-      responseTaskIdRef.current !== data.taskId
-    if (data !== undefined) responseTaskIdRef.current = data.taskId
+      responseResourceIdRef.current !== null &&
+      responseResourceIdRef.current !== adapter.responseId(data)
+    if (data !== undefined) responseResourceIdRef.current = adapter.responseId(data)
     if (lostManage || taskChanged || authChanged || responseTaskChanged) {
       manageSessionRef.current += 1
       if (data !== undefined) setMembers(data.members)
@@ -204,7 +259,7 @@ export function TaskMembersPanel({ taskId, onSaved, onCancel }: TaskMembersPanel
       return
     }
     if (!dirty && !transferOpen) setMembers(data.members)
-  }, [authRevision, dirty, liveCanManage, query.data, taskId, transferOpen])
+  }, [adapter, authRevision, dirty, liveCanManage, query.data, resourceId, transferOpen])
 
   if (!actorIsSettledHuman) {
     return null

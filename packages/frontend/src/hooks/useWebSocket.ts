@@ -200,6 +200,16 @@ function connect(conn: SharedConn): void {
       (msg as { type?: unknown }).type === 'resource-acl.changed'
     ) {
       void appQueryClient.invalidateQueries({ queryKey: ['resource-access'] })
+      // RFC-330 —— 数字员工类型页的三张列表把档位（`access`）带在列表项上（一页
+      // 三列表 N 卡，逐卡 hook 太贵）；被降档的人不刷新页面也要收敛卡片控件，
+      // 所以这帧同时让三张列表重取。
+      for (const prefix of [
+        'digital-employee-tools',
+        'digital-employee-job-templates',
+        'digital-employees',
+      ]) {
+        void appQueryClient.invalidateQueries({ queryKey: [prefix] })
+      }
     }
     // Snapshot so a listener that (un)subscribes mid-dispatch doesn't mutate
     // the live set; swallow listener throws so one bad subscriber can't

@@ -59,6 +59,7 @@ import type {
   UserPublic,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, ne, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
+import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DbClient } from '@/db/client'
@@ -79,6 +80,8 @@ import {
   automationPolicies,
   developmentAdapterDefinitions,
   employeeDefinitions,
+  employeeToolRegistrations,
+  employeeJobTemplates,
 } from '@/db/schema'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import {
@@ -172,29 +175,71 @@ export const ACL_TABLES = {
   development_adapter: developmentAdapterDefinitions,
   // RFC-317 T8 —— 员工定义（数字员工 OS 的 authoring 面）。
   employee_definition: employeeDefinitions,
+  // RFC-330 —— 工具注册 / 岗位模版（第 14 / 15 类）。
+  employee_tool: employeeToolRegistrations,
+  employee_job_template: employeeJobTemplates,
 } as const
 
-/** RFC-223: these five resource types have owner-scoped display-name uniqueness.
- * Workflows deliberately remain non-unique; runtimes are not ACL resources. */
-export const OWNER_NAME_UNIQUE_TYPES: ReadonlySet<AclResourceType> = new Set([
-  'agent',
-  'skill',
-  'mcp',
-  'plugin',
-  'workgroup',
+/**
+ * RFC-223 / RFC-330 D17' —— owner-scoped display-name uniqueness, per type,
+ * with the PARTITION columns the unique index carries besides (owner, name).
+ *
+ * Every registered type's table has a `(COALESCE(owner_user_id,''), …, name)`
+ * unique index; registering it here is what turns a transfer into an occupied
+ * name bucket into the typed 409 (`resource-name-conflict`) instead of a raw
+ * SQLite error the route reports as a 500. Workflows deliberately remain
+ * non-unique; runtimes are not ACL resources.
+ *
+ * The descriptor is keyed by the SNAPSHOT property name and valued by the
+ * drizzle column: the in-tx snapshot select and the transfer collision check
+ * both build from the same object, so a type whose index has extra columns
+ * (job templates: `(owner, type_id, type_revision, name)`) cannot register one
+ * side and forget the other. An empty descriptor means plain (owner, name).
+ */
+export const OWNER_NAME_UNIQUE_PARTITIONS = {
+  agent: () => ({}),
+  skill: () => ({}),
+  mcp: () => ({}),
+  plugin: () => ({}),
+  workgroup: () => ({}),
   // RFC-304 — both capability template tables carry an owner+name unique index
-  // (`capability_{frameworks,bindings}_owner_name_unique`). Registering them
-  // here is what turns a transfer into an occupied name bucket into the typed
-  // 409 every other owner-scoped type gives; without it the constraint still
-  // fires, as a raw SQLite error the route reports as a 500.
-  'capability_template',
+  // (`capability_{frameworks,bindings}_owner_name_unique`).
+  capability_template: () => ({}),
   // RFC-310 — all five identity tables carry owner+name unique indexes.
-  'action_template',
-  'verification_profile',
-  'digital_employee',
-  'automation_policy',
-  'development_adapter',
-])
+  action_template: () => ({}),
+  verification_profile: () => ({}),
+  digital_employee: () => ({}),
+  automation_policy: () => ({}),
+  development_adapter: () => ({}),
+  // RFC-330 D-① —— `employee_definitions_owner_name_unique` existed since
+  // RFC-310 but the type was never registered here: a transfer into an occupied
+  // name was a raw UNIQUE failure (500) where every other type gives 409.
+  employee_definition: () => ({}),
+  // RFC-330 D17' —— job templates are unique per (owner, type, typeRevision, name).
+  employee_job_template: (t: typeof employeeJobTemplates) => ({
+    typeId: t.typeId,
+    typeRevision: t.typeRevision,
+  }),
+} satisfies {
+  readonly [K in AclResourceType]?: (
+    table: (typeof ACL_TABLES)[K],
+  ) => Readonly<Record<string, SQLiteColumn>>
+}
+
+/** Types with owner-scoped name uniqueness (the keys of the partition table). */
+export const OWNER_NAME_UNIQUE_TYPES: ReadonlySet<AclResourceType> = new Set(
+  Object.keys(OWNER_NAME_UNIQUE_PARTITIONS) as AclResourceType[],
+)
+
+/** The partition columns of one type's owner-name unique index (empty = plain owner+name). */
+function ownerNamePartitionOf(type: AclResourceType): Readonly<Record<string, SQLiteColumn>> {
+  const select = (
+    OWNER_NAME_UNIQUE_PARTITIONS as unknown as Partial<
+      Record<AclResourceType, (table: SQLiteTable) => Readonly<Record<string, SQLiteColumn>>>
+    >
+  )[type]
+  return select === undefined ? {} : select(ACL_TABLES[type])
+}
 
 /** RFC-234/RFC-305 — cross-owner Intent audit is a dedicated permission. */
 export function canAuditIntentSessions(actor: Actor): boolean {
@@ -499,6 +544,67 @@ export async function filterVisibleRows<T extends AclRow>(
 }
 
 /**
+ * RFC-330 —— grant LEVEL per resource id for one user, for a list page that
+ * must render the verdict on every card ({@link projectVisibleRowsWithAccess}).
+ * `listGrantedResourceIds` answers "has any grant" (visibility); this is the
+ * same WHERE shape with the level kept, restricted to the ids on the page and
+ * chunked so a long list never exceeds SQLite's bound-parameter limit.
+ */
+export async function loadGrantLevelsForUser(
+  db: DbClient,
+  type: GrantResourceType,
+  resourceIds: readonly string[],
+  userId: string,
+): Promise<Map<string, ResourceGrantLevel>> {
+  const out = new Map<string, ResourceGrantLevel>()
+  for (let index = 0; index < resourceIds.length; index += 500) {
+    const chunk = resourceIds.slice(index, index + 500)
+    const rows = await db
+      .select({ resourceId: resourceGrants.resourceId, level: resourceGrants.level })
+      .from(resourceGrants)
+      .where(and(grantsOfUserWhere(type, userId), inArray(resourceGrants.resourceId, chunk)))
+    for (const row of rows) out.set(row.resourceId, row.level)
+  }
+  return out
+}
+
+/**
+ * RFC-330 —— visibility filter + per-row access verdict in ONE pass, for list
+ * pages whose cards render controls by grade (digital-employee tools / job
+ * templates / definitions: one page, three lists, N cards — a `useResourceAccess`
+ * hook per card would be N extra `/acl` requests, design §7.1 / X3).
+ *
+ * Same short-circuits as {@link resolveResourceAccessFor}: bypass ⇒ `own`
+ * everywhere without a query; no private range ⇒ only public rows, as `read`
+ * (or `own` for the owner). Rows resolving to `none` are dropped, so the
+ * result is exactly `filterVisibleRows` decorated with its verdicts.
+ */
+export async function projectVisibleRowsWithAccess<T extends AclRow>(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  rows: readonly T[],
+): Promise<Array<T & { access: ResourceAccess }>> {
+  const authority = resourceAclAudienceAuthority(actor)
+  const grants =
+    authority.bypass || !authority.private || rows.length === 0
+      ? new Map<string, ResourceGrantLevel>()
+      : await loadGrantLevelsForUser(
+          db,
+          type,
+          rows.map((row) => row.id),
+          actor.user.id,
+        )
+  const out: Array<T & { access: ResourceAccess }> = []
+  for (const row of rows) {
+    const access = resolveAccessFrom(authority, actor.user.id, row, grants.get(row.id) ?? null)
+    if (access === 'none') continue
+    out.push({ ...row, access })
+  }
+  return out
+}
+
+/**
  * RFC-324 — the one place that turns (actor, row) into a verdict by consulting
  * the grant table. Everything else in this section projects it.
  *
@@ -787,6 +893,10 @@ export async function updateResourceAcl(
   // or a late owner transfer cannot slip a revoked grant / re-take ownership
   // through a check-then-write gap. Uses the synchronous drizzle surface (no
   // await inside dbTxSync).
+  // RFC-330 D17' —— the snapshot carries the type's name-partition columns
+  // (job templates: typeId / typeRevision) under the same keys the collision
+  // check below reads them by; both sides come from OWNER_NAME_UNIQUE_PARTITIONS.
+  const partition = ownerNamePartitionOf(type)
   const updatedRow = dbTxSync<AclRow>(db, (tx) => {
     const cur = tx
       .select({
@@ -794,6 +904,7 @@ export async function updateResourceAcl(
         name: table.name,
         ownerUserId: table.ownerUserId,
         visibility: table.visibility,
+        ...partition,
       })
       .from(table)
       .where(eq(table.id, row.id))
@@ -850,11 +961,17 @@ export async function updateResourceAcl(
       body.visibility !== undefined ? body.visibility : (cur.visibility ?? 'public')
 
     if (nextOwner !== prevOwner && nextOwner !== null && OWNER_NAME_UNIQUE_TYPES.has(type)) {
+      const snapshot = cur as unknown as Record<string, unknown>
       const collision = tx
         .select({ id: table.id })
         .from(table)
         .where(
-          and(eq(table.ownerUserId, nextOwner), eq(table.name, cur.name), ne(table.id, row.id)),
+          and(
+            eq(table.ownerUserId, nextOwner),
+            eq(table.name, cur.name),
+            ne(table.id, row.id),
+            ...Object.entries(partition).map(([key, column]) => eq(column, snapshot[key])),
+          ),
         )
         .get()
       if (collision !== undefined) {

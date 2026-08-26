@@ -41,9 +41,12 @@ export const TaskCollaboratorSchema = z.object({
 
 export type TaskCollaborator = z.infer<typeof TaskCollaboratorSchema>
 
-/** GET /api/tasks/:id/members response (RFC-099 task members panel). */
-export const TaskMembersSchema = z.object({
-  taskId: z.string().min(1),
+/**
+ * RFC-330 —— 成员面的**资源中立基础**：任务与数字员工案例共用同一 wire（owner +
+ * 分档成员 + 两个判定位）。任务变体加 `taskId`，案例变体加 `caseId`；前端的
+ * MembersPanelAdapter 也只认这份基础。
+ */
+export const MembersSchema = z.object({
   ownerUserId: z.string().nullable(),
   owner: UserPublicSchema.nullable(),
   /** RFC-324 — members with their grade; was a bare `users: UserPublic[]`. */
@@ -58,14 +61,27 @@ export const TaskMembersSchema = z.object({
    */
   canOperate: z.boolean(),
 })
+export type MembersBase = z.infer<typeof MembersSchema>
+
+/** GET /api/tasks/:id/members response (RFC-099 task members panel). */
+export const TaskMembersSchema = MembersSchema.extend({
+  taskId: z.string().min(1),
+})
 export type TaskMembers = z.infer<typeof TaskMembersSchema>
 
+/** RFC-330 D19 —— GET /api/employee-cases/:id/members response（案例变体）。 */
+export const CaseMembersSchema = MembersSchema.extend({
+  caseId: z.string().min(1),
+})
+export type CaseMembers = z.infer<typeof CaseMembersSchema>
+
 /**
- * PUT /api/tasks/:id/members body — full-replace `members`; both optional but at
- * least one. RFC-324 replaced `userIds: string[]`; `role` deliberately cannot be
- * `owner`, so ownership has exactly one wire representation (`ownerUserId`).
+ * PUT …/members body — full-replace `members`; both optional but at least one.
+ * RFC-324 replaced `userIds: string[]`; `role` deliberately cannot be `owner`,
+ * so ownership has exactly one wire representation (`ownerUserId`). RFC-330:
+ * shared by tasks and employee cases (same normalization rules server-side).
  */
-export const UpdateTaskMembersBodySchema = z
+export const UpdateMembersBodySchema = z
   .object({
     ownerUserId: z.string().min(1).optional(),
     members: z
@@ -76,4 +92,8 @@ export const UpdateTaskMembersBodySchema = z
   .refine((b) => b.ownerUserId !== undefined || b.members !== undefined, {
     message: 'at least one of ownerUserId / members is required',
   })
-export type UpdateTaskMembersBody = z.infer<typeof UpdateTaskMembersBodySchema>
+export type UpdateMembersBody = z.infer<typeof UpdateMembersBodySchema>
+
+/** Task-named alias of {@link UpdateMembersBodySchema} (kept for existing callers). */
+export const UpdateTaskMembersBodySchema = UpdateMembersBodySchema
+export type UpdateTaskMembersBody = UpdateMembersBody

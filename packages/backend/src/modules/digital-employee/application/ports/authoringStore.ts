@@ -39,6 +39,8 @@ export interface ToolDraftRecord {
   readonly validationReceipt: ToolValidationReceipt
   readonly publishedRevision: number | null
   readonly ownerUserId: string | null
+  /** RFC-330 —— 第 14 类 ACL 资源的可见性；平台目录项恒 'public'。 */
+  readonly visibility: 'private' | 'public'
   readonly createdAt: number
   readonly updatedAt: number
   readonly retiredAt: number | null
@@ -83,6 +85,8 @@ export interface JobTemplateRecord {
   readonly draft: EmployeeJobTemplateContent
   readonly publishedRevision: number | null
   readonly ownerUserId: string | null
+  /** RFC-330 —— 第 15 类 ACL 资源的可见性。 */
+  readonly visibility: 'private' | 'public'
   readonly createdAt: number
   readonly updatedAt: number
   readonly archivedAt: number | null
@@ -163,6 +167,17 @@ export interface DigitalEmployeeAuthoringStore {
     updatedAt: number,
   ): void
   getTool(id: string): ToolDraftRecord | null
+  /**
+   * RFC-330 —— 只读 ACL 窄查询（与 getEmployeeDefinitionAcl 同理由）：不解析
+   * draft_json，对任何存在的行都可答；retired 行仍返回，由调用方决定是否视为消失。
+   */
+  getToolAcl(id: string): {
+    readonly id: string
+    readonly name: string
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+    readonly retiredAt: number | null
+  } | null
   listTools(typeRef: EmployeeTypeRef, workItemRef: string): ToolDraftRecord[]
   publishTool(input: ToolRevisionRecord): void
   getToolRevision(ref: ExactResourceRef): ToolRevisionRecord | null
@@ -171,6 +186,14 @@ export interface DigitalEmployeeAuthoringStore {
   createJobTemplate(input: JobTemplateRecord): void
   updateJobTemplate(id: string, name: string, draft: EmployeeJobTemplateContent, now: number): void
   getJobTemplate(id: string): JobTemplateRecord | null
+  /** RFC-330 —— 岗位模版的只读 ACL 窄查询（同上）。 */
+  getJobTemplateAcl(id: string): {
+    readonly id: string
+    readonly name: string
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+    readonly archivedAt: number | null
+  } | null
   listJobTemplates(typeRef: EmployeeTypeRef): JobTemplateRecord[]
   listJobTemplatesByTypeId(typeId: string): JobTemplateRecord[]
   publishJobTemplate(input: JobTemplateRevisionRecord): void

@@ -723,6 +723,34 @@ export class DigitalEmployeeRuntimeService {
     return record
   }
 
+  /**
+   * RFC-330 —— 案例归属的窄查询：transport 层据此做可见性 / 操作判据（与任务成员制
+   * 同形）。不存在返回 null，让调用方给出与「不可见」同形的 404。
+   */
+  getCaseAcl(caseId: string): {
+    readonly id: string
+    readonly ownerUserId: string | null
+    readonly employeeId: string
+  } | null {
+    const record = this.#store.getCase(caseId)
+    return record === null
+      ? null
+      : { id: record.id, ownerUserId: record.ownerUserId, employeeId: record.employeeRef.id }
+  }
+
+  listCaseMembers(caseId: string) {
+    this.getCase(caseId)
+    return this.#store.listCaseMembers(caseId)
+  }
+
+  getCaseMemberRole(caseId: string, userId: string) {
+    return this.#store.getCaseMemberRole(caseId, userId)
+  }
+
+  replaceCaseMembers(input: Parameters<RuntimeCaseStorePort['replaceCaseMembers']>[0]) {
+    return this.#store.replaceCaseMembers(input)
+  }
+
   listCases(employeeId?: string, state?: string): EmployeeCaseRecord[] {
     if (state !== undefined && !['active', 'waiting', 'blocked', 'terminal'].includes(state)) {
       throw new ValidationError('employee-case-state-invalid', `invalid case state: ${state}`)
@@ -2778,6 +2806,27 @@ export class DigitalEmployeeRuntimeService {
     return Buffer.from(JSON.stringify({ ...payload, digest: runtimeDigest(payload) })).toString(
       'base64url',
     )
+  }
+
+  /**
+   * RFC-330 —— 只解出 preview token 指向的案例 id，供 transport 在 apply 前做
+   * 操作判据；完整校验（strict schema + digest + 目标策略对账）仍在 applyPolicyUpgrade。
+   */
+  peekPolicyUpgradeCaseId(previewToken: string): string {
+    let decoded: unknown
+    try {
+      decoded = JSON.parse(Buffer.from(previewToken, 'base64url').toString('utf8')) as unknown
+    } catch {
+      throw new ValidationError('employee-policy-preview-invalid', 'invalid policy preview token')
+    }
+    const parsed = z
+      .object({ caseId: z.string().min(1) })
+      .passthrough()
+      .safeParse(decoded)
+    if (!parsed.success) {
+      throw new ValidationError('employee-policy-preview-invalid', 'invalid policy preview token')
+    }
+    return parsed.data.caseId
   }
 
   applyPolicyUpgrade(previewToken: string): EmployeeCaseRecord {

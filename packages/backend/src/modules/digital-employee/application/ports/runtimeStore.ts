@@ -109,6 +109,15 @@ export interface AttentionSettlementCancellation {
   readonly unsubscribeOutbox: EmployeeOutboxRecord | null
 }
 
+/** RFC-330 —— 一行案例成员。 */
+export interface EmployeeCaseMemberRecord {
+  readonly caseId: string
+  readonly userId: string
+  readonly role: 'collaborator' | 'observer'
+  readonly addedBy: string
+  readonly addedAt: number
+}
+
 export interface RuntimeCaseStorePort {
   createCase(input: {
     readonly caseRecord: EmployeeCaseRecord
@@ -127,6 +136,27 @@ export interface RuntimeCaseStorePort {
     }[]
   }): void
   getCase(id: string): EmployeeCaseRecord | null
+  /** RFC-330 D19 —— 案例成员行（owner 不在其中，见 employee_cases.owner_user_id）。 */
+  listCaseMembers(caseId: string): readonly EmployeeCaseMemberRecord[]
+  getCaseMemberRole(caseId: string, userId: string): EmployeeCaseMemberRecord['role'] | null
+  /**
+   * RFC-330 D19/D20 —— 一个事务内改 owner（可选）并全量替换成员行。返回变更前的
+   * owner 与成员 id，供调用方冻结「before ∪ after」的广播受众。调用方已完成
+   * 规范化（owner 不进成员行、重复 last-wins、用户 active）。
+   */
+  replaceCaseMembers(input: {
+    readonly caseId: string
+    readonly ownerUserId: string | null
+    readonly members: readonly {
+      readonly userId: string
+      readonly role: EmployeeCaseMemberRecord['role']
+    }[]
+    readonly addedBy: string
+    readonly now: number
+  }): {
+    readonly previousOwnerUserId: string | null
+    readonly previousMemberUserIds: readonly string[]
+  }
   findCaseByEventDelivery(eventDeliveryId: string): EmployeeCaseRecord | null
   listCases(employeeId?: string, state?: string): EmployeeCaseRecord[]
   /** Terminal facts grouped once for every employee, without loading Case rows. */

@@ -144,9 +144,17 @@ export interface TaskDeletedAudienceContext {
   visibleUserIds: ReadonlySet<string>
 }
 
+/** RFC-330 —— employee case owner / members changed; before ∪ after audience. */
+export interface EmployeeCaseMembersChangedAudienceContext {
+  kind: 'employee-case.members-changed-audience'
+  caseId: string
+  visibleUserIds: ReadonlySet<string>
+}
+
 export type TasksListBroadcastContext =
   | TaskMembersChangedAudienceContext
   | TaskDeletedAudienceContext
+  | EmployeeCaseMembersChangedAudienceContext
 
 /** Owner identity is authorization metadata and is never serialized on wire. */
 export interface McpRuntimeTestBroadcastContext {

@@ -34,6 +34,7 @@ const RULES: WsInvalidationRules<TasksListWsMessage> = {
   'task.status': () => [TASK_OPERATIONS_QUERY_KEY],
   'task.deleted': () => [TASK_OPERATIONS_QUERY_KEY],
   'task.members.changed': () => [TASK_OPERATIONS_QUERY_KEY],
+  'employee-case.members.changed': () => [TASK_OPERATIONS_QUERY_KEY],
   'lifecycle.alert': () => [TASK_OPERATIONS_QUERY_KEY],
   'lifecycle.alert.resolved': () => [TASK_OPERATIONS_QUERY_KEY],
 }

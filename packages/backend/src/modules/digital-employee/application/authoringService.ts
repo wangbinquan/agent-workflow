@@ -860,6 +860,8 @@ export class DigitalEmployeeAuthoringService {
         validationReceipt: input.validationReceipt,
         publishedRevision: null,
         ownerUserId: input.sourceRecord.ownerUserId,
+        // RFC-330 D18' —— successor 继承 source 的归属与可见性（grants 不继承）。
+        visibility: input.sourceRecord.visibility,
         createdAt: now,
         updatedAt: now,
         retiredAt: null,
@@ -1098,7 +1100,12 @@ export class DigitalEmployeeAuthoringService {
       name: sourceRecord.name,
       content,
     })
-    const preferred = targetJobs.find((candidate) => candidate.name === sourceRecord.name)
+    // RFC-330 D17' —— 名字唯一域是 (owner, type, typeRevision, name)：只有**同 owner** 的
+    // 同名模版才是占位；其它 owner 的同名模版与 successor 互不影响。
+    const preferred = targetJobs.find(
+      (candidate) =>
+        candidate.name === sourceRecord.name && candidate.ownerUserId === sourceRecord.ownerUserId,
+    )
     let preferredMatches = preferred === undefined
     if (
       preferred?.ownerUserId === sourceRecord.ownerUserId &&
@@ -1128,7 +1135,10 @@ export class DigitalEmployeeAuthoringService {
       content,
     })
     const exactTarget = this.#store.getJobTemplate(id)
-    const sameNameTarget = targetJobs.find((candidate) => candidate.name === targetName)
+    const sameNameTarget = targetJobs.find(
+      (candidate) =>
+        candidate.name === targetName && candidate.ownerUserId === sourceRecord.ownerUserId,
+    )
     let target = exactTarget ?? sameNameTarget ?? null
     if (target === null) {
       const now = this.#now()
@@ -1139,6 +1149,8 @@ export class DigitalEmployeeAuthoringService {
         draft: content,
         publishedRevision: null,
         ownerUserId: sourceRecord.ownerUserId,
+        // RFC-330 D18' —— successor 继承 source 的归属与可见性（grants 不继承）。
+        visibility: sourceRecord.visibility,
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
@@ -1713,6 +1725,8 @@ export class DigitalEmployeeAuthoringService {
       validationReceipt,
       publishedRevision: null,
       ownerUserId: input.ownerUserId,
+      // RFC-330 D3 —— 新建默认 private（与 RFC-231 全站默认一致）。
+      visibility: 'private',
       createdAt: now,
       updatedAt: now,
       retiredAt: null,
@@ -2373,6 +2387,8 @@ export class DigitalEmployeeAuthoringService {
       draft,
       publishedRevision: null,
       ownerUserId: input.ownerUserId,
+      // RFC-330 D3 —— 新建默认 private。
+      visibility: 'private',
       createdAt: now,
       updatedAt: now,
       archivedAt: null,

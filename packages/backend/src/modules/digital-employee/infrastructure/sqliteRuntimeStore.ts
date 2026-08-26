@@ -23,6 +23,7 @@ import {
   employeeAttentionBindings,
   employeeCaseEventOrigins,
   employeeCaseInbox,
+  employeeCaseMembers,
   employeeCases,
   employeeChannelResults,
   employeeChannels,
@@ -382,6 +383,77 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     getCase(id) {
       const row = db.select().from(employeeCases).where(eq(employeeCases.id, id)).get()
       return row === undefined ? null : caseRecord(row)
+    },
+
+    listCaseMembers(caseId) {
+      return db
+        .select()
+        .from(employeeCaseMembers)
+        .where(eq(employeeCaseMembers.caseId, caseId))
+        .all()
+        .map((row) => ({
+          caseId: row.caseId,
+          userId: row.userId,
+          role: row.role,
+          addedBy: row.addedBy,
+          addedAt: row.addedAt,
+        }))
+    },
+
+    getCaseMemberRole(caseId, userId) {
+      const row = db
+        .select({ role: employeeCaseMembers.role })
+        .from(employeeCaseMembers)
+        .where(and(eq(employeeCaseMembers.caseId, caseId), eq(employeeCaseMembers.userId, userId)))
+        .get()
+      return row === undefined ? null : row.role
+    },
+
+    replaceCaseMembers(input) {
+      return db.transaction((tx) => {
+        const current = tx
+          .select({ id: employeeCases.id, ownerUserId: employeeCases.ownerUserId })
+          .from(employeeCases)
+          .where(eq(employeeCases.id, input.caseId))
+          .get()
+        if (current === undefined) {
+          throw new NotFoundError(
+            'employee-case-not-found',
+            `employee case not found: ${input.caseId}`,
+          )
+        }
+        const before = tx
+          .select({ userId: employeeCaseMembers.userId })
+          .from(employeeCaseMembers)
+          .where(eq(employeeCaseMembers.caseId, input.caseId))
+          .all()
+        if (current.ownerUserId !== input.ownerUserId) {
+          // 只改归属，不动 revision：revision 是运行时状态机的 CAS 位，策略升级预览
+          // token 等都按它对账；owner 转移不是一次状态变迁。
+          tx.update(employeeCases)
+            .set({ ownerUserId: input.ownerUserId, updatedAt: input.now })
+            .where(eq(employeeCases.id, input.caseId))
+            .run()
+        }
+        tx.delete(employeeCaseMembers).where(eq(employeeCaseMembers.caseId, input.caseId)).run()
+        if (input.members.length > 0) {
+          tx.insert(employeeCaseMembers)
+            .values(
+              input.members.map((member) => ({
+                caseId: input.caseId,
+                userId: member.userId,
+                role: member.role,
+                addedBy: input.addedBy,
+                addedAt: input.now,
+              })),
+            )
+            .run()
+        }
+        return {
+          previousOwnerUserId: current.ownerUserId,
+          previousMemberUserIds: before.map((row) => row.userId),
+        }
+      })
     },
 
     findCaseByEventDelivery(eventDeliveryId) {

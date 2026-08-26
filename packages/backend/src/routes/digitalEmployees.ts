@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ResourceAccess } from '@agent-workflow/shared'
+import { UpdateMembersBodySchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { z } from 'zod'
 
@@ -11,11 +12,21 @@ import { registerRoute } from '@/routes/registry'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
 import type { AppDeps } from '@/server'
 import {
+  getCaseMembers,
+  loadVisibleCase,
+  requireCaseOperator,
+  requireCaseOwner,
+  updateCaseMembers,
+} from '@/services/employeeCaseMembers'
+import {
   filterVisibleRows,
   assertNameUnchangedForEditor,
+  projectVisibleRowsWithAccess,
   requireResourceEdit,
+  requireResourceGovern,
   resourceAclAudienceAuthority,
 } from '@/services/resourceAcl'
+import { assertNotBuiltin } from '@/services/systemResources'
 import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -76,12 +87,14 @@ export function mountDigitalEmployeeRoutes(
   // ACL_RESOURCE_TYPES 里 ⇒ 三列惰性、列表只按 archivedAt 过滤、**全员可见全部
   // 员工定义**。判据与其余 12 类同形，全部留在 transport 层（下面这两个 helper），
   // 模块内部不感知 ACL。
+  // RFC-330 —— 列表项同时带上档位（`access`），卡片按档位收敛控件（design §7.1 / X3）。
   const visibleEmployees = async <
     T extends { id: string; ownerUserId: string | null; visibility: 'private' | 'public' },
   >(
     c: Parameters<typeof actorOf>[0],
     rows: readonly T[],
-  ): Promise<T[]> => filterVisibleRows(deps.db, actorOf(c), 'employee_definition', rows)
+  ): Promise<Array<T & { access: ResourceAccess }>> =>
+    projectVisibleRowsWithAccess(deps.db, actorOf(c), 'employee_definition', rows)
 
   /** 详情/写路径共用：不可见 ⇒ 404 与不存在同形（RFC-248 H9 反枚举）。 */
   const loadVisibleEmployee = async (
@@ -117,6 +130,74 @@ export function mountDigitalEmployeeRoutes(
     const row = await loadVisibleEmployee(c, id)
     const access = await requireResourceEdit(deps.db, actorOf(c), 'employee_definition', row)
     return { name: row.name, access }
+  }
+
+  // RFC-330 —— 工具注册（第 14 类）与岗位模版（第 15 类）的判据，与员工定义同形、
+  // 同样只在 transport 层做一次。平台目录工具没有 DB 行：投影为 builtin / public，
+  // 可见但任何写都 403 `builtin-readonly`（D9）。
+  type ToolAclRow = NonNullable<ReturnType<DigitalEmployeeModule['queries']['getToolAcl']>>
+  const loadVisibleTool = async (
+    c: Parameters<typeof actorOf>[0],
+    toolId: string,
+  ): Promise<ToolAclRow> => {
+    const row = module.queries.getToolAcl(toolId)
+    if (row === null) {
+      throw new NotFoundError('employee-tool-not-found', 'tool registration not found')
+    }
+    if (row.builtin) return row
+    const [visible] = await filterVisibleRows(deps.db, actorOf(c), 'employee_tool', [row])
+    if (visible === undefined) {
+      throw new NotFoundError('employee-tool-not-found', 'tool registration not found')
+    }
+    return visible
+  }
+  const requireEditableTool = async (
+    c: Parameters<typeof actorOf>[0],
+    toolId: string,
+  ): Promise<{ row: ToolAclRow; access: ResourceAccess }> => {
+    const row = await loadVisibleTool(c, toolId)
+    assertNotBuiltin('employee_tool', row)
+    const access = await requireResourceEdit(deps.db, actorOf(c), 'employee_tool', row)
+    return { row, access }
+  }
+  const requireGovernableTool = async (
+    c: Parameters<typeof actorOf>[0],
+    toolId: string,
+  ): Promise<ToolAclRow> => {
+    const row = await loadVisibleTool(c, toolId)
+    assertNotBuiltin('employee_tool', row)
+    await requireResourceGovern(deps.db, actorOf(c), 'employee_tool', row)
+    return row
+  }
+
+  type JobTemplateAclRow = NonNullable<
+    ReturnType<DigitalEmployeeModule['queries']['getJobTemplateAcl']>
+  >
+  const loadVisibleJobTemplate = async (
+    c: Parameters<typeof actorOf>[0],
+    id: string,
+  ): Promise<JobTemplateAclRow> => {
+    const row = module.queries.getJobTemplateAcl(id)
+    if (row === null) {
+      throw new NotFoundError('employee-job-template-not-found', 'job template not found')
+    }
+    const [visible] = await filterVisibleRows(deps.db, actorOf(c), 'employee_job_template', [row])
+    if (visible === undefined) {
+      throw new NotFoundError('employee-job-template-not-found', 'job template not found')
+    }
+    return visible
+  }
+  const requireEditableJobTemplate = async (
+    c: Parameters<typeof actorOf>[0],
+    id: string,
+  ): Promise<{ row: JobTemplateAclRow; access: ResourceAccess }> => {
+    const row = await loadVisibleJobTemplate(c, id)
+    const access = await requireResourceEdit(deps.db, actorOf(c), 'employee_job_template', row)
+    return { row, access }
+  }
+  const submittedString = (body: unknown, key: string): string | undefined => {
+    const value = (body as Record<string, unknown> | null)?.[key]
+    return typeof value === 'string' ? value : undefined
   }
 
   registerRoute(
@@ -217,7 +298,53 @@ export function mountDigitalEmployeeRoutes(
         tokenAccess: 'allow',
         summary: 'Read context, attention, queue, reaction and next action for one case',
       },
-      (c) => jsonDocumentResponse(runtime.queries.getCase(c.req.param('id')).projectionJson),
+      (c) => {
+        // RFC-330 D19 —— 可见 = 发起人 ∪ 成员 ∪ tasks:read:all ∪ bypass；否则 404 同形。
+        const row = loadVisibleCase(runtime, actorOf(c), c.req.param('id'))
+        return jsonDocumentResponse(runtime.queries.getCase(row.id).projectionJson)
+      },
+    )
+
+    // RFC-330 D19/D20 —— 案例成员面，与 GET/PUT /api/tasks/:id/members 同形。
+    registerRoute(
+      app,
+      {
+        method: 'GET',
+        path: '/api/employee-cases/:id/members',
+        permissions: ['digital-employees:read'],
+        tokenAccess: 'allow',
+        summary: 'List employee case members',
+      },
+      async (c) => {
+        const actor = actorOf(c)
+        const row = loadVisibleCase(runtime, actor, c.req.param('id'))
+        return c.json(await getCaseMembers(deps.db, actor, runtime, row))
+      },
+    )
+
+    registerRoute(
+      app,
+      {
+        method: 'PUT',
+        path: '/api/employee-cases/:id/members',
+        // 与 PUT /api/tasks/:id/members 同点：成员管理是通用协作面，不挂类型专属点
+        // （rfc317-permission-domain-ownership 的泄漏账本只减不增）。
+        permissions: ['tasks:update'],
+        // RFC-247 D5 —— a token must NEVER change owner / members.
+        tokenAccess: 'never',
+        summary: 'Replace employee case members or transfer its owner',
+      },
+      async (c) => {
+        const actor = actorOf(c)
+        const parsed = UpdateMembersBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
+        if (!parsed.success) {
+          throw new ValidationError('members-invalid', 'invalid members payload', {
+            issues: parsed.error.issues,
+          })
+        }
+        const row = requireCaseOwner(runtime, actor, c.req.param('id'))
+        return c.json(await updateCaseMembers(deps.db, actor, runtime, row, parsed.data))
+      },
     )
 
     registerRoute(
@@ -253,11 +380,9 @@ export function mountDigitalEmployeeRoutes(
           .object({ targetPolicyRevision: z.number().int().positive() })
           .strict()
           .parse(await safeJsonOrEmpty(c.req.raw))
+        const row = requireCaseOperator(runtime, actorOf(c), c.req.param('id'))
         return c.json({
-          previewToken: runtime.commands.previewPolicyUpgrade(
-            c.req.param('id'),
-            body.targetPolicyRevision,
-          ),
+          previewToken: runtime.commands.previewPolicyUpgrade(row.id, body.targetPolicyRevision),
         })
       },
     )
@@ -276,6 +401,11 @@ export function mountDigitalEmployeeRoutes(
           .object({ previewToken: z.string().min(1) })
           .strict()
           .parse(await safeJsonOrEmpty(c.req.raw))
+        requireCaseOperator(
+          runtime,
+          actorOf(c),
+          runtime.queries.peekPolicyUpgradeCaseId(body.previewToken),
+        )
         const document = runtime.commands.applyPolicyUpgrade(body.previewToken)
         return jsonDocumentResponse(document.projectionJson)
       },
@@ -291,7 +421,8 @@ export function mountDigitalEmployeeRoutes(
         summary: 'Resume a blocked employee case after its blocker was resolved',
       },
       (c) => {
-        const document = runtime.commands.resume(c.req.param('id'))
+        const row = requireCaseOperator(runtime, actorOf(c), c.req.param('id'))
+        const document = runtime.commands.resume(row.id)
         return jsonDocumentResponse(document.projectionJson)
       },
     )
@@ -310,7 +441,8 @@ export function mountDigitalEmployeeRoutes(
           .object({ terminalKind: z.string().min(1) })
           .strict()
           .parse(await safeJsonOrEmpty(c.req.raw))
-        const document = runtime.commands.terminate(c.req.param('id'), body.terminalKind)
+        const row = requireCaseOperator(runtime, actorOf(c), c.req.param('id'))
+        const document = runtime.commands.terminate(row.id, body.terminalKind)
         return jsonDocumentResponse(document.projectionJson)
       },
     )
@@ -376,13 +508,23 @@ export function mountDigitalEmployeeRoutes(
       tokenAccess: 'allow',
       summary: 'List tools registered for one exact work item contract',
     },
-    (c) =>
-      c.json({
-        items: module.queries.listTools(
-          parseEmployeeTypeRef(c.req.param('typeRef')),
-          c.req.param('workItemRef'),
-        ),
-      }),
+    async (c) => {
+      // RFC-330 —— 平台目录工具恒在、恒 `read`；自定义工具按可见性过滤并带档位。
+      const items = module.queries.listTools(
+        parseEmployeeTypeRef(c.req.param('typeRef')),
+        c.req.param('workItemRef'),
+      )
+      const platform = items
+        .filter((tool) => tool.origin === 'platform')
+        .map((tool) => ({ ...tool, access: 'read' as const }))
+      const custom = await projectVisibleRowsWithAccess(
+        deps.db,
+        actorOf(c),
+        'employee_tool',
+        items.filter((tool) => tool.origin !== 'platform'),
+      )
+      return c.json({ items: [...platform, ...custom] })
+    },
   )
 
   registerRoute(
@@ -394,14 +536,16 @@ export function mountDigitalEmployeeRoutes(
       tokenAccess: 'allow',
       summary: 'Read the editable authoring body for one work-item tool registration',
     },
-    async (c) =>
-      c.json(
+    async (c) => {
+      await loadVisibleTool(c, c.req.param('toolId'))
+      return c.json(
         await module.queries.getToolAuthoring({
           typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
           workItemRef: c.req.param('workItemRef'),
           toolId: c.req.param('toolId'),
         }),
-      ),
+      )
+    },
   )
 
   registerRoute(
@@ -438,6 +582,9 @@ export function mountDigitalEmployeeRoutes(
     async (c) => {
       const body = await safeJsonOrEmpty(c.req.raw)
       actorForToolAuthoring(c, body)
+      // RFC-330 —— 内容写（owner / write 授权 / bypass）；显示名视同改名，归 owner（D7）。
+      const { row, access } = await requireEditableTool(c, c.req.param('toolId'))
+      assertNameUnchangedForEditor(access, row.name, submittedString(body, 'displayName'))
       return c.json(
         await module.commands.updateTool({
           typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
@@ -465,6 +612,8 @@ export function mountDigitalEmployeeRoutes(
           workItemRef: c.req.param('workItemRef'),
           toolId: c.req.param('toolId'),
         }
+        // RFC-330 —— 校验 / 发布与编辑同档（RFC-324 D8）。
+        await requireEditableTool(c, common.toolId)
         if (action === 'validate') return c.json(await module.commands.validateTool(common))
         const ref = await module.commands.publishTool({
           ...common,
@@ -484,7 +633,9 @@ export function mountDigitalEmployeeRoutes(
       tokenAccess: 'allow',
       summary: 'Retire a work-item tool registration',
     },
-    (c) => {
+    async (c) => {
+      // RFC-330 D8 —— 退休（含删草稿）是治理写：owner / bypass。
+      await requireGovernableTool(c, c.req.param('toolId'))
       module.commands.retireTool({
         typeRef: parseEmployeeTypeRef(c.req.param('typeRef')),
         workItemRef: c.req.param('workItemRef'),
@@ -503,9 +654,14 @@ export function mountDigitalEmployeeRoutes(
       tokenAccess: 'allow',
       summary: 'List job templates for one employee type',
     },
-    (c) =>
+    async (c) =>
       c.json({
-        items: module.queries.listJobTemplates(parseEmployeeTypeRef(c.req.param('typeRef'))),
+        items: await projectVisibleRowsWithAccess(
+          deps.db,
+          actorOf(c),
+          'employee_job_template',
+          module.queries.listJobTemplates(parseEmployeeTypeRef(c.req.param('typeRef'))),
+        ),
       }),
   )
 
@@ -539,14 +695,20 @@ export function mountDigitalEmployeeRoutes(
       tokenAccess: 'allow',
       summary: 'Update a job template draft',
     },
-    async (c) =>
-      c.json(
+    async (c) => {
+      const id = c.req.param('id')
+      const body = await safeJsonOrEmpty(c.req.raw)
+      // RFC-330 —— 内容写；`name` 变更归 owner（RFC-324 D3）。
+      const { row, access } = await requireEditableJobTemplate(c, id)
+      assertNameUnchangedForEditor(access, row.name, submittedString(body, 'name'))
+      return c.json(
         module.commands.updateJobTemplate({
-          id: c.req.param('id'),
-          body: await safeJsonOrEmpty(c.req.raw),
+          id,
+          body,
           adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),
-      ),
+      )
+    },
   )
 
   registerRoute(
@@ -558,14 +720,17 @@ export function mountDigitalEmployeeRoutes(
       tokenAccess: 'allow',
       summary: 'Publish an immutable job template revision',
     },
-    (c) =>
-      c.json({
+    async (c) => {
+      const id = c.req.param('id')
+      await requireEditableJobTemplate(c, id)
+      return c.json({
         ref: module.commands.publishJobTemplate({
-          id: c.req.param('id'),
+          id,
           actorUserId: actorId(c),
           adapterVisibilitySubject: adapterVisibilitySubject(c),
         }),
-      }),
+      })
+    },
   )
 
   registerRoute(
@@ -704,5 +869,25 @@ export function mountDigitalEmployeeRoutes(
     base: '/api/digital-employees',
     param: 'id',
     load: async (_db, key) => module.queries.getEmployeeAcl(key),
+  })
+
+  // RFC-330 —— 工具注册 / 岗位模版的授权管理端点（第 14 / 15 类）。平台目录工具
+  // 没有 ACL 行：`load` 返回 null ⇒ GET / PUT `/acl` 都 404（D9）。
+  mountAclEndpoints(app, deps, {
+    type: 'employee_tool',
+    base: '/api/digital-employee-tools',
+    param: 'id',
+    notFoundCode: 'employee-tool-not-found',
+    load: async (_db, key) => {
+      const row = module.queries.getToolAcl(key)
+      return row === null || row.builtin ? null : row
+    },
+  })
+  mountAclEndpoints(app, deps, {
+    type: 'employee_job_template',
+    base: '/api/digital-employee-job-templates',
+    param: 'id',
+    notFoundCode: 'employee-job-template-not-found',
+    load: async (_db, key) => module.queries.getJobTemplateAcl(key),
   })
 }

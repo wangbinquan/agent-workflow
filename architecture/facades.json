@@ -1,7 +1,7 @@
 {
   "denominator": {
     "boundaryFacades": 34,
-    "serviceFiles": 369
+    "serviceFiles": 370
   },
   "entries": [
     {
@@ -1113,6 +1113,30 @@
       "removeAfterWave": "W4/W9",
       "status": "legacy-owner",
       "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
+        "CaseAclRow",
+        "CaseMemberRole",
+        "CaseMemberRow",
+        "EmployeeCaseRuntime",
+        "canManageCaseMembers",
+        "canOperateCase",
+        "canViewCase",
+        "getCaseMembers",
+        "loadVisibleCase",
+        "requireCaseOperator",
+        "requireCaseOwner",
+        "updateCaseMembers"
+      ],
+      "file": "packages/backend/src/services/employeeCaseMembers.ts",
+      "id": "facade:packages/backend/src/services/employeeCaseMembers.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/employeeCaseMembers.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "legacy-owner",
+      "targetContext": "digital-employee",
       "targetLayer": "application"
     },
     {
@@ -3524,6 +3548,7 @@
         "AclColumnRef",
         "DEFAULT_USER_RESOURCE_VISIBILITY",
         "DisclosedRefs",
+        "OWNER_NAME_UNIQUE_PARTITIONS",
         "OWNER_NAME_UNIQUE_TYPES",
         "assertInitialResourceOwner",
         "canAuditIntentSessions",
@@ -3551,6 +3576,8 @@
         "listWritableGrantedResourceIds",
         "loadGrantLevel",
         "loadGrantLevelInTx",
+        "loadGrantLevelsForUser",
+        "projectVisibleRowsWithAccess",
         "requireResourceEdit",
         "requireResourceGovern",
         "requireResourceView",
@@ -5974,6 +6001,7 @@
       "exportedSymbols": [
         "TaskRowForVisibility",
         "assertCanReplaySourceTask",
+        "assertMembersUsersActive",
         "buildLaunchCollabRows",
         "canViewTask",
         "getTaskMembers",
@@ -5981,6 +6009,7 @@
         "hasActingMembershipTx",
         "hasMembership",
         "listCollaborators",
+        "planMembersReplacement",
         "recordLaunchContext",
         "requireTaskMember",
         "requireTaskOperator",
@@ -7232,5 +7261,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5"
+  "sourceDigest": "sha256:39b59c4d6281d0a9b07df3693337bf6f8f0e4e8e3324c49d141373f43bd1b68a"
 }

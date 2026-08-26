@@ -245,6 +245,9 @@ describe('API contract registry coverage', () => {
         // （rfc099-acl-endpoints-matrix.test.ts 起真 app 读 allRouteMeta()）。
         // 补齐这里属 TP-01 的契约覆盖扫描器改造，另批处理。
         '/api/digital-employees/:id',
+        // RFC-330 —— 工具注册（第 14 类）与岗位模版（第 15 类），字面量 base 挂载。
+        '/api/digital-employee-tools/:id',
+        '/api/digital-employee-job-templates/:id',
         // RFC-324 §7 —— 定时任务的一对 `/acl` 端点。它**不是** ACL 资源类型
         // （没有 visibility / builtin / owner×name 唯一域，不进配置包也不由 Intent
         // 创建），所以由 routes/scheduledTasks.ts 自己挂载、而不是走

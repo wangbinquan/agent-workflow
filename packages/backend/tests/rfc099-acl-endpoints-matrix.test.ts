@@ -45,6 +45,8 @@ import {
   developmentAdapterDefinitions,
   digitalEmployees,
   employeeDefinitions,
+  employeeJobTemplates,
+  employeeToolRegistrations,
   mcps,
   plugins,
   skills,
@@ -403,6 +405,53 @@ const CASES: ResourceCase[] = [
         visibility: 'private',
         createdAt: now,
         updatedAt: now,
+      })
+      return row
+    },
+  },
+  {
+    // RFC-330 —— 第 14 类：工具注册。base 是字面量 `/api/digital-employee-tools`。
+    type: 'employee_tool',
+    base: '/api/digital-employee-tools',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(employeeToolRegistrations).values({
+        ...row,
+        typeId: 'acl-matrix-type',
+        typeRevision: 1,
+        workItemRef: 'acl-matrix-work-item',
+        draftJson: '{}',
+        publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+        retiredAt: null,
+      })
+      return row
+    },
+  },
+  {
+    // RFC-330 —— 第 15 类：岗位模版。
+    type: 'employee_job_template',
+    base: '/api/digital-employee-job-templates',
+    keyOf: (s) => s.id,
+    missingKey: ulid(),
+    seed: async (db, ownerUserId) => {
+      const row = { id: ulid(), name: KEY }
+      await db.insert(employeeJobTemplates).values({
+        ...row,
+        typeId: 'acl-matrix-type',
+        typeRevision: 1,
+        draftJson: '{}',
+        publishedRevision: null,
+        ownerUserId,
+        visibility: 'private',
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
       })
       return row
     },

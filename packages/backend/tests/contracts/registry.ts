@@ -905,6 +905,13 @@ export const ENDPOINTS: EndpointSpec[] = [
   // 补齐属 TP-01 的契约覆盖扫描器改造，另批处理）。
   { method: 'GET', path: '/api/digital-employees/:id/acl' },
   { method: 'PUT', path: '/api/digital-employees/:id/acl' },
+  // RFC-330 —— 工具注册 / 岗位模版（第 14 / 15 类）的 `/acl`，与案例成员面。
+  { method: 'GET', path: '/api/digital-employee-tools/:id/acl' },
+  { method: 'PUT', path: '/api/digital-employee-tools/:id/acl' },
+  { method: 'GET', path: '/api/digital-employee-job-templates/:id/acl' },
+  { method: 'PUT', path: '/api/digital-employee-job-templates/:id/acl' },
+  { method: 'GET', path: '/api/employee-cases/:id/members' },
+  { method: 'PUT', path: '/api/employee-cases/:id/members' },
   // RFC-324 §7 —— 定时任务借用同一张 grants 表拿到两档授权，但它**不是** ACL 资源
   // （没有 visibility / builtin / owner×name 唯一域），所以这对端点由
   // routes/scheduledTasks.ts 自己挂载，而不是走 mountAclEndpoints。

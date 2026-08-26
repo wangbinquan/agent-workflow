@@ -7,6 +7,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   agents,
   capabilityTemplates,
+  employeeDefinitions,
+  employeeJobTemplates,
   mcps,
   plugins,
   resourceGrants,
@@ -239,5 +241,105 @@ describe('RFC-223 owner transfer and fresh-ACL fences', () => {
         expectedAclRevision: 0,
       }),
     ).rejects.toBeInstanceOf(ConflictError)
+  })
+})
+
+// RFC-330 D17' / D-① —— owner-name 唯一表长出分区列。
+//
+//   - 岗位模版的唯一索引是 (owner, type_id, type_revision, name)：转移到「只在**其它**
+//     类型版本下有同名模版」的 owner 必须成功，同分区撞名才 409（分区列不参与判定的
+//     话前者会被误拒——这正是 v1 设计里 (owner, name) 的问题）；
+//   - `employee_definitions_owner_name_unique` 自 RFC-310 就在，但类型此前没登记进
+//     唯一表：撞名转移是一次 raw UNIQUE 失败（500）而非 409。
+describe('RFC-330 —— 分区化的 owner-name 唯一转移预检', () => {
+  const NOW = 1_700_000_000_000
+  let db: DbClient
+  let admin: Actor
+
+  beforeEach(async () => {
+    db = createInMemoryDb(MIGRATIONS)
+    await seedUser(db, 'owner-a', 'user')
+    await seedUser(db, 'owner-b', 'user')
+    await seedUser(db, 'admin', 'admin')
+    admin = actor('admin', 'admin')
+  })
+
+  const seedTemplate = async (
+    id: string,
+    ownerUserId: string,
+    typeRevision: number,
+    name: string,
+  ): Promise<AclRow> => {
+    await db.insert(employeeJobTemplates).values({
+      id,
+      typeId: 'design',
+      typeRevision,
+      name,
+      draftJson: '{}',
+      publishedRevision: null,
+      ownerUserId,
+      visibility: 'public',
+      aclRevision: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+      archivedAt: null,
+    })
+    return { id, ownerUserId, visibility: 'public' }
+  }
+
+  test('岗位模版：目标 owner 只在其它类型版本下有同名 ⇒ 转移成功；同分区撞名 ⇒ 409', async () => {
+    const source = await seedTemplate('job-src', 'owner-a', 2, 'Reviewer')
+    await seedTemplate('job-other-revision', 'owner-b', 1, 'Reviewer')
+    const moved = await updateResourceAcl(db, admin, 'employee_job_template', source, {
+      ownerUserId: 'owner-b',
+      expectedResourceId: source.id,
+      expectedAclRevision: 0,
+    })
+    expect(moved.ownerUserId).toBe('owner-b')
+
+    const second = await seedTemplate('job-src-2', 'owner-a', 2, 'Reviewer')
+    await expect(
+      updateResourceAcl(db, admin, 'employee_job_template', second, {
+        ownerUserId: 'owner-b',
+        expectedResourceId: second.id,
+        expectedAclRevision: 0,
+      }),
+    ).rejects.toMatchObject({ code: 'resource-name-conflict', status: 409 })
+    expect(
+      await db
+        .select({ ownerUserId: employeeJobTemplates.ownerUserId })
+        .from(employeeJobTemplates)
+        .where(eq(employeeJobTemplates.id, second.id))
+        .get(),
+    ).toEqual({ ownerUserId: 'owner-a' })
+  })
+
+  test('员工定义：撞名转移 ⇒ 409 resource-name-conflict（此前是 raw UNIQUE 500）', async () => {
+    const seedDefinition = async (id: string, ownerUserId: string): Promise<AclRow> => {
+      await db.insert(employeeDefinitions).values({
+        id,
+        name: 'shared-employee',
+        typeId: 'design',
+        typeRevision: 1,
+        configurationJson: '{}',
+        currentRevision: null,
+        ownerUserId,
+        visibility: 'public',
+        aclRevision: 0,
+        createdAt: NOW,
+        updatedAt: NOW,
+        archivedAt: null,
+      })
+      return { id, ownerUserId, visibility: 'public' }
+    }
+    const source = await seedDefinition('emp-src', 'owner-a')
+    await seedDefinition('emp-target', 'owner-b')
+    await expect(
+      updateResourceAcl(db, admin, 'employee_definition', source, {
+        ownerUserId: 'owner-b',
+        expectedResourceId: source.id,
+        expectedAclRevision: 0,
+      }),
+    ).rejects.toMatchObject({ code: 'resource-name-conflict', status: 409 })
   })
 })

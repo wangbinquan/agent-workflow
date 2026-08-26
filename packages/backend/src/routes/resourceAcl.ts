@@ -49,6 +49,12 @@ export interface AclEndpointConfig {
   param: 'id'
   /** Load the row by the route key; null when absent. */
   load: (db: AppDeps['db'], key: string) => Promise<AclRow | null>
+  /**
+   * RFC-330 —— 404 码。默认 `${type}-not-found`（13 类沿用）；数字员工域的工具 / 模版传
+   * 自己既有的连字符码（`employee-tool-not-found` 等），让同一资源在所有路由上只有一个
+   * 404 码、前端 `employee-` 错误域也认得它。
+   */
+  notFoundCode?: string
   /** RFC-201: optional stable-id linearization adapter for operation resources. */
   coordinator?: {
     runExclusive: (resourceId: string, task: () => Promise<ResourceAcl>) => Promise<ResourceAcl>
@@ -127,8 +133,12 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
     // 语义上确实混淆，但新开点族要动权限目录 / 角色 preset / 目录顺序表 /
     // 存量 grant 与 PAT scope 迁移，属独立的产品变更（findings.md TP-05 同类）。
     employee_definition: 'digital-employees',
+    // RFC-330 D5 —— 工具注册 / 岗位模版同样复用 digital-employees:*（先例 RFC-317 T8）。
+    employee_tool: 'digital-employees',
+    employee_job_template: 'digital-employees',
   }
   const resource = ACL_PERMISSION_PREFIX[cfg.type]
+  const notFoundCode = cfg.notFoundCode ?? `${cfg.type}-not-found`
 
   registerRoute(
     app,
@@ -144,7 +154,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
       const actor = actorOf(c)
       const row = await cfg.load(deps.db, key)
       if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
-        throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
+        throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
       }
       return c.json(await getResourceAcl(deps.db, actor, cfg.type, row))
     },
@@ -168,7 +178,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
       const actor = actorOf(c)
       const row = await cfg.load(deps.db, key)
       if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
-        throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
+        throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
       }
       const body: unknown = await c.req.json().catch(() => ({}))
       const parsed = UpdateResourceAclBodySchema.safeParse(body)
@@ -179,7 +189,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
       }
       const updateFresh = async (fresh: AclRow): Promise<ResourceAcl> => {
         if (!(await canViewResource(deps.db, actor, cfg.type, fresh))) {
-          throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
+          throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
         }
         // RFC-104: built-ins are read-only. This runs on the in-lock fresh row.
         assertNotBuiltin(cfg.type, fresh)
@@ -195,7 +205,7 @@ export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConf
           : await cfg.coordinator.runExclusive(row.id, async () => {
               const fresh = await cfg.coordinator!.loadById(deps.db, row.id)
               if (fresh === null) {
-                throw new NotFoundError(`${cfg.type}-not-found`, `${cfg.type} not found`)
+                throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
               }
               return updateFresh(fresh)
             })

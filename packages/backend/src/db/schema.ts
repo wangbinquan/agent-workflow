@@ -522,6 +522,9 @@ export const resourceGrants = sqliteTable(
         'development_adapter',
         // RFC-317 T8 —— 数字员工 OS 的员工定义（第 13 类）。
         'employee_definition',
+        // RFC-330 —— 数字员工 OS 的工具注册 / 岗位模版（第 14 / 15 类）。
+        'employee_tool',
+        'employee_job_template',
         // RFC-324 —— 定时任务借用这张表存授权，但它**不是** ACL 资源（没有
         // visibility / builtin / owner×name 唯一域，不进配置包也不由 Intent 创建）。
         // 类型域因此比 ACL_RESOURCE_TYPES 宽一格，见 shared 的 GRANT_RESOURCE_TYPES。
@@ -5349,6 +5352,17 @@ export const employeeToolRegistrations = sqliteTable(
     draftJson: text('draft_json').notNull(),
     publishedRevision: integer('published_revision'),
     ownerUserId: text('owner_user_id'),
+    /**
+     * RFC-330 —— 第 14 类 ACL 资源。`name` 镜像 `draft_json.content.displayName`
+     * （ACL kernel 的 `table.name` 契约需要一列真实的名字；迁移 0211 回填），
+     * **不**带唯一约束；`visibility` 存量回填 public、新建 private（与
+     * `employee_definitions` 同形）。
+     */
+    name: text('name').notNull().default(''),
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     retiredAt: integer('retired_at'),
@@ -5395,12 +5409,21 @@ export const employeeJobTemplates = sqliteTable(
     draftJson: text('draft_json').notNull(),
     publishedRevision: integer('published_revision'),
     ownerUserId: text('owner_user_id'),
+    /** RFC-330 —— 第 15 类 ACL 资源（与 `employee_definitions` 同形）。 */
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .notNull()
+      .default('public'),
+    aclRevision: integer('acl_revision').notNull().default(0),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     archivedAt: integer('archived_at'),
   },
   (t) => ({
-    typeNameUq: uniqueIndex('employee_job_templates_type_name_unique').on(
+    // RFC-330 D17' —— 名字唯一域 = (owner, type, typeRevision, name)：保持「每个
+    // 类型版本内名字唯一」，只多一层 owner，私有 / 异 owner 的同名模版得以共存；
+    // kernel 的 OWNER_NAME_UNIQUE_PARTITIONS 用 (typeId, typeRevision) 做分区列。
+    ownerTypeNameUq: uniqueIndex('employee_job_templates_owner_type_name_unique').on(
+      sql`COALESCE(${t.ownerUserId}, '')`,
       t.typeId,
       t.typeRevision,
       t.name,
@@ -5923,6 +5946,31 @@ export const employeeCases = sqliteTable(
 )
 
 /** Source-neutral event delivery provenance for an event-started Case. */
+/**
+ * RFC-330 D19/D20 —— 案例成员（observer / collaborator），与 `task_collaborators`
+ * 同形：owner 只在 `employee_cases.owner_user_id`，从不进成员行；`user_id`
+ * RESTRICT——仍在案例上的用户不能被删除。可见 = 发起人 ∪ 成员 ∪ tasks:read:all ∪
+ * bypass；操作 = 发起人 ∪ collaborator ∪ bypass（services/employeeCaseMembers.ts）。
+ */
+export const employeeCaseMembers = sqliteTable(
+  'employee_case_members',
+  {
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    role: text('role', { enum: ['collaborator', 'observer'] }).notNull(),
+    addedBy: text('added_by').notNull(),
+    addedAt: integer('added_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.caseId, t.userId] }),
+    userIdx: index('idx_employee_case_members_user').on(t.userId, t.caseId),
+  }),
+)
+
 export const employeeCaseEventOrigins = sqliteTable(
   'employee_case_event_origins',
   {

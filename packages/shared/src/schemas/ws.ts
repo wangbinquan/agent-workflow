@@ -239,6 +239,9 @@ export const TasksListWsMessageSchema = z.discriminatedUnion('type', [
   // RFC-244: membership full-replace changed list visibility/Owner. The
   // process-local before/after audience is carried beside this wire frame.
   z.object({ type: z.literal('task.members.changed'), taskId: z.string() }),
+  // RFC-330 D19/D20: an employee case's owner / members changed. Same
+  // before/after audience mechanism as task.members.changed, keyed by caseId.
+  z.object({ type: z.literal('employee-case.members.changed'), caseId: z.string() }),
   // RFC-053 P-3: the lifecycle invariant scan emitted a new finding (or
   // promoted an existing 'warning' to 'error'). Subscribers (the list page
   // + the future detail-page banner in PR-E) invalidate the per-task alerts
