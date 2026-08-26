@@ -11794,9 +11794,22 @@
       "domain": "仓库、仓库组与 Git 工作面",
       "title": "SSH 协议的仓库接入（ssh:// / scp 式 URL，deploy key）",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/rfc319-ssh-repo-access.test.ts",
+          "test": "ssh:// 远端能被真的 clone 下来，且确实经由 ssh 传输"
+        },
+        {
+          "file": "packages/backend/tests/rfc319-ssh-repo-access.test.ts",
+          "test": "运维给的 `-i <私钥>` 一路活到 ssh 手里（本产品交付部署密钥的唯一途径）"
+        },
+        {
+          "file": "packages/backend/tests/rfc319-ssh-repo-access.test.ts",
+          "test": "scp 式 `git@host:path` 与 ssh:// 是同一个仓，只落一行缓存"
+        }
+      ]
     },
     {
       "id": "REPO-X3",
@@ -12704,7 +12717,6 @@
     "EVENT-28",
     "EVENT-X4",
     "OPS-X9",
-    "REPO-42",
     "UX-45",
     "UX-46"
   ],

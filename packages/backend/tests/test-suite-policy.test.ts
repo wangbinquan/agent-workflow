@@ -64,7 +64,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/claude-dependency-injection-2026-08-09.test.ts#skipIf': 5,
   'e2e/clarify.spec.ts#skip': 1,
   'e2e/focus-ring-clip.spec.ts#skip': 1,
-  'e2e/git-protocols.spec.ts#skip': 2,
+  // RFC-319 REPO-42（2026-08-26）：这里曾是 2 —— 一条是 gitea 夹具未配置时的条件跳过
+  // （合法，保留），另一条是文件底部一个**只有注释、没有断言**的 SSH 空壳
+  // `describe.skip`。它记的理由（「要等 daemon 支持自定义 GIT_SSH_COMMAND」）本身
+  // 就是错的：util/git.ts:38-44 早就把环境里的 GIT_SSH_COMMAND 层叠保留了。空壳已删，
+  // 覆盖改由 packages/backend/tests/rfc319-ssh-repo-access.test.ts 用桩 ssh 真跑。
+  'e2e/git-protocols.spec.ts#skip': 1,
   // Explicitly billed/provider-backed and activated only by the local
   // pre-release package script; ordinary CI must keep both drivers skipped.
   'e2e/release-runtime.spec.ts#skip': 2,

@@ -24,12 +24,17 @@
 //     cron + path-filtered PRs (when gitRepoCache.ts / git-url.ts
 //     touch the diff).
 //
-// SSH note: the SSH test is currently skipped — getting the daemon to
-// pick up a deploy key requires extending `gitRepoCache` to accept a
-// custom `GIT_SSH_COMMAND` or `~/.ssh/id_ed25519_test` path, which is
-// scoped to a follow-up PR. The skip's `describe.skip` block documents
-// the protocol shape and what to flip when the daemon grows that
-// capability.
+// SSH note: this file has no SSH case, and that is deliberate — the SSH
+// path needs no gitea fixture at all. `git` reaches an ssh remote by handing
+// `git-upload-pack <path>` to GIT_SSH_COMMAND, which the daemon already
+// inherits from its environment (util/git.ts:38-44), so a stub ssh exercises
+// the whole transport locally. That is where the coverage now lives:
+// packages/backend/tests/rfc319-ssh-repo-access.test.ts (RFC-319 REPO-42) —
+// real ssh:// clone, scp-form canonicalization, and the `-i <deploy key>`
+// hand-off. The empty `describe.skip` shell that used to sit at the bottom of
+// this file went with it: it held a slot in the skip ratchet and never ran a
+// single assertion. The premise it recorded ("needs daemon changes to thread
+// a custom GIT_SSH_COMMAND through to git clone") was simply wrong.
 
 import { test, expect } from '@playwright/test'
 
@@ -182,18 +187,5 @@ test.describe('RFC-054 W3-4 — git protocols against real Gitea', () => {
     expect(res.ok).toBe(true)
     const body = (await res.json()) as { version: string }
     expect(body.version).toMatch(/^\d+\.\d+\.\d+/)
-  })
-})
-
-// Separate describe block kept skipped — the SSH path needs daemon
-// changes to thread a custom GIT_SSH_COMMAND / private-key path
-// through to `git clone`. Documenting the surface here so the
-// follow-up PR has a clear contract to fill.
-test.describe.skip('RFC-054 W3-4 — SSH path (deploy-key, follow-up)', () => {
-  test('SSH: daemon clones with a deploy key registered against the fixture user', async () => {
-    // Future PR: add `gitRepoCache` support for per-task env
-    // `GIT_SSH_COMMAND="ssh -i $PRIVATE_KEY -o StrictHostKeyChecking=no"`,
-    // then POST task with repoUrl=ssh://git@127.0.0.1:2222/fixture-admin/sample.git
-    // and assert successful clone.
   })
 })
