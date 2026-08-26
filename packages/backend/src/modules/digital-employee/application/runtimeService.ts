@@ -765,6 +765,7 @@ export class DigitalEmployeeRuntimeService {
   listCasePage(input: {
     readonly employeeId?: string
     readonly ownerUserId?: string
+    readonly membership?: { readonly actorUserId: string; readonly scope: 'mine' | 'shared' }
     readonly launchOrigin?: TaskLaunchOrigin
     readonly states?: readonly EmployeeCaseRecord['state'][]
     readonly terminalCatalogStatuses?: readonly ('done' | 'canceled')[]
@@ -788,6 +789,7 @@ export class DigitalEmployeeRuntimeService {
     const page = this.#store.listCasesPage({
       ...(input.employeeId === undefined ? {} : { employeeId: input.employeeId }),
       ...(input.ownerUserId === undefined ? {} : { ownerUserId: input.ownerUserId }),
+      ...(input.membership === undefined ? {} : { membership: input.membership }),
       ...(input.launchOrigin === undefined ? {} : { launchOrigin: input.launchOrigin }),
       ...(input.states === undefined ? {} : { states: input.states }),
       ...(input.terminalCatalogStatuses === undefined

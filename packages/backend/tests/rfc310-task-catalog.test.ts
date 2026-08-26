@@ -219,22 +219,29 @@ describe('RFC-310 unified task catalog', () => {
     })
     const member = actor(['tasks:read', 'digital-employees:read'])
 
+    // 没有 tasks:read:all 的 all 降成 mine；RFC-330 缺口 1 后 mine / shared 走成员制
+    // （membership），不再只按 owner 过滤，shared 也不再硬编码空页。
     await employeeSource.list({ actor: member, scope: 'all', origin: 'webhook' })
     expect(calls).toEqual([
-      expect.objectContaining({ ownerUserId: 'catalog-user', launchOrigin: 'event' }),
+      expect.objectContaining({
+        membership: { actorUserId: 'catalog-user', scope: 'mine' },
+        launchOrigin: 'event',
+      }),
     ])
+    expect(calls[0]).not.toHaveProperty('ownerUserId')
 
-    const shared = await employeeSource.list({ actor: member, scope: 'shared' })
-    expect(shared.items).toEqual([])
-    expect(calls).toHaveLength(1)
+    await employeeSource.list({ actor: member, scope: 'shared' })
+    expect(calls).toHaveLength(2)
+    expect(calls[1]).toMatchObject({ membership: { actorUserId: 'catalog-user', scope: 'shared' } })
 
     await employeeSource.list({
       actor: actor(['tasks:read', 'tasks:read:all', 'digital-employees:read']),
       scope: 'all',
       origin: 'api',
     })
-    expect(calls[1]).toMatchObject({ launchOrigin: 'api' })
-    expect(calls[1]).not.toHaveProperty('ownerUserId')
+    expect(calls[2]).toMatchObject({ launchOrigin: 'api' })
+    expect(calls[2]).not.toHaveProperty('ownerUserId')
+    expect(calls[2]).not.toHaveProperty('membership')
   })
 
   test('digital-employee source accepts the zero-based first execution round', async () => {

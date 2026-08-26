@@ -168,6 +168,11 @@ export interface RuntimeCaseStorePort {
   listCasesPage(input: {
     readonly employeeId?: string
     readonly ownerUserId?: string
+    /**
+     * RFC-330 缺口 1：按成员制过滤，与任务侧 `taskOwnershipScopeCondition` 同语义——
+     * mine = 发起人 ∨ 成员（observer / collaborator）；shared = 成员 ∧ 非发起人（无主案例也算）。
+     */
+    readonly membership?: { readonly actorUserId: string; readonly scope: 'mine' | 'shared' }
     readonly launchOrigin?: TaskLaunchOrigin
     readonly states?: readonly EmployeeCaseRecord['state'][]
     readonly terminalCatalogStatuses?: readonly ('done' | 'canceled')[]

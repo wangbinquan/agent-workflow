@@ -506,6 +506,29 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     listCasesPage(input) {
+      // RFC-330 缺口 1：成员制过滤。与 `services/taskAuthorization.ts` 的
+      // `taskOwnershipScopeCondition` 同形（那边是 task_collaborators）；shared 对
+      // `owner_user_id IS NULL` 也成立，否则无主案例的成员在「与我共享」里看不到它。
+      const membershipCondition = (): SQL | null => {
+        if (input.membership === undefined) return null
+        const memberOf = inArray(
+          employeeCases.id,
+          db
+            .select({ id: employeeCaseMembers.caseId })
+            .from(employeeCaseMembers)
+            .where(eq(employeeCaseMembers.userId, input.membership.actorUserId)),
+        )
+        if (input.membership.scope === 'shared') {
+          return and(
+            memberOf,
+            or(
+              isNull(employeeCases.ownerUserId),
+              ne(employeeCases.ownerUserId, input.membership.actorUserId),
+            ),
+          )!
+        }
+        return or(eq(employeeCases.ownerUserId, input.membership.actorUserId), memberOf)!
+      }
       const conditions: SQL[] = []
       if (input.employeeId !== undefined) {
         conditions.push(eq(employeeCases.employeeId, input.employeeId))
@@ -513,6 +536,8 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
       if (input.ownerUserId !== undefined) {
         conditions.push(eq(employeeCases.ownerUserId, input.ownerUserId))
       }
+      const membership = membershipCondition()
+      if (membership !== null) conditions.push(membership)
       if (input.launchOrigin !== undefined) {
         conditions.push(eq(employeeCases.launchOrigin, input.launchOrigin))
       }
@@ -593,6 +618,8 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
       if (input.ownerUserId !== undefined) {
         facetConditions.push(eq(employeeCases.ownerUserId, input.ownerUserId))
       }
+      const facetMembership = membershipCondition()
+      if (facetMembership !== null) facetConditions.push(facetMembership)
       if (input.launchOrigin !== undefined) {
         facetConditions.push(eq(employeeCases.launchOrigin, input.launchOrigin))
       }

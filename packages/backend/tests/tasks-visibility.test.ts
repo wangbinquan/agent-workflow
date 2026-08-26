@@ -37,6 +37,7 @@ interface Harness {
   daveToken: string
   bobTaskId: string
   systemTaskId: string
+  carolId: string
 }
 
 async function buildHarness(): Promise<Harness> {
@@ -149,7 +150,17 @@ async function buildHarness(): Promise<Harness> {
     ownerUserId: '__system__',
   })
 
-  return { db, app, aliceToken, bobToken, carolToken, daveToken, bobTaskId, systemTaskId }
+  return {
+    db,
+    app,
+    aliceToken,
+    bobToken,
+    carolToken,
+    daveToken,
+    bobTaskId,
+    systemTaskId,
+    carolId: carol.id,
+  }
 }
 
 async function reqAs(app: Hono, token: string, path: string): Promise<Response> {
@@ -270,6 +281,59 @@ describe('GET /api/tasks visibility filter', () => {
     const res = await reqAs(h.app, h.bobToken, '/api/tasks?scope=shared')
     const list = (await res.json()) as { id: string }[]
     expect(list).toEqual([])
+  })
+
+  test('scope=shared keeps null-owner tasks I collaborate on（RFC-330 缺口 2）', async () => {
+    // `owner_user_id IS NULL`（系统发起 / 存量）对 `<>` 不为真：修前这条任务在 carol 的
+    // 「我的任务」里有、「与我共享」里没有——两档语义本该是「我参与的」⊇「参与但非我所有」。
+    const now = Date.now()
+    await h.db.insert(tasks).values({
+      name: 'fixture-task',
+      id: 'task-null-owner',
+      workflowId: 'wf01',
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/repo',
+      repoUrl: null,
+      worktreePath: '/tmp/wt-null-owner',
+      baseBranch: 'main',
+      branch: 'agent-workflow/task-null-owner',
+      baseCommit: null,
+      status: 'done',
+      inputs: '{}',
+      maxDurationMs: null,
+      maxTotalTokens: null,
+      startedAt: now,
+      finishedAt: now,
+      errorSummary: null,
+      errorMessage: null,
+      failedNodeId: null,
+      expiresAt: null,
+      deletedAt: null,
+      schemaVersion: 1,
+      ownerUserId: null,
+    })
+    await h.db.insert(taskCollaborators).values([
+      {
+        taskId: 'task-null-owner',
+        userId: h.carolId,
+        role: 'collaborator',
+        addedBy: h.carolId,
+        addedAt: now,
+      },
+    ])
+    const shared = (await (await reqAs(h.app, h.carolToken, '/api/tasks?scope=shared')).json()) as {
+      id: string
+    }[]
+    expect(shared.map((t) => t.id).sort()).toEqual([h.bobTaskId, 'task-null-owner'].sort())
+    const mine = (await (await reqAs(h.app, h.carolToken, '/api/tasks?scope=mine')).json()) as {
+      id: string
+    }[]
+    expect(mine.map((t) => t.id).sort()).toEqual([h.bobTaskId, 'task-null-owner'].sort())
+    // bob 与它无关：两档都不该出现
+    const bobShared = (await (
+      await reqAs(h.app, h.bobToken, '/api/tasks?scope=shared')
+    ).json()) as { id: string }[]
+    expect(bobShared).toEqual([])
   })
 
   test('daemon token actor sees everything', async () => {

@@ -1,5 +1,5 @@
 import type { SQL, SQLWrapper } from 'drizzle-orm'
-import { and, eq, inArray, ne, or, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { taskCollaborators, tasks } from '@/db/schema'
@@ -49,7 +49,9 @@ export function taskOwnershipScopeCondition(
       .where(eq(taskCollaborators.userId, actorUserId)),
   )
   if (scope === 'shared') {
-    return and(collaborator, ne(ref.ownerUserId, actorUserId))!
+    // `owner_user_id IS NULL`（系统发起 / 存量行）对 `<>` 不为真：只写 ne() 会把「我是
+    // collaborator 的无主任务」从「与我共享」漏掉，而它明明在「我的任务」里（RFC-330 缺口 2）。
+    return and(collaborator, or(isNull(ref.ownerUserId), ne(ref.ownerUserId, actorUserId)))!
   }
   return or(eq(ref.ownerUserId, actorUserId), collaborator)!
 }

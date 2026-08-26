@@ -1297,6 +1297,13 @@ test('RFC-330: employee case members panel — admin adds a collaborator, who ca
   await expect(bobPage.getByTestId('members-save')).toHaveCount(0)
   await bobPage.keyboard.press('Escape')
 
+  // RFC-330 缺口 1 —— 成员不只靠链接直达：统一任务列表「与我共享」「我的任务」都列出这个案例。
+  await bobPage.goto(`${daemon.baseUrl}/tasks?scope=shared`)
+  await expect(bobPage.getByTestId(`task-row-${launchedCaseId}`)).toBeVisible()
+  await bobPage.goto(`${daemon.baseUrl}/tasks?scope=mine`)
+  await expect(bobPage.getByTestId(`task-row-${launchedCaseId}`)).toBeVisible()
+  await bobPage.goto(`${daemon.baseUrl}/tasks/employee-cases/${launchedCaseId}`)
+
   // D20 —— admin 把案例转移给 bob：bob 成为 owner（前任是系统，不降为成员）。
   await adminPage.getByTestId('employee-case-members-dialog-button').click()
   await expect(adminPage.getByTestId('task-members-panel')).toBeVisible()
@@ -1316,6 +1323,18 @@ test('RFC-330: employee case members panel — admin adds a collaborator, who ca
   // 新 owner 的面板拿到管理控件（不刷新：WS 帧让成员查询失效）。
   await bobPage.getByTestId('employee-case-members-dialog-button').click()
   await expect(bobPage.getByTestId('members-save')).toBeVisible({ timeout: 20_000 })
+
+  // 成为 owner 后：「我的任务」仍有它，「与我共享」不再有（shared = 成员 ∧ 非发起人）。
+  await bobPage.goto(`${daemon.baseUrl}/tasks?scope=mine`)
+  await expect(bobPage.getByTestId(`task-row-${launchedCaseId}`)).toBeVisible()
+  // 空列表不渲染列表容器（走空态），所以等目录请求真正回来再断言「没有这一行」。
+  const sharedAfterTransfer = bobPage.waitForResponse(
+    (response) =>
+      response.url().includes('/api/task-catalog') && response.url().includes('scope=shared'),
+  )
+  await bobPage.goto(`${daemon.baseUrl}/tasks?scope=shared`)
+  await sharedAfterTransfer
+  await expect(bobPage.getByTestId(`task-row-${launchedCaseId}`)).toHaveCount(0)
 
   await adminCtx.close()
   await bobCtx.close()

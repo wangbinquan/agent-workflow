@@ -3803,14 +3803,18 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
 
 ## RFC-330 落地时登记的功能缺口（2026-08-26，数字员工域授权面）
 
-RFC-330 按用户裁定 D21/D22 只做功能核心，下面两条是落地时明确**不做**、但仍是功能缺口的项：
+RFC-330 按用户裁定 D21/D22 只做功能核心，下面两条是落地时明确**不做**、但仍是功能缺口的项。
+**两条均已于 2026-08-27 按用户「直接改、不立 RFC」修掉**（`taskAuthorization.ts` shared 档
+null-safe；`listCasesPage` 增 `membership` 过滤 + adapter 不再对 shared 返回空页；锁定测试
+`tasks-visibility.test.ts`「null-owner」用例、`rfc330-case-list-membership-scope.test.ts`、
+旅程 e2e 的「成员在与我共享里看到案例」段）。下文保留为记录：
 
-1. **【低】成员案例不进统一任务列表的 `mine` / `shared`。** 案例成员制（observer / collaborator）
+1. **【已修 2026-08-27】成员案例不进统一任务列表的 `mine` / `shared`。** 案例成员制（observer / collaborator）
    已落地（`services/employeeCaseMembers.ts`），但 `task-catalog-adapter.ts` 的案例来源仍只按
    owner 过滤：被加为成员的人只能从案例页直达（例如通过 WS 帧 / 链接），列表里找不到它。
    补法：给 `listCasesPage` / `listTerminalOutcomeGroups` 加 `all / mine / shared` scope（成员
    子查询），与任务侧 `taskOwnershipScopeCondition` 同语义。
-2. **【低】任务侧 `shared` scope 对 null-owner 任务不成立。** `services/taskAuthorization.ts:44-47`
+2. **【已修 2026-08-27】任务侧 `shared` scope 对 null-owner 任务不成立。** `services/taskAuthorization.ts:44-47`
    用 `ne(owner, me)`，对 `owner_user_id IS NULL` 的协作任务不为真，于是「我是 collaborator 的
    系统任务」不会出现在「共享给我」。补法：`owner IS NULL OR owner <> ?`（与上一条共用一个
    null-safe helper 时一并修）。

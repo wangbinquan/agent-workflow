@@ -75,6 +75,7 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
     listCasePage(input: {
       readonly employeeId?: string
       readonly ownerUserId?: string
+      readonly membership?: { readonly actorUserId: string; readonly scope: 'mine' | 'shared' }
       readonly launchOrigin?: TaskLaunchOrigin
       readonly states?: readonly EmployeeCaseState[]
       readonly terminalCatalogStatuses?: readonly EmployeeTerminalCatalogStatus[]
@@ -105,13 +106,6 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
         parsedScope.data === 'all' && !input.actor.permissions.has('tasks:read:all')
           ? 'mine'
           : parsedScope.data
-      if (scope === 'shared') {
-        return {
-          items: [],
-          nextCursor: null,
-          facets: { all: 0, active: 0, attention: 0, finished: 0 },
-        }
-      }
       const parsedOrigin = TaskListOriginSchema.safeParse(input.origin ?? 'all')
       if (!parsedOrigin.success) {
         throw new ValidationError('task-page-filter-invalid', `unknown origin: ${input.origin}`)
@@ -134,7 +128,9 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
         JSON.parse(
           runtime.queries.listCasePage({
             view: view as 'all' | 'active' | 'attention' | 'finished',
-            ...(scope === 'mine' ? { ownerUserId: input.actor.user.id } : {}),
+            // RFC-330 缺口 1：mine / shared 走成员制（发起人 ∪ 成员），不再只按 owner；
+            // `all` 只有持 tasks:read:all 的人才到得了这里，不加过滤。
+            ...(scope === 'all' ? {} : { membership: { actorUserId: input.actor.user.id, scope } }),
             ...(launchOrigin === undefined ? {} : { launchOrigin }),
             ...(filter.states === undefined ? {} : { states: filter.states }),
             ...(filter.terminalCatalogStatuses === undefined
