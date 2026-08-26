@@ -10,6 +10,7 @@
 
 | 任务 | 内容 | 依赖 |
 | --- | --- | --- |
+| 2026-08-26 | **收口：最后 13 条 gap 清零（840/840 covered），并补齐 R1/R2 增量对账**。这一批的价值不在「又写了几条用例」，而在**四条被判「做不了」的能力里，三条的理由本身是错的**——逐条回源码复核后：①**OPS-007**（stop 超时/强杀的非零退出码）「e2e 覆盖不了」属实（harness 的 `COMMAND_TIMEOUT_MS` 15s < CLI 的 30s 预算，命令先被 harness 掐断），但 `stopCommand` 一直收 `timeoutMs`、`cli.test.ts` 早就在用——换一层断言面即可。此前它只有源码文本断言在守，实测三种变异（预算归零 / 超时前 unlink 掉 lock / `process.exit(1)`→`exit(0)`）旧断言 22/22 全绿，新用例三条全咬。②**REPO-42**（SSH 仓库接入）是**前提性错误**：`git-protocols.spec.ts` 头部写着「要等 daemon 支持自定义 GIT_SSH_COMMAND」，据此留了一个只有注释没有断言的 `describe.skip` 空壳占着跳过棘轮一格；而 `util/git.ts:38-44` 一直在层叠保留环境里的 GIT_SSH_COMMAND，`parseGitUrl` 把 ssh-uri/ssh-scp 当一等形态。缺的是用例不是能力。**通用手法**：git 的 ssh 传输就是把 `git-upload-pack <path>` 交给 GIT_SSH_COMMAND 执行，所以一个**桩 ssh**能在没有任何 sshd 的情况下跑通整条 transport。顺带纠正一条本仓长期误记：**没有「按仓登记 deploy key」这个功能**，运维交付私钥的唯一途径就是 daemon 环境的 GIT_SSH_COMMAND。空壳已删，棘轮 2 → 1。③**DE-41**（遗留任务运维动作）「已退役」只对了一半：创建那道门确实焊死（`start.ts:798` 不传 options ⇒ `legacyAdmissionsEnabled=false`，无第二个开关），但整个 `developmentMissions.ts` 里 `legacyAdmissionsEnabled()` **只出现一次**，`/:id` 之下 20 个运维端点一个没挡——那是**排干路径**，升级上来的部署靠它把存量 Mission 排干，排不干 `legacyOpenMissionCount` 永不归零、单写切换永远完不成。`getMissionDetail` 只读 mission 行、`summaryOf` 是恒等函数，播一行七个字段就够把详情页开起来。④**MEM-49** 的设置半边本就被 CFG-21 逐字覆盖（假 gap），徽标半边是**真缺口**：`MemoryRow.tsx:70-79` 只在 `status==="candidate"` 时渲染语言徽标，而三个消费点全取 approved/archived（`MemoryAllView = "approved" | "archived"`），唯一渲染候选的 `MemoryApprovalQueue` 不用 MemoryRow —— **用户永远看不到候选记忆的输出语言**，而审批恰恰最需要它。不可达的东西写不进覆盖账本，故收窄能力定义并记入 audit-backlog。另五条**维护拍**（EVENT-28/EVENT-X4/OPS-X9/OPS-X3/OPS-X5）此前判「要等一个小时」，实为**首拍相位 8/16/5 分钟**（`maintenanceTicker.ts:158-167` 让首个周期拍落在 `T0+phaseOffsetMs`），一次 startDaemon 的十几分钟内就会发生；每条都先证明「到点之前确实没发生」再证明到点后发生了——少了前半段，一个「启动就清空」的实现照样跑绿。最后四条 **UX-19/45/46/47** 是「扫描覆盖面本身」的判据：量出来的现状值得记——**39 个无参路由里焦点环扫 21 个、axe 只扫 10 个**，`/tasks`、`/users`、`/scheduled`、`/reviews` 从未被 wcag2a/2aa 扫过；两张「未扫描」清单登记成只许缩的棘轮。**R1/R2 补对账**：B106～B113 十批只改了 R3、漏了这两份（与 B76/B84 同一成因，不补必红）。用集合恒等式把 `uncovered = D − H(全量)` 化成 `(U_old ∪ N) − H_new`，只跑新增/改动的 19 份 spec（127 条用例、1465 条 journal）即可增量对账；N 由「在 `00289395c` 上重放声明表 dump」求得（8 增 0 删），其中 3 条**新挂却无人测**如实计入未覆盖（别人的债，棘轮按设计摆到台面上）。R1 129 → **96**、R2 6 → **4**。**收口期主干红过一次并已修**：`318b76164` 红在 windows 分片的 DE-16b —— 它用 `page.waitForRequest` 等创建请求，而那在**请求刚发出**时就 resolve，紧接着直接读服务端列表，于是慢机器上读跑在写前面，断言成「没落库」。本机给创建请求人为加 1.5s 延迟即可复现（旧写法红 / 改 `waitForResponse` 绿），`ae814b1a2` 修正。全仓扫过同类形态 16 处，只此一处跨越了写入完成。 |
 | **T1** | 在**干净的 exact SHA** 上重采分母：`allRouteMeta()` 端点数（落档时 462）、`router.tsx` 路由数（58）、`e2e/*.spec.ts` 用例数（340）、`startSystemMockSuite` 文件数（6）。落档基线是 `92478e636`，且当时工作树上有并发 session 的大批未提改动（RFC-318 数字员工工具合同等） | — |
 | **T2** | 若 T1 与 `findings.md §1` 的数字有出入，**只订正分母**，不重跑 820 条审计；出入写进本文件 §7 变更记录 | T1 |
 | **T3** | 确认 `design/RFC-318-minimal-digital-employee-tool-contracts/`（并发 session 的 RFC）与本 RFC 无交叉改动面；若他们的实现会新增用户面能力，在 R3 账本里给它们留 `gapSince: RFC-318` 的位置而不是替他们补测 | T1 |
@@ -107,14 +108,17 @@ P1 不带 tag（PR 腿），P2 / P3 带 `@nightly`。
 
 ## 6. 验收清单（对齐 `proposal.md` AC-1–AC-8）
 
-- [ ] **AC-1** 679 条缺口逐条有用例，且在 R3 账本里指向具名证据；账本守卫验证证据可达
-- [ ] **AC-2** 8 条空洞绿修复完毕，每条附变异实证记录（注入→红→撤销→绿）
-- [ ] **AC-3** R1/R2/R3/R4 四条棘轮全绿；每条自带负 fixture 能自证会红；每条断言语料非空
-- [ ] **AC-4** 三份账本注册进 `architecture/ledger-baselines.json`，条目数只减不增
-- [ ] **AC-5** PR 腿单片墙钟不超过今天的水平；`e2e-full-nightly` 能完整跑完
-- [ ] **AC-6** 每条新增 / 改动 spec 本机真跑过；testid 逐个回 grep 过
-- [ ] **AC-7** `bun run gate:local` 全绿；hosted CI 按 exact SHA 全绿
-- [ ] **AC-8** `e2e/CAPABILITY_COVERAGE.md` 改写为导读，删除被本次审计证伪的宣称，指向三份机器账本
+- [x] **AC-1** 679 条缺口逐条有用例，且在 R3 账本里指向具名证据；账本守卫验证证据可达
+      —— 收口实况：账本行数随审计推进从 820 增至 **840**（后续批次补录的能力也一并入账），**gap 于 2026-08-26 归零**，840 条全部 `covered` 且证据为 `{file, test}`、标题逐字可达。
+- [x] **AC-2** 8 条空洞绿修复完毕，每条附变异实证记录（注入→红→撤销→绿）
+- [x] **AC-3** R1/R2/R3/R4 四条棘轮全绿；每条自带负 fixture 能自证会红；每条断言语料非空
+- [x] **AC-4** 三份账本注册进 `architecture/ledger-baselines.json`，条目数只减不增
+- [x] **AC-5** PR 腿单片墙钟不超过今天的水平；`e2e-full-nightly` 能完整跑完
+      —— PR 腿用例数未变（新增用例全部带 `@nightly`，`--grep-invert` 后逐条比对为 0 条新增）；夜跑分片实测 4–7 分钟 / 40 分钟预算，本批最慢的 `rfc319-maintenance-tickers.spec.ts` 单文件 21 分钟（慢时钟相位 8/16/5 分钟，只能真等），落在同一分片后仍在预算内。
+- [x] **AC-6** 每条新增 / 改动 spec 本机真跑过；testid 逐个回 grep 过
+- [x] **AC-7** `bun run gate:local` 全绿；hosted CI 按 exact SHA 全绿
+      —— 本仓 2026-08-24 起以 GitHub Actions 为唯一权威门禁（`CLAUDE.md` §Test-with-every-change），本 RFC 按 exact SHA 逐笔盯到绿；收口期 `318b76164` 曾红在 windows 分片的 DE-16b 上，经本机复现（人为给创建请求加 1.5s 延迟）确认是该用例把「请求已发出」当成「写入已完成」，已于 `ae814b1a2` 修正（`waitForRequest` → `waitForResponse`）。
+- [x] **AC-8** `e2e/CAPABILITY_COVERAGE.md` 改写为导读，删除被本次审计证伪的宣称，指向三份机器账本
 
 **两向对账**（RFC-317 收口时自查出的定式，写在这里免得重蹈）：收口前拿**编号**做一次
 双向核对——①`proposal.md` 的每条 AC 都能在本文件找到承载它的任务；②本文件的每个任务都能

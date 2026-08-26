@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft，2026-08-26；批准前零生产改动）：[RFC-328 持久化任务执行所有权与 fencing（P0-D）](design/RFC-328-durable-task-execution-ownership-fence/proposal.md)**
+> —— 承接 RFC-294 当前路线 N2：当前同步点 `b5467bbce`（`HEAD=origin/main`；相对 task-execution production 基线 `b8c24a5c`，`packages/{backend,shared,frontend}/src` 零 production delta）。基线仍由 `InMemoryTaskDriverSupervisor`、`driverLease` 与 task status CAS
+> 三套进程内/业务状态机制共同维持 execution ownership，人工 resume/retry 又会在新 driver attach 前执行 reap、Git rollback、placeholder mint，PID receipt 写库失败仍被 best-effort 吞掉。RFC-328 终态以 owners / intents / effects / effect_attempts / effect_fences /
+> maintenance_claims / maintenance_members / lineage_replay_decisions 八表建立唯一 durable authority；四 kick 与 auto/recovery 先写 canonical intent，worker claim 单调 epoch；execution DB mutation 同事务 exact-token fence，FS/Git/process/managed outbound 每次真实 act/send record-before-act + multi-resource fence，registry只按exact token管handle。TTL只触发recovery，不能证明旧writer/process已停即保持`recovery-required`。
+> 前两轮只读设计门各报 1 P0/7 P1/2 P2；第三轮为 0 P0/3 P1/2 P2，全部已折入 current 四文档：new-daemon先exact revoke、authorization随intent终止rebind/suspend/return、跨child delete保留ancestor slot path、六份archive ledger，以及normal cascade对known/succeeded动作推进下一operation generation。用户原则已钉死为“功能远大于安全”：不加笼统no-replay或永久quarantine，保留current custom transport retry、built-in成功路径、manual node/parent retry与同task agent/script/fan-out并行；unknown只暂停无actor的auto，manual command按scope可审计授权。
+> 当前待同一外部评审会话完成第四轮无P0/P1、无功能收缩闭合；随后 proposal D1～D12、能力影响1～12与完整matrix须用户按精确四文档hash显式批准，第一项生产工作才是 RFC-328-T3 ownership domain。本 RFC 不改 Task/NodeRun wire、不领取 W2 credit，完成后才另立新号 W2 RFC。
+
 > ✅ **已完成 RFC（Done，2026-08-25，单笔提交）：[RFC-327 按 scope 与标签检索知识](design/RFC-327-memory-scope-tag-discovery/proposal.md)**
 > —— 起于用户「现在有增加知识的 MCP 和 API 吗，还有按照 scope、标签来过滤知识的 MCP 和 API 吗」。源码对账的答案是**写有、筛半有**：
 > 增加知识 REST（`POST /api/memories`）与 MCP（`resource_write kind=memory method=create`）都有；按 scope 过滤只有 REST 有；
@@ -37,6 +44,8 @@
 > 重复 docVersionId 422、Shiki 交叉范围原子化、KaTeX 一律不高亮）。
 > **接手须知**：两个 PR 都已直接推 main（A：解析 + 事务 + REST = plan T1–T12；B：MCP + 前端 + e2e + 账本 = T13–T22）；改动记录 / 改过的既有锁测 / 八条变异实证 / AC 证据表（每 AC 一行）在 `plan.md §3–§4`；两条已登记的残留债在 `docs/audit-backlog.md`（任务工具审计行无资源类别、网页选词偏移仍是启发式）；
 > 工作树里 `e2e/rfc319-*.spec.ts` / `packages/system-mocks` 的未提交改动属并发 RFC-319 session，勿动。
+> （2026-08-26 补记：RFC-319 已收口，那批改动全部落主干，这条不再适用。今天工作树里的
+> `packages/frontend/**` 与 `design/RFC-328-*` 属另一个并发 session。）
 
 > ✅ **已完成 RFC（Done，2026-08-25；主实现 `72e648327`）：[RFC-325 全平台下拉框搜索能力](design/RFC-325-platform-wide-select-search/proposal.md)**
 > —— 起于用户诉求「给平台所有的下拉框都要配置搜索能力」。源码实测：自建 `Select`（RFC-036 popover）共 **153 处**
@@ -127,10 +136,14 @@
 > **非本 RFC 的红**（别代修）：`api-contract-coverage` 的 `GET /api/mcp` 与
 > `rfc319-*` 各腿的红都归 RFC-319 session；`e2e-full-nightly` 的 `RFC-319 覆盖账本对账` 现在只剩
 > `-` 项（账本列着、实际已被打到），是他们补 spec 之后该同批销的账，我这两条
-> `scheduled-tasks/:id/acl` 已登记、不再被点名。gitleaks 那 5 条指纹已由本 session 钉进
+> `scheduled-tasks/:id/acl` 已登记、不再被点名。
+> （2026-08-26 补记：这笔账已由 RFC-319 收口时补齐——R1 129 → 96、R2 6 → 4。
+> 你那两条 `GET/PUT /api/scheduled-tasks/:id/acl` 与 `GET /api/memories/facets` 现在
+> **如实列在未覆盖账本里**：它们是新挂却无人测的端点，棘轮按设计把它们摆到台面上，
+> 销账要求仍按 `design/RFC-324-graded-resource-grants/plan.md §7`。）gitleaks 那 5 条指纹已由本 session 钉进
 > `.gitleaksignore`（`7bb9799f3`，纯追加）。
 >
-> ✅ **已完成 RFC（Done，本地收尾；待发布后复验/回填最终 run，2026-08-25）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-25；本地收尾提交现已进入 `origin/main`）：[RFC-323 数字员工按员工绑定的 Adapter 配置卡](design/RFC-323-employee-scoped-adapter-cards/proposal.md)**
 > —— Adapter 资源继续由 Integration 拥有，但不再固定在分类共享的工具注册上；声明外部系统依赖的泳道在
 > 最前方显示一张**非 WorkItem、不可调度**的紧凑配置卡（流水线、审批）。岗位模板提供默认 Adapter，具体数字员工可覆盖，员工发布
 > revision 冻结 exact Adapter revision，流水线采集与外部审批运行时消费同一冻结绑定。Issue provider 差异由
@@ -140,9 +153,10 @@
 > 2026-08-25 用户已批准完整 RFC 并要求提交上库，并追加确认 Issue 全部走标准协议；候选已按该边界删除
 > `delivery-main/requirement-source` 卡与运行接线。已发布祖先为 `686c42707` / `089015b1a` /
 > `ac960adab`；包含它们的 `15139df7e` 上主 CI `32807941954` success。包含 SHA `72e648327` 的
-> WebKit `32807888131` 有三类真实红项，已由本地提交 `e423065c4` 修复，但该提交尚未 push、尚无
-> final exact-SHA hosted 结果。按用户明确授权，本次只完成本地 Done 收尾；发布后仍须重跑全部可执行
-> workflow，并回填最终 SHA/run IDs，不在此冒充 hosted 全绿。
+> WebKit `32807888131` 有三类真实红项，后由 `e423065c4` 修复并以 `e4218681a` 回填文档；两笔提交现在都是
+> `3bfd5be87` 的祖先。父提交 `51f553bed` 的 exact-SHA CI 整体红于无关的 RFC-239 backend 时序断言；measurement pin
+> `3bfd5be87` 只修该 test/docs，CI `32862503295` 在采样时 queued。故这里只更正“尚未 push”的失效事实，
+> 不把包含提交或当前非终态整仓状态冒充为 RFC-323 final exact-SHA hosted 全绿。
 
 > ✅ **已完成 RFC（Done，2026-08-25；含本笔的 superseding commit `817b54a7b` 上 CI 31/31 全绿）：[RFC-322 维护节奏错峰与停顿归因](design/RFC-322-maintenance-cadence-stagger/proposal.md)**
 > —— 起于生产「每隔一段时间全站冻结约 30 秒、随后自行恢复」。**先证伪了「慢查询」这个前提**：
@@ -188,10 +202,19 @@
 > `089015b1a` 的祖先；该 SHA 的 CI run `32806211369` 31/31 全绿，visual-regression run
 > `32806211353` 1/1 全绿。按用户裁决未运行本地 Bun gate，托管结果为最终权威门禁。
 
-> 🚧 **进行中 RFC（In Progress）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
+> ✅ **已完成 RFC（Done，2026-08-26；hosted CI 按 exact SHA `b5467bbce` 全绿）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
 > —— 用户已批准实施（全做、不取舍；棘轮四层全要；分层落位；允许扩分片）。**四层棘轮已全部落地并入网**
-> RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本已从 679 条缺口收敛到 **179**
-> （840 条能力覆盖 661；2026-08-26 一夜从 223 推进到 179，落地 B93～B97 五批共 46 条）。
+> RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本从 679 条缺口一路收敛到 **0**
+> —— **840 条能力全部 `covered`**，证据均为 `{file, test}` 且标题逐字可达；R1 端点未覆盖 271 → **96**、
+> R2 前端路由 18 → **4**。
+> **收口那几条的教训比用例本身值钱**：四条被判「做不了」的能力里，**三条的理由本身是错的**——
+> OPS-007 只是「e2e 覆盖不了」（harness 15s 上限 < CLI 30s 预算），换后端断言面即可；
+> REPO-42 的前提「要等 daemon 支持自定义 GIT_SSH_COMMAND」与源码相反（`util/git.ts:38-44` 一直在层叠
+> 保留它），而 git 的 ssh 传输只是把 `git-upload-pack <path>` 交给它执行——**桩 ssh 无需 sshd 就能跑通
+> 整条传输**；DE-41 的「已退役」只对**创建**那道门成立，`/:id` 之下 20 个运维端点一个没挡，那是升级
+> 部署赖以排干存量 Mission 的活路径。**判「做不了」之前先回源码，别信文件头的注释。**
+> 另有一条不可达的产品缺口就此留档而非硬凑覆盖：候选记忆的语言徽标（`MemoryRow.tsx:70-79`）在三个
+> 消费点里都不可能渲染，用户永远看不到候选记忆的输出语言——见 `docs/audit-backlog.md`。
 > 每个新 spec 都逐条本机实跑并**变异实证**（注入→红→还原→重建→绿），未咬中的变异也如实记录（见 B45 / B51）。
 > **接手须知**：①逐批进度与每一条实测契约、每一次判据被真实行为纠正的记录，全在
 > `design/RFC-319-.../plan.md` §7 变更记录里，按批次倒序；②新增 spec 走 API 级断言 + 编译后 daemon，单条约
@@ -330,17 +353,19 @@
 > AC-3 的 parse 对拍锚（`rfc271-resource-package-hardening` 内 `PackagePreviewSchema.parse` /
 > `PackageImportReceiptSchema.parse`）**12/12 绿**。RFC 目录 `plan.md` 的验收清单两项已勾选并附证据。
 >
-> **顺带做的全量状态对账（2026-08-23 再刷新）**（回答「还有哪些 RFC 没进终态」）：此前基于 `f57394d8` 的
-> **312 行 / Done 306** 快照已被后续 RFC-317 推进取代，不再作为当前分母。latest published
-> `origin/main=7c61a074` 已包含 RFC-317 B0～B5/B6 部分、TaskCatalog membership 与数字员工后续 schema/contract；当前明确非终态至少包括
-> [RFC-310](design/RFC-310-rule-driven-development-digital-employee/proposal.md)（In Progress）、
-> [RFC-317](design/RFC-317-commons-boundary-hardening/proposal.md)（In Progress）与
-> [RFC-294](design/RFC-294-backend-layered-target-architecture/proposal.md)（Draft，各波次退出门未满足）。任何新的总数/状态分布必须从新的 clean exact SHA 重采，不能沿用旧快照。
+> **全量状态对账（2026-08-25 刷新）**（回答「还有哪些 RFC 没进终态」）：此前基于 `f57394d8`、`7c61a074` 的
+> 快照都不再作为当前分母。本次状态对账使用 committed measurement pin `3bfd5be87`（采样时 `HEAD=origin/main`），
+> 其中正式索引的非终态为
+> [RFC-294](design/RFC-294-backend-layered-target-architecture/proposal.md)（Draft，各波次退出门未满足）与
+> [RFC-326](design/RFC-326-review-gate-mcp-api-surface/proposal.md)（In Progress；只计已提交 PR-A）。RFC-310、317、318、320～325
+> 已按各自正式状态/落地范围进入终态（RFC-319 于 2026-08-26 收口，见上）。共享工作树已有更晚的 RFC-326 PR-B/状态收口与 RFC-327 WIP；本段只描述
+> committed baseline，不覆盖这些并发进度，也不把它们计入可复现的架构 credit。
+> 任何新的总数/状态分布必须从新的 clean exact SHA 重采，不能沿用旧快照或把共享 WIP 混进 committed baseline。
 > 另有两条**登记口径**问题需要后来者知道：RFC-288 / RFC-289 的状态取值写作
 > `CLOSED`，**不在** CLAUDE.md 规定的四选一（Draft / In Progress / Done / Superseded）内——二者已于
 > 2026-08-14 由用户裁决「未实现即关闭、零生产改动」，实质是终态，但任何按四态扫描「哪些 RFC 没收口」的检查
-> 都会把它俩持续伪报为未收口（正是当初立四选一硬约定要避免的情况），建议下次触及时改写为 **Superseded**
-> 并把后继写进状态文本（分别是 RFC-294 §16.2 / W2、与排在 W7 NodeRun identity 之后的新号 RFC）。
+> 都会把它俩持续伪报为未收口。`CLOSED` 是用户明确裁定的项目级终态，后续扫描器必须显式承认，不得擅自翻成
+> **Superseded** 或重开旧 plan；后继分别另立 RFC-294 §16.2 / W2 与 post-W7 新号能力 RFC。
 > 编号空洞 **RFC-061 / 084 / 265 / 296** 均非在途：061·084 当年被并行协作者占用（084 让位给 RFC-085）、
 > 265 已在表内注明「该编号不再排期、不复用」、296 只是一份 2026-08-13 被撤出工作树的原型
 > （教训留在 `docs/dev-gotchas.md:1092`），三件套从未存在。
@@ -1117,7 +1142,10 @@
 
 > 🔒 **已关闭（2026-08-14，用户决定；两者均未实现、零生产改动）：RFC-288 + RFC-289** —— **RFC-288**（[task↔scheduler 环拆解](design/RFC-288-task-scheduler-cycle-untangle/proposal.md)）连过三轮设计门（第二轮两半场 P0×8/P1×7/P2×1；第三轮三路错开视角 P0×5/P1×11/P2×5），findings 全部处置后范围收敛到「四件合同的 owner/consumer/import 拓扑 + 断环」——**而这正是当时 RFC-294（pin `be31dd62`）§16.2 已逐条规定、§5.3 已逐字定义接口、旧 DAG 曾排期（`W1 → gate → W2`）的内容**，收敛到正确形状后该文档不再承载 294 之外的设计信息。叠加当时的实现硬前置未到、而源码锚两天内烂了三轮（`da706b19`→`01d2160e`→`6e8c4f9f`，每轮全量重锚），继续维护行级 inventory 到开工必然重写，故关闭。**九条不随锚烂掉的结论已写进 proposal 顶部**（最要紧的四条：合同必须携带 `OwnershipToken`/epoch——taskId-only 的 `requestStop` 经实测会**误杀继任者**；`abortAll(reason)` 不可选，丢 reason 会把 daemon 停机从可恢复 `interrupted` 降级成 `canceled`〔此后 RFC-287 并发面审计在生产代码里抓到同形态真回归，任务永久楔死，可见非纸面推演〕；kick 是**四点**含 RFC-287 AC-11 的 `retryRepoPreparation`；解环最小充分集＝断 A1+B1+B2/B3/B4+E3，**C1/C2 转静态与 materialization 拆分都不必做**）。六条 depcheck 账目的 `removeWhen` 已按 RFC-247 关闭时的同一做法**转出至 RFC-294 §16.2 / W2**，当前 successor 是 W0-R + P0-D 后另立的新号 implementation RFC，不再执行旧 gate。**RFC-289**（[fanout 内链](design/RFC-289-fanout-inner-chain/proposal.md)）**产品目标不被否定**，被否定的是当前设计——RFC-294 §5.3 已裁决其「child 上游限定为当前 wrapperRunId」与既有跨 generation replay 保留原 parent 不能同时成立、且所依赖的 consumed gate 并不存在；只有该产品能力在 **W7 NodeRun identity** 之后重新获批，才按 §5.3 五条另立新号，否则保持挡板并跳过可选 W8。两份文档均**保留不删**，作为将来实现/重写的输入。**教训（已在 proposal 顶部与本条各记一份）**：①别用**仓库级指标**（「零值级 SCC」）当单个 RFC 的验收标准——它是范围吸引子，三轮里把三族环→git 5 节点含 `util/git` 分层倒置→MCP 三环逐次吸进来，而环只是症状、边界才是目标；②判据「**不跨 context**」（留在本 bounded context 内＝该刀可做，跨到别的 context＝属对应波次）能自动回答「要不要顺手做」，避免把波次归属反复变成选择题。
 
-> 🧭 **架构总纲刷新（Draft，2026-08-24）：[RFC-294 后台最终层次架构与能力归一](design/RFC-294-backend-layered-target-architecture/proposal.md)** —— 最新已发布、architecture-admissible source baseline 是 `origin/main=7c61a074`，exact-SHA CI `32657178722` 31/31 全绿；本区间无 frontend production/visual delta。当前结构量化为 backend 779 TS、services 364（根平铺 194）、`modules/**=277/11 contexts`、depgraph 1846、backend/repo SCC=5/7、`KNOWN=35`、route→DB=15、AppDeps=53、`setInterval` AST=32/25 files。TaskCatalog membership (`0203`) 仍由 TaskExecution 单写且只给新 Catalog 投影 public，legacy `/api/tasks` 仍可能显示 internal execution；`0205/0206` 新增 Task→EmployeeCase provenance ref 与 DE-owned Case name。RFC-317 已落 B0～B5+B6 T42～T46：R1/R2 exact 94/22、R3/R12、高水位与 130 guard classification/fixture 已落；commons/ledger pins 可重放，但 guard `recordedAtSha=0d4010e53` 不含第 130 条语料，须重钉后才可称 provenance 闭合。目标仍是 **bounded-context feature-first + 模块内分层**、bootstrap 唯一装配与 exact public/consumer-owned required contracts；TE↔DE 当前双向 contract/type import 要收成 DE-owned `ReactionExecutionPortV1` + TE provider adapter。RFC-317 子集不是 W0-R exit；仍需其 B6 T41/B7～B11、七份 canonical manifest、P0-D durable ownership、W2 四合同/六环、W3 outbox、W4 inbound/public cutover、W5 SCC/WorkspaceRef、W6 AtomicApply、W7 NodeRun v2/provenance、W9 managed background/artifact lifecycle。
+> 🧭 **架构总纲刷新（Draft，2026-08-25）：[RFC-294 后台最终层次架构与能力归一](design/RFC-294-backend-layered-target-architecture/proposal.md)** —— 本次 published architecture measurement pin 是 `3bfd5be87`（采样时 `HEAD=origin/main`）；它相对 `51f553bed` 只修 RFC-239 test polling 与 gotcha 文档，production/architecture shape 不变。exact-SHA CI `32862503295` 在采样时 queued；父提交 CI `32857376892` terminal failure（33 job success，唯一实际失败是该时序断言），父提交 static depcheck `1889 modules / 37 accepted / 18 external unresolved excluded` 为绿；最近 hosted-green 祖先 `b6eb562` 的 CI `32850661861` 35/35 success。
+> committed 结构为 backend 808 TS、services 366（root-flat 196）、`modules/**=300/12 contexts`、backend/repo SCC=5/7、`KNOWN=37`、route→DB=15、transport→DB=2、AppDeps=54、direct native `setInterval`=19/18 files（另 1 个受管 timer-port call）。RFC-317 已 Done，机器分母为 82/31 kernels、R1/R2=94/23、guards=152、ledgers=38；四份账本的 historical `recordedAtSha` 只表 origin/ancestor，不能重放 current 内容，W0-R 需统一 current SHA+digest/replay。
+> RFC-318/320～324/326 PR-A 已补最小工具合同、冻结 creator identity、publication transport/credential、central cadence、adapter binding、graded ACL 与 review persistence/`collaboration` seed；RFC-319 是测试治理，RFC-325 是前端原语，均不给 backend wave credit；RFC-326 PR-B 与 RFC-327 共享 WIP 不计。TaskCatalog 所有 public feed 已复用 `public` predicate，但 V1 Actor/string/composition/legacy adapter 仍待 W4-E10；TE↔DE 双向合同要收成 DE-owned `ReactionExecutionPortV1` + tx-bound `ReactionExecutionAdmissionParticipantInTxV1`，由 TE exact adapters 实现 execution 与同事务 claim-fence/admission。
+> 下一步按 **N1 current provenance + W0-R canonical completion → N2 P0-D durable ownership → N3 新号 W2**；RFC-326 PR-A 只抵扣 review persistence，P0-C common continuation 仍先于 W3，随后才是 W4/W5/W6/W7/W9 完整退出。后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量证据；只有 context/contract/schema/writer/root/lifecycle 变化才触发架构重采。
 
 > ✅ **已完成 RFC（Done，2026-08-13）：[RFC-293 Intent 持续迭代工作台](design/RFC-293-intent-workbench-working-context/proposal.md)** —— 用户最终裁决只做纯功能与 UX：详情页全宽、左右 pane 独立滚动；工作上下文统一批量管理，空闲应用后自动生成、运行中排队自动续跑或停止后立即刷新；questions 与资源建议一次处理；提交前可反复完善，提交后以检查点继续；current draft 可废弃重跑且不回滚已提交资源。**Intent 继续复用现有普通 system-agent runtime/profile/配置与全部能力；没有增加 sealed/sandbox runtime、credential/auth adapter、containment、capture quarantine、历史清洗或任何 Intent-only 能力收缩。** 1800px/1080px/390×844 浏览器验收与 RFC-293 E2E 已通过，`bun run gate:local` 全绿；实现提交 `53c57080` 已推送且 exact-SHA CI `31641274578`、visual `31641274690`、Windows `31641274650`、integration `31641274736` 全部成功。
 
