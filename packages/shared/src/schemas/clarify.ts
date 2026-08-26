@@ -137,7 +137,7 @@ export type ClarifyDirective = z.infer<typeof ClarifyDirectiveSchema>
 export const SubmitClarifyAnswersSchema = z.object({
   answers: z.array(ClarifyAnswerSchema),
   /** Optimistic-lock guard: must equal the session's current iterationIndex
-   *  or the server returns 412 Precondition Failed (defends against two-tab
+   *  or the server returns 409 Conflict `clarify-iteration-mismatch` (defends against two-tab
    *  double-submit). */
   ifMatchIteration: z.number().int().nonnegative().optional(),
   /** RFC-023 directive iteration: 'continue' (default — legacy behaviour) or

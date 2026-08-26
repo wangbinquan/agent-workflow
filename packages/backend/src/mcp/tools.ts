@@ -212,9 +212,62 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     },
   },
   {
+    // RFC-329 A3 — `launch_task` takes a `ref`, and until now nothing on this
+    // channel could tell the model which refs exist, so it had to guess a branch
+    // name. The REST route takes `?path=<absolute local mirror path>`
+    // (routes/repos.ts, guarded by requireKnownPath), which is not something a
+    // model should be handling or inventing — so this tool takes the repo id and
+    // resolves the path itself.
+    name: 'list_repo_refs',
+    title: 'List the branches and tags of an imported repo',
+    description:
+      'Branches and tags available in an imported repo mirror. `launch_task` takes one of these as ' +
+      '`ref`; without this tool the only option is guessing a branch name. Takes the repo id from ' +
+      'resource_read(kind="repos", method="list") — that list is also where the row itself lives, ' +
+      'since repos have no single-repo read.',
+    permissions: [],
+    inputSchema: {
+      cachedRepoId: z
+        .string()
+        .min(1)
+        .describe('Repo id from resource_read(kind="repos", method="list")'),
+    },
+    audit: (args) => ({ kind: 'repo-refs', id: String(args.cachedRepoId) }),
+    handler: async (args, ctx) => {
+      const listed = unwrap(await ctx.dispatch({ method: 'GET', path: '/api/cached-repos' })) as {
+        items?: ReadonlyArray<{ id?: unknown; localPath?: unknown }>
+      }
+      const row = (listed.items ?? []).find((item) => item.id === args.cachedRepoId)
+      // A miss is a business refusal shaped like the route's own 404, NOT a
+      // thrown TypeError on the next line. The failure mode has to match what a
+      // single-dispatch tool would have produced, or a two-hop tool becomes the
+      // one place where a bad id yields a 500.
+      if (row === undefined || typeof row.localPath !== 'string') {
+        throw new McpCallError({
+          status: 404,
+          body: {
+            code: 'cached-repo-not-found',
+            message: `no imported repo with id '${String(args.cachedRepoId)}'`,
+          },
+        })
+      }
+      return unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: '/api/repos/refs',
+          query: { path: row.localPath },
+        }),
+      )
+    },
+  },
+  {
     name: 'get_task',
     title: 'Get a task',
-    description: 'Full state of one task: status, node runs, timing, and any alerts.',
+    // RFC-329 A2 — this used to promise "and any alerts". It does not carry
+    // them: the route returns the task row via serializeTaskFor. Saying so was
+    // what sent callers looking for an alertId that was never there.
+    description:
+      'Full state of one task: status, node runs and timing. Alerts are NOT included — use list_task_alerts.',
     permissions: [],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
@@ -326,10 +379,31 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
       unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${enc(args.id)}/diagnose` })),
   },
   {
+    // RFC-329 A2 — the alert loop was BROKEN on this channel. `repair_alert` and
+    // `list_repair_options` both need an `alertId`, and `repair_alert` told the
+    // caller to "call get_task first to read the alert" — but `GET /api/tasks/:id`
+    // returns the task row through `serializeTaskFor`, which carries no alerts at
+    // all. The alerts live on their own route, and nothing dispatched to it. So an
+    // MCP-only caller could never obtain the one argument both tools require, and
+    // the two of them were unreachable in practice.
+    name: 'list_task_alerts',
+    title: 'List the alerts a task raised',
+    description:
+      'Lifecycle alerts currently open on a task — invariant violations and stuck-run findings. ' +
+      'This is the ONLY way to obtain an `alertId`: get_task returns the task row and does not carry ' +
+      'alerts. Feed the id to list_repair_options for the option ids, then to repair_alert.',
+    permissions: [],
+    inputSchema: { id: taskId },
+    audit: (args) => ({ kind: 'task-alerts', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}/alerts` })),
+  },
+  {
     name: 'repair_alert',
     title: 'Apply a repair option to an alert',
     description:
-      'Apply one of the repair options a task alert offers. Call get_task first to read the alert and its options.',
+      'Apply one of the repair options a task alert offers. Call list_task_alerts for the alertId ' +
+      '(get_task does not carry alerts), then list_repair_options for the optionId.',
     permissions: ['tasks:execute'],
     inputSchema: {
       id: taskId,
@@ -565,6 +639,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     description:
       'Submit answers and let the task continue. Include `ifMatchIteration` from get_clarify_session: without it, ' +
       'two answerers can silently overwrite each other. `directive: "stop"` answers and asks for no further rounds.',
+    // RFC-329 A4 — this used to say 412. The route deliberately answers 409
+    // (routes/clarify.ts header; ConflictError is hard-coded to 409 in
+    // util/errors.ts), and a wrong status here sends the caller down the wrong
+    // retry branch. `rfc329-mcp-dead-paths.test.ts` now pins the number in this
+    // description to `new ConflictError(...).status` so it cannot drift again.
     permissions: ['tasks:execute'],
     inputSchema: {
       nodeRunId: z.string().min(1),
@@ -576,7 +655,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
         .int()
         .nonnegative()
         .optional()
-        .describe('The iterationIndex you read; mismatched answers are refused with 412'),
+        .describe('The iterationIndex you read; mismatched answers are refused with 409'),
       directive: z.enum(['continue', 'stop']).optional(),
     },
     handler: async (args, ctx) =>
@@ -932,12 +1011,17 @@ const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
   },
   repos: {
     list: { method: 'GET', path: '/api/cached-repos' },
-    get: { method: 'GET', path: '/api/cached-repos/:id' },
+    // RFC-329 A1 — there is NO `get`. `GET /api/cached-repos/:id` was never
+    // registered (routes/cached-repos.ts mounts list, :id/refresh, :id DELETE,
+    // batch-import and imports/*), so this table advertised a read that answered
+    // 404 on every call while `describe_resource` reported it as supported. The
+    // web UI never read a single repo either — it lists and picks the row.
     create: { method: 'POST', path: '/api/cached-repos/batch-import' },
     delete: { method: 'DELETE', path: '/api/cached-repos/:id' },
     note:
       'Repos are imported in batches: `create` takes a batch payload, not one repo. There is no update — ' +
-      'a mirror is refreshed, not edited.',
+      'a mirror is refreshed, not edited. There is also no single-repo read: list and pick the row. ' +
+      "`delete` needs that row's `urlRedacted` as `confirm`.",
   },
   'capability-templates': {
     list: { method: 'GET', path: '/api/capability-templates' },

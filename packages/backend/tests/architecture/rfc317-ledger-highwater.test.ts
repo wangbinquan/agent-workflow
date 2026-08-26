@@ -209,6 +209,12 @@ const NOT_A_LEDGER: Readonly<Record<string, string>> = {
   // 这张表自己：它是「哪些集合不算账本」的声明，不是债务。
   'packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts|NOT_A_LEDGER':
     '本规则的豁免表本身；它的条目数由下面那条精确相等断言钉住',
+  // RFC-329：债务是叶子，理由不是。这张表按 group 存一句话，条数完全由
+  // MCP_SURFACE_EXEMPTION_LEAVES（已入基线，389）决定——最后一条叶子被移走时理由必须
+  // 一起删（rfc329-mcp-surface-guard.test.ts 有「没有叶子的理由算 stale」那条断言），
+  // 所以给它单独钉一个数字只会在收敛叶子时多红一次，钉不住任何多出来的债。
+  'packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts|EXEMPT_REASONS':
+    'RFC-329 豁免叶子的分组理由字典；债务由 MCP_SURFACE_EXEMPTION_LEAVES 计量，这里只是它的说明文字',
 }
 
 describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () => {
@@ -266,6 +272,7 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
   test('豁免表逐条相等（删一条消红也会红）', () => {
     expect(Object.keys(NOT_A_LEDGER).sort()).toEqual([
       'packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts|NOT_A_LEDGER',
+      'packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts|EXEMPT_REASONS',
     ])
   })
 
