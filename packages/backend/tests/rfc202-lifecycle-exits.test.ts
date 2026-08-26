@@ -224,6 +224,10 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
     expect(round.status).toBe('canceled')
     const runRow = db.select().from(nodeRuns).where(eq(nodeRuns.id, run)).all()[0]!
     expect(runRow.status).toBe('canceled')
+    // RFC-328 cancels live node rows inside the task-status transaction. The
+    // post-commit terminal sweep must still retain its transition-time cause
+    // so historical clarify detail does not fall back to a generic banner.
+    expect(runRow.errorMessage).toBe('task-canceled')
   })
 
   test('awaiting_review task cancels', async () => {

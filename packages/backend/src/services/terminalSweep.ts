@@ -111,6 +111,18 @@ export function sealOpenHumanGatesForTask(
           nodeRunId: r.intermediaryNodeRunId,
           nodeId: r.intermediaryNodeId,
         })
+      } else {
+        // RFC-328 terminal control projects every live node run to canceled in
+        // the task-status transaction, before this post-commit sweep runs. An
+        // open round proves that its historical seal has not happened yet, so
+        // preserve the already-committed status/finishedAt while replacing the
+        // generic control reason with the transition-time seal cause consumed
+        // by clarify detail (`task-canceled` / `task-done`). A second sweep sees
+        // no open round and remains a no-op.
+        tx.update(nodeRuns)
+          .set({ errorMessage: cause })
+          .where(and(eq(nodeRuns.id, r.intermediaryNodeRunId), eq(nodeRuns.status, 'canceled')))
+          .run()
       }
     }
     // 3) Legacy cross session rows (RFC-056 read model).
