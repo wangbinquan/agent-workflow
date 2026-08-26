@@ -63807,7 +63807,7 @@
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
       "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:9a9ffabe9eeef1422dc62b55198c0aefcc31f2f7edc3fa29f93372bf2f1c3546",
+      "signatureDigest": "sha256:294a2f0a57a6fef0d117e00f678202b68775c91bff1b37edc9ed851513dfcbd3",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "task-execution",
@@ -63937,7 +63937,7 @@
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
       "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#runManagedProcessLauncher",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:38f8612942273b01ff03f96a60e73b26acc3e917201b0c4a46eab05e5c24baa5",
+      "signatureDigest": "sha256:0d38ccd40756f348e54893e4f5018ec3b93be70774ec94a9cb385b6a308273ba",
       "status": "legacy-target",
       "symbol": "runManagedProcessLauncher",
       "targetContext": "task-execution",
@@ -226174,5 +226174,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9200e802603ac418d143efdc15198b4e75fbe14871284e55b0f56b4f1315bf9c"
+  "sourceDigest": "sha256:f59248e0edb3722e45bbbe8a7c40d29bff09bc428f26cd5b80bab6912fe41e24"
 }

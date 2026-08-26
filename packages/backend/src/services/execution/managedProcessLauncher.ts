@@ -7,6 +7,7 @@
 
 import { resolve } from 'node:path'
 import { IS_EMBEDDED } from '@/embed'
+import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
 export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
 export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
@@ -130,6 +131,7 @@ export async function runManagedProcessLauncher(
   try {
     child = Bun.spawn({
       cmd: [...request.targetArgv],
+      ...platformSpawnOptionsForHost(),
       cwd: process.cwd(),
       env: Object.fromEntries(
         Object.entries(process.env).filter((entry): entry is [string, string] => {
