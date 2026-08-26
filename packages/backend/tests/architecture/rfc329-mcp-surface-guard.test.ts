@@ -108,6 +108,7 @@ const ARGS: Readonly<Record<string, unknown>> = {
   entryId: PH,
   versionId: PH,
   alertId: PH,
+  assignmentId: PH,
   batchId: PH,
   rowId: PH,
   cachedRepoId: 'FIXTURE_ID',

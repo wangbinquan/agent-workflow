@@ -159,7 +159,14 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       method: 'POST',
       path: '/api/tasks/:id/questions/:entryId/reassign',
       permissions: ['tasks:update'],
-      tokenAccess: 'never',
+      // RFC-329 —— was `never`, with no comment saying why. It was the only route
+      // in this file closed to tokens (list / manual / confirm / stage / dispatch
+      // are all `allow`), and RFC-247 D5's reason does not reach it: the four URL
+      // shapes D5 closes are the ones that change owner / grants / visibility, and
+      // this one changes `targetNodeId` — which designer node handles a question.
+      // The answer boundary is unaffected: `gateMemberEntry` below still requires
+      // task membership, and that check knows nothing about credential type.
+      tokenAccess: 'allow',
       summary: 'Reassign a question entry',
     },
     async (c) => {

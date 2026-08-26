@@ -63,6 +63,27 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => c.json(await actions.pendingCount(actorOf(c))),
   )
 
+  // RFC-329 —— the rows behind that badge.
+  //
+  // `pendingCount` computed this exact set and threw it away, so "which workgroup
+  // tasks are waiting on a human" had no listable endpoint: reviews and clarify
+  // each have one, workgroup had a number and a single-task room. That asymmetry
+  // is what kept `list_pending_gates` from being what it says it is.
+  //
+  // Same actor boundary as the badge — both go through `pendingRows`, so the two
+  // cannot answer differently for the same caller.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/workgroup-tasks/pending',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'List workgroup tasks awaiting input',
+    },
+    async (c) => c.json({ items: await actions.pendingRows(actorOf(c)) }),
+  )
+
   registerRoute(
     app,
     {

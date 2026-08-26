@@ -34,6 +34,7 @@ import {
   ReviewDecisionKindSchema,
   type Role,
   type StartTaskSchema,
+  type SubmitClarifyAnswersSchema,
   type SubmitReviewDecisionSchema,
   type WorkflowInput,
 } from '@agent-workflow/shared'
@@ -609,17 +610,38 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     name: 'list_pending_gates',
     title: 'List everything waiting on a human',
     description:
-      'Tasks stopped at a review or a clarifying question. These are the runs that will not move on their own — ' +
-      'watch_task returns as soon as one reaches this state.',
+      'Every gate that will not move on its own: reviews, clarifying questions, workgroup rooms and fusion ' +
+      'approvals. Each lane reports independently — `complete: false` means one of them failed and its entry ' +
+      'carries `{ok: false, error}`, so an empty lane is only trustworthy when that lane says `ok`. ' +
+      'watch_task returns as soon as a task reaches one of these states.',
     permissions: [],
     inputSchema: {},
     audit: () => ({ kind: 'human-gates' }),
     handler: async (_args, ctx) => {
-      const [reviews, clarify] = await Promise.all([
-        ctx.dispatch({ method: 'GET', path: '/api/reviews' }),
-        ctx.dispatch({ method: 'GET', path: '/api/clarify' }),
+      // RFC-329 —— per-lane failure, and `Promise.allSettled` alone does NOT give
+      // it. The dispatcher resolves 4xx/5xx as a fulfilled DispatchResult (see
+      // dispatch.ts); only `unwrap` turns those into a throw. So the unwrap has to
+      // happen INSIDE each lane, or a lane that 500s reports as an empty gate list
+      // — the single most dangerous answer this tool can give, because "nothing is
+      // waiting on you" is exactly what a model acts on by moving on.
+      const lane = async (
+        path: string,
+        query?: Record<string, string>,
+      ): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> => {
+        try {
+          return { ok: true, data: unwrap(await ctx.dispatch({ method: 'GET', path, query })) }
+        } catch (err) {
+          return { ok: false, error: err instanceof McpCallError ? err.code : 'error' }
+        }
+      }
+      const [reviews, clarify, workgroupTasks, fusions] = await Promise.all([
+        lane('/api/reviews'),
+        lane('/api/clarify'),
+        lane('/api/workgroup-tasks/pending'),
+        lane('/api/fusions', { status: 'awaiting_approval' }),
       ])
-      return { reviews: unwrap(reviews), clarify: unwrap(clarify) }
+      const lanes = { reviews, clarify, workgroupTasks, fusions }
+      return { ...lanes, complete: Object.values(lanes).every((entry) => entry.ok) }
     },
   },
   {
@@ -637,8 +659,12 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     name: 'answer_clarify',
     title: 'Answer clarifying questions',
     description:
-      'Submit answers and let the task continue. Include `ifMatchIteration` from get_clarify_session: without it, ' +
-      'two answerers can silently overwrite each other. `directive: "stop"` answers and asks for no further rounds.',
+      'Submit answers to a clarifying round. Two channels: by default (`defer` omitted) this answers the WHOLE ' +
+      'round, seals it and lets the task continue. With `defer: true` it seals only the questions you answer ' +
+      'into the dispatch board and does NOT advance the task — send them later with dispatch_task_questions. ' +
+      'Include `ifMatchIteration` from get_clarify_session: without it, two answerers can silently overwrite ' +
+      'each other. `directive: "stop"` answers and asks for no further rounds (it also flips this node’s ' +
+      'clarify switch — see set_clarify_directive).',
     // RFC-329 A4 — this used to say 412. The route deliberately answers 409
     // (routes/clarify.ts header; ConflictError is hard-coded to 409 in
     // util/errors.ts), and a wrong status here sends the caller down the wrong
@@ -657,7 +683,38 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
         .optional()
         .describe('The iterationIndex you read; mismatched answers are refused with 409'),
       directive: z.enum(['continue', 'stop']).optional(),
-    },
+      // RFC-329 —— the control channel. The REST route has had these three since
+      // RFC-128/136; this tool could not express any of them, so "answer some
+      // questions now and let a colleague take the rest" was web-only. Note this
+      // is the exact shape the guard's request-field dimension checks: a key the
+      // route accepts and this schema omits is a silent capability gap, which is
+      // precisely how these three went unnoticed.
+      defer: z
+        .boolean()
+        .optional()
+        .describe(
+          'false / omitted = QUICK channel: answer the whole round, seal it, task continues. ' +
+            'true = CONTROL channel: seal only the answered questions into the dispatch board ' +
+            'WITHOUT advancing the task.',
+        ),
+      questionIds: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Control channel only: seal exactly these question ids and leave the siblings for ' +
+            'someone else. Sending it without defer:true is REFUSED (clarify-question-ids-requires-defer), ' +
+            'not silently ignored — on the quick channel it would strand the dropped questions.',
+        ),
+      resubmitQuestionIds: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Control channel only: the already-sealed questions you are deliberately OVERWRITING. ' +
+            'Without this declaration a sealed question keeps its exactly-once refusal even here.',
+        ),
+    } satisfies Partial<
+      Record<keyof z.input<typeof SubmitClarifyAnswersSchema> | 'nodeRunId', z.ZodTypeAny>
+    >,
     handler: async (args, ctx) =>
       unwrap(
         await ctx.dispatch({
@@ -667,9 +724,484 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
             answers: args.answers,
             ifMatchIteration: args.ifMatchIteration,
             directive: args.directive,
+            defer: args.defer,
+            questionIds: args.questionIds,
+            resubmitQuestionIds: args.resubmitQuestionIds,
           },
         }),
       ),
+  },
+  // ---------------------------------------------------------------------------
+  // RFC-329 —— the clarify board (per-question routing), the node switch, and the
+  // collaborative draft. All of these existed on REST since RFC-120/122/128; none
+  // had a tool, so "answer some now, hand the rest to a colleague, dispatch when
+  // ready" was reachable only from the web UI.
+  //
+  // Every description says whether the step ADVANCES THE RUN, because only one of
+  // them does and a model cannot tell from the verb.
+  // ---------------------------------------------------------------------------
+  {
+    name: 'list_task_questions',
+    title: 'List the questions on a task’s board',
+    description:
+      'Every question entry on this task with its phase — pending assignment, staged for dispatch, or already ' +
+      'sent. This is the board behind answer_clarify’s control channel. Does not advance the run.',
+    permissions: [],
+    inputSchema: {
+      id: taskId,
+      sourceNodeId: z.string().min(1).optional().describe('Only questions raised by this node'),
+      phase: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Filter by phase; an unknown value is refused (422), not ignored'),
+    },
+    audit: (args) => ({ kind: 'task-questions', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: `/api/tasks/${enc(args.id)}/questions`,
+          query: {
+            ...(typeof args.sourceNodeId === 'string' ? { sourceNodeId: args.sourceNodeId } : {}),
+            ...(typeof args.phase === 'string' ? { phase: args.phase } : {}),
+          },
+        }),
+      ),
+  },
+  {
+    name: 'raise_task_question',
+    title: 'Raise a question of your own on a task',
+    description:
+      'Add a question nobody asked for — the human-authored counterpart of an agent’s clarify round. ' +
+      'With `targetNodeId` it lands staged (ready for dispatch_task_questions); without one it waits for ' +
+      'assignment. Does not advance the run on its own.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      title: z.string().min(1).describe('Short question title'),
+      body: z.string().min(1).describe('The question itself'),
+      targetNodeId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'A workflow agent node; giving one stages the entry instead of leaving it pending',
+        ),
+    },
+    audit: (args) => ({ kind: 'task-questions', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${enc(args.id)}/questions/manual`,
+          body: { title: args.title, body: args.body, targetNodeId: args.targetNodeId },
+        }),
+      ),
+  },
+  {
+    name: 'confirm_task_question',
+    title: 'Confirm a question entry',
+    description: 'Accept a board entry as-is. Does not advance the run.',
+    permissions: ['tasks:execute'],
+    inputSchema: { id: taskId, entryId: z.string().min(1) },
+    audit: (args) => ({ kind: 'task-questions', id: String(args.entryId) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${enc(args.id)}/questions/${enc(args.entryId)}/confirm`,
+        }),
+      ),
+  },
+  {
+    name: 'reassign_task_question',
+    title: 'Route a question to a different node',
+    description:
+      'Point a board entry at another workflow node. The reply says what happened: `added-designer` (the ' +
+      'question gained an upstream handler), `removed-designer` (back to a single card) or `moved-manual`. ' +
+      'The asker entry is always kept. Does not advance the run.',
+    permissions: ['tasks:update'],
+    inputSchema: {
+      id: taskId,
+      entryId: z.string().min(1),
+      targetNodeId: z.string().min(1).describe('The workflow node that should handle it'),
+    },
+    audit: (args) => ({ kind: 'task-questions', id: String(args.entryId) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${enc(args.id)}/questions/${enc(args.entryId)}/reassign`,
+          body: { targetNodeId: args.targetNodeId },
+        }),
+      ),
+  },
+  {
+    name: 'stage_task_question',
+    title: 'Move a question into the send queue',
+    description:
+      'Mark a board entry ready to go. It sits there until dispatch_task_questions sends every staged entry. ' +
+      'Does not advance the run.',
+    permissions: ['tasks:execute'],
+    inputSchema: { id: taskId, entryId: z.string().min(1) },
+    audit: (args) => ({ kind: 'task-questions', id: String(args.entryId) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${enc(args.id)}/questions/${enc(args.entryId)}/stage`,
+        }),
+      ),
+  },
+  {
+    name: 'dispatch_task_questions',
+    title: 'Send the staged questions and resume the task',
+    description:
+      'THIS IS THE STEP THAT RESUMES THE RUN. Sends every staged entry (or just `entryIds`) to their nodes. ' +
+      'Two things can fail independently: the send is recorded first, then the engine is kicked — a reply of ' +
+      'HTTP 200 with `resume.ok === false` means the questions WERE dispatched but the task did not restart. ' +
+      'Check `resume` before reporting success.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      entryIds: z
+        .array(z.string())
+        .optional()
+        .describe('Restrict to these entries; omit to send everything staged'),
+    },
+    audit: (args) => ({ kind: 'task-questions', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${enc(args.id)}/questions/dispatch`,
+          body: { entryIds: args.entryIds },
+        }),
+      ),
+  },
+  {
+    name: 'list_clarify_directives',
+    title: 'Read the per-node clarify switches',
+    description:
+      'Which nodes on this task are allowed to keep asking. Answering with `directive: "stop"` flips the ' +
+      'asking node’s switch here, so this is where you verify a stop actually took.',
+    permissions: [],
+    inputSchema: { id: taskId },
+    audit: (args) => ({ kind: 'clarify-directives', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: `/api/tasks/${enc(args.id)}/clarify-directives`,
+        }),
+      ),
+  },
+  {
+    name: 'set_clarify_directive',
+    title: 'Turn one node’s clarifying on or off',
+    description:
+      'Set whether a node may raise further clarify rounds, WITHOUT answering anything. The other way to ' +
+      'reach the same switch is answer_clarify with `directive` — that one answers the round as well. ' +
+      'Both write the same single source of truth.',
+    permissions: ['tasks:update'],
+    inputSchema: {
+      id: taskId,
+      nodeId: z.string().min(1),
+      directive: z.enum(['continue', 'stop']),
+    },
+    audit: (args) => ({ kind: 'clarify-directives', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/tasks/${enc(args.id)}/nodes/${enc(args.nodeId)}/clarify-directive`,
+          body: { directive: args.directive },
+        }),
+      ),
+  },
+  {
+    name: 'save_clarify_draft',
+    title: 'Save a draft answer others can see',
+    description:
+      'Park a work-in-progress answer on one question so co-answerers see it before anyone submits. ' +
+      'LAST WRITE WINS per question — there is no revision fence, so a concurrent editor (web or MCP) ' +
+      'silently replaces your draft. Drafts are not answers: nothing is sealed and the run does not move.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      nodeRunId: z.string().min(1),
+      roundId: z.string().min(1),
+      questionId: z.string().min(1),
+      selectedOptionIndices: z.array(z.number().int().nonnegative()).max(64).optional(),
+      customText: z.string().max(65536).optional(),
+    },
+    audit: (args) => ({ kind: 'clarify-draft', id: String(args.nodeRunId) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'PUT',
+          path: `/api/clarify/${enc(args.nodeRunId)}/draft`,
+          body: {
+            roundId: args.roundId,
+            questionId: args.questionId,
+            selectedOptionIndices: args.selectedOptionIndices ?? [],
+            customText: args.customText ?? '',
+          },
+        }),
+      ),
+  },
+  // ---------------------------------------------------------------------------
+  // RFC-329 —— the workgroup room. Same boundary as clarify (task membership) and
+  // the same stopping state (`awaiting_human`), but until now zero tools: a task
+  // parked on a workgroup gate was invisible to every MCP caller.
+  // ---------------------------------------------------------------------------
+  {
+    name: 'get_workgroup_room',
+    title: 'Read a workgroup task’s room',
+    description:
+      'The room behind a workgroup task: messages, assignment cards, member roster, and `pauseReason` when ' +
+      'the task is parked on a human. Start here before posting or confirming.',
+    permissions: [],
+    inputSchema: { id: taskId },
+    audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({ method: 'GET', path: `/api/workgroup-tasks/${enc(args.id)}/room` }),
+      ),
+  },
+  {
+    name: 'post_workgroup_message',
+    title: 'Speak in a workgroup room',
+    description:
+      'ADVANCES THE RUN. A message mentioning "@member" dispatches a card straight to those members; ' +
+      'a message with no mention lands on the blackboard and re-wakes a leader that had gone idle. ' +
+      'Either way the engine is kicked, so do not use this as a note-to-self.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      body: z.string().min(1).max(65536).describe('Message text; "@member" tokens dispatch cards'),
+    },
+    audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/workgroup-tasks/${enc(args.id)}/messages`,
+          body: { body: args.body },
+        }),
+      ),
+  },
+  {
+    name: 'confirm_workgroup_step',
+    title: 'Approve or reject a workgroup step',
+    description:
+      'ADVANCES THE RUN. Decides the gate a workgroup task is parked on. `reject` REQUIRES a comment ' +
+      '(the route refuses without one) — that comment is what the agents read to know what to redo.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      decision: z.enum(['approve', 'reject']),
+      comment: z.string().max(65536).optional().describe('Required when rejecting'),
+    },
+    audit: (args) => ({ kind: 'workgroup-gate', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/workgroup-tasks/${enc(args.id)}/confirm`,
+          body: { decision: args.decision, comment: args.comment },
+        }),
+      ),
+  },
+  {
+    name: 'confirm_workgroup_dynamic_workflow',
+    title: 'Approve or reject a generated workflow',
+    description:
+      'ADVANCES THE RUN. Same approve/reject shape as confirm_workgroup_step, but for the gate where a ' +
+      'workgroup proposes a dynamically generated workflow. `reject` requires a comment.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      decision: z.enum(['approve', 'reject']),
+      comment: z.string().max(65536).optional().describe('Required when rejecting'),
+    },
+    audit: (args) => ({ kind: 'workgroup-gate', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/workgroup-tasks/${enc(args.id)}/dw-confirm`,
+          body: { decision: args.decision, comment: args.comment },
+        }),
+      ),
+  },
+  {
+    name: 'save_workgroup_dynamic_workflow',
+    title: 'Keep a generated workflow as a real one',
+    description:
+      'Persist the workflow a workgroup generated as an ordinary workflow resource you can launch again. ' +
+      'Creates a resource; does not advance the run.',
+    // Cross-domain: the URL says workgroup-task, the effect creates a workflow.
+    // The route ANDs both points, so a token holding only one of them is refused
+    // — declaring only `workflows:create` here would have listed the tool for
+    // callers who cannot use it.
+    permissions: ['tasks:execute', 'workflows:create'],
+    inputSchema: {
+      id: taskId,
+      name: z.string().min(1).describe('Name for the new workflow'),
+      description: z.string().max(4096).optional(),
+    },
+    audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/workgroup-tasks/${enc(args.id)}/dw-save-as-workflow`,
+          body: { name: args.name, description: args.description },
+        }),
+      ),
+  },
+  {
+    name: 'deliver_workgroup_assignment',
+    title: 'Hand in an assignment card',
+    description:
+      'ADVANCES THE RUN. Delivers the card dispatched to you. Two accepted shapes: a chat-style `body`, ' +
+      'or a structured `summary` + `detail`. Give one of them.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: taskId,
+      assignmentId: z.string().min(1),
+      body: z.string().min(1).max(65536).optional().describe('Chat-style delivery'),
+      summary: z.string().min(1).max(16384).optional().describe('Structured delivery: headline'),
+      detail: z.string().max(65536).optional().describe('Structured delivery: the rest'),
+    },
+    audit: (args) => ({ kind: 'workgroup-assignment', id: String(args.assignmentId) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/workgroup-tasks/${enc(args.id)}/assignments/${enc(args.assignmentId)}/deliver`,
+          body: { body: args.body, summary: args.summary, detail: args.detail },
+        }),
+      ),
+  },
+  {
+    name: 'cancel_workgroup_assignment',
+    title: 'Cancel an assignment card',
+    description:
+      'Withdraw a dispatched card without delivering it. Does not advance the run — the task stays parked ' +
+      'until something else moves it.',
+    permissions: ['tasks:execute'],
+    inputSchema: { id: taskId, assignmentId: z.string().min(1) },
+    audit: (args) => ({ kind: 'workgroup-assignment', id: String(args.assignmentId) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/workgroup-tasks/${enc(args.id)}/assignments/${enc(args.assignmentId)}/cancel`,
+        }),
+      ),
+  },
+  // ---------------------------------------------------------------------------
+  // RFC-329 —— the memory→skill fusion approval gate.
+  //
+  // Visibility note that MUST stay in the descriptions: the list route hands back
+  // everything only to holders of `resource-acl:bypass`, and that point is a
+  // system-domain one — no PAT can ever carry it. So on this channel these tools
+  // are ALWAYS owner-scoped. Implying otherwise would have a model report "no
+  // pending fusions" when it simply cannot see anyone else's.
+  // ---------------------------------------------------------------------------
+  {
+    name: 'list_fusions',
+    title: 'List memory→skill fusions',
+    description:
+      'Fusions you own, optionally filtered by state. Over MCP this is ALWAYS scoped to your own fusions — ' +
+      'seeing everyone’s needs a permission no token can hold, so an empty list means "none of yours", ' +
+      'not "none exist". Use `status: "awaiting_approval"` for the ones needing a decision.',
+    permissions: [],
+    inputSchema: {
+      status: z
+        .enum([
+          'running',
+          'awaiting_approval',
+          'applying',
+          'done',
+          'rejected',
+          'canceled',
+          'failed',
+        ])
+        .optional()
+        .describe('Exact state; unknown values are rejected here rather than silently ignored'),
+      skillId: z.string().min(1).optional(),
+    },
+    audit: () => ({ kind: 'fusions' }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'GET',
+          path: '/api/fusions',
+          query: {
+            ...(typeof args.status === 'string' ? { status: args.status } : {}),
+            ...(typeof args.skillId === 'string' ? { skillId: args.skillId } : {}),
+          },
+        }),
+      ),
+  },
+  {
+    name: 'get_fusion',
+    title: 'Read one fusion, including its proposed diff',
+    description:
+      'The full fusion record with the change it proposes to the skill. Read this before approving — ' +
+      'the list deliberately omits the diff to stay cheap.',
+    permissions: [],
+    inputSchema: { id: z.string().min(1) },
+    audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/fusions/${enc(args.id)}` })),
+  },
+  {
+    name: 'approve_fusion',
+    title: 'Approve a fusion',
+    description:
+      'IRREVERSIBLE. Bumps the skill to a new version with the proposed change and fuses the source ' +
+      'memories into it. Read the diff with get_fusion first; there is no undo short of editing the skill ' +
+      'back by hand.',
+    permissions: ['skills:update', 'memory:update'],
+    inputSchema: { id: z.string().min(1) },
+    audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/fusions/${enc(args.id)}/approve` })),
+  },
+  {
+    name: 'reject_fusion',
+    title: 'Reject a fusion and let it try again',
+    description:
+      'Sends the fusion back with feedback and RE-RUNS it — this is "try again with this guidance", not ' +
+      '"drop it". Use cancel_fusion to stop it for good.',
+    permissions: ['tasks:execute'],
+    inputSchema: {
+      id: z.string().min(1),
+      feedback: z.string().min(1).max(4000).describe('What was wrong; the agent reads this'),
+    },
+    audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.dispatch({
+          method: 'POST',
+          path: `/api/fusions/${enc(args.id)}/reject`,
+          body: { feedback: args.feedback },
+        }),
+      ),
+  },
+  {
+    name: 'cancel_fusion',
+    title: 'Cancel a fusion',
+    description: 'Stop a fusion for good. Unlike reject_fusion this does not re-run it.',
+    permissions: ['tasks:execute'],
+    inputSchema: { id: z.string().min(1) },
+    audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/fusions/${enc(args.id)}/cancel` })),
   },
   {
     name: 'list_reviews',

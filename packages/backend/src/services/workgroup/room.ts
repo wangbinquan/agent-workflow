@@ -31,6 +31,23 @@ import {
 import { z } from 'zod'
 
 const JsonObjectSchema = z.record(z.string(), z.unknown())
+
+/**
+ * RFC-329 —— one workgroup task that is waiting on a human, as seen by ONE actor.
+ *
+ * `pendingDeliveries` is per-actor (cards dispatched to the member ids this actor
+ * holds in that room), while `awaitingConfirmation` is a property of the task
+ * itself. A row can carry both at once, which is why the count derived from
+ * these rows adds them rather than picking one.
+ */
+interface WorkgroupPendingRow {
+  readonly taskId: string
+  readonly name: string
+  readonly status: string
+  readonly gateStatus: string | null
+  readonly awaitingConfirmation: boolean
+  readonly pendingDeliveries: number
+}
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -337,10 +354,19 @@ export function buildRoomReads(
   },
 ) {
   const { loadVisibleWorkgroupTask } = core
-  async function pendingCount(actor: Actor) {
+  /**
+   * RFC-329 —— 每一个「在等人」的工作组任务，逐行。
+   *
+   * `pendingCount` 以前就把这批行整个算了出来（可见性过滤、gate 判定、逐人待交付卡片），
+   * 然后只返回三个数字。于是 `list_pending_gates` 想列出工作组门时无处可取——REST 上
+   * 只有一个 badge 计数和一个单任务房间。这里把行拿回来，计数改由它派生：两个端点因此
+   * 不可能对同一个 actor 给出不同的答案。
+   */
+  async function pendingRows(actor: Actor): Promise<WorkgroupPendingRow[]> {
     const rows = await deps.db
       .select({
         id: tasks.id,
+        name: tasks.name,
         ownerUserId: tasks.ownerUserId,
         status: tasks.status,
         workgroupConfigJson: tasks.workgroupConfigJson,
@@ -403,8 +429,7 @@ export function buildRoomReads(
         else bucket.push(card.assigneeMemberId)
       }
     }
-    let deliveries = 0
-    let gates = 0
+    const out: WorkgroupPendingRow[] = []
     for (const row of rows) {
       if (row.workgroupConfigJson === null) continue
       if (!visibleIds.has(row.id)) continue
@@ -416,21 +441,44 @@ export function buildRoomReads(
       }
       const parsed = WorkgroupRuntimeConfigSchema.safeParse(raw)
       if (!parsed.success) continue
-      if (
-        gateStatusById.get(row.id) === 'awaiting_confirmation' &&
-        row.status === 'awaiting_review'
-      )
-        gates++
+      const gateStatus = gateStatusById.get(row.id) ?? null
+      const awaitingConfirmation =
+        gateStatus === 'awaiting_confirmation' && row.status === 'awaiting_review'
       const myMemberIds = new Set(
         parsed.data.members
           .filter((m) => m.memberType === 'human' && m.userId === actor.user.id)
           .map((m) => m.id),
       )
-      if (myMemberIds.size === 0) continue
-      deliveries += (dispatchedByTask.get(row.id) ?? []).filter(
-        (assignee) => assignee !== null && myMemberIds.has(assignee),
-      ).length
+      // A row with no membership for this actor still counts as a gate (that was
+      // the pre-RFC-329 behaviour: `gates++` happened before the membership
+      // check), it just contributes no deliveries.
+      const pendingDeliveries =
+        myMemberIds.size === 0
+          ? 0
+          : (dispatchedByTask.get(row.id) ?? []).filter(
+              (assignee) => assignee !== null && myMemberIds.has(assignee),
+            ).length
+      if (!awaitingConfirmation && pendingDeliveries === 0) continue
+      out.push({
+        taskId: row.id,
+        name: row.name,
+        status: row.status,
+        gateStatus,
+        awaitingConfirmation,
+        pendingDeliveries,
+      })
     }
+    return out
+  }
+
+  /**
+   * The left-nav badge. Derived from `pendingRows` so the two can never disagree
+   * — the shape is byte-identical to what it returned before RFC-329.
+   */
+  async function pendingCount(actor: Actor) {
+    const rows = await pendingRows(actor)
+    const gates = rows.filter((row) => row.awaitingConfirmation).length
+    const deliveries = rows.reduce((sum, row) => sum + row.pendingDeliveries, 0)
     return { deliveries, gates, total: deliveries + gates }
   }
 
@@ -611,5 +659,5 @@ export function buildRoomReads(
     }
   }
 
-  return { pendingCount, roomAggregate }
+  return { pendingCount, pendingRows, roomAggregate }
 }
