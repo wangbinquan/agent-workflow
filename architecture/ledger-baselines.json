@@ -276,6 +276,20 @@
       "why": "RFC-326：/api/reviews* 路由里**有意不给 MCP 工具**的名单（今天只有 pending-count 徽章计数）。每加一条都是在把评审面从 MCP 上抠掉一块，只许降；守卫同时钉死名单里的路由确实没有工具、且路由确实存在（过期条目也红）"
     },
     {
+      "id": "rfc319-focus-ring-unswept",
+      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+      "symbol": "FOCUS_RING_UNSWEPT",
+      "baseline": 18,
+      "why": "存在、无参、但不在焦点环全站扫描里的页面。只许缩——每一条都意味着那一页上被祖先容器裁掉的焦点环，键盘用户看不见而 CI 不会告诉任何人。新增页面要么进扫描，要么显式进这张表，两条路都在 diff 里看得见"
+    },
+    {
+      "id": "rfc319-axe-unswept",
+      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+      "symbol": "AXE_UNSWEPT",
+      "baseline": 29,
+      "why": "存在、无参、但不在 axe wcag2a/2aa 整页扫描里的页面。只许缩。axe 的语料比焦点环还小（10 页 / 39 页）：/tasks、/users、/scheduled、/reviews 这些每天在用的主屏从来没被扫过"
+    },
+    {
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
@@ -372,20 +386,6 @@
       "symbol": "entries",
       "baseline": 17083,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
-    },
-    {
-      "id": "rfc319-focus-ring-unswept",
-      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
-      "symbol": "FOCUS_RING_UNSWEPT",
-      "baseline": 18,
-      "why": "存在、无参、但不在焦点环全站扫描里的页面。只许缩——每一条都意味着那一页上被祖先容器裁掉的焦点环，键盘用户看不见而 CI 不会告诉任何人。新增页面要么进扫描，要么显式进这张表，两条路都在 diff 里看得见"
-    },
-    {
-      "id": "rfc319-axe-unswept",
-      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
-      "symbol": "AXE_UNSWEPT",
-      "baseline": 29,
-      "why": "存在、无参、但不在 axe wcag2a/2aa 整页扫描里的页面。只许缩。axe 的语料比焦点环还小（10 页 / 39 页）：/tasks、/users、/scheduled、/reviews 这些每天在用的主屏从来没被扫过"
     }
   ],
   "canonicalProjection": {

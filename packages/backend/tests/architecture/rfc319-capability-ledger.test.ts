@@ -142,9 +142,28 @@ describe('RFC-319 R3 —— 证据必须逐字可达', () => {
 })
 
 describe('RFC-319 R3 —— 两个只降不升的数字', () => {
-  test('gap 计数与基线一致（基线本身由 rfc317-ledger-highwater 管只降不升）', () => {
-    // 这条只做「账本内部自洽」；跨 commit 的单调性由高水位守卫按 git 比较。
-    expect(countByStatus(LEDGER, 'gap')).toBeGreaterThan(0)
+  test('gap 已经清零，且清零是真的而不是账本被掏空', () => {
+    // 这条下界原本写的是 `toBeGreaterThan(0)`，理由是「账本清零意味着每条能力都被
+    // e2e 打过；真到那天，把这条下界一起改掉——在那之前，0 更可能是聚合器坏了」。
+    // 2026-08-26 真到了那天：RFC-319 的最后四条（UX-19/45/46/47）落地后 gap 归零。
+    //
+    // 所以判据翻面，但**空转防线要一起翻**：单说「gap === 0」是一句可以靠把 rows
+    // 清空来满足的话。下面三条一起成立才算数——语料还在、每一行都真的是 covered、
+    // 而 covered 必须带可校验证据（statusShapeViolations 另有一条守着）。
+    expect(
+      LEDGER.rows.length,
+      '账本行数塌了 ⇒ 下面那句「gap 为 0」是靠把语料清空换来的',
+    ).toBeGreaterThan(800)
+    expect(
+      countByStatus(LEDGER, 'gap'),
+      'gap 又长出来了。它可以涨——新审计发现新缺口是正常的——但涨之前请把这条断言' +
+        '连同 ledger-baselines 的 rfc319-capability-gaps 一起改，让「欠了新账」这件事' +
+        '在 diff 里看得见，而不是悄悄回到从前',
+    ).toBe(0)
+    expect(
+      countByStatus(LEDGER, 'covered') + countByStatus(LEDGER, 'covered-unverified'),
+      'gap 为 0 但 covered + covered-unverified 凑不满总行数 ⇒ 有行处在第四种状态',
+    ).toBe(LEDGER.rows.length)
   })
 
   test('covered-unverified 不得超过开工时的存量（它只能被归一掉，不能新增）', () => {
