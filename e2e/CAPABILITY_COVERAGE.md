@@ -16,15 +16,20 @@
 > **权威判据已移交三份机器账本**（都在 `architecture/`，都由 RFC-317 的高水位机制
 > 管「只减不增」）：
 >
-> | 账本                         | 问的问题                                                     | 守卫                               |
-> | ---------------------------- | ------------------------------------------------------------ | ---------------------------------- |
-> | `e2e-endpoint-coverage.json` | `allRouteMeta()` 声明的端点里，哪些一次都没被任何 e2e 打到   | `rfc319-endpoint-coverage.test.ts` |
-> | `e2e-route-coverage.json`    | `router.tsx` 的前端路由里，哪些从未被真实加载过              | `rfc319-route-coverage.test.ts`    |
-> | `e2e-capability-ledger.json` | 820 条用户面能力各自被哪条**具名**用例守着（证据须逐字可达） | `rfc319-capability-ledger.test.ts` |
+> | 账本                         | 问的问题                                                   | 守卫                               |
+> | ---------------------------- | ---------------------------------------------------------- | ---------------------------------- |
+> | `e2e-endpoint-coverage.json` | `allRouteMeta()` 声明的端点里，哪些一次都没被任何 e2e 打到 | `rfc319-endpoint-coverage.test.ts` |
+> | `e2e-route-coverage.json`    | `router.tsx` 的前端路由里，哪些从未被真实加载过            | `rfc319-route-coverage.test.ts`    |
+> | `e2e-capability-ledger.json` | 每条用户面能力各自被哪条**具名**用例守着（证据须逐字可达） | `rfc319-capability-ledger.test.ts` |
 >
 > 前两份的分子来自**运行期实测**（`e2e/route-journal.ts` 从 daemon 请求日志采集，
 > 由 `e2e-full-nightly` 驱动全量对账），不是静态扫描。第三份把「哪条用例守着哪条能力」
 > 从散文变成 `{file, test}`——用例改名或被删就红。
+>
+> **2026-08-26**：能力账本的 gap 已清零——840 条全部指向具名证据。这不意味着「产品
+> 没有缺陷」，只意味着**每条能力都有一条会红的用例**；账本守着的是「用例还在、
+> 标题还对得上」，守不了「用例断言得够不够狠」。后者靠的是逐条落地时的变异实证
+> （注入→红→撤销→绿），记录在 RFC-319 的 `plan.md` 变更记录里。
 >
 > 逐条审计依据：`design/RFC-319-user-facing-e2e-coverage-hardening/findings.md`。
 >
