@@ -1479,6 +1479,18 @@
       "lines": 196
     },
     {
+      "id": "rfc329-mcp-surface-guard",
+      "file": "packages/backend/tests/architecture/rfc329-mcp-surface-guard.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 338
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -1876,7 +1888,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9eae889239bc6f3023fe8c2c8b0b63313f4cdcb25e8738ebca71854337fb574e",
+    "sourceDigest": "sha256:5d55ae91f389fabfa066c8723a050cf28167e811bc4b61663f1305dfa1659918",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
