@@ -17,7 +17,9 @@ describe('RFC-202 source locks', () => {
     const src = read('packages/backend/src/services/scheduler.ts')
     // All four checkpoints must pass the abort reason — dropping it silently
     // reverts daemon shutdowns to "canceled by user" (audit P1 F-13).
-    const threaded = src.match(/cancelTaskRow\(db, taskId(?:, [^)]*)?opts\.signal\??\.reason\)/g)
+    const threaded = src.match(
+      /cancelTaskRow\(\s*db,\s*taskId,[\s\S]{0,160}?opts\.signal\??\.reason,\s*opts\.executionContext\s*,?\s*\)/g,
+    )
     expect(threaded?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(src).toContain('DAEMON_SHUTDOWN_ABORT_REASON')
     expect(src).toContain("to: 'interrupted'")
@@ -36,7 +38,9 @@ describe('RFC-202 source locks', () => {
     const shutdown = read('packages/backend/src/services/shutdown.ts')
     expect(shutdown).toContain('DAEMON_RESTART_ERROR_SUMMARY')
     expect(shutdown).not.toContain("errorSummary: 'daemon-shutdown'")
-    expect(shutdown).toContain('abortAllActiveTasks(DAEMON_SHUTDOWN_ABORT_REASON)')
+    expect(shutdown).toContain(
+      'shutdownActiveTaskExecutions(DAEMON_SHUTDOWN_ABORT_REASON, budgetMs)',
+    )
   })
 
   test('frontend cancel affordance covers awaiting_review/awaiting_human', () => {

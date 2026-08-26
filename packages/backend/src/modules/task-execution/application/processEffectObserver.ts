@@ -1,7 +1,7 @@
 // RFC-328 — task-owned managed-process logical effect coordinator.
 
 import { createHash } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq } from '@/db/query'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { nodeRuns, taskExecutionEffectAttempts, taskExecutionEffects, tasks } from '@/db/schema'
@@ -18,6 +18,7 @@ import {
 } from '../domain/executionIntent'
 import { currentTaskExecutionContext, type TaskExecutionContext } from './taskExecutionContext'
 import { TaskExecutionError } from './taskExecutionError'
+import { waitForEffectResourceTurn } from './effectResourceWait'
 
 const PROCESS_CLASSIFIER_VERSION = 'rfc328-managed-process-v1'
 const PROCESS_TRANSPORT_POLICY_VERSION = 'rfc328-preactivation-v1'
@@ -43,7 +44,7 @@ export interface ProcessSettlement {
 
 export interface ProcessEffectAttemptObserver {
   /** Durable logical effect + attempt + all resource holds, before launcher spawn. */
-  beforeSpawn(): void
+  beforeSpawn(): Promise<void>
   /** Persist process/effect receipt and the caller's node receipt in one owned tx. */
   recordSpawnReceipt(receipt: ProcessSpawnReceipt, companion: (tx: DbTxSync) => void): void
   /** Settle only after managedProcess has reaped or explicitly reported unreaped. */
@@ -145,35 +146,37 @@ export function createProcessEffectAttemptObserver(input: {
   let prepared: PreparedHandle | null = null
 
   return {
-    beforeSpawn() {
+    async beforeSpawn() {
       if (prepared !== null) throw new Error('process effect attempt prepared twice')
-      const next = taskExecutionModule.effects.prepareAndAcquire({
-        db: input.db,
-        token: context.token,
-        intentId: context.intentId,
-        operationKey,
-        executionLineageId,
-        operationFamilyKey: familyKey,
-        // A process family can first appear on a node row whose task/manual
-        // generation is already >0 (for example a seeded failure resumed for
-        // its first real dispatch). Its own family still starts at 0 and then
-        // advances from live/retained effect history.
-        operationGeneration: taskExecutionModule.effects.nextOperationGeneration({
+      const next = await waitForEffectResourceTurn(() =>
+        taskExecutionModule.effects.prepareAndAcquire({
           db: input.db,
+          token: context.token,
+          intentId: context.intentId,
+          operationKey,
           executionLineageId,
           operationFamilyKey: familyKey,
+          // A process family can first appear on a node row whose task/manual
+          // generation is already >0 (for example a seeded failure resumed for
+          // its first real dispatch). Its own family still starts at 0 and then
+          // advances from live/retained effect history.
+          operationGeneration: taskExecutionModule.effects.nextOperationGeneration({
+            db: input.db,
+            executionLineageId,
+            operationFamilyKey: familyKey,
+          }),
+          kind: 'process',
+          requestHash: effectRequestHash,
+          slotPathJson,
+          slotPathDigest,
+          candidateId: `${input.processKind}:${input.nodeRunId}`,
+          recoveryClass: 'managed-process-preactivation',
+          classifierVersion: PROCESS_CLASSIFIER_VERSION,
+          transportPolicyVersion: PROCESS_TRANSPORT_POLICY_VERSION,
+          retryAuthority: 'none',
+          resourceKeys: resources,
         }),
-        kind: 'process',
-        requestHash: effectRequestHash,
-        slotPathJson,
-        slotPathDigest,
-        candidateId: `${input.processKind}:${input.nodeRunId}`,
-        recoveryClass: 'managed-process-preactivation',
-        classifierVersion: PROCESS_CLASSIFIER_VERSION,
-        transportPolicyVersion: PROCESS_TRANSPORT_POLICY_VERSION,
-        retryAuthority: 'none',
-        resourceKeys: resources,
-      })
+      )
       prepared = { effectId: next.effectId, attemptId: next.attemptId }
     },
 

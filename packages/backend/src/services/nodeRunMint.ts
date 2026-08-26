@@ -39,12 +39,12 @@ import {
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
-import { currentTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import {
+  currentTaskExecutionContext,
+  taskExecutionModule,
   withCurrentTaskExecutionMutation,
   withTaskExecutionMutation,
-} from '@/modules/task-execution/application/ownedTaskMutation'
+} from '@/services/taskExecutionParticipants'
 
 /**
  * Statuses a row may be BORN with. Everything else (canceled / interrupted /

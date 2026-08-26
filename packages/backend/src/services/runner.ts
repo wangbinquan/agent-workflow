@@ -52,12 +52,15 @@ import { storeNodeRunPrompt } from '@/services/nodeRunPrompt'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
-import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
+import {
+  withTaskExecutionMutation,
+  withTaskExecutionTransaction,
+} from '@/services/taskExecutionParticipants'
 import {
   createProcessEffectAttemptObserver,
   type ProcessEffectAttemptObserver,
   type ProcessSettlement,
-} from '@/modules/task-execution/application/processEffectObserver'
+} from '@/services/taskExecutionParticipants'
 import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
 import { createLogger, type Logger } from '@/util/log'
 import {
@@ -2405,7 +2408,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           if (status === 'done' && opts.persistDeclaredOutputs !== false) {
             try {
               await persistRunnerWrite('node-run-output/batch', () =>
-                withTaskExecutionMutation({
+                withTaskExecutionTransaction({
                   db: opts.db,
                   taskId: opts.taskId,
                   run: (tx) => {

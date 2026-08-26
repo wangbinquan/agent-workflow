@@ -70,13 +70,14 @@ BEGIN
         (SELECT `p`.`execution_lineage_id` FROM `tasks` AS `p` WHERE `p`.`id` = NEW.`parent_task_id`),
         NEW.`id`
       ),
-      `lineage_slot_path_json` = CASE
-        WHEN NEW.`parent_task_id` IS NULL THEN json_array(json_object(
+      `lineage_slot_path_json` = iif(
+        NEW.`parent_task_id` IS NULL,
+        json_array(json_object(
           'stableNodeKey', 'task-root',
           'frozenOccurrenceKey', NEW.`id`,
           'workflowRevision', NEW.`workflow_version`
-        ))
-        ELSE json_insert(
+        )),
+        json_insert(
           COALESCE(
             (SELECT `p`.`lineage_slot_path_json` FROM `tasks` AS `p` WHERE `p`.`id` = NEW.`parent_task_id`),
             json_array()
@@ -92,7 +93,7 @@ BEGIN
             'workflowRevision', NEW.`workflow_version`
           )
         )
-      END
+      )
   WHERE `id` = NEW.`id`;
 END;
 --> statement-breakpoint

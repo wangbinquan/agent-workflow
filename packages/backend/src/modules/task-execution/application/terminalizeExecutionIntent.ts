@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from '@/db/query'
 import { taskExecutionIntents, taskExecutionLineageOperationRecords } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
 

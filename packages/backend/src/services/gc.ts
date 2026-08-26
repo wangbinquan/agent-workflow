@@ -34,9 +34,11 @@ import type { Config, TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { nodeRuns, taskRepos, tasks } from '@/db/schema'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
-import type { RecoverableTerminalMaintenanceClaim } from '@/modules/task-execution/application/ports/terminalMaintenanceStore'
-import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
+import {
+  taskExecutionModule,
+  TaskExecutionError,
+  type RecoverableTerminalMaintenanceClaim,
+} from '@/services/taskExecutionParticipants'
 import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'

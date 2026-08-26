@@ -11,7 +11,7 @@ import {
   codeHostRecoveryBaseUrlDigest,
   type CodeHostProbeOutcome,
   type CodeHostRecoveryDescriptor,
-} from '@/modules/task-execution/domain/codeHostRecovery'
+} from '@/services/taskExecutionParticipants'
 
 const MAX_PROBE_RESPONSE_BYTES = 256 * 1024
 const DEFAULT_PROBE_TIMEOUT_MS = 30_000

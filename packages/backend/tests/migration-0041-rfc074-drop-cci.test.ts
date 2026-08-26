@@ -177,7 +177,14 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       // `runs/{taskId}/prompts/{nodeRunId}.md`，行里只留路径（列与文件两种形态
       // 由 services/nodeRunPrompt.ts 的双读同时认）。
       expect(cols).toContain('prompt_path')
-      expect(cols.length).toBe(cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1)
+      // RFC-328 (0210): durable continuation identity and exact process receipt.
+      expect(cols).toContain('continuation_slot_key')
+      expect(cols).toContain('lineage_slot_path_json')
+      expect(cols).toContain('operation_generation')
+      expect(cols).toContain('spawn_launch_nonce')
+      expect(cols.length).toBe(
+        cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 4,
+      )
 
       // 4b. row count unchanged.
       const n = (up.query('SELECT count(*) AS n FROM node_runs').get() as { n: number }).n

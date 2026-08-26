@@ -1,10 +1,11 @@
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type {
+  CodeHostSendAttemptHandle,
   CodeHostSendAttemptInfo,
   CodeHostSendAttemptObserver,
   CodeHostSendAttemptSettlement,
-} from '@/services/codeHost/call'
+} from '../public/participants'
 import { taskExecutionModule } from '../composition'
 import type { TaskExecutionContext } from './taskExecutionContext'
 import type { RetryAuthority } from '../domain/executionEffect'
@@ -16,8 +17,9 @@ import {
   type CodeHostRecoveryDescriptor,
 } from '../domain/codeHostRecovery'
 import type { CodeHostAction } from '@agent-workflow/shared'
+import { waitForEffectResourceTurn } from './effectResourceWait'
 
-interface ObserverHandle {
+interface ObserverHandle extends CodeHostSendAttemptHandle {
   readonly effectId: string
   readonly attemptId: string
   readonly info: CodeHostSendAttemptInfo
@@ -69,37 +71,39 @@ export function createCodeHostEffectAttemptObserver(input: {
   }> | null = null
   let terminalProbe: Extract<CodeHostProbeOutcome, { kind: 'applied' }> | null = null
   return {
-    beforeSend(info) {
+    async beforeSend(info) {
       if (info.method === 'GET') return null
-      const prepared = taskExecutionModule.effects.prepareAndAcquire({
-        db: input.db,
-        token: input.context.token,
-        intentId: input.context.intentId,
-        operationKey: input.identity.operationKey,
-        executionLineageId: input.identity.executionLineageId,
-        operationFamilyKey: input.identity.operationFamilyKey,
-        operationGeneration: input.identity.operationGeneration,
-        kind: 'code-host-mutation',
-        requestHash: input.identity.requestHash,
-        slotPathJson: input.identity.slotPathJson,
-        slotPathDigest: input.identity.slotPathDigest,
-        candidateId: `${info.candidateId}:t${info.transportAttempt}`,
-        recoveryClass: codeHostRecoveryClass(input.action, info.method),
-        recoveryDescriptorJson: JSON.stringify({
-          ...info.recoveryDescriptor,
-          nodeRunId: input.nodeRunId ?? null,
+      const prepared = await waitForEffectResourceTurn(() =>
+        taskExecutionModule.effects.prepareAndAcquire({
+          db: input.db,
+          token: input.context.token,
+          intentId: input.context.intentId,
+          operationKey: input.identity.operationKey,
+          executionLineageId: input.identity.executionLineageId,
+          operationFamilyKey: input.identity.operationFamilyKey,
+          operationGeneration: input.identity.operationGeneration,
+          kind: 'code-host-mutation',
+          requestHash: input.identity.requestHash,
+          slotPathJson: input.identity.slotPathJson,
+          slotPathDigest: input.identity.slotPathDigest,
+          candidateId: `${info.candidateId}:t${info.transportAttempt}`,
+          recoveryClass: codeHostRecoveryClass(input.action, info.method),
+          recoveryDescriptorJson: JSON.stringify({
+            ...info.recoveryDescriptor,
+            nodeRunId: input.nodeRunId ?? null,
+          }),
+          classifierVersion: CODE_HOST_CLASSIFIER_VERSION,
+          transportPolicyVersion: CODE_HOST_TRANSPORT_POLICY_VERSION,
+          retryAuthority: nextRetryAuthority,
+          resourceKeys: input.identity.resourceKeys,
         }),
-        classifierVersion: CODE_HOST_CLASSIFIER_VERSION,
-        transportPolicyVersion: CODE_HOST_TRANSPORT_POLICY_VERSION,
-        retryAuthority: nextRetryAuthority,
-        resourceKeys: input.identity.resourceKeys,
-      })
+      )
       nextRetryAuthority = 'none'
       return {
         effectId: prepared.effectId,
         attemptId: prepared.attemptId,
         info,
-      } satisfies ObserverHandle
+      } as ObserverHandle
     },
     afterSend(handle, settlement) {
       if (handle === null || handle === undefined) return

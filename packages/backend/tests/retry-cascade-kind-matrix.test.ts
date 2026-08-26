@@ -483,9 +483,9 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       }),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
-    // Two earlier owner transactions also cross the same injected boundary;
-    // the child itself still exhausts all eight cancellation attempts.
-    expect(cancelCasAttempts).toBe(10)
+    // Five earlier ownership / intent transactions also cross the same injected
+    // boundary; the child itself still exhausts all eight cancellation attempts.
+    expect(cancelCasAttempts).toBe(13)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(parent.status).toBe('failed')

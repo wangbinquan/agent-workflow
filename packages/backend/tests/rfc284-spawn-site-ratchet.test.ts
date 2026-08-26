@@ -73,6 +73,13 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 1,
     why: 'THE agent spawn point（RFC-280）；全部 agent 类进程唯一入口。',
   },
+  'services/execution/managedProcessLauncher.ts': {
+    governance: 'kernel',
+    count: 1,
+    why:
+      'RFC-328 预激活 launcher 的唯一 target spawn；launcher 已是 detached 组长，' +
+      'target 显式留在同一进程组，使既有 TERM→KILL 树杀覆盖整棵运行时进程树。',
+  },
   'util/git.ts': {
     governance: 'process-group',
     count: 1,

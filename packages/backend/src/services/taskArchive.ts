@@ -62,8 +62,10 @@ import {
   workgroupMessages,
   workgroupTaskState,
 } from '@/db/schema'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
-import type { TerminalMaintenanceClaim } from '@/modules/task-execution/domain/ownership'
+import {
+  taskExecutionModule,
+  type TerminalMaintenanceClaim,
+} from '@/services/taskExecutionParticipants'
 import {
   HOUR_MS,
   MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,

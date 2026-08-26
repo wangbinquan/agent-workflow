@@ -49,8 +49,9 @@ import {
 import { buildCodeHostUrl, redirectTargetIssue } from '@/services/codeHost/url'
 import {
   buildCodeHostRecoveryDescriptor,
-  type CodeHostRecoveryDescriptor,
-} from '@/modules/task-execution/domain/codeHostRecovery'
+  type CodeHostSendAttemptInfo,
+  type CodeHostSendAttemptObserver,
+} from '@/services/taskExecutionParticipants'
 
 /** 节点定义里与执行相关的那一份（scheduler 从 WorkflowNode 读出后传进来）。 */
 export interface CodeHostCallSpec {
@@ -77,29 +78,6 @@ export interface CodeHostCallDeps {
   sleep?: (ms: number) => Promise<void>
   /** RFC-328: record every real mutation send before the transport sees it. */
   attemptObserver?: CodeHostSendAttemptObserver
-}
-
-export interface CodeHostSendAttemptInfo {
-  readonly candidateId: string
-  readonly transportAttempt: number
-  readonly method: string
-  readonly pathname: string
-  readonly recoveryDescriptor: CodeHostRecoveryDescriptor
-}
-
-export interface CodeHostSendAttemptSettlement extends CodeHostSendAttemptInfo {
-  readonly result: 'response' | 'network-error'
-  readonly status?: number
-  readonly willRetry: boolean
-  readonly retryKind: 'none' | 'transport-policy' | 'compatibility-fallback'
-  readonly errorMessage?: string
-}
-
-export interface CodeHostSendAttemptObserver {
-  beforeSend(info: CodeHostSendAttemptInfo): Promise<unknown> | unknown
-  afterSend(handle: unknown, settlement: CodeHostSendAttemptSettlement): Promise<void> | void
-  /** True only after a terminal send whose application outcome is ambiguous. */
-  outcomeUnknown?: () => boolean
 }
 
 export type CodeHostCallOutcome =
@@ -792,7 +770,7 @@ async function executeAssembledRequest(
       pathname: built.value.pathname,
       recoveryDescriptor,
     }
-    const attemptHandle = await deps.attemptObserver?.beforeSend(attemptInfo)
+    const attemptHandle = (await deps.attemptObserver?.beforeSend(attemptInfo)) ?? null
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let res: Response

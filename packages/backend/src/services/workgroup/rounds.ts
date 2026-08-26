@@ -21,7 +21,7 @@ import type { WorkgroupMode, WorkgroupRuntimeConfig } from '@agent-workflow/shar
 import type { EngineDbState } from '@/services/workgroup/state'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
-import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
+import { withTaskExecutionMutation } from '@/services/taskExecutionParticipants'
 import { isClarifyRerunCause } from '@/services/nodeRunMint'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 

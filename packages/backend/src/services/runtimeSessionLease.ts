@@ -12,7 +12,7 @@ import {
   withCurrentTaskExecutionMutation,
   withCurrentTaskExecutionTransaction,
   withTaskExecutionTransaction,
-} from '@/modules/task-execution/application/ownedTaskMutation'
+} from '@/services/taskExecutionParticipants'
 import type { RuntimeKind } from '@/services/runtime/types'
 
 export type RuntimeSessionLease = typeof runtimeSessionLeases.$inferSelect

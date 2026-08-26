@@ -6,41 +6,30 @@
 // a JSON object (or an `as OwnershipToken` cast in a legacy adapter) is not a
 // capability and is rejected before it can reach a persistence gateway.
 
-const workerIdentityBrand: unique symbol = Symbol('rfc328.worker-identity')
-const ownershipTokenBrand: unique symbol = Symbol('rfc328.ownership-token')
-const ownedTaskTxBrand: unique symbol = Symbol('rfc328.owned-task-tx')
+import type {
+  OwnedTaskTx,
+  OwnershipToken,
+  TerminalMaintenanceClaim,
+  TerminalMaintenanceOperation,
+  WorkerIdentity,
+} from '../public/participants'
+
+export type {
+  OwnedTaskTx,
+  OwnershipToken,
+  TerminalMaintenanceClaim,
+  TerminalMaintenanceOperation,
+  WorkerIdentity,
+} from '../public/participants'
+
 const daemonLockProofBrand: unique symbol = Symbol('rfc328.daemon-lock-proof')
 const claimAttachPermitBrand: unique symbol = Symbol('rfc328.claim-attach-permit')
 const takeoverProofBrand: unique symbol = Symbol('rfc328.takeover-proof')
 const stopProofBrand: unique symbol = Symbol('rfc328.stop-proof')
 const outcomeClosureBrand: unique symbol = Symbol('rfc328.outcome-closure')
-const maintenanceClaimBrand: unique symbol = Symbol('rfc328.maintenance-claim')
 
 export const TASK_OWNER_STATES = ['claimed', 'revoked', 'released', 'recovery-required'] as const
 export type TaskOwnerState = (typeof TASK_OWNER_STATES)[number]
-
-export interface WorkerIdentity {
-  readonly ownerId: string
-  readonly daemonGeneration: string
-  readonly [workerIdentityBrand]: true
-}
-
-export interface OwnershipToken {
-  readonly taskId: string
-  readonly ownerId: string
-  readonly daemonGeneration: string
-  readonly epoch: number
-  readonly leaseUntil: number
-  readonly ownerRevision: number
-  readonly [ownershipTokenBrand]: true
-}
-
-export interface OwnedTaskTx {
-  readonly taskId: string
-  readonly epoch: number
-  readonly revision: number
-  readonly [ownedTaskTxBrand]: true
-}
 
 export interface ExclusiveDaemonLockProof {
   readonly daemonGeneration: string
@@ -86,21 +75,6 @@ export interface VerifiedOutcomeUnknownClosure {
   readonly unresolvedEffectIds: readonly string[]
   readonly verifiedAt: number
   readonly [outcomeClosureBrand]: true
-}
-
-export type TerminalMaintenanceOperation =
-  | 'archive'
-  | 'delete'
-  | 'retention'
-  | 'workspace-gc'
-  | 'repair-metadata'
-
-export interface TerminalMaintenanceClaim {
-  readonly claimId: string
-  readonly operation: TerminalMaintenanceOperation
-  readonly revision: number
-  readonly memberSetDigest: string
-  readonly [maintenanceClaimBrand]: true
 }
 
 export type ControlRevisionAuthority =
@@ -195,14 +169,12 @@ export function createWorkerIdentity(input: {
   if (input.ownerId.length === 0 || input.daemonGeneration.length === 0) {
     throw new Error('worker identity requires non-empty owner and daemon generation')
   }
-  return frozenCapability(
-    {
-      ownerId: input.ownerId,
-      daemonGeneration: input.daemonGeneration,
-      [workerIdentityBrand]: true as const,
-    },
-    workerIdentities,
-  )
+  const identity = Object.freeze({
+    ownerId: input.ownerId,
+    daemonGeneration: input.daemonGeneration,
+  }) as WorkerIdentity
+  workerIdentities.add(identity)
+  return identity
 }
 
 export function assertWorkerIdentity(value: WorkerIdentity): void {
@@ -221,18 +193,16 @@ export function createOwnershipToken(input: {
   if (input.taskId.length === 0 || input.epoch < 1 || input.ownerRevision < 1) {
     throw new Error('invalid durable ownership claim')
   }
-  return frozenCapability(
-    {
-      taskId: input.taskId,
-      ownerId: input.identity.ownerId,
-      daemonGeneration: input.identity.daemonGeneration,
-      epoch: input.epoch,
-      leaseUntil: input.leaseUntil,
-      ownerRevision: input.ownerRevision,
-      [ownershipTokenBrand]: true as const,
-    },
-    ownershipTokens,
-  )
+  const token = Object.freeze({
+    taskId: input.taskId,
+    ownerId: input.identity.ownerId,
+    daemonGeneration: input.identity.daemonGeneration,
+    epoch: input.epoch,
+    leaseUntil: input.leaseUntil,
+    ownerRevision: input.ownerRevision,
+  }) as OwnershipToken
+  ownershipTokens.add(token)
+  return token
 }
 
 export function assertOwnershipToken(value: OwnershipToken): void {
@@ -248,18 +218,16 @@ export function refreshOwnershipToken(input: {
   if (input.ownerRevision < input.token.ownerRevision) {
     throw new Error('ownership token revision cannot regress')
   }
-  return frozenCapability(
-    {
-      taskId: input.token.taskId,
+  return createOwnershipToken({
+    taskId: input.token.taskId,
+    identity: createWorkerIdentity({
       ownerId: input.token.ownerId,
       daemonGeneration: input.token.daemonGeneration,
-      epoch: input.token.epoch,
-      leaseUntil: input.leaseUntil,
-      ownerRevision: input.ownerRevision,
-      [ownershipTokenBrand]: true as const,
-    },
-    ownershipTokens,
-  )
+    }),
+    epoch: input.token.epoch,
+    leaseUntil: input.leaseUntil,
+    ownerRevision: input.ownerRevision,
+  })
 }
 
 export function ownershipTuple(token: OwnershipToken): OwnershipTuple {
@@ -278,15 +246,13 @@ export function createOwnedTaskTx(input: { token: OwnershipToken; revision: numb
   if (input.revision <= input.token.ownerRevision) {
     throw new Error('owned transaction revision must advance the owner row')
   }
-  return frozenCapability(
-    {
-      taskId: input.token.taskId,
-      epoch: input.token.epoch,
-      revision: input.revision,
-      [ownedTaskTxBrand]: true as const,
-    },
-    ownedTaskTransactions,
-  )
+  const ownedTx = Object.freeze({
+    taskId: input.token.taskId,
+    epoch: input.token.epoch,
+    revision: input.revision,
+  }) as OwnedTaskTx
+  ownedTaskTransactions.add(ownedTx)
+  return ownedTx
 }
 
 export function assertOwnedTaskTx(value: OwnedTaskTx): void {
@@ -374,12 +340,14 @@ export function assertVerifiedOutcomeUnknownClosure(value: VerifiedOutcomeUnknow
 }
 
 export function createTerminalMaintenanceClaim(
-  input: Omit<TerminalMaintenanceClaim, typeof maintenanceClaimBrand>,
+  input: Pick<TerminalMaintenanceClaim, 'claimId' | 'operation' | 'revision' | 'memberSetDigest'>,
 ): TerminalMaintenanceClaim {
   if (input.claimId.length === 0 || input.revision < 1 || input.memberSetDigest.length === 0) {
     throw new Error('invalid-terminal-maintenance-claim')
   }
-  return frozenCapability({ ...input, [maintenanceClaimBrand]: true as const }, maintenanceClaims)
+  const claim = Object.freeze({ ...input }) as TerminalMaintenanceClaim
+  maintenanceClaims.add(claim)
+  return claim
 }
 
 export function assertTerminalMaintenanceClaim(value: TerminalMaintenanceClaim): void {

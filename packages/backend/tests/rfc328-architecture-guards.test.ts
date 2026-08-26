@@ -78,7 +78,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
       {
         callable: 'createIsoUnderLock',
         actCallees: new Set(['createNodeIso']),
-        observerCallees: new Set(['runTaskLocalEffect']),
+        observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
       {
         callable: 'mergeBackAndSettle',

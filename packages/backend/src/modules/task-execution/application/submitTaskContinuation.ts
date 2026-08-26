@@ -1,7 +1,7 @@
 // RFC-328 — the one continuation-admission transaction used by every kick.
 
 import { createHash } from 'node:crypto'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq } from '@/db/query'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { taskExecutionIntents, taskExecutionLineageOperationRecords, tasks } from '@/db/schema'

@@ -173,32 +173,24 @@ import {
   nodeKindIndex,
 } from '@/modules/task-execution/domain/inboundEdges'
 import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
-import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/application/codeHostEffectObserver'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import {
-  createProcessEffectAttemptObserver,
-  type ProcessEffectAttemptObserver,
-} from '@/modules/task-execution/application/processEffectObserver'
-import {
   assertTaskExecutionContext,
-  runWithTaskExecutionContext,
-  type TaskExecutionContext,
-} from '@/modules/task-execution/application/taskExecutionContext'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
-import {
-  withCurrentTaskExecutionMutation,
-  withTaskExecutionMutation,
-} from '@/modules/task-execution/application/ownedTaskMutation'
-import { exactOwnerMatches } from '@/modules/task-execution/domain/ownership'
-import {
+  createCodeHostEffectAttemptObserver,
+  createProcessEffectAttemptObserver,
   decodeLineageSlotPath,
   encodeLineageSlotPath,
-  type LineageSlot,
-} from '@/modules/task-execution/domain/executionIntent'
-import {
+  exactOwnerMatches,
   operationFamilyKey,
-  requestHash as executionEffectRequestHash,
-} from '@/modules/task-execution/domain/executionEffect'
+  runWithTaskExecutionContext,
+  taskExecutionModule,
+  taskExecutionRequestHash as executionEffectRequestHash,
+  withCurrentTaskExecutionMutation,
+  withTaskExecutionMutation,
+  type LineageSlot,
+  type ProcessEffectAttemptObserver,
+  type TaskExecutionContext,
+} from '@/services/taskExecutionParticipants'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
@@ -5379,7 +5371,7 @@ async function runOneScriptAttempt(
       ? {}
       : { timeoutMs: opts.defaultPerNodeTimeoutMs }),
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-    beforeSpawn: ({ argv, cwd }) => {
+    beforeSpawn: async ({ argv, cwd }) => {
       processEffect = createProcessEffectAttemptObserver({
         db,
         taskId,
@@ -5389,7 +5381,7 @@ async function runOneScriptAttempt(
         cwd,
         resourceKeys: a.isReadonly ? [] : [`workspace:${sha256Hex(worktreePath)}`],
       })
-      processEffect?.beforeSpawn()
+      await processEffect?.beforeSpawn()
     },
     gitUserName: task.gitUserName,
     gitUserEmail: task.gitUserEmail,

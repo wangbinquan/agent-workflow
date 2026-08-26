@@ -131,7 +131,7 @@ import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import {
   withTaskExecutionMutation,
   withTaskExecutionTransaction,
-} from '@/modules/task-execution/application/ownedTaskMutation'
+} from '@/services/taskExecutionParticipants'
 import {
   withReviewNodeMutationLock,
   withTaskReviewMutationLock,

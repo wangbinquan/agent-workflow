@@ -124,32 +124,26 @@ import {
   sourceTerminationRevivalError,
   type TaskStopCause,
 } from '@/modules/task-execution/domain/sourceTermination'
-import type { RuntimeStopTicket as TaskDriverStopTicket } from '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry'
 import {
-  DEFAULT_OWNERSHIP_HEARTBEAT_MS,
-  DEFAULT_OWNERSHIP_LEASE_MS,
-  taskExecutionModule,
-} from '@/modules/task-execution/composition'
-import {
+  canonicalTaskExecutionJson as canonicalJson,
+  createLocalEffectAttemptObserver,
+  createTaskExecutionContext,
   createVerifiedOutcomeUnknownClosure,
   createVerifiedStopProof,
+  DEFAULT_OWNERSHIP_HEARTBEAT_MS,
+  DEFAULT_OWNERSHIP_LEASE_MS,
   ownershipTokenKey,
-  type OwnershipToken,
-} from '@/modules/task-execution/domain/ownership'
-import {
-  createTaskExecutionContext,
   runWithTaskExecutionContext,
-  type TaskExecutionContext,
-} from '@/modules/task-execution/application/taskExecutionContext'
-import {
-  canonicalJson,
+  submitTaskContinuationTx,
+  taskExecutionModule,
+  terminalizeTaskExecutionIntentsTx,
+  type OwnershipToken,
+  type RuntimeStopTicket as TaskDriverStopTicket,
   type TaskExecutionIntentKind,
   type TaskExecutionIntentSource,
-} from '@/modules/task-execution/domain/executionIntent'
-import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
-import { submitTaskContinuationTx } from '@/modules/task-execution/application/submitTaskContinuation'
-import { terminalizeTaskExecutionIntentsTx } from '@/modules/task-execution/application/terminalizeExecutionIntent'
-import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
+  type TaskExecutionContext,
+  TaskExecutionError,
+} from '@/services/taskExecutionParticipants'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -4214,12 +4208,7 @@ export async function cancelTask(
                 .where(
                   and(
                     eq(nodeRuns.taskId, id),
-                    inArray(nodeRuns.status, [
-                      'pending',
-                      'running',
-                      'awaiting_review',
-                      'awaiting_human',
-                    ]),
+                    inArray(nodeRuns.status, [...CANCELABLE_TASK_STATUSES]),
                   ),
                 )
                 .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
@@ -5573,7 +5562,7 @@ async function runDeferredRepoPreparation(args: {
     },
     resourceKeys: [`workspace-prepare:${taskId}`],
   })
-  prepEffect?.beforeAct()
+  await prepEffect?.beforeAct()
   const settlePrepFailure = (error: unknown, phase: string): void => {
     try {
       prepEffect?.fail(error, { phase })
@@ -5633,7 +5622,7 @@ async function runDeferredRepoPreparation(args: {
       remainingMs: remaining,
       error: prepared.earlyError,
     })
-    prepEffect?.retry(new Error(prepared.earlyError), 'transport-policy')
+    await prepEffect?.retry(new Error(prepared.earlyError), 'transport-policy')
     if (controller.signal.aborted) break
     await new Promise<void>((resolve) => {
       const settle = (): void => {

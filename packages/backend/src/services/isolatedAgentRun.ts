@@ -27,9 +27,8 @@
 import type { DbClient } from '@/db/client'
 import {
   createLocalEffectAttemptObserver,
-  runTaskLocalEffect,
-} from '@/modules/task-execution/application/localEffectObserver'
-import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
+  withTaskExecutionMutation,
+} from '@/services/taskExecutionParticipants'
 // RFC-210: the pending-submodule-conflict write is a plain column update, not a
 // merge_state transition, so it goes direct rather than through lifecycle.
 import { nodeRuns } from '@/db/schema'
@@ -75,7 +74,7 @@ export async function createIsoUnderLock(args: {
 }): Promise<IsoHandle> {
   // 聚合在锁外（纯读）；快照在锁内（防 sibling merge-back 推进 canonical）。
   const forcedContainerPaths = await forcedPortPathsForTask(args.db, args.taskId)
-  return runTaskLocalEffect({
+  const effect = createLocalEffectAttemptObserver({
     db: args.db,
     taskId: args.taskId,
     nodeRunId: args.isoKeyRunId,
@@ -95,22 +94,33 @@ export async function createIsoUnderLock(args: {
       `isolation:${args.taskId}:${args.isoKeyRunId}`,
       ...args.canonRepos.map((repo) => `workspace:${sha256Hex(repo.worktreePath)}`),
     ],
-    act: () =>
-      args.writeSem.run(() =>
-        createNodeIso({
-          appHome: args.appHome,
-          taskId: args.taskId,
-          nodeRunId: args.isoKeyRunId,
-          canonRepos: args.canonRepos,
-          forcedContainerPaths,
-          ...(args.log !== undefined ? { log: args.log } : {}),
-        }),
-      ),
-    receipt: (handle) => ({
-      passthrough: handle.passthrough,
-      containerPathDigest: sha256Hex(handle.containerPath),
-      repoCount: handle.repos.length,
-    }),
+  })
+  // The existing task write semaphore is a queue, not a rejection boundary.
+  // Acquire the durable workspace fence only after this caller reaches the
+  // short snapshot/create window, and release it before the next waiter enters.
+  // Preparing the effect before `writeSem.run` turned ordinary fan-out into a
+  // resource conflict while the first sibling was merely using its lock turn.
+  return args.writeSem.run(async () => {
+    await effect?.beforeAct()
+    try {
+      const handle = await createNodeIso({
+        appHome: args.appHome,
+        taskId: args.taskId,
+        nodeRunId: args.isoKeyRunId,
+        canonRepos: args.canonRepos,
+        forcedContainerPaths,
+        ...(args.log !== undefined ? { log: args.log } : {}),
+      })
+      effect?.succeed({
+        passthrough: handle.passthrough,
+        containerPathDigest: sha256Hex(handle.containerPath),
+        repoCount: handle.repos.length,
+      })
+      return handle
+    } catch (error) {
+      effect?.fail(error)
+      throw error
+    }
   })
 }
 
@@ -291,28 +301,34 @@ export async function mergeBackAndSettle(args: {
       ...handle.repos.map((repo) => `workspace:${sha256Hex(repo.canonWorktreePath)}`),
     ],
   })
-  effect?.beforeAct()
-  try {
-    // RFC-193 K1（Codex 实现门 P1）：merge 前把 roster 重聚合并写回 handle——
-    // 并发 sibling 可能在本 handle 创建【之后】归档了同一 ignored 路径并已 merge
-    // 进 canonical；canonical 侧（ours）快照若仍用建 handle 时的旧 roster，会漏
-    // 掉 sibling 的文件，3-way merge 把本 run 的版本当 clean add 静默覆写（而非
-    // 报冲突）。此刻 sibling 的 INSERT 已落库（INSERT 先于 merge-back），重聚合
-    // 能看到；并上 extra（本 run 自己的产出）后统一喂给 final 与 ours 两侧。
-    if (!handle.passthrough) {
-      const fresh = await forcedPortPathsForTask(db, handle.taskId)
-      const union = [...new Set([...fresh, ...(args.extraForcedContainerPaths ?? [])])]
-      for (const r of handle.repos) {
-        r.forcedRepoRelPaths = repoRelForcedPaths(union, r.worktreeDirName)
-      }
+  // RFC-193 K1（Codex 实现门 P1）：merge 前把 roster 重聚合并写回 handle——
+  // 并发 sibling 可能在本 handle 创建【之后】归档了同一 ignored 路径并已 merge
+  // 进 canonical；canonical 侧（ours）快照若仍用建 handle 时的旧 roster，会漏
+  // 掉 sibling 的文件，3-way merge 把本 run 的版本当 clean add 静默覆写（而非
+  // 报冲突）。此刻 sibling 的 INSERT 已落库（INSERT 先于 merge-back），重聚合
+  // 能看到；并上 extra（本 run 自己的产出）后统一喂给 final 与 ours 两侧。
+  if (!handle.passthrough) {
+    const fresh = await forcedPortPathsForTask(db, handle.taskId)
+    const union = [...new Set([...fresh, ...(args.extraForcedContainerPaths ?? [])])]
+    for (const r of handle.repos) {
+      r.forcedRepoRelPaths = repoRelForcedPaths(union, r.worktreeDirName)
     }
-    let nodeTrees = args.nodeTrees
-    if (nodeTrees === undefined) {
-      nodeTrees = await snapshotNodeIsoFinal(handle, log)
-      await persistIsoNodeTree(db, nodeRunId, args.repoCount, nodeTrees, handle)
-    }
-    const trees = nodeTrees
-    const merge = await writeSem.run(async () => {
+  }
+  let nodeTrees = args.nodeTrees
+  if (nodeTrees === undefined) {
+    nodeTrees = await snapshotNodeIsoFinal(handle, log)
+    await persistIsoNodeTree(db, nodeRunId, args.repoCount, nodeTrees, handle)
+  }
+  const trees = nodeTrees
+  // Snapshotting stays parallel in each private iso. Only the canonical merge
+  // window is queued. The durable fence now covers that exact window and its
+  // DB settlement, so a sibling waits for normal contention instead of
+  // failing merely because it reached mergeBackAndSettle concurrently.
+  return writeSem.run(async () => {
+    let prepared = false
+    try {
+      await effect?.beforeAct()
+      prepared = effect !== undefined
       const mergeRes = await mergeBackNodeIso(
         handle,
         trees,
@@ -326,30 +342,32 @@ export async function mergeBackAndSettle(args: {
           return { resolved: res.allResolved }
         },
       )
-      if (mergeRes.clean) return { kind: 'merged' as const }
-      const res = await args.conflictResolver(mergeRes.conflicts, handle.containerPath)
-      return res.allResolved
-        ? { kind: 'merged' as const }
-        : { kind: 'conflict-human' as const, detail: res.detail }
-    })
-    if (merge.kind === 'merged') {
-      await transitionMergeState({ db, nodeRunId, event: { kind: 'mark-merged', via } })
-      effect?.succeed({ outcome: 'merged', via, repoCount: handle.repos.length })
-      return { kind: 'merged' }
+      const resolution = mergeRes.clean
+        ? undefined
+        : await args.conflictResolver(mergeRes.conflicts, handle.containerPath)
+      const merge =
+        resolution === undefined || resolution.allResolved
+          ? ({ kind: 'merged' } as const)
+          : ({ kind: 'conflict-human', detail: resolution.detail } as const)
+      if (merge.kind === 'merged') {
+        await transitionMergeState({ db, nodeRunId, event: { kind: 'mark-merged', via } })
+        effect?.succeed({ outcome: 'merged', via, repoCount: handle.repos.length })
+        return { kind: 'merged' }
+      }
+      // RFC-210: persist which submodules are still unresolved BEFORE parking.
+      // The fail-closed gate in completeHumanResolvedConflict reads this back on
+      // resume; without it a crash between park and resume would lose the fact that
+      // a submodule conflict is open, and the parent-level re-probe would find the
+      // parent clean and declare the repo resolved.
+      await persistPendingSubResolves(db, nodeRunId, args.repoCount, handle)
+      await transitionMergeState({ db, nodeRunId, event: { kind: 'park-conflict-human', via } })
+      effect?.succeed({ outcome: 'conflict-human', via, repoCount: handle.repos.length })
+      return { kind: 'conflict-human', detail: merge.detail }
+    } catch (error) {
+      if (prepared) effect?.fail(error, { via, repoCount: handle.repos.length })
+      throw error
     }
-    // RFC-210: persist which submodules are still unresolved BEFORE parking.
-    // The fail-closed gate in completeHumanResolvedConflict reads this back on
-    // resume; without it a crash between park and resume would lose the fact that
-    // a submodule conflict is open, and the parent-level re-probe would find the
-    // parent clean and declare the repo resolved.
-    await persistPendingSubResolves(db, nodeRunId, args.repoCount, handle)
-    await transitionMergeState({ db, nodeRunId, event: { kind: 'park-conflict-human', via } })
-    effect?.succeed({ outcome: 'conflict-human', via, repoCount: handle.repos.length })
-    return { kind: 'conflict-human', detail: merge.detail }
-  } catch (error) {
-    effect?.fail(error, { via, repoCount: handle.repos.length })
-    throw error
-  }
+  })
 }
 
 /**

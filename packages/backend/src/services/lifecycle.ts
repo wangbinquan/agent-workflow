@@ -52,13 +52,13 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
 import {
   assertTaskExecutionContext,
   currentTaskExecutionContext,
+  taskExecutionModule,
   type TaskExecutionContext,
-} from '@/modules/task-execution/application/taskExecutionContext'
-import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
+  withTaskExecutionMutation,
+} from '@/services/taskExecutionParticipants'
 
 const lifecycleLog = createLogger('lifecycle')
 

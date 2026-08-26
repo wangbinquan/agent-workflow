@@ -54,9 +54,11 @@ import { ConflictError, NotFoundError } from '@/util/errors'
 import { deleteSnapshotRefs, removeWorktree } from '@/util/git'
 import { Paths } from '@/util/paths'
 import { createLogger } from '@/util/log'
-import { taskExecutionModule } from '@/modules/task-execution/composition'
-import type { MaintenanceMemberSnapshot } from '@/modules/task-execution/domain/terminalMaintenance'
-import type { TerminalMaintenanceClaim } from '@/modules/task-execution/domain/ownership'
+import {
+  taskExecutionModule,
+  type MaintenanceMemberSnapshot,
+  type TerminalMaintenanceClaim,
+} from '@/services/taskExecutionParticipants'
 
 const log = createLogger('task-delete')
 

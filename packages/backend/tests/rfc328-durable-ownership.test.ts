@@ -306,7 +306,7 @@ describe('RFC-328 exact-token runtime registry', () => {
 })
 
 describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
-  test('local effect generations follow their own retained family, not the task continuation count', () => {
+  test('local effect generations follow their own retained family, not the task continuation count', async () => {
     const database = db()
     seedTask(database, 'task-local-generation')
     const module = createTaskExecutionTestModule('daemon-local-generation')
@@ -335,7 +335,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
       })!
 
     const first = prepare()
-    first.beforeAct()
+    await first.beforeAct()
     first.succeed({ snapshot: 'snapshot-a' })
     expect(
       database
@@ -346,7 +346,7 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
     ).toEqual([0])
 
     const second = prepare()
-    second.beforeAct()
+    await second.beforeAct()
     expect(
       database
         .select({ generation: taskExecutionEffects.operationGeneration })
@@ -915,6 +915,14 @@ describe('RFC-328 successor-daemon effect recovery', () => {
     ).toEqual(['task-process-activated', 'task-process-not-activated', 'task-remote-unknown'])
     database.update(tasks).set({ status: 'interrupted' }).run()
     database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 }).run()
+    // Boot's orphan reaper terminalizes the claimed intent before durable
+    // effect recovery runs. Recovery must bind the historical epoch by
+    // claimedEpoch, not require that its intent still be active.
+    database
+      .update(taskExecutionIntents)
+      .set({ state: 'failed', failureCode: 'daemon-restart', completedAt: 202, updatedAt: 202 })
+      .where(eq(taskExecutionIntents.state, 'claimed'))
+      .run()
 
     const finalized = await finalizeTaskExecutionRecovery({
       db: database,

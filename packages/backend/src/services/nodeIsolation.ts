@@ -38,8 +38,10 @@ import {
   type ResolvedPathState,
 } from '@/services/mergeAgent'
 import { repoRelForcedPaths } from '@/services/portArtifacts'
-import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
-import { currentTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import {
+  createLocalEffectAttemptObserver,
+  currentTaskExecutionContext,
+} from '@/services/taskExecutionParticipants'
 import { sha256Hex } from '@/util/hash'
 // RFC-210. Static import is safe: gitSubmodule imports util/git, util/git reaches
 // gitSubmodule only through a dynamic import, so the edge stays one-way.
@@ -1309,7 +1311,7 @@ export async function discardNodeIso(
           ],
           context,
         })
-  effect?.beforeAct()
+  await effect?.beforeAct()
   let partialFailures = 0
   try {
     for (const r of handle.repos) {

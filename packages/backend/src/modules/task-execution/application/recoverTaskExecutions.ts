@@ -1,7 +1,7 @@
 // RFC-328 — same/new-daemon durable ownership recovery.
 
 import { createHash } from 'node:crypto'
-import { and, eq, inArray, ne } from 'drizzle-orm'
+import { and, eq, inArray, ne } from '@/db/query'
 import type { DbClient } from '@/db/client'
 import {
   nodeRunOutputs,

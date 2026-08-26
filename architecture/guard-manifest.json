@@ -1479,6 +1479,18 @@
       "lines": 196
     },
     {
+      "id": "rfc328-architecture-guards",
+      "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 801,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 566
+    },
+    {
       "id": "rfc329-mcp-surface-guard",
       "file": "packages/backend/tests/architecture/rfc329-mcp-surface-guard.test.ts",
       "runner": "bun",
@@ -1888,14 +1900,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f59248e0edb3722e45bbbe8a7c40d29bff09bc428f26cd5b80bab6912fe41e24",
+    "sourceDigest": "sha256:2ca57770b22824191f065a274fff1384005ce9d3d1d9764961b88163599f174d",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "0bf21a2dabdbd1e0228e5ba937d37481c557b363",
-    "contentDigest": "sha256:c167c4f0e774e5415e12c728e324725a6bd33b81a9e62b8a956d6120ad5e3d1b",
+    "currentSnapshotSha": "9a1f6f642570969f0dd71489b000db68d08d6645",
+    "contentDigest": "sha256:9a7c153ff33e7988f07add6896489a9451e92a0da46bbde87efbf2c06ad59c08",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

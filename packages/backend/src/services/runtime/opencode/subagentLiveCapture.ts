@@ -25,7 +25,7 @@ import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents } from '@/db/schema'
-import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
+import { withTaskExecutionMutation } from '@/services/taskExecutionParticipants'
 import { createLogger, type Logger } from '@/util/log'
 import {
   loadSiblingsCapturedSessionIds,

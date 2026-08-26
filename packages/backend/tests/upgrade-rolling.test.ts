@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 208 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 210 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -505,7 +505,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-324 bump 到 209 with 0209_rfc324_grant_levels：resource_grants 增
     // level（read/write，存量与新行默认 read —— 与 RFC-324 之前 grant 的唯一含义
     // 逐字相同，所以这条迁移零行为变化）、scheduled_tasks 增 acl_revision。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(209)
+    // RFC-328 bump 到 210 with 0210_rfc328_task_execution_ownership：任务执行
+    // owner / intent / effect / fence / maintenance / retained lineage 账本。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(210)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

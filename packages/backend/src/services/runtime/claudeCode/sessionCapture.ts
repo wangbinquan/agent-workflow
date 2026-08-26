@@ -34,7 +34,7 @@ import {
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents } from '@/db/schema'
 import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
-import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
+import { withTaskExecutionMutation } from '@/services/taskExecutionParticipants'
 import type { Logger } from '@/util/log'
 import { parseEvent } from './events'
 

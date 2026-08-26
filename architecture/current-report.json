@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 438,
-    "architectureExceptions": 1010,
-    "backgroundJobs": 210,
-    "crossContextImports": 1030,
-    "facades": 368,
+    "architectureExceptions": 939,
+    "backgroundJobs": 215,
+    "crossContextImports": 959,
+    "facades": 369,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17397,
-    "mutationEntrypoints": 888,
+    "moduleSymbolOwners": 17440,
+    "mutationEntrypoints": 898,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 237,
+    "publicSurfaces": 286,
     "transactionExternalEffects": 243
   },
   "metrics": {
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 836,
+    "backendProductionFiles": 839,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -105,7 +105,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 210,
+    "backgroundEntries": 215,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -128,8 +128,8 @@
       "packages/backend/src/services/task.ts"
     ],
     "directNativeIntervals": 20,
-    "directNativeTimers": 60,
-    "inboundBoundaryEdges": 153,
+    "directNativeTimers": 61,
+    "inboundBoundaryEdges": 92,
     "knownViolations": 37,
     "moduleContexts": [
       {
@@ -178,10 +178,10 @@
       },
       {
         "context": "task-execution",
-        "files": 48
+        "files": 49
       }
     ],
-    "moduleFiles": 324,
+    "moduleFiles": 325,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -204,7 +204,7 @@
         "symbol": "commitDispatchPlan"
       }
     ],
-    "outboundBoundaryEdges": 29,
+    "outboundBoundaryEdges": 23,
     "repoValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -247,10 +247,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 368,
+    "serviceFiles": 369,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f59248e0edb3722e45bbbe8a7c40d29bff09bc428f26cd5b80bab6912fe41e24"
+  "sourceDigest": "sha256:2ca57770b22824191f065a274fff1384005ce9d3d1d9764961b88163599f174d"
 }

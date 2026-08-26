@@ -1648,7 +1648,6 @@ export class SqliteTaskExecutionEffectStore implements TaskExecutionEffectStore 
       .where(
         and(
           eq(taskExecutionIntents.taskId, input.owner.taskId),
-          eq(taskExecutionIntents.state, 'claimed'),
           eq(taskExecutionIntents.claimedEpoch, input.owner.epoch),
         ),
       )
@@ -1656,7 +1655,7 @@ export class SqliteTaskExecutionEffectStore implements TaskExecutionEffectStore 
     if (intent === undefined) {
       throw new TaskExecutionError(
         'task-execution-recovery-required',
-        `task '${input.owner.taskId}' has no claimed intent for recovered epoch`,
+        `task '${input.owner.taskId}' has no intent for recovered epoch`,
       )
     }
     return this.closeOutcomeUnknownAndRelease({

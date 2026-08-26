@@ -60,11 +60,11 @@ import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/
 import { resumeQueuedIntentWorkingSets } from '@/services/intent/dispatcher'
 import { reapOrphanRuns } from '@/services/orphans'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
-import { createExclusiveDaemonLockProof } from '@/modules/task-execution/domain/ownership'
 import {
+  createExclusiveDaemonLockProof,
   finalizeTaskExecutionRecovery,
   prepareTaskExecutionRecovery,
-} from '@/modules/task-execution/application/recoverTaskExecutions'
+} from '@/services/taskExecutionParticipants'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
 import { startAutoRepairLoop } from '@/services/autoRepair'

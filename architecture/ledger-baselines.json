@@ -13,8 +13,18 @@
       "id": "spawn-site-allowlist",
       "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
       "symbol": "ALLOWLIST",
-      "baseline": 14,
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
+      "baseline": 15,
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表",
+      "allowGrowth": {
+        "why": "RFC-328 为 process effect 增加 pre-activation managed launcher；它保留全部既有进程能力，同时确保 durable receipt 先于目标命令执行。"
+      }
+    },
+    {
+      "id": "rfc328-capability-factory-call-sites",
+      "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
+      "symbol": "FACTORY_ALLOWLIST",
+      "baseline": 7,
+      "why": "RFC-328 私有 ownership/proof factory 的精确 production consumer 账本；新增调用点必须逐站审查，不能从 raw task id 或 JSON 构造 authority。"
     },
     {
       "id": "ux-role-dialog-allowlist",
@@ -244,14 +254,14 @@
       "id": "rfc319-e2e-endpoint-coverage",
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
-      "baseline": 96,
+      "baseline": 66,
       "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。（2026-08-25：RFC-319 B76 —— 夜跑 `d366ed4f2` 的实测 journal 显示 B70/B72 那两批 spec 已真实打到 28 条，206 → 178。**这两份账本只在夜跑对账**，前几批只改了 R3 能力账本、漏了这里，是本次红的成因。）（2026-08-25：RFC-319 B84 —— 夜跑 `5eb976fc3`（run 32830821072）实测 journal 显示 B75 那批 spec 已真实打到 6 条：webhook 端点的 GET/PUT/DELETE 与 rotate-url-token、webhook 触发规则的 DELETE、定时任务的 PUT。178 → 172。**再次是「只改了 R3 能力账本、漏了这份」造成的夜跑红**，与 B76 同一成因。）（同批**预对账**：夜跑那份 journal 采自 `5eb976fc3`，在 B80 / B82 / B83 六份新 spec 之前，照现状下次夜跑还会再红一次。于是把那 6 份 spec 在本地按同一套 `AW_E2E_ROUTE_JOURNAL` 开关跑了一遍（57 passed），把命中并进夜跑 journal 后重跑对账，又销掉 8 条：身份/会话面 5 条、`GET /api/users/:id`、`DELETE /api/users/:id`、`GET /api/skills/:id/versions/diff`、`POST /api/workflows/:id/validate-draft`。172 → 164。）（2026-08-26：RFC-319 B93～B100 —— 本轮把基线补齐到与来源逐字相等并继续预对账。B93～B97 那笔（caca2b451）改了来源却没把基线带上：共享工作树上这份文件在我写完与提交之间被并发 session 覆写回旧值，commit-mine 取的是工作树内容，于是来源 147 / 基线 164 直接把 T16 推红。教训：账本类文件改完要立刻提交，并在提交后回读committed内容复核。B98～B100 三份新 spec（27 条用例）本地开 AW_E2E_ROUTE_JOURNAL 跑过（27 passed），再销 13 条：OIDC provider 的 PATCH/DELETE、action-templates 一族七条、automation-policies、code/digital-employees、task-catalog/sources、code/missions。）（2026-08-26：RFC-319 B101 —— WF-52 的配置包导出用例真打到 `GET /api/workflows/:id/export-package`，134 → 133。R2 无变化：本批只加载工作流详情页，账本里剩的六条都是 /code 一族与 /workflows/new、/workgroups/launch。）（2026-08-26：RFC-319 B102 —— AGENT-44/RES-X6 的改名用例真打到三类资源的 rename 端点（agents / mcps / plugins），133 → 130。R2 无变化。）（2026-08-26：RFC-319 B104+B105 —— EVENT-36 的按需观察器用例真打到 `POST /api/event-center/observers/run-due`，130 → 129。R2 无变化：两批只加载已覆盖的页面。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）"
     },
     {
       "id": "rfc319-e2e-route-coverage",
       "file": "architecture/e2e-route-coverage.json",
       "symbol": "uncovered",
-      "baseline": 4,
+      "baseline": 2,
       "why": "RFC-319 R2：默认全量 e2e 跑里从未被作为文档加载过的前端路由（开工时 18/60，其中 14 条在 e2e 源码里被提过却从未真正加载——多半只活在需要 RUN_VISUAL_REGRESSION 才跑的套件里，是典型的假覆盖）。条目数只许降。RFC-323 浏览器用例直达 /code/executors 与两个 Adapter 配置深链并验证重定向，16 → 13。（2026-08-25：RFC-319 B76 —— `rfc319-memory-distill-jobs.spec.ts` 的 MEM-29 真加载了蒸馏任务详情页，13 → 12。）（2026-08-26：RFC-319 B98～B100 —— UX-38 的未知路由用例与 DE-42 的四条兼容重定向真加载了 /code、/code/missions、/code/missions/new、/code/outcomes、/outcomes 五条遗留路由。同批把基线补齐到与来源逐字相等，成因同 R1。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）"
     },
     {
@@ -300,8 +310,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 888,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 898,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-328 新增 durable ownership、effect attempt 与 exact participant mutation entrypoints；全部由 canonical writer/effect 守卫逐项分类，不能通过删除清单掩盖真实写面。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -321,8 +334,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 210,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 215,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-328 把 recovery、process/effect observer 与 execution participant 纳入 daemon lifecycle 清点；新增项均有 exact owner，不是放宽后台任务策略。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -335,7 +351,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1030,
+      "baseline": 959,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -356,22 +372,28 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1010,
+      "baseline": 939,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 368,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
+      "baseline": 369,
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
+      "allowGrowth": {
+        "why": "RFC-328 增加唯一 legacy task-execution participant facade，把潜在 internal ingress 收敛为 exact public edge；新增 facade 是清债而非新增越界。"
+      }
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 237,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 286,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-328 将 execution context、attempt observer、maintenance 与 recovery 的 provider-facing names 归位到 exact public/participants，并保持 capability factory 调用点白名单。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -391,12 +413,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 17397,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 17440,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-328 新增 effect-resource wait、platform query vocabulary 与 exact participant facade，并把 capability declarations 归到 task-execution owner；每个新增 symbol 都有唯一 owner。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f59248e0edb3722e45bbbe8a7c40d29bff09bc428f26cd5b80bab6912fe41e24",
+    "sourceDigest": "sha256:2ca57770b22824191f065a274fff1384005ce9d3d1d9764961b88163599f174d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -409,8 +434,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0bf21a2dabdbd1e0228e5ba937d37481c557b363",
-    "contentDigest": "sha256:54f17eefc5d606477f2a53f545f8bcf0d3bdc5653137c64cca8b14d9e9d74260",
+    "currentSnapshotSha": "9a1f6f642570969f0dd71489b000db68d08d6645",
+    "contentDigest": "sha256:b898e8fd91434d4b8474a0687159550f10c016fe3ad1c27ee06d249a753af9e4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

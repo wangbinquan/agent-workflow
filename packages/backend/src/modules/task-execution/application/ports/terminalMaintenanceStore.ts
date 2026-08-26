@@ -47,7 +47,12 @@ export interface TerminalMaintenanceStore {
 export interface RecoverableTerminalMaintenanceClaim {
   readonly claim: TerminalMaintenanceClaim
   readonly rootTaskId: string
-  readonly state: Exclude<TerminalMaintenanceState, 'completed'>
+  readonly state:
+    | 'claimed'
+    | 'io-complete'
+    | 'db-finalized'
+    | 'cleanup-pending'
+    | 'recovery-required'
   readonly cleanupPlanJson: string
   readonly members: readonly MaintenanceMemberSnapshot[]
 }

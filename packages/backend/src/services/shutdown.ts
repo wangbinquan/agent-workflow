@@ -18,7 +18,7 @@ import { markTaskExecutionShutdownSurvivor, shutdownActiveTaskExecutions } from 
 import { recordRecoveryEvent } from '@/services/recovery'
 import { createLogger } from '@/util/log'
 import { setTaskStatus } from '@/services/lifecycle'
-import { terminalizeTaskExecutionIntentsTx } from '@/modules/task-execution/application/terminalizeExecutionIntent'
+import { terminalizeTaskExecutionIntentsTx } from '@/services/taskExecutionParticipants'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
 const log = createLogger('shutdown')

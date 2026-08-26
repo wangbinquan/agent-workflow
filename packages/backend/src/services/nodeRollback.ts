@@ -28,7 +28,7 @@ import { sha256Hex } from '@/util/hash'
 import { asc, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { taskRepos, tasks } from '@/db/schema'
-import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
+import { createLocalEffectAttemptObserver } from '@/services/taskExecutionParticipants'
 
 export interface RollbackTarget {
   taskId?: string
@@ -160,7 +160,7 @@ export async function rollbackNodeRunWorktrees(
             request: { v: 1, runId: run.id, snapshots: map },
             resourceKeys: target.repos.map((repo) => `workspace:${sha256Hex(repo.worktreePath)}`),
           })
-    effect?.beforeAct()
+    await effect?.beforeAct()
 
     // Phase 2: every snapshot verified — execute the per-repo rollback.
     for (const repo of target.repos) {
@@ -223,7 +223,7 @@ export async function rollbackNodeRunWorktrees(
           request: { v: 1, runId: run.id, snapshot: snap },
           resourceKeys: [`workspace:${sha256Hex(target.worktreePath)}`],
         })
-  effect?.beforeAct()
+  await effect?.beforeAct()
   try {
     await rollbackToSnapshot(target.worktreePath, snap)
     outcome.attempted = true

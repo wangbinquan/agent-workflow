@@ -23,7 +23,7 @@ import type {
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { nodeRuns } from '@/db/schema'
-import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
+import { createLocalEffectAttemptObserver } from '@/services/taskExecutionParticipants'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { createLogger, type Logger } from '@/util/log'
 import { AW_INTERNAL_GIT_IDENTITY, runGit as realRunGit } from '@/util/git'
@@ -205,11 +205,14 @@ export async function runCommitPush(
       repoSlug: params.repoSlug ?? '',
     },
     resourceKeys: [
-      `workspace:${sha256Hex(W)}`,
       `repository:${sha256Hex(`${params.repositoryIdentity ?? W}\u0000${remote}\u0000${params.repoBranch}`)}`,
     ],
   })
-  repositoryEffect?.beforeAct()
+  // Repository publication owns the remote branch turn. The existing short
+  // write semaphore owns only index capture; keeping a workspace fence for the
+  // whole LLM + network transaction would deadlock the nested message agent
+  // and serialize unrelated isolated writers long after the snapshot froze.
+  await repositoryEffect?.beforeAct()
 
   const pushTarget = `${remote}/${params.repoBranch}`
   let sessionId: string | null = null

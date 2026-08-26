@@ -1,16 +1,12 @@
 // RFC-328 — task-owned filesystem/Git logical-effect coordinator.
 
 import { createHash } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq } from '@/db/query'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
 import { taskExecutionModule } from '../composition'
-import {
-  operationFamilyKey,
-  requestHash,
-  type TaskExecutionEffectKind,
-} from '../domain/executionEffect'
+import { operationFamilyKey, requestHash } from '../domain/executionEffect'
 import {
   decodeLineageSlotPath,
   encodeLineageSlotPath,
@@ -18,17 +14,26 @@ import {
 } from '../domain/executionIntent'
 import { currentTaskExecutionContext, type TaskExecutionContext } from './taskExecutionContext'
 import { TaskExecutionError } from './taskExecutionError'
+import { waitForEffectResourceTurn } from './effectResourceWait'
 
 const LOCAL_EFFECT_CLASSIFIER_VERSION = 'rfc328-local-effect-v1'
 const LOCAL_EFFECT_TRANSPORT_VERSION = 'rfc328-local-effect-direct-v1'
+
+export type LocalTaskExecutionEffectKind =
+  | 'workspace-prepare'
+  | 'workspace-rollback'
+  | 'isolation-create'
+  | 'isolation-merge'
+  | 'repository'
+  | 'workspace-cleanup'
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
 export interface LocalEffectAttemptObserver {
-  beforeAct(): void
-  retry(error: unknown, authority: 'convergent' | 'transport-policy'): void
+  beforeAct(): Promise<void>
+  retry(error: unknown, authority: 'convergent' | 'transport-policy'): Promise<void>
   succeed(receipt?: Readonly<Record<string, unknown>>, onSettledTx?: (tx: DbTxSync) => void): void
   fail(error: unknown, receipt?: Readonly<Record<string, unknown>>): void
 }
@@ -43,7 +48,7 @@ export function createLocalEffectAttemptObserver(input: {
   db: DbClient
   taskId: string
   nodeRunId?: string
-  kind: Exclude<TaskExecutionEffectKind, 'process' | 'code-host-mutation' | 'outbound-mutation'>
+  kind: LocalTaskExecutionEffectKind
   stableActionOrdinal: string
   candidateId: string
   request: unknown
@@ -164,40 +169,42 @@ export function createLocalEffectAttemptObserver(input: {
   let nextRetryAuthority: 'none' | 'convergent' | 'transport-policy' = 'none'
 
   return {
-    beforeAct() {
+    async beforeAct() {
       if (prepared !== null) throw new Error(`${input.kind} effect prepared twice`)
-      const next = taskExecutionModule.effects.prepareAndAcquire({
-        db: input.db,
-        token: context.token,
-        intentId: context.intentId,
-        operationKey,
-        executionLineageId,
-        operationFamilyKey: familyKey,
-        // Generation is scoped to the operation family, not to the task's
-        // continuation count. A family first encountered during resume #1 is
-        // still generation 0; a replay of an existing family advances from
-        // its live/retained watermark even after child-row deletion.
-        operationGeneration: taskExecutionModule.effects.nextOperationGeneration({
+      const next = await waitForEffectResourceTurn(() =>
+        taskExecutionModule.effects.prepareAndAcquire({
           db: input.db,
+          token: context.token,
+          intentId: context.intentId,
+          operationKey,
           executionLineageId,
           operationFamilyKey: familyKey,
+          // Generation is scoped to the operation family, not to the task's
+          // continuation count. A family first encountered during resume #1 is
+          // still generation 0; a replay of an existing family advances from
+          // its live/retained watermark even after child-row deletion.
+          operationGeneration: taskExecutionModule.effects.nextOperationGeneration({
+            db: input.db,
+            executionLineageId,
+            operationFamilyKey: familyKey,
+          }),
+          kind: input.kind,
+          requestHash: requestHash(input.request),
+          slotPathJson,
+          slotPathDigest,
+          candidateId: input.candidateId,
+          recoveryClass: 'local-probe-or-actor',
+          classifierVersion: LOCAL_EFFECT_CLASSIFIER_VERSION,
+          transportPolicyVersion: LOCAL_EFFECT_TRANSPORT_VERSION,
+          retryAuthority: nextRetryAuthority,
+          resourceKeys: input.resourceKeys,
         }),
-        kind: input.kind,
-        requestHash: requestHash(input.request),
-        slotPathJson,
-        slotPathDigest,
-        candidateId: input.candidateId,
-        recoveryClass: 'local-probe-or-actor',
-        classifierVersion: LOCAL_EFFECT_CLASSIFIER_VERSION,
-        transportPolicyVersion: LOCAL_EFFECT_TRANSPORT_VERSION,
-        retryAuthority: nextRetryAuthority,
-        resourceKeys: input.resourceKeys,
-      })
+      )
       prepared = { effectId: next.effectId, attemptId: next.attemptId }
       nextRetryAuthority = 'none'
     },
 
-    retry(error, authority) {
+    async retry(error, authority) {
       const message = error instanceof Error ? error.message : String(error)
       settle({
         state: 'retry-authorized',
@@ -209,7 +216,7 @@ export function createLocalEffectAttemptObserver(input: {
       prepared = null
       settled = false
       nextRetryAuthority = authority
-      this.beforeAct()
+      await this.beforeAct()
     },
 
     succeed(receipt = {}, onSettledTx) {
@@ -237,7 +244,7 @@ export async function runTaskLocalEffect<T>(input: {
   db: DbClient
   taskId: string
   nodeRunId?: string
-  kind: Exclude<TaskExecutionEffectKind, 'process' | 'code-host-mutation' | 'outbound-mutation'>
+  kind: LocalTaskExecutionEffectKind
   stableActionOrdinal: string
   candidateId: string
   request: unknown
@@ -247,7 +254,7 @@ export async function runTaskLocalEffect<T>(input: {
   receipt?: (result: T) => Readonly<Record<string, unknown>>
 }): Promise<T> {
   const observer = createLocalEffectAttemptObserver(input)
-  observer?.beforeAct()
+  await observer?.beforeAct()
   try {
     const result = await input.act()
     observer?.succeed(input.receipt?.(result) ?? {})

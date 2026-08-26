@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-08-23",
-    "inboundEdges": 94,
+    "inboundEdges": 92,
     "outboundEdges": 23,
     "registeredFindings": 79,
     "recordedAtShaNote": "采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -3794,15 +3794,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f59248e0edb3722e45bbbe8a7c40d29bff09bc428f26cd5b80bab6912fe41e24",
+    "sourceDigest": "sha256:2ca57770b22824191f065a274fff1384005ce9d3d1d9764961b88163599f174d",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "0bf21a2dabdbd1e0228e5ba937d37481c557b363",
-    "contentDigest": "sha256:cf559ef6c705859e75d14cc501d71d0fe6950b1545752502bcc446d2431d305e",
+    "currentSnapshotSha": "9a1f6f642570969f0dd71489b000db68d08d6645",
+    "contentDigest": "sha256:7ed9b3a60952dac01327d1c93454c7a97a0d3684be6b4f0beba9d7e6ed8f1326",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

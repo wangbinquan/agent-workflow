@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { dbTxSync } from '@/db/txSync'
@@ -153,7 +154,7 @@ function assertMemberQuiescentTx(tx: DbTxSync, member: MaintenanceMemberSnapshot
     .get()
   if (
     task === undefined ||
-    !['done', 'failed', 'canceled', 'interrupted'].includes(task.status) ||
+    !isTerminalTaskStatus(task.status as TaskStatus) ||
     task.revision !== member.taskRevision ||
     task.topologyRevision !== member.topologyRevision
   ) {
