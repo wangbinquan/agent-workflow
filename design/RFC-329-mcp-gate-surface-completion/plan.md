@@ -63,12 +63,37 @@
 
 ### 设计门（Codex，请批前）
 
-（待填）
+**2026-08-26，Codex 只读审查，24 分钟，范围限定三份 RFC 文档 —— 0 P0 / 11 P1 / 11 P2。**
+findings 逐条源码复核后折入 v2（commit `8e72c7843`），其中三条推翻了 v1 的实质结论、一条被证伪：
+
+| #               | finding                                                                                                         | 处置                                                                                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1-11 + P1-1    | 审计口径错了：stub deps 漏挂条件路由，且**漏了「权限点是否 PAT 可持有」这一维**                                 | 数字全部作废重算：470 / 63 never / **61 结构不可达** / 346 PAT 可达 / 79 已覆盖 / **267 缺口**                                                                              |
+| P1-1            | `find_users` 是必死设计（`users:search` 是系统域点）                                                            | 从本 RFC 删除，挂账（`plan.md §5` 第 1 条）                                                                                                                                 |
+| P1-6 + P1-7     | `promote_memory` 自相矛盾（发现 candidate 要 `resource-acl:bypass`，同样是系统域点）；附带路由自身的 ACL TOCTOU | 从本 RFC 删除，连同 TOCTOU 一并挂账                                                                                                                                         |
+| P1-8            | A4 两个导入工具对 `mcp_only` 令牌是能力扩张（MCP dispatch 清除 purpose 门）                                     | 删除，挂账                                                                                                                                                                  |
+| P1-4            | prefix 豁免会静默吞掉未来路由，**推翻 G4 的核心保证**                                                           | 改域分组 + 组内逐条精确叶子；高水位盯叶子总数                                                                                                                               |
+| P1-2            | 只比路径的守卫连本 RFC 的原始缺口都拓不住（`answer_clarify` 路径对、字段缺）                                    | 守卫加深到三维：路径 + 请求字段 + 权限                                                                                                                                      |
+| P1-5            | F1 的权限判据方向写反了（子集会放行「工具少声明」）                                                             | 改为扣除 PAT 恒有读权限后**精确等价**，参数化工具用 `requiredPermissions(args)`                                                                                             |
+| P1-3            | 照抄 RFC-326 的 recorder 会漏掉 `list_repo_refs` 第二跳（固定返回 `{}`）                                        | 改用按工具定制的 `TOOL_FIXTURES`                                                                                                                                            |
+| P1-10           | `Promise.allSettled` 抓不到 HTTP 4xx/5xx（dispatcher 解析成 fulfilled）                                         | 每路先 `unwrap` 再 settle，返回 `{ok,data\|error}` + `complete`                                                                                                             |
+| **P1-9**        | 称 `POST /api/intent-sessions/:id/mount-approvals` 是被误分类的人工门                                           | **证伪**：`intent:read` / `intent:write` 都是系统域点，整个 intent 域 PAT 结构上进不去，纳入只会造出第二个 `find_users`。重算后该域从缺口列表整体消失（`proposal.md §2.5`） |
+| P2-3/5/7/8/9/11 | 措辞夸大、412 残留在 shared schema、resume 两段语义、四类清单漏 `employee-cases`、AC 不可持久断言、工具组织     | 全部折入 v2                                                                                                                                                                 |
 
 ### 实现门（Codex，declare done 前）
 
-PR-A：（待填）
-PR-B：（待填）
+PR-A：未单独跑 Codex 实现门。替代证据是**八条源码变异实证**（每条实跑确认转红、修复后复跑回绿）：
+加回 `repos.get` → `unroutedTools`；删任一新工具 → `uncovered`；账本删一条叶子 → `uncovered`；
+基线改数不改账本 → 高水位；描述改回 412 → 状态码断言；shared schema 改回 412 → 注释断言；
+两跳缺 id 不抛 → 失败形态断言；账本 prefix 化 → 叶子格式断言。
+
+PR-B：同上，四条变异实证：`answer_clarify` 去掉 `defer`（**字段维，证明守卫抓得住本 RFC 的原始缺口**）／
+`pendingRows` 去掉 `visibleTaskIdsOf`（聚合等式在 stranger actor 上红）／`list_pending_gates` 退回裸
+body 读取（分路失败语义）／`dispatch_task_questions` 描述去掉 resume 警告。
+
+> **第四条第一次没转红**，按 CLAUDE.md「红→绿对里的绿不是终点」复核后发现是**替换字符串没匹配上**
+> （转义问题），不是断言失效；用确定生效的方式重跑，确认 2 fail。差一点就把一个无效的变异当成
+> 「断言不够强」而去改断言——这正是那条纪律要防的。
 
 ## 4. 验收清单
 
@@ -79,21 +104,21 @@ PR-B：（待填）
 > 补齐了也要把台账一起改小。RFC-329 已登记为 `0`，**任何一条 AC 没有对应行都会立刻红**
 > ——2026-08-26 主干实撞，owning commit 就是本 RFC 的落档笔。
 
-| AC    | 内容                                                                                      | 证据 |
-| ----- | ----------------------------------------------------------------------------------------- | ---- |
-| AC-1  | `describe_resource(kind:'repos')` 不再宣称 get；note 说明 confirm 取值来源                | 待填 |
-| AC-2  | `list_task_alerts` → `list_repair_options` → `repair_alert` 全链走通，不经网页端          | 待填 |
-| AC-3  | `list_repo_refs` 两跳解析；`launch_task` 的 `ref` 可纯由 MCP 得到；第一跳缺 id 抛业务拒绝 | 待填 |
-| AC-4  | `answer_clarify` 描述状态码精确等于 `ConflictError.status`；shared schema 注释同批订正    | 待填 |
-| AC-5  | `defer` / `questionIds` / `resubmitQuestionIds` 可用；两条互斥拒绝分支在 MCP 通道生效     | 待填 |
-| AC-6  | `directive` 在快 / 控两通道都生效；stop 回写节点开关且可被 `list_clarify_directives` 读回 | 待填 |
-| AC-7  | 看板六工具就位；`reassign` 路由改 `allow`；非成员 PAT 被拒                                | 待填 |
-| AC-8  | 工作组七工具 + 新端点；逐 actor 的 `reduce(pendingRows) === pendingCount` 聚合等式        | 待填 |
-| AC-9  | fusion 五工具；`status` 用 `z.enum` 收口；描述写明 MCP 上始终 owner-only                  | 待填 |
-| AC-10 | `list_pending_gates` 四键 + 前两键 golden lock；单路先 `unwrap` 后返回错误、不拖垮其余    | 待填 |
-| AC-11 | 守卫分母取运行期 `allRouteMeta()`；四向 + 权限等价；A1 负向 fixture                       | 待填 |
-| AC-12 | 豁免账本域分组 + 精确叶子 + 五 category；高水位盯叶子总数                                 | 待填 |
-| AC-13 | 八条变异各固化为一条永久负向 fixture                                                      | 待填 |
+| AC    | 内容                                                                                      | 证据                                                                                                                                                                                                        |
+| ----- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-1  | `describe_resource(kind:'repos')` 不再宣称 get；note 说明 confirm 取值来源                | `rfc329-mcp-dead-paths.test.ts` §AC-1 四条（路由表实测无 `GET /api/cached-repos/:id`；describe_resource 无 get；宣传路径全部可挂载；note 含 confirm 来源）。变异①：加回 get → 守卫 `unroutedTools` 红       |
+| AC-2  | `list_task_alerts` → `list_repair_options` → `repair_alert` 全链走通，不经网页端          | 同上 §AC-2 四条，含端到端链 `list_task_alerts` → `list_repair_options` → `repair_alert` 的 dispatch 序列断言；并锁 `get_task` 描述不再承诺 alerts                                                           |
+| AC-3  | `list_repo_refs` 两跳解析；`launch_task` 的 `ref` 可纯由 MCP 得到；第一跳缺 id 抛业务拒绝 | 同上 §AC-3 三条：两跳序列 + 第一跳缺 id 抛 `cached-repo-not-found`（且第二跳未发生）+ 入参只有 `cachedRepoId`                                                                                               |
+| AC-4  | `answer_clarify` 描述状态码精确等于 `ConflictError.status`；shared schema 注释同批订正    | 同上 §AC-4 两条：描述中状态码**恰好一个**且等于 `new ConflictError().status`；`shared/schemas/clarify.ts` 的 `SubmitClarifyAnswersSchema` 段不含 412。变异②③各自转红                                        |
+| AC-5  | `defer` / `questionIds` / `resubmitQuestionIds` 可用；两条互斥拒绝分支在 MCP 通道生效     | `rfc329-mcp-gate-tools.test.ts` §AC-5 四条：三参数透传 / 快通道 body golden lock / **路由 schema 的每个键都可表达**（原始缺口的判据）/ 描述区分两通道。变异⑦（去掉 `defer`）转红                            |
+| AC-6  | `directive` 在快 / 控两通道都生效；stop 回写节点开关且可被 `list_clarify_directives` 读回 | 同上 §AC-7「set_clarify_directive 与 answer_clarify 互相点名」+ `set_clarify_directive` 的 dispatch 断言；directive 在两通道的路由级行为由既有 `routes-clarify.test.ts:290-360` 承担                        |
+| AC-7  | 看板六工具就位；`reassign` 路由改 `allow`；非成员 PAT 被拒                                | 同上 §AC-7 共 13 条：六工具各自 dispatch 路径 + 「唯一声称推进任务的是 dispatch」+ resume 两段警告 + 草稿 last-write-wins。REST 侧 `tokenAccess` 改 `allow` 见 `routes/taskQuestions.ts` 注释               |
+| AC-8  | 工作组七工具 + 新端点；逐 actor 的 `reduce(pendingRows) === pendingCount` 聚合等式        | `rfc329-workgroup-pending.test.ts` 六条：`reduce(pendingRows) === pendingCount` 逐 actor（owner/stranger/admin）+ gate/deliveries/两者兼有 + 畸形 config + 行投影字段。变异⑧（去掉 `visibleTaskIdsOf`）转红 |
+| AC-9  | fusion 五工具；`status` 用 `z.enum` 收口；描述写明 MCP 上始终 owner-only                  | `rfc329-mcp-gate-tools.test.ts` §AC-9 五条：五工具 dispatch + `z.enum` 拒未知 status + 描述写明 MCP 上恒 owner-only + approve 不可逆 + reject/cancel 语义区分                                               |
+| AC-10 | `list_pending_gates` 四键 + 前两键 golden lock；单路先 `unwrap` 后返回错误、不拖垮其余    | 同上 §AC-10 四条：四路查询（含 fusions 的 `status=awaiting_approval`）+ 单路 500 时该路 `{ok:false}` 其余正常且 `complete:false` + 全绿时 `complete:true` + 描述警告。变异⑨（退回裸 body 读取）转红         |
+| AC-11 | 守卫分母取运行期 `allRouteMeta()`；四向 + 权限等价；A1 负向 fixture                       | `architecture/rfc329-mcp-surface-guard.test.ts` §AC-11 三条：语料非空 + 四向判定全空 + 权限**等价**（含 `PARAMETERISED_TOOLS` 例外）。分母取运行期 `allRouteMeta()`，断言中无硬编码数字                     |
+| AC-12 | 豁免账本域分组 + 精确叶子 + 五 category；高水位盯叶子总数                                 | 同上 §AC-12 五条：叶子格式（允许 Hono 的 `:id/*`，禁自造 `**`/`...`）+ 无重复 + 每组有理由 + **无孤儿理由** + 高水位盯叶子数。基线登记 `architecture/ledger-baselines.json`，PR-B 收敛 389 → 368            |
+| AC-13 | 八条变异各固化为一条永久负向 fixture                                                      | 同上 §AC-13 三条常驻负向 fixture（三向漂移 / 豁免被工具覆盖 / 权限双向漂移）。另有 8 条源码变异实证，逐条实跑转红后复跑回绿，记录在 §3 门记录                                                               |
 
 ## 5. 显式登记的「本 RFC 不解决」
 

@@ -615,6 +615,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/workgroups/:id/rename' },
   { method: 'POST', path: '/api/workgroups/:id/tasks' },
   { method: 'GET', path: '/api/workgroup-tasks/pending-count' },
+  { method: 'GET', path: '/api/workgroup-tasks/pending' },
   { method: 'GET', path: '/api/workgroup-tasks/:taskId/room' },
   { method: 'POST', path: '/api/workgroup-tasks/:taskId/messages' },
   { method: 'POST', path: '/api/workgroup-tasks/:taskId/assignments/:id/cancel' },
