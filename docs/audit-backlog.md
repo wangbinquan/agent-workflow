@@ -3287,8 +3287,22 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
 
 ## RFC-319 B104 起草期撞到的产品缺陷（2026-08-26，意图会话 + 设置分区）
 
-1. **【疑似真缺陷，中高，未写成断言，建议单独立 issue 复核】call-workgroup 节点在 scratch 父任务下
-   永久卡在「发起子任务之前」，且零日志。**
+1. **【~~疑似真缺陷~~ —— 2026-08-26 复核**未能复现**，判定为环境态而非产品缺陷】call-workgroup 节点在
+   scratch 父任务下卡在「发起子任务之前」。**
+   **复核结论（在 `origin/main@b8c24a5c` 全新构建上做）**：scratch 与真仓库两种父任务**都跑得通**——
+   scratch 约 1.0s 内 stamp `child_task_id`、父任务 1.2s 到 `done`；真仓库在 `__repo_prep__` 完成后约
+   0.8s stamp。带上游端口 + 输出节点的完整链（`input → call-workgroup → output`）同样跑通，`result`
+   与 `report` 两个端口都拿到值，子任务的 `spaceKind='inherited'`、`invocationDepth=1`，房间 config 的
+   `goal` 是父侧渲染后的字面量。最终交付的 `e2e/rfc319-workgroup-dynamic-and-calls.spec.ts` 的
+   `beforeAll` 每次都真跑这条链，**连续 7 次运行全部在 120s 预算内到 `done`**（每次约 9s）。
+   **因此 WG-42 / TASK-X4b 正常落地，没有留 gap。**
+   原始报告的现象（`status='running'`、`child_task_id=null`、零 WARN/ERROR）与两处**静默等待**吻合，
+   留作将来复现时的定位起点：`services/scheduler.ts:3533` 的 `budget.acquire`（daemon 级单例
+   `ChildTaskBudget`，排队时不打日志，只有 60s 后的 `child-task slot wait exceeded 60s`——原报告称
+   「跑满 120s 零 WARN」，若属实则**基本排除**这条）与 `:3566` 的 `createIsoUnderLock`（per-task 写
+   信号量，同样不打日志）。**以现有证据看更可能是那次运行的环境态（配额被占 / 单例脏），而不是产品缺陷。**
+   下面保留原始诊断作为复现时的对照。
+   ~~原判定：~~
    起草侧全走产品接口复现：建普通 agent → 建 `mode:'leader_worker'` 且成员只含该 agent 的工作组 →
    建只含 `{kind:'call-workgroup', workgroupName, workgroupId, goalTemplate}` + `output` 的工作流 →
    `POST /api/tasks { workflowId, name, scratch: true }`。
@@ -3656,3 +3670,44 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
    - **INTENT-X5 的「六种空状态」只有四种可驱动**：按第 2 条，`applied` 不可达；`goal` 在产品里只作为
      fallback 出现，照字面驱动会得到一条永远红或恒真的用例。B112 只锁 generating / clarifying /
      error / archived 四种。
+
+## RFC-319 B113（2026-08-26，工作组动态编排）：三条建议改判 + 一处用户面观察
+
+1. **【建议改判：产品不支持，非覆盖缺口】REPO-42（SSH 协议仓库接入 / deploy key）今天做不了，
+   且 `e2e/git-protocols.spec.ts:192-198` 那个空壳建议删掉。** 取源判据：
+   - `packages/backend/src/util/git.ts:34-52` 的 `nonInteractiveGitEnv()` 只是在**环境里已有的**
+     `process.env.GIT_SSH_COMMAND` 上叠 `BatchMode=yes` / `StrictHostKeyChecking=accept-new`；
+     **没有任何 per-repo / per-task 的私钥或 `GIT_SSH_COMMAND` 注入点**。
+   - 全仓 `grep -rni "deploy.key|deployKey|ssh_key|sshKey|privateKey" packages/backend/src` → **零命中**，
+     没有任何存储 / 接口 / 界面让用户登记一把 key。
+   - `packages/backend/src/cli/doctor.ts:307-324` 明写 ssh 是**可选**前置。
+   - `packages/shared/src/git-url.ts:126-140,280-282` 只是**解析** scp / ssh-uri 形态并归一，不代表可用。
+   - 那个 `test.describe.skip('RFC-054 W3-4 — SSH path (deploy-key, follow-up)')` **用例体是空的**，
+     却占着 `packages/backend/tests/test-suite-policy.test.ts:67` 的 `'e2e/git-protocols.spec.ts#skip': 2`
+     棘轮名额。删它的同时要把该值改成 1。
+2. **【建议改判：已退役、不再要求覆盖】DE-41（遗留任务详情的运维动作）在任何全新 daemon 里都不可达。**
+   `cli/start.ts:798` 调 `activateDigitalEmployeeOsWriter(db, legacyMissionDrain)` **不传 options**，而
+   `modules/digital-employee/composition/writerCutover.ts:64` 的默认是 `legacyAdmissionsEnabled = false`；
+   全仓 `grep legacyAdmissions` 只有这 3 处，**没有任何配置项 / env / 接口**能打开它。于是
+   `routes/developmentMissions.ts:284-289` 的 `POST /api/code/missions` 永远 409
+   `legacy-mission-admission-retired`。Mission 行的唯一另一个生产者
+   （`modules/development-automation/infrastructure/childMissionParticipant.ts:81`）需要一个**已存在的父
+   Mission**。结论：新 daemon 里造不出任何 Mission 行 ⇒ `/code/missions/{id}` 打开是空的，取消 / 重试 /
+   移交 / 关联 MR / 需求刷新 / 反问作答 / 证据浏览**全部无对象**。只有手写 SQL 种行才点得到，那不是用户面。
+3. **【账本措辞与实现不符】WG-27 的服务端链路早有 API-only 覆盖。**
+   `e2e/workgroup-matrix.spec.ts:472` 的
+   `dynamic-workflow: reject generated graph, regenerate a two-agent DAG, then preserve literal downstream input`
+   已把「生成→驳回→带反馈重生成→审批→执行生成的 DAG」整条链锁死，但它**全程 `apiFetch`、一次浏览器都不开**。
+   B113 的 WG-27 补的是**另一层**：编排面 UI（相位卡 / 只读预览 / 驳回对话框的必填闸 / 工作流画布何时才肯
+   渲染真图），这一层此前只有 jsdom + mock fetch 的
+   `packages/frontend/tests/dynamic-workflow-panel.test.tsx` 在守，连一次真实 `/dw-confirm` 都没发过。
+   **evidence 只登记 B113 这条**（带 `@nightly`，与 tier 一致）；`workgroup-matrix.spec.ts` 那条不带
+   `@nightly`，两条混登会触发 `tierWiringMismatches` 的「同一条能力被劈在两条腿上」。
+4. **【用户面观察，未写成断言】同一条 call-workgroup 父任务在 `/tasks` 列表里出现两遍。**
+   `/api/task-catalog` 为它返回两行——一行 `sourceId=workgroup` / `matchKind='context'` /
+   `qualifyingChildCount=1`（挂着子树），一行 `sourceId=workflow` / `matchKind='self'` /
+   `qualifyingChildCount=0`；而 `routes/tasks.tsx:169-185` 的 `dedupeItems` 用 `${sourceId}:${id}` 作键，
+   **两行 sourceId 不同、去不掉重**。界面上同一条任务连着出现两行（一行 chip 是 Workgroup、一行是 Workflow），
+   且两行都带「1 child tasks」计数。看代码这是**按来源镜头分行**的有意设计，不是 bug，但对用户而言
+   「同一条任务列了两遍」确实费解。TASK-X4b 因此把定位器显式收窄到「带子树的那一行」并注明原因。
+   参见 `routes/tasks.tsx:183-185` + `services/taskOperations.ts:676-726`。

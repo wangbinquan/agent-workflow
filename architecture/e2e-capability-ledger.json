@@ -1903,8 +1903,13 @@
       "title": "Git 冲突场景的有界修复与 CAS 合并推送（数字员工链路）",
       "risk": "P1",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/rfc310-digital-employee-conflict-system-mock-e2e.test.ts",
+          "test": "real target advance -> conflict Attention -> bounded repair -> CAS merge commit"
+        }
+      ]
     },
     {
       "id": "RES-07",
@@ -7973,8 +7978,13 @@
       "title": "【拆自 TASK-X4】call-workgroup 产生的子任务，以及真实子任务在列表里展开成父子树 —— call-workgroup 在 e2e 里零命中，展开只对 page.route 假数据点过",
       "risk": "P2",
       "tier": "pr",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-dynamic-and-calls.spec.ts",
+          "test": "RFC-319 TASK-X4b: call-workgroup 产生的子任务只作为父任务的子行出现——根层一格都没有，收起再展开还是同一棵树，点进去还能顺着父链接回来"
+        }
+      ]
     },
     {
       "id": "TASK-X5",
@@ -9239,8 +9249,13 @@
       "title": "dynamic-workflow 模式全链（生成图 → 人工驳回 → 携带反馈重生成 → 审批 → 执行生成的 DAG）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-dynamic-and-calls.spec.ts",
+          "test": "RFC-319 WG-27: 生成的图先停在编排面待确认（工作流画布这时只给占位）→ 空评论驳不下去 → 带反馈重生成出两节点图 → 审批把生成的 DAG 换进快照并跑到 done @nightly"
+        }
+      ]
     },
     {
       "id": "WG-28",
@@ -9248,8 +9263,13 @@
       "title": "把生成的动态工作流存为正式工作流资源（dw-save-as-workflow）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-dynamic-and-calls.spec.ts",
+          "test": "RFC-319 WG-28: 把生成的图另存为正式工作流——名字空着一次请求都不发，存下来的定义与预览逐节点一致，随后驳回会把这条「已保存」回执清掉 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-29",
@@ -9331,8 +9351,17 @@
       "title": "子工作组调用节点（工作流里的 call-workgroup：冻结 roster → 起子任务 → result 回填父端口）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-dynamic-and-calls.spec.ts",
+          "test": "RFC-319 WG-42: 工作流里的 call-workgroup 起出真正的子任务——冻结的花名册与章程随子任务走，goalTemplate 里的 {{端口}} 在父侧渲染成子任务的字面目标 @nightly"
+        },
+        {
+          "file": "e2e/rfc319-workgroup-dynamic-and-calls.spec.ts",
+          "test": "RFC-319 WG-42: 子工作组的结果锚回填父端口——call 行的 result 逐字等于子任务 leader 的完成决议，并顺着边流到父工作流的输出节点 @nightly"
+        }
+      ]
     },
     {
       "id": "WG-43",
@@ -9410,8 +9439,13 @@
       "title": "【补漏】房间实时更新（每任务 WS 通道上的 wg.message.created / wg.assignment.updated / wg.gate.updated 三帧 → 失效 workgroupRoomKey 重取聚合）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-workgroup-dynamic-and-calls.spec.ts",
+          "test": "RFC-319 WG-X5: 房间三帧实时刷新——留言 / 派单卡 / 完成门都在一次房间取数刚落地之后 5 秒内自己出现，不靠 15 秒兜底轮询也不靠刷新 @nightly"
+        }
+      ]
     },
     {
       "id": "AGENT-02",
@@ -12648,17 +12682,11 @@
     }
   ],
   "gapIds": [
-    "REPO-43",
     "MEM-49",
     "OPS-X3",
     "OPS-X5",
-    "TASK-X4b",
     "UX-19",
     "UX-47",
-    "WG-27",
-    "WG-28",
-    "WG-42",
-    "WG-X5",
     "DE-41",
     "EVENT-28",
     "EVENT-X4",
