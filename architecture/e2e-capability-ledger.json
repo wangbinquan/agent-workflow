@@ -11359,9 +11359,22 @@
       "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
       "title": "stop 超时/强杀时以非零退出码诚实上报「不是优雅停机」",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/rfc319-stop-not-graceful.test.ts",
+          "test": "drain 超时：结论是 timeout / graceful=false，lock 不删、进程不强杀"
+        },
+        {
+          "file": "packages/backend/tests/rfc319-stop-not-graceful.test.ts",
+          "test": "真跑一次 CLI：停不下来时退出码非零，输出里一个字都不说 stopped"
+        },
+        {
+          "file": "packages/backend/tests/rfc319-stop-not-graceful.test.ts",
+          "test": "反向自证：没有 daemon 时 stop 退出码是 0（否则上面那条「非零」是恒真的）"
+        }
+      ]
     },
     {
       "id": "OPS-008",
@@ -12690,7 +12703,6 @@
     "DE-41",
     "EVENT-28",
     "EVENT-X4",
-    "OPS-007",
     "OPS-X9",
     "REPO-42",
     "UX-45",
