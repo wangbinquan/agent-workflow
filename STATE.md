@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft，2026-08-26；批准前零生产改动）：[RFC-329 MCP 人工门完整面、死路径修复与全域「路由⟷工具」守卫](design/RFC-329-mcp-gate-surface-completion/proposal.md)**
+> —— 起于用户「现在 agent-workflow 的 API 和 MCP 有回答完反问提交反问的能力吗，包括提交并继续反问和提交并停止反问」。源码对账：**REST 完整**
+> （`POST /api/clarify/:nodeRunId/answers` 收 `directive:'continue'|'stop'`，stop 的语义是下一轮 prompt 注入 STOP CLARIFYING **且不再追加**
+> `<workflow-clarify>` 协议块，agent 想再问也问不出来）；**MCP 只有整轮快通道**（`answer_clarify` 有 directive，但表达不了 `defer` /
+> `questionIds` / `resubmitQuestionIds`，逐题分派摸不到）。用户随即要求「一并审视补齐」。
+> **审计是动态跑出来的**：`createApp` 挂出的全量 **440 条路由** × 29 个工具**实际 dispatch 到的路径**（recording dispatcher 真调 handler，
+> 收敛工具遍历 11 kind × 6 method）双向 diff ⇒ 工具只够得着 **77 条**，刨掉 50 条 `tokenAccess:'never'` 后**313 条 PAT 可达路由无工具**。
+> 四类：①**五条死路径**（`RESOURCE_ROUTES.repos.get` 指向 `GET /api/cached-repos/:id`——**该路由从未注册**，实测恒 404，`describe_resource`
+> 还照表宣称支持；`repair_alert`/`list_repair_options` 必需的 `alertId` 在 MCP 上拿不到，因为 `GET /api/tasks/:id` 走 `serializeTaskFor` 不含
+> alerts；`launch_task` 的 `ref`/`collaboratorUserIds` 无从解析；批量导入查不到进度；`answer_clarify` 描述写 412 实为 409）②**人工门不全**
+> （反问控制通道 + 看板 6 条 + 开关 2 条 + 草稿 1 条、工作组任务门 9 条、fusion 审批门 7 条、memory 人审发布门，全部无工具——
+> `list_pending_gates` 自称 everything waiting on a human，实际只 dispatch reviews + clarify 两路）③资源域运维面（挂账）④六个新产品域 ~200 条。
+> 用户 2026-08-26 逐项拍板 D1–D8：范围取 **①+②**；形态**延续 RFC-326 具名工具 + 双向守卫**（不扩 method 枚举、不等 W4-A）；
+> `reassign` 的 `never` 判为遗漏改 `allow`；`repos.get` **从 MCP 表删掉**（不补 REST 路由）；工作组门**新增 `GET /api/workgroup-tasks/pending`**
+> （`pendingCount` 内部早已算出完整候选行却只返回三个数字，重构出 `pendingRows` 共用）；`defer` 半边**扩既有 `answer_clarify`**；
+> memory 只补 `promote`；**守卫做全域 440 条 + 逐组带理由的豁免账本**并接进 `ledger-baselines.json` 高水位（只降不升）。
+> 关键判断：③④真正的问题不是「没有工具」而是「没人看管」——`MCP_RESOURCE_KINDS` 的漂移锁只认 `MATRIX_RESOURCES` 的 11 类，
+> 六个新域的权限点不在其中，于是新域可以无声长出来而没有任何机器说一句「MCP 没跟」。全域守卫是本 RFC 唯一能保证「不会有第三次」的东西。
+> 交付面：修 5 条死路径 + 补 27 个具名工具（29→56，`toolsFor()` 按令牌权限过滤故实际暴露面由令牌决定）+ 2 处 REST 改动 + 1 条全域守卫。
+> 零 DB 迁移、零前端改动、零 wire breaking。**当前待设计门 + 用户批准，批准前零生产改动。**
+
 > 🚧 **进行中 RFC（Draft，2026-08-26；批准前零生产改动）：[RFC-328 持久化任务执行所有权与 fencing（P0-D）](design/RFC-328-durable-task-execution-ownership-fence/proposal.md)**
 > —— 承接 RFC-294 当前路线 N2：当前同步点 `b5467bbce`（`HEAD=origin/main`；相对 task-execution production 基线 `b8c24a5c`，`packages/{backend,shared,frontend}/src` 零 production delta）。基线仍由 `InMemoryTaskDriverSupervisor`、`driverLease` 与 task status CAS
 > 三套进程内/业务状态机制共同维持 execution ownership，人工 resume/retry 又会在新 driver attach 前执行 reap、Git rollback、placeholder mint，PID receipt 写库失败仍被 best-effort 吞掉。RFC-328 终态以 owners / intents / effects / effect_attempts / effect_fences /
