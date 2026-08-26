@@ -960,7 +960,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 506
+      "lines": 588
     },
     {
       "id": "rfc301-task-launch-origin-architecture",
@@ -1888,7 +1888,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:184ed2aabf96be9f67a872cd90d46667dbbc3c393d09a837cc0193cdd8fa1bab",
+    "sourceDigest": "sha256:9200e802603ac418d143efdc15198b4e75fbe14871284e55b0f56b4f1315bf9c",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },

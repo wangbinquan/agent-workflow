@@ -34,6 +34,7 @@ import {
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents } from '@/db/schema'
 import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
+import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
 import type { Logger } from '@/util/log'
 import { parseEvent } from './events'
 
@@ -242,16 +243,24 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
     operation: string,
   ): Promise<void> => {
     if (rows.length === 0) return
-    await retrySqliteWrite(() => opts.db.insert(nodeRunEvents).values(rows), {
-      onRetry: (retry) => {
-        opts.log.warn('sqlite-write-retry', {
-          nodeRunId: opts.nodeRunId,
-          runtime: 'claude-code',
-          operation,
-          ...retry,
-        })
+    await retrySqliteWrite(
+      () =>
+        withTaskExecutionMutation({
+          db: opts.db,
+          taskId: opts.taskId,
+          run: (tx) => tx.insert(nodeRunEvents).values(rows).run(),
+        }),
+      {
+        onRetry: (retry) => {
+          opts.log.warn('sqlite-write-retry', {
+            nodeRunId: opts.nodeRunId,
+            runtime: 'claude-code',
+            operation,
+            ...retry,
+          })
+        },
       },
-    })
+    )
   }
   try {
     let captured = 0

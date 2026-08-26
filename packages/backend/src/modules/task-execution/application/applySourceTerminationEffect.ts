@@ -4,7 +4,8 @@ import type { TaskStatus } from '@agent-workflow/shared'
 import { and, asc, eq, lt } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
+import { taskExecutionOwners, tasks } from '@/db/schema'
+import { dbTxSync } from '@/db/txSync'
 import {
   sourceTerminationTargetDisposition,
   taskStopProjection,
@@ -17,23 +18,22 @@ import type {
   TaskSourceTerminationParticipant,
   TaskSourceTerminationReceipt,
 } from '@/modules/task-execution/public/participants'
-import {
-  awaitTaskDriverStopped,
-  emitTaskStatus,
-  finalizeCanceledTaskWithoutDriver,
-  getTask,
-  requestTaskDriverStop,
-} from '@/services/task'
+import { emitTaskStatus, finalizeCanceledTaskWithoutDriver, getTask } from '@/services/task'
 import { setTaskStatus } from '@/services/lifecycle'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { ConflictError } from '@/util/errors'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import { terminalizeTaskExecutionIntentsTx } from './terminalizeExecutionIntent'
+import type { RuntimeStopTicket } from '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry'
+import type { OwnershipToken } from '@/modules/task-execution/domain/ownership'
 
 // RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
 const CANCELABLE: readonly TaskStatus[] = CANCELABLE_TASK_STATUSES
 
 type AppliedTarget = {
   receipt: TaskSourceTerminationReceipt
-  stopCause: TaskStopCause | null
+  stopTicket: RuntimeStopTicket | null
+  ownerWithoutLocalToken: boolean
   statusChanged: boolean
 }
 
@@ -95,6 +95,10 @@ async function applyOne(
 
     const priorStatus = row.status
     if ((row.effectRevision ?? -1) >= input.streamRevision) {
+      const owner = taskExecutionModule.ownership.read(db, taskId)
+      const token =
+        owner?.state === 'claimed' ? taskExecutionModule.runtimeRegistry.tokenForOwner(owner) : null
+      const repeatedCause = terminalCause(input, row.parentTaskId)
       return {
         receipt: {
           taskId,
@@ -109,7 +113,11 @@ async function applyOne(
           releaseOutcome: input.kind === 'clear-closed' ? 'not-required' : 'pending',
           errorCode: null,
         },
-        stopCause: terminalCause(input, row.parentTaskId),
+        stopTicket:
+          token !== null && repeatedCause !== null
+            ? taskExecutionModule.runtimeRegistry.requestStop(token, repeatedCause)
+            : null,
+        ownerWithoutLocalToken: owner?.state === 'claimed' && token === null,
         statusChanged: false,
       }
     }
@@ -145,7 +153,8 @@ async function applyOne(
           releaseOutcome: 'not-required',
           errorCode: null,
         },
-        stopCause: null,
+        stopTicket: null,
+        ownerWithoutLocalToken: false,
         statusChanged: false,
       }
     }
@@ -156,22 +165,54 @@ async function applyOne(
     const cause = terminalCause(input, row.parentTaskId)!
     const projection = taskStopProjection(cause)
     let statusChanged = false
+    let exactToken: OwnershipToken | null = null
+    let ownerWithoutLocalToken = false
     if (disposition === 'cancel') {
       try {
+        const now = Date.now()
+        let candidateToken: OwnershipToken | null = null
+        let candidateMissing = false
         await setTaskStatus({
           db,
           taskId,
           to: 'canceled',
           allowedFrom: CANCELABLE,
           extra: {
-            finishedAt: Date.now(),
+            finishedAt: now,
             errorSummary: projection.summary,
             errorMessage: `${projection.code}: delivery=${input.deliveryId} revision=${input.streamRevision}`,
             sourceTerminationFence: nextFence,
             sourceTerminationEffectRev: input.streamRevision,
           },
+          onTransitionTx: (tx) => {
+            const owner = tx
+              .select()
+              .from(taskExecutionOwners)
+              .where(eq(taskExecutionOwners.taskId, taskId))
+              .get()
+            if (owner?.state === 'claimed') {
+              candidateToken = taskExecutionModule.runtimeRegistry.tokenForOwner(owner)
+              candidateMissing = candidateToken === null
+              taskExecutionModule.ownership.revokeExactTx({
+                tx,
+                owner,
+                expectedRevision: owner.revision,
+                now,
+                recoveryCode: 'terminal-control-source',
+              })
+            }
+            terminalizeTaskExecutionIntentsTx({
+              tx,
+              taskId,
+              state: 'canceled',
+              failureCode: projection.code,
+              now,
+            })
+          },
           reason: `source-termination-${input.kind}`,
         })
+        exactToken = candidateToken
+        ownerWithoutLocalToken = candidateMissing
         statusChanged = true
       } catch (error) {
         if (!(error instanceof ConflictError)) throw error
@@ -182,23 +223,79 @@ async function applyOne(
           .limit(1)
           .all()[0]
         if (winner !== undefined && CANCELABLE.includes(winner.status)) throw error
-        db.update(tasks)
+        dbTxSync(db, (tx) => {
+          tx.update(tasks)
+            .set({
+              sourceTerminationFence: nextFence,
+              sourceTerminationEffectRev: input.streamRevision,
+            })
+            .where(eq(tasks.id, taskId))
+            .run()
+          const owner = tx
+            .select()
+            .from(taskExecutionOwners)
+            .where(eq(taskExecutionOwners.taskId, taskId))
+            .get()
+          if (owner?.state === 'claimed') {
+            exactToken = taskExecutionModule.runtimeRegistry.tokenForOwner(owner)
+            ownerWithoutLocalToken = exactToken === null
+            taskExecutionModule.ownership.revokeExactTx({
+              tx,
+              owner,
+              expectedRevision: owner.revision,
+              now: Date.now(),
+              recoveryCode: 'terminal-control-source-race-winner',
+            })
+          }
+          terminalizeTaskExecutionIntentsTx({
+            tx,
+            taskId,
+            state: 'canceled',
+            failureCode: projection.code,
+            now: Date.now(),
+          })
+        })
+      }
+    } else {
+      dbTxSync(db, (tx) => {
+        const now = Date.now()
+        tx.update(tasks)
           .set({
             sourceTerminationFence: nextFence,
             sourceTerminationEffectRev: input.streamRevision,
           })
           .where(eq(tasks.id, taskId))
           .run()
-      }
-    } else {
-      db.update(tasks)
-        .set({
-          sourceTerminationFence: nextFence,
-          sourceTerminationEffectRev: input.streamRevision,
+        const owner = tx
+          .select()
+          .from(taskExecutionOwners)
+          .where(eq(taskExecutionOwners.taskId, taskId))
+          .get()
+        if (owner?.state === 'claimed') {
+          exactToken = taskExecutionModule.runtimeRegistry.tokenForOwner(owner)
+          ownerWithoutLocalToken = exactToken === null
+          taskExecutionModule.ownership.revokeExactTx({
+            tx,
+            owner,
+            expectedRevision: owner.revision,
+            now,
+            recoveryCode: 'terminal-control-source-terminal',
+          })
+        }
+        terminalizeTaskExecutionIntentsTx({
+          tx,
+          taskId,
+          state: 'canceled',
+          failureCode: projection.code,
+          now,
         })
-        .where(eq(tasks.id, taskId))
-        .run()
+      })
     }
+
+    const stopTicket =
+      exactToken === null
+        ? null
+        : taskExecutionModule.runtimeRegistry.requestStop(exactToken, cause)
 
     return {
       receipt: {
@@ -209,7 +306,8 @@ async function applyOne(
         releaseOutcome: 'pending',
         errorCode: null,
       },
-      stopCause: cause,
+      stopTicket,
+      ownerWithoutLocalToken,
       statusChanged,
     }
   })
@@ -255,22 +353,27 @@ export function createTaskSourceTerminationParticipant(
             const task = await getTask(db, row.id)
             if (task !== null) emitTaskStatus(task)
           }
-          if (applied.stopCause !== null) {
-            const ticket = requestTaskDriverStop(row.id, applied.stopCause)
-            if (ticket === 'no-active-owner') {
-              await finalizeCanceledTaskWithoutDriver(db, row.id)
-              receipt = { ...receipt, releaseOutcome: 'no-active-owner' }
-            } else {
-              const stopped = await awaitTaskDriverStopped(ticket)
-              receipt =
-                stopped.kind === 'released'
-                  ? { ...receipt, releaseOutcome: 'released' }
-                  : {
-                      ...receipt,
-                      releaseOutcome: 'unreaped',
-                      errorCode: stopped.code,
-                    }
+          if (applied.stopTicket !== null) {
+            const stopped = await taskExecutionModule.runtimeRegistry.awaitStopped(
+              applied.stopTicket,
+            )
+            receipt =
+              stopped.kind === 'released'
+                ? { ...receipt, releaseOutcome: 'released' }
+                : {
+                    ...receipt,
+                    releaseOutcome: 'unreaped',
+                    errorCode: stopped.code,
+                  }
+          } else if (applied.ownerWithoutLocalToken) {
+            receipt = {
+              ...receipt,
+              releaseOutcome: 'unreaped',
+              errorCode: 'task-execution-recovery-required',
             }
+          } else if (input.kind !== 'clear-closed') {
+            await finalizeCanceledTaskWithoutDriver(db, row.id)
+            receipt = { ...receipt, releaseOutcome: 'no-active-owner' }
           }
           receipts.set(row.id, receipt)
         }

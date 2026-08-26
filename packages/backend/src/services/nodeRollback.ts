@@ -24,11 +24,15 @@
 
 import { gitCommitExists, rollbackToSnapshot } from '@/util/git'
 import type { Logger } from '@/util/log'
+import { sha256Hex } from '@/util/hash'
 import { asc, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { taskRepos, tasks } from '@/db/schema'
+import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
 
 export interface RollbackTarget {
+  taskId?: string
+  db?: DbClient
   repoCount: number
   /** Single-repo worktree; for multi-repo this is the container dir (never rolled back in retry mode). */
   worktreePath: string
@@ -70,7 +74,7 @@ export async function loadRollbackTarget(
     repoRows.length > 0
       ? repoRows.map((r) => ({ worktreePath: r.worktreePath, worktreeDirName: r.worktreeDirName }))
       : [{ worktreePath: t.worktreePath, worktreeDirName: '' }]
-  return { repoCount: t.repoCount, worktreePath: t.worktreePath, repos }
+  return { taskId, db, repoCount: t.repoCount, worktreePath: t.worktreePath, repos }
 }
 
 export async function rollbackNodeRunWorktrees(
@@ -143,6 +147,21 @@ export async function rollbackNodeRunWorktrees(
     // RFC-108 T7: dry-run stops here — existence verified, nothing reset.
     if (opts.checkOnly) return outcome
 
+    const effect =
+      target.taskId === undefined || target.db === undefined
+        ? undefined
+        : createLocalEffectAttemptObserver({
+            db: target.db,
+            taskId: target.taskId,
+            nodeRunId: run.id,
+            kind: 'workspace-rollback',
+            stableActionOrdinal: 'workspace-rollback',
+            candidateId: 'node-snapshot-rollback',
+            request: { v: 1, runId: run.id, snapshots: map },
+            resourceKeys: target.repos.map((repo) => `workspace:${sha256Hex(repo.worktreePath)}`),
+          })
+    effect?.beforeAct()
+
     // Phase 2: every snapshot verified — execute the per-repo rollback.
     for (const repo of target.repos) {
       const sha = map[repo.worktreeDirName] ?? ''
@@ -162,6 +181,14 @@ export async function rollbackNodeRunWorktrees(
           error: err instanceof Error ? err.message : String(err),
         })
       }
+    }
+    if (outcome.failures.length === 0) {
+      effect?.succeed({ attempted: outcome.attempted, repoCount: target.repos.length })
+    } else {
+      effect?.fail(new Error(outcome.failures.map((failure) => failure.message).join('; ')), {
+        attempted: outcome.attempted,
+        repoCount: target.repos.length,
+      })
     }
     return outcome
   }
@@ -183,6 +210,20 @@ export async function rollbackNodeRunWorktrees(
     }
     return outcome
   }
+  const effect =
+    target.taskId === undefined || target.db === undefined
+      ? undefined
+      : createLocalEffectAttemptObserver({
+          db: target.db,
+          taskId: target.taskId,
+          nodeRunId: run.id,
+          kind: 'workspace-rollback',
+          stableActionOrdinal: 'workspace-rollback',
+          candidateId: 'node-snapshot-rollback',
+          request: { v: 1, runId: run.id, snapshot: snap },
+          resourceKeys: [`workspace:${sha256Hex(target.worktreePath)}`],
+        })
+  effect?.beforeAct()
   try {
     await rollbackToSnapshot(target.worktreePath, snap)
     outcome.attempted = true
@@ -194,6 +235,13 @@ export async function rollbackNodeRunWorktrees(
     log.warn('node-run rollback failed', {
       nodeRunId: run.id,
       error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  if (outcome.failures.length === 0) {
+    effect?.succeed({ attempted: outcome.attempted })
+  } else {
+    effect?.fail(new Error(outcome.failures.map((failure) => failure.message).join('; ')), {
+      attempted: outcome.attempted,
     })
   }
   return outcome

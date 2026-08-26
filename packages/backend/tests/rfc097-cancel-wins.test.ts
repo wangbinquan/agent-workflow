@@ -274,8 +274,9 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     )
     const start = source.indexOf('async function releaseTaskDriverAndFinalizeWorkspace')
     const body = source.slice(start, source.indexOf('function depsUnreapedProcessCode', start))
-    expect(body.indexOf('taskDriverRegistry.controllerOf(taskId)')).toBeGreaterThan(-1)
-    expect(body.indexOf('taskDriverRegistry.controllerOf(taskId)')).toBeLessThan(
+    expect(body.indexOf('taskDriverRegistry.tokenForTask(taskId)')).toBeGreaterThan(-1)
+    expect(body.indexOf('taskDriverRegistry.controllerFor(token)')).toBeGreaterThan(-1)
+    expect(body.indexOf('taskDriverRegistry.controllerFor(token)')).toBeLessThan(
       body.indexOf('depsUnreapedProcessCode'),
     )
   })

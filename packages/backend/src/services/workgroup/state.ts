@@ -7,7 +7,7 @@
 //            pattern (blind writes are a bug, not a style choice)
 //   - pause: setPauseReason — single writer (the engine)
 //   - dw:    setDwState — complete DwState checkpoint, zod-validated; the
-//            confirm/reject phase flip MUST ride the resume ownership CAS via
+//            confirm/reject phase flip MUST ride the resume admission CAS via
 //            resumeDynamicWorkflowExecution's onClaim transaction (design-gate
 //            P1: a standalone phase write strands awaiting-review tasks)
 //

@@ -77,6 +77,7 @@ import {
 } from 'drizzle-orm'
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { isAbsolute, join, relative } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -92,6 +93,10 @@ import {
   nodeRuns,
   runtimeSessionLeases,
   taskCollaborators,
+  taskExecutionIntents,
+  taskExecutionEffectAttempts,
+  taskExecutionEffects,
+  taskExecutionOwners,
   taskRepos,
   taskSpaceNodes,
   tasks,
@@ -119,18 +124,38 @@ import {
   sourceTerminationRevivalError,
   type TaskStopCause,
 } from '@/modules/task-execution/domain/sourceTermination'
-import { InMemoryTaskDriverSupervisor } from '@/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor'
-import type {
-  TaskDriverStopResult,
-  TaskDriverStopTicket,
-} from '@/modules/task-execution/ports/taskDriverSupervisor'
+import type { RuntimeStopTicket as TaskDriverStopTicket } from '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry'
+import {
+  DEFAULT_OWNERSHIP_HEARTBEAT_MS,
+  DEFAULT_OWNERSHIP_LEASE_MS,
+  taskExecutionModule,
+} from '@/modules/task-execution/composition'
+import {
+  createVerifiedOutcomeUnknownClosure,
+  createVerifiedStopProof,
+  ownershipTokenKey,
+  type OwnershipToken,
+} from '@/modules/task-execution/domain/ownership'
+import {
+  createTaskExecutionContext,
+  runWithTaskExecutionContext,
+  type TaskExecutionContext,
+} from '@/modules/task-execution/application/taskExecutionContext'
+import {
+  canonicalJson,
+  type TaskExecutionIntentKind,
+  type TaskExecutionIntentSource,
+} from '@/modules/task-execution/domain/executionIntent'
+import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
+import { submitTaskContinuationTx } from '@/modules/task-execution/application/submitTaskContinuation'
+import { terminalizeTaskExecutionIntentsTx } from '@/modules/task-execution/application/terminalizeExecutionIntent'
+import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   setNodeRunStatus,
   setTaskStatus,
   transitionTaskStatusByEvent,
-  trySetTaskStatus,
   setNodeRunStatusTx,
   enqueueTaskLifecycleEventTx,
 } from '@/services/lifecycle'
@@ -248,29 +273,56 @@ export async function prepareWorkflowTriggerLaunch(args: {
 
 const log = createLogger('task')
 
-/**
- * Process-local registry of in-flight task AbortControllers. Used by
- * cancelTask to interrupt the running scheduler/runner pipeline.
- *
- * Survives only within this daemon process. On daemon restart, in-flight
- * tasks are reconciled by the startup orphan scan (P-4-07) — out of scope
- * for M1.
- */
-const taskDriverRegistry = new InMemoryTaskDriverSupervisor()
+const taskDriverRegistry = taskExecutionModule.runtimeRegistry
+const testActiveControllers = new Map<string, AbortController>()
+const ownerHeartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
 
 const DRIVER_ATTACHABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(['pending', 'running'])
+
+function continuationSource(
+  deps: StartTaskDeps,
+  kind: TaskExecutionIntentKind,
+): TaskExecutionIntentSource {
+  if (kind === 'gate-continuation') return 'internal'
+  if (deps.actorUserId !== undefined && deps.actorUserId !== SYSTEM_USER_ID) return 'rest'
+  if (deps.scheduledTaskId !== undefined) return 'scheduler'
+  return deps.internalSource !== undefined || deps.callLaunch !== undefined ? 'internal' : 'auto'
+}
+
+/**
+ * Submit the canonical continuation in the SAME transaction as the lifecycle
+ * admission CAS.  The caller supplies a stable id before entering the
+ * transaction so a lost CAS cannot leak an orphan wake or side effect.
+ */
+function submitContinuationIntentTx(input: {
+  tx: DbTxSync
+  taskId: string
+  intentId: string
+  kind: TaskExecutionIntentKind
+  source: TaskExecutionIntentSource
+  actorUserId: string | null
+  payload: Readonly<Record<string, unknown>>
+  now: number
+  advanceOperationGeneration: boolean
+}): void {
+  submitTaskContinuationTx(input.tx, input)
+}
 
 /**
  * RFC-303: driver ownership and source termination share the same per-task
  * coordinator.  A terminal fence that commits first rejects the attach; an
- * attach that wins first becomes visible to requestTaskDriverStop before the
+ * attach that wins first becomes visible to exact-token terminal control before the
  * coordinator is released.
  */
 async function tryAttachTaskDriver(
   db: DbClient,
   taskId: string,
   controller: AbortController,
-): Promise<'attached' | 'rejected-status-or-source-fence'> {
+  requestedIntentId?: string,
+): Promise<
+  | Readonly<{ kind: 'attached'; executionContext: TaskExecutionContext }>
+  | Readonly<{ kind: 'rejected-status-or-source-fence' }>
+> {
   return withTaskReviewMutationLock(taskId, async () => {
     const row = db
       .select({ status: tasks.status, sourceTerminationFence: tasks.sourceTerminationFence })
@@ -281,13 +333,84 @@ async function tryAttachTaskDriver(
     if (
       row === undefined ||
       !DRIVER_ATTACHABLE_STATUSES.has(row.status) ||
-      row.sourceTerminationFence !== null ||
-      !taskDriverRegistry.tryAttach(taskId, controller)
+      row.sourceTerminationFence !== null
     ) {
-      return 'rejected-status-or-source-fence'
+      return { kind: 'rejected-status-or-source-fence' }
     }
-    return 'attached'
+    const intentId =
+      requestedIntentId ??
+      db
+        .select({ id: taskExecutionIntents.id })
+        .from(taskExecutionIntents)
+        .where(
+          and(eq(taskExecutionIntents.taskId, taskId), eq(taskExecutionIntents.state, 'pending')),
+        )
+        .orderBy(asc(taskExecutionIntents.createdAt))
+        .limit(1)
+        .all()[0]?.id
+    if (intentId === undefined) return { kind: 'rejected-status-or-source-fence' }
+
+    const claimed = taskExecutionModule.claim({ db, intentId })
+    let attached: ReturnType<typeof taskDriverRegistry.tryAttach>
+    try {
+      attached = taskDriverRegistry.tryAttach({
+        token: claimed.token,
+        intentId,
+        permit: claimed.permit,
+        controller,
+      })
+    } finally {
+      taskExecutionModule.claimGate.leave(claimed.permit)
+    }
+    if (attached !== 'attached') {
+      // The sticky-stop path has already closed the supplied controller.  The
+      // owner was either revoked by terminal control or has no runtime handle;
+      // leave it for the proof-backed closer instead of silently attaching.
+      return { kind: 'rejected-status-or-source-fence' }
+    }
+    startOwnerHeartbeat(db, claimed.token, controller)
+    return {
+      kind: 'attached',
+      executionContext: createTaskExecutionContext({ intentId, token: claimed.token, db }),
+    }
   })
+}
+
+function startOwnerHeartbeat(
+  db: DbClient,
+  token: OwnershipToken,
+  controller: AbortController,
+): void {
+  const key = ownershipTokenKey(token)
+  const existing = ownerHeartbeatTimers.get(key)
+  if (existing !== undefined) clearInterval(existing)
+  const timer = setInterval(() => {
+    try {
+      taskExecutionModule.ownership.heartbeat({
+        db,
+        token,
+        now: Date.now(),
+        leaseMs: DEFAULT_OWNERSHIP_LEASE_MS,
+      })
+    } catch (error) {
+      controller.abort('task-execution-stale-owner')
+      log.warn('durable task owner heartbeat was fenced', {
+        taskId: token.taskId,
+        epoch: token.epoch,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }, DEFAULT_OWNERSHIP_HEARTBEAT_MS)
+  timer.unref?.()
+  ownerHeartbeatTimers.set(key, timer)
+}
+
+function activeTaskController(taskId: string): AbortController | undefined {
+  const token = taskDriverRegistry.tokenForTask(taskId)
+  return (
+    (token === null ? null : taskDriverRegistry.controllerFor(token)) ??
+    testActiveControllers.get(taskId)
+  )
 }
 
 /** RFC-300: release the in-process scheduler owner before touching its
@@ -302,16 +425,121 @@ async function releaseTaskDriverAndFinalizeWorkspace(
   // compensation finally). Check ownership before touching DB: after the real
   // owner released, a test/daemon shutdown may close this handle or a successor
   // may already own the task, and the stale callback has no evidence to read.
-  if (taskDriverRegistry.controllerOf(taskId) !== controller) return
+  const token = taskDriverRegistry.tokenForTask(taskId)
+  if (token === null || taskDriverRegistry.controllerFor(token) !== controller) return
+  const intentId = taskDriverRegistry.intentFor(token)
+  if (intentId === null) return
   const unreaped = depsUnreapedProcessCode(db, taskId)
   if (
-    !taskDriverRegistry.release(
-      taskId,
+    !taskDriverRegistry.release({
+      token,
       controller,
-      unreaped === null ? { kind: 'released' } : { kind: 'unreaped', code: unreaped },
-    )
+      result: unreaped === null ? { kind: 'released' } : { kind: 'unreaped', code: unreaped },
+    })
   ) {
     return
+  }
+  const timer = ownerHeartbeatTimers.get(ownershipTokenKey(token))
+  if (timer !== undefined) clearInterval(timer)
+  ownerHeartbeatTimers.delete(ownershipTokenKey(token))
+  const stopResult = await taskDriverRegistry.awaitStopped({
+    token,
+    tokenKey: ownershipTokenKey(token),
+  })
+  const owner = taskExecutionModule.ownership.read(db, taskId)
+  if (owner !== null && owner.epoch === token.epoch) {
+    if (stopResult.kind === 'released') {
+      const verifiedAt = Date.now()
+      const stopProof = createVerifiedStopProof({
+        taskId,
+        ownerRevision: owner.revision,
+        epoch: token.epoch,
+        evidenceDigest: stopResult.evidenceDigest,
+        verifiedAt,
+      })
+      // A cancellation/shutdown revokes the worker before it can write its
+      // final process settlement. Once the exact registry handle is stopped,
+      // use the durable pre-activation receipt to resolve that process attempt
+      // as known instead of turning an ordinary cancel into actor-required
+      // outcome ambiguity.
+      taskExecutionModule.effects.resolveQuiescedManagedProcesses({
+        db,
+        authority: 'exact-stop',
+        token,
+        expectedRevision: owner.revision,
+        proof: stopProof,
+        quiescenceEvidenceDigest: stopResult.evidenceDigest,
+        now: verifiedAt,
+      })
+      const unresolvedEffectIds = [
+        ...new Set(
+          db
+            .select({ effectId: taskExecutionEffects.id })
+            .from(taskExecutionEffectAttempts)
+            .innerJoin(
+              taskExecutionEffects,
+              eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
+            )
+            .where(
+              and(
+                eq(taskExecutionEffects.taskId, taskId),
+                eq(taskExecutionEffects.state, 'open'),
+                inArray(taskExecutionEffectAttempts.state, [
+                  'prepared',
+                  'acting',
+                  'recovery-required',
+                ]),
+              ),
+            )
+            .all()
+            .map((row) => row.effectId),
+        ),
+      ].sort()
+      if (unresolvedEffectIds.length > 0) {
+        const quiescenceDigest = createHash('sha256')
+          .update(
+            canonicalJson({
+              v: 1,
+              taskId,
+              epoch: token.epoch,
+              runtimeStopEvidence: stopResult.evidenceDigest,
+              unresolvedEffectIds,
+            }),
+          )
+          .digest('hex')
+        taskExecutionModule.effects.closeOutcomeUnknownAndRelease({
+          db,
+          token,
+          intentId,
+          proof: createVerifiedOutcomeUnknownClosure({
+            taskId,
+            ownerRevision: owner.revision,
+            epoch: token.epoch,
+            quiescenceDigest,
+            unresolvedEffectIds,
+            verifiedAt,
+          }),
+          now: verifiedAt,
+        })
+      } else {
+        taskExecutionModule.ownership.releaseAfterStop({
+          db,
+          token,
+          intentId,
+          proof: stopProof,
+          now: verifiedAt,
+        })
+      }
+    } else {
+      taskExecutionModule.ownership.markRecoveryRequired({
+        db,
+        token,
+        expectedRevision: owner.revision,
+        code: stopResult.code,
+        evidenceDigest: stopResult.evidenceDigest,
+        now: Date.now(),
+      })
+    }
   }
   await finishClaimedWebhookWorkspacePrune(db, taskId)
 }
@@ -330,20 +558,21 @@ function depsUnreapedProcessCode(db: DbClient, taskId: string): string | null {
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's
  *  scheduler-liveness preflight. */
 export function isTaskActive(taskId: string): boolean {
-  return taskDriverRegistry.has(taskId)
+  return taskDriverRegistry.hasTask(taskId) || testActiveControllers.has(taskId)
 }
 
 /** RFC-222 — test-only: inject/clear the in-memory active-task set so the delete
  *  front-gate ('task-active') can be exercised without a live scheduler loop. */
 export function __setActiveTaskForTesting(taskId: string | undefined): void {
   taskDriverRegistry.clearForTesting()
-  if (taskId !== undefined) taskDriverRegistry.tryAttach(taskId, new AbortController())
+  testActiveControllers.clear()
+  if (taskId !== undefined) testActiveControllers.set(taskId, new AbortController())
 }
 
 /** Test-only: register one specific controller without clearing sibling task
  *  drivers, so parent/child cancellation lock ordering can be exercised. */
 export function __registerActiveTaskForTesting(taskId: string, controller: AbortController): void {
-  taskDriverRegistry.tryAttach(taskId, controller)
+  testActiveControllers.set(taskId, controller)
 }
 
 /**
@@ -356,23 +585,82 @@ export function __registerActiveTaskForTesting(taskId: string, controller: Abort
  * checkpoints can tell a daemon shutdown (→ interrupted + daemon-restart,
  * resumable) apart from a user cancel (no-arg abort → canceled by user).
  */
-export function abortAllActiveTasks(reason?: string): string[] {
-  return taskDriverRegistry.abortAll(reason)
+export function abortAllActiveTasks(reason: string): string[] {
+  const tickets = taskDriverRegistry.abortAll(reason)
+  for (const controller of testActiveControllers.values()) controller.abort(reason)
+  return [...tickets.map((ticket) => ticket.token.taskId), ...testActiveControllers.keys()]
 }
 
-/** RFC-303 task-execution adapter used only by the source-termination
- * participant. Callers receive an exact owner ticket, never the controller. */
-export function requestTaskDriverStop(
-  taskId: string,
-  cause: TaskStopCause,
-): TaskDriverStopTicket | 'no-active-owner' {
-  return taskDriverRegistry.requestStop(taskId, cause)
+/**
+ * RFC-328 daemon shutdown admission protocol.  Seal first, drain every
+ * claim→attach permit, then stop an exact token snapshot and perform a final
+ * generation sweep.  The returned ids are the only local handles that did not
+ * prove stopped inside the caller's budget.
+ */
+export async function shutdownActiveTaskExecutions(
+  reason: string,
+  budgetMs: number,
+): Promise<readonly string[]> {
+  if (reason.length === 0) throw new Error('task execution shutdown requires a reason')
+  const tickets = await taskExecutionModule.dispose(reason)
+  for (const controller of testActiveControllers.values()) controller.abort(reason)
+  const boundedBudget = Math.max(0, budgetMs)
+  if (tickets.length > 0 && boundedBudget > 0) {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        Promise.all(tickets.map((ticket) => taskDriverRegistry.awaitStopped(ticket))),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, boundedBudget)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }
+  // A handle may have attached and released while the snapshot was stopping;
+  // the sealed gate means no new claim can start, so one final exact sweep is
+  // complete rather than an open-ended taskId poll.
+  const survivors = taskDriverRegistry.activeTokens()
+  for (const token of survivors) taskDriverRegistry.requestStop(token, reason)
+  return [...survivors.map((token) => token.taskId), ...testActiveControllers.keys()]
 }
 
-export function awaitTaskDriverStopped(
-  ticket: TaskDriverStopTicket,
-): Promise<TaskDriverStopResult> {
-  return taskDriverRegistry.awaitStopped(ticket)
+/** Move an exact same-daemon shutdown survivor behind durable recovery. */
+export function markTaskExecutionShutdownSurvivor(db: DbClient, taskId: string): void {
+  const token = taskDriverRegistry.tokenForTask(taskId)
+  if (token === null) return
+  let owner = taskExecutionModule.ownership.read(db, taskId)
+  if (owner === null || owner.epoch !== token.epoch) return
+  try {
+    if (owner.state === 'claimed') {
+      owner = taskExecutionModule.ownership.revokeExact({
+        db,
+        owner: {
+          taskId: owner.taskId,
+          ownerId: owner.ownerId,
+          daemonGeneration: owner.daemonGeneration,
+          epoch: owner.epoch,
+        },
+        expectedRevision: owner.revision,
+        now: Date.now(),
+        recoveryCode: 'daemon-shutdown-survivor',
+      })
+    }
+    if (owner.state === 'revoked') {
+      taskExecutionModule.ownership.markRecoveryRequired({
+        db,
+        token,
+        expectedRevision: owner.revision,
+        code: 'daemon-shutdown-survivor',
+        now: Date.now(),
+      })
+    }
+  } catch (error) {
+    if (!(error instanceof TaskExecutionError) || error.code !== 'task-execution-stale-owner') {
+      throw error
+    }
+  }
 }
 
 /** RFC-303: a terminal effect may cancel a task that has no process-local
@@ -2895,6 +3183,7 @@ async function startTaskImpl(
   const headBaseCommit = head?.baseCommit ?? baseCommit
 
   const now = Date.now()
+  let launchIntentId: string | null = null
   try {
     await deps.workflowLaunchCommitHook?.(
       workflowLaunchHookEvent('materialized-before-task-commit', workflow, space),
@@ -2948,9 +3237,24 @@ async function startTaskImpl(
       let launchOrigin = rootLaunchOrigin
       let catalogVisibility: TaskCatalogVisibility = deps.catalogVisibility ?? 'public'
       let sourceTerminationSnapshot = deps.sourceTerminationSnapshot ?? null
+      let executionLineageId = taskId
+      let continuationSlotKey = 'task-root'
+      let operationGeneration = 0
+      let lineageSlotPath: Array<{
+        stableNodeKey: string
+        frozenOccurrenceKey: string
+        workflowRevision: number | null
+      }> = [
+        {
+          stableNodeKey: 'task-root',
+          frozenOccurrenceKey: taskId,
+          workflowRevision: workflow.version,
+        },
+      ]
       if (deps.callLaunch !== undefined) {
         const parent = tx
           .select({
+            id: tasks.id,
             status: tasks.status,
             launchOrigin: tasks.launchOrigin,
             catalogVisibility: tasks.catalogVisibility,
@@ -2958,6 +3262,8 @@ async function startTaskImpl(
             sourceTerminationLaunchRev: tasks.sourceTerminationLaunchRev,
             sourceTerminationFence: tasks.sourceTerminationFence,
             sourceTerminationEffectRev: tasks.sourceTerminationEffectRev,
+            executionLineageId: tasks.executionLineageId,
+            lineageSlotPathJson: tasks.lineageSlotPathJson,
           })
           .from(tasks)
           .where(eq(tasks.id, deps.callLaunch.parentTaskId))
@@ -2989,6 +3295,42 @@ async function startTaskImpl(
                 fence: parent.sourceTerminationFence,
                 effectRevision: parent.sourceTerminationEffectRev,
               }
+        const parentRun = tx
+          .select({
+            continuationSlotKey: nodeRuns.continuationSlotKey,
+            lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
+            operationGeneration: nodeRuns.operationGeneration,
+          })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, deps.callLaunch.parentNodeRunId))
+          .get()
+        executionLineageId = parent.executionLineageId ?? parent.id
+        continuationSlotKey =
+          parentRun?.continuationSlotKey ?? `legacy-call:${deps.callLaunch.parentNodeRunId}`
+        operationGeneration = parentRun?.operationGeneration ?? 0
+        const inheritedPathRaw = parentRun?.lineageSlotPathJson ?? parent.lineageSlotPathJson
+        try {
+          const parsed: unknown = inheritedPathRaw === null ? null : JSON.parse(inheritedPathRaw)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            lineageSlotPath = parsed as typeof lineageSlotPath
+          }
+        } catch {
+          lineageSlotPath = [
+            {
+              stableNodeKey: 'task-root',
+              frozenOccurrenceKey: executionLineageId,
+              workflowRevision: null,
+            },
+          ]
+        }
+        lineageSlotPath = [
+          ...lineageSlotPath,
+          {
+            stableNodeKey: 'child-task',
+            frozenOccurrenceKey: continuationSlotKey,
+            workflowRevision: workflow.version,
+          },
+        ]
       }
       if (launchOrigin === null) {
         throw new Error('task launch origin remained unresolved before initial INSERT')
@@ -3135,6 +3477,49 @@ async function startTaskImpl(
                   .from(tasks)
                   .where(eq(tasks.id, deps.callLaunch.parentTaskId))
                   .get()?.rootTaskId ?? deps.callLaunch.parentTaskId),
+          executionLineageId,
+          lineageSlotPathJson: JSON.stringify(lineageSlotPath),
+        })
+        .run()
+
+      launchIntentId = ulid()
+      const launchPayloadJson = JSON.stringify({ v: 1, workflowId: workflow.id })
+      tx.insert(taskExecutionIntents)
+        .values({
+          id: launchIntentId,
+          taskId,
+          kind: 'launch',
+          state: earlyError === null ? 'pending' : 'failed',
+          source:
+            deps.callLaunch !== undefined || deps.internalSource !== undefined
+              ? 'internal'
+              : deps.scheduledTaskId !== undefined ||
+                  deps.webhookFireId !== undefined ||
+                  deps.eventDeliveryId !== undefined
+                ? 'scheduler'
+                : 'rest',
+          requestHash: createHash('sha256')
+            .update(
+              JSON.stringify({
+                kind: 'launch',
+                taskId,
+                workflowId: workflow.id,
+                workflowVersion: workflow.version,
+                continuationSlotKey,
+                operationGeneration,
+              }),
+            )
+            .digest('hex'),
+          payloadJson: launchPayloadJson,
+          executionLineageId,
+          continuationSlotKey,
+          slotPathJson: JSON.stringify(lineageSlotPath),
+          operationGeneration,
+          expectedTaskRevision: 1,
+          failureCode: earlyError === null ? null : 'launch-materialization-failed',
+          createdAt: now,
+          completedAt: earlyError === null ? null : now,
+          updatedAt: now,
         })
         .run()
 
@@ -3294,7 +3679,11 @@ async function startTaskImpl(
   // RFC-287 G7：AbortController 必须在**行落库之后、准备开始之前**注册——准备是
   // 后台推进的第一步，若此刻还没注册，用户在「正在准备仓库」阶段点取消就取消不到
   // 任何东西（而那恰恰是最想取消的阶段：一个拉不动的大仓）。
-  if ((await tryAttachTaskDriver(deps.db, taskId, controller)) !== 'attached') {
+  const attachedDriver =
+    launchIntentId === null
+      ? { kind: 'rejected-status-or-source-fence' as const }
+      : await tryAttachTaskDriver(deps.db, taskId, controller, launchIntentId)
+  if (attachedDriver.kind !== 'attached') {
     // Silent until now, and the silence is the problem: the row exists, the
     // caller gets a Task back, and NOTHING ever runs it. Whoever launched it
     // sees a task that stays pending for good with no error anywhere — which is
@@ -3318,19 +3707,21 @@ async function startTaskImpl(
    * 调用方不得再往下走调度。
    */
   const runRepoPreparation = async (): Promise<boolean> => {
-    const r = await runDeferredRepoPreparation({
-      deps,
-      input,
-      appHome,
-      controller,
-      taskId,
-      prepTaskId: deferredTaskId as string,
-      task,
-      space,
-      ownership,
+    return await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
+      const r = await runDeferredRepoPreparation({
+        deps,
+        input,
+        appHome,
+        controller,
+        taskId,
+        prepTaskId: deferredTaskId as string,
+        task,
+        space,
+        ownership,
+      })
+      preparedTask = r.preparedTask
+      return r.ok
     })
-    preparedTask = r.preparedTask
-    return r.ok
   }
 
   /**
@@ -3352,6 +3743,7 @@ async function startTaskImpl(
       ...runtimeConfigOpts(deps),
       log,
       signal: controller.signal,
+      executionContext: attachedDriver.executionContext,
     })
       .catch((err) => {
         log.error('runTask threw', {
@@ -3402,6 +3794,7 @@ async function startTaskImpl(
               errorSummary: `repository preparation crashed: ${msg}`,
               errorMessage: msg,
             },
+            executionContext: attachedDriver.executionContext,
           })
         } catch (inner) {
           // 任务已被取消/已推进——保留既有终态，不覆写（与准备失败分支同口径）。
@@ -3456,13 +3849,20 @@ async function startTaskImpl(
  * the old comment here misdescribed).
  */
 async function rollbackNodeRunForResume(
+  db: DbClient,
   task: Task,
   run: { id: string; preSnapshot: string | null; preSnapshotReposJson: string | null },
   log: ReturnType<typeof createLogger>,
   opts?: { checkOnly?: boolean },
 ): Promise<RollbackOutcome> {
   return await rollbackNodeRunWorktrees(
-    { repoCount: task.repoCount, worktreePath: task.worktreePath, repos: task.repos },
+    {
+      taskId: task.id,
+      db,
+      repoCount: task.repoCount,
+      worktreePath: task.worktreePath,
+      repos: task.repos,
+    },
     run,
     { resetOnEmptySnapshot: false, ...(opts?.checkOnly ? { checkOnly: true } : {}) },
     log,
@@ -3472,7 +3872,7 @@ async function rollbackNodeRunForResume(
 /**
  * RFC-108 T6 (AR-15): fail CLEAN with 410 if a resumable task's worktree is
  * gone (e.g. `worktreeAutoGc` reclaimed a still-`failed`/`interrupted` task —
- * the gc.ts blindspot) BEFORE the ownership CAS flips the row to pending.
+ * the gc.ts blindspot) BEFORE the continuation-admission CAS flips the row to pending.
  * Otherwise resumeKick CAS-flips to pending then warn-and-continues into a
  * scheduler kick whose cwd no longer exists (a generic 500). Mirrors
  * getTaskDiff's worktree-missing guard (single vs multi-repo).
@@ -3645,6 +4045,7 @@ async function reapRunBeforeWorktreeReset(
     pid: number | null
     startedAt: number | null
     spawnBinaryPath: string | null
+    spawnLaunchNonce?: string | null
   },
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
   deps: StartTaskDeps,
@@ -3732,6 +4133,8 @@ export async function cancelTask(
      * (call node fails with `child-canceled`).
      */
     cascadeFromParent?: boolean
+    /** Internal exact parent id for the structured stop cause. */
+    cascadeParentTaskId?: string
   } = {},
 ): Promise<Task> {
   // Bun SQLite can do this preflight synchronously, preserving the legacy
@@ -3753,30 +4156,8 @@ export async function cancelTask(
     )
   }
 
-  const controller = taskDriverRegistry.controllerOf(id)
-  if (controller !== undefined) {
-    controller.abort()
-    // Wait OUTSIDE the review/cancel coordinator. The scheduler may currently
-    // be inside dispatchReviewNode and must be allowed to finish that critical
-    // section before its cancelTaskRow can acquire the same coordinator and
-    // land the terminal CAS + synchronous human-gate sweep.
-    const deadline = Date.now() + 5000
-    while (Date.now() < deadline) {
-      const reread = await getTask(db, id)
-      if (
-        reread !== null &&
-        !(CANCELABLE_TASK_STATUSES as readonly string[]).includes(reread.status)
-      ) {
-        break
-      }
-      // The registered driver settled without a terminal write (for example,
-      // it parked just before seeing abort). There is nothing left to wait for;
-      // the locked fallback below is now the authoritative closer.
-      if (taskDriverRegistry.controllerOf(id) !== controller) break
-      await Bun.sleep(50)
-    }
-  }
-
+  let stopTicket: TaskDriverStopTicket | null = null
+  let controlCanceledNodeRuns: Array<{ id: string; nodeId: string }> = []
   const committed = await withTaskReviewMutationLock(id, async () => {
     // Re-read only after acquiring the linearization point. A decision,
     // dispatch, scheduler cancel or competing terminal writer may have won
@@ -3786,10 +4167,6 @@ export async function cancelTask(
       throw new NotFoundError('task-not-found', `task '${id}' not found`)
     }
     if ((CANCELABLE_TASK_STATUSES as readonly string[]).includes(current.status)) {
-      // A controller can be attached after the lock-external snapshot (for
-      // example decision-resume racing cancel). Abort it, but do not wait while
-      // holding the coordinator: the terminal CAS makes its later writes lose.
-      taskDriverRegistry.controllerOf(id)?.abort()
       // A non-coordinator lifecycle writer can still move between two
       // cancelable states in setTaskStatus's read→CAS window. Do not interpret
       // that CAS loss as cancellation success: re-read and retry until the row
@@ -3802,21 +4179,100 @@ export async function cancelTask(
             `task '${id}' kept changing between cancelable states while canceling; retry`,
           )
         }
-        await trySetTaskStatus({
-          db,
-          taskId: id,
-          to: 'canceled',
-          allowedFrom: CANCELABLE_TASK_STATUSES,
-          extra: {
-            finishedAt: Date.now(),
-            errorSummary: 'canceled by user',
-            errorMessage:
-              opts.cascadeFromParent === true
-                ? 'canceled-by-parent-cascade'
-                : 'no active scheduler at cancel time',
-          },
-          reason: 'cancelTask-fallback',
-        })
+        const now = Date.now()
+        let candidateStopToken: OwnershipToken | null = null
+        let candidateCanceledNodeRuns: Array<{ id: string; nodeId: string }> = []
+        try {
+          await setTaskStatus({
+            db,
+            taskId: id,
+            to: 'canceled',
+            allowedFrom: CANCELABLE_TASK_STATUSES,
+            extra: {
+              finishedAt: now,
+              errorSummary: 'canceled by user',
+              errorMessage:
+                opts.cascadeFromParent === true
+                  ? 'canceled-by-parent-cascade'
+                  : 'no active scheduler at cancel time',
+            },
+            onTransitionTx: (tx) => {
+              // Once terminal control revokes the worker epoch, that worker is
+              // intentionally unable to stamp its own final node status. The
+              // same control transaction therefore owns the node projection;
+              // later stale callbacks can only lose their CAS/fence.
+              candidateCanceledNodeRuns = tx
+                .update(nodeRuns)
+                .set({
+                  status: 'canceled',
+                  finishedAt: now,
+                  errorMessage:
+                    opts.cascadeFromParent === true
+                      ? 'canceled-by-parent-cascade'
+                      : 'canceled by user',
+                })
+                .where(
+                  and(
+                    eq(nodeRuns.taskId, id),
+                    inArray(nodeRuns.status, [
+                      'pending',
+                      'running',
+                      'awaiting_review',
+                      'awaiting_human',
+                    ]),
+                  ),
+                )
+                .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
+                .all()
+              const owner = tx
+                .select()
+                .from(taskExecutionOwners)
+                .where(eq(taskExecutionOwners.taskId, id))
+                .get()
+              if (owner?.state === 'claimed') {
+                candidateStopToken = taskDriverRegistry.tokenForOwner({
+                  taskId: owner.taskId,
+                  ownerId: owner.ownerId,
+                  daemonGeneration: owner.daemonGeneration,
+                  epoch: owner.epoch,
+                })
+                taskExecutionModule.ownership.revokeExactTx({
+                  tx,
+                  owner: {
+                    taskId: owner.taskId,
+                    ownerId: owner.ownerId,
+                    daemonGeneration: owner.daemonGeneration,
+                    epoch: owner.epoch,
+                  },
+                  expectedRevision: owner.revision,
+                  now,
+                  recoveryCode: 'terminal-control-cancel',
+                })
+              }
+              terminalizeTaskExecutionIntentsTx({
+                tx,
+                taskId: id,
+                state: 'canceled',
+                failureCode:
+                  opts.cascadeFromParent === true
+                    ? 'canceled-by-parent-cascade'
+                    : 'canceled-by-user',
+                now,
+              })
+            },
+            reason: 'cancelTask-fallback',
+          })
+          controlCanceledNodeRuns = candidateCanceledNodeRuns
+        } catch (error) {
+          if (!(error instanceof ConflictError)) throw error
+        }
+        if (candidateStopToken !== null) {
+          const cause: TaskStopCause =
+            opts.cascadeFromParent === true
+              ? { kind: 'parent-cascade', parentTaskId: opts.cascadeParentTaskId ?? id }
+              : { kind: 'user' }
+          stopTicket = taskDriverRegistry.requestStop(candidateStopToken, cause)
+        }
         current = await getTask(db, id)
         if (current === null) {
           throw new NotFoundError('task-not-found', `task '${id}' not found`)
@@ -3847,16 +4303,57 @@ export async function cancelTask(
     return { task: current, childIds }
   })
 
+  const stopCause: TaskStopCause =
+    opts.cascadeFromParent === true
+      ? { kind: 'parent-cascade', parentTaskId: opts.cascadeParentTaskId ?? id }
+      : { kind: 'user' }
+  if (stopTicket === null) {
+    // Test/legacy compatibility handle. Production claimed workers always use
+    // the exact-token registry path above; a controller without a durable
+    // owner still retains the historical cancellation behavior.
+    testActiveControllers.get(id)?.abort(stopCause)
+  }
+
+  const exactStopTicket = stopTicket as TaskDriverStopTicket | null
+  if (exactStopTicket !== null) {
+    const exactStopToken = exactStopTicket.token
+    const result = await Promise.race([
+      taskDriverRegistry.awaitStopped(exactStopTicket),
+      Bun.sleep(5000).then(() => null),
+    ])
+    if (result === null) {
+      const owner = taskExecutionModule.ownership.read(db, id)
+      if (owner !== null && owner.epoch === exactStopToken.epoch && owner.state === 'revoked') {
+        taskExecutionModule.ownership.markRecoveryRequired({
+          db,
+          token: exactStopToken,
+          expectedRevision: owner.revision,
+          code: 'terminal-stop-timeout',
+          now: Date.now(),
+        })
+      }
+    }
+  }
+
   // Broadcasters invoke listeners synchronously. Emit only after releasing
   // the task mutation coordinator so a listener that starts a same-task
   // review/cancel mutation cannot re-enter (or extend) this critical section.
   emitTaskStatus(committed.task)
+  for (const run of controlCanceledNodeRuns) {
+    taskBroadcaster.broadcast(TASK_CHANNEL(id), {
+      id: -1,
+      type: 'node.status',
+      nodeRunId: run.id,
+      nodeId: run.nodeId,
+      status: 'canceled',
+    })
+  }
 
   // RFC-243 §4.3 — recursively cascade into the frozen child set. Depth is
   // bounded by maxInvocationDepth; already-terminal children are idempotent.
   for (const childId of committed.childIds) {
     try {
-      await cancelTask(db, childId, { cascadeFromParent: true })
+      await cancelTask(db, childId, { cascadeFromParent: true, cascadeParentTaskId: id })
     } catch (err) {
       if (
         (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
@@ -3879,6 +4376,7 @@ export async function cancelTask(
  */
 export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps): Promise<Task> {
   return resumeKick(db, id, deps, {
+    intentKind: 'resume',
     event: { kind: 'resume' },
     selectRollback: (runs) => selectResumeRollbackTargets(runs),
     reason: 'resumeTask',
@@ -3890,7 +4388,7 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
 
 /**
  * Resume while committing synchronous companion rows inside the same task
- * ownership CAS transaction. Gate decisions use this instead of "write gate,
+ * continuation-admission CAS transaction. Gate decisions use this instead of "write gate,
  * then fire-and-forget resume": if preflight/CAS/companion writes fail, every
  * row remains unchanged and the user can retry the decision.
  */
@@ -3901,6 +4399,7 @@ export async function resumeTaskWithAtomicSideEffects(
   onClaimTx: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void,
 ): Promise<Task> {
   return resumeKick(db, id, deps, {
+    intentKind: 'gate-continuation',
     event: { kind: 'resume' },
     selectRollback: (runs) => selectResumeRollbackTargets(runs),
     reason: 'resumeTask',
@@ -3913,7 +4412,7 @@ export async function resumeTaskWithAtomicSideEffects(
 
 /**
  * RFC-167 — the dynamic-workflow confirm gate's resume core: write the
- * decision's durable state ATOMICALLY within the resume ownership CAS, then
+ * decision's durable state ATOMICALLY within the resume admission CAS, then
  * re-kick the scheduler. approve passes BOTH columns (swap the confirmed DAG
  * into `workflow_snapshot` + flip dw.phase='executing'); reject passes only
  * `workgroupConfigJson` (phase='generating' + the feedback) — either way a
@@ -3929,6 +4428,7 @@ export async function resumeDynamicWorkflowExecution(
   swap: { workflowSnapshot?: string; dw: DwState },
 ): Promise<Task> {
   return resumeKick(db, id, deps, {
+    intentKind: 'gate-continuation',
     event: { kind: 'resume' },
     ...(swap.workflowSnapshot !== undefined
       ? { extra: { workflowSnapshot: swap.workflowSnapshot } }
@@ -3939,7 +4439,7 @@ export async function resumeDynamicWorkflowExecution(
     verb: 'resume',
     worktreePreflight: true,
     // RFC-217 T2 (design-gate P1) — the phase flip MUST ride the resume
-    // ownership CAS: a lost CAS / failed worktree preflight leaves the gate
+    // admission CAS: a lost CAS / failed worktree preflight leaves the gate
     // open and the decision retryable; a standalone phase write would strand
     // the task in 'executing'/'generating' while still awaiting_review.
     onClaimTx: (tx) => setDwStateTx(tx, id, swap.dw),
@@ -3995,18 +4495,20 @@ async function assertFrozenTaskTriggerPreflight(
  * breakpoint" core, extracted from resumeTask. Both resumeTask and
  * syncTaskWorkflow drive it; the ONLY differences are the transition event
  * (which fixes the allowed-from set via the shared `nextTaskStatus` table), the
- * optional `extra` columns written ATOMICALLY inside the ownership CAS (sync
+ * optional `extra` columns written ATOMICALLY inside the admission CAS (sync
  * swaps `workflow_snapshot` + `workflow_version` here), and the rollback-target
  * selector.
  *
- * The pending CAS (RFC-097 audit S-8) IS the ownership lock and moves BEFORE any
- * git rollback, so a concurrent resume/retry/sync loses with zero side effects.
+ * The pending lifecycle CAS (RFC-097 audit S-8) is the command-admission winner
+ * and moves BEFORE any git rollback. The same transaction writes the canonical
+ * intent; only its durable owner claim authorizes subsequent execution effects.
  */
 async function resumeKick(
   db: DbClient,
   id: string,
   deps: StartTaskDeps,
   opts: {
+    intentKind: 'resume' | 'sync-workflow' | 'gate-continuation'
     event: TaskTransitionEvent
     extra?: TaskStatusUpdateExtra
     selectRollback: (
@@ -4054,7 +4556,7 @@ async function resumeKick(
   // must not be re-driven: nobody will ever merge its further output.
   await assertChildTaskDrivable(db, task, opts.verb)
 
-  // RFC-292: re-check the exact execution snapshot before the ownership CAS.
+  // RFC-292: re-check the exact execution snapshot before the admission CAS.
   await assertFrozenTaskTriggerPreflight(
     db,
     id,
@@ -4066,17 +4568,19 @@ async function resumeKick(
         },
   )
 
-  // RFC-108 T6 (AR-15): 410 before the ownership CAS when the worktree is gone
+  // RFC-108 T6 (AR-15): 410 before the admission CAS when the worktree is gone
   // (gc reclaimed a resumable task) — never flip to pending then 500 on a
   // missing cwd. Gated per-caller (resumeTask opts in).
   if (opts.worktreePreflight === true) {
     assertWorktreePresentForResume(db, task, opts.verb)
   }
 
-  // RFC-097 ownership lock — the pending CAS moves BEFORE the git rollback so a
-  // concurrent resume/retry/sync loses here with zero side effects. RFC-109:
+  // RFC-097 command admission — the pending CAS moves BEFORE the git rollback
+  // so a concurrent resume/retry/sync loses here with zero side effects. RFC-109:
   // routed through the shared event table; `extra` carries sync's atomic
   // snapshot+version swap (one CAS UPDATE — a lost race never tears the row).
+  const intentId = ulid()
+  const intentNow = Date.now()
   try {
     await transitionTaskStatusByEvent({
       db,
@@ -4090,7 +4594,20 @@ async function resumeKick(
         failedNodeId: null,
         ...opts.extra,
       },
-      ...(opts.onClaimTx !== undefined ? { onTransitionTx: opts.onClaimTx } : {}),
+      onTransitionTx: (tx, transition) => {
+        opts.onClaimTx?.(tx, transition)
+        submitContinuationIntentTx({
+          tx,
+          taskId: id,
+          intentId,
+          kind: opts.intentKind,
+          source: continuationSource(deps, opts.intentKind),
+          actorUserId: deps.actorUserId ?? null,
+          payload: { v: 1, event: opts.event.kind },
+          now: intentNow,
+          advanceOperationGeneration: opts.intentKind !== 'gate-continuation',
+        })
+      },
       reason: opts.reason,
     })
   } catch (err) {
@@ -4109,111 +4626,130 @@ async function resumeKick(
     throw err
   }
 
-  // Direct framework children (commit-message / merge-resolve agents) are
-  // nested node_runs and intentionally absent from `toRollback`. Fence every
-  // held native-session owner for the task before any rollback or fresh kick.
-  await reapHeldRuntimeSessionOwnersForTask(db, id, opts.reason, deps, log)
-
-  // Collect the latest non-done run per nodeId — those need rollback + a fresh
-  // attempt. Freshness is ULID id-order, matching the scheduler's authority
-  // (isFresherNodeRun). retryIndex ordering was wrong: a clarify-driven rerun is
-  // minted with retryIndex 0 but a newer id, so an older failed retry with a
-  // higher retryIndex would shadow it and resume would roll the worktree back to
-  // the wrong row's pre_snapshot. See
-  // scheduler-boundary-resume-retryindex-vs-id.test.ts.
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-  const toRollback = opts.selectRollback(runs)
-
-  // RFC-108 T7 (AR-17): cross-node-run all-or-nothing pre-pass. The within-row
-  // rollback is fail-closed, but the reset loop below touches rows one at a
-  // time — if a LATER row's pre_snapshot was gc-pruned, earlier rows are already
-  // reset (and their children killed) when escalateSnapshotLost fires, leaving a
-  // half-rolled-back worktree. Verify EVERY row's snapshot still resolves to a
-  // commit (side-effect-free `checkOnly`) BEFORE killing/resetting anything.
-  for (const r of toRollback) {
-    const probe = await rollbackNodeRunForResume(task, r, log, { checkOnly: true })
-    if (probe.failures.some((f) => f.code === 'snapshot-missing')) {
-      await escalateSnapshotLost(db, id, r, probe, opts.reason) // throws 409
-    }
-  }
-
-  // RFC-098 WP-8 (audit S-15) + RFC-108 T9 (AR-14): kill pass FIRST, separated
-  // from the rollback pass for cross-row safety. If the row's opencode child
-  // from a previous daemon is still alive, group-kill it (SIGTERM→SIGKILL)
-  // BEFORE any worktree is rolled back — a survivor would keep writing into a
-  // worktree we are about to reset. T9: a child that SURVIVES the kill (matched
-  // to our recorded spawn binary, so confidently OURS + alive) is the
-  // double-write danger the old fuzzy gate let slip — REFUSE the whole resume
-  // (409) rather than git-reset under a live writer. Killing is idempotent and
-  // safe; only the rollback is gated on every child being dead/recycled.
-  for (const r of toRollback) {
-    await reapRunBeforeWorktreeReset(db, id, r, opts.reason, deps, log)
-  }
-
-  for (const r of toRollback) {
-    const outcome = await rollbackNodeRunForResume(task, r, log)
-    // RFC-098 WP-9: a gc-pruned pre-snapshot is NOT warn-and-continue — the
-    // fail-closed rollback touched nothing, but the baseline is gone forever;
-    // flip the task failed (errorSummary='snapshot-lost') and surface a 409.
-    // Other failure codes keep the historical warn-and-continue net below.
-    if (outcome.failures.some((f) => f.code === 'snapshot-missing')) {
-      await escalateSnapshotLost(db, id, r, outcome, opts.reason)
-    }
-    // The scheduler creates a new node_run with retry_index = max+1 on its
-    // own when it sees no pending run for the node, so we just leave the
-    // failed row as historical. The task row already flipped pending above
-    // (RFC-097 ownership lock); a rollback failure keeps it pending — same
-    // warn-and-continue net as before, runTask kicks regardless. A daemon
-    // crash mid-rollback leaves a pending orphan that boot reaping flips to
-    // interrupted (reapOrphanRuns, RFC-097 crash-window compensation).
-  }
-
-  const next = (await getTask(db, id)) as Task
-  emitTaskStatus(next)
-
-  // Kick the scheduler — same plumbing as startTask but without re-creating
-  // the worktree.
+  // Up to this point the request committed only lifecycle + intent.  Claim
+  // before any reap, rollback, child cancellation or node-row mutation.
   const controller = new AbortController()
-  if (taskDriverRegistry.has(id)) {
-    // Should be unreachable (entry check + ownership CAS) — defensive only.
-    log.error(`${opts.reason}: controller already registered for task`, { taskId: id })
-  }
-  if ((await tryAttachTaskDriver(db, id, controller)) !== 'attached') {
+  const attachedDriver = await tryAttachTaskDriver(db, id, controller, intentId)
+  if (attachedDriver.kind !== 'attached') {
     return (await getTask(db, id)) as Task
   }
-  const schedulerPromise = runTask({
-    taskId: id,
-    db,
-    appHome: deps.appHome ?? Paths.root,
-    ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-    ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-    ...(deps.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: deps.subagentLiveCapture }
-      : {}),
-    // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
-    // config through to the scheduler (single source, see runtimeConfigOpts).
-    ...runtimeConfigOpts(deps),
-    log,
-    signal: controller.signal,
-    ensureWorkspaceProfiles: true,
-  })
-    .catch((err) => {
-      log.error(`runTask threw on ${opts.verb}`, {
+  try {
+    return await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
+      // Direct framework children (commit-message / merge-resolve agents) are
+      // nested node_runs and intentionally absent from `toRollback`. Fence every
+      // held native-session owner for the task before any rollback or fresh kick.
+      await reapHeldRuntimeSessionOwnersForTask(db, id, opts.reason, deps, log)
+
+      // Collect the latest non-done run per nodeId — those need rollback + a fresh
+      // attempt. Freshness is ULID id-order, matching the scheduler's authority
+      // (isFresherNodeRun). retryIndex ordering was wrong: a clarify-driven rerun is
+      // minted with retryIndex 0 but a newer id, so an older failed retry with a
+      // higher retryIndex would shadow it and resume would roll the worktree back to
+      // the wrong row's pre_snapshot. See
+      // scheduler-boundary-resume-retryindex-vs-id.test.ts.
+      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+      const toRollback = opts.selectRollback(runs)
+
+      // RFC-108 T7 (AR-17): cross-node-run all-or-nothing pre-pass. The within-row
+      // rollback is fail-closed, but the reset loop below touches rows one at a
+      // time — if a LATER row's pre_snapshot was gc-pruned, earlier rows are already
+      // reset (and their children killed) when escalateSnapshotLost fires, leaving a
+      // half-rolled-back worktree. Verify EVERY row's snapshot still resolves to a
+      // commit (side-effect-free `checkOnly`) BEFORE killing/resetting anything.
+      for (const r of toRollback) {
+        const probe = await rollbackNodeRunForResume(db, task, r, log, { checkOnly: true })
+        if (probe.failures.some((f) => f.code === 'snapshot-missing')) {
+          await escalateSnapshotLost(db, id, r, probe, opts.reason) // throws 409
+        }
+      }
+
+      // RFC-098 WP-8 (audit S-15) + RFC-108 T9 (AR-14): kill pass FIRST, separated
+      // from the rollback pass for cross-row safety. If the row's opencode child
+      // from a previous daemon is still alive, group-kill it (SIGTERM→SIGKILL)
+      // BEFORE any worktree is rolled back — a survivor would keep writing into a
+      // worktree we are about to reset. T9: a child that SURVIVES the kill (matched
+      // to our recorded spawn binary, so confidently OURS + alive) is the
+      // double-write danger the old fuzzy gate let slip — REFUSE the whole resume
+      // (409) rather than git-reset under a live writer. Killing is idempotent and
+      // safe; only the rollback is gated on every child being dead/recycled.
+      for (const r of toRollback) {
+        await reapRunBeforeWorktreeReset(db, id, r, opts.reason, deps, log)
+      }
+
+      for (const r of toRollback) {
+        const outcome = await rollbackNodeRunForResume(db, task, r, log)
+        // RFC-098 WP-9: a gc-pruned pre-snapshot is NOT warn-and-continue — the
+        // fail-closed rollback touched nothing, but the baseline is gone forever;
+        // flip the task failed (errorSummary='snapshot-lost') and surface a 409.
+        // Other failure codes keep the historical warn-and-continue net below.
+        if (outcome.failures.some((f) => f.code === 'snapshot-missing')) {
+          await escalateSnapshotLost(db, id, r, outcome, opts.reason)
+        }
+        // The scheduler creates a new node_run with retry_index = max+1 on its
+        // own when it sees no pending run for the node, so we just leave the
+        // failed row as historical. The task row already flipped pending above
+        // (RFC-097 admission winner); a rollback failure keeps it pending — same
+        // warn-and-continue net as before, runTask kicks regardless. A daemon
+        // crash mid-rollback leaves a pending orphan that boot reaping flips to
+        // interrupted (reapOrphanRuns, RFC-097 crash-window compensation).
+      }
+
+      const next = (await getTask(db, id)) as Task
+      emitTaskStatus(next)
+
+      // Kick the scheduler — same plumbing as startTask but without re-creating
+      // the worktree.
+      if (activeTaskController(id) !== controller) {
+        log.error(`${opts.reason}: exact controller was replaced before scheduler kick`, {
+          taskId: id,
+        })
+        return (await getTask(db, id)) as Task
+      }
+      const schedulerPromise = runTask({
         taskId: id,
-        error: err instanceof Error ? err.message : String(err),
+        db,
+        appHome: deps.appHome ?? Paths.root,
+        ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
+        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+        ...(deps.subagentLiveCapture !== undefined
+          ? { subagentLiveCapture: deps.subagentLiveCapture }
+          : {}),
+        // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
+        // config through to the scheduler (single source, see runtimeConfigOpts).
+        ...runtimeConfigOpts(deps),
+        log,
+        signal: controller.signal,
+        executionContext: attachedDriver.executionContext,
+        ensureWorkspaceProfiles: true,
+      })
+        .catch((err) => {
+          log.error(`runTask threw on ${opts.verb}`, {
+            taskId: id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+        .finally(() => {
+          return releaseTaskDriverAndFinalizeWorkspace(db, id, controller)
+        })
+
+      // Mirror startTask: tests opt into awaiting the scheduler; production callers
+      // (HTTP routes) fire-and-forget and get the post-flip task immediately.
+      if (deps.awaitScheduler === true) {
+        await schedulerPromise
+        return (await getTask(db, id)) as Task
+      }
+      return next
+    })
+  } catch (error) {
+    controller.abort('task-continuation-preparation-failed')
+    await releaseTaskDriverAndFinalizeWorkspace(db, id, controller).catch((releaseError) => {
+      log.warn(`${opts.reason}: could not release failed continuation owner`, {
+        taskId: id,
+        error: releaseError instanceof Error ? releaseError.message : String(releaseError),
       })
     })
-    .finally(() => {
-      return releaseTaskDriverAndFinalizeWorkspace(db, id, controller)
-    })
-
-  // Mirror startTask: tests opt into awaiting the scheduler; production callers
-  // (HTTP routes) fire-and-forget and get the post-flip task immediately.
-  if (deps.awaitScheduler === true) {
-    await schedulerPromise
-    return (await getTask(db, id)) as Task
+    throw error
   }
-  return next
 }
 
 /**
@@ -4291,7 +4827,7 @@ export function buildSyncRunSummary(
  * RFC-109 — re-point a non-active task at the LATEST definition of its workflow
  * and continue from the breakpoint, instead of forcing a from-scratch relaunch.
  * Swaps the frozen `workflow_snapshot` (+ records the new version) ATOMICALLY
- * inside the ownership CAS via `resumeKick`'s `extra`, then lets the scheduler
+ * inside the admission CAS via `resumeKick`'s `extra`, then lets the scheduler
  * re-derive the frontier from the new graph (new nodes dispatch, completed
  * done∧fresh nodes are preserved, failed nodes re-run under the new definition).
  *
@@ -4420,7 +4956,7 @@ export async function syncTaskWorkflow(
 
   // F5 TOCTOU re-check (Codex impl-gate F3): validation + diff above are local DB
   // reads, but a concurrent workflow PUT could have bumped the version in that
-  // window. Re-assert it immediately before the ownership CAS so we never write a
+  // window. Re-assert it immediately before the admission CAS so we never write a
   // snapshot the user did not confirm. This closes the real (seconds-long)
   // preview→POST window; a sub-ms residual remains (this re-read → the CAS still
   // does its own task read), but it is BENIGN — sync only ever writes the
@@ -4443,6 +4979,7 @@ export async function syncTaskWorkflow(
   }
 
   return resumeKick(db, id, deps, {
+    intentKind: 'sync-workflow',
     event: { kind: 'sync-workflow' },
     extra: {
       workflowSnapshot: JSON.stringify(newDef),
@@ -4772,6 +5309,8 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
   }
   // 复活闸门与其它重试路径共用 setTaskStatus 这一个写点（RFC-097 CAS + RFC-165
   // 工作区复活判据）。准备失败的行**没有**墓碑（AC-15 刻意保证），所以这里 CAS 得回。
+  const intentId = ulid()
+  const intentNow = Date.now()
   await setTaskStatus({
     db,
     taskId: task.id,
@@ -4788,13 +5327,26 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
       errorMessage: null,
       failedNodeId: null,
     },
+    onTransitionTx: (tx) =>
+      submitContinuationIntentTx({
+        tx,
+        taskId: task.id,
+        intentId,
+        kind: 'retry-repository-preparation',
+        source: continuationSource(deps, 'retry-repository-preparation'),
+        actorUserId: deps.actorUserId ?? null,
+        payload: { v: 1, phase: 'repository-preparation' },
+        now: intentNow,
+        advanceOperationGeneration: true,
+      }),
   })
   // 重跑准备：走**同一份**实现（runDeferredRepoPreparation），不是抄第二套。
   // 复用要点是它只认「一个已存在的任务行 + 一份可解析的来源」，其余（合成行、窗口
   // 重试、回填同事务、租约换真）都在里面，重试与首次因此逐字同构。
   const appHome = deps.appHome ?? Paths.root
   const controller = new AbortController()
-  if ((await tryAttachTaskDriver(db, task.id, controller)) !== 'attached') {
+  const attachedDriver = await tryAttachTaskDriver(db, task.id, controller, intentId)
+  if (attachedDriver.kind !== 'attached') {
     throw new ConflictError(
       'task-still-running',
       `task '${task.id}' was picked up by another driver; retry once it settles`,
@@ -4802,7 +5354,18 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
   }
   // 清掉上一次准备可能留下的残骸（SIGKILL 窗口），否则建树必撞 already exists。
   // 放在 attach 之后：租约在手才动磁盘，避免与另一个驱动抢。
-  await reclaimStalePrepArtifacts(db, appHome, task)
+  await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
+    // Validate the exact owner immediately before the first workspace write.
+    // A superseding stop/recovery revision must make this preparation fail
+    // before it removes or recreates task-owned paths.
+    taskExecutionModule.ownership.withOwnedTaskTx({
+      db,
+      token: attachedDriver.executionContext.token,
+      now: Date.now(),
+      run: () => undefined,
+    })
+    await reclaimStalePrepArtifacts(db, appHome, task)
+  })
   // 重跑用的启动输入：只带**来源**三件（组 / 缓存仓 / 工作分支）。其余启动参数
   // （工作流、成员、冻结闭包…）在任务行上已经定死，重试不得改动它们。
   const input = {
@@ -4822,55 +5385,57 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
     // 行早就在库里了——重试不建行，所以这一位从一开始就是 true。
     taskRowCommitted: true,
   }
-  const runPrepThenTask = async (): Promise<Task | null> => {
-    const r = await runDeferredRepoPreparation({
-      deps: {
-        ...deps,
-        db,
-        gitCommitIdentity:
-          task.gitUserName !== null && task.gitUserEmail !== null
-            ? { name: task.gitUserName, email: task.gitUserEmail }
-            : null,
-      },
-      input,
-      appHome,
-      controller,
-      taskId: task.id,
-      prepTaskId: task.id,
-      task,
-      space: {
-        kind: 'single',
-        spaceKind: 'remote',
+  const runPrepThenTask = async (): Promise<Task | null> =>
+    await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
+      const r = await runDeferredRepoPreparation({
+        deps: {
+          ...deps,
+          db,
+          gitCommitIdentity:
+            task.gitUserName !== null && task.gitUserEmail !== null
+              ? { name: task.gitUserName, email: task.gitUserEmail }
+              : null,
+        },
+        input,
+        appHome,
+        controller,
         taskId: task.id,
-        worktreePath: '',
-        branch: '',
-        baseCommit: null,
-        earlyError: null,
-        resolvedSources: [],
-        repos: [],
-        nodePaths: [],
-        cleanup: ownership.cleanup as MaterializedSpaceCleanup,
-      } as MaterializedSpace,
-      ownership,
-    })
-    if (!r.ok) return r.preparedTask ?? task
-    void runTask({
-      taskId: task.id,
-      db,
-      appHome,
-      ...runtimeConfigOpts(deps),
-      log,
-      signal: controller.signal,
-    })
-      .catch((err) => {
-        log.error('runTask threw after repo-prep retry', {
+        prepTaskId: task.id,
+        task,
+        space: {
+          kind: 'single',
+          spaceKind: 'remote',
           taskId: task.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
+          worktreePath: '',
+          branch: '',
+          baseCommit: null,
+          earlyError: null,
+          resolvedSources: [],
+          repos: [],
+          nodePaths: [],
+          cleanup: ownership.cleanup as MaterializedSpaceCleanup,
+        } as MaterializedSpace,
+        ownership,
       })
-      .finally(() => releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller))
-    return r.preparedTask ?? null
-  }
+      if (!r.ok) return r.preparedTask ?? task
+      void runTask({
+        taskId: task.id,
+        db,
+        appHome,
+        ...runtimeConfigOpts(deps),
+        log,
+        signal: controller.signal,
+        executionContext: attachedDriver.executionContext,
+      })
+        .catch((err) => {
+          log.error('runTask threw after repo-prep retry', {
+            taskId: task.id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+        .finally(() => releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller))
+      return r.preparedTask ?? null
+    })
 
   // RFC-287 AC-11 —— 重试与**首启同一套语义**：准备在后台推进，请求立刻返回。
   //
@@ -4985,6 +5550,41 @@ async function runDeferredRepoPreparation(args: {
     reason: 'repo-prep-start',
     extra: {},
   })
+  const prepEffect = createLocalEffectAttemptObserver({
+    db: deps.db,
+    taskId,
+    nodeRunId: prepRunId,
+    kind: 'workspace-prepare',
+    stableActionOrdinal: 'workspace-prepare:task-root',
+    candidateId: 'deferred-repository-preparation',
+    request: {
+      v: 1,
+      taskId,
+      workflowId: input.workflowId,
+      repositorySource:
+        input.repoGroupId !== undefined
+          ? 'group'
+          : input.repoUrl !== undefined || input.cachedRepoId !== undefined
+            ? 'single'
+            : input.sourceTaskId !== undefined
+              ? 'source-task'
+              : 'scratch',
+      spaceKind: space.spaceKind,
+    },
+    resourceKeys: [`workspace-prepare:${taskId}`],
+  })
+  prepEffect?.beforeAct()
+  const settlePrepFailure = (error: unknown, phase: string): void => {
+    try {
+      prepEffect?.fail(error, { phase })
+    } catch (settleError) {
+      log.warn('repository preparation effect failure receipt was fenced', {
+        taskId,
+        phase,
+        error: settleError instanceof Error ? settleError.message : String(settleError),
+      })
+    }
+  }
   // 准备失败有**两种形态**，都要落到行上：
   //   · `earlyError` —— 物化自己吞下的失败（建工作树、多仓挂载…）；
   //   · **抛出** —— `resolveCachedRepo` 的超时/锁/校验失败走 DomainError
@@ -5033,6 +5633,7 @@ async function runDeferredRepoPreparation(args: {
       remainingMs: remaining,
       error: prepared.earlyError,
     })
+    prepEffect?.retry(new Error(prepared.earlyError), 'transport-policy')
     if (controller.signal.aborted) break
     await new Promise<void>((resolve) => {
       const settle = (): void => {
@@ -5075,6 +5676,7 @@ async function runDeferredRepoPreparation(args: {
     // 处置：合成行落 canceled（不能留在 running——恢复扫描会把它当还在跑），任务
     // 状态**不碰**，交给 cancelTask 按它自己的流程终结；租约照常释放，否则取消之后
     // 这行任务的每次重试都撞 `task-still-running`。
+    settlePrepFailure(new Error(prepared.earlyError), 'aborted')
     try {
       await setNodeRunStatus({
         db: deps.db,
@@ -5091,7 +5693,7 @@ async function runDeferredRepoPreparation(args: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
-    taskDriverRegistry.release(taskId, controller)
+    await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
     const cur = (
       await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
     )[0]
@@ -5113,6 +5715,7 @@ async function runDeferredRepoPreparation(args: {
     //
     // 我原先那句注释「CAS 失败即放弃，不覆写」把语义写反了：不覆写是对的，但它
     // 是**靠抛出**实现的，不是靠静默返回。（T14 实现门）
+    settlePrepFailure(new Error(prepared.earlyError), 'failed')
     try {
       // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能
       // 看到「fatal: unable to access …」，而不是一句无从下手的「启动失败」。
@@ -5160,7 +5763,7 @@ async function runDeferredRepoPreparation(args: {
         error: err instanceof Error ? err.message : String(err),
       })
     } finally {
-      taskDriverRegistry.release(taskId, controller)
+      await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
     }
     // B-F8 的回收**不能放在这里**——这一点是实测逼出来的。
     //
@@ -5219,6 +5822,7 @@ async function runDeferredRepoPreparation(args: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    settlePrepFailure(new Error('task left repository preparation window'), 'discarded')
     // 三轮门并发面抓到的两条，同一个出口上：
     //
     // **F4——准备行不能留在 running**。本分支此前只清物化产物就返回，那条合成行永远
@@ -5273,7 +5877,7 @@ async function runDeferredRepoPreparation(args: {
   // **整份兼容投影**一起回填；只回填路径会让成功任务永久显示成 1 仓，且详情页
   // 丢失远端 URL / cache id / base branch。
   const preparedHead = prepared.repos[0]
-  dbTxSync(deps.db, (tx) => {
+  const persistPreparedProjection = (tx: DbTxSync): void => {
     tx.update(tasks)
       .set({
         worktreePath: prepared.worktreePath,
@@ -5324,7 +5928,19 @@ async function runDeferredRepoPreparation(args: {
       reason: 'repo-prep-done',
       extra: { finishedAt: Date.now() },
     })
-  })
+  }
+  if (prepEffect === undefined) {
+    dbTxSync(deps.db, persistPreparedProjection)
+  } else {
+    prepEffect.succeed(
+      {
+        phase: 'prepared',
+        repoCount: prepared.repos.length,
+        spaceKind: prepared.spaceKind,
+      },
+      persistPreparedProjection,
+    )
+  }
   // 响应体重读一次：它是在准备之前、用占位值构造的，直接返回会让调用方拿到空
   // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
   // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在
@@ -5445,11 +6061,11 @@ export async function retryNode(
 
   // RFC-292: a retry reuses the task's immutable webhook provenance. Keep the
   // RFC-099 ownership guard above authoritative for bogus/cross-task run ids,
-  // then fail trigger preflight before the task ownership CAS, rollback, child
+  // then fail trigger preflight before the task admission CAS, rollback, child
   // cancellation, impact-set writes, or placeholder minting.
   await assertFrozenTaskTriggerPreflight(db, taskId)
 
-  // Freeze the retry impact set BEFORE taking the task ownership CAS. Besides
+  // Freeze the retry impact set BEFORE taking the task admission CAS. Besides
   // making the placeholder plan stable, this lets us collect every child task
   // anchored by a superseded CALL row (the target plus every cascaded
   // downstream node). No child is touched yet: a bad nodeRunId, preflight
@@ -5520,12 +6136,14 @@ export async function retryNode(
     }
   }
 
-  // RFC-097: ownership lock — CAS the task to pending BEFORE the rollback and
+  // RFC-097: command admission — CAS the task to pending BEFORE the rollback and
   // placeholder minting so a concurrent retry/resume loses with zero side
   // effects (the old order let the loser pollute node_runs and the worktree).
   // from = the complement of {pending, running}; canceled→pending is the
   // RFC-095 revival path; done→pending is an explicit re-run of a finished
   // node. All four terminal sources are deliberate — allowTerminal.
+  const intentId = ulid()
+  const intentNow = Date.now()
   try {
     await setTaskStatus({
       db,
@@ -5542,6 +6160,18 @@ export async function retryNode(
       allowTerminal: true,
       extra: { finishedAt: null, errorSummary: null, errorMessage: null, failedNodeId: null },
       reason: 'retryNode',
+      onTransitionTx: (tx) =>
+        submitContinuationIntentTx({
+          tx,
+          taskId,
+          intentId,
+          kind: 'retry-node',
+          source: continuationSource(opts.deps, 'retry-node'),
+          actorUserId: opts.deps.actorUserId ?? null,
+          payload: { v: 1, nodeRunId, cascade },
+          now: intentNow,
+          advanceOperationGeneration: true,
+        }),
     })
   } catch (err) {
     if (err instanceof ConflictError) {
@@ -5559,185 +6189,200 @@ export async function retryNode(
     throw err
   }
 
-  await reapHeldRuntimeSessionOwnersForTask(db, taskId, 'retryNode', opts.deps, log)
-
-  // RFC-243 D12 — only the retry CAS winner may supersede child invocations.
-  // Cancel every frozen target/downstream child before rollback or placeholder
-  // minting, so no old child can keep writing the inherited workspace while a
-  // new generation starts. Terminal/deleted children are already settled and
-  // therefore idempotent no-ops. An unexpected cancellation failure closes the
-  // owned task back to failed and aborts the retry: never leave a scheduler-less
-  // pending row and never reset/mint after a partially failed cancellation set.
-  for (const childTaskId of affectedChildTaskIds) {
-    try {
-      await cancelTask(db, childTaskId, { cascadeFromParent: true })
-    } catch (err) {
-      if (
-        (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
-        err instanceof NotFoundError
-      ) {
-        continue
-      }
-      const detail = err instanceof Error ? err.message : String(err)
-      try {
-        await setTaskStatus({
-          db,
-          taskId,
-          to: 'failed',
-          allowedFrom: ['pending'],
-          extra: {
-            finishedAt: Date.now(),
-            errorSummary: 'retry-child-cancel-failed',
-            errorMessage: `failed to cancel superseded child task '${childTaskId}': ${detail}`,
-            failedNodeId: runRow.nodeId,
-          },
-          reason: 'retryNode:child-cancel-failed',
-        })
-      } catch (closeErr) {
-        const current = await getTask(db, taskId)
-        // A concurrent terminal winner is also fail-closed. If the row somehow
-        // remains pending, surface the close failure because it is the stronger
-        // invariant violation and must not be mistaken for a clean child error.
-        if (current?.status === 'pending') throw closeErr
-      }
-      const failed = await getTask(db, taskId)
-      if (failed !== null) emitTaskStatus(failed)
-      throw new ConflictError(
-        'retry-child-cancel-failed',
-        `cannot retry node '${runRow.nodeId}': superseded child task '${childTaskId}' could not be canceled (${detail})`,
-      )
-    }
-  }
-
-  // Rollback to the snapshot before the node_run started. The single-node
-  // retry uses THIS run's snapshot (not the latest, since the user picked
-  // this specific historical attempt).
-  // RFC-098 WP-8: same kill-then-proceed as resumeTask — group-kill the
-  // target row's still-alive child (if any) before touching the worktree.
-  await reapRunBeforeWorktreeReset(db, taskId, runRow, 'retryNode', opts.deps, log)
-  // RFC-098 WP-9: snapshot-missing escalates to task failed + 409 (same
-  // contract as resumeTask) — no placeholder rows are minted and no
-  // scheduler is kicked when the promised baseline no longer exists.
-  const rollbackOutcome = await rollbackNodeRunForResume(task, runRow, log)
-  if (rollbackOutcome.failures.some((f) => f.code === 'snapshot-missing')) {
-    await escalateSnapshotLost(db, taskId, runRow, rollbackOutcome, 'retryNode')
-  }
-
-  // Flip target + downstream node_runs from done → failed so the resumer
-  // re-runs them. We do this by inserting a fresh failed row at retry_index
-  // max+1, so the scheduler treats it as the "latest" and starts attempt+1.
-  //
-  // Carry forward (iteration, reviewIteration, shardKey, parentNodeRunId,
-  // preSnapshot) from the prior run so the retried attempt resumes in the same
-  // loop / review / shard frame. RFC-074 PR-C: the clarify generation is no
-  // longer carried on the row — it is derived from prior-done id-order at
-  // dispatch time, and the answered Q&A surfaces via the RFC-070 consumed-by
-  // stamp regardless of which row this retry is. For the explicitly retried
-  // target the source-of-truth is `runRow` (the row the
-  // user picked); for cascaded downstream nodes we inherit from each node's
-  // own latest row.
-  // RFC-052 / RFC-053 PR-C: per-kind cascade behavior comes from
-  // `NODE_KIND_BEHAVIORS[k].retryCascade` (shared/node-kind-behavior.ts).
-  // The user-picked node (`runRow.nodeId`) is included unconditionally —
-  // direct retry on a non-process node is a different operation the user
-  // explicitly chose. Downstream nodes are filtered by the table: kinds
-  // with retryCascade='mint-placeholder' get a placeholder row; kinds with
-  // 'skip' don't (RFC-052 fix). Unknown kinds (snapshot missing / older
-  // schema) default to 'mint-placeholder' to preserve the legacy
-  // pre-RFC-052 behavior on stale data.
-  // RFC-098 B3 (audit ⑥-11): when the user-picked TARGET row is a WRAPPER's
-  // own canceled/interrupted row, do NOT mint the failed placeholder — that
-  // row already IS the revival signal (isDispatchable treats canceled /
-  // interrupted as dispatchable, RFC-095) and findResumableWrapperRun resumes
-  // the SAME row (continue-from-persisted-progress). A failed placeholder
-  // would become the node's latest row, make findResumableWrapperRun return
-  // null, and restart the wrapper from iteration 0 / re-capture the git
-  // baseline — exactly the continue-not-restart semantics RFC-095 promised.
-  // Downstream cascade placeholders are kept (a downstream wrapper restarting
-  // from 0 after its upstream changed is the correct semantics); other target
-  // statuses (done / failed / awaiting_*) keep the placeholder mint —
-  // findResumableWrapperRun treats done/failed as terminal, so the placeholder
-  // is what re-arms dispatch there. See rfc095-wrapper-canceled-revival /
-  // retry-cascade-kind-matrix.
-  for (const nodeId of targets) {
-    // RFC-096 (audit S-13 / 附录 C #2): the inheritance source is the freshest
-    // TOP-LEVEL row by pure id — the old `desc(retryIndex)` pick had no
-    // iteration / parent filter, so a placeholder could inherit a fan-out
-    // child's parentNodeRunId (invisible to the frontier → cascade silently
-    // dead) or a stale iteration. nextRetry stays the ALL-rows max+1
-    // (conservative: legacy pathological rows minted by the old pickers may
-    // carry inflated retryIndex on child/inherited rows — never collide).
-    // prev === undefined (e.g. a fanout-inner node with only child rows) keeps
-    // the `?? 0` fallback below: the placeholder lands as a fresh top-level
-    // row that is inert for the top-level scope (inner nodes re-run via the
-    // wrapper's own resume path).
-    const existing = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
-    const prev = pickFreshestRun(existing, { topLevelOnly: true })
-    // RFC-284 T21：口径=全行集（刻意含 child rows），收编 nextRetryIndex。
-    const nextRetry = nextRetryIndex(existing)
-    const inherit = nodeId === runRow.nodeId ? runRow : prev
-    // RFC-306 §10 — "run anyway" on a node the branch logic skipped.
-    //
-    // The flag rides ONLY the placeholder of the node the user actually clicked
-    // (never the cascade), and it is one-shot BY CONSTRUCTION: the activation
-    // judgment reads the freshest row at dispatch time — this placeholder — and
-    // the run that follows mints its own row without the flag. A later
-    // re-evaluation therefore sees a clean row and re-decides the branch on its
-    // merits. Cascaded downstream nodes are deliberately NOT forced: they judge
-    // themselves against what the forced node actually emits.
-    const forceThisNode = nodeId === runRow.nodeId && runRow.status === 'skipped'
-    await mintNodeRun(db, {
-      taskId,
-      nodeId,
-      status: 'failed',
-      cause: nodeId === runRow.nodeId ? 'retry-node' : 'retry-node-cascade',
-      retryIndex: nextRetry,
-      iteration: inherit?.iteration ?? 0,
-      inheritFrom: inherit ?? null,
-      overrides: {
-        finishedAt: Date.now(),
-        errorMessage: 'queued for retry',
-        ...(forceThisNode ? { forceActivated: true } : {}),
-      },
-    })
-  }
-
-  // Task row already flipped pending above (RFC-097 ownership lock).
-  const next = (await getTask(db, taskId)) as Task
-  emitTaskStatus(next)
-
   const controller = new AbortController()
-  if ((await tryAttachTaskDriver(db, taskId, controller)) !== 'attached') {
+  const attachedDriver = await tryAttachTaskDriver(db, taskId, controller, intentId)
+  if (attachedDriver.kind !== 'attached') {
     return (await getTask(db, taskId)) as Task
   }
-  void runTask({
-    taskId,
-    db,
-    appHome: opts.deps.appHome ?? Paths.root,
-    ...(opts.deps.binaryOverride ? { binaryOverride: opts.deps.binaryOverride } : {}),
-    ...(opts.deps.configPath !== undefined ? { configPath: opts.deps.configPath } : {}),
-    ...(opts.deps.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
-      : {}),
-    // RFC-103 T2 (01-LIFE-06): retryNode historically dropped commit&push +
-    // maxConcurrentNodes; thread them like start/resume via the single source.
-    ...runtimeConfigOpts(opts.deps),
-    log,
-    signal: controller.signal,
-  })
-    .catch((err) => {
-      log.error('runTask threw on node retry', {
+  try {
+    return await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
+      await reapHeldRuntimeSessionOwnersForTask(db, taskId, 'retryNode', opts.deps, log)
+
+      // RFC-243 D12 — only the retry CAS winner may supersede child invocations.
+      // Cancel every frozen target/downstream child before rollback or placeholder
+      // minting, so no old child can keep writing the inherited workspace while a
+      // new generation starts. Terminal/deleted children are already settled and
+      // therefore idempotent no-ops. An unexpected cancellation failure closes the
+      // owned task back to failed and aborts the retry: never leave a scheduler-less
+      // pending row and never reset/mint after a partially failed cancellation set.
+      for (const childTaskId of affectedChildTaskIds) {
+        try {
+          await cancelTask(db, childTaskId, { cascadeFromParent: true })
+        } catch (err) {
+          if (
+            (err instanceof ConflictError && err.code === 'task-not-cancelable') ||
+            err instanceof NotFoundError
+          ) {
+            continue
+          }
+          const detail = err instanceof Error ? err.message : String(err)
+          try {
+            await setTaskStatus({
+              db,
+              taskId,
+              to: 'failed',
+              allowedFrom: ['pending'],
+              extra: {
+                finishedAt: Date.now(),
+                errorSummary: 'retry-child-cancel-failed',
+                errorMessage: `failed to cancel superseded child task '${childTaskId}': ${detail}`,
+                failedNodeId: runRow.nodeId,
+              },
+              reason: 'retryNode:child-cancel-failed',
+            })
+          } catch (closeErr) {
+            const current = await getTask(db, taskId)
+            // A concurrent terminal winner is also fail-closed. If the row somehow
+            // remains pending, surface the close failure because it is the stronger
+            // invariant violation and must not be mistaken for a clean child error.
+            if (current?.status === 'pending') throw closeErr
+          }
+          const failed = await getTask(db, taskId)
+          if (failed !== null) emitTaskStatus(failed)
+          throw new ConflictError(
+            'retry-child-cancel-failed',
+            `cannot retry node '${runRow.nodeId}': superseded child task '${childTaskId}' could not be canceled (${detail})`,
+          )
+        }
+      }
+
+      // Rollback to the snapshot before the node_run started. The single-node
+      // retry uses THIS run's snapshot (not the latest, since the user picked
+      // this specific historical attempt).
+      // RFC-098 WP-8: same kill-then-proceed as resumeTask — group-kill the
+      // target row's still-alive child (if any) before touching the worktree.
+      await reapRunBeforeWorktreeReset(db, taskId, runRow, 'retryNode', opts.deps, log)
+      // RFC-098 WP-9: snapshot-missing escalates to task failed + 409 (same
+      // contract as resumeTask) — no placeholder rows are minted and no
+      // scheduler is kicked when the promised baseline no longer exists.
+      const rollbackOutcome = await rollbackNodeRunForResume(db, task, runRow, log)
+      if (rollbackOutcome.failures.some((f) => f.code === 'snapshot-missing')) {
+        await escalateSnapshotLost(db, taskId, runRow, rollbackOutcome, 'retryNode')
+      }
+
+      // Flip target + downstream node_runs from done → failed so the resumer
+      // re-runs them. We do this by inserting a fresh failed row at retry_index
+      // max+1, so the scheduler treats it as the "latest" and starts attempt+1.
+      //
+      // Carry forward (iteration, reviewIteration, shardKey, parentNodeRunId,
+      // preSnapshot) from the prior run so the retried attempt resumes in the same
+      // loop / review / shard frame. RFC-074 PR-C: the clarify generation is no
+      // longer carried on the row — it is derived from prior-done id-order at
+      // dispatch time, and the answered Q&A surfaces via the RFC-070 consumed-by
+      // stamp regardless of which row this retry is. For the explicitly retried
+      // target the source-of-truth is `runRow` (the row the
+      // user picked); for cascaded downstream nodes we inherit from each node's
+      // own latest row.
+      // RFC-052 / RFC-053 PR-C: per-kind cascade behavior comes from
+      // `NODE_KIND_BEHAVIORS[k].retryCascade` (shared/node-kind-behavior.ts).
+      // The user-picked node (`runRow.nodeId`) is included unconditionally —
+      // direct retry on a non-process node is a different operation the user
+      // explicitly chose. Downstream nodes are filtered by the table: kinds
+      // with retryCascade='mint-placeholder' get a placeholder row; kinds with
+      // 'skip' don't (RFC-052 fix). Unknown kinds (snapshot missing / older
+      // schema) default to 'mint-placeholder' to preserve the legacy
+      // pre-RFC-052 behavior on stale data.
+      // RFC-098 B3 (audit ⑥-11): when the user-picked TARGET row is a WRAPPER's
+      // own canceled/interrupted row, do NOT mint the failed placeholder — that
+      // row already IS the revival signal (isDispatchable treats canceled /
+      // interrupted as dispatchable, RFC-095) and findResumableWrapperRun resumes
+      // the SAME row (continue-from-persisted-progress). A failed placeholder
+      // would become the node's latest row, make findResumableWrapperRun return
+      // null, and restart the wrapper from iteration 0 / re-capture the git
+      // baseline — exactly the continue-not-restart semantics RFC-095 promised.
+      // Downstream cascade placeholders are kept (a downstream wrapper restarting
+      // from 0 after its upstream changed is the correct semantics); other target
+      // statuses (done / failed / awaiting_*) keep the placeholder mint —
+      // findResumableWrapperRun treats done/failed as terminal, so the placeholder
+      // is what re-arms dispatch there. See rfc095-wrapper-canceled-revival /
+      // retry-cascade-kind-matrix.
+      for (const nodeId of targets) {
+        // RFC-096 (audit S-13 / 附录 C #2): the inheritance source is the freshest
+        // TOP-LEVEL row by pure id — the old `desc(retryIndex)` pick had no
+        // iteration / parent filter, so a placeholder could inherit a fan-out
+        // child's parentNodeRunId (invisible to the frontier → cascade silently
+        // dead) or a stale iteration. nextRetry stays the ALL-rows max+1
+        // (conservative: legacy pathological rows minted by the old pickers may
+        // carry inflated retryIndex on child/inherited rows — never collide).
+        // prev === undefined (e.g. a fanout-inner node with only child rows) keeps
+        // the `?? 0` fallback below: the placeholder lands as a fresh top-level
+        // row that is inert for the top-level scope (inner nodes re-run via the
+        // wrapper's own resume path).
+        const existing = await db
+          .select()
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+        const prev = pickFreshestRun(existing, { topLevelOnly: true })
+        // RFC-284 T21：口径=全行集（刻意含 child rows），收编 nextRetryIndex。
+        const nextRetry = nextRetryIndex(existing)
+        const inherit = nodeId === runRow.nodeId ? runRow : prev
+        // RFC-306 §10 — "run anyway" on a node the branch logic skipped.
+        //
+        // The flag rides ONLY the placeholder of the node the user actually clicked
+        // (never the cascade), and it is one-shot BY CONSTRUCTION: the activation
+        // judgment reads the freshest row at dispatch time — this placeholder — and
+        // the run that follows mints its own row without the flag. A later
+        // re-evaluation therefore sees a clean row and re-decides the branch on its
+        // merits. Cascaded downstream nodes are deliberately NOT forced: they judge
+        // themselves against what the forced node actually emits.
+        const forceThisNode = nodeId === runRow.nodeId && runRow.status === 'skipped'
+        await mintNodeRun(db, {
+          taskId,
+          nodeId,
+          status: 'failed',
+          cause: nodeId === runRow.nodeId ? 'retry-node' : 'retry-node-cascade',
+          retryIndex: nextRetry,
+          iteration: inherit?.iteration ?? 0,
+          inheritFrom: inherit ?? null,
+          overrides: {
+            finishedAt: Date.now(),
+            errorMessage: 'queued for retry',
+            ...(forceThisNode ? { forceActivated: true } : {}),
+          },
+        })
+      }
+
+      // Task row already flipped pending above (RFC-097 admission winner).
+      const next = (await getTask(db, taskId)) as Task
+      emitTaskStatus(next)
+
+      void runTask({
         taskId,
-        error: err instanceof Error ? err.message : String(err),
+        db,
+        appHome: opts.deps.appHome ?? Paths.root,
+        ...(opts.deps.binaryOverride ? { binaryOverride: opts.deps.binaryOverride } : {}),
+        ...(opts.deps.configPath !== undefined ? { configPath: opts.deps.configPath } : {}),
+        ...(opts.deps.subagentLiveCapture !== undefined
+          ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
+          : {}),
+        // RFC-103 T2 (01-LIFE-06): retryNode historically dropped commit&push +
+        // maxConcurrentNodes; thread them like start/resume via the single source.
+        ...runtimeConfigOpts(opts.deps),
+        log,
+        signal: controller.signal,
+        executionContext: attachedDriver.executionContext,
+      })
+        .catch((err) => {
+          log.error('runTask threw on node retry', {
+            taskId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+        .finally(() => {
+          return releaseTaskDriverAndFinalizeWorkspace(db, taskId, controller)
+        })
+      return next
+    })
+  } catch (error) {
+    controller.abort('task-retry-node-preparation-failed')
+    await releaseTaskDriverAndFinalizeWorkspace(db, taskId, controller).catch((releaseError) => {
+      log.warn('retryNode: could not release failed continuation owner', {
+        taskId,
+        error: releaseError instanceof Error ? releaseError.message : String(releaseError),
       })
     })
-    .finally(() => {
-      return releaseTaskDriverAndFinalizeWorkspace(db, taskId, controller)
-    })
-  return next
+    throw error
+  }
 }
 
 function parseSnapshot(v: unknown): Record<string, unknown> | null {

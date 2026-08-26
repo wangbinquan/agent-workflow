@@ -33,6 +33,7 @@ import { composeScriptActionExecution } from '@/modules/task-execution/compositi
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { ulid } from 'ulid'
+import { createHash } from 'node:crypto'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
@@ -58,6 +59,12 @@ import { convergeResourceBundleApplies } from '@/services/bundle/apply'
 import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/maintenance'
 import { resumeQueuedIntentWorkingSets } from '@/services/intent/dispatcher'
 import { reapOrphanRuns } from '@/services/orphans'
+import { DAEMON_GENERATION } from '@/services/daemonGeneration'
+import { createExclusiveDaemonLockProof } from '@/modules/task-execution/domain/ownership'
+import {
+  finalizeTaskExecutionRecovery,
+  prepareTaskExecutionRecovery,
+} from '@/modules/task-execution/application/recoverTaskExecutions'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import { autoResumeInterruptedTasks } from '@/services/autoResume'
 import { startAutoRepairLoop } from '@/services/autoRepair'
@@ -71,9 +78,11 @@ import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { startEventsArchiver } from '@/services/eventsArchive'
 import { startRetentionSweeper } from '@/services/maintenanceRetention'
 import { recoverInterruptedArchives, startTaskArchiveSweeper } from '@/services/taskArchive'
+import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import {
   finishClaimedWebhookWorkspacePrune,
+  recoverInterruptedWorkspaceGc,
   runClaimedWebhookWorkspacePrunes,
   startWorktreeGc,
 } from '@/services/gc'
@@ -151,6 +160,7 @@ import { createSqliteTaskLifecycleEventPublisher } from '@/modules/task-executio
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
+import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 
 export interface StartOptions {
   port?: number
@@ -596,6 +606,23 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     /* users service may not be available in degraded mode; ignore */
   }
 
+  const taskExecutionLockProof = createExclusiveDaemonLockProof({
+    daemonGeneration: DAEMON_GENERATION,
+    acquiredAt: Date.now(),
+    lockReceiptDigest: createHash('sha256')
+      .update(`${lock.path}\u0000${lock.pid}\u0000${DAEMON_GENERATION}`)
+      .digest('hex'),
+  })
+  const ownershipRecoveryPreparation = prepareTaskExecutionRecovery({
+    db,
+    lockProof: taskExecutionLockProof,
+  })
+  if (ownershipRecoveryPreparation.revokedTaskIds.length > 0) {
+    log.warn('revoked task owners left by a previous daemon', {
+      tasks: ownershipRecoveryPreparation.revokedTaskIds.length,
+    })
+  }
+
   // 5b. P-4-07: reap orphan runs from the previous (crashed/SIGKILLed) daemon
   // process. Any task/node_run left in 'running' is flipped to 'interrupted'
   // with task.error_message = 'daemon-restart' so the UI surfaces what
@@ -611,6 +638,71 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (repairedRuntimeLeases > 0) {
     log.info('released runtime session leases held by terminal orphan runs', {
       leases: repairedRuntimeLeases,
+    })
+  }
+  const ownershipRecovery = await finalizeTaskExecutionRecovery({
+    db,
+    lockProof: taskExecutionLockProof,
+    processEvidence: {
+      orphanReaperCompleted: true,
+      orphanTasks: reap.tasks,
+      orphanRuns: reap.runs,
+      repairedRuntimeLeases,
+    },
+    codeHostProbe: (descriptor) =>
+      probeCodeHostMutation({
+        descriptor,
+        resolveConnection: (provider) => repositoryMetadataConnections.resolve(provider),
+      }),
+  })
+  if (
+    ownershipRecovery.releasedTaskIds.length > 0 ||
+    ownershipRecovery.outcomeUnknownTaskIds.length > 0
+  ) {
+    log.info('durable task execution recovery finalized', {
+      released: ownershipRecovery.releasedTaskIds.length,
+      outcomeUnknown: ownershipRecovery.outcomeUnknownTaskIds.length,
+      recoveredProcessEffects: ownershipRecovery.recoveredProcessEffectIds.length,
+      recoveredCodeHostEffects: ownershipRecovery.recoveredCodeHostEffectIds.length,
+      retryAuthorizedCodeHostEffects: ownershipRecovery.retryAuthorizedCodeHostEffectIds.length,
+    })
+  }
+
+  // RFC-328 terminal maintenance is durable and outlives task-row deletion.
+  // Resume exact delete claims before any automatic continuation is opened.
+  try {
+    const deleteRecovery = await recoverInterruptedTaskDeletes(db)
+    if (
+      deleteRecovery.completed.length > 0 ||
+      deleteRecovery.cleanupPending.length > 0 ||
+      deleteRecovery.recoveryRequired.length > 0
+    ) {
+      log.info('terminal task delete recovery', { ...deleteRecovery })
+    }
+  } catch (err) {
+    log.warn('terminal task delete recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  try {
+    const archiveRecovery = await recoverInterruptedArchives(db)
+    if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {
+      log.info('terminal task archive recovery', archiveRecovery)
+    }
+  } catch (err) {
+    log.warn('terminal task archive recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  try {
+    const workspaceRecovery = await recoverInterruptedWorkspaceGc(db)
+    if (workspaceRecovery.completed.length > 0 || workspaceRecovery.failed.length > 0) {
+      log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
+    }
+  } catch (err) {
+    log.warn('terminal workspace maintenance recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
     })
   }
 
@@ -938,11 +1030,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   })
   // RFC-311 T19(proposal C1):终态任务树归档出库。**默认关闭**;开启后整树终态
-  // 且超保留期的任务被导出到 archive/ 并从库删除(前台 404)。boot 先做一次崩溃
-  // 恢复:扫 `.tmp-*` 残留,库里行还在就丢弃重来、行已删就提升为正式目录。
-  void recoverInterruptedArchives(db).catch((err) =>
-    log.warn('archive recovery threw', { error: (err as Error).message }),
-  )
+  // 且超保留期的任务被导出到 archive/ 并从库删除(前台 404)。RFC-328 的 durable
+  // claim recovery 已在 admission 打开前同步完成。
   const taskArchiveTicker = startTaskArchiveSweeper(db, () => {
     const cfg = loadConfig(Paths.config)
     return {
@@ -1485,9 +1574,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
   // the daemon-restart loop: every task `reapOrphanRuns` just flipped to
   // `interrupted` is re-driven automatically, but only through the breaker +
-  // quarantine + driver-lease + recovery audit (autoResumeInterruptedTasks).
-  // Non-blocking — never hold the ready line on N resumes; resumeTask's CAS
-  // ownership claim keeps it safe against the scheduler / a human racing in.
+  // recovery audit (autoResumeInterruptedTasks) and RFC-328's canonical
+  // continuation intent. Non-blocking — never hold the ready line on N
+  // resumes; the durable intent/owner claim keeps it safe against the
+  // scheduler or a human racing in.
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,

@@ -7,9 +7,9 @@
 // rest of RFC-108 built —
 //   • circuit-breaker  (recordAutoRecoveryAttempt → skip if it quarantines),
 //   • quarantine flag   (isAutoRecoverySuspended → skip),
-//   • driver lease      (withDriverLease → never race a human / another actor),
+//   • continuation intent + durable owner claim (same command path as a human),
 //   • recovery audit     (a recovery_events row per resume),
-//   • resumeTask itself  (CAS ownership lock + snapshot-lost / live-child-survived
+//   • resumeTask itself  (revision CAS + snapshot-lost / live-child-survived
 //                         escalation already refuse unsafe resumes and the
 //                         breaker counts those failures toward quarantine).
 //
@@ -23,7 +23,6 @@ import { DAEMON_RESTART_ERROR_SUMMARY, taskWorkspacePhase } from '@agent-workflo
 import type { DbClient } from '@/db/client'
 import { nodeRuns, tasks } from '@/db/schema'
 import { CLARIFY_RERUN_CAUSES } from '@/services/nodeRunMint'
-import { withDriverLease } from '@/services/driverLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -33,8 +32,6 @@ import {
 import { createLogger } from '@/util/log'
 
 const log = createLogger('auto-resume')
-
-const HOLDER = 'boot-auto-resume'
 
 export interface AutoResumeOptions {
   db: DbClient
@@ -58,8 +55,9 @@ export interface AutoResumeResult {
 
 /**
  * Auto-resume every task that a daemon restart left `interrupted`. Idempotent:
- * resumeTask's CAS ownership claim means a task already being driven is skipped;
- * a second pass finds nothing because successful resumes leave `running`/terminal.
+ * resumeTask submits the same canonical continuation intent as a human command,
+ * so a task already being driven has one durable winner; a second pass finds
+ * nothing because successful resumes leave `running`/terminal.
  */
 export async function autoResumeInterruptedTasks(
   opts: AutoResumeOptions,
@@ -180,26 +178,24 @@ export async function autoResumeInterruptedTasks(
         skipped.push(t.id)
         continue
       }
-      const ok = await withDriverLease(t.id, HOLDER, 'auto-resume', async () => {
-        try {
-          await retryRepoPrep(t.id)
-          await recordRecoveryEvent(db, {
-            taskId: t.id,
-            kind: 'auto-resume',
-            reason: 'autoResumeOnBoot:repo-prep',
-            before: { status: 'interrupted' },
-            after: { status: 'pending' },
-            now: now(),
-          })
-          return true
-        } catch (err) {
-          log.warn('auto repo-prep retry failed', {
-            taskId: t.id,
-            error: err instanceof Error ? err.message : String(err),
-          })
-          return false
-        }
-      })
+      let ok = false
+      try {
+        await retryRepoPrep(t.id)
+        await recordRecoveryEvent(db, {
+          taskId: t.id,
+          kind: 'auto-resume',
+          reason: 'autoResumeOnBoot:repo-prep',
+          before: { status: 'interrupted' },
+          after: { status: 'pending' },
+          now: now(),
+        })
+        ok = true
+      } catch (err) {
+        log.warn('auto repo-prep retry failed', {
+          taskId: t.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
       if (ok === true) resumed.push(t.id)
       else skipped.push(t.id)
       continue
@@ -213,29 +209,24 @@ export async function autoResumeInterruptedTasks(
       skipped.push(t.id)
       continue
     }
-    const ran = await withDriverLease(t.id, HOLDER, 'auto-resume', async () => {
-      try {
-        await resume(t.id)
-        await recordRecoveryEvent(db, {
-          taskId: t.id,
-          kind: 'auto-resume',
-          reason: 'autoResumeOnBoot',
-          before: { status: 'interrupted' },
-          after: { status: 'pending' },
-          now: now(),
-        })
-        return true
-      } catch (err) {
-        // resumeTask refused (snapshot-lost / live-child-survived already
-        // escalated + audited) or the launch failed; the breaker counted the
-        // attempt, so a deterministic crash-loop quarantines after N.
-        log.warn('auto-resume failed', {
-          taskId: t.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-        return false
-      }
-    })
+    let ran = false
+    try {
+      await resume(t.id)
+      await recordRecoveryEvent(db, {
+        taskId: t.id,
+        kind: 'auto-resume',
+        reason: 'autoResumeOnBoot',
+        before: { status: 'interrupted' },
+        after: { status: 'pending' },
+        now: now(),
+      })
+      ran = true
+    } catch (err) {
+      log.warn('auto-resume failed', {
+        taskId: t.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
     if (ran === true) resumed.push(t.id)
     else skipped.push(t.id)
   }

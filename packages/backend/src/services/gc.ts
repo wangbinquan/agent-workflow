@@ -32,7 +32,11 @@ import { join } from 'node:path'
 import { TERMINAL_TASK_STATUSES, isTerminalTaskStatus } from '@agent-workflow/shared'
 import type { Config, TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import { nodeRuns, taskRepos, tasks } from '@/db/schema'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import type { RecoverableTerminalMaintenanceClaim } from '@/modules/task-execution/application/ports/terminalMaintenanceStore'
+import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
 import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'
@@ -84,6 +88,235 @@ export type ClaimedWorkspacePruneOutcome =
  * claim; this set closes the much shorter same-process duplicate-delete race. */
 const workspacePrunesInFlight = new Set<string>()
 
+interface WorkspaceGcCleanupPlanV1 {
+  readonly v: 1
+  readonly kind: 'workspace-prune' | 'iso-container'
+  readonly taskId: string
+  readonly containerRoot?: string
+}
+
+function parseWorkspaceGcCleanupPlan(value: string): WorkspaceGcCleanupPlanV1 | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<WorkspaceGcCleanupPlanV1>
+    if (
+      parsed.v !== 1 ||
+      (parsed.kind !== 'workspace-prune' && parsed.kind !== 'iso-container') ||
+      typeof parsed.taskId !== 'string' ||
+      (parsed.kind === 'iso-container' && typeof parsed.containerRoot !== 'string')
+    ) {
+      return null
+    }
+    return parsed as WorkspaceGcCleanupPlanV1
+  } catch {
+    return null
+  }
+}
+
+function ensureWorkspaceGcClaim(
+  db: DbClient,
+  plan: WorkspaceGcCleanupPlanV1,
+  now: number,
+): RecoverableTerminalMaintenanceClaim {
+  const existing = taskExecutionModule.terminalMaintenance.listRecoverable({
+    db,
+    operation: 'workspace-gc',
+    rootTaskId: plan.taskId,
+  })
+  if (existing.length > 1) {
+    throw new TaskExecutionError(
+      'task-terminal-maintenance-conflict',
+      `task '${plan.taskId}' has multiple active workspace maintenance claims`,
+    )
+  }
+  const current = existing[0]
+  if (current !== undefined) {
+    const persisted = parseWorkspaceGcCleanupPlan(current.cleanupPlanJson)
+    if (persisted?.kind !== plan.kind) {
+      throw new TaskExecutionError(
+        'task-terminal-maintenance-conflict',
+        `task '${plan.taskId}' is already claimed by another workspace cleanup`,
+      )
+    }
+    return current
+  }
+
+  const members = taskExecutionModule.terminalMaintenance.snapshotMembers(db, [plan.taskId])
+  const cleanupPlanJson = JSON.stringify(plan)
+  const claim = taskExecutionModule.terminalMaintenance.claim({
+    db,
+    rootTaskId: plan.taskId,
+    operation: 'workspace-gc',
+    members,
+    cleanupPlanJson,
+    now,
+  })
+  return {
+    claim,
+    rootTaskId: plan.taskId,
+    state: 'claimed',
+    cleanupPlanJson,
+    members,
+  }
+}
+
+async function removeOwnedWorkspace(db: DbClient, taskId: string): Promise<boolean> {
+  const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  if (t === undefined) {
+    throw new TaskExecutionError(
+      'task-terminal-maintenance-conflict',
+      `task '${taskId}' disappeared during workspace cleanup`,
+    )
+  }
+  if (t.workspacePruningAt === null || !isTerminalTaskStatus(t.status as TaskStatus)) {
+    throw new TaskExecutionError(
+      'task-terminal-maintenance-conflict',
+      `task '${taskId}' no longer owns a workspace-prune tombstone`,
+    )
+  }
+  const workspaceExisted = t.worktreePath !== '' && existsSync(t.worktreePath)
+
+  if (t.spaceKind === 'scratch') {
+    if (workspaceExisted) {
+      rmSync(t.worktreePath, { recursive: true, force: true })
+      invalidateCallGraphIndex(t.worktreePath)
+    }
+  } else if (t.repoCount > 1) {
+    const rows = await db.select().from(taskRepos).where(eq(taskRepos.taskId, t.id))
+    for (const r of rows) {
+      if (r.worktreePath !== '' && existsSync(r.worktreePath)) {
+        await removeWorktree({
+          repoPath: r.repoPath,
+          worktreePath: r.worktreePath,
+          force: true,
+        })
+        invalidateCallGraphIndex(r.worktreePath)
+      }
+      await deleteSnapshotRefs(r.repoPath, t.id)
+    }
+    if (workspaceExisted) rmSync(t.worktreePath, { recursive: true, force: true })
+  } else {
+    if (workspaceExisted) {
+      await removeWorktree({ repoPath: t.repoPath, worktreePath: t.worktreePath, force: true })
+      invalidateCallGraphIndex(t.worktreePath)
+    }
+    // Replay even when the path is absent: a previous daemon may have stopped
+    // between worktree removal and snapshot-ref cleanup.
+    await deleteSnapshotRefs(t.repoPath, t.id)
+  }
+  return workspaceExisted
+}
+
+async function resumeWorkspaceGcClaim(
+  db: DbClient,
+  item: RecoverableTerminalMaintenanceClaim,
+  now: number,
+): Promise<{ removed: boolean }> {
+  const plan = parseWorkspaceGcCleanupPlan(item.cleanupPlanJson)
+  if (plan === null || plan.taskId !== item.rootTaskId) {
+    throw new Error(`workspace maintenance claim '${item.claim.claimId}' has an invalid plan`)
+  }
+  let claim = item.claim
+  let state = item.state
+  let removed = false
+
+  if (state === 'recovery-required') {
+    claim = taskExecutionModule.terminalMaintenance.transition({
+      db,
+      claim,
+      to: 'claimed',
+      now,
+    })
+    state = 'claimed'
+  }
+
+  if (state === 'claimed') {
+    if (plan.kind === 'workspace-prune') {
+      removed = await removeOwnedWorkspace(db, plan.taskId)
+    } else {
+      const containerRoot = plan.containerRoot
+      if (containerRoot === undefined) throw new Error('iso cleanup plan lacks container root')
+      removed = existsSync(containerRoot)
+      rmSync(containerRoot, { recursive: true, force: true })
+      const t = (await db.select().from(tasks).where(eq(tasks.id, plan.taskId)).limit(1))[0]
+      if (t !== undefined) {
+        for (const wt of [t.worktreePath, t.repoPath]) {
+          if (wt !== '' && existsSync(wt)) await runGit(wt, ['worktree', 'prune']).catch(() => {})
+        }
+      }
+    }
+    claim = taskExecutionModule.terminalMaintenance.transition({
+      db,
+      claim,
+      to: 'io-complete',
+      now,
+    })
+    state = 'io-complete'
+  }
+
+  if (state === 'io-complete') {
+    claim = dbTxSync(db, (tx) => {
+      taskExecutionModule.terminalMaintenance.assertClaimTx({
+        tx,
+        claim,
+        expectedState: 'io-complete',
+      })
+      const task = tx
+        .select({
+          workspacePruningAt: tasks.workspacePruningAt,
+          workspacePrunedAt: tasks.workspacePrunedAt,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, plan.taskId))
+        .get()
+      if (task === undefined) {
+        throw new TaskExecutionError(
+          'task-terminal-maintenance-conflict',
+          `task '${plan.taskId}' disappeared before workspace cleanup finalized`,
+        )
+      }
+      if (plan.kind === 'workspace-prune') {
+        if (task.workspacePrunedAt === null) {
+          const finalized = tx
+            .update(tasks)
+            .set({ workspacePrunedAt: now })
+            .where(
+              and(
+                eq(tasks.id, plan.taskId),
+                isNotNull(tasks.workspacePruningAt),
+                isNull(tasks.workspacePrunedAt),
+              ),
+            )
+            .returning({ id: tasks.id })
+            .get()
+          if (finalized === undefined) {
+            throw new TaskExecutionError(
+              'task-terminal-maintenance-conflict',
+              `task '${plan.taskId}' lost its workspace-prune tombstone`,
+            )
+          }
+        }
+      } else {
+        tx.update(tasks)
+          .set({ workspacePruningAt: null })
+          .where(and(eq(tasks.id, plan.taskId), isNull(tasks.workspacePrunedAt)))
+          .run()
+      }
+      return taskExecutionModule.terminalMaintenance.transitionTx({
+        tx,
+        claim,
+        to: 'db-finalized',
+        now,
+      })
+    })
+    state = 'db-finalized'
+  }
+
+  if (state === 'db-finalized' || state === 'cleanup-pending') {
+    taskExecutionModule.terminalMaintenance.complete({ db, claim, now })
+  }
+  return { removed }
+}
+
 /**
  * Phase-1 claim (RFC-165 F8): stamp `workspace_pruning_at` iff the task is
  * still terminal, not yet pruned, and has no source-specific claim provenance.
@@ -127,65 +360,28 @@ export async function finishClaimedWorkspacePrune(
   workspacePrunesInFlight.add(taskId)
   try {
     const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
-    if (t === undefined || t.workspacePrunedAt !== null) return { kind: 'already-pruned' }
-    if (t.workspacePruningAt === null || !isTerminalTaskStatus(t.status as TaskStatus)) {
+    if (t === undefined) return { kind: 'already-pruned' }
+    const existing = taskExecutionModule.terminalMaintenance.listRecoverable({
+      db,
+      operation: 'workspace-gc',
+      rootTaskId: taskId,
+    })
+    if (t.workspacePrunedAt !== null && existing.length === 0) return { kind: 'already-pruned' }
+    if (
+      t.workspacePrunedAt === null &&
+      (t.workspacePruningAt === null || !isTerminalTaskStatus(t.status as TaskStatus))
+    ) {
       return { kind: 'not-claimed' }
     }
-    const claimStamp = t.workspacePruningAt
-    const workspaceExisted = t.worktreePath !== '' && existsSync(t.worktreePath)
-
-    if (t.spaceKind === 'scratch') {
-      if (workspaceExisted) {
-        // Scratch owns its entire fresh Git repository; it has no linked
-        // worktree registration or source-repository snapshot refs.
-        rmSync(t.worktreePath, { recursive: true, force: true })
-        invalidateCallGraphIndex(t.worktreePath)
-      }
-    } else if (t.repoCount > 1) {
-      // Multi-repo workspaces remove each registered linked worktree before
-      // the parent container. Snapshot refs are always replayed, even when a
-      // crash already removed the directory but happened before ref cleanup.
-      const rows = await db.select().from(taskRepos).where(eq(taskRepos.taskId, t.id))
-      for (const r of rows) {
-        if (r.worktreePath !== '' && existsSync(r.worktreePath)) {
-          await removeWorktree({
-            repoPath: r.repoPath,
-            worktreePath: r.worktreePath,
-            force: true,
-          })
-          invalidateCallGraphIndex(r.worktreePath)
-        }
-        await deleteSnapshotRefs(r.repoPath, t.id)
-      }
-      if (workspaceExisted) {
-        rmSync(t.worktreePath, { recursive: true, force: true })
-      }
-    } else {
-      if (workspaceExisted) {
-        await removeWorktree({ repoPath: t.repoPath, worktreePath: t.worktreePath, force: true })
-        invalidateCallGraphIndex(t.worktreePath)
-      }
-      // This must run when the worktree path is already absent too: that is
-      // the crash window between `git worktree remove` and ref deletion.
-      await deleteSnapshotRefs(t.repoPath, t.id)
-    }
-
-    const finalized = await db
-      .update(tasks)
-      .set({ workspacePrunedAt: now })
-      .where(
-        and(
-          eq(tasks.id, taskId),
-          eq(tasks.workspacePruningAt, claimStamp),
-          isNull(tasks.workspacePrunedAt),
-        ),
-      )
-      .returning({ id: tasks.id })
-    if (finalized.length !== 1) return { kind: 'busy' }
-    return workspaceExisted ? { kind: 'removed' } : { kind: 'finalized-missing' }
+    const item = ensureWorkspaceGcClaim(db, { v: 1, kind: 'workspace-prune', taskId }, now)
+    const result = await resumeWorkspaceGcClaim(db, item, now)
+    return result.removed ? { kind: 'removed' } : { kind: 'finalized-missing' }
   } catch (err) {
+    if (err instanceof TaskExecutionError && err.code === 'task-terminal-maintenance-conflict') {
+      return { kind: 'busy' }
+    }
     const error = err instanceof Error ? err.message : String(err)
-    log.warn('workspace prune failed (claim kept; lease expiry retries)', {
+    log.warn('workspace prune failed (durable maintenance claim kept for recovery)', {
       taskId,
       error,
     })
@@ -193,6 +389,48 @@ export async function finishClaimedWorkspacePrune(
   } finally {
     workspacePrunesInFlight.delete(taskId)
   }
+}
+
+export interface WorkspaceGcRecoveryResult {
+  completed: string[]
+  failed: string[]
+  skipped: number
+}
+
+/** Resume exact RFC-328 workspace/iso cleanup claims. The cleanup plan is
+ * self-contained, so a crash after physical deletion but before the task-row
+ * finalize is repaired without minting a new claim or waiting for its legacy
+ * lease timestamp to expire. */
+export async function recoverInterruptedWorkspaceGc(
+  db: DbClient,
+  now: number = Date.now(),
+): Promise<WorkspaceGcRecoveryResult> {
+  const result: WorkspaceGcRecoveryResult = { completed: [], failed: [], skipped: 0 }
+  const items = taskExecutionModule.terminalMaintenance.listRecoverable({
+    db,
+    operation: 'workspace-gc',
+  })
+  for (const item of items) {
+    if (workspacePrunesInFlight.has(item.rootTaskId)) {
+      result.skipped += 1
+      continue
+    }
+    workspacePrunesInFlight.add(item.rootTaskId)
+    try {
+      await resumeWorkspaceGcClaim(db, item, now)
+      result.completed.push(item.rootTaskId)
+    } catch (err) {
+      result.failed.push(item.rootTaskId)
+      log.warn('workspace maintenance recovery failed', {
+        taskId: item.rootTaskId,
+        claimId: item.claim.claimId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      workspacePrunesInFlight.delete(item.rootTaskId)
+    }
+  }
+  return result
 }
 
 /** Low-latency RFC-300 finalizer used by the terminal post-commit effect and
@@ -354,6 +592,7 @@ export async function runWorktreeGc(
       repoCount: tasks.repoCount,
       startedAt: tasks.startedAt,
       finishedAt: tasks.finishedAt,
+      workspacePruningAt: tasks.workspacePruningAt,
     })
     .from(tasks)
     .where(
@@ -382,6 +621,11 @@ export async function runWorktreeGc(
       continue
     }
     if (t.worktreePath === '' || !existsSync(t.worktreePath)) {
+      if (t.workspacePruningAt !== null) {
+        await finishClaimedWorkspacePrune(db, t.id, now)
+        result.skipped += 1
+        continue
+      }
       // Legacy pre-tombstone GC (or manual rm) already took the dir — heal the
       // row forward so revive paths 410 instead of resurrecting a ghost
       // (R3-2-r4; boot reconcile does the same sweep once at startup).
@@ -735,36 +979,81 @@ export async function runIsoWorktreeGc(
     const containerRoot = join(isoRoot, taskId)
     // RFC-165 (D1): row-anchored + revivable → take the transient claim.
     // Tombstoned or row-less containers delete without ceremony.
-    let claimStamp: number | null = null
     if (t !== undefined && t.workspacePrunedAt === null) {
-      claimStamp = Date.now()
-      const claimed = await db
-        .update(tasks)
-        .set({ workspacePruningAt: claimStamp })
-        .where(
-          and(
-            eq(tasks.id, taskId),
-            inArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-            isNull(tasks.workspacePruningAt),
-            isNull(tasks.workspacePruneCause),
-            isNull(tasks.workspacePrunedAt),
-          ),
-        )
-        .returning({ id: tasks.id })
-      if (claimed.length !== 1) {
-        // Revived, being pruned by workspace GC, or racing another claimer —
-        // leave the container for the next tick.
-        continue
+      const existing = taskExecutionModule.terminalMaintenance.listRecoverable({
+        db,
+        operation: 'workspace-gc',
+        rootTaskId: taskId,
+      })
+      let item = existing[0]
+      let claimStamp: number | null = null
+      if (item !== undefined) {
+        if (parseWorkspaceGcCleanupPlan(item.cleanupPlanJson)?.kind !== 'iso-container') continue
+      } else {
+        claimStamp = Date.now()
+        const claimed = await db
+          .update(tasks)
+          .set({ workspacePruningAt: claimStamp })
+          .where(
+            and(
+              eq(tasks.id, taskId),
+              inArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+              isNull(tasks.workspacePruningAt),
+              isNull(tasks.workspacePruneCause),
+              isNull(tasks.workspacePrunedAt),
+            ),
+          )
+          .returning({ id: tasks.id })
+        if (claimed.length !== 1) continue
+        try {
+          item = ensureWorkspaceGcClaim(
+            db,
+            { v: 1, kind: 'iso-container', taskId, containerRoot },
+            claimStamp,
+          )
+        } catch (err) {
+          // No maintenance claim was acquired, so release only the legacy
+          // transient stamp created by this attempt.
+          await db
+            .update(tasks)
+            .set({ workspacePruningAt: null })
+            .where(
+              and(
+                eq(tasks.id, taskId),
+                eq(tasks.workspacePruningAt, claimStamp),
+                isNull(tasks.workspacePruneCause),
+                isNull(tasks.workspacePrunedAt),
+              ),
+            )
+          log.warn('iso worktree GC could not acquire terminal maintenance', {
+            taskId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+          continue
+        }
       }
+      if (item === undefined || workspacePrunesInFlight.has(taskId)) continue
+      workspacePrunesInFlight.add(taskId)
+      try {
+        const outcome = await resumeWorkspaceGcClaim(db, item, Date.now())
+        if (outcome.removed) removed.push(taskId)
+      } catch (err) {
+        log.warn('iso worktree GC failed (durable claim kept for recovery)', {
+          taskId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        workspacePrunesInFlight.delete(taskId)
+      }
+      continue
     }
     try {
       rmSync(containerRoot, { recursive: true, force: true })
-      // Prune the now-dangling worktree registrations from the task's repo/worktree.
+      // Row-less or already tombstoned containers cannot be revived and no
+      // longer own live task execution state.
       if (t !== undefined) {
         for (const wt of [t.worktreePath, t.repoPath]) {
-          if (wt !== '' && existsSync(wt)) {
-            await runGit(wt, ['worktree', 'prune']).catch(() => {})
-          }
+          if (wt !== '' && existsSync(wt)) await runGit(wt, ['worktree', 'prune']).catch(() => {})
         }
       }
       removed.push(taskId)
@@ -773,22 +1062,6 @@ export async function runIsoWorktreeGc(
         taskId,
         error: err instanceof Error ? err.message : String(err),
       })
-    } finally {
-      // Release the transient claim (CAS-scoped: only OUR stamp, and only if
-      // the workspace GC didn't finalize a tombstone meanwhile).
-      if (claimStamp !== null) {
-        await db
-          .update(tasks)
-          .set({ workspacePruningAt: null })
-          .where(
-            and(
-              eq(tasks.id, taskId),
-              eq(tasks.workspacePruningAt, claimStamp),
-              isNull(tasks.workspacePruneCause),
-              isNull(tasks.workspacePrunedAt),
-            ),
-          )
-      }
     }
   }
   return { scanned: taskDirs.length, removed }
@@ -818,7 +1091,8 @@ export function startWorktreeGc(
     intervalMs,
     phaseOffsetMs,
     onTick: () =>
-      runClaimedWebhookWorkspacePrunes(db, { isTaskActive, staleOnly: true })
+      recoverInterruptedWorkspaceGc(db)
+        .then(() => runClaimedWebhookWorkspacePrunes(db, { isTaskActive, staleOnly: true }))
         .then(() => runWorktreeGc(db, loadConfig(), Date.now(), isTaskActive))
         .then(() =>
           appHome !== undefined ? runIsoWorktreeGc(db, appHome, isTaskActive) : undefined,

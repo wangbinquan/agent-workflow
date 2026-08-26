@@ -4,7 +4,7 @@
 // than freezing RFC-294's proposed classes. They protect the observable
 // ownership/lifecycle contracts that TaskEngine -> WrapperRuntime ->
 // NodeExecutor -> ExecutionKernel must preserve while those layers move:
-//   1. two real scheduler kicks may race, but the task CAS admits one driver;
+//   1. the retained ownerless scheduler test seam still dispatches exactly once;
 //   2. unlike-operation resume/retry races still have one owner and no loser
 //      placeholder/process pollution;
 //   3. daemon shutdown settles task + node as interrupted, then resume makes a
@@ -24,7 +24,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import {
+  agents,
+  nodeRuns,
+  taskExecutionEffects,
+  taskExecutionOwners,
+  tasks,
+  workflows,
+} from '../src/db/schema'
 import { runTask } from '../src/services/scheduler'
 import {
   abortAllActiveTasks,
@@ -343,6 +350,29 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
     ])
     expect(spawnLog(h)).toBe('SF')
     expect(isTaskActive(started.id)).toBe(false)
+    const owner = (
+      await h.db
+        .select({ epoch: taskExecutionOwners.epoch, state: taskExecutionOwners.state })
+        .from(taskExecutionOwners)
+        .where(eq(taskExecutionOwners.taskId, started.id))
+    )[0]
+    expect(owner).toEqual({ epoch: 2, state: 'released' })
+    const processGenerations = (
+      await h.db
+        .select({
+          kind: taskExecutionEffects.kind,
+          state: taskExecutionEffects.state,
+          operationGeneration: taskExecutionEffects.operationGeneration,
+        })
+        .from(taskExecutionEffects)
+        .where(eq(taskExecutionEffects.taskId, started.id))
+    )
+      .filter((effect) => effect.kind === 'process')
+      .sort((left, right) => left.operationGeneration - right.operationGeneration)
+    expect(processGenerations).toEqual([
+      { kind: 'process', state: 'succeeded', operationGeneration: 0 },
+      { kind: 'process', state: 'succeeded', operationGeneration: 1 },
+    ])
   }, 30_000)
 
   test('pre-materialized failure handoff wins over deferred repository preparation and preserves handed-off task identity', async () => {

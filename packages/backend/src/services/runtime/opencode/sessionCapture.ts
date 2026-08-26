@@ -30,6 +30,7 @@ import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRuns } from '@/db/schema'
+import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
 import { createLogger, type Logger } from '@/util/log'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 import { walkOpencodeSessions, type OpencodeMessageRow, type OpencodePartRow } from './sessionWalk'
@@ -342,7 +343,19 @@ export async function captureChildSessions(
         sessionId: sess.id,
         parentSessionId: sess.parent_id,
       }))
-      await opts.db.insert(nodeRunEvents).values(rows)
+      const taskId =
+        opts.taskId ??
+        opts.db
+          .select({ taskId: nodeRuns.taskId })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, opts.nodeRunId))
+          .get()?.taskId
+      if (taskId === undefined) throw new Error(`node_run '${opts.nodeRunId}' no longer exists`)
+      withTaskExecutionMutation({
+        db: opts.db,
+        taskId,
+        run: (tx) => tx.insert(nodeRunEvents).values(rows).run(),
+      })
       insertedRows += rows.length
     }
     if (skipped.length > 0) {
@@ -412,13 +425,27 @@ async function markCaptureFailed(
   reason: string,
 ): Promise<void> {
   try {
-    await db.insert(nodeRunEvents).values({
-      nodeRunId,
-      ts: Date.now(),
-      kind: 'subagent_capture_failed',
-      payload: JSON.stringify({ sessionID: rootSessionId, reason }),
-      sessionId: rootSessionId,
-      parentSessionId: null,
+    const taskId = db
+      .select({ taskId: nodeRuns.taskId })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+      .get()?.taskId
+    if (taskId === undefined) return
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .insert(nodeRunEvents)
+          .values({
+            nodeRunId,
+            ts: Date.now(),
+            kind: 'subagent_capture_failed',
+            payload: JSON.stringify({ sessionID: rootSessionId, reason }),
+            sessionId: rootSessionId,
+            parentSessionId: null,
+          })
+          .run(),
     })
   } catch {
     // If even the marker write fails, swallow — we already logged the

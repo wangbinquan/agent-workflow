@@ -69,6 +69,7 @@ import {
   exclusionPlanFor,
   describeWrapperKind,
   splitPortItems,
+  isCodeHostAction,
 } from '@agent-workflow/shared'
 import {
   bindWorkspaceExcludeParticipant,
@@ -105,6 +106,7 @@ import {
   runScriptProcess,
 } from './scriptRun'
 import type { DbClient } from '@/db/client'
+import type { DbTxSync } from '@/db/txSync'
 import {
   clarifyRounds,
   nodeRunEvents,
@@ -143,6 +145,7 @@ import { autoDispatchDeferredQuestions } from '@/services/clarifyAutoDispatch'
 import {
   trySetTaskStatus,
   setNodeRunStatus,
+  setNodeRunStatusTx,
   transitionNodeRunStatus,
   transitionMergeState,
   tryTransitionMergeState,
@@ -170,6 +173,32 @@ import {
   nodeKindIndex,
 } from '@/modules/task-execution/domain/inboundEdges'
 import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
+import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/application/codeHostEffectObserver'
+import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
+import {
+  createProcessEffectAttemptObserver,
+  type ProcessEffectAttemptObserver,
+} from '@/modules/task-execution/application/processEffectObserver'
+import {
+  assertTaskExecutionContext,
+  runWithTaskExecutionContext,
+  type TaskExecutionContext,
+} from '@/modules/task-execution/application/taskExecutionContext'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  withCurrentTaskExecutionMutation,
+  withTaskExecutionMutation,
+} from '@/modules/task-execution/application/ownedTaskMutation'
+import { exactOwnerMatches } from '@/modules/task-execution/domain/ownership'
+import {
+  decodeLineageSlotPath,
+  encodeLineageSlotPath,
+  type LineageSlot,
+} from '@/modules/task-execution/domain/executionIntent'
+import {
+  operationFamilyKey,
+  requestHash as executionEffectRequestHash,
+} from '@/modules/task-execution/domain/executionEffect'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
@@ -312,6 +341,14 @@ export interface RunTaskOptions {
   taskId: string
   db: DbClient
   appHome: string
+  /**
+   * RFC-328 exact durable claim, supplied only by the claim→attach handoff.
+   * Optional solely for legacy unit fixtures that call runTask against an
+   * ownerless in-memory database; a durable claimed owner always requires it.
+   * It is intentionally absent from the child inheritance registry because a
+   * child task obtains its own intent/epoch.
+   */
+  executionContext?: TaskExecutionContext
   /**
    * RFC-304: fences MR leases across a restart. A lease minted by a previous
    * daemon is void, so a machine that died holding leases does not lock every
@@ -617,7 +654,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // same reasoning (a split pool would run a task at double its configured
   // shard concurrency), so it is reclaimed in this one place too.
   try {
-    await runTaskInner(opts)
+    if (opts.executionContext === undefined) await runTaskInner(opts)
+    else {
+      await runWithTaskExecutionContext(opts.executionContext, () => runTaskInner(opts))
+    }
   } finally {
     gcTaskWriteSem(opts.taskId)
     gcTaskFanoutSem(opts.taskId)
@@ -633,6 +673,20 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   const task = taskRows[0]
   if (!task) {
     log.error('runTask: task not found', { taskId })
+    return
+  }
+
+  const durableOwner = taskExecutionModule.ownership.read(db, taskId)
+  if (opts.executionContext !== undefined) {
+    assertTaskExecutionContext(opts.executionContext, taskId)
+    if (durableOwner === null || !exactOwnerMatches(durableOwner, opts.executionContext.token)) {
+      log.warn('runTask: durable owner no longer matches execution context', { taskId })
+      return
+    }
+  } else if (durableOwner?.state === 'claimed') {
+    // A production-owned task may never fall back to the pre-RFC-328 status
+    // claim. Ownerless direct fixtures keep their historical test seam.
+    log.error('runTask: durable owner requires exact execution context', { taskId })
     return
   }
 
@@ -690,13 +744,19 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
           worktreePath: repo.worktreePath,
           appHome: opts.appHome ?? Paths.root,
         }).ensure({ directChildMounts: exclusionPlanFor(repo.mountPath, allMounts) })
-        await db
-          .update(taskRepos)
-          .set({
-            workspaceProfileVersion: receipt.version,
-            workspaceProfileDigest: receipt.digest,
-          })
-          .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.repoIndex, repo.repoIndex)))
+        withTaskExecutionMutation({
+          db,
+          taskId,
+          run: (tx) =>
+            tx
+              .update(taskRepos)
+              .set({
+                workspaceProfileVersion: receipt.version,
+                workspaceProfileDigest: receipt.digest,
+              })
+              .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.repoIndex, repo.repoIndex)))
+              .run(),
+        })
       }
     } catch (error) {
       await failTask(
@@ -704,6 +764,8 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         taskId,
         'workspace-exclude-profile-failed',
         error instanceof Error ? error.message : String(error),
+        undefined,
+        opts.executionContext,
       )
       return
     }
@@ -715,7 +777,14 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     const raw: unknown = JSON.parse(task.workflowSnapshot)
     definition = migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(raw))
   } catch (err) {
-    await failTask(db, taskId, 'snapshot-invalid', (err as Error).message)
+    await failTask(
+      db,
+      taskId,
+      'snapshot-invalid',
+      (err as Error).message,
+      undefined,
+      opts.executionContext,
+    )
     return
   }
 
@@ -728,7 +797,14 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     source: parsedTriggerContext,
   })
   if (triggerIssue !== null) {
-    await failTask(db, taskId, triggerIssue.code, triggerIssue.code)
+    await failTask(
+      db,
+      taskId,
+      triggerIssue.code,
+      triggerIssue.code,
+      undefined,
+      opts.executionContext,
+    )
     return
   }
   const triggerContext = parsedTriggerContext.kind === 'ok' ? parsedTriggerContext.value : null
@@ -742,6 +818,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     taskId,
     to: 'running',
     allowedFrom: ['pending'],
+    ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
     reason: 'runTask-start',
   })
   if (!claimed) {
@@ -765,6 +842,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         `scheduler does not yet support ${node.kind} nodes`,
         `node kind ${node.kind} unsupported`,
         node.id,
+        opts.executionContext,
       )
       return
     }
@@ -787,6 +865,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       'workflow-node-id-duplicate',
       `node id '${nodeId}' appears ${count} times; node ids must be unique`,
       nodeId,
+      opts.executionContext,
     )
     return
   }
@@ -811,6 +890,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       'wrapper-containment-invalid',
       `${containmentIssue.code}: ${JSON.stringify(containmentIssue)}`,
       failedNodeId,
+      opts.executionContext,
     )
     return
   }
@@ -833,7 +913,14 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   const topLevelNodes = definition.nodes.filter((n) => topLevelIds.has(n.id))
   const topLevelUpstreams = buildScopeUpstreams(definition, topLevelIds, null, containerOf)
   if (findScopeCycle(topLevelNodes, topLevelUpstreams) !== null) {
-    await failTask(db, taskId, 'workflow has a cycle outside any loop wrapper', 'cycle detected')
+    await failTask(
+      db,
+      taskId,
+      'workflow has a cycle outside any loop wrapper',
+      'cycle detected',
+      undefined,
+      opts.executionContext,
+    )
     return
   }
 
@@ -934,6 +1021,8 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         taskId,
         'dw-phase-invariant',
         `task is phase='executing' but its snapshot still contains the generation host node`,
+        undefined,
+        opts.executionContext,
       )
       return
     }
@@ -963,7 +1052,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log.error('runTask: scope threw — failing task', { taskId, error: message })
-    await failTask(db, taskId, 'scheduler error', message)
+    await failTask(db, taskId, 'scheduler error', message, undefined, opts.executionContext)
     return
   }
 
@@ -984,11 +1073,24 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   }
 
   if (result.kind === 'failed' && result.detail) {
-    await failTask(db, taskId, result.detail.summary, result.detail.message, result.detail.nodeId)
+    await failTask(
+      db,
+      taskId,
+      result.detail.summary,
+      result.detail.message,
+      result.detail.nodeId,
+      opts.executionContext,
+    )
     return
   }
   if (result.kind === 'canceled') {
-    await cancelTaskRow(db, taskId, result.detail?.nodeId, opts.signal?.reason)
+    await cancelTaskRow(
+      db,
+      taskId,
+      result.detail?.nodeId,
+      opts.signal?.reason,
+      opts.executionContext,
+    )
     return
   }
   if (result.kind === 'awaiting_review') {
@@ -997,7 +1099,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // RFC-097: cancel wins — an abort that landed after runScope's last
     // signal check must not be overwritten by a park/terminal write.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(db, taskId, undefined, opts.signal.reason)
+      await cancelTaskRow(db, taskId, undefined, opts.signal.reason, opts.executionContext)
       return
     }
     if (
@@ -1006,6 +1108,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         taskId,
         to: 'awaiting_review',
         allowedFrom: ['running'],
+        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
         reason: 'scope-awaiting-review',
       })
     ) {
@@ -1025,7 +1128,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // created when the user POSTs answers. Per design §7.3 awaiting_human
     // outranks awaiting_review on the task chip when both can fire at once.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(db, taskId, undefined, opts.signal.reason)
+      await cancelTaskRow(db, taskId, undefined, opts.signal.reason, opts.executionContext)
       return
     }
     if (
@@ -1034,6 +1137,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         taskId,
         to: 'awaiting_human',
         allowedFrom: ['running'],
+        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
         reason: 'scope-awaiting-human',
       })
     ) {
@@ -1051,7 +1155,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   // CAS; a cancelTask fallback racing us resolves by whoever's CAS lands
   // (from-sets are disjoint winners: done from=running vs canceled CAS).
   if (opts.signal?.aborted === true) {
-    await cancelTaskRow(db, taskId, undefined, opts.signal.reason)
+    await cancelTaskRow(db, taskId, undefined, opts.signal.reason, opts.executionContext)
     return
   }
   if (
@@ -1061,6 +1165,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       to: 'done',
       allowedFrom: ['running'],
       extra: { finishedAt: Date.now() },
+      ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
       reason: 'task-done',
     })
   ) {
@@ -2126,10 +2231,16 @@ async function inspectReadonlyRepos(state: SchedulerState, log: Logger): Promise
     if (!repo.readonly) continue
     const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
     const changed = status.stdout.trim() === '' ? [] : status.stdout.trim().split('\n')
-    await state.db
-      .update(taskRepos)
-      .set({ readonlyDirtyCount: changed.length })
-      .where(and(eq(taskRepos.taskId, state.task.id), eq(taskRepos.repoIndex, repo.repoIndex)))
+    withTaskExecutionMutation({
+      db: state.db,
+      taskId: state.task.id,
+      run: (tx) =>
+        tx
+          .update(taskRepos)
+          .set({ readonlyDirtyCount: changed.length })
+          .where(and(eq(taskRepos.taskId, state.task.id), eq(taskRepos.repoIndex, repo.repoIndex)))
+          .run(),
+    })
     if (changed.length > 0) {
       log.warn('[rfc248/readonly-dirty] read-only repo was modified; NOT committed or pushed', {
         taskId: state.task.id,
@@ -2326,6 +2437,7 @@ async function maybeRunCommitPush(
         agentName: agentLabel,
         parentNodeRunId,
         worktreePath: repo.worktreePath,
+        repositoryIdentity: repo.repoPath,
         repoBranch: branch,
         baseRef,
         ...(repoSlug ? { repoSlug } : {}),
@@ -3600,7 +3712,12 @@ async function runCallWorkflowNode(
     // child INSERT — a crash between the two surfaces as `child-deleted`
     // (dangling stamp) instead of a duplicate child on redispatch.
     const childId = ulid()
-    await db.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, nodeRunId))
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, nodeRunId)).run(),
+    })
     try {
       if (isWorkgroupCall) {
         await launchCallWorkgroupChild(state, {
@@ -3632,7 +3749,12 @@ async function runCallWorkflowNode(
       launchedChildId = childId
     } catch (err) {
       hold.release()
-      await db.update(nodeRuns).set({ childTaskId: null }).where(eq(nodeRuns.id, nodeRunId))
+      withTaskExecutionMutation({
+        db,
+        taskId,
+        run: (tx) =>
+          tx.update(nodeRuns).set({ childTaskId: null }).where(eq(nodeRuns.id, nodeRunId)).run(),
+      })
       await discardNodeIso(liveIso, log, writeSem)
       const code =
         err instanceof ValidationError || err instanceof DomainError || err instanceof NotFoundError
@@ -3666,11 +3788,20 @@ async function runCallWorkflowNode(
       ? parseCallLedger(latestExisting?.wrapperProgressJson ?? null)
       : parseCallLedger(null)
   const persistLedger = async (): Promise<void> => {
-    await db
-      .update(nodeRuns)
-      .set({ wrapperProgressJson: JSON.stringify(ledger) })
-      .where(eq(nodeRuns.id, nodeRunId))
-      .catch?.(() => {})
+    try {
+      withTaskExecutionMutation({
+        db,
+        taskId,
+        run: (tx) =>
+          tx
+            .update(nodeRuns)
+            .set({ wrapperProgressJson: JSON.stringify(ledger) })
+            .where(eq(nodeRuns.id, nodeRunId))
+            .run(),
+      })
+    } catch {
+      // Best-effort progress telemetry; the child terminal observation remains authoritative.
+    }
   }
   const observeChild = async (): Promise<void> => {
     const row = await db
@@ -3910,20 +4041,26 @@ async function runCallWorkflowNode(
     // parent graph — the child's inactive port projects onto an inactive parent
     // port, so a reusable "decider" workflow can be called as a sub-workflow.
     const active = v.active !== false
-    await db
-      .insert(nodeRunOutputs)
-      .values({
-        nodeRunId,
-        portName,
-        content: v.content,
-        kind: v.kind,
-        archiveJson: v.archiveJson ?? null,
-        active,
-      })
-      .onConflictDoUpdate({
-        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: { content: v.content, kind: v.kind, archiveJson: v.archiveJson ?? null, active },
-      })
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .insert(nodeRunOutputs)
+          .values({
+            nodeRunId,
+            portName,
+            content: v.content,
+            kind: v.kind,
+            archiveJson: v.archiveJson ?? null,
+            active,
+          })
+          .onConflictDoUpdate({
+            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+            set: { content: v.content, kind: v.kind, archiveJson: v.archiveJson ?? null, active },
+          })
+          .run(),
+    })
   }
   // Row goes done BEFORE merge (runner precedent) — downstream still gates on
   // merge_state (deriveFrontier D15), so nothing dispatches early.
@@ -4485,7 +4622,7 @@ async function runCodeHostCallNode(
       message: 'code-host-param-invalid',
     }
   }
-  if (action === null) {
+  if (action === null || !isCodeHostAction(action)) {
     return {
       kind: 'failed',
       summary: `code-host node ${node.id} has no action`,
@@ -4594,52 +4731,212 @@ async function runCodeHostCallNode(
       ? (node as unknown as { timeoutMs: number }).timeoutMs
       : opts.codeHostRequestTimeoutMs
 
+  const attemptObserver = (() => {
+    if (opts.executionContext === undefined) return undefined
+    const run = db
+      .select({
+        continuationSlotKey: nodeRuns.continuationSlotKey,
+        lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
+        operationGeneration: nodeRuns.operationGeneration,
+      })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+      .get()
+    const executionLineageId = task.executionLineageId ?? taskId
+    const fallbackPath: readonly LineageSlot[] = [
+      {
+        stableNodeKey: 'task-root',
+        frozenOccurrenceKey: executionLineageId,
+        workflowRevision: task.workflowVersion,
+      },
+      {
+        stableNodeKey: node.id,
+        frozenOccurrenceKey: run?.continuationSlotKey ?? `${node.id}:${iteration}`,
+        workflowRevision: task.workflowVersion,
+      },
+    ]
+    let slotPath: readonly LineageSlot[] = fallbackPath
+    try {
+      if (run?.lineageSlotPathJson !== null && run?.lineageSlotPathJson !== undefined) {
+        slotPath = decodeLineageSlotPath(run.lineageSlotPathJson)
+      }
+    } catch {
+      // Legacy/imported rows use the deterministic task/node fallback above.
+    }
+    const slotPathJson = encodeLineageSlotPath(slotPath)
+    const slotPathDigest = sha256Hex(slotPathJson)
+    const operationKey = `${run?.continuationSlotKey ?? node.id}:code-host:${action}`
+    const familyKey = operationFamilyKey({
+      executionLineageId,
+      slotPath,
+      effectKind: 'code-host-mutation',
+      stableActionOrdinal: `${node.id}:${iteration}:${action}`,
+    })
+    const attemptPlan = taskExecutionModule.effects.planCodeHostAttempt({
+      db,
+      executionLineageId,
+      operationFamilyKey: familyKey,
+    })
+    const objectCoordinates = Object.fromEntries(
+      ['project', 'mr', 'issue', 'thread', 'comment', 'draft', 'pipeline', 'job', 'sha', 'workflow']
+        .filter((key) => params[key] !== undefined)
+        .map((key) => [key, params[key]]),
+    )
+    return createCodeHostEffectAttemptObserver({
+      db,
+      context: opts.executionContext,
+      action,
+      nodeRunId,
+      initialRetryAuthority: attemptPlan.retryAuthority,
+      identity: {
+        executionLineageId,
+        operationFamilyKey: familyKey,
+        operationGeneration: attemptPlan.operationGeneration,
+        operationKey,
+        requestHash: executionEffectRequestHash({
+          provider,
+          action,
+          params,
+          request: rawRequest ?? null,
+          upstreamInputs,
+        }),
+        slotPathJson,
+        slotPathDigest,
+        resourceKeys: [
+          `code-host:${provider}:${sha256Hex(
+            JSON.stringify({ baseUrl: connection.baseUrl, ...objectCoordinates }),
+          )}`,
+        ],
+      },
+    })
+  })()
+
   const release = await codeHostSem.acquire()
   let outcome: Awaited<ReturnType<typeof executeCodeHostCall>>
   try {
-    outcome = await executeCodeHostCall(
-      {
-        provider,
-        action,
-        params,
-        ...(rawRequest !== undefined ? { request: rawRequest as never } : {}),
-        allowDestructive:
-          (node as unknown as { allowDestructive?: unknown }).allowDestructive === true,
-        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-      },
-      {
-        connection,
-        ctx: { ports: upstreamInputs, triggerContext: state.triggerContext },
-        projectFallback: resolveProjectFallback({
+    let recoveryCycle = 0
+    for (;;) {
+      outcome = await executeCodeHostCall(
+        {
           provider,
-          baseUrl: connection.baseUrl,
-          repositoryUrlPrefixes: connection.repositoryUrlPrefixes,
-          repoUrl: task.repoUrl,
-          repoCount: task.repoCount,
-        }),
+          action,
+          params,
+          ...(rawRequest !== undefined ? { request: rawRequest as never } : {}),
+          allowDestructive:
+            (node as unknown as { allowDestructive?: unknown }).allowDestructive === true,
+          ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+        },
+        {
+          connection,
+          ctx: { ports: upstreamInputs, triggerContext: state.triggerContext },
+          projectFallback: resolveProjectFallback({
+            provider,
+            baseUrl: connection.baseUrl,
+            repositoryUrlPrefixes: connection.repositoryUrlPrefixes,
+            repoUrl: task.repoUrl,
+            repoCount: task.repoCount,
+          }),
+          ...(opts.codeHostFetch !== undefined ? { fetchImpl: opts.codeHostFetch } : {}),
+          ...(opts.codeHostResponseMaxBytes !== undefined
+            ? { maxResponseBytes: opts.codeHostResponseMaxBytes }
+            : {}),
+          ...(attemptObserver !== undefined ? { attemptObserver } : {}),
+        },
+      )
+      if (outcome.ok || attemptObserver?.outcomeUnknown() !== true) break
+      const descriptor = attemptObserver.terminalRecoveryDescriptor()
+      if (descriptor === null) break
+      const probe = await probeCodeHostMutation({
+        descriptor,
+        resolveConnection: (targetProvider) =>
+          targetProvider === provider ? connection : (connections?.resolve(targetProvider) ?? null),
         ...(opts.codeHostFetch !== undefined ? { fetchImpl: opts.codeHostFetch } : {}),
-        ...(opts.codeHostResponseMaxBytes !== undefined
-          ? { maxResponseBytes: opts.codeHostResponseMaxBytes }
-          : {}),
-      },
-    )
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      })
+      if (probe.kind === 'definitely-not-applied' && recoveryCycle > 0) break
+      const resolution = attemptObserver.resolveTerminalProbe(probe)
+      if (resolution === 'applied' && probe.kind === 'applied') {
+        outcome = {
+          ok: true,
+          status: probe.responseStatus,
+          body: probe.responseBody,
+          truncated: false,
+          method: descriptor.method,
+          pathname: descriptor.mutationPathname,
+        }
+        break
+      }
+      if (resolution !== 'retry-authorized') break
+      recoveryCycle += 1
+    }
   } finally {
     release()
   }
 
   if (!outcome.ok) {
-    await settle('failed', outcome.code, {
-      errorMessage: outcome.message,
-      failureCode: outcome.code,
-    })
-    return { kind: 'failed', summary: outcome.summary, message: outcome.code }
+    const outcomeUnknown = attemptObserver?.outcomeUnknown?.() === true
+    const failureCode = outcomeUnknown ? 'task-execution-outcome-unknown' : outcome.code
+    const errorMessage = outcomeUnknown
+      ? `${outcome.message}; the remote mutation outcome is unknown. Automatic continuation is paused, while an actor may use Resume/Retry/Sync to start the next audited generation.`
+      : outcome.message
+    const finishedAt = Date.now()
+    const settledWithEffect =
+      attemptObserver?.settleTerminal((tx) => {
+        setNodeRunStatusTx({
+          tx,
+          nodeRunId,
+          to: 'failed',
+          allowedFrom: ['running'],
+          reason: failureCode,
+          extra: { finishedAt, errorMessage, failureCode },
+        })
+      }) === true
+    if (settledWithEffect) broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
+    else {
+      await settle('failed', failureCode, {
+        errorMessage,
+        failureCode,
+      })
+    }
+    return {
+      kind: 'failed',
+      summary: outcomeUnknown ? 'remote mutation outcome unknown' : outcome.summary,
+      message: failureCode,
+    }
   }
 
-  await db.insert(nodeRunOutputs).values([
-    { nodeRunId, portName: 'response', content: outcome.body },
-    { nodeRunId, portName: 'status', content: String(outcome.status) },
-  ])
-  await settle('done', 'code-host-call-done', {})
+  const persistOutputs = (tx: DbTxSync | DbClient): void => {
+    for (const value of [
+      { nodeRunId, portName: 'response', content: outcome.body },
+      { nodeRunId, portName: 'status', content: String(outcome.status) },
+    ]) {
+      tx.insert(nodeRunOutputs)
+        .values(value)
+        .onConflictDoUpdate({
+          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+          set: { content: value.content },
+        })
+        .run()
+    }
+  }
+  const finishedAt = Date.now()
+  const settledWithEffect =
+    attemptObserver?.settleTerminal((tx) => {
+      persistOutputs(tx)
+      setNodeRunStatusTx({
+        tx,
+        nodeRunId,
+        to: 'done',
+        allowedFrom: ['running'],
+        reason: 'code-host-call-done',
+        extra: { finishedAt },
+      })
+    }) === true
+  if (settledWithEffect) broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
+  else {
+    withTaskExecutionMutation({ db, taskId, run: persistOutputs })
+    await settle('done', 'code-host-call-done', {})
+  }
   return {
     kind: 'ok',
     summary: `${outcome.method} ${outcome.pathname} → ${outcome.status}`,
@@ -5000,11 +5297,19 @@ async function runOneScriptAttempt(
         timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
         ...(opts.signal === undefined ? {} : { signal: opts.signal }),
         onLine: async (stream: 'stdout' | 'stderr', line: string) => {
-          await db.insert(nodeRunEvents).values({
-            nodeRunId: a.nodeRunId,
-            ts: Date.now(),
-            kind: stream === 'stderr' ? 'stderr' : 'text',
-            payload: JSON.stringify({ phase: 'deps-install', line }),
+          withTaskExecutionMutation({
+            db,
+            taskId,
+            run: (tx) =>
+              tx
+                .insert(nodeRunEvents)
+                .values({
+                  nodeRunId: a.nodeRunId,
+                  ts: Date.now(),
+                  kind: stream === 'stderr' ? 'stderr' : 'text',
+                  payload: JSON.stringify({ phase: 'deps-install', line }),
+                })
+                .run(),
           })
         },
         log,
@@ -5047,6 +5352,7 @@ async function runOneScriptAttempt(
   })
   broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'running')
 
+  let processEffect: ProcessEffectAttemptObserver | undefined
   const outcome = await runScriptProcess({
     node: a.node,
     inputs: a.inputs,
@@ -5073,36 +5379,65 @@ async function runOneScriptAttempt(
       ? {}
       : { timeoutMs: opts.defaultPerNodeTimeoutMs }),
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
+    beforeSpawn: ({ argv, cwd }) => {
+      processEffect = createProcessEffectAttemptObserver({
+        db,
+        taskId,
+        nodeRunId: a.nodeRunId,
+        processKind: 'script',
+        argv,
+        cwd,
+        resourceKeys: a.isReadonly ? [] : [`workspace:${sha256Hex(worktreePath)}`],
+      })
+      processEffect?.beforeSpawn()
+    },
     gitUserName: task.gitUserName,
     gitUserEmail: task.gitUserEmail,
-    onSpawned: async ({ pid, spawnBinaryPath }) => {
+    onSpawned: async ({ pid, spawnBinaryPath, launchNonce }) => {
       // Persist before reading a single byte of output: a daemon crash after
       // this point leaves the boot reaper something to match (design-gate P0-3).
-      await db
-        .update(nodeRuns)
-        .set({
-          pid,
-          spawnBinaryPath,
-          runtimeParamsJson: JSON.stringify({
-            script: {
-              interpreter: a.interpreter.path,
-              interpreterVersion: a.interpreter.version,
-              depsHash: depsEnv?.hash ?? null,
-            },
-          }),
-        })
-        .where(eq(nodeRuns.id, a.nodeRunId))
+      const persist = (tx: DbTxSync | DbClient) =>
+        tx
+          .update(nodeRuns)
+          .set({
+            pid,
+            spawnBinaryPath,
+            spawnLaunchNonce: launchNonce ?? null,
+            runtimeParamsJson: JSON.stringify({
+              script: {
+                interpreter: a.interpreter.path,
+                interpreterVersion: a.interpreter.version,
+                depsHash: depsEnv?.hash ?? null,
+              },
+            }),
+          })
+          .where(eq(nodeRuns.id, a.nodeRunId))
+          .run()
+      if (processEffect === undefined) {
+        withTaskExecutionMutation({ db, taskId, run: persist })
+      } else {
+        processEffect.recordSpawnReceipt({ pid, spawnBinaryPath, launchNonce }, persist)
+      }
     },
+    requireSpawnReceipt: true,
     onStdoutLine: async (line) => {
       // NOT masked, deliberately: stdout is the DATA channel. Its bytes become
       // the port value verbatim (AC-27), so masking this mirror would show the
       // operator something the downstream node never sees. A script that prints
       // its own credential to stdout has published it as data.
-      await db.insert(nodeRunEvents).values({
-        nodeRunId: a.nodeRunId,
-        ts: Date.now(),
-        kind: 'text',
-        payload: JSON.stringify({ line }),
+      withTaskExecutionMutation({
+        db,
+        taskId,
+        run: (tx) =>
+          tx
+            .insert(nodeRunEvents)
+            .values({
+              nodeRunId: a.nodeRunId,
+              ts: Date.now(),
+              kind: 'text',
+              payload: JSON.stringify({ line }),
+            })
+            .run(),
       })
     },
     onStderrLine: async (line) => {
@@ -5111,11 +5446,19 @@ async function runOneScriptAttempt(
       // replay). Masking only the failure detail below was not enough: that
       // value is `stderrTail`, a strict SUFFIX of the very bytes this sink
       // stores, so the same secret stayed in the clear one table over.
-      await db.insert(nodeRunEvents).values({
-        nodeRunId: a.nodeRunId,
-        ts: Date.now(),
-        kind: 'stderr',
-        payload: JSON.stringify({ line: maskScriptEnvValues(line, scriptEnv) }),
+      withTaskExecutionMutation({
+        db,
+        taskId,
+        run: (tx) =>
+          tx
+            .insert(nodeRunEvents)
+            .values({
+              nodeRunId: a.nodeRunId,
+              ts: Date.now(),
+              kind: 'stderr',
+              payload: JSON.stringify({ line: maskScriptEnvValues(line, scriptEnv) }),
+            })
+            .run(),
       })
     },
     log,
@@ -5131,16 +5474,25 @@ async function runOneScriptAttempt(
       reason: 'script-aborted',
       extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
     })
+    processEffect?.settle(outcome.result)
     broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, daemonShutdown ? 'interrupted' : 'canceled')
     return { kind: 'canceled', message: daemonShutdown ? 'daemon-shutdown' : 'canceled' }
   }
 
   if (outcome.result.truncated.stdout) {
-    await db.insert(nodeRunEvents).values({
-      nodeRunId: a.nodeRunId,
-      ts: Date.now(),
-      kind: 'error',
-      payload: JSON.stringify({ truncated: 'stdout' }),
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .insert(nodeRunEvents)
+          .values({
+            nodeRunId: a.nodeRunId,
+            ts: Date.now(),
+            kind: 'error',
+            payload: JSON.stringify({ truncated: 'stdout' }),
+          })
+          .run(),
     })
   }
 
@@ -5209,6 +5561,7 @@ async function runOneScriptAttempt(
         failureCode,
       },
     })
+    processEffect?.settle(outcome.result)
     broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
     return {
       kind: 'failed',
@@ -5220,9 +5573,20 @@ async function runOneScriptAttempt(
   for (const [portName, content] of Object.entries(ports)) {
     // RFC-306: a script closes a branch the same way an agent does; the flag has
     // to reach the row or the marker is decoration.
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: a.nodeRunId, portName, content, active: !inactivePorts.has(portName) })
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .insert(nodeRunOutputs)
+          .values({
+            nodeRunId: a.nodeRunId,
+            portName,
+            content,
+            active: !inactivePorts.has(portName),
+          })
+          .run(),
+    })
   }
   // RFC-276 regression fix: a readonly script's iso is discarded without a
   // merge-back, but its 'isolating' stamp must still SETTLE — deriveFrontier's
@@ -5245,6 +5609,7 @@ async function runOneScriptAttempt(
     reason: 'script-done',
     extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
   })
+  processEffect?.settle(outcome.result)
   broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'done')
   return { kind: 'done' }
 }
@@ -5337,10 +5702,16 @@ async function judgeBranchActivation(
   let nodeRunId: string
   if (latest?.status === 'pending') {
     nodeRunId = latest.id
-    await db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: consumedJson })
-      .where(eq(nodeRuns.id, nodeRunId))
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .update(nodeRuns)
+          .set({ consumedUpstreamRunsJson: consumedJson })
+          .where(eq(nodeRuns.id, nodeRunId))
+          .run(),
+    })
     await transitionNodeRunStatus({
       db,
       nodeRunId,
@@ -5453,17 +5824,25 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
     })
     for (const { binding, row } of projected) {
-      await db.insert(nodeRunOutputs).values({
-        nodeRunId: nrId,
-        portName: binding.name,
-        content: row.content,
-        kind: row.kind,
-        archiveJson: row.archiveJson,
-        // RFC-306: an output node is pure projection, and that includes the
-        // branch state. With joinMode 'any' the node itself can be active while
-        // ONE of its bound sources sits on a closed branch — that port then
-        // renders as "not produced" instead of as a genuine empty result.
-        active: row.active,
+      withTaskExecutionMutation({
+        db,
+        taskId,
+        run: (tx) =>
+          tx
+            .insert(nodeRunOutputs)
+            .values({
+              nodeRunId: nrId,
+              portName: binding.name,
+              content: row.content,
+              kind: row.kind,
+              archiveJson: row.archiveJson,
+              // RFC-306: an output node is pure projection, and that includes the
+              // branch state. With joinMode 'any' the node itself can be active while
+              // ONE of its bound sources sits on a closed branch — that port then
+              // renders as "not produced" instead of as a genuine empty result.
+              active: row.active,
+            })
+            .run(),
       })
     }
     broadcastNodeStatus(taskId, nrId, node.id, 'done')
@@ -5651,7 +6030,15 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
     // so edges authored on the canvas (whose source.portName defaults to the
     // visible handle label = inputKey) actually resolve. Previously hardcoded
     // to 'out', which mismatched every workflow created through the editor.
-    await db.insert(nodeRunOutputs).values({ nodeRunId: nrId, portName: inputKey, content: value })
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .insert(nodeRunOutputs)
+          .values({ nodeRunId: nrId, portName: inputKey, content: value })
+          .run(),
+    })
     broadcastNodeStatus(taskId, nrId, node.id, 'done')
     return { kind: 'ok', summary: '', message: '' }
   }
@@ -6031,29 +6418,46 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
                 ? followupDecision.failures
                 : [{ port: '', kind: '', subReason: '' }]
             for (const f of failures) {
-              await db.insert(nodeRunEvents).values({
-                nodeRunId,
-                ts: Date.now(),
-                kind: 'text',
-                payload: `[rfc049/port-validation-followup] ${JSON.stringify({
-                  rfc: 'RFC-049',
-                  port: f.port,
-                  kind: f.kind,
-                  subReason: f.subReason,
-                  retryAttempt: attempt,
-                })}`,
+              withTaskExecutionMutation({
+                db,
+                taskId,
+                run: (tx) =>
+                  tx
+                    .insert(nodeRunEvents)
+                    .values({
+                      nodeRunId,
+                      ts: Date.now(),
+                      kind: 'text',
+                      payload: `[rfc049/port-validation-followup] ${JSON.stringify({
+                        rfc: 'RFC-049',
+                        port: f.port,
+                        kind: f.kind,
+                        subReason: f.subReason,
+                        retryAttempt: attempt,
+                      })}`,
+                    })
+                    .run(),
               })
             }
           } else {
-            await db.insert(nodeRunEvents).values({
-              nodeRunId,
-              ts: Date.now(),
-              kind: 'text',
-              payload: `[rfc042/envelope-followup] ${JSON.stringify({
-                rfc: 'RFC-042',
-                reason: followupDecision.reason,
-                retryAttempt: attempt,
-              })}`,
+            const followupReason = followupDecision.reason
+            withTaskExecutionMutation({
+              db,
+              taskId,
+              run: (tx) =>
+                tx
+                  .insert(nodeRunEvents)
+                  .values({
+                    nodeRunId,
+                    ts: Date.now(),
+                    kind: 'text',
+                    payload: `[rfc042/envelope-followup] ${JSON.stringify({
+                      rfc: 'RFC-042',
+                      reason: followupReason,
+                      retryAttempt: attempt,
+                    })}`,
+                  })
+                  .run(),
             })
           }
         }
@@ -6063,20 +6467,25 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
         // 区分的痕迹——用户拍板不新增 rerun cause，事件流就是唯一的区分面。
         // 与上面的 followup 分支互斥：升级时 followupDecision 已被收回成 false。
         if (pendingRestartReason !== undefined) {
-          await db.insert(nodeRunEvents).values({
-            nodeRunId,
-            ts: Date.now(),
-            kind: 'text',
-            payload: `[rfc313/session-restart] ${JSON.stringify({
-              rfc: 'RFC-313',
-              reason: pendingRestartReason,
-              // 升级的触发条件**就是**链长追平预算，所以这里的 followupBudget 即
-              // 放弃那个会话时的实际链长（判定后 retryShapeState.followupChainLen
-              // 已被归零，事后读不到）。字段名按「它记录的事实」取。
-              abandonedAfterFollowups: followupBudget,
-              restartsUsed: retryShapeState.restartsUsed,
-              retryAttempt: attempt,
-            })}`,
+          withTaskExecutionMutation({
+            db,
+            taskId,
+            run: (tx) =>
+              tx
+                .insert(nodeRunEvents)
+                .values({
+                  nodeRunId,
+                  ts: Date.now(),
+                  kind: 'text',
+                  payload: `[rfc313/session-restart] ${JSON.stringify({
+                    rfc: 'RFC-313',
+                    reason: pendingRestartReason,
+                    abandonedAfterFollowups: followupBudget,
+                    restartsUsed: retryShapeState.restartsUsed,
+                    retryAttempt: attempt,
+                  })}`,
+                })
+                .run(),
           })
         }
       }
@@ -6603,10 +7012,17 @@ async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<One
       // stream so the NEXT clarify-driven rerun on this lineage can pass
       // it back via `--session`. NULL on failed / canceled runs is fine.
       if (lastResult.sessionId !== undefined && lastResult.sessionId !== '') {
-        await db
-          .update(nodeRuns)
-          .set({ opencodeSessionId: lastResult.sessionId })
-          .where(eq(nodeRuns.id, nodeRunId))
+        const persistedSessionId = lastResult.sessionId
+        withTaskExecutionMutation({
+          db,
+          taskId,
+          run: (tx) =>
+            tx
+              .update(nodeRuns)
+              .set({ opencodeSessionId: persistedSessionId })
+              .where(eq(nodeRuns.id, nodeRunId))
+              .run(),
+        })
       }
       // RFC-026: post-spawn fallback — opencode rejected the resume id we
       // passed. Treat the run as a fail-soft signal: leave the failure to
@@ -7083,10 +7499,15 @@ async function persistWrapperProgress(
   wrapperRunId: string,
   progress: WrapperProgress,
 ): Promise<void> {
-  await db
-    .update(nodeRuns)
-    .set({ wrapperProgressJson: encodeWrapperProgress(progress) })
-    .where(eq(nodeRuns.id, wrapperRunId))
+  withCurrentTaskExecutionMutation({
+    db,
+    run: (tx) =>
+      tx
+        .update(nodeRuns)
+        .set({ wrapperProgressJson: encodeWrapperProgress(progress) })
+        .where(eq(nodeRuns.id, wrapperRunId))
+        .run(),
+  })
 }
 
 /**
@@ -7782,10 +8203,16 @@ async function runFanoutWrapperNode(
   // re-run the whole wrapper when an upstream advances. Inner shard rows do NOT
   // record provenance (treated as fresh within this wrapper run). RFC-098 B3:
   // this overwrite intentionally happens AFTER the generation gate above.
-  await db
-    .update(nodeRuns)
-    .set({ consumedUpstreamRunsJson: JSON.stringify(wrapperConsumed) })
-    .where(eq(nodeRuns.id, wrapperRunId))
+  withTaskExecutionMutation({
+    db,
+    taskId,
+    run: (tx) =>
+      tx
+        .update(nodeRuns)
+        .set({ consumedUpstreamRunsJson: JSON.stringify(wrapperConsumed) })
+        .where(eq(nodeRuns.id, wrapperRunId))
+        .run(),
+  })
 
   // 5. Derive wrapper outlets (aggregator outputs OR __done__ signal).
   const derivedOutputs = deriveWrapperFanoutOutputs(definition, node.id, agentsMap)
@@ -8322,7 +8749,16 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     })
     // The re-run consumes the CURRENT shard value — refresh the stored hash
     // so future reuse decisions compare against what actually ran.
-    await db.update(nodeRuns).set({ shardValueHash: valueHash }).where(eq(nodeRuns.id, shardRunId))
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .update(nodeRuns)
+          .set({ shardValueHash: valueHash })
+          .where(eq(nodeRuns.id, shardRunId))
+          .run(),
+    })
     shardRetryIndex = freshest.retryIndex
   } else {
     // Branch 3 — mint a fresh row under this wrapper. The T14 replacement target
@@ -9277,13 +9713,18 @@ async function upsertWrapperOutput(
    */
   active = true,
 ): Promise<void> {
-  await db
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId: wrapperRunId, portName, content, kind, archiveJson, active })
-    .onConflictDoUpdate({
-      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-      set: { content, kind, archiveJson, active },
-    })
+  withCurrentTaskExecutionMutation({
+    db,
+    run: (tx) =>
+      tx
+        .insert(nodeRunOutputs)
+        .values({ nodeRunId: wrapperRunId, portName, content, kind, archiveJson, active })
+        .onConflictDoUpdate({
+          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+          set: { content, kind, archiveJson, active },
+        })
+        .run(),
+  })
 }
 
 export async function createOrRebuildWrapperIso(
@@ -9913,6 +10354,7 @@ async function failTask(
   errorSummary: string,
   errorMessage: string,
   failedNodeId?: string,
+  executionContext?: TaskExecutionContext,
 ): Promise<void> {
   // RFC-097: callers sit either before mark-running (snapshot-invalid /
   // unsupported-kind → from=pending) or inside the running scope. A canceled
@@ -9928,6 +10370,7 @@ async function failTask(
       errorMessage,
       ...(failedNodeId !== undefined ? { failedNodeId } : {}),
     },
+    ...(executionContext !== undefined ? { executionContext } : {}),
     reason: `failTask: ${errorSummary}`,
   })
   if (!won) {
@@ -9945,9 +10388,10 @@ async function cancelTaskRow(
   taskId: string,
   failedNodeId?: string,
   abortReason?: unknown,
+  executionContext?: TaskExecutionContext,
 ): Promise<void> {
   return withTaskReviewMutationLock(taskId, () =>
-    cancelTaskRowUnlocked(db, taskId, failedNodeId, abortReason),
+    cancelTaskRowUnlocked(db, taskId, failedNodeId, abortReason, executionContext),
   )
 }
 
@@ -9956,6 +10400,7 @@ async function cancelTaskRowUnlocked(
   taskId: string,
   failedNodeId?: string,
   abortReason?: unknown,
+  executionContext?: TaskExecutionContext,
 ): Promise<void> {
   // RFC-202 T4: a graceful daemon shutdown aborts the scheduler exactly like
   // a user cancel did — but writing 'canceled by user' misattributes it and
@@ -9978,6 +10423,7 @@ async function cancelTaskRowUnlocked(
         errorMessage: 'daemon shutdown interrupted this task; resume (or auto-resume) continues it',
         ...(failedNodeId !== undefined ? { failedNodeId } : {}),
       },
+      ...(executionContext !== undefined ? { executionContext } : {}),
       reason: 'cancelTaskRow-shutdown',
     })
     if (won) await emitStatus(db, taskId)
@@ -10003,6 +10449,7 @@ async function cancelTaskRowUnlocked(
             : projection.code,
       ...(failedNodeId !== undefined ? { failedNodeId } : {}),
     },
+    ...(executionContext !== undefined ? { executionContext } : {}),
     reason: 'cancelTaskRow',
   })
   if (!won) {
@@ -10542,11 +10989,18 @@ async function recordClarifyInlineEvent(
           reason: args.reason,
           ...args.extra,
         })
-  await db.insert(nodeRunEvents).values({
-    nodeRunId,
-    ts: Date.now(),
-    kind: 'text',
-    payload: `${tag} ${payload}`,
+  withCurrentTaskExecutionMutation({
+    db,
+    run: (tx) =>
+      tx
+        .insert(nodeRunEvents)
+        .values({
+          nodeRunId,
+          ts: Date.now(),
+          kind: 'text',
+          payload: `${tag} ${payload}`,
+        })
+        .run(),
   })
 }
 

@@ -13,6 +13,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { gracefulShutdown } from '../src/services/shutdown'
+import { taskExecutionModule } from '../src/modules/task-execution/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -64,7 +65,10 @@ describe('gracefulShutdown', () => {
   beforeEach(() => {
     h = buildHarness()
   })
-  afterEach(() => h.cleanup())
+  afterEach(() => {
+    taskExecutionModule.resetForTesting()
+    h.cleanup()
+  })
 
   test('returns immediately when no tasks are running', async () => {
     const t0 = Date.now()

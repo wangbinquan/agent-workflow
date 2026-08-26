@@ -1,26 +1,11 @@
-// RFC-108 T12 (AR-08) — driver lease.
+// RFC-108 T12 (AR-08) — retired driver-lease compatibility fixture.
 //
-// A task's "live state" (its worktree, its node_run rows, its running child) may
-// be mutated by at most ONE driver at a time. Today that's an informal
-// convention enforced ad-hoc via `isTaskActive`/scheduler ownership; once the
-// auto loops (boot auto-resume, auto-repair, heartbeat-kill) land they become a
-// SECOND class of driver that can collide with a human's resume/retry/repair on
-// the same task. This is the explicit seam: an auto-actor must hold the lease
-// before touching live state and release it after, so two auto-actors — or an
-// auto-actor and a human — never git-reset / re-mint the same task concurrently.
-//
-// v1 is in-process (single daemon — the lease Map starts empty at boot, so there
-// is nothing stale to clear). The interface is intentionally DB-swappable: a
-// future multi-daemon build replaces the Map with a `recovery_leases` table +
-// TTL without changing callers. `touchesLiveState` marks the recovery operations
-// that MUST run under a lease.
-//
-// 互斥契约全貌（2026-08-12 审计对账补记，防第八个扫描器作者只学半套）：
-// 本 lease 只约束 auto-actor 之间、以及 auto-actor 对人工路径的抢跑——
-// **人工 resume/retry 不 acquire 本 lease**，它们的互斥靠 `isTaskActive`
-// 进程内 Map + tasks.status CAS（services/task.ts）。auto 侧在 gate→write
-// 之间仍有已登记的非原子窗口（orphanReconcile 写前二次 `hasDriver` 复检收窄，
-// 完整原子性需 task ownership epoch，residual 见其 design §5）。
+// RFC-328 removed every production consumer: durable continuation intents,
+// monotonic owner epochs and exact-token resource fences now provide the one
+// execution authority for manual and automatic paths. This in-memory Map is
+// retained only so RFC-108's historical unit contract remains reproducible;
+// production code must not import it, and the RFC-328 architecture guard makes
+// any such import fail. It is neither an admission gate nor a fallback.
 
 export type LiveStateOp = 'auto-resume' | 'auto-repair' | 'heartbeat-kill' | 'periodic-reconcile'
 

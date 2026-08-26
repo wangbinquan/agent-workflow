@@ -127,6 +127,9 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const started = await startTask({ workflowId: wf, name: 'child', inputs: {} } as StartTask, {
         db,
         materializedSpace: spaceFor('placeholder', childRoot),
+        // RFC-328: let the real scheduler release its durable owner before this
+        // maintenance-path test overwrites terminal fixtures.
+        awaitScheduler: true,
         callLaunch: {
           parentTaskId: parentId,
           parentNodeRunId: callRun,

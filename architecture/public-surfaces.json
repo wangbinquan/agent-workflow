@@ -5,8 +5,8 @@
     "governedFieldSurfaces": 5,
     "methods": 132,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1001,
-    "symbols": 235
+    "recursiveFields": 1025,
+    "symbols": 237
   },
   "entries": [
     {
@@ -14216,6 +14216,186 @@
       "fields": [
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0",
+          "type": "'task-continuation-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1",
+          "type": "'task-continuation-stale'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2",
+          "type": "'task-terminal-maintenance-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3",
+          "type": "'task-execution-owner-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:4",
+          "type": "'task-execution-resource-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:5",
+          "type": "'task-execution-stale-owner'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:6",
+          "type": "'task-execution-recovery-required'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:7",
+          "type": "'task-execution-outcome-unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:8",
+          "type": "'task-execution-shutting-down'"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:TaskExecutionCommandErrorCode",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#TaskExecutionCommandErrorCode",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:6d85bca6aeba4e20fc58453e6fc9859a2ffe7b159c355095425de0526f9411b6",
+      "status": "target-context-current-surface",
+      "symbol": "TaskExecutionCommandErrorCode",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.idempotent",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.intentRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.ok",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:0",
+          "type": "'task-continuation-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:1",
+          "type": "'task-continuation-stale'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:2",
+          "type": "'task-terminal-maintenance-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:3",
+          "type": "'task-execution-owner-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:4",
+          "type": "'task-execution-resource-conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:5",
+          "type": "'task-execution-stale-owner'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:6",
+          "type": "'task-execution-recovery-required'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:7",
+          "type": "'task-execution-outcome-unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.code.$variant:8",
+          "type": "'task-execution-shutting-down'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.ok",
+          "type": "false"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.winnerIntentRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:TaskExecutionCommandResult",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#TaskExecutionCommandResult",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:80a7365cbf2860b9cb96e87232755df3afe972988960b22347e64e72a9039cb1",
+      "status": "target-context-current-surface",
+      "symbol": "TaskExecutionCommandResult",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.kind",
           "type": "'user'"
         },
@@ -14634,7 +14814,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:184ed2aabf96be9f67a872cd90d46667dbbc3c393d09a837cc0193cdd8fa1bab",
+  "sourceDigest": "sha256:9200e802603ac418d143efdc15198b4e75fbe14871284e55b0f56b4f1315bf9c",
   "targetContexts": [
     "collaboration",
     "development-automation",

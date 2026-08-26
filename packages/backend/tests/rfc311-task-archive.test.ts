@@ -33,6 +33,7 @@ import {
   nodeRunEvents,
   nodeRuns,
   taskArchiveAudit,
+  taskExecutionMaintenanceClaims,
   taskRepos,
   tasks,
   users,
@@ -226,14 +227,37 @@ describe('RFC-311 T19 — task archive', () => {
       taskIds: string[]
       rows: Record<string, number>
       digest: string
+      terminalMaintenance: {
+        claim: { id: string; state: string; memberSetDigest: string }
+        members: Array<{ taskId: string }>
+      }
     }
-    expect(manifest.schemaVersion).toBe(1)
+    expect(manifest.schemaVersion).toBe(2)
     expect(manifest.taskIds.sort()).toEqual(['child', 'root'])
     expect(manifest.rows.tasks).toBe(2)
     expect(manifest.rows.node_runs).toBe(2)
     expect(manifest.rows.node_run_events).toBe(5)
     expect(manifest.rows.task_repos).toBe(2)
+    expect(manifest.rows.task_execution_owners).toBe(0)
+    expect(manifest.rows.task_execution_intents).toBe(0)
+    expect(manifest.rows.task_execution_effects).toBe(0)
+    expect(manifest.rows.task_execution_effect_attempts).toBe(0)
+    expect(manifest.rows.task_execution_effect_fences).toBe(0)
+    expect(manifest.rows.task_execution_lineage_operation_records).toBe(0)
+    expect(manifest.terminalMaintenance.claim).toMatchObject({ state: 'claimed' })
+    expect(manifest.terminalMaintenance.claim.memberSetDigest).toMatch(/^[a-f0-9]{64}$/)
+    expect(manifest.terminalMaintenance.members.map((member) => member.taskId)).toEqual([
+      'child',
+      'root',
+    ])
     expect(manifest.digest).toMatch(/^[a-f0-9]{64}$/)
+
+    const durableClaim = await db
+      .select()
+      .from(schema.taskExecutionMaintenanceClaims)
+      .where(eq(schema.taskExecutionMaintenanceClaims.id, manifest.terminalMaintenance.claim.id))
+      .get()
+    expect(durableClaim?.state).toBe('completed')
 
     const taskLines = readFileSync(join(dir, 'db', 'tasks.jsonl'), 'utf-8')
       .trim()
@@ -475,6 +499,14 @@ describe('RFC-311 T19 — 手动批量归档入口与审计行', () => {
     expect(audit[0]!.source).toBe('sweep')
     expect(audit[0]!.actorUserId).toBeNull()
     expect(JSON.parse(audit[0]!.rootTaskIdsJson)).toEqual(['old'])
+    expect(
+      await db
+        .select({
+          operation: taskExecutionMaintenanceClaims.operation,
+          state: taskExecutionMaintenanceClaims.state,
+        })
+        .from(taskExecutionMaintenanceClaims),
+    ).toContainEqual({ operation: 'retention', state: 'completed' })
   })
 })
 

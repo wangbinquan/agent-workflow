@@ -280,7 +280,7 @@ export async function readTaskStatus(db: DbClient, taskId: string): Promise<stri
 }
 
 export async function settleResumes(): Promise<void> {
-  const aborted = abortAllActiveTasks()
+  const aborted = abortAllActiveTasks('test-lifecycle-repair-settle')
   // Only pay the settle when a resume was actually in flight. Most repair tests
   // (preflight-stale, preview-steps, …) never trigger a background runTask, so
   // there is nothing to settle and the sleep would be ~78×50ms of dead wait

@@ -19,7 +19,6 @@ import { selectAutoApplyOption, type RepairOption } from '@agent-workflow/shared
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { withDriverLease } from '@/services/driverLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -31,7 +30,6 @@ import { createLogger } from '@/util/log'
 import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('auto-repair')
-const HOLDER = 'auto-repair'
 
 export interface AutoRepairDeps {
   db: DbClient
@@ -88,28 +86,25 @@ export async function runAutoRepairOnce(deps: AutoRepairDeps): Promise<AutoRepai
       skip(alert, 'breaker-tripped')
       continue
     }
-    const result = await withDriverLease(alert.taskId, HOLDER, 'auto-repair', async () => {
-      try {
-        const resp = await applyOption(alert, chosen.id)
-        await recordRecoveryEvent(db, {
-          taskId: alert.taskId,
-          nodeRunId: null,
-          kind: 'auto-repair',
-          reason: `${alert.rule}:${chosen.id}:${resp.outcome}`,
-          after: { optionId: chosen.id, outcome: resp.outcome },
-          now: now(),
-        })
-        return resp
-      } catch (err) {
-        log.warn('applyOption threw', {
-          alertId: alert.id,
-          optionId: chosen.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-        return null
-      }
-    })
-    if (result !== null && result !== undefined) {
+    let result: { outcome: string } | null = null
+    try {
+      result = await applyOption(alert, chosen.id)
+      await recordRecoveryEvent(db, {
+        taskId: alert.taskId,
+        nodeRunId: null,
+        kind: 'auto-repair',
+        reason: `${alert.rule}:${chosen.id}:${result.outcome}`,
+        after: { optionId: chosen.id, outcome: result.outcome },
+        now: now(),
+      })
+    } catch (err) {
+      log.warn('applyOption threw', {
+        alertId: alert.id,
+        optionId: chosen.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+    if (result !== null) {
       out.repaired.push({
         taskId: alert.taskId,
         alertId: alert.id,

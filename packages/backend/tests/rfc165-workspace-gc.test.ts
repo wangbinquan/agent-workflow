@@ -29,11 +29,19 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { taskRepos, tasks, workflows } from '../src/db/schema'
+import {
+  taskExecutionMaintenanceClaims,
+  taskExecutionMaintenanceMembers,
+  taskRepos,
+  tasks,
+  workflows,
+} from '../src/db/schema'
+import { taskExecutionModule } from '../src/modules/task-execution/composition'
 import {
   PRUNING_LEASE_MS,
   materializingSpaces,
   reconcileLegacyPrunedWorkspaces,
+  recoverInterruptedWorkspaceGc,
   runIsoWorktreeGc,
   runScratchOrphanGc,
   runWorktreeGc,
@@ -122,6 +130,19 @@ describe('RFC-165 T2b — two-phase workspace tombstone + revive gate', () => {
     expect(row.workspacePruningAt).not.toBe(null)
     expect(row.workspacePruneCause).toBeNull()
     expect(row.workspacePrunedAt).not.toBe(null)
+    expect(
+      await h.db
+        .select({
+          operation: taskExecutionMaintenanceClaims.operation,
+          state: taskExecutionMaintenanceClaims.state,
+        })
+        .from(taskExecutionMaintenanceClaims),
+    ).toEqual([{ operation: 'workspace-gc', state: 'completed' }])
+    expect(
+      await h.db
+        .select({ releasedAt: taskExecutionMaintenanceMembers.releasedAt })
+        .from(taskExecutionMaintenanceMembers),
+    ).toEqual([{ releasedAt: expect.any(Number) }])
   })
 
   test('G2 held claim blocks revive with 409 workspace-pruning', async () => {
@@ -317,6 +338,49 @@ describe('RFC-165 T2b — two-phase workspace tombstone + revive gate', () => {
     r = await runIsoWorktreeGc(h.db, h.appHome)
     expect(r.removed).toEqual([idC])
     expect(existsSync(isoC)).toBe(false)
+  })
+
+  test('G9b boot resumes the exact workspace maintenance claim after physical deletion', async () => {
+    const dir = mkDir(h, 'scratch-crash-window')
+    const id = await seedTask(h, {
+      status: 'done',
+      spaceKind: 'scratch',
+      worktreePath: dir,
+      repoPath: dir,
+    })
+    const now = Date.now()
+    await h.db.update(tasks).set({ workspacePruningAt: now }).where(eq(tasks.id, id))
+    const members = taskExecutionModule.terminalMaintenance.snapshotMembers(h.db, [id])
+    let claim = taskExecutionModule.terminalMaintenance.claim({
+      db: h.db,
+      rootTaskId: id,
+      operation: 'workspace-gc',
+      members,
+      cleanupPlanJson: JSON.stringify({ v: 1, kind: 'workspace-prune', taskId: id }),
+      now,
+    })
+    rmSync(dir, { recursive: true, force: true })
+    claim = taskExecutionModule.terminalMaintenance.transition({
+      db: h.db,
+      claim,
+      to: 'io-complete',
+      now: now + 1,
+    })
+
+    expect(await recoverInterruptedWorkspaceGc(h.db, now + 2)).toEqual({
+      completed: [id],
+      failed: [],
+      skipped: 0,
+    })
+    expect((await taskRow(h, id)).workspacePrunedAt).toBe(now + 2)
+    expect(
+      (
+        await h.db
+          .select({ state: taskExecutionMaintenanceClaims.state })
+          .from(taskExecutionMaintenanceClaims)
+          .where(eq(taskExecutionMaintenanceClaims.id, claim.claimId))
+      )[0]?.state,
+    ).toBe('completed')
   })
 
   test('G10 internal (fusion) workspaces are never candidates', async () => {

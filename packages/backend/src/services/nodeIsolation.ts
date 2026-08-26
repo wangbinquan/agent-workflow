@@ -38,6 +38,9 @@ import {
   type ResolvedPathState,
 } from '@/services/mergeAgent'
 import { repoRelForcedPaths } from '@/services/portArtifacts'
+import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
+import { currentTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import { sha256Hex } from '@/util/hash'
 // RFC-210. Static import is safe: gitSubmodule imports util/git, util/git reaches
 // gitSubmodule only through a dynamic import, so the edge stays one-way.
 import {
@@ -1281,35 +1284,69 @@ export async function discardNodeIso(
   writeSem?: DiscardLock,
 ): Promise<void> {
   if (handle.passthrough) return // in-place run — the canonical worktree is NOT ours to remove
-  for (const r of handle.repos) {
-    try {
-      await removeWorktree({
-        repoPath: r.canonWorktreePath,
-        worktreePath: r.isoWorktreePath,
-        force: true,
+  const context = currentTaskExecutionContext(handle.taskId)
+  const effect =
+    context === undefined
+      ? undefined
+      : createLocalEffectAttemptObserver({
+          db: context.db,
+          taskId: handle.taskId,
+          nodeRunId: handle.nodeRunId,
+          kind: 'workspace-cleanup',
+          stableActionOrdinal: 'isolation-cleanup',
+          candidateId: 'node-isolation-discard',
+          request: {
+            v: 1,
+            nodeRunId: handle.nodeRunId,
+            repos: handle.repos.map((repo) => ({
+              worktreeDirName: repo.worktreeDirName,
+              isoWorktreePathDigest: sha256Hex(repo.isoWorktreePath),
+            })),
+          },
+          resourceKeys: [
+            `isolation:${handle.taskId}:${handle.nodeRunId}`,
+            ...handle.repos.map((repo) => `workspace:${sha256Hex(repo.canonWorktreePath)}`),
+          ],
+          context,
+        })
+  effect?.beforeAct()
+  let partialFailures = 0
+  try {
+    for (const r of handle.repos) {
+      try {
+        await removeWorktree({
+          repoPath: r.canonWorktreePath,
+          worktreePath: r.isoWorktreePath,
+          force: true,
+          timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+        })
+      } catch (err) {
+        partialFailures += 1
+        log?.warn('iso worktree remove failed (leaving for GC)', {
+          isoWorktreePath: r.isoWorktreePath,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId, {
         timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
       })
-    } catch (err) {
-      log?.warn('iso worktree remove failed (leaving for GC)', {
-        isoWorktreePath: r.isoWorktreePath,
-        error: err instanceof Error ? err.message : String(err),
-      })
+      // RFC-210 (review round 4): hand NEW paths their durable worktree anchor
+      // from canonical's actual state BEFORE this run's node refs go away; a
+      // path that cannot be anchored keeps its node refs (leak-not-lose).
+      const handoff = async (): Promise<void> => {
+        const keepRefs = await anchorNewPathsAtDiscard(r, handle.taskId, log)
+        await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log, keepRefs)
+      }
+      if (writeSem !== undefined && Object.keys(r.poolDirs).length > 0) {
+        await writeSem.run(handoff)
+      } else {
+        await handoff()
+      }
     }
-    await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId, {
-      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
-    })
-    // RFC-210 (review round 4): hand NEW paths their durable worktree anchor
-    // from canonical's actual state BEFORE this run's node refs go away; a
-    // path that cannot be anchored keeps its node refs (leak-not-lose).
-    const handoff = async (): Promise<void> => {
-      const keepRefs = await anchorNewPathsAtDiscard(r, handle.taskId, log)
-      await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log, keepRefs)
-    }
-    if (writeSem !== undefined && Object.keys(r.poolDirs).length > 0) {
-      await writeSem.run(handoff)
-    } else {
-      await handoff()
-    }
+    effect?.succeed({ repoCount: handle.repos.length, partialFailures })
+  } catch (error) {
+    effect?.fail(error, { repoCount: handle.repos.length, partialFailures })
+    throw error
   }
 }
 

@@ -1986,54 +1986,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor",
-      "specifier": "@/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "infrastructure 是适配层，只应由 bootstrap 装配、由 application 经 port 消费；此处调用方直接 new 了具体实现。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:ef92d05132b81ce3796f"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor.ts#InMemoryTaskDriverSupervisor"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/ports/taskDriverSupervisor",
-      "specifier": "@/modules/task-execution/ports/taskDriverSupervisor",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "ports 是 application 自有的 SPI 声明，不是跨层合同；调用方直接引用了端口类型。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:d4190aa032f92049ffc3",
-        "import:f35235c21ac7d7597388"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/ports/taskDriverSupervisor.ts#TaskDriverStopResult",
-        "owner:packages/backend/src/modules/task-execution/ports/taskDriverSupervisor.ts#TaskDriverStopTicket"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/users.ts",
       "to": "packages/backend/src/modules/identity-access/composition",
       "specifier": "@/modules/identity-access/composition",
@@ -2568,18 +2520,14 @@
       "findingId": "G-02",
       "canonicalImportEdgeIds": [
         "import:248d07243c59a2fbb7e8",
-        "import:3b52e445c192f6770b7e",
-        "import:497c58b235fda20e2b2b",
         "import:85a3ce8baee3c25ea585",
         "import:ebed8174827bc5a4fa78"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/task.ts#awaitTaskDriverStopped",
         "owner:packages/backend/src/services/task.ts#emitTaskStatus",
         "owner:packages/backend/src/services/task.ts#finalizeCanceledTaskWithoutDriver",
-        "owner:packages/backend/src/services/task.ts#getTask",
-        "owner:packages/backend/src/services/task.ts#requestTaskDriverStop"
+        "owner:packages/backend/src/services/task.ts#getTask"
       ],
       "canonicalFacadeIds": []
     },
@@ -3846,7 +3794,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:184ed2aabf96be9f67a872cd90d46667dbbc3c393d09a837cc0193cdd8fa1bab",
+    "sourceDigest": "sha256:9200e802603ac418d143efdc15198b4e75fbe14871284e55b0f56b4f1315bf9c",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

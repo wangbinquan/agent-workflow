@@ -1862,18 +1862,15 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
 // 分成两个事务时存在一段必经中间态（三张投影表已提交、prep 还是 running），崩溃落在
 // 那里 ⇒ 任务能跑完全部业务节点而审计历史永久停在「准备被中断」，且违反 AC-10。
 describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => {
-  test('setNodeRunStatusTx 在回填事务内被调用（不是事务后的下一次 await）', () => {
+  test('回填与 setNodeRunStatusTx 共用一个事务回调（不是事务后的下一次 await）', () => {
     const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    // ⚠️ 锚到**回填**那个事务，不是第一个 `dbTxSync`（占位落行也用它，取第一个会切错
-    // 函数——本轮反复踩过的锚点错位）。用回填独有的字段定位。
-    const at = src.lastIndexOf(
-      'dbTxSync(deps.db, (tx) => {',
-      src.indexOf("nodeRunId: prepRunId,\n      to: 'done'"),
-    )
-    expect(at, '应有回填事务').toBeGreaterThan(-1)
-    // 事务体用**括号配平**切（内层还有多个 `})`，取第一个会切在半路——这正是本轮
-    // 反复踩过的锚点错位）。
-    const open = src.indexOf('{', src.indexOf('(tx) =>', at))
+    // RFC-328 把回填抽成命名回调：无 effect 上下文时交给 dbTxSync；有上下文时
+    // 作为 effect settle 的 onSettledTx 交给同一个同步事务。锚到这份唯一回调，既不
+    // 依赖内联写法，也不会误切到 startTask 的占位落行事务。
+    const at = src.indexOf('const persistPreparedProjection = (tx: DbTxSync): void => {')
+    expect(at, '应有唯一的准备投影事务回调').toBeGreaterThan(-1)
+    // 回调体用**括号配平**切（内层还有多个 `})`，取第一个会切在半路）。
+    const open = src.indexOf('{', at)
     let depth = 1
     let i = open + 1
     for (; i < src.length && depth > 0; i++) {
@@ -1882,11 +1879,20 @@ describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => 
     }
     const tx = src.slice(open + 1, i - 1)
     const txEnd = i
+    expect(tx, '任务投影回填必须在事务回调内').toMatch(/tx\.update\(tasks\)/)
     expect(tx, 'prep 置 done 必须在事务内').toMatch(
       /setNodeRunStatusTx\(\{[\s\S]{0,200}nodeRunId: prepRunId[\s\S]{0,120}to: 'done'/,
     )
-    // 反向：事务**之后**不得再有一次异步的 prep-done 写入（那就是旧形态）。
+    // 两条执行路径都消费完整回调；effect 路径通过 succeed 的 onSettledTx 与
+    // attempt/fence 收口同事务，不能只在无上下文的兼容分支保持原子性。
     const after = src.slice(txEnd)
+    expect(after.slice(0, 900), '兼容路径必须把完整回调交给 dbTxSync').toMatch(
+      /dbTxSync\(deps\.db, persistPreparedProjection\)/,
+    )
+    expect(after.slice(0, 900), 'effect 路径必须把完整回调交给 settle 事务').toMatch(
+      /prepEffect\.succeed\([\s\S]{0,500}persistPreparedProjection/,
+    )
+    // 反向：事务**之后**不得再有一次异步的 prep-done 写入（那就是旧形态）。
     expect(after.slice(0, 600), '事务后不得再异步置 done').not.toMatch(
       /await setNodeRunStatus\(\{[\s\S]{0,200}nodeRunId: prepRunId[\s\S]{0,120}to: 'done'/,
     )

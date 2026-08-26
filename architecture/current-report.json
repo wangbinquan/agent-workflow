@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 437,
-    "architectureExceptions": 839,
-    "backgroundJobs": 180,
-    "crossContextImports": 859,
-    "facades": 366,
+    "ambientWiring": 438,
+    "architectureExceptions": 1010,
+    "backgroundJobs": 210,
+    "crossContextImports": 1030,
+    "facades": 368,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17083,
-    "mutationEntrypoints": 842,
+    "moduleSymbolOwners": 17397,
+    "mutationEntrypoints": 888,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 235,
-    "transactionExternalEffects": 231
+    "publicSurfaces": 237,
+    "transactionExternalEffects": 243
   },
   "metrics": {
-    "ambientWiringEntries": 437,
+    "ambientWiringEntries": 438,
     "appDepsConsumers": [
       "packages/backend/src/mcp/dispatch.ts",
       "packages/backend/src/mcp/server.ts",
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 810,
+    "backendProductionFiles": 836,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -105,7 +105,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 180,
+    "backgroundEntries": 210,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -124,11 +124,12 @@
       "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
       "packages/backend/src/services/scheduledTaskScheduler.ts",
       "packages/backend/src/services/scheduler.ts",
-      "packages/backend/src/services/stuckTaskDetector.ts"
+      "packages/backend/src/services/stuckTaskDetector.ts",
+      "packages/backend/src/services/task.ts"
     ],
-    "directNativeIntervals": 19,
-    "directNativeTimers": 56,
-    "inboundBoundaryEdges": 94,
+    "directNativeIntervals": 20,
+    "directNativeTimers": 60,
+    "inboundBoundaryEdges": 153,
     "knownViolations": 37,
     "moduleContexts": [
       {
@@ -177,16 +178,16 @@
       },
       {
         "context": "task-execution",
-        "files": 24
+        "files": 48
       }
     ],
-    "moduleFiles": 300,
+    "moduleFiles": 324,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/nodeRunMint.ts#281",
-        "line": 281,
+        "id": "node-runs-insert:packages/backend/src/services/nodeRunMint.ts#324",
+        "line": 324,
         "ownerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#mintNodeRunTx",
         "removeAfterWave": null,
         "status": "canonical-writer",
@@ -203,7 +204,7 @@
         "symbol": "commitDispatchPlan"
       }
     ],
-    "outboundBoundaryEdges": 23,
+    "outboundBoundaryEdges": 29,
     "repoValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -246,10 +247,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 366,
+    "serviceFiles": 368,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:184ed2aabf96be9f67a872cd90d46667dbbc3c393d09a837cc0193cdd8fa1bab"
+  "sourceDigest": "sha256:9200e802603ac418d143efdc15198b4e75fbe14871284e55b0f56b4f1315bf9c"
 }

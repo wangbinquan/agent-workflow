@@ -39,6 +39,9 @@ const DISPOSITION = {
   db: 'per-task',
   log: 'per-task',
   signal: 'per-task',
+  // RFC-328: every child submits/claims its own intent; parent epoch authority
+  // is never inherited across the call boundary.
+  executionContext: 'per-task',
   appHome: 'inherit',
   binaryOverride: 'inherit',
   configPath: 'inherit',

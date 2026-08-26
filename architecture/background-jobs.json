@@ -3,9 +3,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:991",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1080",
       "kind": "register-call",
-      "line": 991,
+      "line": 1080,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerTerminalTaskHook",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalTaskHook:1017",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalTaskHook:1106",
       "kind": "register-call",
-      "line": 1017,
+      "line": 1106,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -25,9 +25,9 @@
     {
       "callee": "registerTerminalWorkspacePruneEffect",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePruneEffect:491",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePruneEffect:501",
       "kind": "register-call",
-      "line": 491,
+      "line": 501,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -36,9 +36,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:485",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:495",
       "kind": "register-call",
-      "line": 485,
+      "line": 495,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +47,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1005",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1094",
       "kind": "global-setter",
-      "line": 1005,
+      "line": 1094,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -4777,9 +4777,9 @@
     {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/services/scheduler.ts",
-      "id": "ambient:packages/backend/src/services/scheduler.ts#registerKnownChildTask:3631",
+      "id": "ambient:packages/backend/src/services/scheduler.ts#registerKnownChildTask:3748",
       "kind": "register-call",
-      "line": 3631,
+      "line": 3748,
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCallWorkflowNode",
       "removeAfterWave": "W6/W9",
       "symbol": "runCallWorkflowNode",
@@ -4838,11 +4838,11 @@
   "denominator": {
     "ambientWiring": 438,
     "disabled": 7,
-    "entries": 180,
-    "executionLocal": 17,
-    "longRunning": 24,
+    "entries": 210,
+    "executionLocal": 21,
+    "longRunning": 37,
     "managed": 7,
-    "periodic": 132
+    "periodic": 145
   },
   "entries": [
     {
@@ -4895,7 +4895,7 @@
       ],
       "file": "packages/backend/src/cli/start.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1168",
+      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1257",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -4909,7 +4909,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1168",
+      "symbol": "$setInterval:1257",
       "targetContext": "bootstrap"
     },
     {
@@ -5708,6 +5708,369 @@
     },
     {
       "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts#finalizeTaskExecutionRecovery",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts#finalizeTaskExecutionRecovery",
+      "phase": "execution",
+      "symbol": "finalizeTaskExecutionRecovery",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts#prepareTaskExecutionRecovery",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts#prepareTaskExecutionRecovery",
+      "phase": "execution",
+      "symbol": "prepareTaskExecutionRecovery",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/composition.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/composition.ts#DEFAULT_OWNERSHIP_HEARTBEAT_MS",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition.ts#DEFAULT_OWNERSHIP_HEARTBEAT_MS",
+      "phase": "unknown",
+      "symbol": "DEFAULT_OWNERSHIP_HEARTBEAT_MS",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#buildCodeHostRecoveryBindingManifest",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#buildCodeHostRecoveryBindingManifest",
+      "phase": "unknown",
+      "symbol": "buildCodeHostRecoveryBindingManifest",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#buildCodeHostRecoveryDescriptor",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#buildCodeHostRecoveryDescriptor",
+      "phase": "unknown",
+      "symbol": "buildCodeHostRecoveryDescriptor",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#codeHostRecoveryBaseUrlDigest",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#codeHostRecoveryBaseUrlDigest",
+      "phase": "unknown",
+      "symbol": "codeHostRecoveryBaseUrlDigest",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#codeHostRecoveryClass",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#codeHostRecoveryClass",
+      "phase": "unknown",
+      "symbol": "codeHostRecoveryClass",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#decodeCodeHostRecoveryDescriptor",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#decodeCodeHostRecoveryDescriptor",
+      "phase": "unknown",
+      "symbol": "decodeCodeHostRecoveryDescriptor",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#RECOVERY_BY_ACTION",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#RECOVERY_BY_ACTION",
+      "phase": "unknown",
+      "symbol": "RECOVERY_BY_ACTION",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#validateCodeHostRecoveryBindingManifest",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/codeHostRecovery.ts#validateCodeHostRecoveryBindingManifest",
+      "phase": "unknown",
+      "symbol": "validateCodeHostRecoveryBindingManifest",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/ownership.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/ownership.ts#assertWorkerIdentity",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/ownership.ts#assertWorkerIdentity",
+      "phase": "unknown",
+      "symbol": "assertWorkerIdentity",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/ownership.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/ownership.ts#createWorkerIdentity",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/ownership.ts#createWorkerIdentity",
+      "phase": "unknown",
+      "symbol": "createWorkerIdentity",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/ownership.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/ownership.ts#workerIdentities",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/ownership.ts#workerIdentities",
+      "phase": "unknown",
+      "symbol": "workerIdentities",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/domain/ownership.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/domain/ownership.ts#workerIdentityBrand",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/ownership.ts#workerIdentityBrand",
+      "phase": "unknown",
+      "symbol": "workerIdentityBrand",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "runtime"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts#InMemoryTaskRuntimeRegistry",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts#InMemoryTaskRuntimeRegistry",
+      "phase": "execution",
+      "symbol": "InMemoryTaskRuntimeRegistry",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#MANAGED_PROCESS_RECOVERY_CLASS",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#MANAGED_PROCESS_RECOVERY_CLASS",
+      "phase": "unknown",
+      "symbol": "MANAGED_PROCESS_RECOVERY_CLASS",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#recoveredManagedProcessEvidence",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#recoveredManagedProcessEvidence",
+      "phase": "execution",
+      "symbol": "recoveredManagedProcessEvidence",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
         "client",
         "db",
         "runtime"
@@ -5782,7 +6145,7 @@
       ],
       "file": "packages/backend/src/services/autoKill.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/autoKill.ts#$setInterval:210",
+      "id": "background:packages/backend/src/services/autoKill.ts#$setInterval:209",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -5796,7 +6159,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/autoKill.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:210",
+      "symbol": "$setInterval:209",
       "targetContext": "task-execution"
     },
     {
@@ -5875,7 +6238,7 @@
       ],
       "file": "packages/backend/src/services/autoRepair.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/autoRepair.ts#$setInterval:204",
+      "id": "background:packages/backend/src/services/autoRepair.ts#$setInterval:199",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -5889,7 +6252,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/autoRepair.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:204",
+      "symbol": "$setInterval:199",
       "targetContext": "task-execution"
     },
     {
@@ -6053,7 +6416,7 @@
       ],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:645",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:708",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6067,7 +6430,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:645",
+      "symbol": "$setTimeout:708",
       "targetContext": "integration"
     },
     {
@@ -6076,7 +6439,7 @@
       ],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:662",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:750",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6090,7 +6453,74 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:662",
+      "symbol": "$setTimeout:750",
+      "targetContext": "integration"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/services/codeHost/call.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:797",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:797",
+      "targetContext": "integration"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/services/codeHost/call.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#captureRecoveryPreMutationResponse",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#captureRecoveryPreMutationResponse",
+      "phase": "unknown",
+      "symbol": "captureRecoveryPreMutationResponse",
+      "targetContext": "integration"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/services/codeHost/call.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/codeHost/call.ts#recoveryPreMutationRequest",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/codeHost/call.ts#recoveryPreMutationRequest",
+      "phase": "unknown",
+      "symbol": "recoveryPreMutationRequest",
       "targetContext": "integration"
     },
     {
@@ -6114,6 +6544,29 @@
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/connections.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:618",
+      "targetContext": "integration"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/services/codeHost/recoveryProbe.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/codeHost/recoveryProbe.ts#$setTimeout:73",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/codeHost/recoveryProbe.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:73",
       "targetContext": "integration"
     },
     {
@@ -6191,10 +6644,10 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:400",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:480",
       "kind": "periodic",
       "lifecycle": {
-        "health": true,
+        "health": false,
         "readiness": true,
         "run": true,
         "start": true,
@@ -6205,7 +6658,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:400",
+      "symbol": "$setTimeout:480",
       "targetContext": "task-execution"
     },
     {
@@ -6214,10 +6667,10 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:410",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:490",
       "kind": "periodic",
       "lifecycle": {
-        "health": true,
+        "health": false,
         "readiness": true,
         "run": true,
         "start": true,
@@ -6228,7 +6681,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:410",
+      "symbol": "$setTimeout:490",
       "targetContext": "task-execution"
     },
     {
@@ -6237,10 +6690,10 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:436",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:518",
       "kind": "periodic",
       "lifecycle": {
-        "health": true,
+        "health": false,
         "readiness": true,
         "run": true,
         "start": true,
@@ -6251,7 +6704,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:436",
+      "symbol": "$setTimeout:518",
       "targetContext": "task-execution"
     },
     {
@@ -6260,10 +6713,10 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:507",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:591",
       "kind": "periodic",
       "lifecycle": {
-        "health": true,
+        "health": false,
         "readiness": true,
         "run": true,
         "start": true,
@@ -6274,7 +6727,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:507",
+      "symbol": "$setTimeout:591",
       "targetContext": "task-execution"
     },
     {
@@ -6421,6 +6874,29 @@
       ],
       "file": "packages/backend/src/services/gc.ts",
       "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/gc.ts#ensureWorkspaceGcClaim",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/gc.ts#ensureWorkspaceGcClaim",
+      "phase": "after-ready",
+      "symbol": "ensureWorkspaceGcClaim",
+      "targetContext": "source-control"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/services/gc.ts",
+      "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/gc.ts#finishClaimedWebhookWorkspacePrune",
       "kind": "periodic",
       "lifecycle": {
@@ -6457,8 +6933,29 @@
       "lifetime": "daemon",
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/gc.ts#finishClaimedWorkspacePrune",
-      "phase": "unknown",
+      "phase": "after-ready",
       "symbol": "finishClaimedWorkspacePrune",
+      "targetContext": "source-control"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/services/gc.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/gc.ts#parseWorkspaceGcCleanupPlan",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/gc.ts#parseWorkspaceGcCleanupPlan",
+      "phase": "unknown",
+      "symbol": "parseWorkspaceGcCleanupPlan",
       "targetContext": "source-control"
     },
     {
@@ -6482,6 +6979,52 @@
       "ownerEntryId": "owner:packages/backend/src/services/gc.ts#reconcileLegacyPrunedWorkspaces",
       "phase": "unknown",
       "symbol": "reconcileLegacyPrunedWorkspaces",
+      "targetContext": "source-control"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/services/gc.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/gc.ts#recoverInterruptedWorkspaceGc",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/gc.ts#recoverInterruptedWorkspaceGc",
+      "phase": "after-ready",
+      "symbol": "recoverInterruptedWorkspaceGc",
+      "targetContext": "source-control"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/services/gc.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/gc.ts#resumeWorkspaceGcClaim",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/gc.ts#resumeWorkspaceGcClaim",
+      "phase": "after-ready",
+      "symbol": "resumeWorkspaceGcClaim",
       "targetContext": "source-control"
     },
     {
@@ -6526,7 +7069,7 @@
       "lifetime": "daemon",
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/gc.ts#runIsoWorktreeGc",
-      "phase": "unknown",
+      "phase": "after-ready",
       "symbol": "runIsoWorktreeGc",
       "targetContext": "source-control"
     },
@@ -7752,7 +8295,7 @@
       ],
       "file": "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts#$setInterval:272",
+      "id": "background:packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts#$setInterval:277",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7766,7 +8309,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:272",
+      "symbol": "$setInterval:277",
       "targetContext": "runtime-management"
     },
     {
@@ -7842,7 +8385,7 @@
       ],
       "file": "packages/backend/src/services/scheduler.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/scheduler.ts#$setInterval:3699",
+      "id": "background:packages/backend/src/services/scheduler.ts#$setInterval:3830",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -7856,7 +8399,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:3699",
+      "symbol": "$setInterval:3830",
       "targetContext": "integration"
     },
     {
@@ -7865,7 +8408,7 @@
       ],
       "file": "packages/backend/src/services/scheduler.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/scheduler.ts#$setTimeout:4091",
+      "id": "background:packages/backend/src/services/scheduler.ts#$setTimeout:4228",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -7879,7 +8422,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:4091",
+      "symbol": "$setTimeout:4228",
       "targetContext": "integration"
     },
     {
@@ -8182,10 +8725,10 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5046",
+      "id": "background:packages/backend/src/services/task.ts#$setInterval:387",
       "kind": "periodic",
       "lifecycle": {
-        "health": false,
+        "health": true,
         "readiness": true,
         "run": true,
         "start": true,
@@ -8196,7 +8739,98 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5046",
+      "symbol": "$setInterval:387",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5647",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:5647",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:614",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:614",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/task.ts#ownerHeartbeatTimers",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#ownerHeartbeatTimers",
+      "phase": "unknown",
+      "symbol": "ownerHeartbeatTimers",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "db",
+        "timer"
+      ],
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/task.ts#startOwnerHeartbeat",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#startOwnerHeartbeat",
+      "phase": "unknown",
+      "symbol": "startOwnerHeartbeat",
       "targetContext": "task-execution"
     },
     {
@@ -8204,21 +8838,21 @@
         "db"
       ],
       "file": "packages/backend/src/services/taskArchive.ts",
-      "finalCriterion": "owner lifecycle",
+      "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/taskArchive.ts#recoverInterruptedArchives",
-      "kind": "execution-local",
+      "kind": "periodic",
       "lifecycle": {
         "health": false,
         "readiness": false,
         "run": true,
         "start": false,
-        "state": false,
+        "state": true,
         "stop": false
       },
-      "lifetime": "execution-local",
+      "lifetime": "daemon",
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#recoverInterruptedArchives",
-      "phase": "execution",
+      "phase": "after-ready",
       "symbol": "recoverInterruptedArchives",
       "targetContext": "task-execution"
     },
@@ -8267,6 +8901,29 @@
       "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#startTaskArchiveSweeper",
       "phase": "before-ready",
       "symbol": "startTaskArchiveSweeper",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/services/taskDelete.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/services/taskDelete.ts#recoverInterruptedTaskDeletes",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#recoverInterruptedTaskDeletes",
+      "phase": "after-ready",
+      "symbol": "recoverInterruptedTaskDeletes",
       "targetContext": "task-execution"
     },
     {
@@ -8783,7 +9440,7 @@
       ],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/util/process.ts#$setTimeout:309",
+      "id": "background:packages/backend/src/util/process.ts#$setTimeout:334",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8797,7 +9454,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:309",
+      "symbol": "$setTimeout:334",
       "targetContext": "task-execution"
     },
     {
@@ -8806,7 +9463,7 @@
       ],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/util/process.ts#$setTimeout:450",
+      "id": "background:packages/backend/src/util/process.ts#$setTimeout:475",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8820,7 +9477,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:450",
+      "symbol": "$setTimeout:475",
       "targetContext": "task-execution"
     },
     {
@@ -8829,7 +9486,7 @@
       ],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/util/process.ts#$setTimeout:470",
+      "id": "background:packages/backend/src/util/process.ts#$setTimeout:495",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8843,7 +9500,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:470",
+      "symbol": "$setTimeout:495",
       "targetContext": "task-execution"
     },
     {
@@ -8896,5 +9553,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:184ed2aabf96be9f67a872cd90d46667dbbc3c393d09a837cc0193cdd8fa1bab"
+  "sourceDigest": "sha256:9200e802603ac418d143efdc15198b4e75fbe14871284e55b0f56b4f1315bf9c"
 }

@@ -225,7 +225,7 @@ export function buildDwActions(
       rejectRounds,
       rejectionComment: comment,
     }
-    // Codex impl-gate P1: the phase reset rides the resume ownership CAS —
+    // Codex impl-gate P1: the phase reset rides the resume admission CAS —
     // NOT a separate write + fire-and-forget kick. A failed resume (lost CAS,
     // 410 worktree preflight) therefore leaves phase='awaiting_confirm' and
     // the gate re-triable, instead of stranding an awaiting_review task whose
@@ -233,7 +233,7 @@ export function buildDwActions(
     // tasks, so that stranding had no recovery path). The already-closed
     // holder is benign: the gate check reads (phase, status), and the
     // generate engine re-mints a holder on its awaiting_confirm branch.
-    // RFC-217 T2: the write itself is setDwStateTx inside the claim tx.
+    // RFC-217 T2: the write itself is setDwStateTx inside the admission tx.
     await resumeDynamicWorkflowExecution(deps.db, taskId, buildResumeDeps(), { dw: nextDw })
     return { decision: 'reject' }
   }

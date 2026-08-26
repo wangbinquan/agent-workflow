@@ -1,0 +1,169 @@
+// RFC-328 — pre-activation launcher for task-owned managed processes.
+//
+// The launcher itself may exist before the durable PID receipt, but it cannot
+// execute the requested runtime until its parent sends one activation frame.
+// If the daemon dies or closes the control pipe first, EOF makes the launcher
+// exit without ever spawning the target command.
+
+import { resolve } from 'node:path'
+import { IS_EMBEDDED } from '@/embed'
+
+export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
+export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
+export const MANAGED_PROCESS_TARGET_SEPARATOR = '--'
+export const MANAGED_PROCESS_LAUNCH_ERROR_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_ERROR:'
+
+export interface ManagedProcessActivationFrame {
+  readonly v: 1
+  readonly launchNonce: string
+  readonly stdin: Readonly<{ mode: 'ignore' }> | Readonly<{ mode: 'pipe'; data: string }>
+}
+
+function selfInvocation(): string[] {
+  if (IS_EMBEDDED) return [process.execPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+  const mainPath = resolve(import.meta.dir, '..', '..', 'main.ts')
+  return [process.execPath, 'run', mainPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+}
+
+export function managedProcessLauncherArgv(input: {
+  launchNonce: string
+  targetArgv: readonly string[]
+}): string[] {
+  if (input.launchNonce.length === 0 || input.targetArgv.length === 0) {
+    throw new Error('managed process launcher requires a nonce and target argv')
+  }
+  return [
+    ...selfInvocation(),
+    MANAGED_PROCESS_LAUNCH_NONCE_FLAG,
+    input.launchNonce,
+    MANAGED_PROCESS_TARGET_SEPARATOR,
+    ...input.targetArgv,
+  ]
+}
+
+function parseLauncherRequest(argv: readonly string[]): {
+  launchNonce: string
+  targetArgv: readonly string[]
+} {
+  const subcommandIndex = argv.indexOf(MANAGED_PROCESS_LAUNCHER_SUBCOMMAND)
+  const nonceFlagIndex = argv.indexOf(MANAGED_PROCESS_LAUNCH_NONCE_FLAG, subcommandIndex + 1)
+  const separatorIndex = argv.indexOf(MANAGED_PROCESS_TARGET_SEPARATOR, nonceFlagIndex + 2)
+  const launchNonce = nonceFlagIndex < 0 ? undefined : argv[nonceFlagIndex + 1]
+  const targetArgv = separatorIndex < 0 ? [] : argv.slice(separatorIndex + 1)
+  if (
+    subcommandIndex < 0 ||
+    nonceFlagIndex < 0 ||
+    separatorIndex < 0 ||
+    typeof launchNonce !== 'string' ||
+    launchNonce.length === 0 ||
+    targetArgv.length === 0
+  ) {
+    throw new Error('invalid managed process launcher argv')
+  }
+  return { launchNonce, targetArgv }
+}
+
+function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessActivationFrame {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('invalid managed process activation frame')
+  }
+  if (parsed === null || typeof parsed !== 'object') {
+    throw new Error('invalid managed process activation frame')
+  }
+  const value = parsed as {
+    v?: unknown
+    launchNonce?: unknown
+    stdin?: { mode?: unknown; data?: unknown }
+  }
+  if (
+    value.v !== 1 ||
+    value.launchNonce !== launchNonce ||
+    value.stdin === null ||
+    typeof value.stdin !== 'object' ||
+    (value.stdin.mode !== 'ignore' && value.stdin.mode !== 'pipe') ||
+    (value.stdin.mode === 'pipe' && typeof value.stdin.data !== 'string')
+  ) {
+    throw new Error('managed process activation frame does not match launcher nonce')
+  }
+  return value.stdin.mode === 'pipe'
+    ? { v: 1, launchNonce, stdin: { mode: 'pipe', data: value.stdin.data as string } }
+    : { v: 1, launchNonce, stdin: { mode: 'ignore' } }
+}
+
+function reportLaunchError(launchNonce: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error)
+  process.stderr.write(
+    `${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:${JSON.stringify(message)}\n`,
+  )
+}
+
+/** Hidden CLI entry. Never logs ordinary daemon output or reads product state. */
+export async function runManagedProcessLauncher(
+  argv: readonly string[] = Bun.argv,
+): Promise<number> {
+  let request: ReturnType<typeof parseLauncherRequest>
+  try {
+    request = parseLauncherRequest(argv)
+  } catch (error) {
+    reportLaunchError('invalid', error)
+    return 125
+  }
+
+  // EOF before a valid frame is the parent-death/receipt-failure path. The
+  // target has not been spawned, so this is a clean definitely-not-activated
+  // exit rather than an orphan runtime.
+  const raw = await Bun.stdin.text().catch(() => '')
+  if (raw.length === 0) return 125
+
+  let frame: ManagedProcessActivationFrame
+  try {
+    frame = parseActivationFrame(raw, request.launchNonce)
+  } catch (error) {
+    reportLaunchError(request.launchNonce, error)
+    return 125
+  }
+
+  let child: Bun.Subprocess
+  try {
+    child = Bun.spawn({
+      cmd: [...request.targetArgv],
+      cwd: process.cwd(),
+      env: Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        }),
+      ),
+      stdout: 'inherit',
+      stderr: 'inherit',
+      stdin: frame.stdin.mode === 'pipe' ? 'pipe' : 'ignore',
+      // The launcher is already the detached process-group leader. The target
+      // deliberately stays in that group so TERM→KILL reaches the whole tree.
+      detached: false,
+    })
+  } catch (error) {
+    reportLaunchError(request.launchNonce, error)
+    return 127
+  }
+
+  if (frame.stdin.mode === 'pipe') {
+    try {
+      const sink = child.stdin as { write: (data: string) => void; end: () => void }
+      sink.write(frame.stdin.data)
+      sink.end()
+    } catch (error) {
+      reportLaunchError(request.launchNonce, error)
+      try {
+        child.kill(15)
+      } catch {
+        // The child may already have exited.
+      }
+      await child.exited.catch(() => {})
+      return 126
+    }
+  }
+
+  return await child.exited
+}

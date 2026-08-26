@@ -486,7 +486,7 @@ export async function resolveWgClarifyAllowed(
 // Per-task serialization for tasks_add consumption: two member turns
 // finishing in the same tick would otherwise interleave their dedup read
 // and insert (TOCTOU). One engine instance per task is guaranteed by the
-// runTask CAS claim, so an in-process chain fully closes the race.
+// the RFC-328 durable task owner, so an in-process chain fully closes the race.
 const tasksAddQueue = new KeyedSerialQueue<string>()
 function serializeTasksAdd<T>(taskId: string, fn: () => Promise<T>): Promise<T> {
   return tasksAddQueue.run(taskId, fn)

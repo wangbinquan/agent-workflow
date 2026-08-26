@@ -28,6 +28,7 @@ import {
   type StaleRunKillOpts,
 } from '@/util/process'
 import { createLogger } from '@/util/log'
+import { terminalizeTaskExecutionIntentsTx } from '@/modules/task-execution/application/terminalizeExecutionIntent'
 
 const log = createLogger('orphans')
 
@@ -98,6 +99,14 @@ export async function reapOrphanRuns(
         errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
         errorMessage: 'daemon restarted while this task was running; please resume',
       },
+      onTransitionTx: (tx) =>
+        terminalizeTaskExecutionIntentsTx({
+          tx,
+          taskId: t.id,
+          state: 'failed',
+          failureCode: 'daemon-restart',
+          now,
+        }),
       reason: 'reapOrphanRuns',
     })
     if (!won) {

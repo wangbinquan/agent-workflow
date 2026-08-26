@@ -47,6 +47,10 @@ import {
   type ResolvedCodeHostConnection,
 } from '@/services/codeHost/connections'
 import { buildCodeHostUrl, redirectTargetIssue } from '@/services/codeHost/url'
+import {
+  buildCodeHostRecoveryDescriptor,
+  type CodeHostRecoveryDescriptor,
+} from '@/modules/task-execution/domain/codeHostRecovery'
 
 /** 节点定义里与执行相关的那一份（scheduler 从 WorkflowNode 读出后传进来）。 */
 export interface CodeHostCallSpec {
@@ -71,6 +75,31 @@ export interface CodeHostCallDeps {
   maxResponseBytes?: number
   /** 测试用：让退避不真的睡。 */
   sleep?: (ms: number) => Promise<void>
+  /** RFC-328: record every real mutation send before the transport sees it. */
+  attemptObserver?: CodeHostSendAttemptObserver
+}
+
+export interface CodeHostSendAttemptInfo {
+  readonly candidateId: string
+  readonly transportAttempt: number
+  readonly method: string
+  readonly pathname: string
+  readonly recoveryDescriptor: CodeHostRecoveryDescriptor
+}
+
+export interface CodeHostSendAttemptSettlement extends CodeHostSendAttemptInfo {
+  readonly result: 'response' | 'network-error'
+  readonly status?: number
+  readonly willRetry: boolean
+  readonly retryKind: 'none' | 'transport-policy' | 'compatibility-fallback'
+  readonly errorMessage?: string
+}
+
+export interface CodeHostSendAttemptObserver {
+  beforeSend(info: CodeHostSendAttemptInfo): Promise<unknown> | unknown
+  afterSend(handle: unknown, settlement: CodeHostSendAttemptSettlement): Promise<void> | void
+  /** True only after a terminal send whose application outcome is ambiguous. */
+  outcomeUnknown?: () => boolean
 }
 
 export type CodeHostCallOutcome =
@@ -569,7 +598,12 @@ export async function executeCodeHostCall(
 
   if (action === 'custom') {
     try {
-      return (await executeAssembledRequest(spec, deps, assembleCustom(spec, deps))).outcome
+      return (
+        await executeAssembledRequest(spec, deps, assembleCustom(spec, deps), {
+          candidateId: 'custom:c0',
+          compatibilityFallbackAvailable: false,
+        })
+      ).outcome
     } catch (err) {
       if (err instanceof ParamError) return fail(err.code, err.message)
       throw err
@@ -589,7 +623,10 @@ export async function executeCodeHostCall(
       throw err
     }
 
-    const executed = await executeAssembledRequest(spec, deps, assembled)
+    const executed = await executeAssembledRequest(spec, deps, assembled, {
+      candidateId: `${action}:c${index}`,
+      compatibilityFallbackAvailable: index + 1 < candidates.length,
+    })
     const routeMissing =
       executed.responseStatus !== undefined &&
       COMPATIBILITY_FALLBACK_STATUSES.has(executed.responseStatus)
@@ -622,11 +659,79 @@ interface ExecutedRequest {
   readonly pathname?: string
 }
 
+function recoveryPreMutationRequest(
+  provider: CodeHostProvider,
+  action: CodeHostAction,
+  mutationPathname: string,
+): Readonly<{ path: string; query: Readonly<Record<string, string>> }> | null {
+  if (action === 'mr.merge') {
+    return {
+      path: mutationPathname.endsWith('/merge')
+        ? mutationPathname.slice(0, -'/merge'.length)
+        : mutationPathname,
+      query: {},
+    }
+  }
+  if (action !== 'pipeline.retry') return null
+  if (provider === 'github') {
+    return {
+      path: mutationPathname.endsWith('/rerun-failed-jobs')
+        ? mutationPathname.slice(0, -'/rerun-failed-jobs'.length)
+        : mutationPathname,
+      query: {},
+    }
+  }
+  const pipelinePath = mutationPathname.endsWith('/retry')
+    ? mutationPathname.slice(0, -'/retry'.length)
+    : mutationPathname
+  return { path: `${pipelinePath}/jobs`, query: { include_retried: 'true' } }
+}
+
+async function captureRecoveryPreMutationResponse(input: {
+  spec: CodeHostCallSpec
+  deps: CodeHostCallDeps
+  mutationPathname: string
+  doFetch: FetchLike
+  headers: Readonly<Record<string, string>>
+  timeoutMs: number
+}): Promise<Readonly<{ status: number; body: string }> | undefined> {
+  if (input.deps.attemptObserver === undefined) return undefined
+  const request = recoveryPreMutationRequest(
+    input.spec.provider,
+    input.spec.action as CodeHostAction,
+    input.mutationPathname,
+  )
+  if (request === null) return undefined
+  const built = buildCodeHostUrl(input.deps.connection.baseUrl, request.path, request.query)
+  if (!built.ok) return undefined
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), input.timeoutMs)
+  try {
+    const response = await input.doFetch(built.value.url, {
+      method: 'GET',
+      headers: input.headers,
+      redirect: 'manual',
+      ...codeHostTlsRequestInit(input.deps.connection),
+      signal: controller.signal,
+    })
+    // The snapshot is an in-memory input to the digest-only descriptor. Keep a
+    // hard bound anyway so a provider cannot inflate the mutation path.
+    const body = (await response.text()).slice(0, DEFAULT_CODE_HOST_MAX_RESPONSE_BYTES)
+    return { status: response.status, body }
+  } catch {
+    // Probe availability must never remove the normal mutation capability.
+    return undefined
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** 执行单个候选 binding；每条候选都完整遵守原有 TLS、重试与重定向纪律。 */
 async function executeAssembledRequest(
   spec: CodeHostCallSpec,
   deps: CodeHostCallDeps,
   assembled: AssembledRequest,
+  candidate: { candidateId: string; compatibilityFallbackAvailable: boolean },
 ): Promise<ExecutedRequest> {
   const limitFailure = assembledLimitFailure(assembled)
   if (limitFailure !== null) return { outcome: limitFailure }
@@ -647,6 +752,28 @@ async function executeAssembledRequest(
   const maxBytes = deps.maxResponseBytes ?? DEFAULT_CODE_HOST_MAX_RESPONSE_BYTES
   const idempotent = IDEMPOTENT_METHODS.has(assembled.method)
   const headers = headersFor(spec.provider, token, assembled.accept)
+  const preMutationResponse = await captureRecoveryPreMutationResponse({
+    spec,
+    deps,
+    mutationPathname: assembled.path,
+    doFetch,
+    headers,
+    timeoutMs,
+  })
+  const recoveryDescriptor = buildCodeHostRecoveryDescriptor({
+    provider: spec.provider,
+    action: spec.action as CodeHostAction,
+    candidateId: candidate.candidateId,
+    method: assembled.method,
+    pathname: assembled.path,
+    query: assembled.query,
+    ...(assembled.body !== undefined ? { body: assembled.body } : {}),
+    baseUrl: deps.connection.baseUrl,
+    ...(deps.connection.connectionGeneration !== undefined
+      ? { connectionGeneration: deps.connection.connectionGeneration }
+      : {}),
+    ...(preMutationResponse !== undefined ? { preMutationResponse } : {}),
+  })
   const init: BunFetchRequestInit = {
     method: assembled.method,
     headers:
@@ -658,6 +785,14 @@ async function executeAssembledRequest(
 
   let lastError = ''
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const attemptInfo: CodeHostSendAttemptInfo = {
+      candidateId: candidate.candidateId,
+      transportAttempt: attempt,
+      method: assembled.method,
+      pathname: built.value.pathname,
+      recoveryDescriptor,
+    }
+    const attemptHandle = await deps.attemptObserver?.beforeSend(attemptInfo)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let res: Response
@@ -667,7 +802,15 @@ async function executeAssembledRequest(
       lastError = err instanceof Error ? err.message : 'network error'
       clearTimeout(timer)
       // 网络层失败对 POST 不重试：请求可能已经到达并生效，重发就是第二条评论。
-      if (idempotent && attempt < MAX_ATTEMPTS) {
+      const willRetry = idempotent && attempt < MAX_ATTEMPTS
+      await deps.attemptObserver?.afterSend(attemptHandle, {
+        ...attemptInfo,
+        result: 'network-error',
+        willRetry,
+        retryKind: willRetry ? 'transport-policy' : 'none',
+        errorMessage: redactToken(lastError, token),
+      })
+      if (willRetry) {
         await sleep(200 * attempt)
         continue
       }
@@ -680,6 +823,24 @@ async function executeAssembledRequest(
     } finally {
       clearTimeout(timer)
     }
+
+    const transportRetry =
+      (res.status === 429 || (res.status >= 500 && idempotent)) && attempt < MAX_ATTEMPTS
+    const compatibilityRetry =
+      !transportRetry &&
+      candidate.compatibilityFallbackAvailable &&
+      COMPATIBILITY_FALLBACK_STATUSES.has(res.status)
+    await deps.attemptObserver?.afterSend(attemptHandle, {
+      ...attemptInfo,
+      result: 'response',
+      status: res.status,
+      willRetry: transportRetry || compatibilityRetry,
+      retryKind: transportRetry
+        ? 'transport-policy'
+        : compatibilityRetry
+          ? 'compatibility-fallback'
+          : 'none',
+    })
 
     // 429：请求**没有**被执行，所以对任何 method 重试都是安全的。
     if (res.status === 429 && attempt < MAX_ATTEMPTS) {

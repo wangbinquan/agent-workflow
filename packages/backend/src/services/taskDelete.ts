@@ -54,6 +54,9 @@ import { ConflictError, NotFoundError } from '@/util/errors'
 import { deleteSnapshotRefs, removeWorktree } from '@/util/git'
 import { Paths } from '@/util/paths'
 import { createLogger } from '@/util/log'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import type { MaintenanceMemberSnapshot } from '@/modules/task-execution/domain/terminalMaintenance'
+import type { TerminalMaintenanceClaim } from '@/modules/task-execution/domain/ownership'
 
 const log = createLogger('task-delete')
 
@@ -64,9 +67,102 @@ interface WorktreeTarget {
   worktreePath: string
 }
 
+interface DeleteCleanupPlanV2 {
+  readonly v: 2
+  readonly taskId: string
+  readonly parentTaskId: string | null
+  readonly worktrees: readonly WorktreeTarget[]
+  readonly directories: readonly string[]
+}
+
 export interface DeleteTaskResult {
   taskId: string
   cleanup: 'done' | 'pending'
+}
+
+function parseDeleteCleanupPlan(
+  value: string,
+  members: readonly MaintenanceMemberSnapshot[],
+): DeleteCleanupPlanV2 | null {
+  try {
+    const parsed = JSON.parse(value) as {
+      v?: number
+      taskId?: unknown
+      parentTaskId?: unknown
+      worktrees?: unknown
+      directories?: unknown
+    }
+    if (
+      (parsed.v !== 1 && parsed.v !== 2) ||
+      typeof parsed.taskId !== 'string' ||
+      !Array.isArray(parsed.worktrees) ||
+      !parsed.worktrees.every(
+        (target) =>
+          target !== null &&
+          typeof target === 'object' &&
+          typeof (target as WorktreeTarget).repoPath === 'string' &&
+          typeof (target as WorktreeTarget).worktreePath === 'string',
+      ) ||
+      !Array.isArray(parsed.directories) ||
+      !parsed.directories.every((dir) => typeof dir === 'string')
+    ) {
+      return null
+    }
+    const directories =
+      parsed.v === 2
+        ? (parsed.directories as string[])
+        : members.flatMap((member) => [
+            join(Paths.runsDir, member.taskId),
+            join(Paths.logsDir, member.taskId),
+            join(Paths.root, 'scratch', member.taskId),
+          ])
+    return {
+      v: 2,
+      taskId: parsed.taskId,
+      parentTaskId: typeof parsed.parentTaskId === 'string' ? parsed.parentTaskId : null,
+      worktrees: parsed.worktrees as WorktreeTarget[],
+      directories,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function cleanupDeletedTaskResources(plan: DeleteCleanupPlanV2): Promise<'done' | 'pending'> {
+  let cleanup: 'done' | 'pending' = 'done'
+  const fail = (what: string, err: unknown): void => {
+    cleanup = 'pending'
+    log.warn('task delete cleanup step failed', {
+      taskId: plan.taskId,
+      what,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  for (const wt of plan.worktrees) {
+    try {
+      await removeWorktree({ repoPath: wt.repoPath, worktreePath: wt.worktreePath, force: true })
+    } catch (err) {
+      fail('removeWorktree', err)
+      try {
+        if (existsSync(wt.worktreePath)) rmSync(wt.worktreePath, { recursive: true, force: true })
+      } catch (fallbackError) {
+        fail('rmSync-worktree', fallbackError)
+      }
+    }
+    try {
+      await deleteSnapshotRefs(wt.repoPath, plan.taskId)
+    } catch (err) {
+      fail('deleteSnapshotRefs', err)
+    }
+  }
+  for (const dir of plan.directories) {
+    try {
+      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+    } catch (err) {
+      fail('rmSync-dir', err)
+    }
+  }
+  return cleanup
 }
 
 /**
@@ -141,21 +237,87 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
     }
   }
 
-  // Capture every worktree BEFORE deletion (taskRepos cascades away with the row).
+  // Freeze the complete member set before collecting its cleanup resources.
+  // The claim revalidates this same snapshot before it becomes authoritative.
+  const maintenanceMembers = taskExecutionModule.terminalMaintenance.snapshotTree(db, taskId)
+  for (const member of maintenanceMembers) {
+    if (isTaskActive(member.taskId)) {
+      throw new ConflictError(
+        'task-active',
+        `task '${member.taskId}' still has an active process; cancel it first`,
+      )
+    }
+  }
+  const maintenanceTaskIds = maintenanceMembers.map((member) => member.taskId)
+
+  // Capture every owned worktree BEFORE deletion (taskRepos cascades away with
+  // the rows). Inherited children borrow their parent's isolation and therefore
+  // never contribute a cleanup target of their own.
+  const memberTaskRows = await db
+    .select({
+      id: tasks.id,
+      spaceKind: tasks.spaceKind,
+      repoPath: tasks.repoPath,
+      worktreePath: tasks.worktreePath,
+    })
+    .from(tasks)
+    .where(inArray(tasks.id, maintenanceTaskIds))
   const repoRows = await db
-    .select({ repoPath: taskRepos.repoPath, worktreePath: taskRepos.worktreePath })
+    .select({
+      taskId: taskRepos.taskId,
+      repoPath: taskRepos.repoPath,
+      worktreePath: taskRepos.worktreePath,
+    })
     .from(taskRepos)
-    .where(eq(taskRepos.taskId, taskId))
-  const worktrees: WorktreeTarget[] = (
-    repoRows.length
-      ? repoRows.map((r) => ({ repoPath: r.repoPath, worktreePath: r.worktreePath }))
-      : [{ repoPath: row.repoPath, worktreePath: row.worktreePath }]
-  )
+    .where(inArray(taskRepos.taskId, maintenanceTaskIds))
+  const worktrees: WorktreeTarget[] = [
+    ...new Map(
+      memberTaskRows
+        .filter((taskRow) => taskRow.spaceKind !== 'inherited')
+        .flatMap((taskRow) => {
+          const owned = repoRows.filter((repo) => repo.taskId === taskRow.id)
+          return owned.length > 0
+            ? owned.map((repo) => ({ repoPath: repo.repoPath, worktreePath: repo.worktreePath }))
+            : [{ repoPath: taskRow.repoPath, worktreePath: taskRow.worktreePath }]
+        })
+        .map((target) => [`${target.repoPath}\u0000${target.worktreePath}`, target] as const),
+    ).values(),
+  ]
     // RFC-287 G7：准备失败 / 准备窗口内的任务 `task_repos` 为空、两个路径都是空串，
     // 于是这里会用两个空串去调 git，拿到 `fatal: '' is not a working tree`，API 回给
     // 调用方一个**假的** `cleanup: "pending"`——任务与 node_runs 其实已经删干净了，
     // 只是从来就没有工作树要清（四轮门 Codex 契约面实测）。空路径直接不进清理面。
     .filter((w) => w.worktreePath !== '' && w.repoPath !== '')
+
+  // RFC-328: claim the complete terminal tree before the first destructive
+  // database or filesystem action.  This is durable, so a crash leaves a
+  // resumable cleanup manifest instead of reopening continuation admission.
+  const cleanupPlan: DeleteCleanupPlanV2 = {
+    v: 2,
+    taskId,
+    parentTaskId: row.parentTaskId,
+    worktrees,
+    directories: maintenanceTaskIds.flatMap((id) => [
+      join(Paths.runsDir, id),
+      join(Paths.logsDir, id),
+      join(Paths.root, 'scratch', id),
+    ]),
+  }
+  let maintenanceClaim = taskExecutionModule.terminalMaintenance.claim({
+    db,
+    rootTaskId: taskId,
+    operation: 'delete',
+    members: maintenanceMembers,
+    cleanupPlanJson: JSON.stringify(cleanupPlan),
+  })
+  // The immutable member/ledger/cleanup manifest is now frozen.  Advancing to
+  // io-complete makes the following DB deletion restartable without claiming
+  // that best-effort filesystem cleanup has already succeeded.
+  maintenanceClaim = taskExecutionModule.terminalMaintenance.transition({
+    db,
+    claim: maintenanceClaim,
+    to: 'io-complete',
+  })
 
   // Serialize against in-flight writers, then re-check terminality and delete in
   // one transaction (closes the resume/retry TOCTOU — §6.2).
@@ -163,6 +325,11 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
   let deletedAudiences: Array<{ taskId: string; visibleUserIds: ReadonlySet<string> }> = []
   try {
     dbTxSync(db, (tx) => {
+      taskExecutionModule.terminalMaintenance.assertClaimTx({
+        tx,
+        claim: maintenanceClaim,
+        expectedState: 'io-complete',
+      })
       const fresh = tx
         .select({ status: tasks.status })
         .from(tasks)
@@ -196,6 +363,13 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
         JOIN cascade c ON c.id = t.id
       `) as Array<{ id: string; owner_user_id: string | null }>
       const cascadeIds = cascadeRows.map((item) => item.id)
+      const claimedIds = maintenanceMembers.map((member) => member.taskId).sort()
+      if (JSON.stringify([...cascadeIds].sort()) !== JSON.stringify(claimedIds)) {
+        throw new ConflictError(
+          'task-terminal-maintenance-conflict',
+          `task tree '${taskId}' changed after terminal maintenance claim`,
+        )
+      }
       const memberRows =
         cascadeIds.length === 0
           ? []
@@ -215,7 +389,7 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       // Explicit task-scoped deletes; the remaining FK tables cascade with the
       // task row. Lifecycle publication rows deliberately use a restrictive FK
       // so no generic task deletion can silently orphan an Event Center fact.
-      tx.delete(taskFeedback).where(eq(taskFeedback.taskId, taskId)).run()
+      tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
       if (cascadeIds.length > 0) {
         tx.delete(taskLifecycleEventOutbox)
           .where(inArray(taskLifecycleEventOutbox.taskId, cascadeIds))
@@ -249,54 +423,20 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
         tx.update(tasks).set({ branchStartedAt: recomputed }).where(eq(tasks.id, parent.id)).run()
         cursor = parent.parentTaskId
       }
+      maintenanceClaim = taskExecutionModule.terminalMaintenance.transitionTx({
+        tx,
+        claim: maintenanceClaim,
+        to: 'db-finalized',
+        now: Date.now(),
+      })
     })
   } finally {
     release()
   }
 
-  // Best-effort disk cleanup (GC orphan-scan is the backstop).
-  let cleanup: 'done' | 'pending' = 'done'
-  const fail = (what: string, err: unknown): void => {
-    cleanup = 'pending'
-    log.warn('task delete cleanup step failed', {
-      taskId,
-      what,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-  // RFC-243 §4.4 — an 'inherited' child's workspace IS the parent's call-node
-  // iso; removing it here would rip the directory out of the parent's iso
-  // lifecycle (discard / GC own it). Skip worktree + snapshot-ref cleanup,
-  // keep the runs/logs/scratch sweep below.
-  const ownsWorkspace = row.spaceKind !== 'inherited'
-  for (const wt of ownsWorkspace ? worktrees : []) {
-    try {
-      await removeWorktree({ repoPath: wt.repoPath, worktreePath: wt.worktreePath, force: true })
-    } catch (err) {
-      fail('removeWorktree', err)
-      try {
-        if (existsSync(wt.worktreePath)) rmSync(wt.worktreePath, { recursive: true, force: true })
-      } catch (err2) {
-        fail('rmSync-worktree', err2)
-      }
-    }
-    try {
-      await deleteSnapshotRefs(wt.repoPath, taskId)
-    } catch (err) {
-      fail('deleteSnapshotRefs', err)
-    }
-  }
-  for (const dir of [
-    join(Paths.runsDir, taskId),
-    join(Paths.logsDir, taskId),
-    join(Paths.root, 'scratch', taskId),
-  ]) {
-    try {
-      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
-    } catch (err) {
-      fail('rmSync-dir', err)
-    }
-  }
+  // Best-effort disk cleanup (GC orphan-scan is the backstop). The exact plan
+  // survives task-row deletion and is reused by boot recovery.
+  const cleanup = await cleanupDeletedTaskResources(cleanupPlan)
   for (const audience of deletedAudiences) {
     tasksListBroadcaster.broadcast(
       TASKS_LIST_CHANNEL,
@@ -308,7 +448,196 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
       },
     )
   }
+  maintenanceClaim = taskExecutionModule.terminalMaintenance.transition({
+    db,
+    claim: maintenanceClaim,
+    to: cleanup === 'done' ? 'completed' : 'cleanup-pending',
+    releaseMembers: cleanup === 'done',
+  })
   return { taskId, cleanup }
+}
+
+export interface DeleteRecoveryResult {
+  readonly completed: readonly string[]
+  readonly cleanupPending: readonly string[]
+  readonly recoveryRequired: readonly string[]
+}
+
+/** Resume exact RFC-328 delete claims left by a daemon/process crash. */
+export async function recoverInterruptedTaskDeletes(db: DbClient): Promise<DeleteRecoveryResult> {
+  const completed: string[] = []
+  const cleanupPending: string[] = []
+  const recoveryRequired: string[] = []
+  for (const item of taskExecutionModule.terminalMaintenance.listRecoverable({
+    db,
+    operation: 'delete',
+  })) {
+    const plan = parseDeleteCleanupPlan(item.cleanupPlanJson, item.members)
+    let claim: TerminalMaintenanceClaim = item.claim
+    let state = item.state
+    if (plan === null) {
+      if (state !== 'recovery-required') {
+        taskExecutionModule.terminalMaintenance.transition({
+          db,
+          claim,
+          to: 'recovery-required',
+        })
+      }
+      recoveryRequired.push(item.rootTaskId)
+      continue
+    }
+
+    const rootBefore = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(eq(tasks.id, item.rootTaskId))
+      .get()
+    if (state === 'recovery-required') {
+      claim = taskExecutionModule.terminalMaintenance.transition({
+        db,
+        claim,
+        to: rootBefore === undefined ? 'db-finalized' : 'io-complete',
+      })
+      state = rootBefore === undefined ? 'db-finalized' : 'io-complete'
+    } else if (state === 'claimed') {
+      claim = taskExecutionModule.terminalMaintenance.transition({
+        db,
+        claim,
+        to: 'io-complete',
+      })
+      state = 'io-complete'
+    }
+
+    let deletedAudiences: Array<{ taskId: string; visibleUserIds: ReadonlySet<string> }> = []
+    if (state === 'io-complete') {
+      const release = await getTaskWriteSem(item.rootTaskId).acquire()
+      try {
+        claim = dbTxSync(db, (tx) => {
+          taskExecutionModule.terminalMaintenance.assertClaimTx({
+            tx,
+            claim,
+            expectedState: 'io-complete',
+          })
+          const fresh = tx
+            .select({ status: tasks.status, parentTaskId: tasks.parentTaskId })
+            .from(tasks)
+            .where(eq(tasks.id, item.rootTaskId))
+            .get()
+          if (fresh !== undefined) {
+            if (!isTerminalTaskStatus(fresh.status as TaskStatus)) {
+              throw new ConflictError(
+                'task-terminal-maintenance-conflict',
+                `task '${item.rootTaskId}' changed during delete recovery`,
+              )
+            }
+            const cascadeRows = tx.all(sql`
+              WITH RECURSIVE cascade(id) AS (
+                SELECT id FROM tasks WHERE id = ${item.rootTaskId}
+                UNION
+                SELECT child.id FROM tasks child
+                JOIN cascade parent ON child.parent_task_id = parent.id
+              )
+              SELECT t.id, t.owner_user_id
+              FROM tasks t JOIN cascade c ON c.id = t.id
+            `) as Array<{ id: string; owner_user_id: string | null }>
+            const cascadeIds = cascadeRows.map((row) => row.id)
+            const claimedIds = item.members.map((member) => member.taskId).sort()
+            if (JSON.stringify([...cascadeIds].sort()) !== JSON.stringify(claimedIds)) {
+              throw new ConflictError(
+                'task-terminal-maintenance-conflict',
+                `task tree '${item.rootTaskId}' changed during delete recovery`,
+              )
+            }
+            const collaborators =
+              cascadeIds.length === 0
+                ? []
+                : tx
+                    .select({ taskId: taskCollaborators.taskId, userId: taskCollaborators.userId })
+                    .from(taskCollaborators)
+                    .where(inArray(taskCollaborators.taskId, cascadeIds))
+                    .all()
+            deletedAudiences = cascadeRows.map((row) => {
+              const visibleUserIds = new Set<string>()
+              if (row.owner_user_id !== null) visibleUserIds.add(row.owner_user_id)
+              for (const collaborator of collaborators) {
+                if (collaborator.taskId === row.id) visibleUserIds.add(collaborator.userId)
+              }
+              return { taskId: row.id, visibleUserIds }
+            })
+            if (cascadeIds.length > 0) {
+              tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
+              tx.delete(taskLifecycleEventOutbox)
+                .where(inArray(taskLifecycleEventOutbox.taskId, cascadeIds))
+                .run()
+            }
+            tx.delete(tasks).where(eq(tasks.id, item.rootTaskId)).run()
+
+            let cursor = fresh.parentTaskId ?? plan.parentTaskId
+            for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
+              const parent = tx
+                .select({
+                  id: tasks.id,
+                  parentTaskId: tasks.parentTaskId,
+                  startedAt: tasks.startedAt,
+                })
+                .from(tasks)
+                .where(eq(tasks.id, cursor))
+                .get()
+              if (parent === undefined) break
+              const childMax = tx
+                .select({ v: sql<number | null>`MAX(${tasks.branchStartedAt})` })
+                .from(tasks)
+                .where(eq(tasks.parentTaskId, parent.id))
+                .get()
+              tx.update(tasks)
+                .set({ branchStartedAt: Math.max(parent.startedAt ?? 0, childMax?.v ?? 0) })
+                .where(eq(tasks.id, parent.id))
+                .run()
+              cursor = parent.parentTaskId
+            }
+          }
+          return taskExecutionModule.terminalMaintenance.transitionTx({
+            tx,
+            claim,
+            to: 'db-finalized',
+            now: Date.now(),
+          })
+        })
+      } finally {
+        release()
+      }
+      state = 'db-finalized'
+      for (const audience of deletedAudiences) {
+        tasksListBroadcaster.broadcast(
+          TASKS_LIST_CHANNEL,
+          { type: 'task.deleted', taskId: audience.taskId },
+          {
+            kind: 'task.deleted-audience',
+            taskId: audience.taskId,
+            visibleUserIds: audience.visibleUserIds,
+          },
+        )
+      }
+    }
+
+    if (state === 'db-finalized' || state === 'cleanup-pending') {
+      const cleanup = await cleanupDeletedTaskResources(plan)
+      if (cleanup === 'done') {
+        taskExecutionModule.terminalMaintenance.complete({ db, claim })
+        completed.push(item.rootTaskId)
+      } else {
+        if (state === 'db-finalized') {
+          taskExecutionModule.terminalMaintenance.transition({
+            db,
+            claim,
+            to: 'cleanup-pending',
+          })
+        }
+        cleanupPending.push(item.rootTaskId)
+      }
+    }
+  }
+  return { completed, cleanupPending, recoveryRequired }
 }
 
 /**

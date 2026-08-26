@@ -231,6 +231,21 @@ export function pidCommandContainsBinary(pid: number, binaryPath: string): boole
   }
 }
 
+/** RFC-328: exact launcher identity = target binary plus unpredictable nonce. */
+export function pidCommandContainsLaunchIdentity(
+  pid: number,
+  binaryPath: string,
+  launchNonce: string,
+): boolean {
+  if (binaryPath.length === 0 || launchNonce.length === 0) return false
+  try {
+    const command = pidCommandLine(pid)
+    return command.includes(binaryPath) && command.includes(launchNonce)
+  } catch {
+    return false
+  }
+}
+
 export type StaleRunKillOutcome =
   | 'no-pid'
   | 'not-alive'
@@ -256,7 +271,12 @@ export interface StaleRunKillOpts {
  * caller proceeds with its rollback / status flip regardless of the outcome.
  */
 export async function killStaleRunProcessTree(
-  run: { pid: number | null; startedAt: number | null; spawnBinaryPath?: string | null },
+  run: {
+    pid: number | null
+    startedAt: number | null
+    spawnBinaryPath?: string | null
+    spawnLaunchNonce?: string | null
+  },
   opts: StaleRunKillOpts = {},
 ): Promise<StaleRunKillOutcome> {
   const pid = run.pid
@@ -279,9 +299,14 @@ export async function killStaleRunProcessTree(
   // is the DANGER signal callers act on (refuse the resume rather than git-reset
   // under a live writer).
   const matchesShape =
-    typeof run.spawnBinaryPath === 'string' && run.spawnBinaryPath.length > 0
-      ? pidCommandContainsBinary(pid, run.spawnBinaryPath)
-      : pidCommandLooksLikeAgentChild(pid)
+    typeof run.spawnBinaryPath === 'string' &&
+    run.spawnBinaryPath.length > 0 &&
+    typeof run.spawnLaunchNonce === 'string' &&
+    run.spawnLaunchNonce.length > 0
+      ? pidCommandContainsLaunchIdentity(pid, run.spawnBinaryPath, run.spawnLaunchNonce)
+      : typeof run.spawnBinaryPath === 'string' && run.spawnBinaryPath.length > 0
+        ? pidCommandContainsBinary(pid, run.spawnBinaryPath)
+        : pidCommandLooksLikeAgentChild(pid)
   if (!matchesShape) return 'command-mismatch'
 
   killProcessTree(pid, 'SIGTERM')

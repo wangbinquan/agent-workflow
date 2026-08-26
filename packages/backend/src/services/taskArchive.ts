@@ -17,7 +17,7 @@
 // 扫描;另有 admin 手动入口。删除复用 taskDelete 的语义(FK 级联 + 显式非 FK 表),
 // 但 runs/logs 改为**挪移**而不是删除。
 
-import { and, asc, eq, inArray, isNull, lte, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import {
   appendFileSync,
   existsSync,
@@ -43,6 +43,14 @@ import {
   reviewComments,
   taskArchiveAudit,
   taskCollaborators,
+  taskExecutionEffectAttempts,
+  taskExecutionEffectFences,
+  taskExecutionEffects,
+  taskExecutionIntents,
+  taskExecutionLineageOperationRecords,
+  taskExecutionMaintenanceClaims,
+  taskExecutionMaintenanceMembers,
+  taskExecutionOwners,
   taskFeedback,
   taskNodeClarifyDirectives,
   taskQuestions,
@@ -54,6 +62,8 @@ import {
   workgroupMessages,
   workgroupTaskState,
 } from '@/db/schema'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import type { TerminalMaintenanceClaim } from '@/modules/task-execution/domain/ownership'
 import {
   HOUR_MS,
   MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
@@ -67,7 +77,7 @@ import { chunkedAll } from '@/util/sqlChunk'
 
 const log = createLogger('task-archive')
 
-const ARCHIVE_SCHEMA_VERSION = 1
+const ARCHIVE_SCHEMA_VERSION = 2
 const EXPORT_BATCH = 2_000
 const TERMINAL = ['done', 'failed', 'canceled'] as const
 
@@ -254,12 +264,98 @@ const RUN_SCOPED: readonly ExportSpec[] = [
   },
 ]
 
+interface ExecutionLedgerExport {
+  readonly rows: Readonly<Record<string, readonly unknown[]>>
+  readonly effectIds: readonly string[]
+  readonly attemptIds: readonly string[]
+}
+
+/**
+ * RFC-328 D12: an archive is self-contained for execution recovery/audit.  The
+ * retained lineage table has soft references, so it must be selected by every
+ * possible task/effect anchor instead of relying on FK traversal.
+ */
+async function loadExecutionLedgers(
+  db: DbClient,
+  taskIds: readonly string[],
+): Promise<ExecutionLedgerExport> {
+  const owners = await chunkedAll(taskIds, (chunk) =>
+    db.select().from(taskExecutionOwners).where(inArray(taskExecutionOwners.taskId, chunk)),
+  )
+  const intents = await chunkedAll(taskIds, (chunk) =>
+    db.select().from(taskExecutionIntents).where(inArray(taskExecutionIntents.taskId, chunk)),
+  )
+  const effects = await chunkedAll(taskIds, (chunk) =>
+    db.select().from(taskExecutionEffects).where(inArray(taskExecutionEffects.taskId, chunk)),
+  )
+  const effectIds = effects.map((row) => row.id)
+  const attempts = await chunkedAll(effectIds, (chunk) =>
+    db
+      .select()
+      .from(taskExecutionEffectAttempts)
+      .where(inArray(taskExecutionEffectAttempts.effectId, chunk)),
+  )
+  const attemptIds = attempts.map((row) => row.id)
+  const fences = await chunkedAll(attemptIds, (chunk) =>
+    db
+      .select()
+      .from(taskExecutionEffectFences)
+      .where(inArray(taskExecutionEffectFences.effectAttemptId, chunk)),
+  )
+
+  const lineageById = new Map<string, typeof taskExecutionLineageOperationRecords.$inferSelect>()
+  for (const row of await chunkedAll(taskIds, (chunk) =>
+    db
+      .select()
+      .from(taskExecutionLineageOperationRecords)
+      .where(
+        or(
+          inArray(taskExecutionLineageOperationRecords.rootAnchorTaskId, chunk),
+          inArray(taskExecutionLineageOperationRecords.ancestorAnchorTaskId, chunk),
+          inArray(taskExecutionLineageOperationRecords.currentAnchorTaskId, chunk),
+          inArray(taskExecutionLineageOperationRecords.sourceTaskId, chunk),
+        ),
+      ),
+  )) {
+    lineageById.set(row.id, row)
+  }
+  for (const row of await chunkedAll(effectIds, (chunk) =>
+    db
+      .select()
+      .from(taskExecutionLineageOperationRecords)
+      .where(inArray(taskExecutionLineageOperationRecords.sourceEffectId, chunk)),
+  )) {
+    lineageById.set(row.id, row)
+  }
+
+  return {
+    rows: {
+      task_execution_owners: owners,
+      task_execution_intents: intents,
+      task_execution_effects: effects,
+      task_execution_effect_attempts: attempts,
+      task_execution_effect_fences: fences,
+      task_execution_lineage_operation_records: [...lineageById.values()].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      ),
+    },
+    effectIds,
+    attemptIds,
+  }
+}
+
 /** 归档目录里会出现的全部表名(供对账守卫比对,见上面的口径说明)。 */
 export const ARCHIVED_TABLES: readonly string[] = [
   'tasks',
   'node_runs',
   ...TASK_SCOPED.map((s) => s.name),
   ...RUN_SCOPED.map((s) => s.name),
+  'task_execution_owners',
+  'task_execution_intents',
+  'task_execution_effects',
+  'task_execution_effect_attempts',
+  'task_execution_effect_fences',
+  'task_execution_lineage_operation_records',
 ]
 
 /** 会随删库级联消失、但**故意**不归档的表(理由见上)。加进来必须写清为什么。 */
@@ -348,23 +444,32 @@ async function exportTable(
 }
 
 /**
- * 归档一棵树。**先落盘、后删库**;任一步抛错都不会删库。
- * 返回 manifest 摘要;调用方负责审计行。
+ * Export and finalize an already-claimed tree.  Retrying the same durable
+ * claim preserves any runs/logs directories that were moved before a crash;
+ * only reproducible DB JSONL files are rebuilt.
  */
-export async function archiveTaskTree(
+async function archiveClaimedTree(
   db: DbClient,
   rootTaskId: string,
+  taskIds: readonly string[],
+  initialClaim: TerminalMaintenanceClaim,
   opts: TaskArchiveOptions = {},
 ): Promise<ArchivedTree> {
   const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
   const runsRoot = opts.runsDir ?? Paths.runsDir
   const logsRoot = opts.logsDir ?? Paths.logsDir
   const now = opts.now ?? Date.now()
-
-  const taskIds = await collectTree(db, rootTaskId)
   const tmpDir = join(archiveRoot, `.tmp-${rootTaskId}`)
   const finalDir = join(archiveRoot, rootTaskId)
-  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true })
+  if (existsSync(finalDir)) {
+    throw new Error(`archive destination already exists for task '${rootTaskId}'`)
+  }
+  if (existsSync(join(tmpDir, 'db'))) {
+    rmSync(join(tmpDir, 'db'), { recursive: true, force: true })
+  }
+  if (existsSync(join(tmpDir, 'manifest.json'))) {
+    rmSync(join(tmpDir, 'manifest.json'), { force: true })
+  }
   mkdirSync(join(tmpDir, 'db'), { recursive: true })
 
   const rowCounts: Record<string, number> = {}
@@ -397,6 +502,11 @@ export async function archiveTaskTree(
     )
   }
 
+  const executionLedgers = await loadExecutionLedgers(db, taskIds)
+  for (const [name, rows] of Object.entries(executionLedgers.rows)) {
+    rowCounts[name] = await exportTable(db, join(tmpDir, 'db'), name, rows)
+  }
+
   // runs/ 与 logs/ 整体挪入(而不是复制+删除:大目录复制会把归档变成一次长 IO)。
   for (const [kind, root] of [
     ['runs', runsRoot],
@@ -406,13 +516,31 @@ export async function archiveTaskTree(
     let moved = 0
     for (const id of taskIds) {
       const src = join(root, id)
+      const dest = join(destRoot, id)
+      if (existsSync(dest)) {
+        moved += 1
+        continue
+      }
       if (!existsSync(src)) continue
       mkdirSync(destRoot, { recursive: true })
-      renameSync(src, join(destRoot, id))
+      renameSync(src, dest)
       moved += 1
     }
     rowCounts[`${kind}_dirs`] = moved
   }
+
+  const claimRow = db
+    .select()
+    .from(taskExecutionMaintenanceClaims)
+    .where(eq(taskExecutionMaintenanceClaims.id, initialClaim.claimId))
+    .get()
+  const claimMembers = db
+    .select()
+    .from(taskExecutionMaintenanceMembers)
+    .where(eq(taskExecutionMaintenanceMembers.claimId, initialClaim.claimId))
+    .orderBy(taskExecutionMaintenanceMembers.taskId)
+    .all()
+  if (claimRow === undefined) throw new Error(`archive claim '${initialClaim.claimId}' disappeared`)
 
   const manifest = {
     schemaVersion: ARCHIVE_SCHEMA_VERSION,
@@ -420,24 +548,100 @@ export async function archiveTaskTree(
     taskIds,
     exportedAt: new Date(now).toISOString(),
     rows: rowCounts,
+    terminalMaintenance: {
+      claim: claimRow,
+      members: claimMembers,
+    },
     // 校验和覆盖「导出了什么」这一事实本身,便于事后确认目录未被截断。
-    digest: sha256Hex(JSON.stringify({ rootTaskId, taskIds, rows: rowCounts })),
+    digest: sha256Hex(
+      JSON.stringify({
+        rootTaskId,
+        taskIds,
+        rows: rowCounts,
+        maintenanceClaimId: claimRow.id,
+        memberSetDigest: claimRow.memberSetDigest,
+      }),
+    ),
   }
   writeFileSync(join(tmpDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8')
 
   // 全部落盘成功后才 rename;rename 之后库里的行才允许删。
-  if (existsSync(finalDir)) rmSync(finalDir, { recursive: true, force: true })
   renameSync(tmpDir, finalDir)
 
-  deleteTreeRows(db, taskIds)
+  let maintenanceClaim = taskExecutionModule.terminalMaintenance.transition({
+    db,
+    claim: initialClaim,
+    to: 'io-complete',
+    now,
+  })
+  maintenanceClaim = deleteTreeRows(db, rootTaskId, taskIds, maintenanceClaim, now)
+  taskExecutionModule.terminalMaintenance.complete({ db, claim: maintenanceClaim, now })
 
   log.info('archived task tree', { rootTaskId, tasks: taskIds.length, dir: finalDir })
-  return { rootTaskId, taskIds, rows: rowCounts, dir: finalDir }
+  return { rootTaskId, taskIds: [...taskIds], rows: rowCounts, dir: finalDir }
+}
+
+/**
+ * 归档一棵树。maintenance claim 在任何 mkdir/rename 前提交；任一步失败都保留
+ * exact claim 与 cleanup plan，boot/sweeper 可从同一 revision 继续。
+ */
+export async function archiveTaskTree(
+  db: DbClient,
+  rootTaskId: string,
+  opts: TaskArchiveOptions = {},
+): Promise<ArchivedTree> {
+  const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
+  const runsRoot = opts.runsDir ?? Paths.runsDir
+  const logsRoot = opts.logsDir ?? Paths.logsDir
+  const members = taskExecutionModule.terminalMaintenance.snapshotTree(db, rootTaskId)
+  const taskIds = members.map((member) => member.taskId)
+  const claim = taskExecutionModule.terminalMaintenance.claim({
+    db,
+    rootTaskId,
+    // A scheduled retention pass and an actor-requested archive share the
+    // exact export implementation, but retain distinct durable authorities.
+    // This makes recovery/audit state say why the tree left the live store.
+    operation: opts.source === 'sweep' ? 'retention' : 'archive',
+    members,
+    cleanupPlanJson: JSON.stringify({
+      v: 2,
+      rootTaskId,
+      archiveRoot,
+      runsRoot,
+      logsRoot,
+    }),
+    now: opts.now,
+  })
+  return archiveClaimedTree(db, rootTaskId, taskIds, claim, opts)
 }
 
 /** 删库:一个事务、子先父后(FK 级联仍然生效,这里显式删非 FK 的软链接行)。 */
-function deleteTreeRows(db: DbClient, taskIds: readonly string[]): void {
-  dbTxSync(db, (tx) => {
+function deleteTreeRows(
+  db: DbClient,
+  rootTaskId: string,
+  taskIds: readonly string[],
+  claim: TerminalMaintenanceClaim,
+  now: number,
+): TerminalMaintenanceClaim {
+  return dbTxSync(db, (tx) => {
+    taskExecutionModule.terminalMaintenance.assertClaimTx({
+      tx,
+      claim,
+      expectedState: 'io-complete',
+    })
+    const currentIds = (
+      tx.all(sql`
+        WITH RECURSIVE tree(id) AS (
+          SELECT id FROM tasks WHERE id = ${rootTaskId}
+          UNION
+          SELECT child.id FROM tasks child JOIN tree parent ON child.parent_task_id = parent.id
+        )
+        SELECT id FROM tree ORDER BY id
+      `) as Array<{ id: string }>
+    ).map((row) => row.id)
+    if (JSON.stringify(currentIds) !== JSON.stringify([...taskIds].sort())) {
+      throw new Error(`archive task tree changed after claim '${claim.claimId}'`)
+    }
     for (let i = 0; i < taskIds.length; i += 200) {
       const chunk = [...taskIds].slice(i, i + 200)
       tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, chunk)).run()
@@ -445,11 +649,60 @@ function deleteTreeRows(db: DbClient, taskIds: readonly string[]): void {
       // 触发外键顺序问题(SQLite 的 FK 在同一事务内延迟检查,但显式反序更稳)。
       tx.delete(tasks).where(inArray(tasks.id, chunk)).run()
     }
+    return taskExecutionModule.terminalMaintenance.transitionTx({
+      tx,
+      claim,
+      to: 'db-finalized',
+      now,
+    })
   })
 }
 
-/** boot 恢复:扫 `.tmp-*` 残留。库里还有行 ⇒ 上次没走到删库,丢弃 tmp 重来;
- *  行已经没了 ⇒ rename 之后崩的,把 tmp 提升为正式目录。 */
+interface ArchiveCleanupPlanV2 {
+  readonly v: 2
+  readonly rootTaskId: string
+  readonly archiveRoot: string
+  readonly runsRoot: string
+  readonly logsRoot: string
+}
+
+function parseArchiveCleanupPlan(value: string): ArchiveCleanupPlanV2 | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<ArchiveCleanupPlanV2>
+    return parsed.v === 2 &&
+      typeof parsed.rootTaskId === 'string' &&
+      typeof parsed.archiveRoot === 'string' &&
+      typeof parsed.runsRoot === 'string' &&
+      typeof parsed.logsRoot === 'string'
+      ? (parsed as ArchiveCleanupPlanV2)
+      : null
+  } catch {
+    return null
+  }
+}
+
+function restoreLegacyMovedDirectories(
+  tmpDir: string,
+  kind: 'runs' | 'logs',
+  root: string,
+): boolean {
+  const movedRoot = join(tmpDir, kind)
+  if (!existsSync(movedRoot)) return true
+  mkdirSync(root, { recursive: true })
+  for (const entry of readdirSync(movedRoot)) {
+    const from = join(movedRoot, entry)
+    const to = join(root, entry)
+    if (existsSync(to)) return false
+    renameSync(from, to)
+  }
+  return true
+}
+
+/**
+ * Boot recovery first resumes RFC-328 durable archive claims, then handles
+ * pre-RFC-328 `.tmp-*` directories.  A partial move is never discarded until
+ * its runs/logs directories have been restored.
+ */
 export async function recoverInterruptedArchives(
   db: DbClient,
   opts: TaskArchiveOptions = {},
@@ -457,10 +710,119 @@ export async function recoverInterruptedArchives(
   const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
   const promoted: string[] = []
   const discarded: string[] = []
+  const recoverable = [
+    ...taskExecutionModule.terminalMaintenance.listRecoverable({ db, operation: 'archive' }),
+    ...taskExecutionModule.terminalMaintenance.listRecoverable({ db, operation: 'retention' }),
+  ]
+  const claimedRoots = new Set<string>()
+  for (const item of recoverable) {
+    claimedRoots.add(item.rootTaskId)
+    const plan = parseArchiveCleanupPlan(item.cleanupPlanJson)
+    if (plan === null || plan.archiveRoot !== archiveRoot) continue
+    const claimOpts: TaskArchiveOptions = {
+      ...opts,
+      archiveDir: plan.archiveRoot,
+      runsDir: plan.runsRoot,
+      logsDir: plan.logsRoot,
+    }
+    const tmpDir = join(plan.archiveRoot, `.tmp-${item.rootTaskId}`)
+    const finalDir = join(plan.archiveRoot, item.rootTaskId)
+    const root = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(eq(tasks.id, item.rootTaskId))
+      .get()
+    let claim = item.claim
+    let state = item.state
+
+    if (state === 'recovery-required') {
+      if (existsSync(finalDir)) {
+        claim = taskExecutionModule.terminalMaintenance.transition({
+          db,
+          claim,
+          to: root === undefined ? 'db-finalized' : 'io-complete',
+        })
+        state = root === undefined ? 'db-finalized' : 'io-complete'
+      } else if (root !== undefined) {
+        claim = taskExecutionModule.terminalMaintenance.transition({
+          db,
+          claim,
+          to: 'claimed',
+        })
+        state = 'claimed'
+      } else {
+        continue
+      }
+    }
+
+    if (state === 'claimed' && !existsSync(finalDir)) {
+      if (root === undefined) continue
+      const archived = await archiveClaimedTree(
+        db,
+        item.rootTaskId,
+        item.members.map((member) => member.taskId),
+        claim,
+        claimOpts,
+      )
+      promoted.push(archived.rootTaskId)
+      continue
+    }
+
+    if (state === 'claimed') {
+      claim = taskExecutionModule.terminalMaintenance.transition({
+        db,
+        claim,
+        to: 'io-complete',
+      })
+      state = 'io-complete'
+    }
+    if (state === 'io-complete') {
+      if (!existsSync(finalDir) && existsSync(join(tmpDir, 'manifest.json'))) {
+        renameSync(tmpDir, finalDir)
+        promoted.push(item.rootTaskId)
+      }
+      if (!existsSync(finalDir)) {
+        taskExecutionModule.terminalMaintenance.transition({
+          db,
+          claim,
+          to: 'recovery-required',
+        })
+        continue
+      }
+      claim =
+        root === undefined
+          ? taskExecutionModule.terminalMaintenance.transition({
+              db,
+              claim,
+              to: 'db-finalized',
+            })
+          : deleteTreeRows(
+              db,
+              item.rootTaskId,
+              item.members.map((member) => member.taskId),
+              claim,
+              Date.now(),
+            )
+      state = 'db-finalized'
+    }
+    if (state === 'db-finalized' || state === 'cleanup-pending') {
+      if (!existsSync(finalDir)) {
+        taskExecutionModule.terminalMaintenance.transition({
+          db,
+          claim,
+          to: 'recovery-required',
+        })
+        continue
+      }
+      taskExecutionModule.terminalMaintenance.complete({ db, claim })
+    }
+  }
+
   if (!existsSync(archiveRoot)) return { promoted, discarded }
   for (const entry of readdirSync(archiveRoot)) {
     if (!entry.startsWith('.tmp-')) continue
     const rootTaskId = entry.slice('.tmp-'.length)
+    if (claimedRoots.has(rootTaskId)) continue
     const tmpDir = join(archiveRoot, entry)
     const stillInDb = await db
       .select({ id: tasks.id })
@@ -468,8 +830,20 @@ export async function recoverInterruptedArchives(
       .where(eq(tasks.id, rootTaskId))
       .get()
     if (stillInDb !== undefined) {
-      rmSync(tmpDir, { recursive: true, force: true })
-      discarded.push(rootTaskId)
+      const runsRestored = restoreLegacyMovedDirectories(
+        tmpDir,
+        'runs',
+        opts.runsDir ?? Paths.runsDir,
+      )
+      const logsRestored = restoreLegacyMovedDirectories(
+        tmpDir,
+        'logs',
+        opts.logsDir ?? Paths.logsDir,
+      )
+      if (runsRestored && logsRestored) {
+        rmSync(tmpDir, { recursive: true, force: true })
+        discarded.push(rootTaskId)
+      }
       continue
     }
     const finalDir = join(archiveRoot, rootTaskId)
@@ -536,7 +910,12 @@ export async function runTaskArchiveSweep(
   let skipped = 0
   for (const candidate of candidates) {
     try {
-      archived.push(await archiveTaskTree(db, candidate.rootTaskId, opts))
+      archived.push(
+        await archiveTaskTree(db, candidate.rootTaskId, {
+          ...opts,
+          source: opts.source ?? 'sweep',
+        }),
+      )
     } catch (err) {
       // 落盘失败(磁盘满/权限)⇒ 库内不删,留待下一轮;不阻塞其它树。
       skipped += 1

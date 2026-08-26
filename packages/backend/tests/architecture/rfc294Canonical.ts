@@ -26,6 +26,10 @@ import {
   type SourceUnit,
 } from './census'
 import { KNOWN_VIOLATIONS } from '../../../../scripts/depcheck'
+import {
+  buildCodeHostRecoveryBindingManifest,
+  validateCodeHostRecoveryBindingManifest,
+} from '../../src/modules/task-execution/domain/codeHostRecovery'
 
 export const CANONICAL_MANIFEST_PATHS = {
   mutationEntrypoints: 'architecture/mutation-entrypoints.json',
@@ -1732,6 +1736,339 @@ function buildMutationEntries(backend: readonly SourceUnit[]): MutationEntry[] {
   return out.sort((left, right) => left.id.localeCompare(right.id))
 }
 
+type TaskExecutionAuthorityKind =
+  | 'worker-epoch'
+  | 'control-revision'
+  | 'recovery-proof'
+  | 'terminal-maintenance'
+
+type TaskExecutionControlSubtype =
+  | 'continuation-admission'
+  | 'terminal-control'
+  | 'gate-control'
+  | 'membership-control'
+  | 'daemon-shutdown'
+  | 'recovery-candidate-revoke'
+
+const TASK_EXECUTION_DURABLE_TABLES = new Set([
+  // Business projections are part of the authority denominator too.  The
+  // RFC-328 ledgers are not useful if a stale worker can still bypass them by
+  // writing the task/node projection directly.
+  'tasks',
+  'nodeRuns',
+  'nodeRunOutputs',
+  'nodeRunEvents',
+  'taskExecutionOwners',
+  'taskExecutionIntents',
+  'taskExecutionEffects',
+  'taskExecutionEffectAttempts',
+  'taskExecutionEffectFences',
+  'taskExecutionMaintenanceClaims',
+  'taskExecutionMaintenanceMembers',
+  'taskExecutionLineageOperationRecords',
+])
+
+interface TaskExecutionAuthorityEntry {
+  readonly id: string
+  readonly file: string
+  readonly line: number
+  readonly ownerEntryId: string
+  readonly symbol: string
+  readonly consumer: string
+  readonly dataClass: string
+  readonly authorityKind: TaskExecutionAuthorityKind
+  readonly controlSubtype: TaskExecutionControlSubtype | null
+  readonly allowedTables: readonly string[]
+  readonly revisionPredicate: string
+  readonly requiredBrandedProof: string
+}
+
+interface TaskExecutionControlGatewayEntry {
+  readonly id: string
+  readonly subtype: TaskExecutionControlSubtype
+  readonly file: string
+  readonly symbol: string
+  readonly ownerEntryId: string
+  readonly allowedTables: readonly string[]
+  readonly allowedTransitions: readonly string[]
+  readonly revisionPredicate: string
+  readonly requiredBrandedProof: string
+}
+
+function nearestCallableName(unit: SourceUnit, node: ts.Node): string {
+  let cursor: ts.Node | undefined = node
+  while (cursor !== undefined && cursor !== unit.source) {
+    if (
+      (ts.isMethodDeclaration(cursor) || ts.isFunctionDeclaration(cursor)) &&
+      cursor.name !== undefined
+    ) {
+      return cursor.name.getText(unit.source)
+    }
+    if (
+      (ts.isArrowFunction(cursor) || ts.isFunctionExpression(cursor)) &&
+      ts.isVariableDeclaration(cursor.parent) &&
+      ts.isIdentifier(cursor.parent.name)
+    ) {
+      return cursor.parent.name.text
+    }
+    cursor = cursor.parent
+  }
+  return enclosingTopLevelSymbol(unit, node)?.name ?? '$file'
+}
+
+function durableMutationTable(node: ts.Node): string | null {
+  if (
+    !ts.isCallExpression(node) ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    !['insert', 'update', 'delete'].includes(node.expression.name.text)
+  ) {
+    return null
+  }
+  const table = node.arguments[0]
+  return table !== undefined && ts.isIdentifier(table) ? table.text : null
+}
+
+function classifyTaskExecutionAuthority(input: {
+  file: string
+  callable: string
+}): Pick<
+  TaskExecutionAuthorityEntry,
+  'authorityKind' | 'controlSubtype' | 'revisionPredicate' | 'requiredBrandedProof'
+> | null {
+  const value = `${input.file}#${input.callable}`
+  if (
+    /sqliteTerminalMaintenance|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'terminal-maintenance',
+      controlSubtype: null,
+      revisionPredicate: 'exact-claim-revision-and-member-set-digest',
+      requiredBrandedProof: 'TerminalMaintenanceClaim',
+    }
+  }
+  if (/recoverTaskExecutions|releaseRecovered|closeRecovered/.test(value)) {
+    return {
+      authorityKind: 'recovery-proof',
+      controlSubtype: null,
+      revisionPredicate: 'exact-old-owner-revision-and-daemon-generation',
+      requiredBrandedProof: 'ExclusiveDaemonLockProof+VerifiedTakeoverOrOutcomeProof',
+    }
+  }
+  if (
+    /modules\/task-execution\/application\/applySourceTerminationEffect\.ts|services\/task\.ts#cancelTask|services\/terminalSweep\.ts/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'task-lifecycle-cas-and-source-or-terminal-control-fence',
+      requiredBrandedProof: 'ExactTerminalControlTuple',
+    }
+  }
+  if (
+    /services\/clarify\/seal\.ts|services\/review\.ts#submitReviewDecisionUnlocked|services\/taskQuestionDispatch\.ts|services\/workgroup\/(?:configActions|lifecycle)\.ts/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'gate-control',
+      revisionPredicate: 'task-scoped-decision-transaction-and-row-cas',
+      requiredBrandedProof: 'GateDecisionTransaction',
+    }
+  }
+  if (
+    /services\/lifecycle\.ts|services\/limits\.ts|services\/recoveryBreaker\.ts|services\/repoCredentials\.ts/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'continuation-admission',
+      revisionPredicate: 'task-lifecycle-or-metadata-cas',
+      requiredBrandedProof: 'CanonicalControlTransaction',
+    }
+  }
+  if (
+    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'worker-epoch',
+      controlSubtype: null,
+      revisionPredicate: 'exact-owner-id-daemon-generation-epoch-and-claimed-state',
+      requiredBrandedProof: 'OwnershipToken+OwnedTaskTx',
+    }
+  }
+  if (
+    /sqliteTaskExecutionIntent|submitTaskContinuation|submitContinuationIntentTx|services\/task\.ts#startTaskImpl/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'continuation-admission',
+      revisionPredicate: 'expected-task-revision-and-active-intent-unique',
+      requiredBrandedProof: 'CanonicalContinuationRequest',
+    }
+  }
+  if (/terminalizeExecutionIntent/.test(value)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'bound-intent-and-decision-revision',
+      requiredBrandedProof: 'TerminalControlDecision',
+    }
+  }
+  if (/revoke|markRecoveryRequired|releaseAfterStop/.test(input.callable)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'exact-owner-tuple-state-and-revision',
+      requiredBrandedProof: 'VerifiedStopProofOrExactControlTuple',
+    }
+  }
+  if (/sqliteTaskOwnership|sqliteTaskExecutionEffect|processEffectObserver/.test(value)) {
+    return {
+      authorityKind: 'worker-epoch',
+      controlSubtype: null,
+      revisionPredicate: 'exact-owner-id-daemon-generation-epoch-and-claimed-state',
+      requiredBrandedProof: 'OwnershipToken',
+    }
+  }
+  return null
+}
+
+function buildTaskExecutionAuthorityEntries(backend: readonly SourceUnit[]): {
+  entries: TaskExecutionAuthorityEntry[]
+  unknown: Array<{ file: string; line: number; table: string; callable: string }>
+} {
+  const entries: TaskExecutionAuthorityEntry[] = []
+  const unknown: Array<{ file: string; line: number; table: string; callable: string }> = []
+  for (const unit of backend) {
+    const visit = (node: ts.Node): void => {
+      const table = durableMutationTable(node)
+      if (table !== null && TASK_EXECUTION_DURABLE_TABLES.has(table)) {
+        const line = unit.source.getLineAndCharacterOfPosition(node.getStart()).line + 1
+        const owner = enclosingTopLevelSymbol(unit, node)
+        const symbol = owner?.name ?? '$file'
+        const callable = nearestCallableName(unit, node)
+        const classification = classifyTaskExecutionAuthority({ file: unit.path, callable })
+        if (classification === null) {
+          unknown.push({ file: unit.path, line, table, callable })
+        } else {
+          entries.push({
+            id: `task-authority:${unit.path}#${line}:${table}`,
+            file: unit.path,
+            line,
+            ownerEntryId: ownerEntryId(unit.path, symbol),
+            symbol,
+            consumer: callable,
+            dataClass: table,
+            ...classification,
+            allowedTables: [table],
+          })
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+  }
+  return {
+    entries: entries.sort((left, right) => left.id.localeCompare(right.id)),
+    unknown: unknown.sort((left, right) =>
+      `${left.file}:${left.line}`.localeCompare(`${right.file}:${right.line}`),
+    ),
+  }
+}
+
+const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
+  TaskExecutionControlGatewayEntry,
+  'id' | 'ownerEntryId'
+>[] = [
+  {
+    subtype: 'continuation-admission',
+    file: 'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
+    symbol: 'submitTaskContinuationTx',
+    allowedTables: ['tasks', 'taskExecutionIntents', 'taskExecutionLineageOperationRecords'],
+    allowedTransitions: ['business-state->pending', 'intent-absent->pending', 'decision->authorized'],
+    revisionPredicate: 'task-lifecycle-event-revision+decision-record-revision',
+    requiredBrandedProof: 'CanonicalContinuationRequest',
+  },
+  {
+    subtype: 'terminal-control',
+    file: 'packages/backend/src/services/task.ts',
+    symbol: 'cancelTask',
+    allowedTables: ['tasks', 'taskExecutionOwners', 'taskExecutionIntents'],
+    allowedTransitions: ['task->canceled', 'owner-claimed->revoked', 'intent->canceled'],
+    revisionPredicate: 'task-lifecycle-event-revision+exact-owner-revision',
+    requiredBrandedProof: 'ExactTerminalControlTuple',
+  },
+  {
+    subtype: 'gate-control',
+    file: 'packages/backend/src/services/task.ts',
+    symbol: 'resumeTaskWithAtomicSideEffects',
+    allowedTables: ['tasks', 'taskExecutionIntents', 'gate-companion-table'],
+    allowedTransitions: ['awaiting-gate->pending', 'intent-absent->pending'],
+    revisionPredicate: 'task-lifecycle-event-revision',
+    requiredBrandedProof: 'GateDecisionTransaction',
+  },
+  {
+    subtype: 'membership-control',
+    file: 'packages/backend/src/services/taskCollab.ts',
+    symbol: 'updateTaskMembers',
+    allowedTables: ['tasks', 'taskCollaborators'],
+    allowedTransitions: ['membership-revision-cas'],
+    revisionPredicate: 'task-membership-revision',
+    requiredBrandedProof: 'AuthorizedTaskMembershipActor',
+  },
+  {
+    subtype: 'daemon-shutdown',
+    file: 'packages/backend/src/services/task.ts',
+    symbol: 'markTaskExecutionShutdownSurvivor',
+    allowedTables: ['taskExecutionOwners', 'taskExecutionIntents'],
+    allowedTransitions: ['claimed->revoked', 'revoked->recovery-required'],
+    revisionPredicate: 'exact-owner-tuple-and-revision',
+    requiredBrandedProof: 'ExplicitShutdownReason+ExactOwnershipToken',
+  },
+  {
+    subtype: 'recovery-candidate-revoke',
+    file: 'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
+    symbol: 'prepareTaskExecutionRecovery',
+    allowedTables: ['taskExecutionOwners'],
+    allowedTransitions: ['old-daemon-claimed->revoked'],
+    revisionPredicate: 'exact-old-owner-revision',
+    requiredBrandedProof: 'ExclusiveDaemonLockProof',
+  },
+]
+
+function buildTaskExecutionControlGateways(
+  backend: readonly SourceUnit[],
+): { entries: TaskExecutionControlGatewayEntry[]; unknown: string[] } {
+  const entries: TaskExecutionControlGatewayEntry[] = []
+  const unknown: string[] = []
+  for (const spec of TASK_EXECUTION_CONTROL_GATEWAY_SPECS) {
+    const unit = backend.find((candidate) => candidate.path === spec.file)
+    const symbolExists = unit?.source.statements.some(
+      (statement) => declarationName(statement) === spec.symbol,
+    )
+    if (unit === undefined || symbolExists !== true) {
+      unknown.push(`${spec.subtype}:${spec.file}#${spec.symbol}`)
+      continue
+    }
+    entries.push({
+      ...spec,
+      id: `task-control:${spec.subtype}`,
+      ownerEntryId: ownerEntryId(spec.file, spec.symbol),
+    })
+  }
+  return { entries, unknown: unknown.sort() }
+}
+
 interface NodeRunInsertSite {
   readonly id: string
   readonly file: string
@@ -1858,6 +2195,139 @@ function buildTransactionEffects(backend: readonly SourceUnit[]): TransactionExt
   return [...new Map(out.map((entry) => [entry.id, entry])).values()].sort((left, right) =>
     left.id.localeCompare(right.id),
   )
+}
+
+const TASK_EFFECT_OBSERVER_CALLEES = new Set([
+  'createCodeHostEffectAttemptObserver',
+  'createLocalEffectAttemptObserver',
+  'createProcessEffectAttemptObserver',
+  'runTaskLocalEffect',
+])
+
+interface TaskOwnedEffectEntry {
+  readonly id: string
+  readonly file: string
+  readonly symbol: string
+  readonly line: number
+  readonly effectKind: string
+  readonly operationFamily: 'lineage-slot-stable-action'
+  readonly generationPolicy: 'intent-or-node-generation' | 'next-retained-generation'
+  readonly journaledBy: string
+  readonly attemptPolicy: 'per-act' | 'per-spawn' | 'per-http-send'
+  readonly resourceKeySetResolver: 'explicit-multi-resource-set'
+  readonly recoveryClass: string
+  readonly responseClassifier: string
+  readonly transportRetryPolicy: string
+  readonly recoveryProbeOrActorReplay: string
+  readonly auditRetention: 'effect-attempt-watermark-and-decision'
+  readonly ownerEntryId: string
+}
+
+function objectProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): ts.Expression | null {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property) || propertyName(property.name) !== name) continue
+    return property.initializer
+  }
+  return null
+}
+
+function literalText(expression: ts.Expression | null): string | null {
+  return expression !== null && ts.isStringLiteralLike(expression) ? expression.text : null
+}
+
+function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
+  entries: TaskOwnedEffectEntry[]
+  unknown: Array<{ file: string; line: number; reason: string }>
+} {
+  const entries: TaskOwnedEffectEntry[] = []
+  const unknown: Array<{ file: string; line: number; reason: string }> = []
+  for (const unit of backend) {
+    // Coordinator internals call one another; the denominator is production
+    // act-site registration, not the coordinator's own adapter plumbing.
+    if (unit.path.startsWith(`${MODULE_PREFIX}task-execution/application/`)) continue
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        TASK_EFFECT_OBSERVER_CALLEES.has(node.expression.text)
+      ) {
+        const callee = node.expression.text
+        const line = unit.source.getLineAndCharacterOfPosition(node.getStart()).line + 1
+        const owner = enclosingTopLevelSymbol(unit, node)
+        const symbol = owner?.name ?? '$file'
+        const argument = node.arguments[0]
+        if (argument === undefined || !ts.isObjectLiteralExpression(argument)) {
+          unknown.push({ file: unit.path, line, reason: `${callee} lacks an object-literal policy` })
+          ts.forEachChild(node, visit)
+          return
+        }
+        const text = argument.getText(unit.source)
+        let effectKind: string | null = null
+        if (callee === 'createProcessEffectAttemptObserver') effectKind = 'process'
+        else if (callee === 'createCodeHostEffectAttemptObserver') effectKind = 'code-host-mutation'
+        else effectKind = literalText(objectProperty(argument, 'kind'))
+        if (effectKind === null) {
+          unknown.push({ file: unit.path, line, reason: `${callee} has an unclassified effect kind` })
+          ts.forEachChild(node, visit)
+          return
+        }
+        if (!/\bresourceKeys\s*:/.test(text)) {
+          unknown.push({ file: unit.path, line, reason: `${callee} has no resource-key resolver` })
+          ts.forEachChild(node, visit)
+          return
+        }
+        const isProcess = effectKind === 'process'
+        const isCodeHost = effectKind === 'code-host-mutation'
+        entries.push({
+          id: `task-effect:${unit.path}#${line}:${effectKind}`,
+          file: unit.path,
+          symbol,
+          line,
+          effectKind,
+          operationFamily: 'lineage-slot-stable-action',
+          generationPolicy: isCodeHost
+            ? 'next-retained-generation'
+            : 'intent-or-node-generation',
+          journaledBy: callee,
+          attemptPolicy: isCodeHost ? 'per-http-send' : isProcess ? 'per-spawn' : 'per-act',
+          resourceKeySetResolver: 'explicit-multi-resource-set',
+          recoveryClass: isCodeHost
+            ? 'action-provider-candidate-matrix'
+            : isProcess
+              ? 'managed-process-preactivation'
+              : 'local-probe-or-actor',
+          responseClassifier: isCodeHost
+            ? 'http-status-plus-prior-ambiguity'
+            : isProcess
+              ? 'spawn-receipt-exit-reap'
+              : 'applied-or-ambiguous-throw',
+          transportRetryPolicy: isCodeHost
+            ? 'rfc269-current-method-policy'
+            : isProcess
+              ? 'no-hidden-respawn'
+              : 'caller-explicit-only',
+          recoveryProbeOrActorReplay: isCodeHost
+            ? 'binding-profile-or-actor-next-generation'
+            : isProcess
+              ? 'pid-nonce-binary-probe'
+              : 'local-probe-or-actor-next-generation',
+          auditRetention: 'effect-attempt-watermark-and-decision',
+          ownerEntryId: ownerEntryId(unit.path, symbol),
+        })
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+  }
+  return {
+    entries: entries.sort((left, right) => left.id.localeCompare(right.id)),
+    unknown: unknown.sort((left, right) =>
+      `${left.file}:${left.line}`.localeCompare(`${right.file}:${right.line}`),
+    ),
+  }
 }
 
 const BACKGROUND_NAME =
@@ -2280,8 +2750,12 @@ export function buildCanonicalArtifacts(repoRoot: string): CanonicalArtifacts {
   const governedFieldSurfaces = buildGovernedFieldSurfaces(allUnits)
   const requiredPorts = buildRequiredPorts(backend, allUnits, observedEdges)
   const mutationEntries = buildMutationEntries(backend)
+  const taskExecutionAuthority = buildTaskExecutionAuthorityEntries(backend)
+  const taskExecutionControlGateways = buildTaskExecutionControlGateways(backend)
   const nodeRunInsertSites = buildNodeRunInsertSites(backend)
   const transactionEffects = buildTransactionEffects(backend)
+  const taskOwnedEffects = buildTaskOwnedEffectEntries(backend)
+  const codeHostRecoveryBindings = buildCodeHostRecoveryBindingManifest()
   const backgrounds = buildBackgroundEntries(backend)
   const ambientWiring = buildAmbientWiringEntries(backend)
   const facades = buildFacades(backend, observedEdges)
@@ -2331,6 +2805,20 @@ export function buildCanonicalArtifacts(repoRoot: string): CanonicalArtifacts {
       'Every discovered command and write transport is owned and its authority/tx/OCC/audit/event evidence cannot change silently.',
     entries: mutationEntries,
     nodeRunInsertSites,
+    taskExecutionAuthorityLedger: {
+      denominator: {
+        durableWriterSites: taskExecutionAuthority.entries.length,
+        unknownAuthoritySites: taskExecutionAuthority.unknown.length,
+        controlSubtypes: taskExecutionControlGateways.entries.length,
+        unknownControlSubtypes: taskExecutionControlGateways.unknown.length,
+      },
+      finalCriterion:
+        'Every durable task-execution writer uses exactly one of worker-epoch/control-revision/recovery-proof/terminal-maintenance, and all six control subtypes retain explicit write and proof bounds.',
+      entries: taskExecutionAuthority.entries,
+      unknown: taskExecutionAuthority.unknown,
+      controlGateways: taskExecutionControlGateways.entries,
+      unknownControlGateways: taskExecutionControlGateways.unknown,
+    },
   }
   const transactionExternalEffects = {
     ...common,
@@ -2343,6 +2831,20 @@ export function buildCanonicalArtifacts(repoRoot: string): CanonicalArtifacts {
     finalCriterion:
       'Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.',
     entries: transactionEffects,
+    taskExecutionEffectLedger: {
+      denominator: {
+        registeredActSites: taskOwnedEffects.entries.length,
+        unknownActSites: taskOwnedEffects.unknown.length,
+        codeHostBindings: codeHostRecoveryBindings.length,
+        unknownCodeHostBindings:
+          validateCodeHostRecoveryBindingManifest(codeHostRecoveryBindings).length,
+      },
+      finalCriterion:
+        'Every task-owned FS/Git/process/code-host act is registered before act with an operation family, generation, attempt, full resource set, recovery profile and retained audit.',
+      entries: taskOwnedEffects.entries,
+      unknown: taskOwnedEffects.unknown,
+      codeHostBindings: codeHostRecoveryBindings,
+    },
   }
   const backgroundJobs = {
     ...common,
@@ -2932,6 +3434,134 @@ export function validateCanonicalArtifacts(artifacts: CanonicalArtifacts): strin
       if (!ownerSet.has(String(entry.ownerEntryId))) {
         errors.push(`missing ${manifestName} owner: ${String(entry.id)}`)
       }
+    }
+  }
+
+  const taskAuthorityLedger = artifacts.mutationEntrypoints.taskExecutionAuthorityLedger
+  if (
+    taskAuthorityLedger === null ||
+    typeof taskAuthorityLedger !== 'object' ||
+    Array.isArray(taskAuthorityLedger)
+  ) {
+    errors.push('task-execution authority ledger is missing')
+  } else {
+    const ledger = taskAuthorityLedger as Record<string, unknown>
+    const entries = Array.isArray(ledger.entries)
+      ? (ledger.entries as Array<Record<string, unknown>>)
+      : []
+    const unknown = Array.isArray(ledger.unknown) ? ledger.unknown : []
+    const gateways = Array.isArray(ledger.controlGateways)
+      ? (ledger.controlGateways as Array<Record<string, unknown>>)
+      : []
+    const unknownGateways = Array.isArray(ledger.unknownControlGateways)
+      ? ledger.unknownControlGateways
+      : []
+    if (entries.length === 0) errors.push('task-execution authority denominator is empty')
+    if (unknown.length > 0) errors.push('task-execution authority ledger has unknown writers')
+    if (unknownGateways.length > 0) {
+      errors.push('task-execution control gateway ledger has unknown subtypes')
+    }
+    const authorityKinds = new Set(entries.map((entry) => String(entry.authorityKind)))
+    for (const kind of [
+      'worker-epoch',
+      'control-revision',
+      'recovery-proof',
+      'terminal-maintenance',
+    ]) {
+      if (!authorityKinds.has(kind)) errors.push(`task-execution authority kind is empty: ${kind}`)
+    }
+    for (const entry of entries) {
+      const id = String(entry.id)
+      if (!ownerSet.has(String(entry.ownerEntryId))) {
+        errors.push(`missing task-execution authority owner: ${id}`)
+      }
+      for (const field of [
+        'consumer',
+        'dataClass',
+        'authorityKind',
+        'revisionPredicate',
+        'requiredBrandedProof',
+      ]) {
+        if (typeof entry[field] !== 'string' || String(entry[field]).trim() === '') {
+          errors.push(`task-execution authority '${id}' lacks ${field}`)
+        }
+      }
+      if (!Array.isArray(entry.allowedTables) || entry.allowedTables.length === 0) {
+        errors.push(`task-execution authority '${id}' lacks allowedTables`)
+      }
+    }
+    const gatewaySubtypes = new Set(gateways.map((gateway) => String(gateway.subtype)))
+    for (const subtype of [
+      'continuation-admission',
+      'terminal-control',
+      'gate-control',
+      'membership-control',
+      'daemon-shutdown',
+      'recovery-candidate-revoke',
+    ]) {
+      if (!gatewaySubtypes.has(subtype)) {
+        errors.push(`task-execution control subtype is empty: ${subtype}`)
+      }
+    }
+    for (const gateway of gateways) {
+      const id = String(gateway.id)
+      if (!ownerSet.has(String(gateway.ownerEntryId))) {
+        errors.push(`missing task-execution control gateway owner: ${id}`)
+      }
+      if (!Array.isArray(gateway.allowedTables) || gateway.allowedTables.length === 0) {
+        errors.push(`task-execution control gateway '${id}' lacks allowedTables`)
+      }
+      if (!Array.isArray(gateway.allowedTransitions) || gateway.allowedTransitions.length === 0) {
+        errors.push(`task-execution control gateway '${id}' lacks allowedTransitions`)
+      }
+    }
+  }
+
+  const taskEffectLedger = artifacts.transactionExternalEffects.taskExecutionEffectLedger
+  if (
+    taskEffectLedger === null ||
+    typeof taskEffectLedger !== 'object' ||
+    Array.isArray(taskEffectLedger)
+  ) {
+    errors.push('task-execution effect ledger is missing')
+  } else {
+    const ledger = taskEffectLedger as Record<string, unknown>
+    const entries = Array.isArray(ledger.entries)
+      ? (ledger.entries as Array<Record<string, unknown>>)
+      : []
+    const unknown = Array.isArray(ledger.unknown) ? ledger.unknown : []
+    const bindings = Array.isArray(ledger.codeHostBindings)
+      ? ledger.codeHostBindings
+      : []
+    if (entries.length === 0) errors.push('task-execution effect denominator is empty')
+    if (unknown.length > 0) errors.push('task-execution effect ledger has unknown act sites')
+    for (const entry of entries) {
+      const id = String(entry.id)
+      if (!ownerSet.has(String(entry.ownerEntryId))) {
+        errors.push(`missing task-execution effect owner: ${id}`)
+      }
+      for (const field of [
+        'effectKind',
+        'operationFamily',
+        'generationPolicy',
+        'journaledBy',
+        'attemptPolicy',
+        'resourceKeySetResolver',
+        'recoveryClass',
+        'responseClassifier',
+        'transportRetryPolicy',
+        'recoveryProbeOrActorReplay',
+        'auditRetention',
+      ]) {
+        if (typeof entry[field] !== 'string' || String(entry[field]).trim() === '') {
+          errors.push(`task-execution effect '${id}' lacks ${field}`)
+        }
+      }
+    }
+    for (const bindingError of validateCodeHostRecoveryBindingManifest(
+      bindings as Parameters<typeof validateCodeHostRecoveryBindingManifest>[0],
+    )) {
+      errors.push(`code-host recovery matrix: ${bindingError}`)
     }
   }
 

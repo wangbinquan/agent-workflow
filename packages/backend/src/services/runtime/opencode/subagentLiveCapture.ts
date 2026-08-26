@@ -25,6 +25,7 @@ import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents } from '@/db/schema'
+import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
 import { createLogger, type Logger } from '@/util/log'
 import {
   loadSiblingsCapturedSessionIds,
@@ -195,7 +196,11 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
           sessionId: sess.id,
           parentSessionId: sess.parent_id,
         }))
-        await opts.db.insert(nodeRunEvents).values(rows)
+        withTaskExecutionMutation({
+          db: opts.db,
+          taskId: opts.taskId,
+          run: (tx) => tx.insert(nodeRunEvents).values(rows).run(),
+        })
         if (writtenForSession === undefined) {
           writtenForSession = new Set<string>()
           insertedPartIdsBySession.set(sess.id, writtenForSession)

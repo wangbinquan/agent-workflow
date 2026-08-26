@@ -12,7 +12,7 @@
 //     (DW_MAX_GENERATE_ATTEMPTS total per pass) ──▶ exhausted = failed
 //
 // The confirm REST (routes/workgroupTasks.ts) swaps the generated DAG into
-// task.workflow_snapshot atomically inside resumeKick's ownership CAS and
+// task.workflow_snapshot atomically inside resumeKick's admission CAS and
 // flips dw.phase='executing'; the resumed runTask then runs the REAL DAG via
 // runScope — this engine never executes the generated graph itself.
 //

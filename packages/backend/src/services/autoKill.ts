@@ -7,8 +7,9 @@
 // event stream has been silent past `heartbeatStallMs`, reusing T9's fail-safe
 // `killStaleRunProcessTree` (PID-reuse window + binary-identity gate) so it never
 // signals an unrelated recycled pid. Every guard gates it: quarantine,
-// circuit-breaker, driver lease, recovery audit. After the child dies the
-// runner's exit handler marks the node — this module only pulls the trigger.
+// circuit-breaker, RFC-328 durable continuation ownership, and recovery audit.
+// After the child dies the runner's exit handler marks the node — this module
+// only pulls the trigger.
 //
 // findStalledRuns / killChild are injected so the loop is unit-testable;
 // startHeartbeatKillLoop wires the real query + killStaleRunProcessTree.
@@ -18,7 +19,6 @@ import { and, desc, eq, isNotNull } from 'drizzle-orm'
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRuns } from '@/db/schema'
-import { withDriverLease } from '@/services/driverLease'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -30,7 +30,6 @@ import { createLogger } from '@/util/log'
 import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('auto-kill')
-const HOLDER = 'heartbeat-kill'
 
 export interface StalledRun {
   id: string
@@ -38,6 +37,7 @@ export interface StalledRun {
   pid: number | null
   startedAt: number | null
   spawnBinaryPath: string | null
+  spawnLaunchNonce?: string | null
   lastTs: number | null
 }
 
@@ -98,6 +98,7 @@ export async function findStalledRunningChildren(
       pid: nodeRuns.pid,
       startedAt: nodeRuns.startedAt,
       spawnBinaryPath: nodeRuns.spawnBinaryPath,
+      spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
     })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.status, 'running'), isNotNull(nodeRuns.pid)))
@@ -144,17 +145,14 @@ export async function runHeartbeatKillOnce(deps: HeartbeatKillDeps): Promise<Hea
       skip(run, 'breaker-tripped')
       continue
     }
-    const outcome = await withDriverLease(run.taskId, HOLDER, 'heartbeat-kill', async () => {
-      const o = await killChild(run)
-      await recordRecoveryEvent(db, {
-        taskId: run.taskId,
-        nodeRunId: run.id,
-        kind: 'heartbeat-kill',
-        reason: `stalled child pid ${run.pid ?? '?'} (outcome=${o})`,
-        after: { outcome: o },
-        now: now(),
-      })
-      return o
+    const outcome = await killChild(run)
+    await recordRecoveryEvent(db, {
+      taskId: run.taskId,
+      nodeRunId: run.id,
+      kind: 'heartbeat-kill',
+      reason: `stalled child pid ${run.pid ?? '?'} (outcome=${outcome})`,
+      after: { outcome },
+      now: now(),
     })
     if (outcome === 'killed') out.killed.push({ taskId: run.taskId, nodeRunId: run.id })
     else skip(run, `not-killed:${outcome ?? 'lease-held'}`)
@@ -197,6 +195,7 @@ export function startHeartbeatKillLoop(opts: {
             pid: run.pid,
             startedAt: run.startedAt,
             spawnBinaryPath: run.spawnBinaryPath,
+            spawnLaunchNonce: run.spawnLaunchNonce,
           }),
       })
     } catch (err) {

@@ -8,10 +8,16 @@
 // that should reach the child.
 
 import type { Logger } from '@/util/log'
+import { randomUUID } from 'node:crypto'
 import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
+import {
+  MANAGED_PROCESS_LAUNCH_ERROR_PREFIX,
+  managedProcessLauncherArgv,
+  type ManagedProcessActivationFrame,
+} from './managedProcessLauncher'
 
 /** Per-line cap (code units)——数值单点；runner.ts 的 MAX_STREAM_LINE_CHARS 是本值的 re-export（RFC-284 §3.5）。 */
 export const MANAGED_PROCESS_MAX_LINE_CHARS = 1024 * 1024
@@ -62,7 +68,18 @@ export interface ManagedProcessRequest {
    * match against and the orphan survives forever (design-gate P0-3). Awaited,
    * so the row is persisted before output processing begins.
    */
-  onSpawned?: (info: { pid: number; spawnBinaryPath: string }) => Promise<void> | void
+  onSpawned?: (info: {
+    pid: number
+    spawnBinaryPath: string
+    /** Present for the RFC-328 pre-activation launcher. */
+    launchNonce?: string
+  }) => Promise<void> | void
+  /**
+   * Task execution uses a durable pre-activation receipt.  When enabled, a
+   * missing/failed onSpawned callback prevents stdin delivery, terminates and
+   * reaps the process tree, and reports spawn-failed.
+   */
+  requireSpawnReceipt?: boolean
   onStdoutLine?: (line: string) => Promise<void> | void
   onStderrLine?: (line: string) => Promise<void> | void
   /**
@@ -115,6 +132,8 @@ export interface ManagedProcessResult {
   spawnBinaryPath: string
   /** null when the child never started. */
   pid: number | null
+  /** Durable launcher identity when pre-activation is enabled. */
+  launchNonce?: string
   spawnError?: string
 }
 
@@ -244,6 +263,20 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const graceMs = req.killEscalationGraceMs ?? 10_000
 
   const spawnBinaryPath = req.argv[0] ?? ''
+  const launchNonce = req.requireSpawnReceipt === true ? randomUUID() : undefined
+
+  if (req.requireSpawnReceipt === true && req.onSpawned === undefined) {
+    return {
+      outcome: 'spawn-failed',
+      exitCode: null,
+      rawStdout: '',
+      stderrTail: '',
+      truncated: { stdout: false, stderr: false },
+      spawnBinaryPath,
+      pid: null,
+      spawnError: 'required durable spawn receipt callback is missing',
+    }
+  }
 
   if (
     req.timeoutMs !== undefined &&
@@ -282,14 +315,20 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
 
   let child: Bun.Subprocess
   try {
+    const spawnArgv =
+      launchNonce === undefined
+        ? [...req.argv]
+        : managedProcessLauncherArgv({ launchNonce, targetArgv: req.argv })
     child = Bun.spawn({
       ...platformSpawnOptionsForHost(),
-      cmd: [...req.argv],
+      cmd: spawnArgv,
       cwd: req.cwd,
       env: req.env,
       stdout: 'pipe',
       stderr: 'pipe',
-      stdin: req.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
+      // A gated launcher always needs its private activation pipe. The target's
+      // actual stdin mode is carried inside the post-receipt frame.
+      stdin: launchNonce !== undefined || req.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
       // Own process group so the whole descendant tree can be signalled.
       // Without it a fork()ed grandchild survives every kill we send.
       detached: true,
@@ -313,17 +352,57 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     }
   }
 
-  // RFC-280 T4 — one-shot stdin delivery (the claude prompt transport):
-  // write before reading any output, then close so the child sees EOF.
-  if (req.stdin?.mode === 'pipe') {
+  const pid = typeof child.pid === 'number' ? child.pid : null
+  let activationFailure: string | null = null
+  if (pid !== null && req.onSpawned !== undefined) {
+    try {
+      await req.onSpawned({
+        pid,
+        spawnBinaryPath,
+        ...(launchNonce !== undefined ? { launchNonce } : {}),
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (req.requireSpawnReceipt === true) activationFailure = message
+      log.warn('onSpawned receipt failed', {
+        pid,
+        required: req.requireSpawnReceipt === true,
+        error: message,
+      })
+    }
+  }
+
+  // A gated launcher receives exactly one frame only AFTER the durable PID
+  // receipt. Until then it cannot exec the real runtime or consume task stdin.
+  // Non-task callers retain the historical direct one-shot stdin path.
+  if (activationFailure === null && launchNonce !== undefined) {
+    const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
+    if (sink !== undefined) {
+      try {
+        const frame: ManagedProcessActivationFrame = {
+          v: 1,
+          launchNonce,
+          stdin:
+            req.stdin?.mode === 'pipe'
+              ? { mode: 'pipe', data: req.stdin.data }
+              : { mode: 'ignore' },
+        }
+        sink.write(JSON.stringify(frame))
+        sink.end()
+      } catch (err) {
+        activationFailure = err instanceof Error ? err.message : String(err)
+        log.warn('managed-process stdin write failed', {
+          error: activationFailure,
+        })
+      }
+    }
+  } else if (activationFailure === null && req.stdin?.mode === 'pipe') {
     const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
     if (sink !== undefined) {
       try {
         sink.write(req.stdin.data)
         sink.end()
       } catch (err) {
-        // A child that exited instantly closes its pipe; the exit path below
-        // reports the real outcome — a broken stdin write must not mask it.
         log.warn('managed-process stdin write failed', {
           error: err instanceof Error ? err.message : String(err),
         })
@@ -331,23 +410,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     }
   }
 
-  const pid = typeof child.pid === 'number' ? child.pid : null
-  if (pid !== null && req.onSpawned !== undefined) {
-    try {
-      await req.onSpawned({ pid, spawnBinaryPath })
-    } catch (err) {
-      // Persisting the pid is best-effort for the RUN; failing it must not kill
-      // a healthy child. It is logged loudly because the crash-recovery
-      // guarantee is degraded when it happens.
-      log.warn('onSpawned receipt failed; orphan recovery degraded', {
-        pid,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-
   let rawStdout = ''
   let stderrTail = ''
+  let launcherSpawnError: string | undefined
   const truncated = { stdout: false, stderr: false }
 
   const stdoutPump = pump(
@@ -365,7 +430,22 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   )
   const stderrPump = pump(
     child.stderr as ReadableStream<Uint8Array>,
-    req.onStderrLine,
+    async (line) => {
+      if (
+        launchNonce !== undefined &&
+        line.startsWith(`${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`)
+      ) {
+        const encoded = line.slice(`${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`.length)
+        try {
+          const parsed: unknown = JSON.parse(encoded)
+          launcherSpawnError = typeof parsed === 'string' ? parsed : encoded
+        } catch {
+          launcherSpawnError = encoded
+        }
+        return
+      }
+      await req.onStderrLine?.(line)
+    },
     (chunk) => {
       const next = appendBounded(stderrTail, chunk, MANAGED_PROCESS_MAX_STREAM_CHARS)
       stderrTail = next.text
@@ -375,7 +455,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     req.onStderrChunkEnd,
   )
 
-  let outcome: ManagedProcessOutcome = 'exited'
+  let outcome: ManagedProcessOutcome = activationFailure === null ? 'exited' : 'spawn-failed'
   let killTimer: ReturnType<typeof setTimeout> | undefined
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined
   let reapDeadlineTimer: ReturnType<typeof setTimeout> | undefined
@@ -411,6 +491,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     }, graceMs)
     killTimer.unref()
   }
+
+  if (activationFailure !== null) escalate()
 
   // RFC-280 T7 — a line-callback failure (persist error) makes further output
   // unrecordable; escalate the child (the historical runner `settlePump` did
@@ -489,6 +571,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       truncated,
       spawnBinaryPath,
       pid,
+      ...(launchNonce !== undefined ? { launchNonce } : {}),
+      ...(activationFailure !== null ? { spawnError: activationFailure } : {}),
       ...(pumpError !== undefined ? { pumpError } : {}),
     }
   }
@@ -522,6 +606,11 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     }
   }
 
+  if (launcherSpawnError !== undefined) {
+    outcome = 'spawn-failed'
+    exitCode = null
+  }
+
   return {
     outcome,
     exitCode,
@@ -530,6 +619,17 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     truncated,
     spawnBinaryPath,
     pid,
+    ...(launchNonce !== undefined ? { launchNonce } : {}),
+    ...(activationFailure !== null
+      ? { spawnError: activationFailure }
+      : launcherSpawnError !== undefined
+        ? {
+            spawnError: explainSpawnEnoent(launcherSpawnError, {
+              argv0: req.argv[0] ?? spawnBinaryPath,
+              cwd: req.cwd,
+            }),
+          }
+        : {}),
     ...(drainTimedOut ? { drainTimedOut: true } : {}),
     ...(pumpError !== undefined ? { pumpError } : {}),
   }

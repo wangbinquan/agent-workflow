@@ -424,9 +424,15 @@ export interface ScriptRunRequest {
   timeoutMs?: number
   killEscalationGraceMs?: number
   signal?: AbortSignal
+  beforeSpawn?: (info: { argv: readonly string[]; cwd: string }) => Promise<void> | void
   onStdoutLine?: (line: string) => Promise<void> | void
   onStderrLine?: (line: string) => Promise<void> | void
-  onSpawned?: (info: { pid: number; spawnBinaryPath: string }) => Promise<void> | void
+  onSpawned?: (info: {
+    pid: number
+    spawnBinaryPath: string
+    launchNonce?: string
+  }) => Promise<void> | void
+  requireSpawnReceipt?: boolean
   gitUserName?: string | null
   gitUserEmail?: string | null
   log?: Logger
@@ -478,8 +484,9 @@ export async function runScriptProcess(req: ScriptRunRequest): Promise<ScriptRun
   })
   for (const file of assembly.spillFiles) writeFileSync(file.path, file.content, 'utf8')
 
+  const argv = spec.argv(req.interpreter.path, scriptPath)
   const result = await runManagedProcess({
-    argv: spec.argv(req.interpreter.path, scriptPath),
+    argv,
     cwd: req.worktreePath,
     env: assembly.env,
     captureRawStdout: true,
@@ -488,7 +495,11 @@ export async function runScriptProcess(req: ScriptRunRequest): Promise<ScriptRun
       ? {}
       : { killEscalationGraceMs: req.killEscalationGraceMs }),
     ...(req.signal === undefined ? {} : { signal: req.signal }),
+    ...(req.beforeSpawn === undefined
+      ? {}
+      : { beforeSpawn: () => req.beforeSpawn?.({ argv, cwd: req.worktreePath }) }),
     ...(req.onSpawned === undefined ? {} : { onSpawned: req.onSpawned }),
+    ...(req.requireSpawnReceipt === true ? { requireSpawnReceipt: true } : {}),
     ...(req.onStdoutLine === undefined ? {} : { onStdoutLine: req.onStdoutLine }),
     ...(req.onStderrLine === undefined ? {} : { onStderrLine: req.onStderrLine }),
     ...(req.log === undefined ? {} : { log: req.log }),

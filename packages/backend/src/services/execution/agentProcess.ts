@@ -49,7 +49,10 @@ export interface AgentProcessRequest {
     pid: number
     spawnedAt: number
     spawnBinaryPath: string
+    launchNonce?: string
   }) => void | Promise<void>
+  /** Task-owned runtimes require the PID receipt before stdin/output activation. */
+  requireSpawnReceipt?: boolean
   capture?: {
     onStdoutLine?: (line: string) => void | Promise<void>
     onStderrLine?: (line: string) => void | Promise<void>
@@ -79,6 +82,7 @@ export interface AgentProcessResult {
   outcome: AgentProcessOutcome
   exitCode: number | null
   pid: number | null
+  launchNonce?: string
   /** capture.rawStdout 时为 byte-exact rolling tail，否则 ''。 */
   rawStdout: string
   stderrTail: string
@@ -131,12 +135,17 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
     ...(req.stdin !== undefined ? { stdin: req.stdin } : {}),
     ...(req.onSpawned !== undefined
       ? {
-          onSpawned: async (info: { pid: number; spawnBinaryPath: string }) => {
+          onSpawned: async (info: {
+            pid: number
+            spawnBinaryPath: string
+            launchNonce?: string
+          }) => {
             try {
               await req.onSpawned?.({
                 pid: info.pid,
                 spawnedAt: Date.now(),
                 spawnBinaryPath: info.spawnBinaryPath,
+                ...(info.launchNonce !== undefined ? { launchNonce: info.launchNonce } : {}),
               })
             } catch (err) {
               // P1-2：收据落库失败 = run 不可继续。managedProcess 对 onSpawned
@@ -148,10 +157,12 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
                 error: err instanceof Error ? err.message : String(err),
               })
               controller.abort()
+              if (req.requireSpawnReceipt === true) throw err
             }
           },
         }
       : {}),
+    ...(req.requireSpawnReceipt === true ? { requireSpawnReceipt: true } : {}),
     ...(req.capture?.onStdoutLine !== undefined ? { onStdoutLine: req.capture.onStdoutLine } : {}),
     ...(req.capture?.onStderrLine !== undefined ? { onStderrLine: req.capture.onStderrLine } : {}),
     ...(req.capture?.onStdoutChunkEnd !== undefined
@@ -198,6 +209,7 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
     outcome,
     exitCode: mp.exitCode,
     pid: mp.pid,
+    ...(mp.launchNonce !== undefined ? { launchNonce: mp.launchNonce } : {}),
     rawStdout: mp.rawStdout,
     stderrTail: mp.stderrTail,
     durationMs: Date.now() - startedAt,

@@ -195,7 +195,7 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
       } catch {
         /* gate dir already removed */
       }
-      if (abortAllActiveTasks().length > 0) await Bun.sleep(100)
+      if (abortAllActiveTasks('test-rfc097-after-each').length > 0) await Bun.sleep(100)
       h.cleanup()
     })
 

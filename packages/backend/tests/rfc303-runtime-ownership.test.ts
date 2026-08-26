@@ -10,7 +10,12 @@ import { webhookMrLaunchGuards, webhookMrStreamStates } from '@/db/schema'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { sourceTerminationCapabilityMatches } from '@/modules/task-execution/application/sourceTerminationCapability'
-import { InMemoryTaskDriverSupervisor } from '@/modules/task-execution/infrastructure/inMemoryTaskDriverSupervisor'
+import { TaskClaimGate } from '@/modules/task-execution/application/taskClaimGate'
+import { InMemoryTaskRuntimeRegistry } from '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry'
+import {
+  createOwnershipToken,
+  createWorkerIdentity,
+} from '@/modules/task-execution/domain/ownership'
 import type {
   SourceTerminationEffectCapability,
   TaskSourceTerminationEffectInput,
@@ -24,50 +29,98 @@ const cause = {
 } as const
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
+function runtimeFixture(taskId: string) {
+  const gate = new TaskClaimGate('rfc303-runtime-test')
+  const registry = new InMemoryTaskRuntimeRegistry(gate)
+  const permit = gate.enter()
+  const token = createOwnershipToken({
+    taskId,
+    identity: createWorkerIdentity({
+      ownerId: `owner-${taskId}`,
+      daemonGeneration: 'rfc303-runtime-test',
+    }),
+    epoch: 1,
+    leaseUntil: 10_000,
+    ownerRevision: 1,
+  })
+  gate.bind(permit, token)
+  return { gate, registry, permit, token }
+}
+
 describe('RFC-303 task driver ownership', () => {
   test('stop targets the attached generation and settles only after owner release', async () => {
-    const registry = new InMemoryTaskDriverSupervisor()
+    const h = runtimeFixture('task-1')
     const controller = new AbortController()
-    expect(registry.tryAttach('task-1', controller)).toBe(true)
-    expect(registry.tryAttach('task-1', new AbortController())).toBe(false)
+    expect(
+      h.registry.tryAttach({
+        token: h.token,
+        intentId: 'intent-1',
+        permit: h.permit,
+        controller,
+      }),
+    ).toBe('attached')
+    h.gate.leave(h.permit)
 
-    const ticket = registry.requestStop('task-1', cause)
-    expect(ticket).not.toBe('no-active-owner')
-    if (ticket === 'no-active-owner') throw new Error('expected owner ticket')
+    const ticket = h.registry.requestStop(h.token, cause)
     expect(controller.signal.aborted).toBe(true)
     expect(controller.signal.reason).toEqual(cause)
 
     let settled = false
-    void registry.awaitStopped(ticket).then(() => {
+    void h.registry.awaitStopped(ticket).then(() => {
       settled = true
     })
     await Promise.resolve()
     expect(settled).toBe(false)
-    expect(registry.release('task-1', controller, { kind: 'released' })).toBe(true)
-    expect(await registry.awaitStopped(ticket)).toEqual({ kind: 'released' })
+    expect(h.registry.release({ token: h.token, controller, result: { kind: 'released' } })).toBe(
+      true,
+    )
+    expect(await h.registry.awaitStopped(ticket)).toMatchObject({ kind: 'released' })
   })
 
   test('a stale controller cannot release a newer or different owner', async () => {
-    const registry = new InMemoryTaskDriverSupervisor()
+    const h = runtimeFixture('task-1')
     const owner = new AbortController()
-    expect(registry.tryAttach('task-1', owner)).toBe(true)
-    expect(registry.release('task-1', new AbortController())).toBe(false)
-    expect(registry.has('task-1')).toBe(true)
+    expect(
+      h.registry.tryAttach({
+        token: h.token,
+        intentId: 'intent-1',
+        permit: h.permit,
+        controller: owner,
+      }),
+    ).toBe('attached')
+    h.gate.leave(h.permit)
+    expect(h.registry.release({ token: h.token, controller: new AbortController() })).toBe(false)
+    expect(h.registry.hasTask('task-1')).toBe(true)
 
-    const ticket = registry.requestStop('task-1', cause)
-    if (ticket === 'no-active-owner') throw new Error('expected owner ticket')
-    expect(registry.release('task-1', owner, { kind: 'unreaped', code: 'child-unkillable' })).toBe(
-      true,
-    )
-    expect(await registry.awaitStopped(ticket)).toEqual({
+    const ticket = h.registry.requestStop(h.token, cause)
+    expect(
+      h.registry.release({
+        token: h.token,
+        controller: owner,
+        result: { kind: 'unreaped', code: 'child-unkillable' },
+      }),
+    ).toBe(true)
+    expect(await h.registry.awaitStopped(ticket)).toMatchObject({
       kind: 'unreaped',
       code: 'child-unkillable',
     })
   })
 
-  test('a missing owner is reported explicitly', () => {
-    const registry = new InMemoryTaskDriverSupervisor()
-    expect(registry.requestStop('missing', cause)).toBe('no-active-owner')
+  test('stop-first is sticky for the exact token and does not need a taskId lookup', async () => {
+    const h = runtimeFixture('missing')
+    const ticket = h.registry.requestStop(h.token, cause)
+    const controller = new AbortController()
+    expect(
+      h.registry.tryAttach({
+        token: h.token,
+        intentId: 'intent-missing',
+        permit: h.permit,
+        controller,
+      }),
+    ).toBe('rejected-stopped')
+    h.gate.leave(h.permit)
+    expect(controller.signal.aborted).toBe(true)
+    expect(await h.registry.awaitStopped(ticket)).toMatchObject({ kind: 'released' })
   })
 })
 

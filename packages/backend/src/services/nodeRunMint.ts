@@ -21,7 +21,7 @@
 // deriveFrontier's in-flight set and freeze the frontier. Violation throws
 // (pinned by node-run-mint.test.ts).
 
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
@@ -39,6 +39,12 @@ import {
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
+import { currentTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  withCurrentTaskExecutionMutation,
+  withTaskExecutionMutation,
+} from '@/modules/task-execution/application/ownedTaskMutation'
 
 /**
  * Statuses a row may be BORN with. Everything else (canceled / interrupted /
@@ -69,6 +75,10 @@ export interface MintInheritSource {
   shardKey: string | null
   parentNodeRunId: string | null
   preSnapshot: string | null
+  /** RFC-328 causal slot/generation inheritance; optional for legacy fixtures. */
+  continuationSlotKey?: string | null
+  lineageSlotPathJson?: string | null
+  operationGeneration?: number
 }
 
 /**
@@ -128,6 +138,10 @@ export interface MintNodeRunOverrides {
    * mirrors how the runner inherits the memory snapshot from the first attempt.
    */
   envelopeNonce?: string
+  /** RFC-328 internal causal identity overrides. */
+  continuationSlotKey?: string | null
+  lineageSlotPathJson?: string | null
+  operationGeneration?: number
 }
 
 export interface MintNodeRunArgs {
@@ -206,6 +220,22 @@ export function buildMintNodeRunValues(
   const reviewIteration =
     o.reviewIteration !== undefined ? o.reviewIteration : (inherit?.reviewIteration ?? 0)
   const preSnapshot = o.preSnapshot !== undefined ? o.preSnapshot : (inherit?.preSnapshot ?? null)
+  const stableSlotSeed = JSON.stringify({
+    nodeId: args.nodeId,
+    iteration: args.iteration ?? 0,
+    shardKey,
+  })
+  const continuationSlotKey =
+    o.continuationSlotKey !== undefined
+      ? o.continuationSlotKey
+      : (inherit?.continuationSlotKey ?? createHash('sha256').update(stableSlotSeed).digest('hex'))
+  const inheritedGeneration = inherit?.operationGeneration ?? 0
+  // Any newly minted reincarnation of the same causal slot is a new logical
+  // operation generation. This includes manual Resume, retry cascades,
+  // stale-upstream redispatch and post-restart revival. Wrapper/session
+  // continuation reuses its existing row and therefore does not pass here.
+  const operationGeneration =
+    o.operationGeneration ?? (inherit === null ? 0 : inheritedGeneration + 1)
 
   // RFC-098 对抗检视修订 #10 — frontier invisibility invariant: a row born
   // 'running' must be a CHILD row. deriveFrontier treats top-level running
@@ -247,6 +277,12 @@ export function buildMintNodeRunValues(
     // RFC-200 (T1b): generate a fresh per-run nonce by default; a caller may
     // override it (inline-followup reuses the anchor round's nonce).
     envelopeNonce: o.envelopeNonce ?? generateEnvelopeNonce(),
+    continuationSlotKey,
+    lineageSlotPathJson:
+      o.lineageSlotPathJson !== undefined
+        ? o.lineageSlotPathJson
+        : (inherit?.lineageSlotPathJson ?? null),
+    operationGeneration,
   }
 }
 
@@ -256,7 +292,14 @@ export async function mintNodeRun(db: DbClient, args: MintNodeRunArgs): Promise<
   // a crash between two separate statements would leave the old pending-merge
   // row replayable at the next runTask entry (the exact bug this closes), or
   // conversely a successor row whose predecessors were never retired.
-  return dbTxSync(db, (tx) => mintNodeRunTx(tx, args))
+  const context = currentTaskExecutionContext(args.taskId)
+  if (context === undefined) return dbTxSync(db, (tx) => mintNodeRunTx(tx, args))
+  return taskExecutionModule.ownership.withOwnedTaskTx({
+    db,
+    token: context.token,
+    now: Date.now(),
+    run: (tx) => mintNodeRunTx(tx, args),
+  })
 }
 
 /**
@@ -582,16 +625,21 @@ export async function resolveFrozenRuntime(
           },
           configDir: r.configDir,
         }))
-  await db
-    .update(nodeRuns)
-    .set({
-      runtime: frozen.protocol,
-      runtimeBinary: frozen.binary,
-      // RFC-154: __configDir rides inside the same JSON column (no new column);
-      // parseFrozenParams whitelists its keys so it never leaks into params.
-      runtimeParamsJson: JSON.stringify({ ...frozen.params, __configDir: frozen.configDir }),
-    })
-    .where(eq(nodeRuns.id, nodeRunId))
+  withCurrentTaskExecutionMutation({
+    db,
+    run: (tx) =>
+      tx
+        .update(nodeRuns)
+        .set({
+          runtime: frozen.protocol,
+          runtimeBinary: frozen.binary,
+          // RFC-154: __configDir rides inside the same JSON column (no new column);
+          // parseFrozenParams whitelists its keys so it never leaks into params.
+          runtimeParamsJson: JSON.stringify({ ...frozen.params, __configDir: frozen.configDir }),
+        })
+        .where(eq(nodeRuns.id, nodeRunId))
+        .run(),
+  })
   return frozen
 }
 
@@ -683,6 +731,10 @@ export interface SchedulerRunRowCandidate {
   reviewIteration: number
   shardKey: string | null
   parentNodeRunId: string | null
+  preSnapshot?: string | null
+  continuationSlotKey?: string | null
+  lineageSlotPathJson?: string | null
+  operationGeneration?: number
   startedAt: number | null
   childTaskId?: string | null
 }
@@ -742,10 +794,16 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
   if (pendingExisting !== undefined) {
     // RFC-074: a reused pending row (e.g. minted by clarify rerun) runs now with
     // the inputs just resolved — stamp its provenance to match what it reads.
-    await db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
-      .where(eq(nodeRuns.id, pendingExisting.id))
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .update(nodeRuns)
+          .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
+          .where(eq(nodeRuns.id, pendingExisting.id))
+          .run(),
+    })
     if (args.broadcastPending !== null) args.broadcastPending(pendingExisting.id)
     return {
       nodeRunId: pendingExisting.id,
@@ -767,6 +825,18 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     cause: schedulerMintCause(latestExisting),
     retryIndex,
     iteration,
+    inheritFrom:
+      latestExisting === undefined
+        ? null
+        : {
+            reviewIteration: latestExisting.reviewIteration,
+            shardKey: latestExisting.shardKey,
+            parentNodeRunId: latestExisting.parentNodeRunId,
+            preSnapshot: latestExisting.preSnapshot ?? null,
+            continuationSlotKey: latestExisting.continuationSlotKey ?? null,
+            lineageSlotPathJson: latestExisting.lineageSlotPathJson ?? null,
+            operationGeneration: latestExisting.operationGeneration ?? 0,
+          },
     overrides: {
       ...(args.inheritReviewIteration
         ? { reviewIteration: latestExisting?.reviewIteration ?? 0 }

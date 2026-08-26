@@ -21,6 +21,7 @@ import type { WorkgroupMode, WorkgroupRuntimeConfig } from '@agent-workflow/shar
 import type { EngineDbState } from '@/services/workgroup/state'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
+import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
 import { isClarifyRerunCause } from '@/services/nodeRunMint'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 
@@ -227,8 +228,20 @@ export async function stampWgRound(
   nodeRunId: string,
   wgRound: number,
 ): Promise<void> {
-  await db
-    .update(nodeRuns)
-    .set({ wgRound })
-    .where(and(eq(nodeRuns.id, nodeRunId), isNull(nodeRuns.wgRound)))
+  const taskId = db
+    .select({ taskId: nodeRuns.taskId })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, nodeRunId))
+    .get()?.taskId
+  if (taskId === undefined) return
+  withTaskExecutionMutation({
+    db,
+    taskId,
+    run: (tx) =>
+      tx
+        .update(nodeRuns)
+        .set({ wgRound })
+        .where(and(eq(nodeRuns.id, nodeRunId), isNull(nodeRuns.wgRound)))
+        .run(),
+  })
 }

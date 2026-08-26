@@ -51,7 +51,13 @@ import { join } from 'node:path'
 import { storeNodeRunPrompt } from '@/services/nodeRunPrompt'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import type { DbTxSync } from '@/db/txSync'
+import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
+import {
+  createProcessEffectAttemptObserver,
+  type ProcessEffectAttemptObserver,
+  type ProcessSettlement,
+} from '@/modules/task-execution/application/processEffectObserver'
 import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
 import { createLogger, type Logger } from '@/util/log'
 import {
@@ -747,12 +753,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // here, while the row is still 'pending', made a refresh-on-receipt read a
   // status the DB didn't hold yet.
   try {
-    await opts.db
-      .update(nodeRuns)
-      .set({
-        injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
-      })
-      .where(eq(nodeRuns.id, opts.nodeRunId))
+    withTaskExecutionMutation({
+      db: opts.db,
+      taskId: opts.taskId,
+      run: (tx) =>
+        tx
+          .update(nodeRuns)
+          .set({
+            injectedMemoriesJson:
+              injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+          })
+          .where(eq(nodeRuns.id, opts.nodeRunId))
+          .run(),
+    })
     log.info('inject-snapshot-eager-write', {
       nodeRunId: opts.nodeRunId,
       count: injectedSnapshot?.length ?? 0,
@@ -928,10 +941,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // (prompt_text 平均 ~6KB、占 node_runs 表 57%,而它只在详情页/会话视图被读)。
   // 落盘失败会回落成写列——prompt 是执行事实,宁可行胖也不能丢。
   // rfc053-allow-direct-status-write -- writing non-status field
-  await opts.db
-    .update(nodeRuns)
-    .set(storeNodeRunPrompt(opts.taskId, opts.nodeRunId, prompt, join(opts.appHome, 'runs')))
-    .where(eq(nodeRuns.id, opts.nodeRunId))
+  withTaskExecutionMutation({
+    db: opts.db,
+    taskId: opts.taskId,
+    run: (tx) =>
+      tx
+        .update(nodeRuns)
+        .set(storeNodeRunPrompt(opts.taskId, opts.nodeRunId, prompt, join(opts.appHome, 'runs')))
+        .where(eq(nodeRuns.id, opts.nodeRunId))
+        .run(),
+  })
   // RFC-053: mark-running enforces pending → running.
   await transitionNodeRunStatus({
     db: opts.db,
@@ -980,14 +999,22 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // human-readable reset event instead of pretending resume succeeded.
       try {
         await persistRunnerWrite('node-run-event/session-reset', () =>
-          opts.db.insert(nodeRunEvents).values({
-            nodeRunId: opts.nodeRunId,
-            ts: Date.now(),
-            kind: 'text',
-            payload: JSON.stringify({
-              code: 'runtime-session-reset',
-              previousSessionUnavailable: true,
-            }),
+          withTaskExecutionMutation({
+            db: opts.db,
+            taskId: opts.taskId,
+            run: (tx) =>
+              tx
+                .insert(nodeRunEvents)
+                .values({
+                  nodeRunId: opts.nodeRunId,
+                  ts: Date.now(),
+                  kind: 'text',
+                  payload: JSON.stringify({
+                    code: 'runtime-session-reset',
+                    previousSessionUnavailable: true,
+                  }),
+                })
+                .run(),
           }),
         )
       } catch (error) {
@@ -1218,6 +1245,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // parsing, live subagent capture, and final status resolution.
   let preserveLiveRuntimeState = false
   let postSpawnFailed = false
+  let processEffect: ProcessEffectAttemptObserver | undefined
+  let processSettlement: ProcessSettlement | null = null
   // Survives the outer catch so even a second DB failure while stamping the
   // terminal row cannot erase the durable breadcrumb boot repair uses to
   // discard (rather than neutralize) a contradicted native resume id.
@@ -1331,7 +1360,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           const batch = rows.splice(0, rows.length)
           for (let i = 0; i < batch.length; i += EVENT_INSERT_MAX_ROWS) {
             const slice = batch.slice(i, i + EVENT_INSERT_MAX_ROWS)
-            await persistRunnerWrite(operation, () => opts.db.insert(nodeRunEvents).values(slice))
+            await persistRunnerWrite(operation, () =>
+              withTaskExecutionMutation({
+                db: opts.db,
+                taskId: opts.taskId,
+                run: (tx) => tx.insert(nodeRunEvents).values(slice).run(),
+              }),
+            )
           }
         },
       }
@@ -1408,10 +1443,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         )
         try {
           await persistRunnerWrite('runtime-inventory/eager', () =>
-            opts.db
-              .update(nodeRuns)
-              .set({ runtimeInventoryJson })
-              .where(eq(nodeRuns.id, opts.nodeRunId)),
+            withTaskExecutionMutation({
+              db: opts.db,
+              taskId: opts.taskId,
+              run: (tx) =>
+                tx
+                  .update(nodeRuns)
+                  .set({ runtimeInventoryJson })
+                  .where(eq(nodeRuns.id, opts.nodeRunId))
+                  .run(),
+            }),
           )
           startupInventoryPersistedLive = true
         } catch (err) {
@@ -1685,16 +1726,24 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       const decoded = detectPluginLoadFailure(line, opts.plugins ?? [])
       if (decoded !== null) {
         await persistRunnerWrite('node-run-event/plugin-load-failed', () =>
-          opts.db.insert(nodeRunEvents).values({
-            nodeRunId: opts.nodeRunId,
-            ts: Date.now(),
-            kind: 'text',
-            payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
-              rfc: 'RFC-031',
-              code: 'plugin-load-failed',
-              pluginName: decoded.pluginName,
-              message: decoded.message,
-            })}`,
+          withTaskExecutionMutation({
+            db: opts.db,
+            taskId: opts.taskId,
+            run: (tx) =>
+              tx
+                .insert(nodeRunEvents)
+                .values({
+                  nodeRunId: opts.nodeRunId,
+                  ts: Date.now(),
+                  kind: 'text',
+                  payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
+                    rfc: 'RFC-031',
+                    code: 'plugin-load-failed',
+                    pluginName: decoded.pluginName,
+                    message: decoded.message,
+                  })}`,
+                })
+                .run(),
           }),
         )
       }
@@ -1711,6 +1760,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       opts.gitMutationPolicy === 'read-only'
         ? await captureGitControlSnapshot(opts.worktreePath)
         : undefined
+    processEffect = createProcessEffectAttemptObserver({
+      db: opts.db,
+      taskId: opts.taskId,
+      nodeRunId: opts.nodeRunId,
+      processKind: 'agent',
+      argv: cmd,
+      cwd: opts.worktreePath,
+      // Read-only executions keep their existing concurrency. Writer agents
+      // additionally fence the exact isolation/workspace path, never the task.
+      resourceKeys:
+        opts.gitMutationPolicy === 'read-only' ? [] : [`workspace:${sha256Hex(opts.worktreePath)}`],
+    })
+    const activeProcessEffect = processEffect
     const runResult = await runAgentProcess({
       cmd,
       cwd: opts.worktreePath,
@@ -1719,26 +1781,38 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       termGraceMs: graceMs,
       ...(opts.signal !== undefined ? { abortSignal: opts.signal } : {}),
       ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
-      onSpawned: async (receipt: { pid: number; spawnedAt: number; spawnBinaryPath: string }) => {
+      ...(activeProcessEffect === undefined
+        ? {}
+        : { beforeSpawn: () => activeProcessEffect.beforeSpawn() }),
+      requireSpawnReceipt: true,
+      onSpawned: async (receipt: {
+        pid: number
+        spawnedAt: number
+        spawnBinaryPath: string
+        launchNonce?: string
+      }) => {
         // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside
         // pid so the stale-process reaper can match a live pid against THIS
         // specific binary, not a fuzzy regex.
         //
-        // impl-gate P2-C: pid persistence is BEST-EFFORT (managedProcess's own
-        // onSpawned contract) — catch here so a transient DB error does not
-        // trip the executor's receipt fence and abort a HEALTHY child (which
-        // would mark the node `canceled`, not the historical `failed`). Only
-        // the playground's admission fence intentionally rethrows.
-        try {
-          await opts.db
+        const persist = (tx: DbTxSync | DbClient) =>
+          tx
             .update(nodeRuns)
-            .set({ pid: receipt.pid, spawnBinaryPath: receipt.spawnBinaryPath })
+            .set({
+              pid: receipt.pid,
+              spawnBinaryPath: receipt.spawnBinaryPath,
+              spawnLaunchNonce: receipt.launchNonce ?? null,
+            })
             .where(eq(nodeRuns.id, opts.nodeRunId))
-        } catch (err) {
-          log.warn('runtime-pid-persist-failed', {
-            nodeRunId: opts.nodeRunId,
-            err: err instanceof Error ? err.message : String(err),
+            .run()
+        if (activeProcessEffect === undefined) {
+          withTaskExecutionMutation({
+            db: opts.db,
+            taskId: opts.taskId,
+            run: persist,
           })
+        } else {
+          activeProcessEffect.recordSpawnReceipt(receipt, persist)
         }
       },
       capture: {
@@ -1756,6 +1830,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       },
       log,
     })
+    processSettlement = runResult
     // RFC-314 D3：取消 / kill 时 pump 走的是 `cancel()` 而不是 EOF，最后一批缓冲拿不到
     // chunk-end。这里兜底冲刷，且必须在任何读事件的下游逻辑（信封解析 / 计数 / 广播）
     // 之前。
@@ -1875,26 +1950,30 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       const supersededEpochIds = nativeSessionEpochIds.filter((id) => id !== sessionId)
       if (supersededEpochIds.length > 0) {
         await persistRunnerWrite('node-run-event/session-epoch-retag', () =>
-          dbTxSync(opts.db, (tx) => {
-            tx.update(nodeRunEvents)
-              .set({ sessionId })
-              .where(
-                and(
-                  eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
-                  inArray(nodeRunEvents.sessionId, supersededEpochIds),
-                  isNull(nodeRunEvents.parentSessionId),
-                ),
-              )
-              .run()
-            tx.update(nodeRunEvents)
-              .set({ parentSessionId: sessionId })
-              .where(
-                and(
-                  eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
-                  inArray(nodeRunEvents.parentSessionId, supersededEpochIds),
-                ),
-              )
-              .run()
+          withTaskExecutionMutation({
+            db: opts.db,
+            taskId: opts.taskId,
+            run: (tx) => {
+              tx.update(nodeRunEvents)
+                .set({ sessionId })
+                .where(
+                  and(
+                    eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
+                    inArray(nodeRunEvents.sessionId, supersededEpochIds),
+                    isNull(nodeRunEvents.parentSessionId),
+                  ),
+                )
+                .run()
+              tx.update(nodeRunEvents)
+                .set({ parentSessionId: sessionId })
+                .where(
+                  and(
+                    eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
+                    inArray(nodeRunEvents.parentSessionId, supersededEpochIds),
+                  ),
+                )
+                .run()
+            },
           }),
         )
       }
@@ -2326,37 +2405,41 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           if (status === 'done' && opts.persistDeclaredOutputs !== false) {
             try {
               await persistRunnerWrite('node-run-output/batch', () =>
-                dbTxSync(opts.db, (tx) => {
-                  const inactiveSet = new Set(parsed.inactivePorts)
-                  for (const [name, content] of parsed.ports) {
-                    // RFC-072: persist the resolved output kind so the Outputs
-                    // tab can tell file-path ports from text. Keep every port in
-                    // one synchronous transaction: a later failure must roll
-                    // earlier upserts back instead of exposing partial outputs.
-                    const rawKind = outputKinds?.[name]
-                    const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
-                    const persisted = normalizedContent.get(name) ?? content
-                    const archiveJson = archiveJsonByPort.get(name) ?? null
-                    // RFC-306: `active` must be part of the UPSERT's `set` too —
-                    // a re-run of the same node_run (inline followup) may flip a
-                    // branch open again, and a set-list that omitted the column
-                    // would leave the previous round's closure in place.
-                    const active = !inactiveSet.has(name)
-                    tx.insert(nodeRunOutputs)
-                      .values({
-                        nodeRunId: opts.nodeRunId,
-                        portName: name,
-                        content: persisted,
-                        kind,
-                        archiveJson,
-                        active,
-                      })
-                      .onConflictDoUpdate({
-                        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-                        set: { content: persisted, kind, archiveJson, active },
-                      })
-                      .run()
-                  }
+                withTaskExecutionMutation({
+                  db: opts.db,
+                  taskId: opts.taskId,
+                  run: (tx) => {
+                    const inactiveSet = new Set(parsed.inactivePorts)
+                    for (const [name, content] of parsed.ports) {
+                      // RFC-072: persist the resolved output kind so the Outputs
+                      // tab can tell file-path ports from text. Keep every port in
+                      // one synchronous transaction: a later failure must roll
+                      // earlier upserts back instead of exposing partial outputs.
+                      const rawKind = outputKinds?.[name]
+                      const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
+                      const persisted = normalizedContent.get(name) ?? content
+                      const archiveJson = archiveJsonByPort.get(name) ?? null
+                      // RFC-306: `active` must be part of the UPSERT's `set` too —
+                      // a re-run of the same node_run (inline followup) may flip a
+                      // branch open again, and a set-list that omitted the column
+                      // would leave the previous round's closure in place.
+                      const active = !inactiveSet.has(name)
+                      tx.insert(nodeRunOutputs)
+                        .values({
+                          nodeRunId: opts.nodeRunId,
+                          portName: name,
+                          content: persisted,
+                          kind,
+                          archiveJson,
+                          active,
+                        })
+                        .onConflictDoUpdate({
+                          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+                          set: { content: persisted, kind, archiveJson, active },
+                        })
+                        .run()
+                    }
+                  },
                 }),
               )
             } catch (error) {
@@ -2541,22 +2624,29 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // Runner-specific JSON fields not in NodeRunStatusUpdateExtra — write
     // them as a follow-up non-status update.
     // rfc053-allow-direct-status-write -- writing non-status fields
-    await opts.db
-      .update(nodeRuns)
-      .set({
-        runtimeInventoryJson,
-        // RFC-280 T3: declared × observed × diff — the node-detail warning face.
-        startupVerificationJson,
-        // RFC-046: persist the post-budget-clip snapshot captured at inject
-        // time (or copied from attempt 0 on the envelope-followup path).
-        injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
-        // RFC-049: structured port-validation failure payload.
-        portValidationFailuresJson:
-          portValidationFailures.length > 0
-            ? serializePortValidationFailures(portValidationFailures)
-            : null,
-      })
-      .where(eq(nodeRuns.id, opts.nodeRunId))
+    withTaskExecutionMutation({
+      db: opts.db,
+      taskId: opts.taskId,
+      run: (tx) =>
+        tx
+          .update(nodeRuns)
+          .set({
+            runtimeInventoryJson,
+            // RFC-280 T3: declared × observed × diff — the node-detail warning face.
+            startupVerificationJson,
+            // RFC-046: persist the post-budget-clip snapshot captured at inject
+            // time (or copied from attempt 0 on the envelope-followup path).
+            injectedMemoriesJson:
+              injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+            // RFC-049: structured port-validation failure payload.
+            portValidationFailuresJson:
+              portValidationFailures.length > 0
+                ? serializePortValidationFailures(portValidationFailures)
+                : null,
+          })
+          .where(eq(nodeRuns.id, opts.nodeRunId))
+          .run(),
+    })
 
     const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
     // RFC-306: only attach when non-empty so every existing result object stays
@@ -2614,6 +2704,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         nodeRunId: opts.nodeRunId,
       })
     }
+    // The process effect becomes terminal only after the node/output/session
+    // projection above has committed. A crash before this line leaves an
+    // unresolved attempt for proof-backed recovery instead of a duplicate
+    // automatic runtime launch.
+    if (!postSpawnFailed && processSettlement !== null) {
+      processEffect?.settle(processSettlement)
+    }
   }
 
   // The only fallthrough from the try/catch/finally above is an unexpected
@@ -2648,6 +2745,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       nodeRunId: opts.nodeRunId,
     })
   }
+  if (processSettlement !== null) processEffect?.settle(processSettlement)
   return {
     status: 'failed',
     exitCode: null,

@@ -278,6 +278,88 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     ).toBeGreaterThan(50)
   })
 
+  test('RFC-328 task-owned effects and every code-host binding are canonical and mutation-sensitive', () => {
+    const ledger = generated.transactionExternalEffects.taskExecutionEffectLedger as Record<
+      string,
+      unknown
+    >
+    const entries = ledger.entries as Array<Record<string, unknown>>
+    const bindings = ledger.codeHostBindings as Array<Record<string, unknown>>
+    expect(entries.length).toBeGreaterThan(8)
+    expect(ledger.unknown).toEqual([])
+    expect(bindings.length).toBeGreaterThan(50)
+    expect(
+      bindings
+        .filter((entry) => entry.action === 'mr.approve')
+        .every((entry) => entry.recoveryClass === 'R-ACTOR'),
+    ).toBe(true)
+
+    const unjournaled = cloneArtifacts(generated)
+    const unjournaledLedger = unjournaled.transactionExternalEffects
+      .taskExecutionEffectLedger as Record<string, unknown>
+    const unjournaledEntry = (unjournaledLedger.entries as Array<Record<string, unknown>>)[0]!
+    delete unjournaledEntry.resourceKeySetResolver
+    expect(validateCanonicalArtifacts(unjournaled)).toContain(
+      `task-execution effect '${String(unjournaledEntry.id)}' lacks resourceKeySetResolver`,
+    )
+
+    const incomplete = cloneArtifacts(generated)
+    const incompleteLedger = incomplete.transactionExternalEffects
+      .taskExecutionEffectLedger as Record<string, unknown>
+    const incompleteBindings = incompleteLedger.codeHostBindings as Array<Record<string, unknown>>
+    const removed = incompleteBindings.shift()!
+    expect(validateCanonicalArtifacts(incomplete)).toContain(
+      `code-host recovery matrix: missing code-host recovery binding '${String(removed.id)}'`,
+    )
+  })
+
+  test('RFC-328 durable writers close four authorities and all six control subtypes', () => {
+    const ledger = generated.mutationEntrypoints.taskExecutionAuthorityLedger as Record<
+      string,
+      unknown
+    >
+    const entries = ledger.entries as Array<Record<string, unknown>>
+    const gateways = ledger.controlGateways as Array<Record<string, unknown>>
+    expect(entries.length).toBeGreaterThan(30)
+    expect(ledger.unknown).toEqual([])
+    expect(ledger.unknownControlGateways).toEqual([])
+    expect([...new Set(entries.map((entry) => entry.authorityKind))].sort()).toEqual([
+      'control-revision',
+      'recovery-proof',
+      'terminal-maintenance',
+      'worker-epoch',
+    ])
+    expect([...new Set(gateways.map((entry) => entry.subtype))].sort()).toEqual([
+      'continuation-admission',
+      'daemon-shutdown',
+      'gate-control',
+      'membership-control',
+      'recovery-candidate-revoke',
+      'terminal-control',
+    ])
+
+    const unclassified = cloneArtifacts(generated)
+    const unclassifiedLedger = unclassified.mutationEntrypoints
+      .taskExecutionAuthorityLedger as Record<string, unknown>
+    const unclassifiedEntry = (unclassifiedLedger.entries as Array<Record<string, unknown>>)[0]!
+    delete unclassifiedEntry.requiredBrandedProof
+    expect(validateCanonicalArtifacts(unclassified)).toContain(
+      `task-execution authority '${String(unclassifiedEntry.id)}' lacks requiredBrandedProof`,
+    )
+
+    const missingSubtype = cloneArtifacts(generated)
+    const missingSubtypeLedger = missingSubtype.mutationEntrypoints
+      .taskExecutionAuthorityLedger as Record<string, unknown>
+    const missingGateways = missingSubtypeLedger.controlGateways as Array<Record<string, unknown>>
+    missingGateways.splice(
+      missingGateways.findIndex((entry) => entry.subtype === 'daemon-shutdown'),
+      1,
+    )
+    expect(validateCanonicalArtifacts(missingSubtype)).toContain(
+      'task-execution control subtype is empty: daemon-shutdown',
+    )
+  })
+
   test('RFC-317 subset ledgers project into canonical owner/import/facade truth', () => {
     const current = {
       commonsManifest: readJson('architecture/commons-manifest.json'),

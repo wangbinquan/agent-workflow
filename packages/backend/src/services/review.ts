@@ -129,6 +129,10 @@ import { nextRetryIndex, mintNodeRun, mintNodeRunTx } from '@/services/nodeRunMi
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import {
+  withTaskExecutionMutation,
+  withTaskExecutionTransaction,
+} from '@/modules/task-execution/application/ownedTaskMutation'
+import {
   withReviewNodeMutationLock,
   withTaskReviewMutationLock,
 } from '@/services/reviewMutationCoordinator'
@@ -730,40 +734,44 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       // RFC-093: synchronous transaction (dbTxSync) — the previous
       // `db.transaction(async …)` COMMITted at its first await and left this
       // three-step retire sequence non-atomic (audit S-10).
-      dbTxSync(db, (tx) => {
-        const stale = tx
-          .select({ id: docVersions.id })
-          .from(docVersions)
-          .where(
-            and(
-              eq(docVersions.reviewNodeRunId, reuse.id),
-              eq(docVersions.sourcePortName, sourcePortName),
-              eq(docVersions.decision, 'pending'),
-            ),
-          )
-          .all()
-        for (const s of stale) {
-          tx.delete(reviewComments).where(eq(reviewComments.docVersionId, s.id)).run()
-        }
-        tx.update(docVersions)
-          .set({
-            decision: 'superseded',
-            decisionReason: 'upstream-refreshed',
-            decidedBy: SYSTEM_DECIDER,
-            decidedAt: Date.now(),
-          })
-          .where(
-            and(
-              eq(docVersions.reviewNodeRunId, reuse.id),
-              eq(docVersions.sourcePortName, sourcePortName),
-              eq(docVersions.decision, 'pending'),
-            ),
-          )
-          .run()
-        tx.update(nodeRuns)
-          .set({ consumedUpstreamRunsJson: consumedJson })
-          .where(eq(nodeRuns.id, reuse.id))
-          .run()
+      withTaskExecutionTransaction({
+        db,
+        taskId,
+        run: (tx) => {
+          const stale = tx
+            .select({ id: docVersions.id })
+            .from(docVersions)
+            .where(
+              and(
+                eq(docVersions.reviewNodeRunId, reuse.id),
+                eq(docVersions.sourcePortName, sourcePortName),
+                eq(docVersions.decision, 'pending'),
+              ),
+            )
+            .all()
+          for (const s of stale) {
+            tx.delete(reviewComments).where(eq(reviewComments.docVersionId, s.id)).run()
+          }
+          tx.update(docVersions)
+            .set({
+              decision: 'superseded',
+              decisionReason: 'upstream-refreshed',
+              decidedBy: SYSTEM_DECIDER,
+              decidedAt: Date.now(),
+            })
+            .where(
+              and(
+                eq(docVersions.reviewNodeRunId, reuse.id),
+                eq(docVersions.sourcePortName, sourcePortName),
+                eq(docVersions.decision, 'pending'),
+              ),
+            )
+            .run()
+          tx.update(nodeRuns)
+            .set({ consumedUpstreamRunsJson: consumedJson })
+            .where(eq(nodeRuns.id, reuse.id))
+            .run()
+        },
       })
     }
   } else if (latestDone !== undefined && coversSource(latestDone)) {
@@ -785,10 +793,16 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       event: { kind: 'park-review' },
       extra: { startedAt: reuse.startedAt ?? Date.now() },
     })
-    await db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: consumedJson })
-      .where(eq(nodeRuns.id, reviewNodeRunId))
+    withTaskExecutionMutation({
+      db,
+      taskId,
+      run: (tx) =>
+        tx
+          .update(nodeRuns)
+          .set({ consumedUpstreamRunsJson: consumedJson })
+          .where(eq(nodeRuns.id, reviewNodeRunId))
+          .run(),
+    })
   } else {
     // No prior review row, OR the freshest is a terminal decision against an
     // OLDER source (RFC-005 US-2 re-review: upstream re-ran after approve /
@@ -921,46 +935,58 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         acceptedItemIndices: [],
         auto: 'empty-list',
       })
-      await db
-        .insert(nodeRunOutputs)
-        .values({
-          nodeRunId: reviewNodeRunId,
-          portName: REVIEW_APPROVED_PORT_MULTI,
-          content: '',
-          kind: acceptedKind,
-          archiveJson: null,
-        })
-        .onConflictDoUpdate({
-          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-          set: { content: '', kind: acceptedKind, archiveJson: null },
-        })
-      await db
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: reviewNodeRunId, portName: REVIEW_APPROVAL_META_PORT, content: meta })
-        .onConflictDoUpdate({
-          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-          set: { content: meta },
-        })
-      await transitionNodeRunStatus({
+      withTaskExecutionTransaction({
         db,
-        nodeRunId: reviewNodeRunId,
-        event: { kind: 'approve-review' },
-        extra: { finishedAt: decidedAt },
-      })
-      // Persistent, user-visible audit record (node drawer "events" tab) —
-      // the dispatch summary string is discarded by runScope and node_runs
-      // has no summary column, so this event is the durable trace.
-      await db.insert(nodeRunEvents).values({
-        nodeRunId: reviewNodeRunId,
-        ts: decidedAt,
-        kind: 'text',
-        payload: `[rfc202/review-auto-approved] ${JSON.stringify({
-          rfc: 'RFC-202',
-          reason: 'empty-list',
-          itemCount: 0,
-          sourceNodeId,
-          sourcePortName,
-        })}`,
+        taskId,
+        run: (tx) => {
+          tx.insert(nodeRunOutputs)
+            .values({
+              nodeRunId: reviewNodeRunId,
+              portName: REVIEW_APPROVED_PORT_MULTI,
+              content: '',
+              kind: acceptedKind,
+              archiveJson: null,
+            })
+            .onConflictDoUpdate({
+              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+              set: { content: '', kind: acceptedKind, archiveJson: null },
+            })
+            .run()
+          tx.insert(nodeRunOutputs)
+            .values({
+              nodeRunId: reviewNodeRunId,
+              portName: REVIEW_APPROVAL_META_PORT,
+              content: meta,
+            })
+            .onConflictDoUpdate({
+              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+              set: { content: meta },
+            })
+            .run()
+          transitionNodeRunStatusTx({
+            tx,
+            nodeRunId: reviewNodeRunId,
+            event: { kind: 'approve-review' },
+            extra: { finishedAt: decidedAt },
+          })
+          // Persistent, user-visible audit record (node drawer "events" tab) —
+          // the dispatch summary string is discarded by runScope and node_runs
+          // has no summary column, so this event is the durable trace.
+          tx.insert(nodeRunEvents)
+            .values({
+              nodeRunId: reviewNodeRunId,
+              ts: decidedAt,
+              kind: 'text',
+              payload: `[rfc202/review-auto-approved] ${JSON.stringify({
+                rfc: 'RFC-202',
+                reason: 'empty-list',
+                itemCount: 0,
+                sourceNodeId,
+                sourcePortName,
+              })}`,
+            })
+            .run()
+        },
       })
       return {
         kind: 'ok',

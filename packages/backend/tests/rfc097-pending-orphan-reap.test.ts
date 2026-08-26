@@ -1,9 +1,10 @@
 // RFC-097 — pending 孤儿任务的 boot 收割 + 恢复（design/RFC-097-task-status-cas/
 // design.md §3「崩溃窗口补偿」）。
 //
-// 背景：resumeTask/retryNode 的 pending CAS 前移为所有权锁之后，「回滚中途 daemon
-// 崩溃」会留下 status='pending' 但无人认领的任务（boot 前 activeTasks 为空，旧收割
-// 只翻 running）。补偿：reapOrphanRuns 增加 pending→interrupted 任务收割分支——
+// 背景：resumeTask/retryNode 把 lifecycle + durable intent admission 放到回滚之前后，
+// 「intent提交后、owner claim/回滚中途 daemon崩溃」会留下status='pending'但无人驱动的
+// 任务。补偿：reapOrphanRuns增加pending→interrupted任务收割分支，并在同一transaction
+// 终止active intent——
 // boot 在 HTTP listen 之前运行（src/cli/start.ts:138，步骤 5b 早于 token/serve），
 // 彼刻一切 pending 任务必为孤儿：startTask 是 insert 后同进程立即 kick，不存在
 // 「boot 时合法存活的 pending 任务」窗口，零误伤（design §3）。
@@ -23,7 +24,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { agents, nodeRuns, taskExecutionIntents, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { resumeTask, startTaskWithLocalRepo } from '../src/services/task'
 import { runGit } from '../src/util/git'
@@ -164,6 +165,24 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
 
   test('resume 中途崩溃残留的 pending 任务：reap 翻 interrupted(daemon-restart)，resumeTask 恢复跑到终态', async () => {
     const { taskId, runId } = await seedCrashedResumeResidue(h)
+    const taskBeforeReap = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const crashedIntentId = ulid()
+    await h.db.insert(taskExecutionIntents).values({
+      id: crashedIntentId,
+      taskId,
+      kind: 'resume',
+      state: 'pending',
+      source: 'internal',
+      requestHash: 'rfc097-crashed-resume-intent',
+      payloadJson: '{}',
+      executionLineageId: taskBeforeReap.executionLineageId ?? taskId,
+      continuationSlotKey: 'task-root',
+      slotPathJson: taskBeforeReap.lineageSlotPathJson ?? '[]',
+      operationGeneration: 1,
+      expectedTaskRevision: taskBeforeReap.lifecycleEventRevision,
+      createdAt: Date.now() - 30_000,
+      updatedAt: Date.now() - 30_000,
+    })
 
     const r = await reapOrphanRuns(h.db)
     expect(r.tasks).toBe(1)
@@ -177,6 +196,17 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     expect(reaped.finishedAt).not.toBeNull()
     const failedRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     expect(failedRow.status).toBe('failed') // 历史行原样保留
+    expect(
+      (
+        await h.db
+          .select({
+            state: taskExecutionIntents.state,
+            failureCode: taskExecutionIntents.failureCode,
+          })
+          .from(taskExecutionIntents)
+          .where(eq(taskExecutionIntents.id, crashedIntentId))
+      )[0],
+    ).toEqual({ state: 'failed', failureCode: 'daemon-restart' })
 
     // 自愈闭环：interrupted 在 resumeTask 的可恢复集里——用户（或修复工具）一次
     // Resume 即可把崩溃残留任务跑到终态。

@@ -52,6 +52,13 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
+import { taskExecutionModule } from '@/modules/task-execution/composition'
+import {
+  assertTaskExecutionContext,
+  currentTaskExecutionContext,
+  type TaskExecutionContext,
+} from '@/modules/task-execution/application/taskExecutionContext'
+import { withTaskExecutionMutation } from '@/modules/task-execution/application/ownedTaskMutation'
 
 const lifecycleLog = createLogger('lifecycle')
 
@@ -140,6 +147,7 @@ export async function transitionNodeRunStatus(args: {
   nodeRunId: string
   event: NodeRunTransitionEvent
   extra?: NodeRunStatusUpdateExtra
+  executionContext?: TaskExecutionContext
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
   // RFC-326: a pure wrapper around the transactional companion — the ONLY
   // status write for this event kind now lives in transitionNodeRunStatusTx, so
@@ -148,7 +156,22 @@ export async function transitionNodeRunStatus(args: {
   // statement (atomic on its own), callers may already be inside one, and an
   // extra BEGIN/COMMIT per transition changed the retry behaviour of the
   // session-lease claim (runner.test.ts caught it on CI).
-  return transitionNodeRunStatusTx({ tx: args.db, ...args })
+  const taskId = args.db
+    .select({ taskId: nodeRuns.taskId })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, args.nodeRunId))
+    .get()?.taskId
+  const executionContext =
+    args.executionContext ??
+    (taskId === undefined ? undefined : currentTaskExecutionContext(taskId))
+  if (executionContext === undefined) return transitionNodeRunStatusTx({ tx: args.db, ...args })
+  assertTaskExecutionContext(executionContext, taskId)
+  return taskExecutionModule.ownership.withOwnedTaskTx({
+    db: args.db,
+    token: executionContext.token,
+    now: Date.now(),
+    run: (tx) => transitionNodeRunStatusTx({ tx, ...args }),
+  })
 }
 
 /**
@@ -236,6 +259,7 @@ export async function setNodeRunStatus(args: {
   allowTerminal?: boolean
   /** Diagnostic label for errors — appears in the IllegalTransition message. */
   reason?: string
+  executionContext?: TaskExecutionContext
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
   const row = (
     await args.db
@@ -253,6 +277,16 @@ export async function setNodeRunStatus(args: {
     throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
   }
   const from = row.status as NodeRunStatus
+  const executionContext = args.executionContext ?? currentTaskExecutionContext(row.taskId)
+  if (executionContext !== undefined) {
+    assertTaskExecutionContext(executionContext, row.taskId)
+    return taskExecutionModule.ownership.withOwnedTaskTx({
+      db: args.db,
+      token: executionContext.token,
+      now: Date.now(),
+      run: (tx) => setNodeRunStatusTx({ tx, ...args }),
+    })
+  }
   assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, args.to)
   if (isTerminalNodeRunStatus(from) && args.allowTerminal !== true) {
     throw new ConflictError(
@@ -525,10 +559,16 @@ export async function setTaskStatus(args: {
   extra?: TaskStatusUpdateExtra
   /**
    * Optional synchronous companion writes that must commit or roll back with
-   * the task ownership CAS. Used for decisions whose gate/config/message rows
+   * the task lifecycle/admission CAS. Used for decisions whose gate/config/message rows
    * would otherwise tear if resume loses or preflight fails.
    */
   onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  /**
+   * RFC-328 exact durable worker authority.  Control/maintenance callers omit
+   * this and enter through their own revision/proof gateways; a scheduler
+   * worker must pass the context created by the claim→attach handoff.
+   */
+  executionContext?: TaskExecutionContext
   /** RFC-207 — injectable clock for the run-time accounting (test determinism). */
   now?: number
   reason: string
@@ -599,16 +639,23 @@ export async function setTaskStatus(args: {
       )
     }
     if (row.worktreePath !== '' && !existsSync(row.worktreePath)) {
-      await args.db
-        .update(tasks)
-        .set({ workspacePrunedAt: Date.now() })
-        .where(
-          and(
-            eq(tasks.id, args.taskId),
-            isNull(tasks.workspacePruningAt),
-            isNull(tasks.workspacePrunedAt),
-          ),
-        )
+      withTaskExecutionMutation({
+        db: args.db,
+        taskId: args.taskId,
+        ...(args.executionContext === undefined ? {} : { context: args.executionContext }),
+        run: (tx) =>
+          tx
+            .update(tasks)
+            .set({ workspacePrunedAt: Date.now() })
+            .where(
+              and(
+                eq(tasks.id, args.taskId),
+                isNull(tasks.workspacePruningAt),
+                isNull(tasks.workspacePrunedAt),
+              ),
+            )
+            .run(),
+      })
       throw new DomainError(
         'workspace-pruned',
         `task ${args.taskId} workspace '${row.worktreePath}' no longer exists (reclaimed before tombstones existed); cannot ${args.reason}`,
@@ -682,7 +729,7 @@ export async function setTaskStatus(args: {
         ),
       )
       .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision })
-  dbTxSync(args.db, (tx) => {
+  const commitTransition = (tx: DbTxSync): void => {
     const updated = writeStatus(tx).all()
     if (updated.length === 0) {
       throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
@@ -695,7 +742,19 @@ export async function setTaskStatus(args: {
       occurredAt: now,
     })
     args.onTransitionTx?.(tx, transition)
-  })
+  }
+  const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
+  if (executionContext !== undefined) {
+    assertTaskExecutionContext(executionContext, args.taskId)
+    taskExecutionModule.ownership.withOwnedTaskTx({
+      db: args.db,
+      token: executionContext.token,
+      now,
+      run: (tx) => commitTransition(tx),
+    })
+  } else {
+    dbTxSync(args.db, commitTransition)
+  }
   // RFC-202 T2: unrevivable terminal statuses sweep the task's open human
   // gates (clarify rounds / review parks) so they leave the inbox for good.
   // Registered as a callback (cli/start.ts assembly) because lifecycle.ts is
@@ -774,6 +833,8 @@ export async function trySetTaskStatus(args: {
   allowedFrom: readonly TaskStatus[]
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
+  onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  executionContext?: TaskExecutionContext
   reason: string
 }): Promise<boolean> {
   try {
@@ -806,6 +867,7 @@ export async function transitionTaskStatusByEvent(args: {
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
   onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  executionContext?: TaskExecutionContext
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   return setTaskStatus({
@@ -816,6 +878,7 @@ export async function transitionTaskStatusByEvent(args: {
     ...(args.allowTerminal !== undefined ? { allowTerminal: args.allowTerminal } : {}),
     ...(args.extra !== undefined ? { extra: args.extra } : {}),
     ...(args.onTransitionTx !== undefined ? { onTransitionTx: args.onTransitionTx } : {}),
+    ...(args.executionContext !== undefined ? { executionContext: args.executionContext } : {}),
     reason: args.reason,
   })
 }
@@ -890,7 +953,7 @@ export async function transitionMergeState(args: {
 }): Promise<{ from: MergeStateOrNull; to: MergeState }> {
   const row = (
     await args.db
-      .select({ mergeState: nodeRuns.mergeState })
+      .select({ mergeState: nodeRuns.mergeState, taskId: nodeRuns.taskId })
       .from(nodeRuns)
       .where(eq(nodeRuns.id, args.nodeRunId))
       .limit(1)
@@ -901,16 +964,22 @@ export async function transitionMergeState(args: {
   const from = (row.mergeState ?? null) as MergeStateOrNull
   const to = nextMergeState(from, args.event)
   // rfc144-allow-direct-merge-state-write -- single allowlisted writer
-  const updated = await args.db
-    .update(nodeRuns)
-    .set({ mergeState: to, ...(args.extra ?? {}) })
-    .where(
-      and(
-        eq(nodeRuns.id, args.nodeRunId),
-        from === null ? isNull(nodeRuns.mergeState) : eq(nodeRuns.mergeState, from),
-      ),
-    )
-    .returning({ id: nodeRuns.id })
+  const updated = withTaskExecutionMutation({
+    db: args.db,
+    taskId: row.taskId,
+    run: (tx) =>
+      tx
+        .update(nodeRuns)
+        .set({ mergeState: to, ...(args.extra ?? {}) })
+        .where(
+          and(
+            eq(nodeRuns.id, args.nodeRunId),
+            from === null ? isNull(nodeRuns.mergeState) : eq(nodeRuns.mergeState, from),
+          ),
+        )
+        .returning({ id: nodeRuns.id })
+        .all(),
+  })
   if (updated.length === 0) {
     throw new ConcurrentMergeStateTransition(args.nodeRunId, from, args.event.kind)
   }

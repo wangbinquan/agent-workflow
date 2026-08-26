@@ -1192,6 +1192,18 @@ export const tasks = sqliteTable(
     // CTE 走全森林」塌缩成一次 `GROUP BY root_task_id`（见 migration 0183 与
     // services/taskOperations.ts 的 fastFilteredRootQuery）。
     rootTaskId: text('root_task_id'),
+    /**
+     * RFC-328: stable causal identity for execution effects.  It is internal
+     * (absent from every shared/REST/MCP schema) and inherited verbatim by
+     * child tasks.  Legacy rows are backfilled by migration 0210.
+     */
+    executionLineageId: text('execution_lineage_id'),
+    /**
+     * RFC-328: immutable ordered slot path from the lineage root to this task.
+     * IDs inside the JSON are causal soft references; retained operation
+     * records survive task deletion and must never FK back through this field.
+     */
+    lineageSlotPathJson: text('lineage_slot_path_json'),
     // （RFC-120 的 deferred_question_dispatch 列已由 RFC-132 T8 + migration 0073 物理删除——
     // universal deferred model 下所有任务同路径，无 per-task 开关。）
   },
@@ -1825,6 +1837,8 @@ export const nodeRuns = sqliteTable(
      * process" (safe to flip). NULL for non-agent runs / rows predating RFC-108.
      */
     spawnBinaryPath: text('spawn_binary_path'),
+    /** RFC-328: exact pre-activation launcher marker for PID reuse/recovery. */
+    spawnLaunchNonce: text('spawn_launch_nonce'),
     exitCode: integer('exit_code'),
     /** Human-readable failure breadcrumbs ONLY (RFC-145): machine consumers
      *  read `failure_code` / `superseded_by_review` / `rolled_back` instead —
@@ -2117,6 +2131,12 @@ export const nodeRuns = sqliteTable(
      * call row is alive) and the resume re-attach anchor (design §4.2).
      */
     childTaskId: text('child_task_id'),
+    /** RFC-328: immutable causal slot, independent of this attempt row id. */
+    continuationSlotKey: text('continuation_slot_key'),
+    /** RFC-328: ordered root→node slot path; internal, never serialized. */
+    lineageSlotPathJson: text('lineage_slot_path_json'),
+    /** RFC-328: business re-run generation (technical retries stay in-generation). */
+    operationGeneration: integer('operation_generation').notNull().default(0),
   },
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),
@@ -2127,6 +2147,358 @@ export const nodeRuns = sqliteTable(
     // 蕴含判断不认「status='running' ⊂ status IN ('pending','running')」，等值查询
     // 会退回全表扫（rfc311-perf-foundation plan 断言实测）。普通复合索引换确定命中。
     statusActiveIdx: index('idx_node_runs_status_active').on(t.status, t.startedAt),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-328 — durable task-execution ownership, intent, effects and retained
+// causal operation ledger.  The first five tables follow the live task/effect
+// lifecycle via CASCADE.  Maintenance and lineage records intentionally have
+// no task FK: they remain recovery/audit authority after a hard delete.
+// -----------------------------------------------------------------------------
+export const taskExecutionOwners = sqliteTable(
+  'task_execution_owners',
+  {
+    taskId: text('task_id')
+      .primaryKey()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    ownerId: text('owner_id').notNull(),
+    daemonGeneration: text('daemon_generation').notNull(),
+    epoch: integer('epoch').notNull(),
+    state: text('state', {
+      enum: ['claimed', 'revoked', 'released', 'recovery-required'],
+    }).notNull(),
+    leaseUntil: integer('lease_until').notNull(),
+    revision: integer('revision').notNull(),
+    lastHeartbeatAt: integer('last_heartbeat_at').notNull(),
+    recoveryCode: text('recovery_code'),
+    recoveryProofDigest: text('recovery_proof_digest'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    stateLeaseIdx: index('idx_task_execution_owners_state_lease').on(t.state, t.leaseUntil),
+    epochPositive: check('task_execution_owners_epoch_positive', sql`${t.epoch} > 0`),
+    revisionPositive: check('task_execution_owners_revision_positive', sql`${t.revision} > 0`),
+  }),
+)
+
+export const taskExecutionIntents = sqliteTable(
+  'task_execution_intents',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    kind: text('kind', {
+      enum: [
+        'launch',
+        'resume',
+        'retry-repository-preparation',
+        'retry-node',
+        'sync-workflow',
+        'gate-continuation',
+        'recovery',
+      ],
+    }).notNull(),
+    state: text('state', {
+      enum: ['pending', 'claimed', 'completed', 'canceled', 'failed'],
+    }).notNull(),
+    source: text('source', {
+      enum: ['rest', 'mcp', 'scheduler', 'auto', 'boot', 'internal'],
+    }).notNull(),
+    requestHash: text('request_hash').notNull(),
+    payloadJson: text('payload_json').notNull().default('{}'),
+    executionLineageId: text('execution_lineage_id').notNull(),
+    continuationSlotKey: text('continuation_slot_key').notNull(),
+    slotPathJson: text('slot_path_json').notNull(),
+    operationGeneration: integer('operation_generation').notNull().default(0),
+    replayAuthorizationId: text('replay_authorization_id'),
+    authorizationScopeJson: text('authorization_scope_json'),
+    expectedTaskRevision: integer('expected_task_revision').notNull(),
+    claimedEpoch: integer('claimed_epoch'),
+    failureCode: text('failure_code'),
+    createdAt: integer('created_at').notNull(),
+    claimedAt: integer('claimed_at'),
+    completedAt: integer('completed_at'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    taskStateIdx: index('idx_task_execution_intents_task_state').on(t.taskId, t.state),
+    activeTaskUq: uniqueIndex('idx_task_execution_intents_active_task')
+      .on(t.taskId)
+      .where(sql`${t.state} IN ('pending', 'claimed')`),
+    generationNonNegative: check(
+      'task_execution_intents_generation_nonnegative',
+      sql`${t.operationGeneration} >= 0`,
+    ),
+  }),
+)
+
+export const taskExecutionEffects = sqliteTable(
+  'task_execution_effects',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    originIntentId: text('origin_intent_id')
+      .notNull()
+      .references(() => taskExecutionIntents.id, { onDelete: 'cascade' }),
+    currentIntentId: text('current_intent_id')
+      .notNull()
+      .references(() => taskExecutionIntents.id, { onDelete: 'cascade' }),
+    operationKey: text('operation_key').notNull(),
+    executionLineageId: text('execution_lineage_id').notNull(),
+    operationFamilyKey: text('operation_family_key').notNull(),
+    operationGeneration: integer('operation_generation').notNull(),
+    kind: text('kind', {
+      enum: [
+        'workspace-prepare',
+        'workspace-rollback',
+        'isolation-create',
+        'isolation-merge',
+        'repository',
+        'process',
+        'workspace-cleanup',
+        'code-host-mutation',
+        'outbound-mutation',
+      ],
+    }).notNull(),
+    requestHash: text('request_hash').notNull(),
+    slotPathJson: text('slot_path_json').notNull(),
+    slotPathDigest: text('slot_path_digest').notNull(),
+    state: text('state', {
+      enum: ['open', 'succeeded', 'failed', 'outcome-unknown'],
+    }).notNull(),
+    lastAttemptNo: integer('last_attempt_no').notNull().default(0),
+    receiptJson: text('receipt_json'),
+    failureCode: text('failure_code'),
+    preparedAt: integer('prepared_at').notNull(),
+    settledAt: integer('settled_at'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    taskOperationGenerationUq: uniqueIndex(
+      'idx_task_execution_effects_task_operation_generation',
+    ).on(t.taskId, t.operationKey, t.operationGeneration),
+    lineageFamilyGenerationUq: uniqueIndex(
+      'idx_task_execution_effects_lineage_family_generation',
+    ).on(t.executionLineageId, t.operationFamilyKey, t.operationGeneration),
+    taskStateIdx: index('idx_task_execution_effects_task_state').on(t.taskId, t.state),
+    generationNonNegative: check(
+      'task_execution_effects_generation_nonnegative',
+      sql`${t.operationGeneration} >= 0`,
+    ),
+  }),
+)
+
+export const taskExecutionEffectAttempts = sqliteTable(
+  'task_execution_effect_attempts',
+  {
+    id: text('id').primaryKey(),
+    effectId: text('effect_id')
+      .notNull()
+      .references(() => taskExecutionEffects.id, { onDelete: 'cascade' }),
+    attemptNo: integer('attempt_no').notNull(),
+    intentId: text('intent_id')
+      .notNull()
+      .references(() => taskExecutionIntents.id, { onDelete: 'cascade' }),
+    epoch: integer('epoch').notNull(),
+    state: text('state', {
+      enum: [
+        'prepared',
+        'acting',
+        'succeeded',
+        'failed-not-applied',
+        'retry-authorized',
+        'recovery-required',
+        'outcome-unknown',
+      ],
+    }).notNull(),
+    candidateId: text('candidate_id').notNull(),
+    requestHash: text('request_hash').notNull(),
+    recoveryClass: text('recovery_class').notNull(),
+    // RFC-328: bounded, credential-free provider probe coordinates. Mutation
+    // values are represented by one-way digests; NULL for local/process acts.
+    recoveryDescriptorJson: text('recovery_descriptor_json'),
+    classifierVersion: text('classifier_version').notNull(),
+    transportPolicyVersion: text('transport_policy_version').notNull(),
+    applicationEvidence: text('application_evidence', {
+      enum: ['applied', 'definitely-not-applied', 'ambiguous'],
+    }),
+    retryAuthority: text('retry_authority', {
+      enum: ['none', 'probe', 'convergent', 'transport-policy'],
+    })
+      .notNull()
+      .default('none'),
+    receiptJson: text('receipt_json'),
+    failureCode: text('failure_code'),
+    preparedAt: integer('prepared_at').notNull(),
+    actingAt: integer('acting_at'),
+    settledAt: integer('settled_at'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    effectAttemptUq: uniqueIndex('idx_task_execution_attempts_effect_no').on(
+      t.effectId,
+      t.attemptNo,
+    ),
+    oneActiveAttempt: uniqueIndex('idx_task_execution_attempts_one_active')
+      .on(t.effectId)
+      .where(sql`${t.state} IN ('prepared', 'acting', 'recovery-required')`),
+    attemptPositive: check('task_execution_attempts_no_positive', sql`${t.attemptNo} > 0`),
+    epochPositive: check('task_execution_attempts_epoch_positive', sql`${t.epoch} > 0`),
+  }),
+)
+
+export const taskExecutionEffectFences = sqliteTable(
+  'task_execution_effect_fences',
+  {
+    effectAttemptId: text('effect_attempt_id')
+      .notNull()
+      .references(() => taskExecutionEffectAttempts.id, { onDelete: 'cascade' }),
+    fenceKey: text('fence_key').notNull(),
+    acquiredEpoch: integer('acquired_epoch').notNull(),
+    acquiredAt: integer('acquired_at').notNull(),
+    releasedAt: integer('released_at'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.effectAttemptId, t.fenceKey] }),
+    oneActiveHolder: uniqueIndex('idx_task_execution_effect_fences_active_key')
+      .on(t.fenceKey)
+      .where(sql`${t.releasedAt} IS NULL`),
+    epochPositive: check(
+      'task_execution_effect_fences_epoch_positive',
+      sql`${t.acquiredEpoch} > 0`,
+    ),
+  }),
+)
+
+export const taskExecutionMaintenanceClaims = sqliteTable(
+  'task_execution_maintenance_claims',
+  {
+    id: text('id').primaryKey(),
+    rootTaskId: text('root_task_id').notNull(),
+    operation: text('operation', {
+      enum: ['archive', 'delete', 'retention', 'workspace-gc', 'repair-metadata'],
+    }).notNull(),
+    state: text('state', {
+      enum: [
+        'claimed',
+        'io-complete',
+        'db-finalized',
+        'cleanup-pending',
+        'completed',
+        'recovery-required',
+      ],
+    }).notNull(),
+    memberSetDigest: text('member_set_digest').notNull(),
+    expectedTreeDigest: text('expected_tree_digest').notNull(),
+    revision: integer('revision').notNull(),
+    cleanupPlanJson: text('cleanup_plan_json').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    completedAt: integer('completed_at'),
+  },
+  (t) => ({
+    stateUpdatedIdx: index('idx_task_execution_maintenance_state_updated').on(t.state, t.updatedAt),
+    revisionPositive: check('task_execution_maintenance_revision_positive', sql`${t.revision} > 0`),
+  }),
+)
+
+export const taskExecutionMaintenanceMembers = sqliteTable(
+  'task_execution_maintenance_members',
+  {
+    claimId: text('claim_id')
+      .notNull()
+      .references(() => taskExecutionMaintenanceClaims.id, { onDelete: 'cascade' }),
+    taskId: text('task_id').notNull(),
+    expectedTaskRevision: integer('expected_task_revision').notNull(),
+    expectedOwnerRevision: integer('expected_owner_revision'),
+    expectedTopologyRevision: integer('expected_topology_revision').notNull(),
+    expectedLedgerDigest: text('expected_ledger_digest').notNull(),
+    releasedAt: integer('released_at'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.claimId, t.taskId] }),
+    activeTaskUq: uniqueIndex('idx_task_execution_maintenance_members_active_task')
+      .on(t.taskId)
+      .where(sql`${t.releasedAt} IS NULL`),
+  }),
+)
+
+export const taskExecutionLineageOperationRecords = sqliteTable(
+  'task_execution_lineage_operation_records',
+  {
+    id: text('id').primaryKey(),
+    recordKind: text('record_kind', {
+      enum: ['generation-watermark', 'replay-decision'],
+    }).notNull(),
+    executionLineageId: text('execution_lineage_id').notNull(),
+    operationFamilyKey: text('operation_family_key').notNull(),
+    operationGeneration: integer('operation_generation'),
+    highestSettledGeneration: integer('highest_settled_generation'),
+    lastOutcome: text('last_outcome'),
+    requestHash: text('request_hash').notNull(),
+    slotPathJson: text('slot_path_json').notNull(),
+    slotPathDigest: text('slot_path_digest').notNull(),
+    rootAnchorTaskId: text('root_anchor_task_id'),
+    ancestorAnchorTaskId: text('ancestor_anchor_task_id'),
+    currentAnchorTaskId: text('current_anchor_task_id'),
+    sourceTaskId: text('source_task_id'),
+    sourceEffectId: text('source_effect_id'),
+    sourceAttemptId: text('source_attempt_id'),
+    providerCoordinateJson: text('provider_coordinate_json'),
+    failureCode: text('failure_code'),
+    decisionState: text('decision_state', {
+      enum: [
+        'requires-actor',
+        'actor-replay-authorized',
+        'actor-replay-authorized-suspended',
+        'consumed',
+      ],
+    }),
+    replayAuthorizationId: text('replay_authorization_id'),
+    authorizationScopeJson: text('authorization_scope_json'),
+    actorUserId: text('actor_user_id'),
+    authorizationSource: text('authorization_source'),
+    boundIntentId: text('bound_intent_id'),
+    newEffectId: text('new_effect_id'),
+    recordRevision: integer('record_revision').notNull(),
+    compacted: integer('compacted', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    watermarkUq: uniqueIndex('idx_task_execution_lineage_watermark')
+      .on(t.executionLineageId, t.operationFamilyKey)
+      .where(sql`${t.recordKind} = 'generation-watermark'`),
+    decisionUq: uniqueIndex('idx_task_execution_lineage_decision')
+      .on(t.executionLineageId, t.operationFamilyKey, t.operationGeneration)
+      .where(sql`${t.recordKind} = 'replay-decision'`),
+    decisionStateIdx: index('idx_task_execution_lineage_decision_state').on(
+      t.recordKind,
+      t.decisionState,
+      t.updatedAt,
+    ),
+    revisionPositive: check(
+      'task_execution_lineage_revision_positive',
+      sql`${t.recordRevision} > 0`,
+    ),
+    discriminatedShape: check(
+      'task_execution_lineage_record_shape',
+      sql`(
+        (${t.recordKind} = 'generation-watermark'
+          AND ${t.highestSettledGeneration} IS NOT NULL
+          AND ${t.operationGeneration} IS NULL
+          AND ${t.decisionState} IS NULL)
+        OR
+        (${t.recordKind} = 'replay-decision'
+          AND ${t.operationGeneration} IS NOT NULL
+          AND ${t.highestSettledGeneration} IS NULL
+          AND ${t.decisionState} IS NOT NULL)
+      )`,
+    ),
   }),
 )
 

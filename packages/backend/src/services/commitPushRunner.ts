@@ -21,7 +21,9 @@ import type {
   SubrepoPushResult,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import type { DbTxSync } from '@/db/txSync'
 import { nodeRuns } from '@/db/schema'
+import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
 import { mintNodeRun } from '@/services/nodeRunMint'
 import { createLogger, type Logger } from '@/util/log'
 import { AW_INTERNAL_GIT_IDENTITY, runGit as realRunGit } from '@/util/git'
@@ -51,6 +53,7 @@ import type {
   RepositoryPublicationTransport,
 } from '@/modules/source-control/public/types'
 import { Paths } from '@/util/paths'
+import { sha256Hex } from '@/util/hash'
 
 type RunGit = typeof realRunGit
 
@@ -95,6 +98,8 @@ export interface CommitPushParams {
   /** node_run id of the triggering agent (becomes parentNodeRunId). */
   parentNodeRunId: string | null
   worktreePath: string
+  /** Stable source-repository identity for cross-worktree publication fencing. */
+  repositoryIdentity?: string
   /** Local branch to commit on + push (working branch or isolation branch). */
   repoBranch: string
   /** Base ref the worktree was branched from (for prompt context). */
@@ -185,6 +190,26 @@ export async function runCommitPush(
     cause: 'commit-push',
     overrides: { parentNodeRunId: params.parentNodeRunId, startedAt },
   })
+  const repositoryEffect = createLocalEffectAttemptObserver({
+    db,
+    taskId: params.taskId,
+    nodeRunId,
+    kind: 'repository',
+    stableActionOrdinal: `repository-publication:${params.agentNodeId}:${params.repoSlug ?? ''}`,
+    candidateId: 'commit-and-push',
+    request: {
+      v: 1,
+      branch: params.repoBranch,
+      baseRef: params.baseRef,
+      remote,
+      repoSlug: params.repoSlug ?? '',
+    },
+    resourceKeys: [
+      `workspace:${sha256Hex(W)}`,
+      `repository:${sha256Hex(`${params.repositoryIdentity ?? W}\u0000${remote}\u0000${params.repoBranch}`)}`,
+    ],
+  })
+  repositoryEffect?.beforeAct()
 
   const pushTarget = `${remote}/${params.repoBranch}`
   let sessionId: string | null = null
@@ -249,15 +274,38 @@ export async function runCommitPush(
       outcome === 'commit-local-excluded-history'
         ? 'failed'
         : 'done'
-    await db
-      .update(nodeRuns)
-      .set({
-        status,
-        finishedAt: Date.now(),
-        ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
-        commitPushJson: JSON.stringify(meta),
-      })
-      .where(eq(nodeRuns.id, nodeRunId))
+    const persistMeta = (tx: DbTxSync): void => {
+      tx.update(nodeRuns)
+        .set({
+          status,
+          finishedAt: Date.now(),
+          ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
+          commitPushJson: JSON.stringify(meta),
+        })
+        .where(eq(nodeRuns.id, nodeRunId))
+        .run()
+    }
+    if (repositoryEffect === undefined) {
+      await db
+        .update(nodeRuns)
+        .set({
+          status,
+          finishedAt: Date.now(),
+          ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
+          commitPushJson: JSON.stringify(meta),
+        })
+        .where(eq(nodeRuns.id, nodeRunId))
+    } else {
+      repositoryEffect.succeed(
+        {
+          outcome,
+          commitSha: meta.commitSha,
+          repairAttempts: meta.repairAttempts,
+          publicationReceipt: meta.publicationReceipt ?? null,
+        },
+        persistMeta,
+      )
+    }
     return { nodeRunId, meta, ...(processUnreaped ? { processUnreaped: true as const } : {}) }
   }
 

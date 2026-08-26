@@ -25,6 +25,10 @@ import { packageCommand } from './cli/package'
 import { userCommand } from './cli/user'
 import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
+import {
+  MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
+  runManagedProcessLauncher,
+} from './services/execution/managedProcessLauncher'
 
 function readFlag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name)
@@ -52,6 +56,13 @@ async function main(): Promise<void> {
   const sub = Bun.argv[2] ?? 'help'
 
   switch (sub) {
+    case MANAGED_PROCESS_LAUNCHER_SUBCOMMAND: {
+      // RFC-328: hidden pre-activation process gate. It intentionally bypasses
+      // every daemon/bootstrap concern and exits with the target's code.
+      process.exit(await runManagedProcessLauncher(Bun.argv))
+      break
+    }
+
     case '__git-credential': {
       // RFC-254 T20 (D11): git credential-helper protocol. `get`/`store`/`erase`
       // in argv[3]; request fields on stdin. Answers a `get` for the lease host
