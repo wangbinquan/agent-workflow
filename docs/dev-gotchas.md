@@ -494,6 +494,53 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **权限点与路由必须同批落地——这是结构性的，不是约定**。RFC-247 的启动自检会遍历 `ROUTE_BACKED_POINTS`，任何没有 `RouteMeta` 引用的点位让 daemon **拒绝启动**。这次先加了 8 个点、路由还没写，于是**全仓 20 条测试失败全是这一条拒绝**（凡是 `createApp` 的用例都挂）——症状离原因很远，但只要想到「刚加过点位」就一步到位。反向同理：删路由不删点位一样起不来。
 
+## 架构账本的联动点：新增一个守卫/账本要同步 6 处（RFC-329 PR-A 实测，2026-08-26 连推红四轮）
+
+一次 PR 里加了**一个守卫文件 + 一条账本条目**，主干连红四轮，每轮暴露一个此前不知道的
+联动点。四轮全部是同一类失败：**改了 X 就必须同步 Y，而 Y 只有 CI 会告诉你**。
+
+按撞到的顺序列全（新增守卫 / 账本时逐条过一遍，别等 CI）：
+
+| #   | 改了什么                                                                                 | 必须同步                                                                          | 不同步的表现                                                                                                                                                                                                                       |
+| --- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 新 RFC 同时有 AC 列表和证据表                                                            | `tests/rfc-index-status-drift.test.ts` 的 `AC_EVIDENCE_GAP`                       | 「AC 证据索引的缺口逐字相等」红。**缺口为 0 也必须登记**——它按「measured 与台账逐字相等」判定，漏登记 = 台账少一个键                                                                                                               |
+| 2   | 新增守卫测试文件                                                                         | `architecture/guard-manifest.json` 的 `guards[]`                                  | 「清单与磁盘逐条相等」红。字段值不是随便填：`assertsAbsence` / `negativeFixture` / `corpusScanner` 都由 `census.ts` 从源码**检测**出来，账本要与检测结果相等                                                                       |
+| 3   | 新增/修改任何 `.ts` 源码                                                                 | 全部 12 份 `architecture/*.json` 的 `sourceDigest`                                | RFC-294 N1b「seven canonical manifests are exact generated projections」红。这是**全局**digest（`allUnits` 路径+内容），12 处共用一个值                                                                                            |
+| 4   | 改了 `architecture/{commons-manifest,commons-debt,guard-manifest,ledger-baselines}.json` | 这四份的 `provenance`                                                             | RFC-294 N1a「replays byte-equivalent payload」红。**必须两笔提交**：`currentSnapshotSha` 要指向一个**已提交**的 commit，且 `git show <sha>:<path>` 的 payload 与当前文件逐字相等——所以内容先落一笔，再用那笔的 sha 回填 provenance |
+| 5   | 往 `ledger-baselines.json` 加条目                                                        | 条目**位置**                                                                      | N1b 红。`projectGovernanceArtifacts` 投影成「非-N1-spec（原序）+ `n1LedgerSpecs`（末尾）」，而 `toEqual` 对数组顺序敏感。append 到最末尾会落在四条 `rfc294-*` spec 之后                                                            |
+| 6   | 改了任何生产 `.ts` 文件                                                                  | `architecture/module-symbol-owners.json` 里**该文件每个符号**的 `signatureDigest` | N1b 红。改一个函数体就会让 `$file` 与它所在的那几个 top-level 符号的签名全变                                                                                                                                                       |
+
+### `bun run architecture:write` 在多人共享工作树上**不能跑**
+
+它读**磁盘**，不是 HEAD。本仓常态是工作树里躺着别人未提交的生产代码，于是跑一次它就会：
+
+- 把别人的在制品写进共享清单——RFC-329 实测一次生成里 89 条内容有变的条目**83 条属于并发
+  session**，另有 223 条是他们的新增文件；
+- 把别人引起的 baseline **上涨**写进 `ledger-baselines.json`（实测 842→870、859→928、
+  17083→…）。账本只许降，涨要写 `allowGrowth` 并点名 RFC——替别人涨等于帮他们绕过高水位。
+
+**替代做法（RFC-329 实测可行）**：
+
+1. `sourceDigest`（第 3 条）：**从 CI 日志里读**。N1b 失败输出会同时给出 committed 与
+   generated 两个值，generated 就是干净树上的正确答案，直接手工写进 12 处。
+2. `signatureDigest`（第 6 条）：**可以本地算**——它只依赖单文件内容，不受别人的在制品影响。
+   跑生成器 → 按 `id` 精确挑出**只属于自己改过的文件**的条目 → 逐字段应用到 HEAD 版本 →
+   其余全部 `git checkout --` 回退。RFC-329 用这法子把 89+223 条里的 6 条摘了出来，
+   最终 diff 6 增 6 减。
+3. 跑生成器前先 `cp` 一份 HEAD 版本到 scratchpad，跑完对着它做「只取自己那几条」的合并；
+   **不要**直接 `git add architecture/`。
+
+### `git commit -- <目录>` 与裸 commit 在共享树上等价
+
+CLAUDE.md 警告过裸 `git commit` 会提交整个暂存区。**加了 pathspec 也挡不住，只要 pathspec
+是目录**：`git commit -- architecture/` 提交的是该目录下的全部改动。RFC-329 就这样把并发
+session 未提交的两个 e2e 覆盖账本推上了主干，当场引发 T16 红
+（`rfc319-e2e-endpoint-coverage: 源码 66 vs 基线 96`——artifact 提了一半，配套基线还在对方手里）。
+
+**pathspec 必须精确到文件**：`git commit -- a.json b.json`。撤回误提时，把对方的在制品内容
+先 `cp` 到 scratchpad，`git checkout <误提前的commit> -- <files>` 恢复并提交，再把备份原样
+写回工作树——这样对方的磁盘内容一个字节没变，只是重新显示为 M。
+
 ## git / 多人协作（共享工作树）
 
 - **`git commit -- <路径>` 提交的是「工作树」内容，不是 index —— 你精心 `git add` 的那一版会被静默忽略**（2026-08-25 实撞，同一个坑连着把 main 弄红两次）。
@@ -2985,7 +3032,7 @@ git checkout -- packages/backend/src/…              # ← 还原：fatal，但
 ```ts
 const baselines = (dir: string) => readdirSync(dir).filter((f) => f.endsWith('.png'))
 test('…', () => {
-  expect(baselines(DIR).length).toBeGreaterThanOrEqual(100)  // ← corpusFloor 记成「没有下界」
+  expect(baselines(DIR).length).toBeGreaterThanOrEqual(100) // ← corpusFloor 记成「没有下界」
 })
 ```
 
@@ -2994,7 +3041,7 @@ test('…', () => {
 ```ts
 test('…', () => {
   const files = readdirSync(resolve(ROOT, DIR)).filter((f) => f.endsWith('.png'))
-  expect(files.length).toBeGreaterThanOrEqual(100)           // ← 这样才认
+  expect(files.length).toBeGreaterThanOrEqual(100) // ← 这样才认
 })
 ```
 
