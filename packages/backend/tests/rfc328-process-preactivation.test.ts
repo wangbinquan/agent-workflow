@@ -127,4 +127,32 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
     expect(result.exitCode).toBeNull()
     expect(result.spawnError).toContain('missing-runtime')
   })
+
+  test('business timeout starts after target readiness and launcher records stay private', async () => {
+    const root = fixtureRoot()
+    const stderrLines: string[] = []
+    const result = await runManagedProcess({
+      argv: [
+        process.execPath,
+        '-e',
+        "await Bun.sleep(100); process.stderr.write('runtime-stderr\\n')",
+      ],
+      cwd: root,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        }),
+      ),
+      timeoutMs: 750,
+      requireSpawnReceipt: true,
+      onSpawned: () => {},
+      onStderrLine: (line) => void stderrLines.push(line),
+    })
+
+    expect(result.outcome).toBe('exited')
+    expect(result.exitCode).toBe(0)
+    expect(stderrLines).toEqual(['runtime-stderr'])
+    expect(result.stderrTail).toContain('runtime-stderr')
+    expect(result.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
+  })
 })

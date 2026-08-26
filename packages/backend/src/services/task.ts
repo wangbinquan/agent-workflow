@@ -77,7 +77,6 @@ import {
 } from 'drizzle-orm'
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
 import { isAbsolute, join, relative } from 'node:path'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
@@ -118,6 +117,7 @@ import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
+import { sha256Hex } from '@/util/hash'
 import type { StaleRunKillOutcome } from '@/util/process'
 import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
 import {
@@ -151,6 +151,7 @@ import {
   setTaskStatus,
   transitionTaskStatusByEvent,
   setNodeRunStatusTx,
+  cancelOpenNodeRunsTx,
   enqueueTaskLifecycleEventTx,
 } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
@@ -490,17 +491,15 @@ async function releaseTaskDriverAndFinalizeWorkspace(
         ),
       ].sort()
       if (unresolvedEffectIds.length > 0) {
-        const quiescenceDigest = createHash('sha256')
-          .update(
-            canonicalJson({
-              v: 1,
-              taskId,
-              epoch: token.epoch,
-              runtimeStopEvidence: stopResult.evidenceDigest,
-              unresolvedEffectIds,
-            }),
-          )
-          .digest('hex')
+        const quiescenceDigest = sha256Hex(
+          canonicalJson({
+            v: 1,
+            taskId,
+            epoch: token.epoch,
+            runtimeStopEvidence: stopResult.evidenceDigest,
+            unresolvedEffectIds,
+          }),
+        )
         taskExecutionModule.effects.closeOutcomeUnknownAndRelease({
           db,
           token,
@@ -3492,18 +3491,16 @@ async function startTaskImpl(
                   deps.eventDeliveryId !== undefined
                 ? 'scheduler'
                 : 'rest',
-          requestHash: createHash('sha256')
-            .update(
-              JSON.stringify({
-                kind: 'launch',
-                taskId,
-                workflowId: workflow.id,
-                workflowVersion: workflow.version,
-                continuationSlotKey,
-                operationGeneration,
-              }),
-            )
-            .digest('hex'),
+          requestHash: sha256Hex(
+            JSON.stringify({
+              kind: 'launch',
+              taskId,
+              workflowId: workflow.id,
+              workflowVersion: workflow.version,
+              continuationSlotKey,
+              operationGeneration,
+            }),
+          ),
           payloadJson: launchPayloadJson,
           executionLineageId,
           continuationSlotKey,
@@ -4195,24 +4192,15 @@ export async function cancelTask(
               // intentionally unable to stamp its own final node status. The
               // same control transaction therefore owns the node projection;
               // later stale callbacks can only lose their CAS/fence.
-              candidateCanceledNodeRuns = tx
-                .update(nodeRuns)
-                .set({
-                  status: 'canceled',
-                  finishedAt: now,
-                  errorMessage:
-                    opts.cascadeFromParent === true
-                      ? 'canceled-by-parent-cascade'
-                      : 'canceled by user',
-                })
-                .where(
-                  and(
-                    eq(nodeRuns.taskId, id),
-                    inArray(nodeRuns.status, [...CANCELABLE_TASK_STATUSES]),
-                  ),
-                )
-                .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-                .all()
+              candidateCanceledNodeRuns = cancelOpenNodeRunsTx({
+                tx,
+                taskId: id,
+                finishedAt: now,
+                errorMessage:
+                  opts.cascadeFromParent === true
+                    ? 'canceled-by-parent-cascade'
+                    : 'canceled by user',
+              })
               const owner = tx
                 .select()
                 .from(taskExecutionOwners)
@@ -4327,16 +4315,7 @@ export async function cancelTask(
   // Broadcasters invoke listeners synchronously. Emit only after releasing
   // the task mutation coordinator so a listener that starts a same-task
   // review/cancel mutation cannot re-enter (or extend) this critical section.
-  emitTaskStatus(committed.task)
-  for (const run of controlCanceledNodeRuns) {
-    taskBroadcaster.broadcast(TASK_CHANNEL(id), {
-      id: -1,
-      type: 'node.status',
-      nodeRunId: run.id,
-      nodeId: run.nodeId,
-      status: 'canceled',
-    })
-  }
+  emitTaskStatus(committed.task, controlCanceledNodeRuns)
 
   // RFC-243 §4.3 — recursively cascade into the frozen child set. Depth is
   // bounded by maxInvocationDepth; already-terminal children are idempotent.
@@ -6390,7 +6369,10 @@ function parseSnapshot(v: unknown): Record<string, unknown> | null {
  * Push a task-status update onto both broadcaster channels at once.
  * Scheduler + cancel path both call this after each state change.
  */
-export function emitTaskStatus(t: Task): void {
+export function emitTaskStatus(
+  t: Task,
+  canceledNodeRuns: readonly { id: string; nodeId: string }[] = [],
+): void {
   tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
     type: 'task.status',
     taskId: t.id,
@@ -6412,6 +6394,15 @@ export function emitTaskStatus(t: Task): void {
       id: -1,
       type: 'task.done',
       status: t.status,
+    })
+  }
+  for (const run of canceledNodeRuns) {
+    taskBroadcaster.broadcast(TASK_CHANNEL(t.id), {
+      id: -1,
+      type: 'node.status',
+      nodeRunId: run.id,
+      nodeId: run.nodeId,
+      status: 'canceled',
     })
   }
 }

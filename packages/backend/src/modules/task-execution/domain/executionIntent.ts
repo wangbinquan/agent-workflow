@@ -1,6 +1,6 @@
 // RFC-328 — canonical continuation intent and replay-authorization rules.
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from './digest'
 
 export const TASK_EXECUTION_INTENT_KINDS = [
   'launch',
@@ -111,7 +111,7 @@ export function continuationRequestHash(request: CanonicalContinuationRequest): 
     scope: request.scope,
     payload: request.payload,
   }
-  return createHash('sha256').update(canonicalJson(canonical)).digest('hex')
+  return sha256Hex(canonicalJson(canonical))
 }
 
 export function encodeLineageSlotPath(path: readonly LineageSlot[]): string {

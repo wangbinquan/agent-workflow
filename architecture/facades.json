@@ -1380,6 +1380,7 @@
         "MANAGED_PROCESS_LAUNCHER_SUBCOMMAND",
         "MANAGED_PROCESS_LAUNCH_ERROR_PREFIX",
         "MANAGED_PROCESS_LAUNCH_NONCE_FLAG",
+        "MANAGED_PROCESS_LAUNCH_READY_PREFIX",
         "MANAGED_PROCESS_TARGET_SEPARATOR",
         "ManagedProcessActivationFrame",
         "managedProcessLauncherArgv",
@@ -2105,6 +2106,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:1e146b37d4cd8c56c11e",
         "import:52b6f287fd8c62b9046f",
         "import:e3708cb755459a85c894"
       ],
@@ -2122,6 +2124,7 @@
         "WorkspacePruneCause",
         "abandonSupersededMergeStates",
         "assertNodeRunSourceTerminationAdmission",
+        "cancelOpenNodeRunsTx",
         "enqueueTaskLifecycleEventTx",
         "isTerminalTaskStatus",
         "registerTerminalTaskHook",
@@ -7229,5 +7232,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:99c28f0f5bedf6bd59e9f34892b3c41086a932db00730e2ff7b51c837cc53d19"
+  "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5"
 }

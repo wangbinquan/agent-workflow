@@ -33,8 +33,8 @@ import { composeScriptActionExecution } from '@/modules/task-execution/compositi
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { ulid } from 'ulid'
-import { createHash } from 'node:crypto'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { sha256Hex } from '@/util/hash'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
   buildDevelopmentDeliveryDeps,
@@ -609,9 +609,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const taskExecutionLockProof = createExclusiveDaemonLockProof({
     daemonGeneration: DAEMON_GENERATION,
     acquiredAt: Date.now(),
-    lockReceiptDigest: createHash('sha256')
-      .update(`${lock.path}\u0000${lock.pid}\u0000${DAEMON_GENERATION}`)
-      .digest('hex'),
+    lockReceiptDigest: sha256Hex(`${lock.path}\u0000${lock.pid}\u0000${DAEMON_GENERATION}`),
   })
   const ownershipRecoveryPreparation = prepareTaskExecutionRecovery({
     db,

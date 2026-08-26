@@ -1,7 +1,7 @@
 // RFC-328 — task-owned filesystem/Git logical-effect coordinator.
 
-import { createHash } from 'node:crypto'
 import { and, eq } from '@/db/query'
+import { sha256Hex } from '../domain/digest'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
@@ -28,7 +28,7 @@ export type LocalTaskExecutionEffectKind =
   | 'workspace-cleanup'
 
 function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
+  return sha256Hex(value)
 }
 
 export interface LocalEffectAttemptObserver {

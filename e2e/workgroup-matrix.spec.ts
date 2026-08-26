@@ -450,9 +450,18 @@ for (const protocol of ['opencode', 'claude-code'] as const satisfies readonly P
         run.promptText?.includes('## Your assignments (batch of'),
       )
       expect(batchRuns.length).toBeGreaterThanOrEqual(1)
-      expect(batchRuns.every((run) => run.promptText?.includes('FC_PUBLIC_SIGNAL') === true)).toBe(
-        true,
-      )
+      expect(
+        batchRuns.every((run) => run.promptText?.includes('FC_PUBLIC_SIGNAL') === true),
+        `batch prompts missing the public signal: ${JSON.stringify(
+          batchRuns.map((run) => ({
+            id: run.id,
+            status: run.status,
+            retryIndex: run.retryIndex,
+            hasPrompt: run.promptText !== null,
+            promptTail: run.promptText?.slice(-600) ?? null,
+          })),
+        )}`,
+      ).toBe(true)
       expect(data.runs.filter((run) => run.status === 'failed')).toEqual([])
 
       const alphaFile = await readWorktree(task.id, 'showcase/free-collab-alpha.txt')

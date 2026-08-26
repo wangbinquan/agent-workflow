@@ -3,9 +3,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1080",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1078",
       "kind": "register-call",
-      "line": 1080,
+      "line": 1078,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerTerminalTaskHook",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalTaskHook:1106",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalTaskHook:1104",
       "kind": "register-call",
-      "line": 1106,
+      "line": 1104,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +47,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1094",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1092",
       "kind": "global-setter",
-      "line": 1094,
+      "line": 1092,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -3743,9 +3743,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1016",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1029",
       "kind": "register-call",
-      "line": 1016,
+      "line": 1029,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3754,9 +3754,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1037",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1050",
       "kind": "register-call",
-      "line": 1037,
+      "line": 1050,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3765,9 +3765,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1090",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1103",
       "kind": "register-call",
-      "line": 1090,
+      "line": 1103,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3776,9 +3776,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1116",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1129",
       "kind": "register-call",
-      "line": 1116,
+      "line": 1129,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3787,9 +3787,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1134",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1147",
       "kind": "register-call",
-      "line": 1134,
+      "line": 1147,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3798,9 +3798,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1154",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1167",
       "kind": "register-call",
-      "line": 1154,
+      "line": 1167,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3809,9 +3809,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1181",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1194",
       "kind": "register-call",
-      "line": 1181,
+      "line": 1194,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4051,9 +4051,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:812",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:816",
       "kind": "register-call",
-      "line": 812,
+      "line": 816,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4062,9 +4062,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:850",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:854",
       "kind": "register-call",
-      "line": 850,
+      "line": 854,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4073,9 +4073,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:895",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:904",
       "kind": "register-call",
-      "line": 895,
+      "line": 904,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4084,9 +4084,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:927",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:936",
       "kind": "register-call",
-      "line": 927,
+      "line": 936,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4095,9 +4095,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:981",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:990",
       "kind": "register-call",
-      "line": 981,
+      "line": 990,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4895,7 +4895,7 @@
       ],
       "file": "packages/backend/src/cli/start.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1257",
+      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1255",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -4909,7 +4909,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1257",
+      "symbol": "$setInterval:1255",
       "targetContext": "bootstrap"
     },
     {
@@ -6751,7 +6751,7 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:480",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:508",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6765,30 +6765,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:480",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/services/execution/managedProcess.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:490",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:490",
+      "symbol": "$setTimeout:508",
       "targetContext": "task-execution"
     },
     {
@@ -6820,7 +6797,7 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:591",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:555",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6834,7 +6811,30 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:591",
+      "symbol": "$setTimeout:555",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/services/execution/managedProcess.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:631",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:631",
       "targetContext": "task-execution"
     },
     {
@@ -8832,7 +8832,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setInterval:381",
+      "id": "background:packages/backend/src/services/task.ts#$setInterval:382",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8846,7 +8846,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:381",
+      "symbol": "$setInterval:382",
       "targetContext": "task-execution"
     },
     {
@@ -8855,7 +8855,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5636",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5615",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8869,7 +8869,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5636",
+      "symbol": "$setTimeout:5615",
       "targetContext": "task-execution"
     },
     {
@@ -8878,7 +8878,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:608",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:607",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8892,7 +8892,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:608",
+      "symbol": "$setTimeout:607",
       "targetContext": "task-execution"
     },
     {
@@ -9660,5 +9660,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:99c28f0f5bedf6bd59e9f34892b3c41086a932db00730e2ff7b51c837cc53d19"
+  "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5"
 }

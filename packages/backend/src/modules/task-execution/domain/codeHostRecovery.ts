@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { sha256Hex } from './digest'
 import {
   CODE_HOST_ACTIONS,
   codeHostActionDef,
@@ -207,7 +207,7 @@ export type CodeHostProbeOutcome =
     }>
 
 function digest(value: unknown): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex')
+  return sha256Hex(canonicalJson(value))
 }
 
 export function codeHostRecoveryBaseUrlDigest(baseUrl: string): string {

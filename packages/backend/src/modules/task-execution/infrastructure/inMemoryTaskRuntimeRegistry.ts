@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { sha256Hex } from '../domain/digest'
 import type { TaskStopCause } from '../domain/sourceTermination'
 import {
   assertClaimAttachPermit,
@@ -28,9 +28,7 @@ interface RuntimeEntry {
 }
 
 function stopDigest(tokenKey: string, result: 'released' | 'unreaped', code?: string): string {
-  return createHash('sha256')
-    .update(`${tokenKey}\u0000${result}\u0000${code ?? ''}`)
-    .digest('hex')
+  return sha256Hex(`${tokenKey}\u0000${result}\u0000${code ?? ''}`)
 }
 
 /** Process-local handle cache.  Authorization always comes from the token. */

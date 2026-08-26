@@ -5,7 +5,6 @@
 // If the daemon dies or closes the control pipe first, EOF makes the launcher
 // exit without ever spawning the target command.
 
-import { resolve } from 'node:path'
 import { IS_EMBEDDED } from '@/embed'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 
@@ -13,6 +12,7 @@ export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
 export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
 export const MANAGED_PROCESS_TARGET_SEPARATOR = '--'
 export const MANAGED_PROCESS_LAUNCH_ERROR_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_ERROR:'
+export const MANAGED_PROCESS_LAUNCH_READY_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_READY:'
 
 export interface ManagedProcessActivationFrame {
   readonly v: 1
@@ -22,8 +22,10 @@ export interface ManagedProcessActivationFrame {
 
 function selfInvocation(): string[] {
   if (IS_EMBEDDED) return [process.execPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
-  const mainPath = resolve(import.meta.dir, '..', '..', 'main.ts')
-  return [process.execPath, 'run', mainPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+  // Development/test launches do not need to import the daemon's complete CLI
+  // graph for every runtime attempt.  Invoke this deliberately small module
+  // directly; the embedded binary keeps using main.ts's hidden subcommand.
+  return [process.execPath, 'run', import.meta.path, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
 }
 
 export function managedProcessLauncherArgv(input: {
@@ -167,5 +169,14 @@ export async function runManagedProcessLauncher(
     }
   }
 
+  // This is a timing boundary, not a new admission policy: the target exists
+  // and its stdin has been delivered, so only now may its business timeout
+  // begin.  The parent consumes this private record instead of surfacing it as
+  // runtime stderr.
+  process.stderr.write(`${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`)
   return await child.exited
+}
+
+if (import.meta.main) {
+  process.exit(await runManagedProcessLauncher(Bun.argv))
 }

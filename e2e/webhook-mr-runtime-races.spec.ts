@@ -777,7 +777,10 @@ test('different-UUID close/update facts on one MR stream linearize; reopen and a
     )
     const runtimeRuns = execution.runs.filter((run) => run.nodeId === 'runtime')
     if (taskId === original.task.id) expect(runtimeRuns).toHaveLength(1)
-    expect(runtimeRuns.every((run) => run.status === 'canceled')).toBe(true)
+    expect(
+      runtimeRuns.every((run) => run.status === 'canceled'),
+      `terminal control left non-canceled runtime rows: ${JSON.stringify(runtimeRuns)}`,
+    ).toBe(true)
     for (const run of runtimeRuns) {
       if (run.pid !== null) await waitForPidGone(run.pid, `closed long runtime ${taskId}`)
     }

@@ -171,6 +171,25 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     expect(routesSrc).not.toContain('...(commitPush !== undefined ? { commitPush } : {})')
   })
 
+  test('RFC-328: Resume / Sync / Retry 三个人工续跑入口都透传认证 actor', () => {
+    for (const path of [
+      '/api/tasks/:id/resume',
+      '/api/tasks/:id/sync-workflow',
+      '/api/tasks/:id/nodes/:nodeRunId/retry',
+    ]) {
+      const start = routesSrc.indexOf(`path: '${path}'`)
+      expect(start, `${path} route must exist`).toBeGreaterThan(-1)
+      const nextRoute = routesSrc.indexOf('\n  registerRoute(', start)
+      const block = routesSrc.slice(start, nextRoute < 0 ? routesSrc.length : nextRoute)
+      expect(block, `${path} must retain its authenticated actor`).toContain(
+        'const actor = actorOf(c)',
+      )
+      expect(block, `${path} must pass actorUserId into StartTaskDeps`).toContain(
+        'actorUserId: actor.user.id',
+      )
+    }
+  })
+
   test('start/resume/retry 三处 kick 都经 runtimeConfigOpts 透传', () => {
     const spreads = taskSrc.match(/\.\.\.runtimeConfigOpts\(/g) ?? []
     // startTask + resumeTask（同块 replace_all）+ retryNode + retryRepoPreparation = 4

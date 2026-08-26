@@ -39,11 +39,12 @@
 // snaps back on refresh. Callers of these helpers place their
 // broadcastNodeStatus AFTER the helper returns; never the other way around.
 
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import {
   type NodeRunTransitionEvent,
   type NodeRunStatus,
+  allowedFromStatusesForEvent,
   nextNodeRunStatus,
   isTerminalNodeRunStatus,
 } from '@agent-workflow/shared'
@@ -219,6 +220,37 @@ export function transitionNodeRunStatusTx(args: {
     throw new ConcurrentNodeRunTransition(args.nodeRunId, from, args.event.kind)
   }
   return { from, to }
+}
+
+/**
+ * Terminal task control revokes the active owner before that owner's callbacks
+ * can settle their node rows. Project every still-live node row to `canceled`
+ * in the SAME transaction as the task/owner transition, using the shared node
+ * transition table rather than a task-status allowlist or a blind bulk write.
+ *
+ * The caller broadcasts only after its enclosing transaction commits.
+ */
+export function cancelOpenNodeRunsTx(args: {
+  tx: DbTxSync
+  taskId: string
+  finishedAt: number
+  errorMessage: string
+}): Array<{ id: string; nodeId: string }> {
+  const cancelableStatuses = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
+  const rows = args.tx
+    .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, args.taskId), inArray(nodeRuns.status, [...cancelableStatuses])))
+    .all()
+  for (const row of rows) {
+    transitionNodeRunStatusTx({
+      tx: args.tx,
+      nodeRunId: row.id,
+      event: { kind: 'mark-canceled', reason: args.errorMessage },
+      extra: { finishedAt: args.finishedAt, errorMessage: args.errorMessage },
+    })
+  }
+  return rows
 }
 
 /**
@@ -893,7 +925,7 @@ export async function transitionTaskStatusByEvent(args: {
 // to IS NULL when from === null — `eq(col, null)` never matches in SQL.
 // -----------------------------------------------------------------------------
 
-import { inArray, isNull, lt, or } from 'drizzle-orm'
+import { isNull, lt, or } from 'drizzle-orm'
 import {
   IllegalMergeStateTransition,
   type MergeState,

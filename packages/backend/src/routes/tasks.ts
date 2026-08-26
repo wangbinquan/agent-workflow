@@ -793,15 +793,19 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
       await requireTaskOperatorFromRoute(c, deps)
       await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
+      const actor = actorOf(c)
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await resumeTask(deps.db, c.req.param('id'), {
         db: deps.db,
         configPath: deps.configPath,
+        // RFC-328: a session-backed Resume is the explicit actor decision that
+        // advances an outcome-unknown operation to its next generation.
+        actorUserId: actor.user.id,
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
         ...resolveLaunchRuntimeConfig(deps.configPath),
       })
-      return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
+      return c.json(serializeTaskFor(task, workflowReadLensFor(actor)))
     },
   )
 
@@ -858,6 +862,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
+      const actor = actorOf(c)
       await assertTaskSyncable(deps, id) // RFC-104 builtin 403 / RFC-165 host 422
       const task = await getTask(deps.db, id)
       if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
@@ -868,7 +873,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           `workflow '${task.workflowId}' no longer exists`,
         )
       }
-      if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
+      if (!(await canViewResource(deps.db, actor, 'workflow', workflow))) {
         // 404-shaped (RFC-099 anti-probing) — same as an unknown workflow.
         throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
       }
@@ -882,12 +887,16 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const updated = await syncTaskWorkflow(deps.db, id, {
         db: deps.db,
         expectedVersion: body.data.expectedVersion,
-        launchActor: actorOf(c),
+        launchActor: actor,
+        // RFC-328: workflow sync is one of the existing explicit manual
+        // continuation commands, so retain its authenticated actor in the
+        // durable replay authorization/audit row.
+        actorUserId: actor.user.id,
         configPath: deps.configPath,
         ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
         ...resolveLaunchRuntimeConfig(deps.configPath),
       })
-      return c.json(serializeTaskFor(updated, workflowReadLensFor(actorOf(c))))
+      return c.json(serializeTaskFor(updated, workflowReadLensFor(actor)))
     },
   )
 
@@ -991,6 +1000,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
       await requireTaskOperatorFromRoute(c, deps)
       await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
+      const actor = actorOf(c)
       // flag-audit W0：统一布尔解析（此前 `!== 'false'` 双重否定——任何拼错值静默当
       // true）。产品语义保留默认级联。
       const cascade = parseBoolQuery(c, 'cascade', { default: true })
@@ -1000,6 +1010,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         deps: {
           db: deps.db,
           configPath: deps.configPath,
+          // RFC-328: preserve the authenticated manual retry decision; without
+          // it an outcome-unknown task is indistinguishable from actorless auto.
+          actorUserId: actor.user.id,
           // 重试走到 `__repo_prep__` 时会分流进 retryRepoPreparation → startTask，
           // 那里要 unseal `cached_repos.url_enc`。漏了 secretBox 的话，凡是配了
           // secret.key 的部署一律 409 cached-repo-credential-unavailable。
@@ -1009,7 +1022,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           ...resolveLaunchRuntimeConfig(deps.configPath),
         },
       })
-      return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
+      return c.json(serializeTaskFor(task, workflowReadLensFor(actor)))
     },
   )
 

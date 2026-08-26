@@ -1,7 +1,7 @@
 // RFC-328 — same/new-daemon durable ownership recovery.
 
-import { createHash } from 'node:crypto'
 import { and, eq, inArray, ne } from '@/db/query'
+import { sha256Hex } from '../domain/digest'
 import type { DbClient } from '@/db/client'
 import {
   nodeRunOutputs,
@@ -143,19 +143,17 @@ export async function finalizeTaskExecutionRecovery(input: {
           .map((row) => row.effectId),
       ),
     ].sort()
-    const processEvidenceDigest = createHash('sha256')
-      .update(
-        canonicalJson({
-          v: 1,
-          taskId: owner.taskId,
-          oldOwner,
-          successorGeneration: input.lockProof.daemonGeneration,
-          lockReceiptDigest: input.lockProof.lockReceiptDigest,
-          processEvidence: input.processEvidence,
-          preResolutionEffectIds,
-        }),
-      )
-      .digest('hex')
+    const processEvidenceDigest = sha256Hex(
+      canonicalJson({
+        v: 1,
+        taskId: owner.taskId,
+        oldOwner,
+        successorGeneration: input.lockProof.daemonGeneration,
+        lockReceiptDigest: input.lockProof.lockReceiptDigest,
+        processEvidence: input.processEvidence,
+        preResolutionEffectIds,
+      }),
+    )
     const processResolution = taskExecutionModule.effects.resolveQuiescedManagedProcesses({
       db: input.db,
       authority: 'successor-daemon',
@@ -239,16 +237,14 @@ export async function finalizeTaskExecutionRecovery(input: {
     const knownProbeResults = probed.filter(
       (result): result is Exclude<(typeof probed)[number], null> => result !== null,
     )
-    const codeHostEvidenceDigest = createHash('sha256')
-      .update(
-        canonicalJson({
-          v: 1,
-          taskId: owner.taskId,
-          processEvidenceDigest,
-          probeResults: knownProbeResults.map((result) => result.evidence),
-        }),
-      )
-      .digest('hex')
+    const codeHostEvidenceDigest = sha256Hex(
+      canonicalJson({
+        v: 1,
+        taskId: owner.taskId,
+        processEvidenceDigest,
+        probeResults: knownProbeResults.map((result) => result.evidence),
+      }),
+    )
     const codeHostResolution = taskExecutionModule.effects.resolveQuiescedCodeHostMutations({
       db: input.db,
       owner: oldOwner,
@@ -338,23 +334,21 @@ export async function finalizeTaskExecutionRecovery(input: {
           .map((row) => row.effectId),
       ),
     ].sort()
-    const evidenceDigest = createHash('sha256')
-      .update(
-        canonicalJson({
-          v: 2,
-          taskId: owner.taskId,
-          oldOwner,
-          successorGeneration: input.lockProof.daemonGeneration,
-          lockReceiptDigest: input.lockProof.lockReceiptDigest,
-          processEvidenceDigest,
-          recoveredProcessEffectIds: processResolution.resolvedEffectIds,
-          recoveredCodeHostEffectIds: codeHostResolution.appliedEffectIds,
-          retryAuthorizedCodeHostEffectIds: codeHostResolution.retryAuthorizedEffectIds,
-          codeHostEvidenceDigest,
-          unresolvedEffectIds,
-        }),
-      )
-      .digest('hex')
+    const evidenceDigest = sha256Hex(
+      canonicalJson({
+        v: 2,
+        taskId: owner.taskId,
+        oldOwner,
+        successorGeneration: input.lockProof.daemonGeneration,
+        lockReceiptDigest: input.lockProof.lockReceiptDigest,
+        processEvidenceDigest,
+        recoveredProcessEffectIds: processResolution.resolvedEffectIds,
+        recoveredCodeHostEffectIds: codeHostResolution.appliedEffectIds,
+        retryAuthorizedCodeHostEffectIds: codeHostResolution.retryAuthorizedEffectIds,
+        codeHostEvidenceDigest,
+        unresolvedEffectIds,
+      }),
+    )
     if (unresolvedEffectIds.length > 0) {
       taskExecutionModule.effects.closeRecoveredOutcomeUnknownAndRelease({
         db: input.db,

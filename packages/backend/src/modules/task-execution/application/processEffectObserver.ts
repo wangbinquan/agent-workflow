@@ -1,7 +1,7 @@
 // RFC-328 — task-owned managed-process logical effect coordinator.
 
-import { createHash } from 'node:crypto'
 import { and, eq } from '@/db/query'
+import { sha256Hex } from '../domain/digest'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { nodeRuns, taskExecutionEffectAttempts, taskExecutionEffects, tasks } from '@/db/schema'
@@ -24,7 +24,7 @@ const PROCESS_CLASSIFIER_VERSION = 'rfc328-managed-process-v1'
 const PROCESS_TRANSPORT_POLICY_VERSION = 'rfc328-preactivation-v1'
 
 function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
+  return sha256Hex(value)
 }
 
 export interface ProcessSpawnReceipt {

@@ -73,7 +73,9 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-300 +1 net: claimed Webhook recovery takes over an existing durable
   // workspace_pruning_at lease by exact-stamp CAS; physical deletion and the
   // status transition remain in their existing single writers.
-  'services/gc.ts': 7,
+  // RFC-328 +1 net: terminal-maintenance finalization/recovery only completes
+  // or releases the same workspace tombstone; lifecycle status is untouched.
+  'services/gc.ts': 8,
   // RFC-165 (R3-2-r4): the revive gate stamps workspace_pruned_at when the
   // dir vanished pre-tombstone (heal-forward) — companion-column write only.
   'services/lifecycle.ts': 1,
@@ -90,7 +92,9 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-311 —— 删除路径上的祖先链 branchStartedAt 重算（与 task.ts 的维护写点
   // 同族：单伴随列，永不触碰 status；归属 RFC-311 session，锁由 RFC-310
   // session 顺手同步）。
-  'services/taskDelete.ts': 1,
+  // RFC-328 +1: crash recovery of a claimed delete repeats that same ancestor
+  // branchStartedAt recomputation after the member rows are removed.
+  'services/taskDelete.ts': 2,
   'services/workgroup/configActions.ts': 1,
   // RFC-243 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
   // （status 由调度器或 fallback CAS 落定）之后，把 errorMessage 幂等改写为

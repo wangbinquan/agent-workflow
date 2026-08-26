@@ -1,7 +1,7 @@
 // RFC-328 — the one continuation-admission transaction used by every kick.
 
-import { createHash } from 'node:crypto'
 import { and, desc, eq } from '@/db/query'
+import { sha256Hex } from '../domain/digest'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { taskExecutionIntents, taskExecutionLineageOperationRecords, tasks } from '@/db/schema'
@@ -69,9 +69,7 @@ export function submitTaskContinuationTx(tx: DbTxSync, input: SubmitTaskContinua
       : decodeLineageSlotPath(task.lineageSlotPathJson)
   const continuationSlotKey =
     latest?.continuationSlotKey ??
-    createHash('sha256')
-      .update(`${executionLineageId}\u0000${task.lineageSlotPathJson ?? input.taskId}`)
-      .digest('hex')
+    sha256Hex(`${executionLineageId}\u0000${task.lineageSlotPathJson ?? input.taskId}`)
   const operationGeneration =
     (latest?.operationGeneration ?? 0) + (input.advanceOperationGeneration ? 1 : 0)
   const replayAuthorized = mayAuthorizeReplay({

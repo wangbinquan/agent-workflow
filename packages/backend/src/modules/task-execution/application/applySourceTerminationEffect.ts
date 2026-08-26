@@ -19,7 +19,7 @@ import type {
   TaskSourceTerminationReceipt,
 } from '@/modules/task-execution/public/participants'
 import { emitTaskStatus, finalizeCanceledTaskWithoutDriver, getTask } from '@/services/task'
-import { setTaskStatus } from '@/services/lifecycle'
+import { cancelOpenNodeRunsTx, setTaskStatus } from '@/services/lifecycle'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { ConflictError } from '@/util/errors'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
@@ -35,6 +35,7 @@ type AppliedTarget = {
   stopTicket: RuntimeStopTicket | null
   ownerWithoutLocalToken: boolean
   statusChanged: boolean
+  canceledNodeRuns: Array<{ id: string; nodeId: string }>
 }
 
 function fenceFor(input: TaskSourceTerminationEffectInput): 'closed' | 'merged' | null {
@@ -95,10 +96,21 @@ async function applyOne(
 
     const priorStatus = row.status
     if ((row.effectRevision ?? -1) >= input.streamRevision) {
+      const repeatedCause = terminalCause(input, row.parentTaskId)
+      let canceledNodeRuns: Array<{ id: string; nodeId: string }> = []
+      if (repeatedCause !== null) {
+        dbTxSync(db, (tx) => {
+          canceledNodeRuns = cancelOpenNodeRunsTx({
+            tx,
+            taskId,
+            finishedAt: Date.now(),
+            errorMessage: taskStopProjection(repeatedCause).code,
+          })
+        })
+      }
       const owner = taskExecutionModule.ownership.read(db, taskId)
       const token =
         owner?.state === 'claimed' ? taskExecutionModule.runtimeRegistry.tokenForOwner(owner) : null
-      const repeatedCause = terminalCause(input, row.parentTaskId)
       return {
         receipt: {
           taskId,
@@ -119,6 +131,7 @@ async function applyOne(
             : null,
         ownerWithoutLocalToken: owner?.state === 'claimed' && token === null,
         statusChanged: false,
+        canceledNodeRuns,
       }
     }
 
@@ -156,6 +169,7 @@ async function applyOne(
         stopTicket: null,
         ownerWithoutLocalToken: false,
         statusChanged: false,
+        canceledNodeRuns: [],
       }
     }
 
@@ -167,6 +181,7 @@ async function applyOne(
     let statusChanged = false
     let exactToken: OwnershipToken | null = null
     let ownerWithoutLocalToken = false
+    let canceledNodeRuns: Array<{ id: string; nodeId: string }> = []
     if (disposition === 'cancel') {
       try {
         const now = Date.now()
@@ -185,6 +200,12 @@ async function applyOne(
             sourceTerminationEffectRev: input.streamRevision,
           },
           onTransitionTx: (tx) => {
+            canceledNodeRuns = cancelOpenNodeRunsTx({
+              tx,
+              taskId,
+              finishedAt: now,
+              errorMessage: projection.code,
+            })
             const owner = tx
               .select()
               .from(taskExecutionOwners)
@@ -224,6 +245,7 @@ async function applyOne(
           .all()[0]
         if (winner !== undefined && CANCELABLE.includes(winner.status)) throw error
         dbTxSync(db, (tx) => {
+          const now = Date.now()
           tx.update(tasks)
             .set({
               sourceTerminationFence: nextFence,
@@ -252,7 +274,13 @@ async function applyOne(
             taskId,
             state: 'canceled',
             failureCode: projection.code,
-            now: Date.now(),
+            now,
+          })
+          canceledNodeRuns = cancelOpenNodeRunsTx({
+            tx,
+            taskId,
+            finishedAt: now,
+            errorMessage: projection.code,
           })
         })
       }
@@ -289,6 +317,12 @@ async function applyOne(
           failureCode: projection.code,
           now,
         })
+        canceledNodeRuns = cancelOpenNodeRunsTx({
+          tx,
+          taskId,
+          finishedAt: now,
+          errorMessage: projection.code,
+        })
       })
     }
 
@@ -309,6 +343,7 @@ async function applyOne(
       stopTicket,
       ownerWithoutLocalToken,
       statusChanged,
+      canceledNodeRuns,
     }
   })
 }
@@ -349,9 +384,9 @@ export function createTaskSourceTerminationParticipant(
           const applied = await applyOne(db, row.id, input)
           if (applied === null) continue
           let receipt = applied.receipt
-          if (applied.statusChanged) {
+          if (applied.statusChanged || applied.canceledNodeRuns.length > 0) {
             const task = await getTask(db, row.id)
-            if (task !== null) emitTaskStatus(task)
+            if (task !== null) emitTaskStatus(task, applied.canceledNodeRuns)
           }
           if (applied.stopTicket !== null) {
             const stopped = await taskExecutionModule.runtimeRegistry.awaitStopped(

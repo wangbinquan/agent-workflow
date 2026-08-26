@@ -21,7 +21,7 @@
 // deriveFrontier's in-flight set and freeze the frontier. Violation throws
 // (pinned by node-run-mint.test.ts).
 
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
@@ -39,6 +39,7 @@ import {
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
+import { sha256Hex } from '@/util/hash'
 import {
   currentTaskExecutionContext,
   taskExecutionModule,
@@ -228,7 +229,7 @@ export function buildMintNodeRunValues(
   const continuationSlotKey =
     o.continuationSlotKey !== undefined
       ? o.continuationSlotKey
-      : (inherit?.continuationSlotKey ?? createHash('sha256').update(stableSlotSeed).digest('hex'))
+      : (inherit?.continuationSlotKey ?? sha256Hex(stableSlotSeed))
   const inheritedGeneration = inherit?.operationGeneration ?? 0
   // Any newly minted reincarnation of the same causal slot is a new logical
   // operation generation. This includes manual Resume, retry cascades,

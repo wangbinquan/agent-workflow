@@ -62,7 +62,10 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
     ["'done'", "'pending'", "'failed'", 'result.status', "'failed'"],
   ],
   ['async function runScriptNode(', ["'pending'", "'failed'", "'pending'"]],
-  ['async function runCodeHostCallNode(', ["'running'", 'to']],
+  // RFC-328's effect-ledger transaction settles the node and effect together;
+  // those two branches broadcast the committed terminal state explicitly,
+  // while legacy/no-context execution still broadcasts through `settle(to)`.
+  ['async function runCodeHostCallNode(', ["'running'", 'to', "'failed'", "'done'"]],
   // 四轮门测试有效性自查纠正:第 4 项 `'status as NodeStatus'` **根本不在
   // runHostNode 里** —— 它是 `buildWorkgroupHooks` 返回对象里的兄弟钩子
   // `broadcastNodeStatus`。旧 `bodyOf` 靠「下一个 function 声明」当边界,而这些兄弟

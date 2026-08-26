@@ -31,6 +31,13 @@ export interface WakeInput {
     /** member ids with an in-flight message turn. */
     messageTurnMemberIds: ReadonlySet<string>
     /**
+     * Free-collab members still executing the parallel initial-planning burst.
+     * This is deliberately distinct from ordinary message turns: task batches
+     * may overlap normal discussion, but they must not start from a partial
+     * initial plan before every parallel planner has published its contribution.
+     */
+    initialPlanningMemberIds?: ReadonlySet<string>
+    /**
      * RFC-215 §2.1 — member ids with an in-flight TASK-track run (fc batch /
      * lw assignment assignee). Optional so existing WakeInput literals default
      * to empty (same precedent as `leaderClarifyParked`). fc pairs new batches
@@ -299,6 +306,14 @@ export function deriveWakeSet(input: WakeInput): WakeSet {
     return { items, capExceeded }
   }
 
+  // Phase boundary, not task serialization: every fc_initial turn above still
+  // runs in parallel, and every later batch/message turn keeps RFC-215's dual-
+  // track concurrency. We only wait between those phases so a fast planner
+  // cannot claim work before a slower planner's public context is durable.
+  if ((input.inFlight.initialPlanningMemberIds?.size ?? 0) > 0) {
+    return { items: [], capExceeded: false }
+  }
+
   // 1fc-a. TASK track, recovery batches first (design §2.2/§3.4): dispatched
   // cards with NO in-flight run driving them (crash between CAS and mint, or
   // reconcile's redispatch). Checked against the in-flight legs ONLY — a
@@ -391,7 +406,8 @@ export function decideWorkgroupOutcome(input: WakeInput, wake: WakeSet): Workgro
     wake.items.length > 0 ||
     input.inFlight.leaderRunning ||
     input.inFlight.runningAssignmentIds.size > 0 ||
-    input.inFlight.messageTurnMemberIds.size > 0
+    input.inFlight.messageTurnMemberIds.size > 0 ||
+    (input.inFlight.initialPlanningMemberIds?.size ?? 0) > 0
   ) {
     return { kind: 'running' }
   }

@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import { dbTxSync } from '@/db/txSync'
+import { sha256Hex } from '../domain/digest'
 import {
   taskExecutionEffectAttempts,
   taskExecutionEffectFences,
@@ -36,7 +36,7 @@ import {
 } from '../domain/ownership'
 
 function sha256(value: unknown): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex')
+  return sha256Hex(canonicalJson(value))
 }
 
 function ledgerDigestTx(tx: DbTxSync, taskId: string): string {

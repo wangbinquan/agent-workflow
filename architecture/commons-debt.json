@@ -2477,10 +2477,12 @@
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
       "findingId": "G-02",
       "canonicalImportEdgeIds": [
+        "import:1e146b37d4cd8c56c11e",
         "import:52b6f287fd8c62b9046f"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
       "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/lifecycle.ts#cancelOpenNodeRunsTx",
         "owner:packages/backend/src/services/lifecycle.ts#setTaskStatus"
       ],
       "canonicalFacadeIds": []
@@ -3794,7 +3796,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:99c28f0f5bedf6bd59e9f34892b3c41086a932db00730e2ff7b51c837cc53d19",
+    "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

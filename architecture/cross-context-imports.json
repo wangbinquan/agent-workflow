@@ -2570,6 +2570,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1e146b37d4cd8c56c11e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W5/W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#cancelOpenNodeRunsTx",
+      "toPath": "packages/backend/src/services/lifecycle.ts",
+      "toSymbol": "cancelOpenNodeRunsTx",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#$file",
       "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "fromSymbol": "$file",
@@ -14485,6 +14502,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/digest.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/domain/digest.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e65bb9b284893e3a15d0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W5/W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/users.ts#$file",
@@ -15965,9 +15999,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 939,
+    "architectureExceptions": 941,
     "implementationSccs": 0,
-    "observedEdges": 959,
+    "observedEdges": 961,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -17910,6 +17944,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#getMissionMergeRequestView"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
+      "id": "import:1e146b37d4cd8c56c11e",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W5/W9",
+      "role": "legacy-outbound",
+      "specifier": "@/services/lifecycle",
+      "syntax": "static-import",
+      "targetSymbol": "cancelOpenNodeRunsTx",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/lifecycle.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#cancelOpenNodeRunsTx"
     },
     {
       "edgeKind": "value",
@@ -29880,6 +29930,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/domain/digest.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/digest.ts#$file",
+      "id": "import:e65bb9b284893e3a15d0",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W5/W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "export",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/users.ts",
@@ -31730,7 +31796,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:99c28f0f5bedf6bd59e9f34892b3c41086a932db00730e2ff7b51c837cc53d19",
+  "sourceDigest": "sha256:0a1731539110688bceb85b00f76c39a29c454486e03bbabde6856d96722dbec5",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

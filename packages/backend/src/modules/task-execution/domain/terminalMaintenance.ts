@@ -1,6 +1,6 @@
 // RFC-328 — pure terminal-maintenance membership and state rules.
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from './digest'
 import { canonicalJson } from './executionIntent'
 import type { TerminalMaintenanceOperation } from './ownership'
 
@@ -31,9 +31,7 @@ export function maintenanceMemberSetDigest(
   if (new Set(sorted.map((member) => member.taskId)).size !== sorted.length) {
     throw new Error('duplicate-maintenance-member')
   }
-  return createHash('sha256')
-    .update(canonicalJson({ operation, members: sorted }))
-    .digest('hex')
+  return sha256Hex(canonicalJson({ operation, members: sorted }))
 }
 
 export function assertMaintenanceTransition(

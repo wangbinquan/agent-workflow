@@ -15,6 +15,7 @@ import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import {
   MANAGED_PROCESS_LAUNCH_ERROR_PREFIX,
+  MANAGED_PROCESS_LAUNCH_READY_PREFIX,
   managedProcessLauncherArgv,
   type ManagedProcessActivationFrame,
 } from './managedProcessLauncher'
@@ -152,6 +153,21 @@ function appendBounded(
   const joined = current + addition
   if (joined.length <= 2 * maxChars) return { text: joined, truncated: false }
   return { text: joined.slice(joined.length - maxChars), truncated: true }
+}
+
+function stripLauncherProtocol(text: string, launchNonce: string | undefined): string {
+  if (launchNonce === undefined) return text
+  const ready = `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${launchNonce}`
+  const error = `${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`
+  return text
+    .split('\n')
+    .map((line) => {
+      const readyAt = line.indexOf(ready)
+      const errorAt = line.indexOf(error)
+      const controlAt = readyAt < 0 ? errorAt : errorAt < 0 ? readyAt : Math.min(readyAt, errorAt)
+      return controlAt < 0 ? line : line.slice(0, controlAt)
+    })
+    .join('\n')
 }
 
 interface Pump {
@@ -413,6 +429,10 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   let rawStdout = ''
   let stderrTail = ''
   let launcherSpawnError: string | undefined
+  let launcherReadyResolve: (() => void) | undefined
+  const launcherReady = new Promise<void>((resolve) => {
+    launcherReadyResolve = resolve
+  })
   const truncated = { stdout: false, stderr: false }
 
   const stdoutPump = pump(
@@ -431,6 +451,13 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const stderrPump = pump(
     child.stderr as ReadableStream<Uint8Array>,
     async (line) => {
+      if (
+        launchNonce !== undefined &&
+        line.startsWith(`${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${launchNonce}`)
+      ) {
+        launcherReadyResolve?.()
+        return
+      }
       if (
         launchNonce !== undefined &&
         line.startsWith(`${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`)
@@ -459,6 +486,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   let killTimer: ReturnType<typeof setTimeout> | undefined
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined
   let reapDeadlineTimer: ReturnType<typeof setTimeout> | undefined
+  let executionSettled = false
   // RFC-280 impl-gate P1-A: the final liveness bound. A child that ignores even
   // SIGKILL (uninterruptible D-state, a stuck-I/O grandchild, a failed signal
   // delivery) would otherwise make `await child.exited` hang FOREVER — and the
@@ -514,7 +542,16 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     if (req.signal.aborted) onAbort()
     else req.signal.addEventListener('abort', onAbort, { once: true })
   }
-  if (req.timeoutMs !== undefined && req.timeoutMs > 0) {
+  const armExecutionTimeout = (): void => {
+    if (
+      executionSettled ||
+      killTimer !== undefined ||
+      timeoutTimer !== undefined ||
+      req.timeoutMs === undefined ||
+      req.timeoutMs <= 0
+    ) {
+      return
+    }
     timeoutTimer = setTimeout(() => {
       // impl-gate 3.2: guarded like `onAbort`. Without it, "user cancels →
       // SIGTERM → timeout fires during the 10s grace" relabels a cancellation
@@ -525,6 +562,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     }, req.timeoutMs)
     timeoutTimer.unref()
   }
+  if (launchNonce === undefined) armExecutionTimeout()
+  else void launcherReady.then(armExecutionTimeout)
 
   let exitCode: number | null = null
   let childUnreaped = false
@@ -546,6 +585,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       exitCode = exitResult.code
     }
   } finally {
+    executionSettled = true
     if (killTimer !== undefined) clearTimeout(killTimer)
     if (timeoutTimer !== undefined) clearTimeout(timeoutTimer)
     if (reapDeadlineTimer !== undefined) clearTimeout(reapDeadlineTimer)
@@ -567,7 +607,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       outcome,
       exitCode,
       rawStdout,
-      stderrTail,
+      stderrTail: stripLauncherProtocol(stderrTail, launchNonce),
       truncated,
       spawnBinaryPath,
       pid,
@@ -610,6 +650,11 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     outcome = 'spawn-failed'
     exitCode = null
   }
+
+  // Launcher control records share the inherited stderr pipe but are private
+  // orchestration metadata.  Keep user/runtime diagnostics byte-for-byte while
+  // removing those records from the returned tail.
+  stderrTail = stripLauncherProtocol(stderrTail, launchNonce)
 
   return {
     outcome,

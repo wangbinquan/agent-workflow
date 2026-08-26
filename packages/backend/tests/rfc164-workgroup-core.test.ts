@@ -584,6 +584,25 @@ describe('RFC-164 core — deriveWakeSet (free_collab)', () => {
     ])
   })
 
+  test('task batches wait for the complete parallel initial-planning burst', () => {
+    const open = asg({ status: 'open', assigneeMemberId: null, source: 'self_claim' })
+    const input = wakeInput({
+      config: fcCfg,
+      assignments: [open],
+      budgetUsed: 2,
+      inFlight: {
+        leaderRunning: false,
+        runningAssignmentIds: new Set(),
+        messageTurnMemberIds: new Set(['m-coder']),
+        initialPlanningMemberIds: new Set(['m-coder']),
+        taskTurnMemberIds: new Set(),
+      },
+    })
+    const wake = deriveWakeSet(input)
+    expect(wake).toEqual({ items: [], capExceeded: false })
+    expect(decideWorkgroupOutcome(input, wake)).toEqual({ kind: 'running' })
+  })
+
   // RFC-215 改写：原「一人一张」单卡配对由批量均分取代（design §2.2/§11——
   // 3 卡 2 闲 ⇒ ceil(3/2)=2 张 + 1 张，连续切片保创建序）。
   test('claim pairing: open tasks evenly batched across idle members, deterministic', () => {

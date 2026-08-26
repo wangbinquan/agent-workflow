@@ -314,6 +314,7 @@ export async function runWorkgroupEngine(
     leaderRunning: false,
     runningAssignmentIds: new Set<string>(),
     messageTurnMemberIds: new Set<string>(),
+    initialPlanningMemberIds: new Set<string>(),
     // RFC-215 §2.1 — fc 任务轨 in-flight 成员（批 drive / 领养批行）。lw 不读它
     // （合并占用走卡状态腿），故 assignment item 不维护。
     taskTurnMemberIds: new Set<string>(),
@@ -479,6 +480,7 @@ export async function runWorkgroupEngine(
         leaderRunning: inflightMeta.leaderRunning,
         runningAssignmentIds: inflightMeta.runningAssignmentIds,
         messageTurnMemberIds: inflightMeta.messageTurnMemberIds,
+        initialPlanningMemberIds: inflightMeta.initialPlanningMemberIds,
         taskTurnMemberIds: inflightMeta.taskTurnMemberIds,
       },
       leaderClarifyParked,
@@ -653,6 +655,7 @@ function markInflight(
     leaderRunning: boolean
     runningAssignmentIds: Set<string>
     messageTurnMemberIds: Set<string>
+    initialPlanningMemberIds: Set<string>
     taskTurnMemberIds: Set<string>
   },
   item: WakeItem,
@@ -676,9 +679,17 @@ function markInflight(
       else meta.taskTurnMemberIds.delete(item.memberId)
       break
     case 'message_turn':
-    case 'fc_initial':
       if (on) meta.messageTurnMemberIds.add(item.memberId)
       else meta.messageTurnMemberIds.delete(item.memberId)
+      break
+    case 'fc_initial':
+      if (on) {
+        meta.messageTurnMemberIds.add(item.memberId)
+        meta.initialPlanningMemberIds.add(item.memberId)
+      } else {
+        meta.messageTurnMemberIds.delete(item.memberId)
+        meta.initialPlanningMemberIds.delete(item.memberId)
+      }
       break
   }
 }

@@ -1,6 +1,6 @@
 // RFC-328 — logical effects, per-send attempts and multi-resource fences.
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from './digest'
 import { canonicalJson, type LineageSlot } from './executionIntent'
 
 export const TASK_EXECUTION_EFFECT_KINDS = [
@@ -66,20 +66,18 @@ export function operationFamilyKey(input: {
   ) {
     throw new Error('invalid-operation-family-input')
   }
-  return createHash('sha256')
-    .update(
-      canonicalJson({
-        lineage: input.executionLineageId,
-        path: input.slotPath,
-        kind: input.effectKind,
-        ordinal: input.stableActionOrdinal,
-      }),
-    )
-    .digest('hex')
+  return sha256Hex(
+    canonicalJson({
+      lineage: input.executionLineageId,
+      path: input.slotPath,
+      kind: input.effectKind,
+      ordinal: input.stableActionOrdinal,
+    }),
+  )
 }
 
 export function requestHash(value: unknown): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex')
+  return sha256Hex(canonicalJson(value))
 }
 
 export function canonicalResourceKeySet(keys: readonly string[]): readonly string[] {
