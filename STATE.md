@@ -15,6 +15,7 @@
 > 收敛 + 名字锁 + `AclDialogButton`、任务成员面板抽 `MembersPanelAdapter` 供案例页复用、恢复按钮 ∧ `canOperate`、`digitalEmployee` 错误域。测试：后端 3 新文件 + 4 处扩展、
 > 前端 3 新文件、e2e 1 新 spec + 旅程扩展（6 条新路由全打到）；账本：rfc329 叶子 +6、ledger `allowGrowth` 具名、census 再生成 + provenance repin。
 > 设计门 r1～r5（r6 中止），实现门只审功能。功能缺口两条记 `docs/audit-backlog.md`（成员案例不进统一列表 / 任务侧 `shared` null-owner）。
+> **CI 收尾（2026-08-27）**：首推 `4924d4e62` 红 5 项——迁移头 210→211、s10 原始事务站点 12→13、routes-no-cast（`submittedString` 改 zod）、macOS e2e onboarding（Enter 抢在 `<Select>` 焦点交接前，helper 先等 `:focus-within`）、视觉基线（夹具补 ACL 投影；员工卡多了「权限」后操作行 1280 宽溢出 → flex-wrap）；修复 `a1bc8b7cc` + 账本 `c778d2527` + repin `3638b6f78` 主 CI 绿，linux 基线取自该次视觉 artifact。
 
 > 🚧 **进行中 RFC（Draft，2026-08-26；批准前零生产改动）：[RFC-329 MCP 人工门完整面、死路径修复与全域「路由⟷工具」守卫](design/RFC-329-mcp-gate-surface-completion/proposal.md)**
 > —— 起于用户「现在 agent-workflow 的 API 和 MCP 有回答完反问提交反问的能力吗，包括提交并继续反问和提交并停止反问」。源码对账：**REST 完整**
