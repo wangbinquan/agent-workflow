@@ -1448,6 +1448,7 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
 - **把 hook 塞进 `WorkflowCanvas` 之前先想清楚它需不需要 QueryClientProvider**：十来个画布单测直接 `render(<WorkflowCanvas/>)`，没有 provider，裸 `useQuery` 在那里会抛「No QueryClient set」并把整棵树打挂——现象是一口气红七八个与你改动无关的测试文件。仓内既有解法是**provider 容忍**（`useWorkflowRefResolver` 的 `QueryClientContext` + 显式 `QueryObserver`，无 client 时降级），RFC-270 的 `usePrivilegedNodes` 照抄了它。顺带：`usePermission` 以前对 `data.permissions` 缺失会直接抛，现在失败关闭。
 - **给 `createRootRoute` 加 context 会波及每一个测试自建 router**：`createRootRouteWithContext<T>()` 让 `context` 变成 `createRouter` 的**必填**项，仓内 12 个测试文件的 `createRouter({ routeTree, history })` 当场编译不过。需要在 `beforeLoad` 里读全局资源时，优先把依赖做成**函数入参**并在路由定义处注入单例（`assertSettingsRouteAccess(appQueryClient)`），既可测又零波及。
 - **`redirect()` 抛出来的是一个 `Response`，目标在 `.options.to` 而不是顶层 `.to`**：断言写成 `(thrown as {to?}).to` 会拿到 `undefined`，而 `toEqual({to: undefined})` 对着 `toEqual({to: '/'})` 才会红——写成 `expect(x).toBeDefined()` 之类就直接假绿了。
+- **e2e 里对 `<Select>` 按 Enter 之前，先等 listbox 拿到焦点**（2026-08-26 macOS CI 实撞，RFC-330）：`Select` 打开后是在 `setTimeout(0)` 里才把焦点交给列表 / 搜索框，`click()` 一返回就 `keyboard.press('Enter')` 在负载高的 macOS runner 上会抢在这个定时器前面——Enter 落在仍持焦点的 trigger 上，只是再 `setOpen(true)` 一次，列表永远不关（`aria-activedescendant` 已就位也救不了，它不代表焦点）。本地与 ubuntu 恒绿、只有 macOS 红是它的判据。姿势：`await expect(page.locator('[role="listbox"]:focus-within')).toHaveCount(1)` 再按 Enter（`e2e/rfc310-zero-config-onboarding.spec.ts` 的 `chooseActiveSelectOption`）。
 
 ## 依赖与审计门
 
@@ -3195,6 +3196,24 @@ tracked = {x.split('/')[1] for x in git('ls-files','design').split() if x.starts
 两边对不上的条目，先看它是不是别人的未提交产物——是的话本地那条红与你无关，别动台账。
 同族的还有「凡是 `readdirSync` / `glob` 语料的守卫」：语料面越接近文件系统，越容易被共享
 工作树污染；`git ls-files` 才是与 CI 同构的那一面。
+
+## N1 账本（`rfc294-*`）涨了要**三笔**提交，不是两笔（RFC-330 实撞，2026-08-27）
+
+`ledger-baselines.json` 里 `rfc294-*` 这几条是 canonical 投影（`n1LedgerSpecs`）**逐字生成**的，
+不接受手写字段——往它们身上加 `allowGrowth` 会让 N1b「subset ledgers project into canonical truth」
+红；而不加，RFC-317 T17「只降不升」在涨账那笔上红。两个守卫在**同一笔提交里不可能同时绿**，
+只能靠 CI 只评估 push 顶端的那一笔来消化（一次 `git push` 推多笔只跑一个 run）：
+
+1. **内容笔**：代码 + 再生成的 8 份 canonical artifact + 涨账的 `allowGrowth`（含 N1 条目；
+   T17 绿、N1b 红，不单独评估）；
+2. **归一笔**：`bun run architecture:write --snapshot-sha <内容笔>` 再生成——N1 条目上的
+   `allowGrowth` 被投影抹掉；再手动删掉非 N1 条目（如 `rfc329-mcp-surface-exemptions`）上的
+   `allowGrowth`——因为下一笔 repin 相对这一笔零增长，任何残留都会被 T17「无过期条目」判红；
+   这一笔的 provenance 指向内容笔、payload 却已不同 ⇒ N1a 红，也不单独评估；
+3. **repin 笔**：`architecture:write --snapshot-sha <归一笔>`，只改四份治理文件的 provenance
+   ⇒ N1a / N1b / T17 全绿。
+
+三笔一次 `git push`。RFC-328 的 `b0aa3fadb → cc29ecc6d（normalize）→ 8fa602a5f（pin）` 是同一形状。
 
 ## 只有 `owner_user_id` 的表不是权限（RFC-330，2026-08-26）
 

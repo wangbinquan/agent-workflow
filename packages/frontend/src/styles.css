@@ -1678,6 +1678,13 @@
   align-items: center;
 }
 
+/* RFC-330：员工卡多了「权限」入口，1280 宽下一行放不下四个按钮；与工具行 / 模版头
+   同规则——换行、右对齐，别把卡片撑出页面。 */
+.employee-summary-card--employee > .employee-summary-card__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .employee-card-outcomes {
   display: grid;
   grid-template-columns: repeat(4, minmax(58px, 1fr));
@@ -2721,6 +2728,10 @@
   }
 
   .job-template-detail-editor > header > .employee-summary-card__actions {
+    justify-content: flex-start;
+  }
+
+  .employee-summary-card--employee > .employee-summary-card__actions {
     justify-content: flex-start;
   }
 

@@ -195,8 +195,10 @@ export function mountDigitalEmployeeRoutes(
     const access = await requireResourceEdit(deps.db, actorOf(c), 'employee_job_template', row)
     return { row, access }
   }
+  // 只取改名围栏要比对的那一个字符串字段；用 zod 而不是 `as` 转型（routes-no-cast 守卫）。
   const submittedString = (body: unknown, key: string): string | undefined => {
-    const value = (body as Record<string, unknown> | null)?.[key]
+    const parsed = z.record(z.unknown()).safeParse(body)
+    const value = parsed.success ? parsed.data[key] : undefined
     return typeof value === 'string' ? value : undefined
   }
 

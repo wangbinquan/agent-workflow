@@ -181,7 +181,8 @@ const RAW_TRANSACTION_SITES: Record<string, number> = {
   'modules/development-automation/infrastructure/sqliteUploadSessionStore.ts': 1,
   'modules/digital-employee/composition/writerCutover.ts': 2,
   'modules/digital-employee/infrastructure/sqliteAuthoringStore.ts': 5,
-  'modules/digital-employee/infrastructure/sqliteRuntimeStore.ts': 12,
+  // RFC-330：+1 replaceCaseMembers（同一事务内改 owner + 全量替换案例成员行）。
+  'modules/digital-employee/infrastructure/sqliteRuntimeStore.ts': 13,
   'modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts': 1,
   'modules/event-center/infrastructure/sqliteEventStore.ts': 4,
   'modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts': 1,

@@ -53,6 +53,14 @@ async function chooseActiveSelectOption(page: Page, name: RegExp): Promise<void>
   // choose a stale pointer coordinate while the portaled list scrolls, so use
   // the component's real accessible Enter contract once the intended option
   // is the active descendant.
+  //
+  // That contract also needs the listbox to *hold focus*: <Select> hands focus
+  // to its list / search input from a `setTimeout(0)` after opening, and on a
+  // loaded macOS runner the key event can be processed before that timer
+  // fires (2026-08-26 CI: Enter landed on the still-focused trigger, which
+  // just re-asserts `open`, so the listbox never closed). Wait for the
+  // hand-off instead of racing it.
+  await expect(page.locator('[role="listbox"]:focus-within')).toHaveCount(1)
   await page.keyboard.press('Enter')
   await expect(page.getByRole('listbox')).toHaveCount(0)
 }

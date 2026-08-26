@@ -1626,6 +1626,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
           items: [
             {
               id: 'visual-java-employee',
+              // RFC-330：列表项自带 ACL 投影（legacy 无主行 + public，管理员为 own）。
+              ownerUserId: null,
+              visibility: 'public',
+              access: 'own',
               name: 'Java delivery employee',
               typeRef: { typeId: 'development', revision: 10 },
               configuration: {
@@ -1651,6 +1655,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             },
             {
               id: 'visual-cpp-employee',
+              // RFC-330：列表项自带 ACL 投影（legacy 无主行 + public，管理员为 own）。
+              ownerUserId: null,
+              visibility: 'public',
+              access: 'own',
               name: 'C++ pipeline repair employee',
               typeRef: { typeId: 'development', revision: 10 },
               configuration: {
@@ -1687,6 +1695,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
           items: [
             {
               id: 'visual-java-job',
+              // RFC-330：列表项自带 ACL 投影（legacy 无主行 + public，管理员为 own）。
+              ownerUserId: null,
+              visibility: 'public',
+              access: 'own',
               name: 'Java service delivery',
               draft: {
                 description: '',
@@ -1699,6 +1711,10 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
             },
             {
               id: 'visual-cpp-job',
+              // RFC-330：列表项自带 ACL 投影（legacy 无主行 + public，管理员为 own）。
+              ownerUserId: null,
+              visibility: 'public',
+              access: 'own',
               name: 'C++ repair specialist',
               draft: {
                 description: '',
