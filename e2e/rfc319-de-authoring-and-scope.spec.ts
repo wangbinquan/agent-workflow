@@ -1378,3 +1378,242 @@ test('RFC-319 DE-40: 遗留发起向导仍打得开，平台在提交处给出�
     '提示里指向的数字员工入口不在任务源注册表里 ⇒ 平台把人指向了一个不存在的地方',
   ).toMatchObject({ catalogPath: '/digital-employees' })
 })
+
+// ------------------------------------------------------------------- DE-41
+
+/**
+ * 播一行**排干期的遗留 Mission**。
+ *
+ * 为什么要直接写库：新建那道门在生产里是焊死的——`cli/start.ts:798` 调
+ * `activateDigitalEmployeeOsWriter(db, legacyMissionDrain)` 不传 options，
+ * `writerCutover.ts:64` 于是取 `legacyAdmissionsEnabled = false`，全仓再无第二个
+ * 开关，`POST /api/code/missions` 永远 409（DE-40 锁的就是那道门）。所以任何全新
+ * daemon 里都不可能「正常地」造出一条 Mission。
+ *
+ * 但**运维动作不在那道门后面**：整个 `routes/developmentMissions.ts` 里
+ * `legacyAdmissionsEnabled()` 只出现一次，就在创建那处；`/:id` 之下的 20 个端点
+ * （cancel / retry / handoff / attach-mr / resume / source-refresh / answers /
+ * decision-trace / …）一个都没被挡。这是刻意的：**升级上来的部署里，存量 Mission
+ * 必须还能被排干**——排不干就意味着它们永远卡在 `legacy-draining`，
+ * `refreshDigitalEmployeeWriterState` 的 `legacyOpenMissionCount` 永远不归零，
+ * 单写切换就永远完不成。所以这条排干路径是活的产品面，只是入口被封了。
+ *
+ * `getMissionDetail`（missionReadModels.ts:287-317）只读 mission 行 + sources 行，
+ * `summaryOf` 是恒等函数、不做任何 join，所以一行就够把详情页开起来。
+ */
+function seedDrainingMission(input: {
+  readonly id: string
+  readonly status: string
+  readonly automationMode?: 'active' | 'tracking-only'
+  readonly repositoryId: string
+}): void {
+  const now = Date.now()
+  runSqlite(
+    dbPath(),
+    `INSERT INTO development_missions
+       (id, status, automation_mode, repository_id, source_kind, delivery_kind,
+        created_at, updated_at)
+     VALUES ('${input.id}', '${input.status}', '${input.automationMode ?? 'active'}',
+             '${input.repositoryId}', 'direct', 'create-merge-request', ${now}, ${now})`,
+  )
+}
+
+function missionRow(id: string): {
+  status: string
+  automation_mode: string
+  mr_claim_id: string | null
+} {
+  const rows = querySqlite<{
+    status: string
+    automation_mode: string
+    mr_claim_id: string | null
+  }>(
+    dbPath(),
+    'SELECT status, automation_mode, mr_claim_id FROM development_missions WHERE id = ?',
+    [id],
+  )
+  const row = rows[0]
+  if (row === undefined) throw new Error(`播下的 mission ${id} 不见了`)
+  return row
+}
+
+test('RFC-319 DE-41: 排干期遗留任务的运维动作——交接/取消按状态各归各位，下一步动作随终态翻面，每一次拒绝都带机器码 @nightly', async ({
+  page,
+}) => {
+  await primeAuth(page)
+
+  const drainId = `01DE41DRAIN${RUN_TAG.slice(0, 10).toUpperCase().padEnd(10, '0')}A`.slice(0, 24)
+  seedDrainingMission({ id: drainId, status: 'blocked', repositoryId: repoAlpha.id })
+
+  // ── ① 详情页开得起来，且给出的是「现在该做什么」而不只是一堆字段 ──
+  await page.goto(`${daemon.baseUrl}/code/missions/${drainId}`)
+  await expect(
+    page.getByTestId('mission-cancel'),
+    '排干期的 Mission 详情页打不开（或没有取消入口）⇒ 升级上来的部署里存量 Mission ' +
+      '再也没有人工出口，legacyOpenMissionCount 永不归零，单写切换永远完不成',
+  ).toBeVisible()
+  await expect(
+    page.getByTestId('mission-handoff'),
+    'automationMode=active 的在途 Mission 没有「交接」⇒ 卡住时没有转人工的路',
+  ).toBeVisible()
+
+  // 阻塞态的下一步动作是「重试」，而且它是**可点的命令**而非死链。
+  const nextCommand = page.getByTestId('journey-next-command')
+  await expect(
+    nextCommand,
+    'blocked 的 Mission 没有给出可执行的下一步 ⇒ 运维只看到「卡住了」，看不到怎么往下走',
+  ).toBeVisible()
+
+  // ── ② 交接：自动化让位给人，库与界面同步翻面 ──
+  await page.getByTestId('mission-handoff').click()
+  await expect
+    .poll(() => missionRow(drainId).automation_mode, {
+      timeout: 20_000,
+      message: '点了「交接」但库里的 automation_mode 没翻 ⇒ 界面在自说自话，刷新就打回原形',
+    })
+    .toBe('tracking-only')
+  await expect(
+    page.getByTestId('mission-handoff'),
+    '已经交接过了还留着「交接」⇒ 重复点会把同一条 Mission 反复摘牌',
+  ).toHaveCount(0, { timeout: 20_000 })
+  await expect(
+    page.getByTestId('mission-cancel'),
+    '交接之后连「取消」也没了 ⇒ 转人工反而把最后的出口关掉了',
+  ).toBeVisible()
+
+  // ── ③ 关联 MR：这台 daemon 的仓库没绑代码宿主，所以必须**明说为什么**，
+  //    既不能静默吞掉，也不能假装挂上了。
+  const attachRefusal = await rawCall(`/api/code/missions/${drainId}/attach-mr`, {
+    method: 'POST',
+    body: { mrIid: '4217' },
+  })
+  expect(
+    {
+      status: attachRefusal.status,
+      code: (attachRefusal.json as { code?: string } | undefined)?.code,
+    },
+    '关联 MR 失败时没有专门的机器码 ⇒ 运维只知道「没成功」，不知道是缺代码宿主绑定',
+  ).toEqual({ status: 409, code: 'mr-observe-unavailable' })
+  expect(
+    missionRow(drainId).mr_claim_id,
+    '关联失败却已经把 mr_claim_id 写下去了 ⇒ 这条 Mission 认领了一个它根本观察不到的 MR',
+  ).toBeNull()
+
+  // ── ④ 续跑：把自动化交回平台 ──
+  const resumed = await rawCall(`/api/code/missions/${drainId}/resume`, {
+    method: 'POST',
+    body: {},
+  })
+  expect(
+    {
+      status: resumed.status,
+      mode: (resumed.json as { automationMode?: string } | undefined)?.automationMode,
+    },
+    '交接出去的 Mission 收不回来 ⇒ 人工介入完成后没有回到自动化的路',
+  ).toEqual({ status: 200, mode: 'active' })
+  await page.reload()
+  await expect(
+    page.getByTestId('mission-handoff'),
+    '续跑之后「交接」没回来 ⇒ 这条 Mission 再也交不出去了',
+  ).toBeVisible()
+
+  // ── ⑤ 取消：进终态，两个运维入口**一起**消失，下一步动作从「命令」翻成「去处」──
+  await page.getByTestId('mission-cancel').click()
+  await expect
+    .poll(() => missionRow(drainId).status, {
+      timeout: 20_000,
+      message: '点了「取消」但库里状态没进终态',
+    })
+    .toBe('canceled')
+  await expect(
+    page.getByTestId('mission-cancel'),
+    '取消之后「取消」还在 ⇒ 终态的 Mission 仍摆着可点的运维入口，点下去只会 409',
+  ).toHaveCount(0, { timeout: 20_000 })
+  await expect(page.getByTestId('mission-handoff')).toHaveCount(0)
+  await expect(
+    page.getByTestId('journey-next-command'),
+    '终态之后仍然给出可执行命令 ⇒ 平台在建议一件它自己会拒绝的事',
+  ).toHaveCount(0)
+  // 终态之后下一步变成一条「去处」链接。这里只断言**它存在**，刻意不断言它指向哪儿：
+  // 当前它指向 `/code/missions/new`，而那道门在单写切换后永远 409（DE-40 已锁）——
+  // 也就是说排干完一条 Mission 之后，平台给出的下一步是一条死路。这是一条已记录的
+  // 产品缺口（docs/audit-backlog.md），把 href 写进断言等于让 CI 帮着守住这个缺陷，
+  // 所以留给修的人去改，不留给测试去固化。
+  await expect(
+    page.getByTestId('journey-next-link'),
+    '终态之后没有任何下一步 ⇒ 用户走到这里就断了',
+  ).toBeVisible()
+
+  // ── ⑥ 重试：只对 blocked 成立，拒绝要带机器码 ──
+  const retryAfterTerminal = await rawCall(`/api/code/missions/${drainId}/retry`, {
+    method: 'POST',
+    body: {},
+  })
+  expect(
+    {
+      status: retryAfterTerminal.status,
+      code: (retryAfterTerminal.json as { code?: string } | undefined)?.code,
+    },
+    '对已终态的 Mission 重试没有被专门回绝 ⇒ 排干期最容易发生的误操作没有护栏',
+  ).toEqual({ status: 409, code: 'mission-command-not-blocked' })
+
+  const retryId = `${drainId.slice(0, 19)}RETRY`
+  seedDrainingMission({ id: retryId, status: 'blocked', repositoryId: repoAlpha.id })
+  const retried = await rawCall(`/api/code/missions/${retryId}/retry`, { method: 'POST', body: {} })
+  expect(
+    {
+      status: retried.status,
+      next: (retried.json as { status?: string } | undefined)?.status,
+    },
+    'blocked 的 Mission 重试不动 ⇒ 排干路上每一次阻塞都成了死结',
+  ).toEqual({ status: 200, next: 'working' })
+
+  // ── ⑦ 需求刷新 / 反问作答 / 证据浏览：正向路径要一整套外部适配器与流水线证据才走得到；
+  //    排干期真正要保证的是**不会 500、不会静默**——运维点下去总能读到「为什么不行」。
+  const refresh = await rawCall(`/api/code/missions/${retryId}/source-refresh/preview`, {
+    method: 'POST',
+    body: {},
+  })
+  expect(
+    { status: refresh.status, code: (refresh.json as { code?: string } | undefined)?.code },
+    'direct 来源的 Mission 去刷新需求，没有给出「它本来就没有外部来源」这个机器码',
+  ).toEqual({ status: 422, code: 'not-external-source' })
+
+  const answers = await rawCall(`/api/code/missions/${retryId}/answers`, {
+    method: 'POST',
+    body: { questionSetRef: 'de41-no-such-set', answers: [{ questionId: 'q1', answer: 'a' }] },
+  })
+  expect(
+    { status: answers.status, code: (answers.json as { code?: string } | undefined)?.code },
+    '不在等反问的 Mission 收到答案时没有专门回绝 ⇒ 答案会落在没人读的地方',
+  ).toEqual({ status: 409, code: 'mission-command-not-awaiting-information' })
+
+  const manifest = await rawCall(`/api/code/missions/${retryId}/requirement-manifest`)
+  expect(
+    { status: manifest.status, code: (manifest.json as { code?: string } | undefined)?.code },
+    '还没物化需求包的 Mission 去读清单，没有专门的 404 ⇒ 分不清「没有」和「坏了」',
+  ).toEqual({ status: 404, code: 'requirement-manifest-not-found' })
+
+  // 上面那次 retry 真的在轨迹里留下了一条判定：这条播出来的 Mission 没有绑策略，
+  // 于是它在策略这一关被拦下（`policy-content-missing`）。断言它**有内容且说得出理由**，
+  // 而不是断言它是空的——空轨迹既可能是「什么都没发生」，也可能是「记录坏了」，
+  // 而排干期最需要读的恰恰是「它当时为什么这么判」。
+  const trace = await rawCall(`/api/code/missions/${retryId}/decision-trace`)
+  const traceItems =
+    (trace.json as { items?: Array<{ selected?: { kind?: string; reason?: string } }> } | undefined)
+      ?.items ?? []
+  expect(
+    { status: trace.status, count: traceItems.length > 0 },
+    '决策轨迹读不出来（或一条都没记）⇒ 排干期最需要的「它当时为什么这么判」没了',
+  ).toEqual({ status: 200, count: true })
+  expect(
+    traceItems[0]?.selected,
+    '轨迹条目没有写清这一步选了什么、为什么 ⇒ 它只是一行时间戳，帮不了正在排障的人',
+  ).toEqual({ kind: 'block', reason: 'policy-content-missing' })
+
+  await page.goto(`${daemon.baseUrl}/code/missions/${retryId}`)
+  await expect(
+    page.getByTestId('evidence-not-collected'),
+    '没有流水线证据时证据区是空白而不是一句明确的「尚未采集」⇒ 用户读不出这是「没有」还是「没加载出来」',
+  ).toBeVisible()
+})

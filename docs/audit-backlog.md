@@ -3763,3 +3763,38 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
    徽标本身有单测在守（`packages/frontend/tests/memory-row-lang-chip.test.tsx`），
    所以它不会烂掉，只是没人看得见。MEM-49 的能力定义已收窄到设置那半；
    **这一条缺口未修，待决**：要么让审批队列改用 MemoryRow，要么给它补一个自己的徽标。
+
+## RFC-319 DE-41 起草期撞到的三条缺陷（2026-08-26，遗留任务排干面）
+
+播一行排干期 Mission 把 `/code/missions/{id}` 的运维面真跑了一遍，顺出三条：
+
+1. **【中】排干完一条 Mission 之后，平台给出的「下一步」是一条死路。**
+   终态之后 journey 投影的 `next` 变成
+   `{"key":"launchAnotherMission","kind":"navigate","href":"/code/missions/new","available":true}`，
+   详情页据此渲染 `journey-next-link`。但 `/code/missions/new` 正是单写切换后**永远 409**
+   的那道门（DE-40 锁的就是它：`POST /api/code/missions` 恒返
+   `legacy-mission-admission-retired`）。也就是说：用户刚把一条遗留任务排干，平台就把他
+   指向一个必定失败的入口，而且 `available: true`。
+   合理的去处应当是数字员工入口（`/digital-employees`）——DE-40 的回绝正文里指的也是它。
+   DE-41 的用例**刻意只断言这条链接存在、不断言 href**：把当前 href 写进断言等于让 CI
+   帮着守住这个缺陷。修的时候顺手把那条断言收紧即可。
+
+2. **【低】必填字段缺失/为空时返回 500，而不是带机器码的 4xx。**
+   同一批端点在**字段齐全**时的回绝都很干净：
+   `attach-mr` 缺代码宿主绑定 → 409 `mr-observe-unavailable`；
+   `answers` 不在等反问 → 409 `mission-command-not-awaiting-information`；
+   `source-refresh/preview` 对 direct 来源 → 422 `not-external-source`；
+   `requirement-manifest` 无需求包 → 404 `requirement-manifest-not-found`。
+   但 `POST /:id/attach-mr` 传 `{"mrIid":""}`、`POST /:id/answers` 漏掉 `questionSetRef`
+   都会掉进 500 `internal-error`。路由层的 `z.record(z.unknown()).parse()` 只保证「是个对象」，
+   真正的形状校验在下游领域层抛的是无类型错误。对照本仓其它端点的惯例，这里应当是
+   422 + 专门机器码。DE-41 的用例只断言**齐全时**的那四条机器码，没有把 500 写进断言。
+
+3. **【信息】遗留 Mission 的详情页运维入口分两套，且互斥。**
+   `mission-resume` / `mission-attach-open` 这两个 testid 只在
+   `mission.journey === undefined` 时渲染（`code.missions.$id.tsx:308,322`），而
+   `getMissionDetail` **总是**带出 journey 投影——所以那两个按钮在今天的产品里
+   **一次都不会出现**，真正的入口是 journey 面板的 `journey-next-command`
+   （它按状态派发 retry / resume / attach-merge-request / submit-answers）。
+   起草时先照那两个 testid 写，跑出来才发现它们恒不可见。后续若要清理死路径，
+   这两支是候选；在那之前，写这块用例的人别再被它们误导。

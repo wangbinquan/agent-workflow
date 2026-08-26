@@ -10220,8 +10220,13 @@
       "title": "遗留任务详情 /code/missions/{id} 的运维动作（取消 / 重试 / 移交 / 关联 MR / 需求刷新 / 反问作答 / 证据浏览）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-de-authoring-and-scope.spec.ts",
+          "test": "RFC-319 DE-41: 排干期遗留任务的运维动作——交接/取消按状态各归各位，下一步动作随终态翻面，每一次拒绝都带机器码 @nightly"
+        }
+      ]
     },
     {
       "id": "DE-42",
@@ -12717,7 +12722,6 @@
     "OPS-X5",
     "UX-19",
     "UX-47",
-    "DE-41",
     "EVENT-28",
     "EVENT-X4",
     "OPS-X9",
