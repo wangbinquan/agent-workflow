@@ -1419,6 +1419,18 @@
       "lines": 80
     },
     {
+      "id": "rfc319-ui-sweep-coverage",
+      "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": true,
+      "minCorpusFiles": 100,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 391
+    },
+    {
       "id": "rfc321-repository-publication-ratchet",
       "file": "packages/backend/tests/rfc321-repository-publication-ratchet.test.ts",
       "runner": "bun",

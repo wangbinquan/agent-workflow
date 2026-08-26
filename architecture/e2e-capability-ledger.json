@@ -8192,9 +8192,18 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "axe wcag2a/2aa 零 critical+serious 的整页扫描覆盖面",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "扫描页数既有下界也不为全量（两个方向的空转都要红）"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "未授权落地页 /auth 始终在扫描面内（它是唯一一个所有人都会看到的页面）"
+        }
+      ]
     },
     {
       "id": "UX-21",
@@ -8419,9 +8428,34 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "焦点环 / axe 两套全站扫描的路由清单与实际路由表的同步机制",
       "risk": "P2",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "语料非空：路由表本身取到了东西（取空即假绿）"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "focus-ring 的手抄清单里没有幽灵（改名的路由会静默少扫一页）"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "axe 扫到的每一页也都是真实路由"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "未被 focus-ring 扫的页面集合与声明清单逐条相等"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "未被 axe 扫的页面集合与声明清单逐条相等"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "两张清单都升序去重（顺序不稳会让 diff 噪声淹没真实变化）"
+        }
+      ]
     },
     {
       "id": "UX-X2",
@@ -12279,18 +12313,44 @@
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "视觉基线覆盖面：哪些页面有快照、哪些没有",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "canonical 视觉套件的基线数不低于下界"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "RFC-250 高危交互态的基线数不低于下界"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "两个快照目录里都没有 spec 已经不再引用的孤儿基线"
+        }
+      ]
     },
     {
       "id": "UX-46",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "视觉门的触发条件本身（夜间 + 路径过滤）",
       "risk": "P3",
-      "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "夜跑是定时触发的，且留着手动补基线的按钮"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "push 与 pull_request 的路径过滤逐条相等"
+        },
+        {
+          "file": "packages/backend/tests/architecture/rfc319-ui-sweep-coverage.test.ts",
+          "test": "过滤清单盖住了视觉结果真正依赖的那几处"
+        }
+      ]
     },
     {
       "id": "UX-X3",
@@ -12742,11 +12802,6 @@
       ]
     }
   ],
-  "gapIds": [
-    "UX-19",
-    "UX-47",
-    "UX-45",
-    "UX-46"
-  ],
+  "gapIds": [],
   "unverifiedIds": []
 }
