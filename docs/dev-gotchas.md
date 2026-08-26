@@ -494,12 +494,12 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **权限点与路由必须同批落地——这是结构性的，不是约定**。RFC-247 的启动自检会遍历 `ROUTE_BACKED_POINTS`，任何没有 `RouteMeta` 引用的点位让 daemon **拒绝启动**。这次先加了 8 个点、路由还没写，于是**全仓 20 条测试失败全是这一条拒绝**（凡是 `createApp` 的用例都挂）——症状离原因很远，但只要想到「刚加过点位」就一步到位。反向同理：删路由不删点位一样起不来。
 
-## 架构账本的联动点：新增守卫 / 账本 / 路由要同步 7 处（RFC-329 实测，2026-08-26 连推红五轮）
+## 架构账本的联动点：动一次代码要同步 8 处（RFC-329 实测，2026-08-26 连推红六轮）
 
 一次 PR 里加了**一个守卫文件 + 一条账本条目**，主干连红四轮，每轮暴露一个此前不知道的
 联动点。四轮全部是同一类失败：**改了 X 就必须同步 Y，而 Y 只有 CI 会告诉你**。
 
-按撞到的顺序列全（新增守卫 / 账本 / **路由**时逐条过一遍，别等 CI）：
+按撞到的顺序列全（新增守卫 / 账本 / 路由、**以及任何改了行数的编辑**，逐条过一遍，别等 CI）：
 
 | #   | 改了什么                                                                                 | 必须同步                                                                          | 不同步的表现                                                                                                                                                                                                                       |
 | --- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -510,6 +510,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 | 5   | 往 `ledger-baselines.json` 加条目                                                        | 条目**位置**                                                                      | N1b 红。`projectGovernanceArtifacts` 投影成「非-N1-spec（原序）+ `n1LedgerSpecs`（末尾）」，而 `toEqual` 对数组顺序敏感。append 到最末尾会落在四条 `rfc294-*` spec 之后                                                            |
 | 6   | 改了任何生产 `.ts` 文件                                                                  | `architecture/module-symbol-owners.json` 里**该文件每个符号**的 `signatureDigest` | N1b 红。改一个函数体就会让 `$file` 与它所在的那几个 top-level 符号的签名全变                                                                                                                                                       |
 | 7   | **新增一条路由**（`registerRoute`） | `packages/backend/tests/contracts/registry.ts` 的 `ENDPOINTS` | RFC-317 T52「运行期预言」+ `api-contract-coverage` 双红。RFC-329 PR-B 实撞：加了 `GET /api/workgroup-tasks/pending` 忘了登记，backend shard 2/4 双 OS 红 |
+| 8   | **任何让文件行数变化的改动**（含**纯加注释**） | `architecture/background-jobs.json` 的 `ambientWiringEntries` | N1b 红。ambient wiring 把每个 `registerRoute` 记成 `...#registerRoute:<line>`，行号进 id。RFC-329 PR-B 实撞：给一条路由加 7 行注释，后面每条的行号全挪 |
 
 ### `bun run architecture:write` 在多人共享工作树上**不能跑**
 
@@ -553,6 +554,15 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
    最终 diff 6 增 6 减。
 3. 跑生成器前先 `cp` 一份 HEAD 版本到 scratchpad，跑完对着它做「只取自己那几条」的合并；
    **不要**直接 `git add architecture/`。
+
+### 改 artifact 的 `entries` 别忘了同文件的 `denominator`
+
+`module-symbol-owners.json` 与 `background-jobs.json` 各自带一个 `denominator` 块，里面的
+`symbolsIncludingFileRoots` / `ambientWiring` 必须等于对应数组的长度。只改数组不改它，N1b 会
+红在一个**看起来与你的改动无关的地方**（diff 里只显示 denominator 那一行差 1）。
+
+`ledger-baselines.json` 里还有各自的 baseline 条目，**那是第三处**。所以加一个 top-level 符号
+要同时改：entries 数组、该文件的 denominator、ledger baseline（若上涨还要写 `allowGrowth`）。
 
 ### `docs/` 不在 format 门里，别对它跑 prettier
 
