@@ -590,19 +590,29 @@ test('RFC-319 DE-16b: 新建数字员工时不碰作用域下拉，落库的就�
     `Delivery baseline ${RUN_TAG}`,
   )
 
-  const createRequest = page.waitForRequest(
-    (request) =>
-      request.method() === 'POST' &&
-      new URL(request.url()).pathname ===
+  // 这里等的是**响应**而不是请求。`waitForRequest` 在请求刚发出的那一刻就 resolve，
+  // 而第 ③ 段紧接着直接去服务端读列表——于是在慢机器上，读会跑在 POST 完成之前，
+  // 断言成「新建的员工没有落库」，而库里其实几十毫秒后就有了。
+  // 2026-08-26 主干因此在 windows-latest 分片红过一次，**两次重试都红**：
+  // 它不是抖动，是这条用例自己把「已发出」当成了「已完成」。
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname ===
         `/api/digital-employee-types/${encodeURIComponent(TYPE_REF)}/employees`,
   )
   await dialog.getByRole('button', { name: 'Create', exact: true }).click()
-  const created = await createRequest
+  const created = await createResponse
+  // 顺带把「对话框的成功状态是不是假的」提前一层：POST 本身失败时，下面第 ③ 段
+  // 报出来的会是「没落库」，而真正的原因是这一步就被服务端拒了。
+  expect(created.ok(), `创建员工的 POST 以 ${created.status()} 收场：${await created.text()}`).toBe(
+    true,
+  )
 
   // ② 请求体逐字段比对。`toMatchObject` 在这里不够：多带一个 `repositoryId: ''` 同样是错的
   //    （服务端会把空串当成一个仓库 id 存下来），所以用 toEqual 钉死整个对象。
   expect(
-    (created.postDataJSON() as { workScope: unknown }).workScope,
+    (created.request().postDataJSON() as { workScope: unknown }).workScope,
     'POST /employees 的 workScope 不是 {kind:"task"} ⇒ 界面显示的默认档和真正发出去的' +
       '不是同一件事，用户以为自己建的是「每次再选仓库」的员工',
   ).toEqual({ kind: 'task' })
