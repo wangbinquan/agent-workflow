@@ -6619,8 +6619,13 @@
       "title": "自动杀死心跳停滞的 runtime 子进程（autoKillStalledChild + heartbeatStallMs）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-maintenance-tickers.spec.ts",
+          "test": "RFC-319 OPS-X3/OPS-X5: 心跳停滞的 runtime 子进程与 S4 卡死任务都要等到第 5 分钟那一拍才被处置，限流触顶的转隔离、已隔离的一动不动 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X4",
@@ -6642,8 +6647,13 @@
       "title": "自动修复（autoRepair S4）+ 自愈限流窗口 + 任务隔离（quarantine）",
       "risk": "P2",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-maintenance-tickers.spec.ts",
+          "test": "RFC-319 OPS-X3/OPS-X5: 心跳停滞的 runtime 子进程与 S4 卡死任务都要等到第 5 分钟那一拍才被处置，限流触顶的转隔离、已隔离的一动不动 @nightly"
+        }
+      ]
     },
     {
       "id": "OPS-X8",
@@ -10308,8 +10318,13 @@
       "title": "投递保留策略（body 清空天数 / 整行删除天数）与后台 GC",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-maintenance-tickers.spec.ts",
+          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到第 8 分钟才置空 body 与删过期行、保留期清扫到第 16 分钟才删 fire 与事件流水，到点前一行不动，在飞投递与未终态宿主永不被删 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-34",
@@ -10415,8 +10430,13 @@
       "title": "触发规则 fire 历史保留天数（webhookTriggerFiresRetentionDays）与维护期清理",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-maintenance-tickers.spec.ts",
+          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到第 8 分钟才置空 body 与删过期行、保留期清扫到第 16 分钟才删 fire 与事件流水，到点前一行不动，在飞投递与未终态宿主永不被删 @nightly"
+        }
+      ]
     },
     {
       "id": "EVENT-X5",
@@ -11694,8 +11714,13 @@
       "title": "保留期清扫：事件流 / webhook 触发记录按天删行（小时级）",
       "risk": "P3",
       "tier": "nightly",
-      "status": "gap",
-      "gapSince": "RFC-319"
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc319-maintenance-tickers.spec.ts",
+          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到第 8 分钟才置空 body 与删过期行、保留期清扫到第 16 分钟才删 fire 与事件流水，到点前一行不动，在飞投递与未终态宿主永不被删 @nightly"
+        }
+      ]
     },
     {
       "id": "REPO-10",
@@ -12718,13 +12743,8 @@
     }
   ],
   "gapIds": [
-    "OPS-X3",
-    "OPS-X5",
     "UX-19",
     "UX-47",
-    "EVENT-28",
-    "EVENT-X4",
-    "OPS-X9",
     "UX-45",
     "UX-46"
   ],
