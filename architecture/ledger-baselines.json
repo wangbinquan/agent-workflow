@@ -301,9 +301,6 @@
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
       "baseline": 374,
-      "allowGrowth": {
-        "why": "RFC-330：工具注册 / 岗位模版立为第 14 / 15 类 ACL 资源、案例补成员制——新增 6 条路由（GET/PUT …/digital-employee-tools/:id/acl、…/digital-employee-job-templates/:id/acl、…/employee-cases/:id/members）按同组分类逐条入账：GET 与 /api/digital-employees/:id/acl 同组 not-in-scope，PUT 按 RFC-247 D5/D6 never。"
-      },
       "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
     },
     {
@@ -311,10 +308,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 900,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-330：legacy 层新增 services/employeeCaseMembers.ts 的 updateCaseMembers（案例成员全量替换 + owner 转移，与 taskCollab.updateTaskMembers 同形）。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -328,10 +322,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 245,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-330：digital-employee 运行时 store 新增 replaceCaseMembers 的 db.transaction（同一事务内改 owner + 全量替换成员行）。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -345,20 +336,14 @@
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 440,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-330：routes/digitalEmployees.ts 新挂两对 /acl（mountAclEndpoints）与案例成员面，登记为 ambient wiring。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 962,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-330：sqliteRuntimeStore 新 import schema 符号 employeeCaseMembers（digital-employee 自有表）。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -379,20 +364,14 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 942,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-330：同上一条的 legacy 目标 exception（随 RFC-294 W4/W5 一起退）。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
       "baseline": 370,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
-      "allowGrowth": {
-        "why": "RFC-330：services/employeeCaseMembers.ts 新文件（案例成员制的 transport 判据 / wire / 广播，镜像 taskCollab.ts）。"
-      }
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
@@ -420,10 +399,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 17492,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-330：digital-employee 模块新增 getToolAcl / getJobTemplateAcl / getCaseAcl / listCaseMembers / getCaseMemberRole / replaceCaseMembers / peekPolicyUpgradeCaseId 等符号与 EmployeeCaseMemberRecord。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -440,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1e1980a6965c0bcd38b41c4e35986346526ee157",
-    "contentDigest": "sha256:822176dec5cde01954de3db75bc17bd9f085beed8d9f456064d9023e3483cb56",
+    "currentSnapshotSha": "f4e95cd496c78a40f1ff6042d934225026452f31",
+    "contentDigest": "sha256:877a9c7a1674e7600acd87942dcc1026173df992efc31949e6922227a11a1ea3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
