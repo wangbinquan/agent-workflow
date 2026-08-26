@@ -494,12 +494,12 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **权限点与路由必须同批落地——这是结构性的，不是约定**。RFC-247 的启动自检会遍历 `ROUTE_BACKED_POINTS`，任何没有 `RouteMeta` 引用的点位让 daemon **拒绝启动**。这次先加了 8 个点、路由还没写，于是**全仓 20 条测试失败全是这一条拒绝**（凡是 `createApp` 的用例都挂）——症状离原因很远，但只要想到「刚加过点位」就一步到位。反向同理：删路由不删点位一样起不来。
 
-## 架构账本的联动点：新增一个守卫/账本要同步 6 处（RFC-329 PR-A 实测，2026-08-26 连推红四轮）
+## 架构账本的联动点：新增守卫 / 账本 / 路由要同步 7 处（RFC-329 实测，2026-08-26 连推红五轮）
 
 一次 PR 里加了**一个守卫文件 + 一条账本条目**，主干连红四轮，每轮暴露一个此前不知道的
 联动点。四轮全部是同一类失败：**改了 X 就必须同步 Y，而 Y 只有 CI 会告诉你**。
 
-按撞到的顺序列全（新增守卫 / 账本时逐条过一遍，别等 CI）：
+按撞到的顺序列全（新增守卫 / 账本 / **路由**时逐条过一遍，别等 CI）：
 
 | #   | 改了什么                                                                                 | 必须同步                                                                          | 不同步的表现                                                                                                                                                                                                                       |
 | --- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -509,6 +509,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 | 4   | 改了 `architecture/{commons-manifest,commons-debt,guard-manifest,ledger-baselines}.json` | 这四份的 `provenance`                                                             | RFC-294 N1a「replays byte-equivalent payload」红。**必须两笔提交**：`currentSnapshotSha` 要指向一个**已提交**的 commit，且 `git show <sha>:<path>` 的 payload 与当前文件逐字相等——所以内容先落一笔，再用那笔的 sha 回填 provenance |
 | 5   | 往 `ledger-baselines.json` 加条目                                                        | 条目**位置**                                                                      | N1b 红。`projectGovernanceArtifacts` 投影成「非-N1-spec（原序）+ `n1LedgerSpecs`（末尾）」，而 `toEqual` 对数组顺序敏感。append 到最末尾会落在四条 `rfc294-*` spec 之后                                                            |
 | 6   | 改了任何生产 `.ts` 文件                                                                  | `architecture/module-symbol-owners.json` 里**该文件每个符号**的 `signatureDigest` | N1b 红。改一个函数体就会让 `$file` 与它所在的那几个 top-level 符号的签名全变                                                                                                                                                       |
+| 7   | **新增一条路由**（`registerRoute`） | `packages/backend/tests/contracts/registry.ts` 的 `ENDPOINTS` | RFC-317 T52「运行期预言」+ `api-contract-coverage` 双红。RFC-329 PR-B 实撞：加了 `GET /api/workgroup-tasks/pending` 忘了登记，backend shard 2/4 双 OS 红 |
 
 ### `bun run architecture:write` 在多人共享工作树上**不能跑**
 
@@ -529,6 +530,18 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
    最终 diff 6 增 6 减。
 3. 跑生成器前先 `cp` 一份 HEAD 版本到 scratchpad，跑完对着它做「只取自己那几条」的合并；
    **不要**直接 `git add architecture/`。
+
+### `docs/` 不在 format 门里，别对它跑 prettier
+
+`format:check` 的范围是 `packages/**/*.{ts,tsx,json,md}` 加上几个具名文件（见 package.json），
+**`docs/` 不在其中**——仓里的 `docs/*.md` 因此本来就不是 prettier-clean 的。
+
+对它跑一次 `prettier --write` 会把别人写的斜体（`*x*` → `_x_`）、列表标记（`+ ` → `- `）和
+表格列宽大面积改写：RFC-329 实测在 `audit-backlog.md` 上是 **50 删 53 增，而真实内容改动只有 3 条**。
+那种 diff 里没人看得出你到底改了什么，也违反「完全不动别人的产物」。
+
+**改 `docs/` 只改内容，不跑 prettier。** 提交前用 `git diff -w` 自查：忽略空白后的增删行数
+应当和你的实际改动条数对得上；对不上就说明你顺手改了别人的东西。
 
 ### `git commit -- <目录>` 与裸 commit 在共享树上等价
 
