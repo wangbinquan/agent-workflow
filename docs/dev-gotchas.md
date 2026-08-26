@@ -3049,3 +3049,25 @@ ledgers = rest[:anchor + 1] + mine + rest[anchor + 1:]
   插入过一次；②更新前给某个**与本次推送无关**的行元素挂一个标记属性，更新后看标记还在不在
   ——整表重建会换掉 DOM 节点，就地更新不会。两条在真浏览器 e2e 里同样成立（本次
   `rfc319-task-list-and-filters.spec.ts` TASK-21 即按此改写，变异实证咬中）。
+
+## 扫文件系统的守卫在共享工作树上会「本地红、CI 绿」——别照着本地的红去改台账（2026-08-26 实撞）
+
+`tests/rfc-index-status-drift.test.ts` 的「AC 证据索引缺口逐字相等」用 `readdirSync('design')`
+枚举 RFC 目录，而不是问 git。于是它看见的是**这棵共享工作树里的全部目录**，包括并发 session
+还没提交的 `design/RFC-328-…`、`design/RFC-316-…`。后果是两个方向都会骗人：
+
+- **本地红、CI 绿**：别人的未提交 RFC 目录进了 `measured`，台账里当然没有它 ⇒ 本地 `toEqual` 红。
+  照着这条红往台账加 `'RFC-328-…': 0`，CI 那边（干净 checkout 看不见这个目录）就会反向红成
+  「台账里有、measured 里没有」——一次修出两条红。
+- **本地绿、CI 红**：反过来，别人**刚提交**的新 RFC（如 RFC-329）需要在台账登记，而你本地
+  可能还没 fetch 到，测试照样绿。
+
+**判据**：动这类台账前，用 **git 跟踪面**重算一遍，而不是信本地目录列表：
+
+```python
+tracked = {x.split('/')[1] for x in git('ls-files','design').split() if x.startswith('design/')}
+```
+
+两边对不上的条目，先看它是不是别人的未提交产物——是的话本地那条红与你无关，别动台账。
+同族的还有「凡是 `readdirSync` / `glob` 语料的守卫」：语料面越接近文件系统，越容易被共享
+工作树污染；`git ls-files` 才是与 CI 同构的那一面。

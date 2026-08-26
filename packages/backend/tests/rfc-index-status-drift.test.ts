@@ -127,6 +127,10 @@ describe('RFC 索引状态漂移守卫', () => {
     'RFC-326-review-gate-mcp-api-surface': 0,
     // RFC-327：16 条 AC 全部在 plan §4 有证据行，缺口为零。
     'RFC-327-memory-scope-tag-discovery': 0,
+    // RFC-329：落档（666be6e99）时 plan 的证据表已逐条覆盖 proposal 的全部 AC，缺口为零。
+    // 补这一行是因为本守卫按「measured 与台账**逐字相等**」判定：新 RFC 只要同时有 AC 列表
+    // 与证据表，就必须在这里登记——哪怕缺口是 0，漏登记也照样红（2026-08-26 主干实撞）。
+    'RFC-329-mcp-gate-surface-completion': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {
