@@ -52,6 +52,18 @@ describe('usePopoverPosition', () => {
     expect(result.current).toEqual({ left: 110, top: 224, width: 30 })
   })
 
+  test('flips a measured popover above a trigger when the viewport has no room below', () => {
+    Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true })
+    const triggerRef = createRef<HTMLElement>()
+    triggerRef.current = fakeTrigger({ left: 29, top: 760, bottom: 800, width: 332 })
+    const popoverRef = createRef<HTMLElement>()
+    popoverRef.current = fakeTrigger({ height: 120 })
+
+    const { result } = renderHook(() => usePopoverPosition(triggerRef, true, popoverRef))
+
+    expect(result.current).toEqual({ left: 129, top: 836, width: 332 })
+  })
+
   test('re-anchors on scroll and resize while open', () => {
     const ref = createRef<HTMLElement>()
     const el = fakeTrigger({ left: 10, bottom: 20, width: 30 })

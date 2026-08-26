@@ -250,8 +250,20 @@ test('RFC-326 HUMAN-49: an MCP token reads the pending review — list_pending_g
   expect(taskId, 'beforeAll 必须已经把任务跑到待评审').not.toBe('')
   const gates = await toolCall(patToken, 'list_pending_gates', {})
   expect(gates.ok).toBe(true)
-  const reviews = (gates as { value: { reviews: ReviewRow[] } }).value.reviews
-  expect(reviews.map((r) => r.nodeRunId)).toContain(nodeRunId)
+  const gateValue = (
+    gates as {
+      value: {
+        complete: boolean
+        reviews: { ok: true; data: ReviewRow[] } | { ok: false; error: string }
+      }
+    }
+  ).value
+  expect(gateValue.complete).toBe(true)
+  expect(gateValue.reviews.ok).toBe(true)
+  if (!gateValue.reviews.ok) {
+    throw new Error(`reviews gate lane failed: ${gateValue.reviews.error}`)
+  }
+  expect(gateValue.reviews.data.map((r) => r.nodeRunId)).toContain(nodeRunId)
 
   const detail = await toolCall(patToken, 'get_review', { nodeRunId })
   expect(detail.ok).toBe(true)

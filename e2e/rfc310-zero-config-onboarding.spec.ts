@@ -604,6 +604,10 @@ test('pipeline failure types expand into equal-width required nodes and only sho
   await page.mouse.up()
   await expect(pipelineLane.locator('.employee-toolbox-lane__priority')).toHaveText('P3')
 
+  // Reordering can leave the handle a couple of pixels below the 800px
+  // viewport. A real user must be able to see the handle before pressing it;
+  // refresh both source and target geometry after bringing it back onscreen.
+  await dragHandle.scrollIntoViewIfNeeded()
   currentHandleBox = await dragHandle.boundingBox()
   const exactFirstSlotBox = await sortableLanes.nth(0).boundingBox()
   expect(currentHandleBox).not.toBeNull()

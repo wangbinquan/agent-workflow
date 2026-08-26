@@ -71,7 +71,7 @@ export function MultiSelect(props: MultiSelectProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
   const listId = useId()
-  const popPos = usePopoverPosition(rootRef, open)
+  const popPos = usePopoverPosition(rootRef, open, listRef)
 
   // Reuse only the pending/commit half of the chips state machine (trim → dedup
   // vs value → clear). onCommit adds a custom token; onRemoveLast is unused

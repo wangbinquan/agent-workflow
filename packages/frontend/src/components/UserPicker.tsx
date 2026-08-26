@@ -103,7 +103,7 @@ export function UserPicker({
   // RFC-173 (T1): portal positioning extracted to the shared hook (was a
   // byte-identical copy here and in Select). Anchors from the whole field
   // (rootRef) so the list tracks the chip row's bottom edge.
-  const popPos = usePopoverPosition(rootRef, open)
+  const popPos = usePopoverPosition(rootRef, open, listRef)
 
   // Close on outside click — outside means outside BOTH the field and the
   // portaled list (the list lives on document.body, not under rootRef).

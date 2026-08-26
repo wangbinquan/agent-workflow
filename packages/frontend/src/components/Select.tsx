@@ -217,7 +217,7 @@ export function Select<V extends string>(props: Props<V>) {
   const labelId = useId()
   // RFC-173 (T1): portal positioning extracted to the shared hook (was a
   // byte-identical copy here and in UserPicker).
-  const popPos = usePopoverPosition(triggerRef, open)
+  const popPos = usePopoverPosition(triggerRef, open, listRef)
 
   const current = useMemo(
     () => props.options.find((o) => o.value === props.value),

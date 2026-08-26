@@ -132,6 +132,7 @@ interface RoomRunEntry {
 interface RoomMember {
   id: string
   memberType: 'agent' | 'human'
+  agentId: string | null
   displayName: string
 }
 
@@ -875,16 +876,29 @@ test('RFC-319 WG-35: 房间右栏花名册 —— 四种状态各按自己的数
   // 断言面仍然是「房间聚合 → 右栏 chip」这条真链路，只是把输入端固定住。
   const builderId = memberId(room, 'builder')
   const researcherId = memberId(room, 'researcher')
+  const builder = room.config.members.find((m) => m.id === builderId)
+  if (builder?.agentId == null) throw new Error('RFC-319 fixture builder has no frozen agent id')
   const now = Date.now()
+  const builderAssignmentId = `z:rfc319:working:${taskId}`
+  const builderRunId = `z:rfc319:working-run:${taskId}`
+  // A running card without its live host row is crash-recovery input: an engine
+  // resumed by the two human dispatches is allowed to redispatch it. Seed the
+  // matching running row as well, so this UI fixture cannot race recovery and
+  // turn into failed/Idle before WebKit reads the room aggregate.
   runSqlite(
     dbPath(),
     `PRAGMA foreign_keys=ON;
      BEGIN IMMEDIATE;
-     INSERT INTO workgroup_assignments
-       (id, task_id, round, source, assignee_member_id, title, brief_md, status, created_at, updated_at)
+     INSERT INTO node_runs
+       (id, task_id, node_id, iteration, shard_key, retry_index, wg_round,
+        review_iteration, status, started_at, agent_override_id)
      VALUES
-       (${sqlLiteral(`z:rfc319:working:${taskId}`)},${sqlLiteral(taskId)},1,'leader',${sqlLiteral(builderId)},'seeded running card','seeded','running',${now},${now}),
-       (${sqlLiteral(`z:rfc319:awaiting:${taskId}`)},${sqlLiteral(taskId)},1,'leader',${sqlLiteral(researcherId)},'seeded awaiting card','seeded','awaiting_human',${now},${now});
+       (${sqlLiteral(builderRunId)},${sqlLiteral(taskId)},'__wg_member__',0,${sqlLiteral(builderAssignmentId)},0,1,0,'running',${now},${sqlLiteral(builder.agentId)});
+     INSERT INTO workgroup_assignments
+       (id, task_id, round, source, assignee_member_id, title, brief_md, status, node_run_id, created_at, updated_at)
+     VALUES
+       (${sqlLiteral(builderAssignmentId)},${sqlLiteral(taskId)},1,'leader',${sqlLiteral(builderId)},'seeded running card','seeded','running',${sqlLiteral(builderRunId)},${now},${now}),
+       (${sqlLiteral(`z:rfc319:awaiting:${taskId}`)},${sqlLiteral(taskId)},1,'leader',${sqlLiteral(researcherId)},'seeded awaiting card','seeded','awaiting_human',NULL,${now},${now});
      COMMIT;`,
   )
 
