@@ -243,7 +243,7 @@ describe('RFC-270 · 接线：每个定义出口都过镜头', () => {
   test('routes/tasks.ts 的每次 serializeTaskFor 都传 workflowReadLensFor', () => {
     const routes = src('routes/tasks.ts')
     const calls =
-      routes.match(/serializeTaskFor\(\w+, workflowReadLensFor\(actorOf\(c\)\)\)/g) ?? []
+      routes.match(/serializeTaskFor\(\w+, workflowReadLensFor\((?:actorOf\(c\)|actor)\)\)/g) ?? []
     // get + create(multipart) + create + cancel + resume + retry + sync
     expect(calls.length).toBe(7)
     // 没有任何一处 serializeTaskFor 走别的形参形态（漏一个出口 = 没做遮蔽）。

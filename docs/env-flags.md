@@ -103,7 +103,8 @@ pipeline 及其编号）、`AW_CWI_ROUND_ID` / `AW_CWI_ROUND_SEQ`（本轮标识
 | --------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
 | `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/util/version.ts`（`declare const`） | 构建期 define 注入的全局常量                       |
 | `AW_INTERNAL_GIT_IDENTITY`        | `backend/src/util/git.ts`                                                    | 导出的 TS 常量名（内部 git spawn 的身份 env 集合） |
-| `AW_MANAGED_PROCESS_LAUNCH_ERROR` | `backend/src/services/execution/managedProcessLauncher.ts`                   | launcher stderr 控制帧前缀（不是环境变量）         |
+| `AW_MANAGED_PROCESS_LAUNCH_ERROR` | `backend/src/services/execution/managedProcessLauncher.ts`                   | launcher stderr 失败控制帧前缀（不是环境变量）     |
+| `AW_MANAGED_PROCESS_LAUNCH_READY` | `backend/src/services/execution/managedProcessLauncher.ts`                   | launcher stderr 就绪控制帧前缀（不是环境变量）     |
 | `__AW_CODEHOST_VAR_`              | `packages/shared/src/codeHost/template.ts`                                   | code-host 模板变量哨兵前缀                         |
 
 ## 已删除

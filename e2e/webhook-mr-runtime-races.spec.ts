@@ -1194,9 +1194,10 @@ if (process.platform !== 'win32') {
       'read recovered restart node runs',
     )
     expect(recoveredExecution.runs.filter((run) => run.nodeId === 'runtime')).toHaveLength(1)
-    expect(recoveredExecution.runs.find((run) => run.nodeId === 'runtime')?.status).toBe(
-      'interrupted',
-    )
+    // Terminal control committed the task and its live node-run as one canceled
+    // domain transition before the first daemon died. Recovery must preserve that
+    // winning source action instead of rewriting the node as a crash interruption.
+    expect(recoveredExecution.runs.find((run) => run.nodeId === 'runtime')?.status).toBe('canceled')
     expect(recoveredExecution.outputs.filter((row) => row.port === 'answer')).toEqual([])
 
     const late = await postIngress(fixture, 'update', 'webhook-mr-restart-late-update')
