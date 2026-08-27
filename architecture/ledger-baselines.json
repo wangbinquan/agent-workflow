@@ -188,8 +188,11 @@
       "id": "test-suite-allowed-skips",
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
-      "baseline": 32,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。"
+      "baseline": 33,
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。",
+      "allowGrowth": {
+        "why": "RFC-254 为真实 Windows .cmd wrapper stdout 回归新增一个平台限定测试；其他平台显式跳过，由 windows-platform CI 持续执行。"
+      }
     },
     {
       "id": "frontend-inline-loading-allowlist",
