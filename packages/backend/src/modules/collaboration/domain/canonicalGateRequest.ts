@@ -1,7 +1,10 @@
 // RFC-333 — canonical business request used by gate-operation idempotency.
 
-import { createHash } from 'node:crypto'
-import type { HumanGateKind, HumanGateOperationKind } from './humanGateOperation'
+import {
+  humanGateSha256Hex,
+  type HumanGateKind,
+  type HumanGateOperationKind,
+} from './humanGateOperation'
 
 export type ReviewGateDecision = 'approved' | 'rejected' | 'iterated'
 export type ClarifyGateDirective = 'continue' | 'stop'
@@ -73,7 +76,7 @@ export function canonicalHumanGateJson(request: CanonicalHumanGateRequest): stri
 }
 
 export function canonicalHumanGateRequestHash(request: CanonicalHumanGateRequest): string {
-  return createHash('sha256').update(canonicalHumanGateJson(request)).digest('hex')
+  return humanGateSha256Hex(canonicalHumanGateJson(request))
 }
 
 export function deriveHumanGateCompatibilityKey(request: CanonicalHumanGateRequest): string {

@@ -507,7 +507,9 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
         return s
       }, 'parked wrapper clarify while slow sibling is still running')
 
-      expect(await taskStatus(h.db, taskId)).toBe('running')
+      // RFC-333 T7 原子停泊任务，但 slow sibling 仍由当前活调度调用持有；
+      // 答案仍应由这次调用自取，不需要额外 resume。
+      expect(await taskStatus(h.db, taskId)).toBe('awaiting_human')
 
       await autoDispatchClarifyRound({
         db: h.db,

@@ -3,7 +3,9 @@
 // This is deliberately not a generic saga abstraction. The closed kinds below
 // describe only review / clarify / question open and decision recovery.
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex as humanGateSha256Hex } from '@/util/hash'
+
+export { humanGateSha256Hex }
 
 export const HUMAN_GATE_KINDS = ['review', 'clarify', 'questions'] as const
 export type HumanGateKind = (typeof HUMAN_GATE_KINDS)[number]
@@ -136,7 +138,7 @@ export function preparedHumanGateRef(operation: HumanGateOperationSnapshot): Pre
     taskId: operation.taskId,
     gateKind: operation.gateKind,
     expectedTaskRevision: operation.expectedTaskRevision,
-    manifestDigest: sha256Hex(operation.manifestJson),
+    manifestDigest: humanGateSha256Hex(operation.manifestJson),
   })
 }
 

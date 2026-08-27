@@ -316,9 +316,11 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       }, 'parked review while slow sibling is still running')
       revRunId = revRun.id
 
-      // 窗口证据：任务整体仍 running（不是停泊后 resume 的旧路径）。
+      // RFC-333 T7 将 review 投影与任务停泊合并为一次 TaskParkTx；
+      // slow sibling 仍在同一次活调度调用中运行，所以这里锁定新的
+      // awaiting_review 状态，后续 iterate 仍由这次调用自取。
       const midTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
-      expect(midTask.status).toBe('running')
+      expect(midTask.status).toBe('awaiting_review')
 
       // 真实入口：先落一条行内评论，再 iterate 打回。
       await addReviewComment({
