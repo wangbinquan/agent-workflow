@@ -124,8 +124,18 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
 
   test('Q6：resume 臂豁免注释锁在位（只拦新任务创建）', () => {
     const scheduler = src('services/scheduler.ts')
-    expect(scheduler).toContain('RFC-285 B3 Q6')
-    expect(scheduler).toContain('resumeTask(db, childTaskId, buildChildDeps(state))')
+    const start = scheduler.indexOf('RFC-285 B3 Q6')
+    expect(start).toBeGreaterThan(-1)
+    const end = scheduler.indexOf('} catch (error)', start)
+    expect(end).toBeGreaterThan(start)
+    const resumeArm = scheduler.slice(start, end)
+    // RFC-331 keeps Q6 on the explicit child-control port: resume extends an
+    // existing task and therefore must not rebuild or re-check its owner.
+    expect(resumeArm).toContain('const childRuntime = buildChildRuntime(state)')
+    expect(resumeArm).toContain('await state.topology.schedulerDriver.resumeChild({')
+    expect(resumeArm).toContain('taskId: childTaskId')
+    expect(resumeArm).toContain('runtime: childRuntime')
+    expect(resumeArm).not.toContain('buildInheritedActor(')
   })
 
   test('scheduled 臂收编：手写 owner rebuild 归零、错误码 owner-inactive 不变', () => {
