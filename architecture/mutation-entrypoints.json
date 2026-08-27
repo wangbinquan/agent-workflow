@@ -22185,8 +22185,8 @@
     {
       "file": "packages/backend/src/services/taskQuestionDispatch.ts",
       "guard": "rfc098-node-run-mint-grep-guard",
-      "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1444",
-      "line": 1444,
+      "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1447",
+      "line": 1447,
       "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
       "removeAfterWave": "W2/W7",
       "status": "reviewed-dispatch-exception",
@@ -22194,7 +22194,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7df8e2ff481838fee825c4a983e991b2ec579365d30622807bb21a38c315a2ce",
+  "sourceDigest": "sha256:d1db72fbf9321f8e580bac62d1770b41b91eb0cdf7807c407aa62c8a5841079b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -23470,8 +23470,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
-        "id": "task-authority:packages/backend/src/services/humanGateContinuationEffects.ts#165:nodeRuns",
-        "line": 165,
+        "id": "task-authority:packages/backend/src/services/humanGateContinuationEffects.ts#170:nodeRuns",
+        "line": 170,
         "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#SqliteGateWorkspaceRollbackProjectionFactory",
         "requiredBrandedProof": "OwnershipToken+TaskExecutionEffectReceipt",
         "revisionPredicate": "exact-owned-intent-and-succeeded-effect-receipt",
@@ -24830,8 +24830,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
-        "id": "task-authority:packages/backend/src/services/taskQuestionDispatch.ts#1444:nodeRuns",
-        "line": 1444,
+        "id": "task-authority:packages/backend/src/services/taskQuestionDispatch.ts#1447:nodeRuns",
+        "line": 1447,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "requiredBrandedProof": "GateDecisionTransaction",
         "revisionPredicate": "task-scoped-decision-transaction-and-row-cas",

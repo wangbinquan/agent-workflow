@@ -33,7 +33,5 @@ export interface SubmitReviewDecisionCommandResult {
 }
 
 export interface ReviewDecisionCommandPort {
-  submit(
-    input: SubmitReviewDecisionCommandInput,
-  ): Promise<SubmitReviewDecisionCommandResult>
+  submit(input: SubmitReviewDecisionCommandInput): Promise<SubmitReviewDecisionCommandResult>
 }

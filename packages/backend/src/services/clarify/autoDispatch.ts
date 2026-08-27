@@ -44,16 +44,16 @@ import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify/service'
 import { hasOpenDispatchedEntryOnHome } from './rerunLedger'
-import {
-  sealRoundQuestions,
-  type ClarifySealDecisionParticipantInTx,
-} from './seal'
+import { sealRoundQuestions, type ClarifySealDecisionParticipantInTx } from './seal'
 import {
   prepareClarifyDecision,
   replayCommittedClarifyDecision,
   type ClarifyDecisionArgs,
 } from '@/services/clarifyDecision'
-import { gateDecisionReceipt, type GateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
+import {
+  gateDecisionReceipt,
+  type GateDecisionReceipt,
+} from '@/modules/collaboration/domain/gateReceipt'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { buildFrozenAttributionSet } from './rounds'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'

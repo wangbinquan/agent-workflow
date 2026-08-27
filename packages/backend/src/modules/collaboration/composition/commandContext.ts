@@ -46,7 +46,8 @@ export function requireReviewDecisionCommand(
   context: CollaborationCommandContext,
 ): ReviewDecisionCommandPort {
   const command = resolveCollaborationCommandContext(context).reviewDecisions
-  if (command === undefined) throw new Error('collaboration review decision command is not composed')
+  if (command === undefined)
+    throw new Error('collaboration review decision command is not composed')
   return command
 }
 
@@ -54,7 +55,8 @@ export function requireQuestionDispatchCommand(
   context: CollaborationCommandContext,
 ): QuestionDispatchCommandPort {
   const command = resolveCollaborationCommandContext(context).questionDispatches
-  if (command === undefined) throw new Error('collaboration question dispatch command is not composed')
+  if (command === undefined)
+    throw new Error('collaboration question dispatch command is not composed')
   return command
 }
 
@@ -62,6 +64,7 @@ export function requireClarifyDecisionCommand(
   context: CollaborationCommandContext,
 ): ClarifyDecisionCommandPort {
   const command = resolveCollaborationCommandContext(context).clarifyDecisions
-  if (command === undefined) throw new Error('collaboration clarify decision command is not composed')
+  if (command === undefined)
+    throw new Error('collaboration clarify decision command is not composed')
   return command
 }

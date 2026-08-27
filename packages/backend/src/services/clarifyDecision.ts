@@ -252,8 +252,7 @@ export function prepareClarifyDecision(input: {
   }
   const manifestJson = encodeClarifyDecisionManifest(manifest)
   const operationId = ulid()
-  const idempotencyKey =
-    input.decision.idempotencyKey ?? deriveHumanGateCompatibilityKey(request)
+  const idempotencyKey = input.decision.idempotencyKey ?? deriveHumanGateCompatibilityKey(request)
   const capture: PreparedClarifyDecision['capture'] = {}
   const participant: ClarifySealDecisionParticipantInTx = {
     acceptTx(sealed) {

@@ -598,8 +598,9 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
       gate: { kind: 'questions', ref: `questions:${taskId}` },
       replayed: false,
     })
-    expect((await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0])
-      .toMatchObject({ dispatchedBy: actor.userId })
+    expect(
+      (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
+    ).toMatchObject({ dispatchedBy: actor.userId })
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
       status: 'pending',
       lifecycleEventRevision: decided.receipt.taskRevision,
@@ -650,8 +651,9 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
       }),
     ).rejects.toThrow('rfc333-question-intent-fault')
 
-    expect((await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0])
-      .toMatchObject({ dispatchedAt: null, dispatchedBy: null })
+    expect(
+      (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
+    ).toMatchObject({ dispatchedAt: null, dispatchedBy: null })
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
       status: 'awaiting_human',
     })

@@ -127,7 +127,7 @@ describe('RFC-333 clarify decision transaction', () => {
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       actor,
-      decision: { idempotencyKey: 'clarify-decision-1' },
+      decision: { idempotencyKey: 'replay' },
     }
 
     const decided = await autoDispatchClarifyRoundWithDecision(command)

@@ -68,3 +68,7 @@ c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generi
 # 断言能精确定位到这一个 agent。与本文件上面 B12 / B68 / B69 三段同因同处置——
 # 改当前文件消不掉，gitleaks detect 扫的是**全部历史**，所以这里钉历史指纹。
 3589bc6c9124ea514301d787b6cd2008b5801de6:e2e/rfc319-workgroup-launch-and-config.spec.ts:generic-api-key:494
+
+# RFC-333 T9（837f124a0）：clarify decision replay 用例的普通幂等键字面量
+# 撞 generic-api-key；当前值已改为低熵测试值，此处只钉已发布的历史指纹。
+837f124a0d128e6c0c0b9c747394caeaac99e7c8:packages/backend/tests/rfc128-p5-d-autodispatch.test.ts:generic-api-key:130

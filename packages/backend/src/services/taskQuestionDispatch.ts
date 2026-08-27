@@ -103,7 +103,10 @@ import {
   deriveHumanGateCompatibilityKey,
   type CanonicalHumanGateRequest,
 } from '@/modules/collaboration/domain/canonicalGateRequest'
-import { gateDecisionReceipt, type GateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
+import {
+  gateDecisionReceipt,
+  type GateDecisionReceipt,
+} from '@/modules/collaboration/domain/gateReceipt'
 import {
   decodeQuestionDispatchManifest,
   decodeQuestionDispatchReceipt,
@@ -1294,13 +1297,13 @@ async function commitDispatchPlan(
                   origin: taskQuestions.originNodeRunId,
                 })
                 .from(taskQuestions)
-          // RFC-128 P5-BC §5.2.14 (Codex impl-gate finding B): the CAS re-checks `confirmation='open'`
-          // too, NOT just `dispatched_at IS NULL`. A quick whole-round finalize that committed between
-          // the async `requested` read and this tx CONSUMES (confirms) the round's sealed-undispatched
-          // self/q entries; once its continuation is done+output the open-ledger recheck no longer
-          // blocks, so without this predicate a now-confirmed entry would still pass the CAS (its
-          // `dispatched_at` is still NULL) and get stamped/minted → duplicate rerun. A confirmed entry
-          // now shrinks `stillNull` → ConcurrentClaim → whole-tx rollback (nothing stamped/minted).
+                // RFC-128 P5-BC §5.2.14 (Codex impl-gate finding B): the CAS re-checks `confirmation='open'`
+                // too, NOT just `dispatched_at IS NULL`. A quick whole-round finalize that committed between
+                // the async `requested` read and this tx CONSUMES (confirms) the round's sealed-undispatched
+                // self/q entries; once its continuation is done+output the open-ledger recheck no longer
+                // blocks, so without this predicate a now-confirmed entry would still pass the CAS (its
+                // `dispatched_at` is still NULL) and get stamped/minted → duplicate rerun. A confirmed entry
+                // now shrinks `stillNull` → ConcurrentClaim → whole-tx rollback (nothing stamped/minted).
                 .where(
                   and(
                     inArray(taskQuestions.id, dispatchIds),

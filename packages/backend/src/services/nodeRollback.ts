@@ -84,7 +84,8 @@ export function planNodeRunRollbackTargets(
       }
     }
     return target.repos.flatMap((repo) => {
-      const snapshot = typeof map[repo.worktreeDirName] === 'string' ? map[repo.worktreeDirName]! : ''
+      const snapshot =
+        typeof map[repo.worktreeDirName] === 'string' ? map[repo.worktreeDirName]! : ''
       if (snapshot === '' && !opts.resetOnEmptySnapshot) return []
       return [{ ...repo, snapshot }]
     })

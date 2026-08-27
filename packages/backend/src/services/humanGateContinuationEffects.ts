@@ -67,7 +67,8 @@ export class SqliteGateWorkspaceRollbackExecutor implements GateWorkspaceRollbac
     view: GateWorkspaceRollbackPlanView,
   ): Promise<GateWorkspaceRollbackOutcome> {
     const plan = this.resolvedPlans.get(view)
-    if (plan === undefined) throw new Error('workspace rollback plan was not loaded by this executor')
+    if (plan === undefined)
+      throw new Error('workspace rollback plan was not loaded by this executor')
     return getTaskWriteSem(plan.taskId).run(async () => {
       const targets: TargetReceipt[] = []
       for (const target of plan.targets) {
@@ -136,12 +137,14 @@ function projectRollbackMarker(errorMessage: string | null, rolledBack: boolean)
   )
 }
 
-export class SqliteGateWorkspaceRollbackProjectionFactory
-  implements GateWorkspaceRollbackProjectionFactory
-{
+export class SqliteGateWorkspaceRollbackProjectionFactory implements GateWorkspaceRollbackProjectionFactory {
   bind(tx: Parameters<GateWorkspaceRollbackProjectionFactory['bind']>[0]) {
     return {
-      projectWorkspaceRollbackTx(input: Parameters<ReturnType<GateWorkspaceRollbackProjectionFactory['bind']>['projectWorkspaceRollbackTx']>[0]) {
+      projectWorkspaceRollbackTx(
+        input: Parameters<
+          ReturnType<GateWorkspaceRollbackProjectionFactory['bind']>['projectWorkspaceRollbackTx']
+        >[0],
+      ) {
         if (input.gateKind !== 'review') return
         const succeeded = rollbackSources(input.receipt)
         const rows =
@@ -158,7 +161,9 @@ export class SqliteGateWorkspaceRollbackProjectionFactory
                 )
                 .all()
         if (rows.length !== input.sourceNodeRunIds.length) {
-          throw new Error(`workspace rollback projection for '${input.operationId}' lost a source row`)
+          throw new Error(
+            `workspace rollback projection for '${input.operationId}' lost a source row`,
+          )
         }
         for (const row of rows) {
           const rolledBack = succeeded.has(row.id)
