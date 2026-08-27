@@ -518,6 +518,37 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     ).toBe('completed')
   })
 
+  test('an auto-dispatch-deferred question yields its park obligation to the runnable predecessor', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = 'task-333-manual-auto-dispatch-deferred'
+    seedTask(db, taskId, 'running')
+    const created = createManual(db, taskId)
+    // Regression: a mixed-cause "dispatch all" atomically mints the first
+    // handler rerun and marks the lower-priority manual question for automatic
+    // dispatch. Parking here, before the DAG can run that predecessor, leaves
+    // both obligations waiting on each other forever.
+    db.update(taskQuestions)
+      .set({ autoDispatchDeferredAt: NOW + 11 })
+      .where(eq(taskQuestions.id, created.questionId))
+      .run()
+    const module = createTaskExecutionTestModule('daemon-rfc333-manual-auto-deferred')
+    const settled = new ManualQuestionParkTransaction(
+      module.ownership,
+      composeTaskExecutionHumanGateAdapter(),
+      new LegacyHumanGateTaskLifecycle(),
+    ).settle({ db, taskId, now: NOW + 20 })
+
+    expect(settled).toEqual({ consumed: 1, parked: false })
+    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
+    expect(
+      db
+        .select()
+        .from(collaborationGateOperations)
+        .where(eq(collaborationGateOperations.id, created.operationId))
+        .get()?.state,
+    ).toBe('completed')
+  })
+
   test('awaiting-human obligation survives release until a later owner settle', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-manual-revision-rebase'

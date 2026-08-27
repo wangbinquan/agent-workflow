@@ -439,7 +439,15 @@ function manualQuestionStillOutstanding(
       `manual question '${expected.id}' identity changed before its park obligation`,
     )
   }
-  return row.confirmation === 'open' && row.dispatchedAt === null
+  // A mixed-cause batch may dispatch one predecessor rerun and atomically mark
+  // this lower-priority manual entry for automatic follow-up.  That durable
+  // marker means no human action is outstanding: parking before the DAG tick
+  // would prevent the predecessor from finishing, so the follow-up could
+  // never dispatch.  The DAG's ordinary undispatched-entry park remains the
+  // fallback if the queued handoff later cannot make progress.
+  return (
+    row.confirmation === 'open' && row.dispatchedAt === null && row.autoDispatchDeferredAt === null
+  )
 }
 
 export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticipantInTx {
