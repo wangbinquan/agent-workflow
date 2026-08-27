@@ -22,10 +22,8 @@ import {
 } from '@/modules/collaboration/domain/clarifyDecision'
 import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
-import {
-  bindTaskDecisionParticipantInTx,
-  humanGateNodeProjectionFence,
-} from '@/modules/task-execution/public/participants'
+import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import type { ClarifySealDecisionParticipantInTx } from '@/services/clarify/seal'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -311,18 +309,20 @@ export function prepareClarifyDecision(input: {
         .from(nodeRuns)
         .where(inArray(nodeRuns.id, [input.originNodeRunId]))
         .all()
-      const accepted = bindTaskDecisionParticipantInTx(sealed.tx).acceptGateDecisionTx({
-        taskId: input.taskId,
-        gate: { kind: 'clarify', ref: gateRef },
-        expectedTaskRevision: request.expectedTaskRevision,
-        expectedNodeProjection: humanGateNodeProjectionFence(sourceRows.map(projectionMember)),
-        continuationLineage: {
-          sourceNodeRunIds: [input.originNodeRunId],
-          rerunNodeRunIds: [],
-        },
-        operationId: begun.operation.id,
-        now: sealed.now,
-      })
+      const accepted = humanGateComposition
+        .bindTaskDecisionParticipantInTx(sealed.tx)
+        .acceptGateDecisionTx({
+          taskId: input.taskId,
+          gate: { kind: 'clarify', ref: gateRef },
+          expectedTaskRevision: request.expectedTaskRevision,
+          expectedNodeProjection: humanGateNodeProjectionFence(sourceRows.map(projectionMember)),
+          continuationLineage: {
+            sourceNodeRunIds: [input.originNodeRunId],
+            rerunNodeRunIds: [],
+          },
+          operationId: begun.operation.id,
+          now: sealed.now,
+        })
       const envelope: ClarifyDecisionReceiptEnvelope = {
         schemaVersion: 1,
         kind: 'clarify-decision',

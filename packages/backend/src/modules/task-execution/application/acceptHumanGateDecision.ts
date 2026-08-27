@@ -102,7 +102,7 @@ function assertProjection(input: {
 export class SqliteTaskDecisionParticipantInTx implements TaskDecisionParticipantInTx {
   constructor(
     private readonly tx: DbTxSync,
-    private readonly lifecycle: HumanGateTaskLifecycle,
+    private readonly lifecycle: Pick<HumanGateTaskLifecycle, 'transitionTx'>,
     private readonly effects: TaskExecutionEffectStore = taskExecutionModule.effects,
   ) {}
 
@@ -215,7 +215,7 @@ export class SqliteTaskDecisionParticipantInTx implements TaskDecisionParticipan
 
 export function bindTaskDecisionParticipantInTx(
   tx: DbTxSync,
-  lifecycle: HumanGateTaskLifecycle,
+  lifecycle: Pick<HumanGateTaskLifecycle, 'transitionTx'>,
   effects?: TaskExecutionEffectStore,
 ): TaskDecisionParticipantInTx {
   return new SqliteTaskDecisionParticipantInTx(tx, lifecycle, effects)

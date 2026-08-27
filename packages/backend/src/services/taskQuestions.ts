@@ -21,7 +21,7 @@ import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
-import { createCollaborationCommandContext } from '@/services/humanGateComposition'
+import { humanGateComposition } from '@/services/humanGateComposition'
 
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
@@ -1353,12 +1353,15 @@ export async function createManualTaskQuestion(
       `target node '${target}' has no prior node_run (a manual question reruns its handler, so the handler must have run at least once)`,
     )
   }
-  const created = createManualQuestionOpen(createCollaborationCommandContext({ db }), {
-    taskId,
-    title,
-    body,
-    targetNodeId: target,
-    actorUserId: actor.userId,
-  })
+  const created = createManualQuestionOpen(
+    humanGateComposition.createCollaborationCommandContext({ db }),
+    {
+      taskId,
+      title,
+      body,
+      targetNodeId: target,
+      actorUserId: actor.userId,
+    },
+  )
   return { id: created.questionId }
 }

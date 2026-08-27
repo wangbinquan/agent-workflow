@@ -37,7 +37,7 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { createCollaborationCommandContext } from '@/services/humanGateComposition'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { getRuntimeDriver } from '@/services/runtime'
@@ -537,7 +537,10 @@ async function loadReviewBodies(
   const out = new Map<string, SourceContextResult>()
   if (budget.reviewBodyMaxBytes === 0 || reviewRows.length === 0) return out
   const home = appHome()
-  const collaboration = createCollaborationCommandContext({ db, appHome: home })
+  const collaboration = humanGateComposition.createCollaborationCommandContext({
+    db,
+    appHome: home,
+  })
   for (const r of reviewRows) {
     try {
       const text = readCommittedReviewArtifactBody(collaboration, r.bodyPath)

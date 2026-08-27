@@ -586,7 +586,6 @@
         "import:0f21ec2f5d8cfd04f2c7",
         "import:23e4ce4987248ac57856",
         "import:37c560ce2b2293bdad0b",
-        "import:5b1ec9c0d24166738eb5",
         "import:5c196cf50eeeb1dcc38a",
         "import:5dde0786c9bf02e6466f",
         "import:897b79ab567fb43dc535",
@@ -1875,12 +1874,11 @@
       "boundaryEdgeIds": [
         "import:2cad8b73b382ab2a79a4",
         "import:b99ff6a3b945e8252db3",
+        "import:cec3edcdb48a1c4c4030",
         "import:e0fa4035273ad5a73fb6"
       ],
       "exportedSymbols": [
-        "composeTaskExecutionHumanGateAdapter",
-        "createCollaborationCommandContext",
-        "parkPreparedHumanGate"
+        "humanGateComposition"
       ],
       "file": "packages/backend/src/services/humanGateComposition.ts",
       "id": "facade:packages/backend/src/services/humanGateComposition.ts",
@@ -6456,7 +6454,6 @@
         "import:2636a875ee5dd7a39a87",
         "import:2932782e1aa7ed87df73",
         "import:603dbc3faeb280675cc0",
-        "import:6bc3f4f86ddf808f509e",
         "import:6d0cea50ec2a2c70c79f",
         "import:7c9fa817a53cf3047228",
         "import:7ed8ca057be10e3708ff",
@@ -7576,5 +7573,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1db72fbf9321f8e580bac62d1770b41b91eb0cdf7807c407aa62c8a5841079b"
+  "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99"
 }

@@ -29,12 +29,12 @@ import type {
   AcceptedHumanGateDecision,
   TaskDecisionParticipantInTx,
 } from '../application/acceptHumanGateDecision'
+import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '../application/acceptHumanGateDecision'
 import { terminalizeTaskExecutionIntentsTx as terminalizeTaskExecutionIntentsTxInternal } from '../application/terminalizeExecutionIntent'
 import {
   finalizeTaskExecutionRecovery as finalizeTaskExecutionRecoveryInternal,
   prepareTaskExecutionRecovery as prepareTaskExecutionRecoveryInternal,
 } from '../application/recoverTaskExecutions'
-import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '../composition/humanGate'
 import {
   buildCodeHostRecoveryDescriptor as buildCodeHostRecoveryDescriptorInternal,
   classifyCodeHostProbeResponse as classifyCodeHostProbeResponseInternal,
@@ -193,6 +193,10 @@ export const withCurrentTaskExecutionTransaction = withCurrentTaskExecutionTrans
 export const withTaskExecutionMutation = withTaskExecutionMutationInternal
 export const withTaskExecutionTransaction = withTaskExecutionTransactionInternal
 export const submitTaskContinuationTx = submitTaskContinuationTxInternal
+// Composition supplies only the exact lifecycle transition participant. The
+// public task-execution surface does not close over the legacy lifecycle
+// adapter, so lifecycle.ts can consume the remaining participant aggregate
+// without creating a value cycle.
 export const bindTaskDecisionParticipantInTx = bindTaskDecisionParticipantInTxInternal
 export const humanGateNodeProjectionFence = humanGateNodeProjectionFenceInternal
 export const terminalizeTaskExecutionIntentsTx = terminalizeTaskExecutionIntentsTxInternal

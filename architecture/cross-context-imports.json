@@ -7685,23 +7685,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
-      "fromPath": "packages/backend/src/services/clarifyDecision.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:5b1ec9c0d24166738eb5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "bindTaskDecisionParticipantInTx",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#$file",
@@ -9230,23 +9213,6 @@
       "toPath": "packages/backend/src/services/capabilityTemplates.ts",
       "toSymbol": "mergeableSnapshot",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file",
-      "fromPath": "packages/backend/src/services/taskQuestionDispatch.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:6bc3f4f86ddf808f509e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "bindTaskDecisionParticipantInTx",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -16238,6 +16204,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "fromPath": "packages/backend/src/services/humanGateComposition.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cec3edcdb48a1c4c4030",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "bindTaskDecisionParticipantInTx",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "fromSymbol": "$file",
@@ -20164,9 +20147,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1186,
+    "architectureExceptions": 1185,
     "implementationSccs": 0,
-    "observedEdges": 1218,
+    "observedEdges": 1217,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -27167,22 +27150,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionEffects"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/clarifyDecision.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
-      "id": "import:5b1ec9c0d24166738eb5",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "bindTaskDecisionParticipantInTx",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts",
@@ -28781,22 +28748,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/capabilityTemplates.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#mergeableSnapshot"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/taskQuestionDispatch.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file",
-      "id": "import:6bc3f4f86ddf808f509e",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "bindTaskDecisionParticipantInTx",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx"
     },
     {
       "edgeKind": "type",
@@ -35808,6 +35759,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/humanGateComposition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "id": "import:cec3edcdb48a1c4c4030",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "bindTaskDecisionParticipantInTx",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file",
@@ -40073,7 +40040,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1db72fbf9321f8e580bac62d1770b41b91eb0cdf7807c407aa62c8a5841079b",
+  "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

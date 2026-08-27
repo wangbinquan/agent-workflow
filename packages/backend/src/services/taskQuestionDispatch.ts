@@ -116,10 +116,8 @@ import {
   type QuestionDispatchReceiptEnvelope,
 } from '@/modules/collaboration/domain/questionDispatchDecision'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
-import {
-  bindTaskDecisionParticipantInTx,
-  humanGateNodeProjectionFence,
-} from '@/modules/task-execution/public/participants'
+import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import {
   isClarifyChannelEdge,
   isTurnEngineWorkgroupTask,
@@ -1468,17 +1466,19 @@ async function commitDispatchPlan(
             rerunNodeRunIds.length === 0
               ? []
               : tx.select().from(nodeRuns).where(inArray(nodeRuns.id, rerunNodeRunIds)).all()
-          const accepted = bindTaskDecisionParticipantInTx(tx).acceptGateDecisionTx({
-            taskId,
-            gate: { kind: 'questions', ref: decision.gateRef },
-            expectedTaskRevision: decision.request.expectedTaskRevision,
-            expectedNodeProjection: humanGateNodeProjectionFence(
-              projectionRows.map(questionDispatchProjectionMember),
-            ),
-            continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
-            operationId: begun.operation.id,
-            now,
-          })
+          const accepted = humanGateComposition
+            .bindTaskDecisionParticipantInTx(tx)
+            .acceptGateDecisionTx({
+              taskId,
+              gate: { kind: 'questions', ref: decision.gateRef },
+              expectedTaskRevision: decision.request.expectedTaskRevision,
+              expectedNodeProjection: humanGateNodeProjectionFence(
+                projectionRows.map(questionDispatchProjectionMember),
+              ),
+              continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
+              operationId: begun.operation.id,
+              now,
+            })
           const reruns: DispatchedRerun[] = mintPlans.map((plan) => ({
             targetNodeId: plan.nodeId,
             nodeRunId: plan.preId,

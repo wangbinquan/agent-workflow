@@ -72,10 +72,7 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import { prepareClarifyGateOpen } from '@/modules/collaboration/public/commands'
-import {
-  createCollaborationCommandContext,
-  parkPreparedHumanGate,
-} from '@/services/humanGateComposition'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import { setNodeRunStatus } from '@/services/lifecycle'
 import { currentTaskExecutionContext } from '@/services/taskExecutionParticipants'
 import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
@@ -320,41 +317,44 @@ export async function createClarifyRound(
       truncationWarningsJson,
     }),
   )
-  const prepared = prepareClarifyGateOpen(createCollaborationCommandContext({ db: args.db }), {
-    taskId: args.taskId,
-    kind: args.kind,
-    askingNodeId: args.askingNodeId,
-    askingNodeRunId: args.askingNodeRunId,
-    askingShardKey: args.kind === 'self' ? args.askingShardKey : null,
-    intermediaryNodeId: args.intermediaryNodeId,
-    targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
-    parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
-    loopIter: args.kind === 'cross' ? args.loopIter : 0,
-    iteration,
-    questionsJson,
-    questions: questions.map((question) => ({ id: question.id, title: question.title })),
-    truncationWarningsJson,
-    sourceSnapshotDigest,
-    idempotencyKey: `clarify-open:v1:${args.taskId}:${args.askingNodeRunId}:${args.intermediaryNodeId}:${sourceSnapshotDigest}`,
-    expectedTaskRevision: taskRow.lifecycleEventRevision,
-    ...(existingRun === undefined
-      ? {}
-      : {
-          reuseNodeRun: {
-            id: existingRun.id,
-            status: existingRun.status as 'pending' | 'running' | 'awaiting_human',
-            iteration: existingRun.iteration,
-            parentNodeRunId: existingRun.parentNodeRunId,
-            shardKey: existingRun.shardKey,
-            startedAt: existingRun.startedAt,
-          },
-        }),
-    now: createdAt,
-  })
+  const prepared = prepareClarifyGateOpen(
+    humanGateComposition.createCollaborationCommandContext({ db: args.db }),
+    {
+      taskId: args.taskId,
+      kind: args.kind,
+      askingNodeId: args.askingNodeId,
+      askingNodeRunId: args.askingNodeRunId,
+      askingShardKey: args.kind === 'self' ? args.askingShardKey : null,
+      intermediaryNodeId: args.intermediaryNodeId,
+      targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
+      parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
+      loopIter: args.kind === 'cross' ? args.loopIter : 0,
+      iteration,
+      questionsJson,
+      questions: questions.map((question) => ({ id: question.id, title: question.title })),
+      truncationWarningsJson,
+      sourceSnapshotDigest,
+      idempotencyKey: `clarify-open:v1:${args.taskId}:${args.askingNodeRunId}:${args.intermediaryNodeId}:${sourceSnapshotDigest}`,
+      expectedTaskRevision: taskRow.lifecycleEventRevision,
+      ...(existingRun === undefined
+        ? {}
+        : {
+            reuseNodeRun: {
+              id: existingRun.id,
+              status: existingRun.status as 'pending' | 'running' | 'awaiting_human',
+              iteration: existingRun.iteration,
+              parentNodeRunId: existingRun.parentNodeRunId,
+              shardKey: existingRun.shardKey,
+              startedAt: existingRun.startedAt,
+            },
+          }),
+      now: createdAt,
+    },
+  )
   const committedHere = prepared.kind === 'prepared'
   if (committedHere) {
     const executionContext = currentTaskExecutionContext(args.taskId)
-    parkPreparedHumanGate({
+    humanGateComposition.parkPreparedHumanGate({
       db: args.db,
       prepared: prepared.prepared,
       ...(executionContext === undefined ? {} : { executionContext }),

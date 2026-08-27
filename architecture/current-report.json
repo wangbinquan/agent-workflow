@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 1186,
+    "architectureExceptions": 1185,
     "backgroundJobs": 218,
-    "crossContextImports": 1218,
+    "crossContextImports": 1217,
     "facades": 379,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18016,
-    "mutationEntrypoints": 934,
+    "moduleSymbolOwners": 18014,
+    "mutationEntrypoints": 933,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 337,
     "transactionExternalEffects": 263
@@ -77,13 +77,6 @@
         "packages/backend/src/mcp/dispatch.ts",
         "packages/backend/src/mcp/server.ts",
         "packages/backend/src/server.ts"
-      ],
-      [
-        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
-        "packages/backend/src/modules/task-execution/public/participants.ts",
-        "packages/backend/src/services/lifecycle.ts",
-        "packages/backend/src/services/taskExecutionParticipants.ts"
       ],
       [
         "packages/backend/src/services/agent.ts",
@@ -193,8 +186,8 @@
       {
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1447",
-        "line": 1447,
+        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1445",
+        "line": 1445,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "removeAfterWave": "W2/W7",
         "status": "reviewed-dispatch-exception",
@@ -207,13 +200,6 @@
         "packages/backend/src/mcp/dispatch.ts",
         "packages/backend/src/mcp/server.ts",
         "packages/backend/src/server.ts"
-      ],
-      [
-        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
-        "packages/backend/src/modules/task-execution/public/participants.ts",
-        "packages/backend/src/services/lifecycle.ts",
-        "packages/backend/src/services/taskExecutionParticipants.ts"
       ],
       [
         "packages/backend/src/services/agent.ts",
@@ -246,5 +232,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1db72fbf9321f8e580bac62d1770b41b91eb0cdf7807c407aa62c8a5841079b"
+  "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99"
 }

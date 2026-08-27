@@ -120,10 +120,7 @@ import { prepareWorkspaceRollbackPlan } from '@/modules/collaboration/applicatio
 import type { ValidatedWorkspaceRollbackPlan } from '@/modules/collaboration/domain/workspaceRollbackPlan'
 import { GitWorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
-import {
-  createCollaborationCommandContext,
-  parkPreparedHumanGate,
-} from '@/services/humanGateComposition'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
@@ -162,7 +159,6 @@ import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { nextRetryIndex, mintNodeRun, mintNodeRunTx } from '@/services/nodeRunMint'
 import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
 import {
-  bindTaskDecisionParticipantInTx,
   currentTaskExecutionContext,
   humanGateNodeProjectionFence,
   withTaskExecutionMutation,
@@ -1024,7 +1020,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         })),
       }),
     )
-    const collaboration = createCollaborationCommandContext({ db, appHome })
+    const collaboration = humanGateComposition.createCollaborationCommandContext({ db, appHome })
     const prepared = prepareReviewGateOpen(collaboration, {
       taskId,
       reviewNodeId: node.id,
@@ -1048,7 +1044,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     })
     if (prepared.kind === 'prepared') {
       const executionContext = currentTaskExecutionContext(taskId)
-      parkPreparedHumanGate({
+      humanGateComposition.parkPreparedHumanGate({
         db,
         prepared: prepared.prepared,
         ...(executionContext === undefined ? {} : { executionContext }),
@@ -1555,7 +1551,7 @@ async function loadPriorRound(
     if (cur === undefined || r.id > cur.id) byIndex.set(idx, r)
   }
   const members: PriorRoundMember[] = []
-  const collaboration = createCollaborationCommandContext({ db, appHome })
+  const collaboration = humanGateComposition.createCollaborationCommandContext({ db, appHome })
   for (const r of byIndex.values()) {
     let body = ''
     try {
@@ -1579,7 +1575,7 @@ async function loadPriorRound(
 export function readDocVersionBody(db: DbClient, appHome: string, docVersion: DocVersion): string {
   try {
     return readCommittedReviewArtifactBody(
-      createCollaborationCommandContext({ db, appHome }),
+      humanGateComposition.createCollaborationCommandContext({ db, appHome }),
       docVersion.bodyPath,
     )
   } catch {
@@ -3651,7 +3647,7 @@ async function submitReviewDecisionUnlocked(
     const expectedNodeProjection = humanGateNodeProjectionFence(
       projectionRows.map(reviewDecisionProjectionMember),
     )
-    const accepted = bindTaskDecisionParticipantInTx(tx).acceptGateDecisionTx({
+    const accepted = humanGateComposition.bindTaskDecisionParticipantInTx(tx).acceptGateDecisionTx({
       taskId: taskRow.id,
       gate: { kind: 'review', ref: gateRef },
       expectedTaskRevision: capturedTaskRevision,

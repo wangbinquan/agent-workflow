@@ -11,7 +11,7 @@ import type { DbClient } from '@/db/client'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { cancelTask, isTaskActive, resumeTask, type StartTaskDeps } from '@/services/task'
 import { driveTaskEngineApplication } from '@/modules/task-execution/composition/taskEngineApplication'
-import { composeTaskExecutionHumanGateAdapter } from '@/services/humanGateComposition'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/public/queries'
 import {
@@ -61,7 +61,7 @@ export function createLegacyTaskExecutionTopology(
             : { repositoryPublicationTransport }),
         } as RunTaskOptions,
         topology,
-        composeTaskExecutionHumanGateAdapter(),
+        humanGateComposition.composeTaskExecutionHumanGateAdapter(),
       )
     },
     async cancelChild(input) {
