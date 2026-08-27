@@ -1,6 +1,9 @@
 # RFC-329 任务分解
 
-配套：`proposal.md`（背景 / 审计总账 / 决策 D1–D8 / 验收 AC-1…AC-14）· `design.md`（技术设计 §1–§7）
+配套：`proposal.md`（背景 / 审计总账 / 决策 D1–D8 / 验收 AC-1…AC-13）· `design.md`（技术设计 §1–§7）
+
+> 状态：Done（production）；T1～T25 已落 `main`，hosted containing SHA `5c762c197` 的 CI
+> `32998902223` 与 visual `32998902239` 均 `success`。本次 doc-only closeout 已获用户授权发布；其 remote/CI 由发布流程核验，不在提交内递归自证。
 
 ## 1. 子任务
 
@@ -52,9 +55,9 @@
 **两个 PR**，理由是 PR-A 的守卫必须先落地——它是**发现 A1 的那台机器**，先有机器再修 bug，
 才能证明机器管用（变异实证 ① 就是把 A1 加回去看它红）。
 
-- **PR-A**（T1–T9 + T25）：守卫 + 账本 + 五条死路径。**这个 PR 自身就有独立价值**——
+- **PR-A**（T1–T9 + T25）：守卫 + 账本 + 四条死路径 + 2 个具名工具。**这个 PR 自身就有独立价值**——
   即使 PR-B 因故延后，全域守卫与死路径修复也已经在保护主干。
-- **PR-B**（T10–T24）：27 个工具里剩下的 22 个 + 两处 REST 改动 + 账本收敛 + 销账。
+- **PR-B**（T10–T24）：其余 21 个具名工具 + 两处 REST 改动 + 账本收敛 + 销账。
 
 两个 PR 都直接推 `main`（本仓禁分支），commit message 前缀
 `feat(mcp): RFC-329 ...`，推完立刻按 exact SHA 查 CI 盯到绿。
@@ -167,3 +170,13 @@ body 读取（分路失败语义）／`dispatch_task_questions` 描述去掉 res
 7. **RFC-294 W4-A 的 operation catalog** 未建。T2 的工具 binding 是它的雏形但不是它：
    本 RFC 不引入 `McpBinding` 类型、不合并 RouteMeta 与 tool 的 handler、不建 operation id
    注册表。守卫钉住两侧一致，catalog 留给 W4-A。
+
+## 6. 完工收口（2026-08-27）
+
+- [x] T1～T9：PR-A `7131812a47fade80341fce90dc29e860a4c68867`。
+- [x] T10～T24：PR-B `15701c3c007dd3d7aba721ccadbf6ac3ed7f3e24`。
+- [x] contract registry / backlog / AC evidence：`d5744a0842253ef6f2c61c00013209a76e16a990`。
+- [x] 13 条 AC 均有永久测试/账本证据；PR-A 8 条、PR-B 4 条源码变异均曾转红并恢复。
+- [x] 23 个新工具，工具总数 29→52；RFC-329 落地 exact leaf debt 389→368。当前 `main` 为 374，后续 +6 已由 RFC-330 逐条归因。
+- [x] containing SHA `5c762c19715f167a8796bf08d661ad9c43b4349f` 的 CI/visual 终态成功。
+- [x] 已发布的 STATE 与 RFC 索引均为 Done；本次只对齐 proposal/design/plan，用户已明确授权发布，发布回执不预写进提交自身。

@@ -2,6 +2,10 @@
 
 配套：`proposal.md`（背景 / 审计总账 / 决策 D1–D8 / 验收标准）· `plan.md`（任务分解）
 
+> 状态：Done（production）；PR-A `7131812a4`、PR-B `15701c3c0`、收口 `d5744a084` 已由 containing SHA
+> `5c762c197` 的 CI `32998902223` 与 visual `32998902239` 验绿。本次文档收口已获用户授权发布；其自身远端与 CI 由发布流程核验，不在提交内递归自证。
+> RFC-329 落地时 exact leaf debt 为 368；当前 `main` 为 374，增加的 6 条由 RFC-330 新路由以具名 `allowGrowth` 归因，不改写本 RFC 的 389→368 历史 credit。
+
 ## 1. 落位与 RFC-294 对齐
 
 | 面           | 文件                                                                   | 层                                      |
@@ -12,7 +16,7 @@
 | 全域守卫     | `packages/backend/tests/architecture/rfc329-mcp-surface-guard.test.ts` | 守卫声明                                |
 | 豁免账本基线 | `architecture/ledger-baselines.json`                                   | 账本                                    |
 
-**零业务逻辑下沉**：27 个新工具的 handler 全部是一次（`list_repo_refs` 两次）
+**零业务逻辑下沉**：23 个新工具的 handler 全部是一次（`list_repo_refs` 两次）
 `ctx.dispatch`，与既有 26 个具名工具形状逐字一致。`mcp/dispatch.ts:1-23` 的裁决
 ——「工具不碰 `services/*`，每条授权规则只有一处实现」——原样保持。
 

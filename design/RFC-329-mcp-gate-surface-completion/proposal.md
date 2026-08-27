@@ -1,6 +1,6 @@
 # RFC-329 —— MCP 人工门完整面、死路径修复与全域「路由⟷工具」守卫
 
-状态：Draft（2026-08-26）· 批准前零生产改动
+状态：Done（2026-08-26 production landed；本次文档收口已获用户授权发布，其自身远端与 CI 由发布流程核验）
 
 ## 1. 背景
 
@@ -194,7 +194,7 @@ CLAUDE.md §RFC workflow 第 7 条要求：凡**关闭或收缩既有能力**的
 | C2  | `questions/:entryId/reassign` 的 `tokenAccess` `never` → `allow` | **扩张** | 属能力**开放**不是收缩。开放理由：RFC-162 后 reassign 的语义是「给问题加 / 去 designer handler 节点」（`routes/taskQuestions.ts:174-178` 的 `action` 三态），改的是 `targetNodeId`，**不碰 owner / grants / visibility**，不属 RFC-247 D5 的四种 URL 形状；同域另外四条（confirm / stage / dispatch / manual）本来就是 `allow`。它是全仓 `questions` 域唯一一条 `never` 且**没有任何注释说明理由** |
 | C3  | 新增 `GET /api/workgroup-tasks/pending`                          | **扩张** | 新读端点。可见性沿用 `pendingCount` 已有的 `visibleTaskIdsOf` 过滤（`services/workgroup/room.ts:379-383`），**不新造读面**——今天同一批行已经被算出来用于计数，只是被丢掉了                                                                                                                                                                                                                         |
 | C4  | `list_pending_gates` 从 2 路扩到 4 路                            | **扩张** | 返回体加字段，既有 `reviews` / `clarify` 两键逐字不变                                                                                                                                                                                                                                                                                                                                              |
-| C5  | 27 个新工具                                                      | **扩张** | 每个工具的权限点与其 REST 路由声明**逐字一致**；`toolsFor()`（`mcp/tools.ts:1261-1265`）按 token 权限过滤，窄令牌看到的工具集自动收窄                                                                                                                                                                                                                                                              |
+| C5  | 23 个新工具（29→52；PR-A 2 个、PR-B 21 个）                      | **扩张** | 每个工具的权限点与其 REST 路由声明**逐字一致**；`toolsFor()`（`mcp/tools.ts:1877-1880`）按 token 权限过滤，窄令牌看到的工具集自动收窄                                                                                                                                                                                                                                                              |
 
 **没有任何禁用 / 拒绝分支被新增**，故 §7 第二条（禁用分支必须有测试覆盖）无对应项；
 第三条（关闭判据须为可复跑的外部源码引用）无对应项（本 RFC 不引用 opencode 行为）。
@@ -209,7 +209,7 @@ CLAUDE.md §RFC workflow 第 7 条要求：凡**关闭或收缩既有能力**的
 
 **本 RFC 承担哪一步演进**：
 
-- 27 个新工具**全部零业务逻辑**——每个 handler 就是一次（个别两次）`ctx.dispatch`，
+- 23 个新工具**全部零业务逻辑**——每个 handler 就是一次（个别两次）`ctx.dispatch`，
   与既有 26 个具名工具形状逐字一致。没有任何新的 facade、没有 cross-context import、
   没有往 `routes/` / `services/` 加新的跨域耦合。
 - G4 的全域守卫产出一张**「路由 ⟷ 工具」全量映射表**。这张表恰好是 W4-A
@@ -340,7 +340,7 @@ D11（`mcp/tools.ts:12-21`）担心的是：「11 类资源 × 4 动词 = 44 个
 | 全域守卫初次落地会暴露出更多今天没意识到的不一致                         | 这正是它的价值。落地时若发现新的 `unroutedTools`（即又一个 A1 类死路径），当场修；若是新的 `uncovered`，按四类归类后入账本                                                                                                                                                                                                                                                                    |
 | 280 条豁免账本又臭又长，没人读                                           | 按**域前缀分组** + 每组一条理由，而非 280 条各写一句。高水位机制保证它只降不升                                                                                                                                                                                                                                                                                                                |
 | `GET /api/workgroup-tasks/pending` 与 `pending-count` 两处可见性判定漂移 | 两者共用同一个内部候选集函数（重构 `pendingCount` 抽出 `pendingRows`，count 由 rows 派生）。AC-9 有双 actor 一致性用例                                                                                                                                                                                                                                                                        |
-| 27 个新工具的描述质量参差，模型误用                                      | 每个工具的描述必须写明**前置条件**与**这一步会不会推进任务**（`dispatch_task_questions` / `confirm_workgroup_step` 会，`stage_task_question` 不会）——这是 review 的硬项。**「推进」还要分两段**：`dispatch_task_questions` 落库成功后 resume 仍可能失败，路由以 HTTP 200 带嵌套 `{resume:{ok:false}}` 返回（`routes/taskQuestions.ts:231-269`，设计门 P2-7），描述必须要求调用方检查 `resume` |
+| 23 个新工具的描述质量参差，模型误用                                      | 每个工具的描述必须写明**前置条件**与**这一步会不会推进任务**（`dispatch_task_questions` / `confirm_workgroup_step` 会，`stage_task_question` 不会）——这是 review 的硬项。**「推进」还要分两段**：`dispatch_task_questions` 落库成功后 resume 仍可能失败，路由以 HTTP 200 带嵌套 `{resume:{ok:false}}` 返回（`routes/taskQuestions.ts:231-269`，设计门 P2-7），描述必须要求调用方检查 `resume` |
 
 ## 11. 设计门 / 实现门
 
@@ -350,4 +350,23 @@ D11（`mcp/tools.ts:12-21`）担心的是：「11 类资源 × 4 动词 = 44 个
 
 ## 12. 门记录
 
-（待填）
+### 12.1 设计门
+
+2026-08-26 对 current 三件套做功能、可实现性与证据闭合审查：0 P0 / 11 P1 / 11 P2。关键修正已折入
+v2：审计分母从 440 重跑为 470；新增 PAT 结构可达维度（63 never、61 system-point、346 PAT 可达、
+79 已覆盖、267 gap）；prefix 豁免改为逐条 exact leaf；守卫从路径加深到路径/请求字段/权限三维；
+删除结构上必死的 `find_users`、memory candidate 与 batch-import 工具方案。逐项处置见 `plan.md §3`。
+
+### 12.2 实现与托管证据
+
+- PR-A `7131812a47fade80341fce90dc29e860a4c68867`：四条死路径、2 个新具名工具、全域四向守卫与 389 条 exact leaf；targeted 61 pass，8 条变异实证。
+- PR-B `15701c3c007dd3d7aba721ccadbf6ac3ed7f3e24`：21 个具名人工门工具，工具总数 31→52；`answer_clarify` 字段补齐、新 pending route、分路失败语义，账本 389→368；targeted 66 pass，4 条变异实证。
+- 收口 `d5744a0842253ef6f2c61c00013209a76e16a990`：新 route 进入 contract registry，audit backlog 与 AC-1～13 证据逐项回填。
+- hosted containing SHA `5c762c19715f167a8796bf08d661ad9c43b4349f` 已包含上述三笔；CI `32998902223`、visual `32998902239` 均 `success`。
+
+### 12.3 架构定位
+
+RFC-329 提供 W4-A 的 replayable route/tool binding 与 exact gap ledger，但没有建立 operation id/catalog、合并 handler
+或切 transport boundary，因此只记 **W4-A 输入**，不记 W4-A wave credit。当前 exact leaf baseline 为 374；相对本 RFC
+落地时的 368 增加 6 条，已由 RFC-330 的新路由以具名 `allowGrowth` 归因。本次状态回填已获用户授权作为 doc-only
+收口发布；其 remote ancestry 与 exact-SHA docs CI 由发布流程外部核验并在交付回执中报告，不在提交内递归自证。

@@ -1,7 +1,7 @@
 # RFC-328 详细设计：持久化任务执行所有权与 fencing
 
-> 状态：Implementation candidate；用户已批准 [`proposal.md`](./proposal.md) 的 D1～D12、能力影响 1～12 与 [`code-host-recovery-matrix.md`](./code-host-recovery-matrix.md)，实现候选待远端 exact-SHA CI。
-> 当前实现基线：`a23c1a4113ad849bfbded4524ae063ce1eacd6c1`（刷新时 `HEAD=origin/main`）；production wiring、迁移、测试与 canonical artifacts 尚未发布，不把候选或本地验证冒充 hosted 终态。
+> 状态：Done（production）；用户已批准 [`proposal.md`](./proposal.md) 的 D1～D12、能力影响 1～12 与 [`code-host-recovery-matrix.md`](./code-host-recovery-matrix.md)。
+> 落地证据：主实现 `650ced2528fcf16c48e1743127394463ca747dc5`，修复链收口于 `6af560df7`；包含二者的 `5c762c19715f167a8796bf08d661ad9c43b4349f` 已由 CI `32998902223` 与 visual `32998902239` 验绿。本次文档收口已获用户授权发布；其自身的远端与 CI 结果由发布流程核验，不在提交内递归自证。
 > 架构位置：RFC-294 N2 / P0-D；本 RFC 不领取 W2 的解环或目录迁移 credit。
 
 ## 1. 一句话设计
@@ -51,7 +51,7 @@ inherited child 的真实磁盘边界由 `scheduler.ts:4169-4202` 证明是借�
 
 code-host分母也不能只写成“评论/合并”：`packages/shared/src/codeHost/actions.ts:29-84`当前有29个action，其中`custom`可提交任意`GET/POST/PUT/PATCH/DELETE`；`services/codeHost/call.ts:88`当前把`GET/PUT/PATCH/DELETE`用于网络/5xx传输重试，`:684`又对所有method的429遵守Retry-After，`scheduler.ts:4469`明确保留人工retry node。用户已钉死“功能远大于安全、不得随便加安全策略”，因此本RFC必须逐provider binding登记可恢复语义、记录每次真实send并保留manual retry，而不能用一刀切`no-replay`删除现有能力或声称所有outbound都exactly-once。
 
-当前 canonical artifacts 是可复用 seed，但还不是 P0-D exact denominator：`architecture/mutation-entrypoints.json` 记录 842 entries / 2 个 node-run insert site，尚无本 RFC四类 authority字段；`architecture/transaction-external-effects.json` 记录 231 个 transaction callbacks / 38 个 co-located candidates，只回答 transaction内是否疑似外部效果，不穷尽 transaction外 task-owned act。实现 T26/T27 必须扩展这两份 canonical事实源及其生成/守卫，不另造平行手抄 JSON。
+设计时的 canonical seed 是 842 个 mutation entrypoint / 2 个 node-run insert site 与 231 个 transaction callback；hosted containing SHA `5c762c197` 的落地报告为 900 / 2 / 245，并把四类 authority、task-owned effect 与 corresponding guards 归入同一 canonical 生成链。当前 `main` 经 RFC-331～333 后为 924 / 2 / 263；后续增长归后续波次，不改变 T26/T27 已闭合、未另造平行手抄 JSON 的结论，也不把 W2 topology cut credit 记给本 RFC。
 
 ## 3. 目标架构与模块边界
 

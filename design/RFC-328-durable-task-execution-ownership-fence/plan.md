@@ -1,6 +1,6 @@
 # RFC-328 实施计划：持久化任务执行所有权与 fencing
 
-> 状态：Implementation candidate；用户已批准完整决策面，T0～T33候选与发布前证据已闭合；T34远端发布与T35 hosted证据收口尚未完成。
+> 状态：Done（production）；用户已批准完整决策面，T0～T35 与 hosted production evidence 已闭合。用户已授权发布本次文档收口；该提交的 remote ancestry / exact-SHA docs jobs 由发布流程核验，不在提交内递归自证。
 > 决策门：用户于2026-08-26明确批准实施，即批准 proposal D1～D12、能力影响 1～12 与完整 code-host recovery matrix；任何后续功能语义变化仍须退回设计门。本轮只做correctness fencing，不新增功能收缩型安全策略。
 > 开发位置：共享主工作树 `/Users/wangbinquan/dev/proj/agent-workflow` 的 `main`；禁止分支/worktree/stash/rebase/reset。
 
@@ -426,7 +426,7 @@ RFC workflow 默认单 RFC 单 PR；本仓直接在共享 `main` 上提交，不
 
 ## 11. 完成清单
 
-- [ ] T0～T35 全部完成，无跳号任务被“口头算过”。
+- [x] T0～T35 全部完成，无跳号任务被“口头算过”；production hosted 证据已闭合，本次 doc-only 收口的发布回执不预写进自身。
 - [x] proposal AC-1～32 每条有可复跑命令/测试/ledger证据。
 - [x] durable ownership authority恰好 1。
 - [x] epoch失效后的 stale authoritative DB mutation delta恰好 0。
@@ -436,7 +436,15 @@ RFC workflow 默认单 RFC 单 PR；本仓直接在共享 `main` 上提交，不
 - [x] production taskId-only stop=0、未分类 writer=0、未登记 effect=0。
 - [x] Task/NodeRun REST/MCP/frontend wire零 breaking delta。
 - [x] 设计门与实现门 findings闭合并记录。
-- [ ] exact-path commits已入 `origin/main`，local main不落后/不分叉。
-- [ ] 包含最终 exact SHA 的相关 GitHub Actions jobs终态为绿；取消或无关红不冒充全绿。
-- [ ] `STATE.md` 与 `design/plan.md` 标为 Done并记录证据。
-- [ ] 后续另立新号 W2 RFC；RFC-328 不自行继续目录解环。
+- [x] production exact-path commits已入 `origin/main`；主实现 `650ced252` 与修复收口 `6af560df7` 均包含于 hosted-green `5c762c197`。
+- [x] containing SHA `5c762c19715f167a8796bf08d661ad9c43b4349f` 的 CI `32998902223`、visual `32998902239` 终态为 `success`；未用取消 run 冒充全绿。
+- [x] 已发布的 `STATE.md` 与 `design/plan.md` 均为 Done；本次提交只对齐 RFC 自身三件套，不重复修改总索引。
+- [x] 后续已另立 RFC-331 承接 W2-A topology cut；RFC-328 没有自行继续目录解环。
+
+## 12. T34/T35 托管证据收口（2026-08-27）
+
+- production 主实现：`650ced2528fcf16c48e1743127394463ca747dc5`；durable intent/owner/effect/fence/maintenance/lineage、迁移 `0210`、exact-token registry、context/outbox 与 canonical guards 同批进入 `main`。
+- 后续修复链：`4d028445a`、`0bf21a2da`、`9a1f6f642`、`b0aa3fadb`、`cc29ecc6d`、`8fa602a5f`、`1e1980a69`、`4040adcc7`、`bdb268676`、`6af560df7`；修复保持已批准的 normal/custom retry、manual retry 与同 task 并行能力。
+- hosted 结论：`5c762c19715f167a8796bf08d661ad9c43b4349f` 同时包含上述实现/修复链与 RFC-329，CI run `32998902223`、visual run `32998902239` 均 `success`。
+- 架构结论：P0-D / N2 完成；durable authority 与 committed lifecycle outbox 已成为后续输入；task SCC 六条债、TaskEngine/NodeExecutor/WrapperRuntime 仍归 RFC-331 与后续 W2 波次。
+- 发布边界：本节与状态回填是 doc-only 收口，用户已于 2026-08-27 明确授权提交/推送；本次文档 commit 的 remote ancestry 与 exact-SHA hosted docs 证据由发布流程外部核验并在交付回执中报告，不在提交内递归自证。

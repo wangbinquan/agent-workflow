@@ -1,8 +1,8 @@
 # RFC-328 持久化任务执行所有权与 fencing（P0-D）
 
-> 状态：Implementation candidate（2026-08-26；用户已批准 D1～D12、能力影响 1～12 与完整 code-host recovery matrix；实现候选待远端 exact-SHA CI）
+> 状态：Done（production，2026-08-26；用户已批准 D1～D12、能力影响 1～12 与完整 code-host recovery matrix；本次文档收口已获用户授权发布，其自身远端与 CI 由发布流程核验）
 > 目标架构位置：RFC-294 N2 / P0-D；硬前置于新号 W2 implementation RFC
-> 当前实现基线：`a23c1a4113ad849bfbded4524ae063ce1eacd6c1`（刷新时 `HEAD=origin/main`）；RFC-328 production wiring、迁移、测试与 canonical artifacts 尚在本地候选，未把未发布内容或 hosted 结果写成 Done。
+> 落地证据：主实现 `650ced2528fcf16c48e1743127394463ca747dc5`，修复链收口于 `6af560df7`；两者均为 hosted-green containing SHA `5c762c19715f167a8796bf08d661ad9c43b4349f` 的祖先。CI run `32998902223` 与 visual run `32998902239` 均为 `success`。本 RFC 只完成 P0-D，不领取 W2 credit。
 
 ## 1. 背景
 
