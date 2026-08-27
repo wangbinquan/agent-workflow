@@ -16,7 +16,7 @@
 // exists for canvas legibility — without it, the user sees a one-way arrow
 // out of the agent and the cycle isn't obvious. Deleting the second edge in
 // the canvas does NOT break answer injection (asserted by
-// `clarify-reverse-drag-two-edges.test.ts` via grep against scheduler.ts).
+// `clarify-reverse-drag-two-edges.test.ts` via the taskDagGraph owner).
 //
 // All exports are pure functions. Mirrors connectionSync conventions so
 // WorkflowCanvas.handleConnect can chain them with the existing
