@@ -4,9 +4,11 @@
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { TaskActorRole } from '@agent-workflow/shared'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition'
-import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
-import type { ReviewDecisionCommandPort } from '@/modules/collaboration/application/ports/reviewDecisionCommand'
+import type {
+  CollaborationCommandContext,
+  ReviewDecisionCommandPort,
+} from '@/modules/collaboration/public/types'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import { submitReviewDecision as submitLegacyReviewDecision } from '@/services/review'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { createLogger } from '@/util/log'
@@ -69,7 +71,7 @@ export function createReviewDecisionCommandContext(input: {
       }
     },
   }
-  return createCollaborationCommandContext({
+  return humanGateComposition.createCollaborationCommandContext({
     db: input.db,
     appHome: input.appHome,
     reviewDecisions,

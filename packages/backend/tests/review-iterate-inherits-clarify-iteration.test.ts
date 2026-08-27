@@ -36,6 +36,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { submitReviewDecision } from '../src/services/review'
+import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -48,6 +49,7 @@ interface Fixture {
   reviewNodeRunId: string
   staleRunId: string
   clarifyRunId: string
+  clarifySnapshot: string
   pendingDocVersionId: string
 }
 
@@ -57,6 +59,23 @@ async function buildFixture(opts: {
   worktree: string
 }): Promise<Fixture> {
   const { db, appHome, worktree } = opts
+
+  const git = async (args: string[]): Promise<string> => {
+    const result = await runGit(worktree, args)
+    if (result.exitCode !== 0) throw new Error(result.stderr.trim())
+    return result.stdout.trim()
+  }
+  await git(['init', '-q', '-b', 'main'])
+  await git(['config', 'user.email', 'review-lineage@test.invalid'])
+  await git(['config', 'user.name', 'review-lineage-test'])
+  writeFileSync(join(worktree, 'lineage.txt'), 'stale\n', 'utf8')
+  await git(['add', 'lineage.txt'])
+  await git(['commit', '-q', '-m', 'stale snapshot'])
+  const staleSnapshot = await git(['rev-parse', 'HEAD'])
+  writeFileSync(join(worktree, 'lineage.txt'), 'clarify\n', 'utf8')
+  await git(['add', 'lineage.txt'])
+  await git(['commit', '-q', '-m', 'clarify snapshot'])
+  const clarifySnapshot = await git(['rev-parse', 'HEAD'])
 
   const agentId = ulid()
   await db.insert(agentsTable).values({
@@ -124,7 +143,7 @@ async function buildFixture(opts: {
     status: 'done',
     startedAt: Date.now() - 2000,
     finishedAt: Date.now() - 1500,
-    preSnapshot: 'stale-snapshot-sha',
+    preSnapshot: staleSnapshot,
   })
   await db.insert(nodeRunOutputs).values({
     nodeRunId: staleRunId,
@@ -145,7 +164,7 @@ async function buildFixture(opts: {
     status: 'done',
     startedAt: Date.now() - 1000,
     finishedAt: Date.now() - 500,
-    preSnapshot: 'clarify-snapshot-sha',
+    preSnapshot: clarifySnapshot,
   })
   await db.insert(nodeRunOutputs).values({
     nodeRunId: clarifyRunId,
@@ -195,6 +214,7 @@ async function buildFixture(opts: {
     reviewNodeRunId,
     staleRunId,
     clarifyRunId,
+    clarifySnapshot,
     pendingDocVersionId,
   }
 }
@@ -260,7 +280,7 @@ describe('submitReviewDecision iterate/reject inherits clarifyIteration from lat
     expect(fresh.retryIndex).toBe(1)
     expect(fresh.iteration).toBe(0)
     expect(fresh.parentNodeRunId).toBeNull()
-    expect(fresh.preSnapshot).toBe('clarify-snapshot-sha') // inherited from clarify-rerun, not stale
+    expect(fresh.preSnapshot).toBe(f.clarifySnapshot) // inherited from clarify-rerun, not stale
     // Agent has not run yet — started_at must still be null.
     expect(fresh.startedAt).toBeNull()
 

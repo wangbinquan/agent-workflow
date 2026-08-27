@@ -5,19 +5,23 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { collaborationGateOperations, nodeRuns } from '@/db/schema'
-import { decodeReviewDecisionManifest } from '@/modules/collaboration/domain/reviewDecision'
-import type { ValidatedWorkspaceRollbackPlan } from '@/modules/collaboration/domain/workspaceRollbackPlan'
-import { GateContinuationEffectStep } from '@/modules/task-execution/application/drive/gateContinuationEffectStep'
-import type {
-  GateWorkspaceRollbackExecutor,
-  GateWorkspaceRollbackOutcome,
-  GateWorkspaceRollbackPlanView,
-  GateWorkspaceRollbackProjectionFactory,
-  GateWorkspaceRollbackRef,
-} from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
-import { taskExecutionModule } from '@/modules/task-execution/public/participants'
+import {
+  GateContinuationEffectStep,
+  type GateWorkspaceRollbackExecutor,
+  type GateWorkspaceRollbackOutcome,
+  type GateWorkspaceRollbackPlanView,
+  type GateWorkspaceRollbackProjectionFactory,
+  type GateWorkspaceRollbackRef,
+  taskExecutionModule,
+} from '@/modules/task-execution/public/participants'
+import {
+  humanGateComposition,
+  type ValidatedWorkspaceRollbackPlanBridge as ValidatedWorkspaceRollbackPlan,
+} from '@/services/humanGateComposition'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { rollbackToSnapshot } from '@/util/git'
+
+const { decodeReviewDecisionManifest } = humanGateComposition
 
 type TargetReceipt = Readonly<{
   sourceNodeRunId: string
@@ -180,7 +184,9 @@ export class SqliteGateWorkspaceRollbackProjectionFactory implements GateWorkspa
   }
 }
 
-export function createGateContinuationPreDriveStep(db: DbClient): GateContinuationEffectStep {
+export function createGateContinuationPreDriveStep(
+  db: DbClient,
+): InstanceType<typeof GateContinuationEffectStep> {
   return new GateContinuationEffectStep(
     db,
     taskExecutionModule.effects,

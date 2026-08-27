@@ -372,9 +372,9 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
     expect(typeof dv.decisionReason).toBe('string')
   })
 
-  test('A6 second approve on already-done review: 409 + no-op on outputs', async () => {
+  test('A6 same approve retry replays its durable receipt + no-op on outputs', async () => {
     h = await buildHarness()
-    await submitReviewDecision({
+    const first = await submitReviewDecision({
       db: h.db,
       appHome: h.appHome,
       nodeRunId: h.reviewRunId,
@@ -387,26 +387,26 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
       .from(nodeRunOutputs)
       .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
 
-    let code: string | undefined
-    try {
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
-    } catch (err) {
-      code = (err as { code?: string }).code
-    }
-    expect(code).toBe('review-not-awaiting')
+    const replay = await submitReviewDecision({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewRunId,
+      decision: 'approved',
+      expectedReviewIteration: 0,
+      author: 'tester',
+    })
+    expect(first.receipt.replayed).toBe(false)
+    expect(replay.receipt).toMatchObject({
+      operationId: first.receipt.operationId,
+      replayed: true,
+    })
 
     const outsAfter = await h.db
       .select()
       .from(nodeRunOutputs)
       .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
     expect(outsAfter.length).toBe(outsBefore.length)
+    expect(await h.db.select().from(memoryDistillJobs)).toHaveLength(1)
   })
 
   test('A7 approve sets distill job sourceKind=review + status pending-ish', async () => {
@@ -629,7 +629,14 @@ describe('review decision concurrency — one complete winner, zero loser side e
     ])
 
     expect(results[0]!.status).toBe('fulfilled')
-    expectRejectedWithCode(results[1]!, 'review-not-awaiting')
+    expect(results[1]!.status).toBe('fulfilled')
+    if (results[0]!.status === 'fulfilled' && results[1]!.status === 'fulfilled') {
+      expect(results[0]!.value.receipt.replayed).toBe(false)
+      expect(results[1]!.value.receipt).toMatchObject({
+        operationId: results[0]!.value.receipt.operationId,
+        replayed: true,
+      })
+    }
     const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
     expect(doc.decision).toBe('approved')
     expect(doc.decidedBy).toBe('first')

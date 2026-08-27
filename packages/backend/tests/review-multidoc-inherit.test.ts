@@ -32,6 +32,7 @@ import {
   setDocumentSelection,
   submitReviewDecision,
 } from '../src/services/review'
+import { transitionTaskStatusByEvent } from '../src/services/lifecycle'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -192,6 +193,22 @@ describe('RFC-129 — cross-round selection inheritance', () => {
     },
     iteration = 0,
   ): Promise<void> {
+    const current = await db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, ctx.taskId))
+      .then((rows) => rows[0])
+    if (current?.status === 'pending') {
+      // A real scheduler claim performs this edge before it dispatches the
+      // freshly re-minted review round. This test calls dispatchReviewNode
+      // directly, so model that lifecycle step explicitly.
+      await transitionTaskStatusByEvent({
+        db,
+        taskId: ctx.taskId,
+        event: { kind: 'claim' },
+        reason: 'review-multidoc-inherit-test-scheduler-claim',
+      })
+    }
     const r = await dispatchReviewNode({
       db,
       taskId: ctx.taskId,

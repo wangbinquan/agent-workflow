@@ -27,6 +27,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { dispatchReviewNode, submitReviewDecision } from '../src/services/review'
+import { transitionTaskStatusByEvent } from '../src/services/lifecycle'
 import { isFresherNodeRun } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -253,6 +254,16 @@ describe('RFC-053 PR-A T1f — loop / fan-out / wrapper nesting', () => {
       reviewIteration: 0,
       bodyPath: 'doc_versions/v1.md',
       decision: 'pending',
+    })
+
+    // The manually seeded review row represents an already parked gate. The
+    // production dispatch path performs running -> awaiting_review before a
+    // decision can release it; this direct fixture must model that edge too.
+    await transitionTaskStatusByEvent({
+      db: h.db,
+      taskId: h.taskId,
+      event: { kind: 'park-review' },
+      reason: 'lifecycle-wrapper-nested-test-review-park',
     })
 
     await submitReviewDecision({

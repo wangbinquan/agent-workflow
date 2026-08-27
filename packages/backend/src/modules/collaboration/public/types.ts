@@ -34,6 +34,22 @@ export type {
 export type { GateDecisionReceipt, HumanGateIdentity } from '../domain/gateReceipt'
 export type { HumanGateKind, PreparedHumanGateRef } from '../domain/humanGateOperation'
 export type { ReviewGateOpenDocumentDraft } from '../application/prepareReviewGateOpen'
+export type {
+  ReviewDecisionCommandPort,
+  SubmitReviewDecisionCommandInput,
+  SubmitReviewDecisionCommandResult,
+} from '../application/ports/reviewDecisionCommand'
+export type {
+  ClarifyDecisionCommandPort,
+  SubmitClarifyDecisionCommandInput,
+  SubmitClarifyDecisionCommandResult,
+} from '../application/ports/clarifyDecisionCommand'
+export type {
+  DispatchTaskQuestionsCommandInput,
+  DispatchTaskQuestionsCommandResult,
+  QuestionDispatchActorSnapshot,
+  QuestionDispatchCommandPort,
+} from '../application/ports/questionDispatchCommand'
 
 declare const collaborationCommandContextBrand: unique symbol
 

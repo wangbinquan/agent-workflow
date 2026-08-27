@@ -7,7 +7,10 @@ import {
   taskExecutionEffects,
   taskExecutionIntents,
 } from '@/db/schema'
-import { decodeHumanGateContinuationPayload } from '../../domain/humanGateContinuation'
+import {
+  decodeHumanGateContinuationPayload,
+  isLegacyTaskGateContinuationPayload,
+} from '../../domain/humanGateContinuation'
 import type { TaskExecutionEffectStore } from '../ports/taskExecutionEffectStore'
 import type {
   GateWorkspaceRollbackExecutor,
@@ -55,6 +58,11 @@ export class GateContinuationEffectStep implements RepositoryPreparationStep {
       )
     }
     if (intent.kind !== 'gate-continuation') return { kind: 'ready' }
+
+    // Dynamic-workflow/workgroup task gates predate RFC-333 and intentionally
+    // share this intent kind to preserve their operation generation. They have
+    // no collaboration rollback effect to settle.
+    if (isLegacyTaskGateContinuationPayload(intent.payloadJson)) return { kind: 'ready' }
 
     const payload = decodeHumanGateContinuationPayload(intent.payloadJson)
     const linked = this.db

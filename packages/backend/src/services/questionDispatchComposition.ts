@@ -3,9 +3,11 @@
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { QuestionDispatchCommandPort } from '@/modules/collaboration/application/ports/questionDispatchCommand'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition'
-import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
+import type {
+  CollaborationCommandContext,
+  QuestionDispatchCommandPort,
+} from '@/modules/collaboration/public/types'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import { dispatchTaskQuestionsWithDecision } from '@/services/taskQuestionDispatch'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { createLogger } from '@/util/log'
@@ -63,5 +65,8 @@ export function createQuestionDispatchCommandContext(input: {
       }
     },
   }
-  return createCollaborationCommandContext({ db: input.db, questionDispatches })
+  return humanGateComposition.createCollaborationCommandContext({
+    db: input.db,
+    questionDispatches,
+  })
 }

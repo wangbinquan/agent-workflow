@@ -1912,7 +1912,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99",
+    "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },

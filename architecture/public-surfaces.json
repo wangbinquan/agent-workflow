@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 204,
+    "consumers": 224,
     "exactEntrypointFiles": 35,
     "governedFieldSurfaces": 5,
-    "methods": 162,
+    "methods": 168,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1413,
-    "symbols": 337
+    "recursiveFields": 1495,
+    "symbols": 353
   },
   "entries": [
     {
@@ -2454,7 +2454,11 @@
         "maxTransitiveLeafFields": 33,
         "maxUnionVariants": 15
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:4a9db5b7723cce546d2e",
+        "import:e7dae2614e7fadd00cae",
+        "import:ec58f14a48b44f06f4ae"
+      ],
       "context": "collaboration",
       "dataClass": "metadata",
       "direction": "offered",
@@ -2471,32 +2475,56 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "expectedGateRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "expectedTaskRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "gateKind",
           "type": "(typeof HUMAN_GATE_KINDS)[number]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "gateRef",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "operationKind",
           "type": "(typeof HUMAN_GATE_OPERATION_KINDS)[number]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:0.kind",
           "type": "'open'"
         },
@@ -2506,7 +2534,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:1.commentsJson",
           "type": "string"
         },
@@ -2526,7 +2556,11 @@
           "type": "'iterated'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:1.kind",
           "type": "'review-decision'"
         },
@@ -2541,17 +2575,25 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:1.reviewIteration",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:1.selectionsJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:e7dae2614e7fadd00cae"
+          ],
           "fieldPath": "payload.$variant:2.answersJson",
           "type": "string"
         },
@@ -2566,32 +2608,50 @@
           "type": "'stop'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:2.kind",
           "type": "'clarify-decision'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:e7dae2614e7fadd00cae"
+          ],
           "fieldPath": "payload.$variant:2.releaseGate",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:e7dae2614e7fadd00cae"
+          ],
           "fieldPath": "payload.$variant:2.roundId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e"
+          ],
           "fieldPath": "payload.$variant:3.entryIds",
           "type": "readonly string[]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:3.kind",
           "type": "'question-dispatch'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:4.kind",
           "type": "'manual-question-open'"
         },
@@ -2601,27 +2661,45 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e"
+          ],
           "fieldPath": "payload.$variant:4.targetNodeId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:5.factDigest",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "payload.$variant:5.kind",
           "type": "'legacy-seed'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "schemaVersion",
           "type": "1"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
+          ],
           "fieldPath": "taskId",
           "type": "string"
         }
@@ -2631,12 +2709,77 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:4a9db5b7723cce546d2e",
+          "file": "packages/backend/src/services/taskQuestionDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e7dae2614e7fadd00cae",
+          "file": "packages/backend/src/services/clarifyDecision.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:ec58f14a48b44f06f4ae",
+          "file": "packages/backend/src/services/review.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/review.ts#$file"
+        }
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:a1d2bb20be287fac51c964e8de416e434dacb34efb343177091f97d73416aea1",
       "status": "target-context-current-surface",
       "symbol": "CanonicalHumanGateRequest",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:24b0ad1fe92405169317"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:ClarifyDecisionCommandPort",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:24b0ad1fe92405169317"
+          ],
+          "name": "submit",
+          "signatureDigest": "sha256:33df24c14edb636b320636fd8f847a634327fec165f45966c192984fa9411652"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:24b0ad1fe92405169317",
+          "file": "packages/backend/src/services/clarifyDecisionComposition.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/clarifyDecisionComposition.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:47e523ee709a17db8cf3402feb6e01b93b6fde5327fc04ef1905e5e626094521",
+      "status": "target-context-current-surface",
+      "symbol": "ClarifyDecisionCommandPort",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -2749,36 +2892,197 @@
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "acceptedAt",
+          "fieldPath": "entryIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedGateRevision",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "gate.kind",
+          "fieldPath": "expectedTaskRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "idempotencyKey",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:DispatchTaskQuestionsCommandInput",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e1f0e8baafe0b7653ebad78faa1cefcdfd740d83c45b35418bbc8f3d455047d4",
+      "status": "target-context-current-surface",
+      "symbol": "DispatchTaskQuestionsCommandInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "deferred",
+          "type": "readonly QuestionDispatchDeferredReceipt[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "dispatchedEntryIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.acceptedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.gate.kind",
           "type": "(typeof HUMAN_GATE_KINDS)[number]"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "gate.ref",
+          "fieldPath": "receipt.gate.ref",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "gateRevision",
+          "fieldPath": "receipt.gateRevision",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "operationId",
+          "fieldPath": "receipt.operationId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "replayed",
+          "fieldPath": "receipt.replayed",
           "type": "boolean"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "receipt.taskRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "reruns",
+          "type": "readonly QuestionDispatchRerunReceipt[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:DispatchTaskQuestionsCommandResult",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:7d3daf00187608b1a76afdd85943681b2546179d6ebebc1b427f43638c20833b",
+      "status": "target-context-current-surface",
+      "symbol": "DispatchTaskQuestionsCommandResult",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:2a02c9e15c2bcd034104",
+        "import:720ba8368de50257733e"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:720ba8368de50257733e"
+          ],
+          "fieldPath": "acceptedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2a02c9e15c2bcd034104",
+            "import:720ba8368de50257733e"
+          ],
+          "fieldPath": "gate.kind",
+          "type": "(typeof HUMAN_GATE_KINDS)[number]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2a02c9e15c2bcd034104",
+            "import:720ba8368de50257733e"
+          ],
+          "fieldPath": "gate.ref",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:720ba8368de50257733e"
+          ],
+          "fieldPath": "gateRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:720ba8368de50257733e"
+          ],
+          "fieldPath": "operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2a02c9e15c2bcd034104",
+            "import:720ba8368de50257733e"
+          ],
+          "fieldPath": "replayed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2a02c9e15c2bcd034104",
+            "import:720ba8368de50257733e"
+          ],
           "fieldPath": "taskRevision",
           "type": "number"
         }
@@ -2788,7 +3092,20 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:2a02c9e15c2bcd034104",
+          "file": "packages/backend/src/services/clarify/autoDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/clarify/autoDispatch.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:720ba8368de50257733e",
+          "file": "packages/backend/src/services/taskQuestionDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file"
+        }
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:1e28e2cc1a2cb88be73416e49821b80082ceaae3c66e1daa80ce2629cdc6cdfc",
@@ -3129,6 +3446,94 @@
       "signatureDigest": "sha256:a299cdfd289e983a2ae2d4d3f000c590d057b684fb1c8ec16f503088c096db2b",
       "status": "target-context-current-surface",
       "symbol": "PreparedHumanGateRef",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "role",
+          "type": "z.infer<typeof TaskActorRoleSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "userId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:QuestionDispatchActorSnapshot",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:3c18416f64e782dbb77478c433f3090bfa18e8a45e240976247aa76007e12a96",
+      "status": "target-context-current-surface",
+      "symbol": "QuestionDispatchActorSnapshot",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:f833a9be867437113003"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:QuestionDispatchCommandPort",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:f833a9be867437113003"
+          ],
+          "name": "dispatch",
+          "signatureDigest": "sha256:25e9561871a3cf72d043078bead825273e268085825d2965307eb8c232940cd5"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:f833a9be867437113003",
+          "file": "packages/backend/src/services/questionDispatchComposition.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/questionDispatchComposition.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b9afef5f797200b26dd8e197201837c032d895afa9c873627851c31ddf7f3fec",
+      "status": "target-context-current-surface",
+      "symbol": "QuestionDispatchCommandPort",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -4098,6 +4503,52 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:2ac5579438de84f16ac1"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:ReviewDecisionCommandPort",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:2ac5579438de84f16ac1"
+          ],
+          "name": "submit",
+          "signatureDigest": "sha256:e603744edc1fb70aee00d80bf0fcf46d9d236179a58b14ef2a2d7913905c86eb"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:2ac5579438de84f16ac1",
+          "file": "packages/backend/src/services/reviewDecisionComposition.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/reviewDecisionComposition.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:2cd7dc8b9f0365b0bf493d39497407aca8b98c213f0781222651c971f6199916",
+      "status": "target-context-current-surface",
+      "symbol": "ReviewDecisionCommandPort",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "collaboration",
       "dataClass": "metadata",
@@ -4285,6 +4736,395 @@
       "signatureDigest": "sha256:833da17388c3c15ac09e5e9901b8658b6f873a1df4fe30a32b6ff9f02b334062",
       "status": "target-context-current-surface",
       "symbol": "ReviewGateOpenDocumentDraft",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "answers",
+          "type": "readonly ClarifyAnswer[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "directive",
+          "type": "z.infer<typeof ClarifyDirectiveSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedGateRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedTaskRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "idempotencyKey",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "ifMatchIteration",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nodeRunId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:SubmitClarifyDecisionCommandInput",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e513c8614724c7da26cf17eb6452900225879fe3511e09543ef0c10722141ff8",
+      "status": "target-context-current-surface",
+      "symbol": "SubmitClarifyDecisionCommandInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "deferred",
+          "type": "readonly QuestionDispatchDeferredReceipt[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "dispatchDeferredReason",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "dispatchedEntryIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.acceptedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.gate.kind",
+          "type": "(typeof HUMAN_GATE_KINDS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.gate.ref",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.gateRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.replayed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.taskRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "reruns",
+          "type": "readonly QuestionDispatchRerunReceipt[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "roundFullySealed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "roundKind.$variant:0",
+          "type": "'self'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "roundKind.$variant:1",
+          "type": "'cross'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sealedQuestionIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:SubmitClarifyDecisionCommandResult",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:0b1c1edf621332efc80e776d216133c55fb156fdc51f924a1768f9f136e694bb",
+      "status": "target-context-current-surface",
+      "symbol": "SubmitClarifyDecisionCommandResult",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "comments[].anchor",
+          "type": "z.infer<typeof ReviewCommentAnchorSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "comments[].anchorRequest.occurrence",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "comments[].anchorRequest.quote",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "comments[].anchorRequest.section",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "comments[].commentText",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "comments[].docVersionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "decision.$variant:0",
+          "type": "'approved'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "decision.$variant:1",
+          "type": "'rejected'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "decision.$variant:2",
+          "type": "'iterated'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedGateRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedReviewIteration",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedTaskRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "idempotencyKey",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "rejectReason",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "selections[].docVersionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "selections[].selection.$variant:0",
+          "type": "'accepted'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "selections[].selection.$variant:1",
+          "type": "'not_accepted'"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:SubmitReviewDecisionCommandInput",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e8e28a9716c415ca7bf9f4546bf28333feb8d9294a33979f0d3d9c410f8fc23e",
+      "status": "target-context-current-surface",
+      "symbol": "SubmitReviewDecisionCommandInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "commentsAdded",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "commentsSkippedAsDuplicate",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.acceptedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.gate.kind",
+          "type": "(typeof HUMAN_GATE_KINDS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.gate.ref",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.gateRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.replayed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "receipt.taskRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "reviewIteration",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "selectionsApplied",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/collaboration/public/types.ts",
+      "id": "public:collaboration:types:SubmitReviewDecisionCommandResult",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:69479d1167fdec9e22155cde3540bd22dadc4d685b3d4ef720d1de8f85fab1aa",
+      "status": "target-context-current-surface",
+      "symbol": "SubmitReviewDecisionCommandResult",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -17548,6 +18388,377 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:a565d89a85dadec282d6"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateContinuationEffectStep",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#GateContinuationEffectStep",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a565d89a85dadec282d6",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:af6eb5084bd021cd9c0492dd323865510a06182437fab65e583cb6b13332065c",
+      "status": "target-context-current-surface",
+      "symbol": "GateContinuationEffectStep",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:f6f6a79d7ea24d7f92c0"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateWorkspaceRollbackExecutor",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:f6f6a79d7ea24d7f92c0"
+          ],
+          "name": "executeValidatedPlan",
+          "signatureDigest": "sha256:fbfaf0a291c8ae181d850d29865baa60f646c3db3a324e2949f64c807e426a4b"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f6f6a79d7ea24d7f92c0"
+          ],
+          "name": "loadValidatedPlan",
+          "signatureDigest": "sha256:b1d3ce5e2e27308c514b29c13ef54f89bda1274bf2129bb337bf898dcd36d0be"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f6f6a79d7ea24d7f92c0",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:9775436b10ddc7f2d5f75b6b4ae66d850ca105f7c8e6402bc6b3428538d01dd7",
+      "status": "target-context-current-surface",
+      "symbol": "GateWorkspaceRollbackExecutor",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:b8288b60d247ee059059"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "applicationEvidence.$variant:0",
+          "type": "'applied'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "applicationEvidence.$variant:1",
+          "type": "'definitely-not-applied'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b8288b60d247ee059059"
+          ],
+          "fieldPath": "receipt",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b8288b60d247ee059059"
+          ],
+          "fieldPath": "rolledBack",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateWorkspaceRollbackOutcome",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:b8288b60d247ee059059",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:19b422df65a35b7421a7dca253ea6cb2d85369e3ab4ca86b7d0186c9fc61985b",
+      "status": "target-context-current-surface",
+      "symbol": "GateWorkspaceRollbackOutcome",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:ad9e685c2854e741e976"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:ad9e685c2854e741e976"
+          ],
+          "fieldPath": "operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ad9e685c2854e741e976"
+          ],
+          "fieldPath": "planDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ad9e685c2854e741e976"
+          ],
+          "fieldPath": "resourceKeys",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ad9e685c2854e741e976"
+          ],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateWorkspaceRollbackPlanView",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:ad9e685c2854e741e976",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:67e247d50508733492207b6b8adb9393b7c52043f07bc119b5f96f0245692730",
+      "status": "target-context-current-surface",
+      "symbol": "GateWorkspaceRollbackPlanView",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:799ec42a2f64b21578eb"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateWorkspaceRollbackProjectionFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:799ec42a2f64b21578eb"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:1fb48d1514b16b17360d7549001854cd98465889d6db3142aab8733935992ef3"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:799ec42a2f64b21578eb",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:650497d518d23d42a2092e7b788a3e0c371afe2713c9b77e3257b66764afd238",
+      "status": "target-context-current-surface",
+      "symbol": "GateWorkspaceRollbackProjectionFactory",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:4d8b06536c625c830493"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:4d8b06536c625c830493"
+          ],
+          "fieldPath": "operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4d8b06536c625c830493"
+          ],
+          "fieldPath": "planDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4d8b06536c625c830493"
+          ],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateWorkspaceRollbackRef",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:4d8b06536c625c830493",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:2828c9e29c15dfa0b716307a97beb51d7123469126d5e236e93b8b5e291ad21a",
+      "status": "target-context-current-surface",
+      "symbol": "GateWorkspaceRollbackRef",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
@@ -20813,7 +22024,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99",
+  "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -97,27 +97,17 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
-import {
-  canonicalHumanGateRequestHash,
-  canonicalHumanGateValueJson,
-  deriveHumanGateCompatibilityKey,
-  type CanonicalHumanGateRequest,
-} from '@/modules/collaboration/domain/canonicalGateRequest'
-import {
-  gateDecisionReceipt,
-  type GateDecisionReceipt,
-} from '@/modules/collaboration/domain/gateReceipt'
-import {
-  decodeQuestionDispatchManifest,
-  decodeQuestionDispatchReceipt,
-  encodeQuestionDispatchManifest,
-  encodeQuestionDispatchReceipt,
-  type QuestionDispatchManifest,
-  type QuestionDispatchReceiptEnvelope,
-} from '@/modules/collaboration/domain/questionDispatchDecision'
-import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
+import type {
+  CanonicalHumanGateRequest,
+  GateDecisionReceipt,
+} from '@/modules/collaboration/public/types'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
-import { humanGateComposition } from '@/services/humanGateComposition'
+import {
+  humanGateComposition,
+  type HumanGateOperationStoreBridge as SqliteHumanGateOperationStore,
+  type QuestionDispatchManifestBridge as QuestionDispatchManifest,
+  type QuestionDispatchReceiptEnvelopeBridge as QuestionDispatchReceiptEnvelope,
+} from '@/services/humanGateComposition'
 import {
   isClarifyChannelEdge,
   isTurnEngineWorkgroupTask,
@@ -127,6 +117,17 @@ import {
 } from '@agent-workflow/shared'
 
 const log = createLogger('task-questions.dispatch')
+
+const {
+  canonicalHumanGateRequestHash,
+  canonicalHumanGateValueJson,
+  decodeQuestionDispatchManifest,
+  decodeQuestionDispatchReceipt,
+  deriveHumanGateCompatibilityKey,
+  encodeQuestionDispatchManifest,
+  encodeQuestionDispatchReceipt,
+  gateDecisionReceipt,
+} = humanGateComposition
 
 /** Audit-only actor identity. NEVER enters a prompt (RFC-099 prompt-isolation). */
 export interface DispatchTaskQuestionsActor {
@@ -1241,7 +1242,8 @@ async function commitDispatchPlan(
           )
         }
         let begun: ReturnType<SqliteHumanGateOperationStore['beginTx']> | undefined
-        const operations = decision === undefined ? undefined : new SqliteHumanGateOperationStore()
+        const operations =
+          decision === undefined ? undefined : humanGateComposition.createHumanGateOperationStore()
         if (decision !== undefined && operations !== undefined) {
           const currentGateRevision = ensureLegacyQuestionGateRevisionTx({
             tx,

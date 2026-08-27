@@ -193,9 +193,15 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   test('四种 admission 共用一个 runtimeConfigOpts → coordinator 漏斗', () => {
     const spreads = taskSrc.match(/\.\.\.runtimeConfigOpts\(/g) ?? []
     // RFC-332 把 start/resume/retry/retry-prep 四份 spread 收进一个 coordinator
-    // factory；配置单源应恰好出现一次，而四个 admission 都必须调用该 factory。
+    // factory；RFC-333 的 exact human-gate wake 复用同一 factory，但不是第五份
+    // admission。配置单源仍只出现一次，四个 admission + 一个 wake 都必须接入。
     expect(spreads).toHaveLength(1)
-    expect(taskSrc.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(4)
+    expect(taskSrc.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(5)
+    const wakeStart = taskSrc.indexOf('export async function wakeHumanGateContinuation(')
+    const wakeEnd = taskSrc.indexOf('\nexport ', wakeStart + 1)
+    const wakeBlock = taskSrc.slice(wakeStart, wakeEnd)
+    expect(wakeStart).toBeGreaterThan(-1)
+    expect(wakeBlock.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(1)
   })
 
   // RFC-266: RFC-243 子任务的 deps 装配（buildChildDeps）必须原样带上三个并发键。

@@ -434,8 +434,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:42caefedb3ffb3a2bf5f",
-        "import:9fa1900dd74b562335de"
+        "import:2a02c9e15c2bcd034104"
       ],
       "exportedSymbols": [
         "AutoDispatchClarifyDecisionResult",
@@ -583,19 +582,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0f21ec2f5d8cfd04f2c7",
-        "import:23e4ce4987248ac57856",
-        "import:37c560ce2b2293bdad0b",
-        "import:5c196cf50eeeb1dcc38a",
-        "import:5dde0786c9bf02e6466f",
-        "import:897b79ab567fb43dc535",
-        "import:a5fd77bc9ae24fa2203a",
-        "import:af5a490e648c0f552d9f",
-        "import:b74ee40b59a0fc85534e",
-        "import:c0aa339fd448f1867c65",
-        "import:d431b003782c62cb1c8f",
-        "import:d7962c741fbe6189518c",
-        "import:dace83c20633fe685860"
+        "import:dace83c20633fe685860",
+        "import:e7dae2614e7fadd00cae"
       ],
       "exportedSymbols": [
         "ClarifyDecisionArgs",
@@ -613,8 +601,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:47399645662f94e9a74b",
-        "import:66db07f931bc0894c85d",
+        "import:24b0ad1fe92405169317",
         "import:eb85fb54dec9772eb20c"
       ],
       "exportedSymbols": [
@@ -1872,12 +1859,39 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0b5d48a45de5a9739079",
+        "import:2a368a687055a9380d5b",
+        "import:2af557f5dc96e75c906d",
         "import:2cad8b73b382ab2a79a4",
+        "import:5211f60ddb3a9be4344f",
+        "import:55348f9123db078151d8",
+        "import:5e5d25b4e190cff24137",
+        "import:672f8de26e0ccddb9b70",
+        "import:68be674a077204e3e011",
+        "import:7ece29e98a8ee290d6d5",
+        "import:97fc18515661bad39480",
+        "import:9c8eceaa5f410087fda5",
         "import:b99ff6a3b945e8252db3",
+        "import:bd0e77d598925cfb243e",
+        "import:c03d7d384cf732703275",
+        "import:c8cb3881721a45867470",
+        "import:c9e98dbd2bc6c2936dd9",
         "import:cec3edcdb48a1c4c4030",
-        "import:e0fa4035273ad5a73fb6"
+        "import:d2c415d6489c6711d978",
+        "import:e0fa4035273ad5a73fb6",
+        "import:e4e4f64d230770f24150",
+        "import:f81440fe46bf03f8affe",
+        "import:ff13bcbb91ebf6d67f49"
       ],
       "exportedSymbols": [
+        "ClarifyDecisionManifestBridge",
+        "ClarifyDecisionReceiptEnvelopeBridge",
+        "HumanGateOperationStoreBridge",
+        "QuestionDispatchManifestBridge",
+        "QuestionDispatchReceiptEnvelopeBridge",
+        "ReviewDecisionManifestBridge",
+        "ReviewDecisionReceiptEnvelopeBridge",
+        "ValidatedWorkspaceRollbackPlanBridge",
         "humanGateComposition"
       ],
       "file": "packages/backend/src/services/humanGateComposition.ts",
@@ -1890,15 +1904,13 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:043fe8911b0fb8e19a50",
-        "import:14c46975b6878da9608f",
-        "import:2d786e387dd446f860cb",
         "import:3c606fd7f430b388674c",
-        "import:76b6048968bbecb615f2",
-        "import:c0ed65786c048851873b",
-        "import:c87baa7fd06fda8cf2cd",
-        "import:f85c0d5dd2099370d70a",
-        "import:fec957579a99588a7d89"
+        "import:4d8b06536c625c830493",
+        "import:799ec42a2f64b21578eb",
+        "import:a565d89a85dadec282d6",
+        "import:ad9e685c2854e741e976",
+        "import:b8288b60d247ee059059",
+        "import:f6f6a79d7ea24d7f92c0"
       ],
       "exportedSymbols": [
         "SqliteGateWorkspaceRollbackExecutor",
@@ -3544,9 +3556,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:3c5c980188fbf51fe9f7",
         "import:577f75f4be456c71d121",
-        "import:c054bef784af7e456df6"
+        "import:f833a9be867437113003"
       ],
       "exportedSymbols": [
         "createQuestionDispatchCommandContext"
@@ -4075,27 +4086,13 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:01934c21d9e91f5e6c96",
         "import:03c5c5821dbc66ecef64",
         "import:15d52dbcc5e457a912cd",
-        "import:205d8c349ed1bc08165d",
-        "import:2547070a314d92073296",
         "import:30a6613c0e08ce11c0b2",
-        "import:355737219daa0d531cb0",
-        "import:3934d6c75724b7ec59cc",
-        "import:3b49aaa34c0c3e8843a3",
-        "import:3be933e3f4d0ff337ca4",
-        "import:3c7d83b740b22db438ed",
         "import:5fb92fc1db85b1e884ac",
-        "import:65d84f497b64a3d359d1",
-        "import:672b4365b278a91fd11b",
-        "import:70fdc7aa47cad335ac8f",
         "import:ac8057bde3a7ea3c8e87",
-        "import:b710fa6d395e2f866008",
-        "import:c80cfe1cd020cd69abc9",
-        "import:d844793e3bf57669063a",
-        "import:db606d5ddd5f772767d0",
         "import:e6a195947dd1f581629b",
+        "import:ec58f14a48b44f06f4ae",
         "import:f4f06fa560bee6701077",
         "import:f777a2e4b746b263a89e"
       ],
@@ -4164,8 +4161,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:02b49efd87675bbdccea",
-        "import:4687932e12fdd365aa05",
+        "import:2ac5579438de84f16ac1",
         "import:de528558cf3c4ebcd70e"
       ],
       "exportedSymbols": [
@@ -6447,20 +6443,9 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:13cb4dbf36babaa62116",
-        "import:1d619ddaecc79546c74d",
-        "import:20a6f931df23bc0c0f67",
-        "import:2162802a5b89f0a0be73",
-        "import:2636a875ee5dd7a39a87",
-        "import:2932782e1aa7ed87df73",
-        "import:603dbc3faeb280675cc0",
-        "import:6d0cea50ec2a2c70c79f",
-        "import:7c9fa817a53cf3047228",
-        "import:7ed8ca057be10e3708ff",
-        "import:a8b215a7729ea46d2828",
-        "import:aa1f1e81ea971445e394",
-        "import:ba0025e50807a16dfd36",
-        "import:cb7491bcb8ee43deadd9"
+        "import:4a9db5b7723cce546d2e",
+        "import:720ba8368de50257733e",
+        "import:aa1f1e81ea971445e394"
       ],
       "exportedSymbols": [
         "DispatchTaskQuestionsActor",
@@ -7573,5 +7558,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99"
+  "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e"
 }

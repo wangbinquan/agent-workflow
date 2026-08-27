@@ -756,4 +756,64 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)).get()?.rolledBack,
     ).toBe(true)
   })
+
+  test('pre-drive preserves the exact legacy task-gate resume variant without weakening RFC-333 payloads', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = 'task-333-legacy-task-gate'
+    seedTask(db, taskId, 'pending')
+    const module = createTaskExecutionTestModule('daemon-rfc333-legacy-task-gate')
+    const submitted = module.intents.submit({
+      db,
+      intentId: 'intent-rfc333-legacy-task-gate',
+      request: {
+        taskId,
+        kind: 'gate-continuation',
+        source: 'internal',
+        actorUserId: null,
+        expectedTaskRevision: 1,
+        scope: {
+          executionLineageId: taskId,
+          continuationSlotKey: `${taskId}:root`,
+          slotPath: slotPath(taskId),
+          operationGeneration: 0,
+        },
+        payload: { v: 1, event: 'resume' },
+      },
+      now: NOW,
+    })
+    const claimed = module.claim({ db, intentId: submitted.intentId, now: NOW + 1 })
+    module.claimGate.leave(claimed.permit)
+    const executor: GateWorkspaceRollbackExecutor = {
+      async loadValidatedPlan() {
+        throw new Error('legacy task gate must not load a collaboration rollback plan')
+      },
+      async executeValidatedPlan() {
+        throw new Error('legacy task gate must not execute a collaboration rollback plan')
+      },
+    }
+    const projections: GateWorkspaceRollbackProjectionFactory = {
+      bind() {
+        throw new Error('legacy task gate must not bind a collaboration rollback projection')
+      },
+    }
+    const step = new GateContinuationEffectStep(db, module.effects, executor, projections)
+    const context = {
+      taskId,
+      execution: createTaskExecutionContext({
+        intentId: submitted.intentId,
+        token: claimed.token,
+        db,
+      }),
+      signal: new AbortController().signal,
+      runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc333-legacy-task-gate' }),
+    }
+
+    await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
+
+    db.update(taskExecutionIntents)
+      .set({ payloadJson: '{"event":"resume","extra":true,"v":1}' })
+      .where(eq(taskExecutionIntents.id, submitted.intentId))
+      .run()
+    await expect(step.run(context)).rejects.toThrow('invalid-human-gate-continuation-payload')
+  })
 })

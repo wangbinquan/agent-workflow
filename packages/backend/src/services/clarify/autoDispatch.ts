@@ -50,10 +50,8 @@ import {
   replayCommittedClarifyDecision,
   type ClarifyDecisionArgs,
 } from '@/services/clarifyDecision'
-import {
-  gateDecisionReceipt,
-  type GateDecisionReceipt,
-} from '@/modules/collaboration/domain/gateReceipt'
+import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { buildFrozenAttributionSet } from './rounds'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
@@ -74,6 +72,8 @@ import {
   type ClarifyQuestion,
   type TaskActorRole,
 } from '@agent-workflow/shared'
+
+const { gateDecisionReceipt } = humanGateComposition
 
 const log = createLogger('clarify-auto-dispatch')
 

@@ -102,25 +102,12 @@ import {
   prepareReviewGateOpen,
 } from '@/modules/collaboration/public/commands'
 import {
-  canonicalHumanGateValueJson,
-  canonicalHumanGateRequestHash,
-  deriveHumanGateCompatibilityKey,
-} from '@/modules/collaboration/domain/canonicalGateRequest'
-import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
-import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
-import {
-  decodeReviewDecisionManifest,
-  decodeReviewDecisionReceipt,
-  encodeReviewDecisionManifest,
-  encodeReviewDecisionReceipt,
-  type ReviewDecisionManifest,
-  type ReviewDecisionReceiptEnvelope,
-} from '@/modules/collaboration/domain/reviewDecision'
-import { prepareWorkspaceRollbackPlan } from '@/modules/collaboration/application/prepareWorkspaceRollbackPlan'
-import type { ValidatedWorkspaceRollbackPlan } from '@/modules/collaboration/domain/workspaceRollbackPlan'
-import { GitWorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector'
-import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
-import { humanGateComposition } from '@/services/humanGateComposition'
+  humanGateComposition,
+  type HumanGateOperationStoreBridge as SqliteHumanGateOperationStore,
+  type ReviewDecisionManifestBridge as ReviewDecisionManifest,
+  type ReviewDecisionReceiptEnvelopeBridge as ReviewDecisionReceiptEnvelope,
+  type ValidatedWorkspaceRollbackPlanBridge as ValidatedWorkspaceRollbackPlan,
+} from '@/services/humanGateComposition'
 import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
@@ -128,6 +115,7 @@ import {
   resolveReviewAnchor,
 } from '@/modules/collaboration/public/queries'
 import type {
+  CanonicalHumanGateRequest,
   ReviewAnchorFailure,
   ReviewGateOpenDocumentDraft,
 } from '@/modules/collaboration/public/types'
@@ -180,6 +168,17 @@ import { resolveTaskRole } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+
+const {
+  canonicalHumanGateRequestHash,
+  canonicalHumanGateValueJson,
+  decodeReviewDecisionManifest,
+  decodeReviewDecisionReceipt,
+  deriveHumanGateCompatibilityKey,
+  encodeReviewDecisionManifest,
+  encodeReviewDecisionReceipt,
+  gateDecisionReceipt,
+} = humanGateComposition
 
 /** RFC-145: human-readable supersede breadcrumb prefix (message builder only —
  *  the machine contract is the superseded_by_review / rolled_back columns). */
@@ -3282,10 +3281,9 @@ async function submitReviewDecisionUnlocked(
       }),
     }))
     if (candidates.some((candidate) => candidate.targets.length > 0)) {
-      workspaceRollbackPlan = await prepareWorkspaceRollbackPlan({
+      workspaceRollbackPlan = await humanGateComposition.prepareWorkspaceRollbackPlan({
         taskId: taskRow.id,
         candidates,
-        inspector: new GitWorkspaceRollbackSnapshotInspector(),
       })
     }
   }
@@ -3334,7 +3332,7 @@ async function submitReviewDecisionUnlocked(
     workspaceRollbackPlan,
   }
   const decisionManifestJson = encodeReviewDecisionManifest(decisionManifest)
-  const operations = new SqliteHumanGateOperationStore()
+  const operations = humanGateComposition.createHumanGateOperationStore()
 
   // ── commit: one transaction ───────────────────────────────────────────────
   const nextIter = policy.bumpsIteration ? run.reviewIteration + 1 : run.reviewIteration

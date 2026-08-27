@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 1185,
+    "architectureExceptions": 1162,
     "backgroundJobs": 218,
-    "crossContextImports": 1217,
+    "crossContextImports": 1194,
     "facades": 379,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18014,
+    "moduleSymbolOwners": 18050,
     "mutationEntrypoints": 933,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 337,
+    "publicSurfaces": 353,
     "transactionExternalEffects": 263
   },
   "metrics": {
@@ -119,7 +119,7 @@
     ],
     "directNativeIntervals": 20,
     "directNativeTimers": 61,
-    "inboundBoundaryEdges": 129,
+    "inboundBoundaryEdges": 95,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -186,8 +186,8 @@
       {
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1445",
-        "line": 1445,
+        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1447",
+        "line": 1447,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "removeAfterWave": "W2/W7",
         "status": "reviewed-dispatch-exception",
@@ -232,5 +232,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99"
+  "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e"
 }

@@ -6,28 +6,29 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { collaborationGateOperations, nodeRuns } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
-import {
-  canonicalHumanGateRequestHash,
-  canonicalHumanGateValueJson,
-  deriveHumanGateCompatibilityKey,
-  type CanonicalHumanGateRequest,
-} from '@/modules/collaboration/domain/canonicalGateRequest'
-import {
-  decodeClarifyDecisionManifest,
-  decodeClarifyDecisionReceipt,
-  encodeClarifyDecisionManifest,
-  encodeClarifyDecisionReceipt,
-  type ClarifyDecisionManifest,
-  type ClarifyDecisionReceiptEnvelope,
-} from '@/modules/collaboration/domain/clarifyDecision'
-import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
-import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
+import type { CanonicalHumanGateRequest } from '@/modules/collaboration/public/types'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
-import { humanGateComposition } from '@/services/humanGateComposition'
+import {
+  humanGateComposition,
+  type ClarifyDecisionManifestBridge as ClarifyDecisionManifest,
+  type ClarifyDecisionReceiptEnvelopeBridge as ClarifyDecisionReceiptEnvelope,
+  type HumanGateOperationStoreBridge as SqliteHumanGateOperationStore,
+} from '@/services/humanGateComposition'
 import type { ClarifySealDecisionParticipantInTx } from '@/services/clarify/seal'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type { ClarifyAnswer, ClarifyDirective } from '@agent-workflow/shared'
+
+const {
+  canonicalHumanGateRequestHash,
+  canonicalHumanGateValueJson,
+  decodeClarifyDecisionManifest,
+  decodeClarifyDecisionReceipt,
+  deriveHumanGateCompatibilityKey,
+  encodeClarifyDecisionManifest,
+  encodeClarifyDecisionReceipt,
+  gateDecisionReceipt,
+} = humanGateComposition
 
 export interface ClarifyDecisionArgs {
   readonly expectedTaskRevision?: number
@@ -265,7 +266,7 @@ export function prepareClarifyDecision(input: {
           `clarify round ${input.originNodeRunId} changed before decision commit`,
         )
       }
-      const operations = new SqliteHumanGateOperationStore()
+      const operations = humanGateComposition.createHumanGateOperationStore()
       const currentGateRevision = ensureLegacyClarifyGateRevisionTx({
         tx: sealed.tx,
         operations,

@@ -2,9 +2,11 @@
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition'
-import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
+import type {
+  ClarifyDecisionCommandPort,
+  CollaborationCommandContext,
+} from '@/modules/collaboration/public/types'
+import { humanGateComposition } from '@/services/humanGateComposition'
 import { autoDispatchClarifyRoundWithDecision } from '@/services/clarify/autoDispatch'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { createLogger } from '@/util/log'
@@ -70,5 +72,8 @@ export function createClarifyDecisionCommandContext(input: {
       }
     },
   }
-  return createCollaborationCommandContext({ db: input.db, clarifyDecisions })
+  return humanGateComposition.createCollaborationCommandContext({
+    db: input.db,
+    clarifyDecisions,
+  })
 }

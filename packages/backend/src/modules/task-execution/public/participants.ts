@@ -23,6 +23,7 @@ import {
   runWithTaskExecutionContext as runWithTaskExecutionContextInternal,
 } from '../application/taskExecutionContext'
 import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
+import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
 import { submitTaskContinuationTx as submitTaskContinuationTxInternal } from '../application/submitTaskContinuation'
 import type {
   AcceptHumanGateDecisionInput,
@@ -216,6 +217,14 @@ export const createVerifiedStopProof = createVerifiedStopProofInternal
 export const exactOwnerMatches = exactOwnerMatchesInternal
 export const ownershipTokenKey = ownershipTokenKeyInternal
 export const TaskExecutionError = TaskExecutionErrorInternal
+export const GateContinuationEffectStep = GateContinuationEffectStepInternal
+export type {
+  GateWorkspaceRollbackExecutor,
+  GateWorkspaceRollbackOutcome,
+  GateWorkspaceRollbackPlanView,
+  GateWorkspaceRollbackProjectionFactory,
+  GateWorkspaceRollbackRef,
+} from '../application/ports/gateWorkspaceRollback'
 
 export type TaskSourceTerminationEffectInput = Readonly<{
   effectId: string

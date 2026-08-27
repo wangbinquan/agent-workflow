@@ -53,6 +53,31 @@ export interface HumanGateContinuationPayload {
   readonly workspaceRollbackPlan?: HumanGateWorkspaceRollbackRef
 }
 
+/**
+ * RFC-333 coexists with two older task-level gates (dynamic-workflow confirm
+ * and workgroup completion). Those paths deliberately keep the historical
+ * gate-continuation intent kind so their operation generation does not move,
+ * but their payload is the exact legacy resume event rather than a
+ * collaboration human-gate projection.
+ *
+ * Keep this discriminator deliberately exact: only the payload emitted by
+ * resumeKick is accepted as the compatibility variant. A malformed RFC-333
+ * payload must still reach decodeHumanGateContinuationPayload and fail.
+ */
+export function isLegacyTaskGateContinuationPayload(raw: string): boolean {
+  let decoded: unknown
+  try {
+    decoded = JSON.parse(raw)
+  } catch {
+    return false
+  }
+  if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) return false
+  const value = decoded as Record<string, unknown>
+  return (
+    value.v === 1 && value.event === 'resume' && Object.keys(value).sort().join(',') === 'event,v'
+  )
+}
+
 function assertNodeProjectionMember(member: HumanGateNodeProjectionMember): void {
   if (
     member.id.length === 0 ||

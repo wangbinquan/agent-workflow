@@ -1713,8 +1713,27 @@
       "removeAfterWave": "RFC-294 W2-D（legacy service dependency injection cutover）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
+        "import:0b5d48a45de5a9739079",
+        "import:2a368a687055a9380d5b",
+        "import:2af557f5dc96e75c906d",
+        "import:5211f60ddb3a9be4344f",
+        "import:55348f9123db078151d8",
+        "import:5e5d25b4e190cff24137",
+        "import:672f8de26e0ccddb9b70",
+        "import:68be674a077204e3e011",
+        "import:7ece29e98a8ee290d6d5",
+        "import:97fc18515661bad39480",
+        "import:9c8eceaa5f410087fda5",
         "import:b99ff6a3b945e8252db3",
-        "import:e0fa4035273ad5a73fb6"
+        "import:bd0e77d598925cfb243e",
+        "import:c03d7d384cf732703275",
+        "import:c8cb3881721a45867470",
+        "import:c9e98dbd2bc6c2936dd9",
+        "import:d2c415d6489c6711d978",
+        "import:e0fa4035273ad5a73fb6",
+        "import:e4e4f64d230770f24150",
+        "import:f81440fe46bf03f8affe",
+        "import:ff13bcbb91ebf6d67f49"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -3864,7 +3883,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:dc0ff66c91163db905406ce2554e160295c31243c2375f163f12a16fd6f8be99",
+    "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
