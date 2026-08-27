@@ -2227,9 +2227,12 @@ export const taskExecutionIntents = sqliteTable(
   },
   (t) => ({
     taskStateIdx: index('idx_task_execution_intents_task_state').on(t.taskId, t.state),
-    activeTaskUq: uniqueIndex('idx_task_execution_intents_active_task')
+    pendingTaskUq: uniqueIndex('idx_task_execution_intents_pending_task')
       .on(t.taskId)
-      .where(sql`${t.state} IN ('pending', 'claimed')`),
+      .where(sql`${t.state} = 'pending'`),
+    claimedTaskUq: uniqueIndex('idx_task_execution_intents_claimed_task')
+      .on(t.taskId)
+      .where(sql`${t.state} = 'claimed'`),
     generationNonNegative: check(
       'task_execution_intents_generation_nonnegative',
       sql`${t.operationGeneration} >= 0`,

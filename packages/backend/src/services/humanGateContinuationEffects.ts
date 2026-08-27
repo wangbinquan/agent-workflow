@@ -2,16 +2,16 @@
 // phase.  The bounded contexts meet through their purpose-specific ports; this
 // file is the temporary composition bridge tracked by RFC-294 W4.
 
-import { and, eq, inArray } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { collaborationGateOperations, nodeRuns } from '@/db/schema'
+import { collaborationGateOperations } from '@/db/schema'
 import {
   GateContinuationEffectStep,
   type GateWorkspaceRollbackExecutor,
   type GateWorkspaceRollbackOutcome,
   type GateWorkspaceRollbackPlanView,
-  type GateWorkspaceRollbackProjectionFactory,
   type GateWorkspaceRollbackRef,
+  type GateWorkspaceRollbackTargetReceipt,
   taskExecutionModule,
 } from '@/modules/task-execution/public/participants'
 import {
@@ -22,15 +22,6 @@ import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { rollbackToSnapshot } from '@/util/git'
 
 const { decodeReviewDecisionManifest } = humanGateComposition
-
-type TargetReceipt = Readonly<{
-  sourceNodeRunId: string
-  worktreeDirName: string
-  snapshot: string
-  ok: boolean
-  code?: string
-  message?: string
-}>
 
 function clippedError(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 2_000)
@@ -74,7 +65,7 @@ export class SqliteGateWorkspaceRollbackExecutor implements GateWorkspaceRollbac
     if (plan === undefined)
       throw new Error('workspace rollback plan was not loaded by this executor')
     return getTaskWriteSem(plan.taskId).run(async () => {
-      const targets: TargetReceipt[] = []
+      const targets: GateWorkspaceRollbackTargetReceipt[] = []
       for (const target of plan.targets) {
         try {
           await rollbackToSnapshot(target.worktreePath, target.snapshot)
@@ -123,67 +114,6 @@ export class SqliteGateWorkspaceRollbackExecutor implements GateWorkspaceRollbac
   }
 }
 
-function rollbackSources(receipt: Readonly<Record<string, unknown>>): Set<string> {
-  const nested = receipt.outcome
-  const value =
-    nested !== null && typeof nested === 'object' && !Array.isArray(nested)
-      ? (nested as Readonly<Record<string, unknown>>).successfulSourceNodeRunIds
-      : undefined
-  if (!Array.isArray(value) || value.some((id) => typeof id !== 'string')) return new Set()
-  return new Set(value as string[])
-}
-
-function projectRollbackMarker(errorMessage: string | null, rolledBack: boolean): string | null {
-  if (errorMessage === null) return null
-  return errorMessage.replace(
-    /^(superseded-by-review-(?:rejected|iterated))(?:-rollback)?:/,
-    `$1${rolledBack ? '-rollback' : ''}:`,
-  )
-}
-
-export class SqliteGateWorkspaceRollbackProjectionFactory implements GateWorkspaceRollbackProjectionFactory {
-  bind(tx: Parameters<GateWorkspaceRollbackProjectionFactory['bind']>[0]) {
-    return {
-      projectWorkspaceRollbackTx(
-        input: Parameters<
-          ReturnType<GateWorkspaceRollbackProjectionFactory['bind']>['projectWorkspaceRollbackTx']
-        >[0],
-      ) {
-        if (input.gateKind !== 'review') return
-        const succeeded = rollbackSources(input.receipt)
-        const rows =
-          input.sourceNodeRunIds.length === 0
-            ? []
-            : tx
-                .select({ id: nodeRuns.id, errorMessage: nodeRuns.errorMessage })
-                .from(nodeRuns)
-                .where(
-                  and(
-                    eq(nodeRuns.taskId, input.taskId),
-                    inArray(nodeRuns.id, [...input.sourceNodeRunIds]),
-                  ),
-                )
-                .all()
-        if (rows.length !== input.sourceNodeRunIds.length) {
-          throw new Error(
-            `workspace rollback projection for '${input.operationId}' lost a source row`,
-          )
-        }
-        for (const row of rows) {
-          const rolledBack = succeeded.has(row.id)
-          tx.update(nodeRuns)
-            .set({
-              rolledBack,
-              errorMessage: projectRollbackMarker(row.errorMessage, rolledBack),
-            })
-            .where(and(eq(nodeRuns.id, row.id), eq(nodeRuns.taskId, input.taskId)))
-            .run()
-        }
-      },
-    }
-  }
-}
-
 export function createGateContinuationPreDriveStep(
   db: DbClient,
 ): InstanceType<typeof GateContinuationEffectStep> {
@@ -191,6 +121,5 @@ export function createGateContinuationPreDriveStep(
     db,
     taskExecutionModule.effects,
     new SqliteGateWorkspaceRollbackExecutor(db),
-    new SqliteGateWorkspaceRollbackProjectionFactory(),
   )
 }

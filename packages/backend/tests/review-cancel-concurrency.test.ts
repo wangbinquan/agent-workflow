@@ -579,9 +579,16 @@ describe('review mutation vs task cancellation linearization', () => {
     await blocked
 
     let dispatchTouchedDb = false
+    let schedulerClaimed = false
     const dispatch = dispatchReviewNode({
       db: observeDbSelect(h.db, () => {
         dispatchTouchedDb = true
+        if (!schedulerClaimed) {
+          schedulerClaimed = true
+          // dispatchReviewNode normally runs after the scheduler has claimed
+          // pending → running. This direct service fixture models that entry.
+          h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId)).run()
+        }
       }),
       taskId: h.taskId,
       appHome: h.appHome,

@@ -15,6 +15,7 @@ export interface TaskFailureDetail {
 
 export type TaskEngineOutcome =
   | Readonly<{ kind: 'ok' }>
+  | Readonly<{ kind: 'handoff' }>
   | Readonly<{ kind: 'failed'; detail: TaskFailureDetail }>
   | Readonly<{ kind: 'canceled'; detail?: TaskFailureDetail }>
   | Readonly<{ kind: 'awaiting_review'; detail?: TaskFailureDetail }>
@@ -22,7 +23,7 @@ export type TaskEngineOutcome =
 
 /** Temporary W2-C/D mechanics result retained for nested wrapper parity. */
 export interface TaskScopeOutcome {
-  readonly kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
+  readonly kind: 'ok' | 'handoff' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
   readonly detail?: TaskFailureDetail
   readonly processUnreaped?: true
 }
@@ -42,6 +43,7 @@ export function taskEngineOutcomeFromScope(result: TaskScopeOutcome): TaskEngine
     }
   }
   if (result.kind === 'ok') return { kind: 'ok' }
+  if (result.kind === 'handoff') return { kind: 'handoff' }
   if (result.kind === 'canceled') return { kind: 'canceled', detail: result.detail }
   if (result.kind === 'awaiting_review') {
     return { kind: 'awaiting_review', detail: result.detail }

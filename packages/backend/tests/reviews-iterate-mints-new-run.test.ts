@@ -25,6 +25,7 @@ import { submitReviewDecision } from '../src/services/review'
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+  wakeHumanGateContinuation,
 } from '../src/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -252,6 +253,20 @@ async function fetchDesignerTopRuns(h: Harness) {
   return rows.filter((r) => r.parentNodeRunId === null).sort((a, b) => a.retryIndex - b.retryIndex)
 }
 
+async function submitAndSettleReviewDecision(
+  h: Harness,
+  input: Omit<Parameters<typeof submitReviewDecision>[0], 'db' | 'appHome'>,
+): Promise<Awaited<ReturnType<typeof submitReviewDecision>>> {
+  const result = await submitReviewDecision({ ...input, db: h.db, appHome: h.appHome })
+  await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    db: h.db,
+    appHome: h.appHome,
+    schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'noop' }).schedulerDriver,
+    awaitScheduler: true,
+  })
+  return result
+}
+
 describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
   let h: Harness
   let cleanupHarness: (() => Promise<void>) | undefined
@@ -274,9 +289,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     const originalPrompt = beforeRuns[0]!.promptText
     expect(originalPrompt).not.toBeNull()
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
+    await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -303,9 +316,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     const before = (await fetchDesignerTopRuns(h))[0]!
     const beforeSnapshot = before.preSnapshot
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
+    await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -329,9 +340,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     const before = await fetchDesignerTopRuns(h)
     expect(before.length).toBe(1)
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
+    await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
       decision: 'rejected',
       rejectReason: 'wrong direction',
@@ -376,9 +385,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
+    await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -395,9 +402,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
+    await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -414,9 +419,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
+    await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
       decision: 'rejected',
       rejectReason: 'wrong direction',
@@ -433,9 +436,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     cleanupHarness = h.cleanup
     await seedDesignerPreSnapshot(h)
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
+    await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
       decision: 'rejected',
       rejectReason: 'wrong direction',

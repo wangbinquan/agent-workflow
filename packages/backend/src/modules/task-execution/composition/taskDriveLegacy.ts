@@ -18,6 +18,7 @@ export {
 export { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
 export {
   activeTaskDriverController,
+  awaitTaskDriverIdle,
   clearTaskDriverLifecycleForTesting,
   createTaskDriverLifecyclePort,
   isTaskDriverActive,

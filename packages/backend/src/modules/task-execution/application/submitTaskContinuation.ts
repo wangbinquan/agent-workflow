@@ -28,6 +28,7 @@ export interface SubmitTaskContinuationInput {
   readonly payload: Readonly<Record<string, unknown>>
   readonly now: number
   readonly advanceOperationGeneration: boolean
+  readonly admissionMode?: 'exclusive' | 'successor-after-claimed'
 }
 
 export function submitTaskContinuationTx(
@@ -140,6 +141,7 @@ export function submitTaskContinuationTx(
     intentId: input.intentId,
     replayAuthorizationId,
     authorizationScopeJson,
+    admissionMode: input.admissionMode ?? 'exclusive',
     now: input.now,
   })
   for (const decision of selectedUnknownDecisions) {

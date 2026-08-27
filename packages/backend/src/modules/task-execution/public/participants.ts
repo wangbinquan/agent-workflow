@@ -222,8 +222,9 @@ export type {
   GateWorkspaceRollbackExecutor,
   GateWorkspaceRollbackOutcome,
   GateWorkspaceRollbackPlanView,
-  GateWorkspaceRollbackProjectionFactory,
+  GateWorkspaceRollbackReceipt,
   GateWorkspaceRollbackRef,
+  GateWorkspaceRollbackTargetReceipt,
 } from '../application/ports/gateWorkspaceRollback'
 
 export type TaskSourceTerminationEffectInput = Readonly<{

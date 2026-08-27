@@ -118,10 +118,11 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
     // cross-clarify designer rerun no longer rolls back the worktree, so it no
     // longer takes the task write lock at all. RFC-132: the live self-clarify
     // rollback critical section moved to clarifyAutoDispatch.ts (A OUTER ≻ B
-    // INNER); it + review.ts still roll back under getTaskWriteSem and must
-    // never gc.
+    // INNER). RFC-333 moved review rollback execution behind the canonical
+    // gate-continuation effect in humanGateContinuationEffects.ts. Both
+    // current rollback executors use the same registry and must never gc.
     // RFC-284 T27 改锚：clarify 正体迁 services/clarify/（旧路径为 facade）。
-    for (const f of ['clarify/autoDispatch.ts', 'review.ts']) {
+    for (const f of ['clarify/autoDispatch.ts', 'humanGateContinuationEffects.ts']) {
       const src = readFileSync(SRC(f), 'utf-8')
       expect(src).toContain('getTaskWriteSem')
       expect(src.includes('gcTaskWriteSem')).toBe(false)

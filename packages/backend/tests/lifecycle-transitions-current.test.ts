@@ -179,6 +179,10 @@ async function seedReviewRow(
   return id
 }
 
+async function parkTaskAtReviewForFixture(h: Harness): Promise<void> {
+  await h.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, h.taskId))
+}
+
 describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavior)', () => {
   let h: Harness
 
@@ -275,6 +279,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
     test('A4 submitReviewDecision approve: awaiting_review → done + outputs written', async () => {
       await seedAgentDone(h.db, h.taskId)
       const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 2)
+      await parkTaskAtReviewForFixture(h)
       mkdirSync(join(h.appHome, 'doc_versions'), { recursive: true })
       writeFileSync(join(h.appHome, 'doc_versions', 'v3.md'), '# body')
       await h.db.insert(docVersions).values({
@@ -315,6 +320,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
     test('A5 submitReviewDecision iterate: awaiting_review → pending + bumps reviewIteration + cancels upstream', async () => {
       const agentRunId = await seedAgentDone(h.db, h.taskId, { ports: { docpath: '# v1' } })
       const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 0)
+      await parkTaskAtReviewForFixture(h)
       mkdirSync(join(h.appHome, 'doc_versions'), { recursive: true })
       writeFileSync(join(h.appHome, 'doc_versions', 'v1.md'), '# v1')
       await h.db.insert(docVersions).values({
@@ -365,6 +371,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
     test('A6 submitReviewDecision reject: awaiting_review → pending + decisionReason saved', async () => {
       const agentRunId = await seedAgentDone(h.db, h.taskId, { ports: { docpath: '# v1' } })
       const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 0)
+      await parkTaskAtReviewForFixture(h)
       mkdirSync(join(h.appHome, 'doc_versions'), { recursive: true })
       writeFileSync(join(h.appHome, 'doc_versions', 'v1.md'), '# v1')
       const dvId = ulid()
@@ -416,6 +423,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
       const agentRunId = await seedAgentDone(h.db, h.taskId)
       const rev1RunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 0)
       const rev2RunId = await seedReviewRow(h.db, h.taskId, 'rev_2', 'awaiting_review', 0)
+      await parkTaskAtReviewForFixture(h)
       mkdirSync(join(h.appHome, 'doc_versions'), { recursive: true })
       writeFileSync(join(h.appHome, 'doc_versions', 'v1.md'), '# v1')
       writeFileSync(join(h.appHome, 'doc_versions', 'v1s.md'), '# side v1')

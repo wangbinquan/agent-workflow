@@ -32,7 +32,12 @@ import {
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { addReviewComment, submitReviewDecision } from '@/services/review'
-import { abortAllActiveTasks, isTaskActive, listTaskItems, resumeTask } from '@/services/task'
+import {
+  abortAllActiveTasks,
+  isTaskActive,
+  listTaskItems,
+  wakeHumanGateContinuation,
+} from '@/services/task'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
@@ -338,7 +343,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         },
         commentText: 'Add the exact focused verification step.',
       })
-      await submitReviewDecision({
+      const rejected = await submitReviewDecision({
         db,
         appHome,
         nodeRunId: reviewRun.id,
@@ -346,7 +351,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         rejectReason: 'The plan must include the exact focused verification step.',
         expectedReviewIteration: 0,
       })
-      await resumeTask(db, taskId, startDeps)
+      await wakeHumanGateContinuation(rejected.taskId, rejected.continuationRef, startDeps)
 
       expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('2')
@@ -391,14 +396,14 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         },
         commentText: 'Keep the focused check and make the sequence explicit.',
       })
-      await submitReviewDecision({
+      const iterated = await submitReviewDecision({
         db,
         appHome,
         nodeRunId: reviewRun.id,
         decision: 'iterated',
         expectedReviewIteration: 1,
       })
-      await resumeTask(db, taskId, startDeps)
+      await wakeHumanGateContinuation(iterated.taskId, iterated.continuationRef, startDeps)
 
       expect(inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('3')
@@ -428,14 +433,14 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         status: 'awaiting_review',
         reviewIteration: 2,
       })
-      await submitReviewDecision({
+      const approved = await submitReviewDecision({
         db,
         appHome,
         nodeRunId: reviewRun.id,
         decision: 'approved',
         expectedReviewIteration: 2,
       })
-      await resumeTask(db, taskId, startDeps)
+      await wakeHumanGateContinuation(approved.taskId, approved.continuationRef, startDeps)
 
       expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
         status: 'done',

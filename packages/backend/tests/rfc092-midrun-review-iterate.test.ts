@@ -32,9 +32,10 @@ const ulid = monotonicFactory() // 同毫秒插入仍保 id 单调（pure-id fre
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
-import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import { wakeHumanGateContinuation } from '../src/services/task'
+import { submitTaskContinuation } from '../src/modules/task-execution/application/submitTaskContinuation'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
-import { reenterScheduler } from './reenter-scheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -296,14 +297,31 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       req: 'go',
     })
 
-    const runPromise = runTask({
+    const launchIntentId = ulid()
+    submitTaskContinuation(h.db, {
       taskId,
+      intentId: launchIntentId,
+      kind: 'launch',
+      source: 'internal',
+      actorUserId: null,
+      payload: {},
+      now: Date.now(),
+      advanceOperationGeneration: false,
+    })
+    const schedulerDriver = createTaskExecutionTestTopology({
+      db: h.db,
+      driver: 'real',
+    }).schedulerDriver
+    const runPromise = wakeHumanGateContinuation(taskId, launchIntentId, {
       db: h.db,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
+      schedulerDriver,
+      awaitScheduler: true,
     })
 
     let revRunId = ''
+    let continuationPromise: Promise<void> | undefined
     try {
       // 等到「review 已停泊 awaiting_review ∧ slow 仍 running」——S-1 的提交窗口。
       const revRun = await waitFor(async () => {
@@ -339,13 +357,24 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
         },
         commentText: ITERATE_COMMENT,
       })
-      await submitReviewDecision({
+      const iterateDecision = await submitReviewDecision({
         db: h.db,
         appHome: h.appHome,
         nodeRunId: revRunId,
         decision: 'iterated',
         expectedReviewIteration: 0,
       })
+      continuationPromise = wakeHumanGateContinuation(
+        iterateDecision.taskId,
+        iterateDecision.continuationRef,
+        {
+          db: h.db,
+          appHome: h.appHome,
+          binaryOverride: ['bun', 'run', h.mockPath],
+          schedulerDriver,
+          awaitScheduler: true,
+        },
+      )
 
       // 提交瞬间：author 的 rerun 行 pending（retryIndex+1 新铸行）、review 行
       // 原地翻回 pending（reviewIteration=1）、slow 仍在跑——确认落在窗口内。
@@ -364,13 +393,17 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       await runPromise.catch(() => {})
     }
     await runPromise
+    await continuationPromise
 
     // 正确语义（RFC-092 §1.2）：slow settle 后的 tick 经 pending-bypass 先自取
     // author 的 rerun 行、再自取翻回 pending 的 review 行 → 新一轮 review 停泊。
     // 任务以真实的 awaiting_review 收场，绝不是 'scheduler stalled' 假失败。
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(taskRow.errorMessage ?? '').not.toContain('scheduler stalled')
-    expect(taskRow.status).toBe('awaiting_review')
+    expect({ status: taskRow.status, errorMessage: taskRow.errorMessage }).toEqual({
+      status: 'awaiting_review',
+      errorMessage: null,
+    })
 
     // author：旧 done 行被 supersede（canceled），rerun 行（retryIndex=1）done，
     // 且 rerun prompt 注入了 iterate 评论。
@@ -411,22 +444,20 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     expect(v2.decision).toBe('pending')
     expect(readFileSync(join(h.appHome, v2.bodyPath), 'utf-8')).toContain('AUTHOR_V2')
 
-    // 全链路推进收尾：approve v2 + 重新进调度 → 任务 done（author 不再重跑）。
-    await submitReviewDecision({
+    // 全链路推进收尾：approve v2 + 精确 continuation 唤醒 → 任务 done。
+    const approval = await submitReviewDecision({
       db: h.db,
       appHome: h.appHome,
       nodeRunId: revRunId,
       decision: 'approved',
       expectedReviewIteration: 1,
     })
-    // RFC-097: runTask's entry CAS only claims pending tasks — reset first
-    // (test stand-in for resumeTask).
-    await reenterScheduler(h.db, taskId)
-    await runTask({
-      taskId,
+    await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
       db: h.db,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
+      schedulerDriver,
+      awaitScheduler: true,
     })
     const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(finalTask.status).toBe('done')

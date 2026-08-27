@@ -172,11 +172,19 @@ describe('RFC-332 T3-T4 — additive drive and engine contracts', () => {
 })
 
 describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
-  test('four admissions converge on one TaskEngine application adapter and no kick remains', () => {
+  test('four admissions and the exact human-gate wake converge on one TaskEngine adapter', () => {
     const task = source('packages/backend/src/services/task.ts')
     expect(taskDriveRequests('kick')).toHaveLength(0)
     expect(taskDriveRequests('drive')).toHaveLength(1)
-    expect(task.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(4)
+    // Four command admissions plus RFC-333's post-commit wake use the same
+    // coordinator factory. The wake is not a fifth admission: the decision
+    // transaction already inserted its exact durable intent.
+    expect(task.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(5)
+    const wakeStart = task.indexOf('export async function wakeHumanGateContinuation(')
+    const wakeEnd = task.indexOf('\nexport ', wakeStart + 1)
+    const wakeBlock = task.slice(wakeStart, wakeEnd)
+    expect(wakeStart).toBeGreaterThan(-1)
+    expect(wakeBlock.match(/createTaskDriveCoordinator\(\{/g)).toHaveLength(1)
   })
 
   test('boot recovery delegates repository preparation without querying prep rows', () => {

@@ -43,6 +43,7 @@ import {
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+  wakeHumanGateContinuation,
 } from '../src/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -291,7 +292,6 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
       decision: 'iterated',
       expectedReviewIteration: 0,
     })
-
     // Siblings (proposal + plan) should be reset to pending with reviewIteration++.
     const proposalAfter = (
       await h.db
@@ -326,12 +326,19 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     cleanupHarness = h.cleanup
 
     // First approve proposal so it goes to status=done.
-    await submitReviewDecision({
+    const approval = await submitReviewDecision({
       db: h.db,
       appHome: h.appHome,
       nodeRunId: h.reviewNodeRunIds.proposal,
       decision: 'approved',
       expectedReviewIteration: 0,
+    })
+    await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
+      db: h.db,
+      appHome: h.appHome,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
+      awaitScheduler: true,
     })
     const proposalDone = (
       await h.db

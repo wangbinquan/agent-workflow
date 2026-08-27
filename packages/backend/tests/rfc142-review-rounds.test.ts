@@ -44,6 +44,7 @@ import {
   type RoundGroupRow,
 } from '../src/services/review'
 import { createUser } from '../src/services/users'
+import { wakeHumanGateContinuation } from '../src/services/task'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -348,7 +349,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
 
     // 第 0 篇挂一条评论后 iterate —— 决策会删 live 行、冻结进 commentsJson。
     await insertComment(round1Docs[0]!.id, 'tighten the steps')
-    await submitReviewDecision({
+    const firstDecision = await submitReviewDecision({
       db,
       appHome,
       nodeRunId: reviewNodeRunId,
@@ -356,6 +357,12 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       expectedReviewIteration: 0,
       author: 'alice',
       authorRole: 'owner',
+    })
+    await wakeHumanGateContinuation(firstDecision.taskId, firstDecision.continuationRef, {
+      db,
+      appHome,
+      schedulerDriver: { async drive() {} },
+      awaitScheduler: true,
     })
 
     // 模拟上游重跑完成：iterate 铸出的 fresh pending src 行置 done + 补输出。
@@ -378,6 +385,10 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     await db
       .insert(nodeRunOutputs)
       .values({ nodeRunId: srcRerun.id, portName: 'cases', content: PATHS.join('\n') })
+
+    // The no-op owner settles the exact intent but deliberately does not run
+    // TaskEngine's pending → running claim used by this direct service fixture.
+    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
 
     const r2 = await dispatchReviewNode({
       db,

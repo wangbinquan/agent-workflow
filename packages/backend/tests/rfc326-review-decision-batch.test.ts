@@ -935,7 +935,8 @@ describe('RFC-326 AC-14 — POST /api/reviews/:id/decision with a batch', () => 
   }
 
   test('selections + comments land in one request; the response carries the counters', async () => {
-    // task status `running` keeps the post-decision resume kick a documented no-op.
+    // The HTTP route returns the durable continuation receipt; the scheduler
+    // wake itself remains outside this response contract.
     m = await buildMulti('list<path<md>>', 'running')
     process.env.AGENT_WORKFLOW_HOME = m.appHome
     events = countTaskEvents(m.taskId)
@@ -962,12 +963,17 @@ describe('RFC-326 AC-14 — POST /api/reviews/:id/decision with a batch', () => 
       ok: true,
       taskId: m.taskId,
       reviewIteration: 0,
-      resumeRequired: true,
+      receipt: {
+        gate: { kind: 'review', ref: `review:${m.reviewRunId}` },
+        gateRevision: 2,
+        replayed: false,
+      },
       commentsAdded: 1,
       commentsSkippedAsDuplicate: 1,
       selectionsApplied: 3,
     })
     expect(json.resume).toBeUndefined()
+    expect(json.resumeRequired).toBeUndefined()
     const accepted = (
       await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
     ).find((o) => o.portName === 'accepted')!

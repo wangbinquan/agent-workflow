@@ -64,8 +64,8 @@ function insertOperation(
   `)
 }
 
-describe('RFC-333 migration 0212 — human-gate operation journal', () => {
-  test('adds the inactive narrow tables and recovery/idempotency indexes', () => {
+describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff storage', () => {
+  test('adds the operation journal and splits active intent uniqueness for one exact successor', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const tables = db.all<{ name: string }>(
       sql`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`,
@@ -95,6 +95,18 @@ describe('RFC-333 migration 0212 — human-gate operation journal', () => {
           unique: 0,
         }),
       ]),
+    )
+    const intentIndexes = db.all<{ name: string; unique: number }>(
+      sql`SELECT name, "unique" FROM pragma_index_list('task_execution_intents')`,
+    )
+    expect(intentIndexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'idx_task_execution_intents_pending_task', unique: 1 }),
+        expect.objectContaining({ name: 'idx_task_execution_intents_claimed_task', unique: 1 }),
+      ]),
+    )
+    expect(intentIndexes.map((row) => row.name)).not.toContain(
+      'idx_task_execution_intents_active_task',
     )
     expect(db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
   })

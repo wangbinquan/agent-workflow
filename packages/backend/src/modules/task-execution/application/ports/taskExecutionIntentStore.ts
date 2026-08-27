@@ -19,6 +19,7 @@ export interface TaskExecutionIntentStore {
     intentId?: string
     replayAuthorizationId?: string | null
     authorizationScopeJson?: string | null
+    admissionMode?: 'exclusive' | 'successor-after-claimed'
     now?: number
   }): SubmittedTaskExecutionIntent
   submitTx(input: {
@@ -27,6 +28,7 @@ export interface TaskExecutionIntentStore {
     intentId: string
     replayAuthorizationId: string | null
     authorizationScopeJson: string | null
+    admissionMode?: 'exclusive' | 'successor-after-claimed'
     now: number
   }): SubmittedTaskExecutionIntent
 }

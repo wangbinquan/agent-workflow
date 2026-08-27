@@ -74,7 +74,9 @@ function assertProjection(input: {
   const lineage = canonicalHumanGateContinuationLineage(input.lineage)
   const ids = [...lineage.sourceNodeRunIds, ...lineage.rerunNodeRunIds]
   const rows =
-    ids.length === 0 ? [] : input.tx.select().from(nodeRuns).where(inArray(nodeRuns.id, ids)).all()
+    ids.length === 0
+      ? []
+      : input.tx.select().from(nodeRuns).where(inArray(nodeRuns.id, ids)).limit(ids.length).all()
   if (
     rows.length !== ids.length ||
     rows.some((row) => row.taskId !== input.taskId) ||
@@ -161,6 +163,10 @@ export class SqliteTaskDecisionParticipantInTx implements TaskDecisionParticipan
       payload,
       now: input.now,
       advanceOperationGeneration: false,
+      // A visible gate may be decided while a previously admitted sibling is
+      // still settling. Keep one claimed owner and admit exactly one durable
+      // successor; the old owner hands off before dispatching any new work.
+      admissionMode: 'successor-after-claimed',
     })
 
     if (input.workspaceRollbackPlan !== undefined) {

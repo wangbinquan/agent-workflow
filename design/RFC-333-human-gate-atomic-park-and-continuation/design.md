@@ -1,10 +1,11 @@
 # RFC-333 技术设计：人工门原子停驻与持久续跑
 
-> 状态：Approved / Publishing（2026-08-28；D1～D12 已获用户批准，T2～T11 已完成，当前执行 T12 hosted 收口）
+> 状态：Approved / Publishing（2026-08-28；D1～D12 已获用户批准，D13 为用户要求继续完成 RFC-333 后纳入的
+> 同权威交接精化；T2～T11 已完成，当前执行 T12 hosted 收口）
 >
 > 本设计只闭合 RFC-294 P0-C。它以 RFC-326 已落的 review transaction 为种子，以 RFC-328
 > `task_execution_intents` / ownership fence 为唯一 durable execution authority，以 RFC-332
-> `TaskDriveCoordinator` 为唯一 drive 入口。D1～D12 与 T2～T12 已获生产实现授权；任何超出 P0-C、收缩正常能力或
+> `TaskDriveCoordinator` 为唯一 drive 入口。D1～D13 与 T2～T12 已获本次完成范围覆盖；任何超出 P0-C、收缩正常能力或
 > 新增安全/权限策略的变化仍不在授权内。
 
 ## 1. 设计不变量
@@ -17,7 +18,7 @@
 domain decision committed
 ∧ exact node projection committed
 ∧ task lifecycle revision advanced
-∧ one canonical gate-continuation intent exists
+∧ one new canonical gate-continuation intent exists
 ∧ committed event exists
 ```
 
@@ -46,8 +47,9 @@ clarify directive、question asker/rerun 或 doc archive 结构。
 
 ### I6：一个 continuation authority、一个 drive authority
 
-续跑只写 RFC-328 canonical intent；drive 只由 RFC-332 coordinator claim。operation journal 不是 execution queue，
-artifact recovery 也不得直接启动任务。
+续跑只写 RFC-328 canonical intent；drive 只由 RFC-332 coordinator claim。若决定时当前 intent 仍 claimed，允许同一
+repository 同时保留一个 pending gate successor，但它在旧 owner 释放前不可 claim；这是一段单一 authority 的交接窗口，
+不是两个执行者。operation journal 不是 execution queue，artifact recovery 也不得直接启动任务。
 
 ## 2. bounded-context 与依赖边界
 
@@ -180,6 +182,32 @@ RFC-328 `task_execution_effects(kind='workspace-rollback')`；不为它再建 ar
 - 不复制 review/clarify/question 的现有领域表为 shadow truth。
 
 operation 表只保存 command/application recovery 状态；最终业务 query 继续从正式领域事实投影。
+
+### 3.4 `task_execution_intents` 的窄交接形状
+
+RFC-328 原先以一个 partial unique index 把 `pending | claimed` 合并为“每 task 恰好一个 active intent”。正常 DAG 并行下，
+一个 review/clarify 节点可以先停驻，而同一 scope 中已经准入的慢 sibling 仍由该 claimed intent 执行。此时用户决定必须立即
+原子提交；要求它等待 sibling 或返回冲突都会损伤既有功能，也会重新制造“领域决定与 continuation 分离”的窗口。
+
+RFC-333 因此把同一表的约束精化为：
+
+```text
+per task: claimed intent count <= 1
+per task: pending intent count <= 1
+pending behind claimed is admitted only for TaskDecisionParticipantInTx
+```
+
+具体规则：
+
+1. `SqliteTaskExecutionIntentStore` 仍是唯一 insert/replay/conflict 判据；不新增表或 selector；
+2. 默认 `exclusive` 准入逐字保持：存在 pending 或 claimed 均冲突；
+3. 只有人工决定 participant 可请求 `successor-after-claimed`，且只放过“有 claimed、无 pending”的形状；
+4. 相同 request hash 仍重放同一个 active intent；第二个不同 pending successor 必须冲突；
+5. claimed 与 pending 各由 state-specific partial unique index 兜底；旧 active index 由 migration 原子替换；
+6. coordinator 仍只能 claim pending intent，ownership 表仍只允许一个 claimed owner，因此交接窗口内不会并行 drive 两个 intent。
+
+这两个 intent 是同一任务执行生命周期的 current/successor，不是两条队列。旧 owner 只完成已经准入的工作并释放；新 intent
+随后由同一个 coordinator claim，epoch 继续按 RFC-328 单调前进。
 
 ## 4. public 与 participant 合同
 
@@ -381,7 +409,8 @@ HTTP/MCP facade
             ├─ operation=committed + receipt
             └─ domain/lifecycle committed events
                  │
-                 ├─ coordinator.wake(opaque continuation ref)
+                 ├─ current owner drain/handoff（若仍 claimed）
+                 ├─ coordinator.wake(exact opaque continuation ref)
                  │    └─ pre-drive: settle linked rollback effect + projection
                  ├─ roll-forward/cleanup prepared artifacts
                  └─ WS invalidate
@@ -437,6 +466,41 @@ pre-drive phase，但不新增 engine kind或第二 coordinator：
 下游 rerun 之前。正常请求沿 coordinator 的同一 submission 先等待这段 pre-drive effect settle，再按现有后台语义启动 engine，
 从而保持“响应前已尝试 rollback”；若进程在此退出，committed receipt 不回退，boot/ticker 从同一 intent/effect 接手。
 operation recovery 不直接 drive；task-execution intent/effect recovery 是唯一执行入口。
+
+### 6.6 决定发生在 active sibling 期间的 owner handoff
+
+completion-driven frontier 允许一个 gate 节点先变为可见，而此前已派发的 sibling 仍在自己的 isolated worktree 中运行。
+决定事务不能取消 sibling，也不能让新 gate rerun 与旧 owner 同时 drive。交接顺序固定为：
+
+```text
+claimed current intent / owner
+        │ sibling already admitted
+        ├───────────────► settle + merge existing work
+        │
+        └─ decision tx admits one pending gate-continuation successor
+                              │
+                              ▼
+             current DAG loop observes exact pending successor
+                              │
+                 stop deriving/dispatching new frontier
+                              │
+                 drain only already-admitted work/effects
+                              │
+                    TaskEngine outcome = handoff
+                              │
+              release current owner / claimed intent terminal
+                              │
+                              ▼
+           same TaskDriveCoordinator claims exact successor
+```
+
+`wakeHumanGateContinuation` 在当前进程存在 exact active driver 时只进行 event-driven idle wait，再向同一个 coordinator 提交
+已经在决定事务中生成的 continuation ref；它不重新 mint、不做第二次 task transition。后台 HTTP 路径可以把这段等待留在
+进程内加速，但 durable pending intent 才是恢复真值：进程在 wait 中退出，boot recovery 仍会接管同一个 successor。
+
+旧 owner 的 handoff 不是 cancel/terminalize：它不得把 task 改成 done/failed/awaiting，也不得丢弃已经启动的 sibling 结果；
+它只停止新 frontier admission，等 in-flight map（含已经触发的 commit/push synthetic）归零后释放。workgroup/dynamic engine
+没有这种同 scope sibling 并发形状，仍沿现有顺序释放 owner；不为它们复制第二套 handoff worker。
 
 ## 7. revision、幂等与并发
 
@@ -494,20 +558,23 @@ RFC-333 切换时仍可能有 legacy open gate。migration/recovery 在 task/gat
 4. loser transaction 零写，返回 latest actor-filtered view/conflict；
 5. loser 不做 rollback、wake 或 WS。
 
+若 winner 提交时 task 仍有 claimed current intent，winner 的 pending successor 使用 §3.4 的窄准入；任何普通
+launch/resume/retry 与第二个不同 gate successor 都仍是 loser，零写。
+
 ## 8. recovery 与 maintenance
 
 ### 8.1 operation recovery
 
 复用全局 maintenance ticker 注册一个 collaboration phase，不创建 `setInterval`：
 
-| state                             | recovery                                                                      |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `preparing` claim expired         | 检查 artifact receipts；继续 prepare 或转 cleanup/failed                      |
-| `prepared` 未消费                 | 若 source/task/revision 仍匹配则供 owner retry；否则 cleanup staged artifacts |
-| `committed` artifact 未 finalized | roll-forward 到 canonical path，digest 对拍后 completed                       |
-| `cleanup_pending`                 | 幂等删除未消费 staging，完成后 completed                                      |
-| committed decision、wake 未发生   | 不由 operation 直接 drive；RFC-328 pending intent recovery 负责               |
-| linked rollback effect 未终态     | coordinator pre-drive 复用 RFC-328 effect claim/fence/receipt 收敛            |
+| state                             | recovery                                                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `preparing` claim expired         | 检查 artifact receipts；继续 prepare 或转 cleanup/failed                                                 |
+| `prepared` 未消费                 | 若 source/task/revision 仍匹配则供 owner retry；否则 cleanup staged artifacts                            |
+| `committed` artifact 未 finalized | roll-forward 到 canonical path，digest 对拍后 completed                                                  |
+| `cleanup_pending`                 | 幂等删除未消费 staging，完成后 completed                                                                 |
+| committed decision、wake 未发生   | 不由 operation 直接 drive；若旧 owner 尚 claimed 则先 handoff，否则 RFC-328 pending intent recovery 接管 |
+| linked rollback effect 未终态     | coordinator pre-drive 复用 RFC-328 effect claim/fence/receipt 收敛                                       |
 
 operation recovery 与 task drive recovery 是两条职责清晰的 worker：前者只收敛 collaboration artifacts/prepare plan，
 后者只 claim canonical intent，并在进入 engine 前收敛该 intent 已绑定的 RFC-328 execution effect。
@@ -619,17 +686,18 @@ RFC-329 的 named MCP tools 继续 dispatch exact route template，因此自动�
 
 ### 11.2 decide
 
-| 注入点                             | 必须收敛                                                                 |
-| ---------------------------------- | ------------------------------------------------------------------------ |
-| operation claim 后                 | gate 未变；相同命令可接管/replay                                         |
-| rollback plan/before-image prepare | canonical worktree 未改；失败可清理，decision 未被误报 committed         |
-| final tx 前                        | 零 domain/task/intent/effect 写                                          |
-| final tx 每个 mutation 后抛错      | 全回滚；无 partial answer/decision/intent/effect                         |
-| commit 后、wake 前                 | committed receipt + one pending intent + linked effect；restart 自动收敛 |
-| rollback effect act→receipt        | outcome-unknown 按 plan digest/facts 恢复；不重复破坏 worktree           |
-| effect receipt→projection/drive    | 先补 `rolledBack` projection，再进入 engine；不会跳过 rollback phase     |
-| wake 后、HTTP response 前          | retry 返回同一 receipt，不追加 intent/effect/不重复 rerun                |
-| WS 前/后重复 recovery              | query 一致，invalidate 幂等                                              |
+| 注入点                               | 必须收敛                                                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| operation claim 后                   | gate 未变；相同命令可接管/replay                                                                         |
+| rollback plan/before-image prepare   | canonical worktree 未改；失败可清理，decision 未被误报 committed                                         |
+| final tx 前                          | 零 domain/task/intent/effect 写                                                                          |
+| final tx 每个 mutation 后抛错        | 全回滚；无 partial answer/decision/intent/effect                                                         |
+| commit 后、wake 前                   | committed receipt + one pending successor + linked effect；旧 owner handoff 或 restart recovery 自动收敛 |
+| decision commit 时 sibling in-flight | 一个 claimed current + 一个 pending successor；不派发新 frontier，排空既有 sibling 后 exact handoff      |
+| rollback effect act→receipt          | outcome-unknown 按 plan digest/facts 恢复；不重复破坏 worktree                                           |
+| effect receipt→projection/drive      | 先补 `rolledBack` projection，再进入 engine；不会跳过 rollback phase                                     |
+| wake 后、HTTP response 前            | retry 返回同一 receipt，不追加 intent/effect/不重复 rerun                                                |
+| WS 前/后重复 recovery                | query 一致，invalidate 幂等                                                                              |
 
 ### 11.3 race/stale
 
@@ -638,6 +706,7 @@ RFC-329 的 named MCP tools 继续 dispatch exact route template，因此自动�
 - two decisions same gate；
 - partial clarify answer 与 full release；
 - manual question 与 task settle；
+- visible gate decision 与同 scope 慢 sibling；
 - daemon shutdown 与 continuation claim；
 - task retry/cancel 与 stale operation recovery。
 
@@ -678,7 +747,9 @@ barrier 只允许编入专用 E2E binary；production binary 对应常量为 `fa
 
 - 三条 route 中 `resumeTask` / node mint/transition / rollback production call=0；
 - collaboration 不 deep import task-execution infrastructure/DB tables，反向亦然；
-- continuation table/predicate/claim/drive owner 仍唯一；
+- continuation table/store/claim/drive owner 仍唯一；claimed/pending 仅是同一 repository 的 state-specific 唯一约束；
+- `successor-after-claimed` 只允许从人工决定 participant 进入，默认 continuation admission 与第二 pending successor 保持冲突；
+- DAG handoff 停止新 frontier、排空既有 in-flight 后返回，不通过 cancel/terminal CAS 丢结果；
 - operation/artifact state transitions 由一个 collaboration repository 实现；
 - no native interval；recovery 只能注册 maintenance job；
 - new operation 不走 lazy question reconciliation 或 legacy answered-row repair；
@@ -712,8 +783,15 @@ REST / MCP / Web UI ───► │ collaboration public facade  │
              after-commit WS                    RFC-328 canonical intent
                                                             │
                                                ┌────────────▼────────────┐
+                                               │ same-authority handoff   │
+                                               │ claimed current owner    │
+                                               │ drains admitted siblings │
+                                               └────────────┬────────────┘
+                                                            │ release
+                                               ┌────────────▼────────────┐
                                                │ TaskDriveCoordinator     │
-                                               │ claim / attach / drive   │
+                                               │ claim exact pending      │
+                                               │ successor / attach/drive │
                                                └─────────────────────────┘
 ```
 
@@ -741,7 +819,12 @@ RFC-333 Done 后只更新 RFC-294：
 - review、clarify、questions 分别由 purpose-specific domain command + required in-transaction participant 完成 final commit；
   `services/*DecisionComposition.ts` 只负责 concrete adapter 与 after-commit wake，不把领域顺序放回 route/bootstrap；
 - `wakeHumanGateContinuation` 只提交已经原子 admitted 的 exact continuation ref，不再做第二次 lifecycle transition 或 mint 第二个
-  intent；boot 的 `humanGateContinuationRecovery` 扫描 exact pending intent 并复用同一入口；
+  intent；若当前 owner 仍 claimed，它 event-driven 等待 current driver 释放后再向同一 coordinator 提交 exact ref；boot 的
+  `humanGateContinuationRecovery` 扫描 exact pending intent 并复用同一入口；
+- migration 0213 把旧 `(pending|claimed)` 合并唯一约束拆为 claimed/pending 各一个 partial unique index；默认 store 准入仍
+  排斥任意 active intent，只有 `TaskDecisionParticipantInTx` 可在“一个 claimed、零 pending”时放入一个 gate successor。
+  DAG owner 观察该 successor 后不再派发新 frontier，只排空已经启动的 sibling/效果并返回 `handoff`；同一 coordinator 随后
+  claim successor。真实 SQLite 约束测试与 RFC-092 慢 sibling 端到端锁住第二 successor/普通 resume 冲突及完整接力；
 - orphan reaper 只保留“task pending、相关 run 全 pending、存在 exact pending gate-continuation intent”的恢复形状；任何 running
   row 仍按既有 orphan contract 中断，避免把真实存活执行误当 durable wake；
 - shared response schema、REST/MCP facade 与 UI 都以 committed receipt 为成功边界；内部 wake failure 不再暴露给用户，真实领域

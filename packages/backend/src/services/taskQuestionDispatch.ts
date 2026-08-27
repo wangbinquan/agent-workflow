@@ -1467,7 +1467,12 @@ async function commitDispatchPlan(
           const projectionRows =
             rerunNodeRunIds.length === 0
               ? []
-              : tx.select().from(nodeRuns).where(inArray(nodeRuns.id, rerunNodeRunIds)).all()
+              : tx
+                  .select()
+                  .from(nodeRuns)
+                  .where(inArray(nodeRuns.id, rerunNodeRunIds))
+                  .limit(rerunNodeRunIds.length)
+                  .all()
           const accepted = humanGateComposition
             .bindTaskDecisionParticipantInTx(tx)
             .acceptGateDecisionTx({

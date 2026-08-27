@@ -32,6 +32,7 @@ import {
   abortAllActiveTasks,
   isTaskActive,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+  wakeHumanGateContinuation,
 } from '../src/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
@@ -576,30 +577,30 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(err!.message).toContain('review_iteration changed')
   })
 
-  test('decision while not in awaiting_review → conflict', async () => {
+  test('repeating the same decision replays the committed operation', async () => {
     // Approve first.
-    await submitReviewDecision({
+    const first = await submitReviewDecision({
       db: h.db,
       appHome: h.appHome,
       nodeRunId: h.reviewNodeRunId,
       decision: 'approved',
       expectedReviewIteration: 0,
     })
-    // Second approve should fail.
-    let err: Error | null = null
-    try {
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewNodeRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-      })
-    } catch (e) {
-      err = e as Error
-    }
-    expect(err).not.toBeNull()
-    expect(err!.message).toMatch(/not awaiting_review|not-awaiting/)
+    await wakeHumanGateContinuation(first.taskId, first.continuationRef, {
+      db: h.db,
+      appHome: h.appHome,
+      schedulerDriver: { async drive() {} },
+      awaitScheduler: true,
+    })
+    const replay = await submitReviewDecision({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewNodeRunId,
+      decision: 'approved',
+      expectedReviewIteration: 0,
+    })
+    expect(replay.continuationRef).toBe(first.continuationRef)
+    expect(replay.receipt.replayed).toBe(true)
   })
 })
 
@@ -724,9 +725,17 @@ describe('RFC-005 review REST endpoints', () => {
       }),
     )
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { ok: boolean; resumeRequired: boolean }
-    expect(body.ok).toBe(true)
-    expect(body.resumeRequired).toBe(true)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body).toMatchObject({
+      ok: true,
+      taskId: h.taskId,
+      receipt: {
+        gate: { kind: 'review', ref: `review:${h.reviewNodeRunId}` },
+        gateRevision: 2,
+        replayed: false,
+      },
+    })
+    expect(body.resumeRequired).toBeUndefined()
 
     const run = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)

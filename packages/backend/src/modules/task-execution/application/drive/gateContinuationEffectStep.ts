@@ -3,6 +3,7 @@
 import { and, eq, inArray } from '@/db/query'
 import type { DbClient } from '@/db/client'
 import {
+  nodeRuns,
   taskExecutionEffectAttempts,
   taskExecutionEffects,
   taskExecutionIntents,
@@ -14,7 +15,6 @@ import {
 import type { TaskExecutionEffectStore } from '../ports/taskExecutionEffectStore'
 import type {
   GateWorkspaceRollbackExecutor,
-  GateWorkspaceRollbackProjectionFactory,
   GateWorkspaceRollbackRef,
 } from '../ports/gateWorkspaceRollback'
 import { waitForEffectResourceTurn } from '../effectResourceWait'
@@ -33,7 +33,6 @@ export class GateContinuationEffectStep implements RepositoryPreparationStep {
     private readonly db: DbClient,
     private readonly effects: TaskExecutionEffectStore,
     private readonly executor: GateWorkspaceRollbackExecutor,
-    private readonly projections: GateWorkspaceRollbackProjectionFactory,
   ) {}
 
   async run(context: TaskDriveContext): Promise<{ kind: 'ready' }> {
@@ -75,6 +74,7 @@ export class GateContinuationEffectStep implements RepositoryPreparationStep {
           eq(taskExecutionEffects.kind, 'workspace-rollback'),
         ),
       )
+      .limit(2)
       .all()
     if (linked.length > 1) {
       throw new TaskExecutionError(
@@ -218,18 +218,44 @@ export class GateContinuationEffectStep implements RepositoryPreparationStep {
       retryAuthority: 'none',
       receiptJson: JSON.stringify(receipt),
       ...(outcome.rolledBack ? {} : { failureCode: 'human-gate-workspace-rollback-incomplete' }),
-      onSettledTx: (tx) =>
-        this.projections.bind(tx).projectWorkspaceRollbackTx({
-          taskId: context.taskId,
-          gateKind: payload.gate.kind,
-          operationId: ref.operationId,
-          planDigest: ref.planDigest,
-          sourceNodeRunIds: payload.continuationLineage.sourceNodeRunIds,
-          rerunNodeRunIds: payload.continuationLineage.rerunNodeRunIds,
-          rolledBack: outcome.rolledBack,
-          receipt,
-          now: Date.now(),
-        }),
+      onSettledTx: (tx) => {
+        if (payload.gate.kind !== 'review') return
+        const sourceIds = payload.continuationLineage.sourceNodeRunIds
+        const rows =
+          sourceIds.length === 0
+            ? []
+            : tx
+                .select({ id: nodeRuns.id, errorMessage: nodeRuns.errorMessage })
+                .from(nodeRuns)
+                .where(
+                  and(eq(nodeRuns.taskId, context.taskId), inArray(nodeRuns.id, [...sourceIds])),
+                )
+                .limit(sourceIds.length)
+                .all()
+        if (rows.length !== sourceIds.length) {
+          throw new TaskExecutionError(
+            'task-continuation-stale',
+            `workspace rollback projection for '${ref.operationId}' lost a source row`,
+          )
+        }
+        const succeeded = new Set(outcome.receipt.successfulSourceNodeRunIds)
+        for (const row of rows) {
+          const rolledBack = succeeded.has(row.id)
+          tx.update(nodeRuns)
+            .set({
+              rolledBack,
+              errorMessage:
+                row.errorMessage === null
+                  ? null
+                  : row.errorMessage.replace(
+                      /^(superseded-by-review-(?:rejected|iterated))(?:-rollback)?:/,
+                      `$1${rolledBack ? '-rollback' : ''}:`,
+                    ),
+            })
+            .where(and(eq(nodeRuns.id, row.id), eq(nodeRuns.taskId, context.taskId)))
+            .run()
+        }
+      },
     })
     return { kind: 'ready' }
   }

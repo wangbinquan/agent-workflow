@@ -1,24 +1,15 @@
-// RFC-319 B38 —— HUMAN-18：决策已落库、但后续 resume 失败时不许假装成功。
+// RFC-333 T12 —— review 决策的成功边界是「决策 + durable continuation」同事务。
 //
-// 提交评审决策做的是两件事：**记下决策**，然后**把任务踢回去继续跑**。
-// 前者是本地事务、几乎不会失败；后者要碰工作树、要起进程，是真会失败的那一半。
+// 决策事务同时落下领域决定、node/task projection、公开 receipt 与 exact
+// gate-continuation intent；commit 后的 wake 只是对同一持久事实的加速。因此工作树
+// 被 GC 掉会让后续 repository preparation 失败，但不能把已提交的用户决定
+// 伪装成失败，也不能暴露已退役的 `resume` / `resumeRequired` 内部协议。
 //
-// 两件事失败语义不同，所以不能合并成一个「成功/失败」：决策确实落库了（2xx 是
-// 对的），但任务并没有继续。若响应对此只字不提，reviewer 看到「已通过」就走了，
-// 而任务从此停在原地——**没有任何人会再回来看它**。这类「伪成功」是审计 R4 点名
-// 的形态：真失败沉进 daemon 日志，HTTP 那头一片祥和。
+// 判据三段：①响应携带可对账的 committed receipt；②两个旧 resume 字段
+// 始终不存在；③决策确实落库，但下游没跑完也不谎报任务 done。
 //
-// 判据三段：①决策**确实**落库（它不该因为踢不动就回滚）；②响应里带着
-// `resume.ok === false` 与一个可归因的 code；③任务**没有**被说成在跑。
-// 正向对照不能省：同样的流程在工作树健在时不带 `resume` 字段，否则「永远报警告」
-// 也能让上面三条成立。
-//
-// 触发真失败的方式是把任务工作树从磁盘上删掉——这正是 `resumeTask` 的 410
-// 前置检查所守的形态（GC 掉的工作树），也是源码注释里点名的第一个例子。
-//
-// 判据取自源码单一事实源：
-//   routes/reviews.ts:300-333   决策 2xx 不变，踢的结果作为可选 `resume` 字段回传
-//   services/task.ts:3473-3484  工作树没了 ⇒ task-worktree-missing（410）
+// 触发下游真失败的方式仍是把任务工作树从磁盘上删掉；这能证明
+// HTTP 成功不依赖工作树或当前进程内 wake，而依赖已落库的持久事实。
 
 import { expect, test } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -52,7 +43,16 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 interface DecisionResponse {
   ok: boolean
-  resume?: { ok: boolean; code: string; message: string }
+  receipt: {
+    operationId: string
+    gate: { kind: string; ref: string }
+    gateRevision: number
+    taskRevision: number
+    acceptedAt: number
+    replayed: boolean
+  }
+  resume?: unknown
+  resumeRequired?: unknown
 }
 
 async function decide(
@@ -171,35 +171,37 @@ test('正向对照：工作树健在时，决策响应里不带任何 resume 警
   const { task, review } = await launchAndAwaitReview(`rfc319-resumefail-ok-${++sequence}`)
   const done = await decide(review.nodeRunId, review.reviewIteration)
   expect(done.status).toBe(200)
-  expect(
-    done.body.resume,
-    '一切正常也报 resume 警告的话，「有警告」就不再是信号——下面那条判据随之失效',
-  ).toBeUndefined()
+  expect(done.body.receipt).toMatchObject({
+    gate: { kind: 'review', ref: `review:${review.nodeRunId}` },
+    replayed: false,
+  })
+  expect(done.body.resume).toBeUndefined()
+  expect(done.body.resumeRequired).toBeUndefined()
   expect(
     (await api<ReviewRow[]>('/api/reviews?status=pending')).some((r) => r.taskId === task),
     '决策提交完这条评审还挂在待办里',
   ).toBe(false)
 })
 
-test('工作树被回收后：决策照样落库，但响应必须点名 resume 失败，且不谎称任务在跑 @nightly', async () => {
+test('工作树被回收后：决策与 durable continuation 照样落库，且不泄露内部 wake @nightly', async () => {
   const { task, review } = await launchAndAwaitReview(`rfc319-resumefail-gone-${++sequence}`)
   const detail = await api<{ worktreePath: string }>(`/api/tasks/${task}`)
   expect(detail.worktreePath, '任务没有工作树路径 ⇒ 下面的删除构造不出那条失败').toBeTruthy()
   rmSync(detail.worktreePath, { recursive: true, force: true })
 
   const decided = await decide(review.nodeRunId, review.reviewIteration)
-  expect(decided.status, '踢不动就把决策一起判失败 ⇒ reviewer 会重复点，而决策其实已经落库了').toBe(
-    200,
-  )
+  expect(decided.status, '工作树故障不得回滚已提交的决策与持久续跑事实').toBe(200)
   expect(
-    decided.body.resume?.ok,
-    '响应对 resume 失败只字不提 ⇒ 这就是审计 R4 点名的「伪成功」：' +
-      'reviewer 看到「已通过」就走了，任务从此停在原地，没有任何人会再回来看它',
-  ).toBe(false)
-  expect(
-    decided.body.resume?.code,
-    '警告没有可归因的 code ⇒ 界面只能显示一句无法排查的「出错了」',
-  ).toBeTruthy()
+    decided.body.receipt,
+    '响应没有 committed receipt ⇒ 调用方无法对账这次已接受的决策',
+  ).toMatchObject({
+    gate: { kind: 'review', ref: `review:${review.nodeRunId}` },
+    replayed: false,
+  })
+  expect(decided.body.receipt.operationId).toBeTruthy()
+  expect(decided.body.receipt.gateRevision).toBeGreaterThan(0)
+  expect(decided.body.resume, '公开响应不得再暴露进程内 wake 结果').toBeUndefined()
+  expect(decided.body.resumeRequired, '公开响应不得再要求客户端补 resume').toBeUndefined()
 
   // 决策本身确实落库：这条评审不再挂在待办上。
   expect(

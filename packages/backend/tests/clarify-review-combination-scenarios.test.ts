@@ -20,7 +20,13 @@ import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { clarifyRounds, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
+import {
+  clarifyRounds,
+  nodeRunOutputs,
+  nodeRuns,
+  taskExecutionIntents,
+  tasks,
+} from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
 // RFC-132 ②a 缺口② 回归锁: S3 + S6 drive answers through the unified autoDispatchClarifyRound.
@@ -38,6 +44,7 @@ import { addReviewComment, submitReviewDecision } from '../src/services/review'
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
+  wakeHumanGateContinuation,
 } from '../src/services/task'
 // RFC-097: runTask's entry CAS only claims pending tasks. Every scheduler
 // re-entry below (the post-decision / post-answer `await runTask(...)` calls)
@@ -79,13 +86,36 @@ function git(...args: string[]): Promise<string> {
   return runTestGit(args, GIT_TIMEOUT_MS)
 }
 
-function runTask(options: Parameters<typeof runTaskBase>[0]) {
-  return runTaskBase({
+async function runTask(options: Parameters<typeof runTaskBase>[0]): Promise<void> {
+  const pendingGateIntent = (
+    await options.db
+      .select({ id: taskExecutionIntents.id })
+      .from(taskExecutionIntents)
+      .where(
+        and(
+          eq(taskExecutionIntents.taskId, options.taskId),
+          eq(taskExecutionIntents.kind, 'gate-continuation'),
+          eq(taskExecutionIntents.state, 'pending'),
+        ),
+      )
+      .limit(1)
+  )[0]
+  const runOptions = {
     ...options,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
     signal: scenarioController.signal,
-  })
+  }
+  if (pendingGateIntent !== undefined) {
+    await wakeHumanGateContinuation(options.taskId, pendingGateIntent.id, {
+      ...runOptions,
+      schedulerDriver: createTaskExecutionTestTopology({ db: options.db, driver: 'real' })
+        .schedulerDriver,
+      awaitScheduler: true,
+    })
+    return
+  }
+  await runTaskBase(runOptions)
 }
 
 function startTaskWithLocalRepo(
@@ -800,12 +830,19 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(revA && revB).toBeTruthy()
 
     // approve B first
-    await submitReviewDecision({
+    const approvalB = await submitReviewDecision({
       db: c.db,
       appHome: c.appHome,
       nodeRunId: revB!.id,
       decision: 'approved',
       expectedReviewIteration: 0,
+    })
+    await reenterScheduler(c.db, approvalB.taskId)
+    await runTask({
+      taskId: approvalB.taskId,
+      db: c.db,
+      appHome: c.appHome,
+      binaryOverride: opencodeCmd(),
     })
     // then reject A (rerunnable designer) → designer reruns v2 → B's approval is now stale
     await submitReviewDecision({
@@ -2220,12 +2257,19 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const revA = await awaitingReviewRun(c.db, task.id, 'revA')
     const revB = await awaitingReviewRun(c.db, task.id, 'revB')
     expect(revA && revB).toBeTruthy()
-    await submitReviewDecision({
+    const approvalA = await submitReviewDecision({
       db: c.db,
       appHome: c.appHome,
       nodeRunId: revA!.id,
       decision: 'approved',
       expectedReviewIteration: revA!.reviewIteration,
+    })
+    await reenterScheduler(c.db, approvalA.taskId)
+    await runTask({
+      taskId: approvalA.taskId,
+      db: c.db,
+      appHome: c.appHome,
+      binaryOverride: opencodeCmd(),
     })
     await submitReviewDecision({
       db: c.db,

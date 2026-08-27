@@ -36,6 +36,7 @@ export class SqliteTaskExecutionIntentStore implements TaskExecutionIntentStore 
     intentId?: string
     replayAuthorizationId?: string | null
     authorizationScopeJson?: string | null
+    admissionMode?: 'exclusive' | 'successor-after-claimed'
     now?: number
   }): SubmittedTaskExecutionIntent {
     const intentId = input.intentId ?? ulid()
@@ -47,6 +48,7 @@ export class SqliteTaskExecutionIntentStore implements TaskExecutionIntentStore 
         intentId,
         replayAuthorizationId: input.replayAuthorizationId ?? null,
         authorizationScopeJson: input.authorizationScopeJson ?? null,
+        admissionMode: input.admissionMode ?? 'exclusive',
         now,
       }),
     )
@@ -58,6 +60,7 @@ export class SqliteTaskExecutionIntentStore implements TaskExecutionIntentStore 
     intentId: string
     replayAuthorizationId: string | null
     authorizationScopeJson: string | null
+    admissionMode?: 'exclusive' | 'successor-after-claimed'
     now: number
   }): SubmittedTaskExecutionIntent {
     const { tx, request } = input
@@ -105,7 +108,7 @@ export class SqliteTaskExecutionIntentStore implements TaskExecutionIntentStore 
     }
 
     const hash = continuationRequestHash(request)
-    const existing = tx
+    const active = tx
       .select({
         id: taskExecutionIntents.id,
         requestHash: taskExecutionIntents.requestHash,
@@ -118,21 +121,31 @@ export class SqliteTaskExecutionIntentStore implements TaskExecutionIntentStore 
           inArray(taskExecutionIntents.state, ['pending', 'claimed']),
         ),
       )
-      .get()
-    if (existing !== undefined) {
-      if (existing.requestHash === hash) {
-        return {
-          intentId: existing.id,
-          state: existing.state,
-          idempotent: true,
-          requestHash: hash,
-        }
+      .limit(2)
+      .all()
+    const replay = active.find((intent) => intent.requestHash === hash)
+    if (replay !== undefined) {
+      return {
+        intentId: replay.id,
+        state: replay.state,
+        idempotent: true,
+        requestHash: hash,
       }
-      throw new TaskExecutionError(
-        'task-continuation-conflict',
-        `task '${request.taskId}' already has an active continuation`,
-        { winnerIntentRef: existing.id },
-      )
+    }
+    const pending = active.find((intent) => intent.state === 'pending')
+    const claimed = active.find((intent) => intent.state === 'claimed')
+    if (
+      pending !== undefined ||
+      (claimed !== undefined && input.admissionMode !== 'successor-after-claimed')
+    ) {
+      const winner = pending ?? claimed
+      if (winner !== undefined) {
+        throw new TaskExecutionError(
+          'task-continuation-conflict',
+          `task '${request.taskId}' already has an active continuation`,
+          { winnerIntentRef: winner.id },
+        )
+      }
     }
 
     // SQLite's json_object/json_array migration helpers preserve insertion

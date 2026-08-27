@@ -299,13 +299,13 @@ async function launchTask(groupId: string, name: string, goal: string): Promise<
 /** 起一个停在 leader-clarify 的安静房间（leader 结构性不再自己动）。 */
 async function quietTask(name: string): Promise<string> {
   const taskId = await launchTask(quietGroupId, name, GOAL_OPEN)
-  const room = await waitForRoom(
+  await waitForRoom(
     taskId,
-    (r) => r.taskStatus === 'awaiting_human',
-    `${name} 没有停在 awaiting_human`,
-  )
-  expect(room.pauseReason, `${name} 的停机成因不是 leader-clarify ⇒ 房间不会保持安静`).toBe(
-    'leader-clarify',
+    // RFC-333 会在 clarify-open 事务里先把 task 原子停到
+    // awaiting_human，workgroup engine 随后再写入自己的成因投影。
+    // 等完整业务形态，这样持久缺失 pauseReason 仍会稳定超时变红。
+    (r) => r.taskStatus === 'awaiting_human' && r.pauseReason === 'leader-clarify',
+    `${name} 没有停在 awaiting_human / leader-clarify`,
   )
   return taskId
 }

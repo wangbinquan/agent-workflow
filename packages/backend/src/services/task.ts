@@ -220,6 +220,7 @@ type TaskDriveFailureReporter = taskDriveComposition.TaskDriveFailureReporter
 
 const {
   activeTaskDriverController,
+  awaitTaskDriverIdle,
   clearTaskDriverLifecycleForTesting,
   createTaskDriverLifecyclePort,
   DefaultTaskDriveCoordinator,
@@ -4242,11 +4243,39 @@ export async function wakeHumanGateContinuation(
       },
     },
   })
-  await coordinator.submit({
-    taskId,
-    intentId: continuationRef,
-    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
-  })
+  const completionMode = deps.awaitScheduler === true ? 'await-settle' : 'background'
+  const submitExact = () =>
+    coordinator.submit({ taskId, intentId: continuationRef, completionMode })
+  const submitAfterCurrentOwner = async (): Promise<void> => {
+    await awaitTaskDriverIdle(taskId)
+    await submitExact()
+  }
+  const deferBehindCurrentOwner = (): void => {
+    void submitAfterCurrentOwner().catch((error) => {
+      log.warn('human-gate continuation handoff wake failed', {
+        taskId,
+        continuationRef,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+  }
+
+  if (isTaskDriverActive(taskId)) {
+    if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
+    else deferBehindCurrentOwner()
+    return
+  }
+  try {
+    const outcome = await submitExact()
+    if (outcome.kind === 'not-attached' && isTaskDriverActive(taskId)) {
+      if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
+      else deferBehindCurrentOwner()
+    }
+  } catch (error) {
+    if (!isTaskDriverActive(taskId)) throw error
+    if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
+    else deferBehindCurrentOwner()
+  }
 }
 
 /**

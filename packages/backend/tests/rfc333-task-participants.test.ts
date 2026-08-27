@@ -32,10 +32,7 @@ import {
   ManualQuestionParkRequired,
   ManualQuestionParkTransaction,
 } from '@/modules/task-execution/application/parkManualQuestions'
-import type {
-  GateWorkspaceRollbackExecutor,
-  GateWorkspaceRollbackProjectionFactory,
-} from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
+import type { GateWorkspaceRollbackExecutor } from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { LegacyHumanGateTaskLifecycle } from '@/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle'
@@ -631,6 +628,94 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
     expect(db.select().from(taskExecutionIntents).all()).toHaveLength(1)
   })
 
+  test('admits one gate successor behind a claimed owner while every other admission stays exclusive', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = 'task-333-decision-handoff'
+    seedTask(db, taskId, 'awaiting_review')
+    const ids = seedDecisionNodes(db, taskId)
+    const module = createTaskExecutionTestModule('daemon-rfc333-decision-handoff')
+    const launch = module.intents.submit({
+      db,
+      intentId: 'intent-rfc333-handoff-owner',
+      request: {
+        taskId,
+        kind: 'launch',
+        source: 'internal',
+        actorUserId: null,
+        expectedTaskRevision: 1,
+        scope: {
+          executionLineageId: taskId,
+          continuationSlotKey: `${taskId}:root`,
+          slotPath: slotPath(taskId),
+          operationGeneration: 0,
+        },
+        payload: { v: 1 },
+      },
+      now: NOW,
+    })
+    const claimed = module.claim({ db, intentId: launch.intentId, now: NOW + 1 })
+    module.claimGate.leave(claimed.permit)
+
+    expect(() =>
+      module.intents.submit({
+        db,
+        intentId: 'intent-rfc333-exclusive-conflict',
+        request: {
+          taskId,
+          kind: 'resume',
+          source: 'internal',
+          actorUserId: null,
+          expectedTaskRevision: 1,
+          scope: {
+            executionLineageId: taskId,
+            continuationSlotKey: `${taskId}:root`,
+            slotPath: slotPath(taskId),
+            operationGeneration: 0,
+          },
+          payload: { v: 1, reason: 'must-stay-exclusive' },
+        },
+        now: NOW + 2,
+      }),
+    ).toThrow(expect.objectContaining({ code: 'task-continuation-conflict' }))
+
+    const decision = dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))
+    const active = db
+      .select({ id: taskExecutionIntents.id, state: taskExecutionIntents.state })
+      .from(taskExecutionIntents)
+      .where(inArray(taskExecutionIntents.state, ['pending', 'claimed']))
+      .all()
+    expect(active).toHaveLength(2)
+    expect(active).toEqual(
+      expect.arrayContaining([
+        { id: launch.intentId, state: 'claimed' },
+        { id: decision.continuationRef, state: 'pending' },
+      ]),
+    )
+
+    expect(() =>
+      module.intents.submit({
+        db,
+        intentId: 'intent-rfc333-second-successor',
+        admissionMode: 'successor-after-claimed',
+        request: {
+          taskId,
+          kind: 'gate-continuation',
+          source: 'internal',
+          actorUserId: null,
+          expectedTaskRevision: decision.taskRevision,
+          scope: {
+            executionLineageId: taskId,
+            continuationSlotKey: `${taskId}:root`,
+            slotPath: slotPath(taskId),
+            operationGeneration: 0,
+          },
+          payload: { v: 1, operationId: 'second-gate-successor' },
+        },
+        now: NOW + 3,
+      }),
+    ).toThrow(expect.objectContaining({ code: 'task-continuation-conflict' }))
+  })
+
   test('projection, lifecycle-event, and intent faults each roll prior domain writes back', () => {
     for (const fault of ['projection', 'event', 'intent'] as const) {
       const db = createInMemoryDb(MIGRATIONS)
@@ -707,24 +792,23 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         return {
           rolledBack: true,
           applicationEvidence: 'applied',
-          receipt: { targetCount: 1, failureCount: 0 },
-        }
-      },
-    }
-    const projections: GateWorkspaceRollbackProjectionFactory = {
-      bind(tx) {
-        return {
-          projectWorkspaceRollbackTx(input) {
-            events.push(`project:${input.operationId}:${String(input.rolledBack)}`)
-            tx.update(nodeRuns)
-              .set({ rolledBack: input.rolledBack })
-              .where(inArray(nodeRuns.id, [...input.sourceNodeRunIds]))
-              .run()
+          receipt: {
+            targetCount: 1,
+            failureCount: 0,
+            successfulSourceNodeRunIds: [ids.sourceNodeRunId],
+            targets: [
+              {
+                sourceNodeRunId: ids.sourceNodeRunId,
+                worktreeDirName: 'repo',
+                snapshot: 'snapshot-1',
+                ok: true,
+              },
+            ],
           },
         }
       },
     }
-    const step = new GateContinuationEffectStep(db, module.effects, executor, projections)
+    const step = new GateContinuationEffectStep(db, module.effects, executor)
     const execution = createTaskExecutionContext({
       intentId: decision.continuationRef,
       token: claimed.token,
@@ -739,11 +823,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
 
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
-    expect(events).toEqual([
-      `load:operation:${taskId}`,
-      `act:operation:${taskId}`,
-      `project:operation:${taskId}:true`,
-    ])
+    expect(events).toEqual([`load:operation:${taskId}`, `act:operation:${taskId}`])
     expect(db.select().from(taskExecutionEffects).get()).toMatchObject({
       state: 'succeeded',
       lastAttemptNo: 1,
@@ -791,12 +871,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         throw new Error('legacy task gate must not execute a collaboration rollback plan')
       },
     }
-    const projections: GateWorkspaceRollbackProjectionFactory = {
-      bind() {
-        throw new Error('legacy task gate must not bind a collaboration rollback projection')
-      },
-    }
-    const step = new GateContinuationEffectStep(db, module.effects, executor, projections)
+    const step = new GateContinuationEffectStep(db, module.effects, executor)
     const context = {
       taskId,
       execution: createTaskExecutionContext({

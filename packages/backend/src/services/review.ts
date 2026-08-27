@@ -3641,7 +3641,12 @@ async function submitReviewDecisionUnlocked(
     const projectionRows =
       lineageIds.length === 0
         ? []
-        : tx.select().from(nodeRuns).where(inArray(nodeRuns.id, lineageIds)).all()
+        : tx
+            .select()
+            .from(nodeRuns)
+            .where(inArray(nodeRuns.id, lineageIds))
+            .limit(lineageIds.length)
+            .all()
     const expectedNodeProjection = humanGateNodeProjectionFence(
       projectionRows.map(reviewDecisionProjectionMember),
     )

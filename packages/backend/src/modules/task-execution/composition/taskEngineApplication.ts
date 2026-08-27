@@ -574,6 +574,11 @@ async function runTaskEngineOrchestratorInner(
     return
   }
 
+  if (result.kind === 'handoff') {
+    log.info('task drive handed off to a pending human-gate continuation', { taskId })
+    return
+  }
+
   // RFC-248 AC-19（实现门 P1）：只读成员的脏检查必须在**每一条终态路径**上都
   // 跑一次，而不是搭在自动提交推送里——`maybeRunCommitPush` 只在
   // `task.autoCommitPush` 开启且顶层节点成功后触发，于是默认配置的任务、以及

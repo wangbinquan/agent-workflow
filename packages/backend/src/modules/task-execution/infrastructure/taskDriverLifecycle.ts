@@ -22,6 +22,7 @@ import {
   type OwnershipToken,
 } from '../domain/ownership'
 import { sha256Hex } from '../domain/digest'
+import { TaskExecutionError } from '../application/taskExecutionError'
 
 const DRIVER_ATTACHABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(['pending', 'running'])
 const ownerHeartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
@@ -248,6 +249,20 @@ export function activeTaskDriverController(taskId: string): AbortController | un
 
 export function isTaskDriverActive(taskId: string): boolean {
   return taskExecutionModule.runtimeRegistry.hasTask(taskId)
+}
+
+/** Wait for the current process-local owner to release without requesting a stop. */
+export async function awaitTaskDriverIdle(taskId: string): Promise<void> {
+  const registry = taskExecutionModule.runtimeRegistry
+  const token = registry.tokenForTask(taskId)
+  if (token === null) return
+  const result = await registry.awaitStopped({ token, tokenKey: ownershipTokenKey(token) })
+  if (result.kind === 'unreaped') {
+    throw new TaskExecutionError(
+      'task-execution-recovery-required',
+      `task '${taskId}' owner stopped with unreaped work (${result.code})`,
+    )
+  }
 }
 
 /** Test isolation for the module-owned heartbeat/runtime handles. */

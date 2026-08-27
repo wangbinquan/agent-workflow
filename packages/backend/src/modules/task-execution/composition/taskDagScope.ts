@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, nodeRuns } from '@/db/schema'
+import { clarifyRounds, nodeRuns, taskExecutionIntents } from '@/db/schema'
 import { autoDispatchDeferredQuestions } from '@/services/clarifyAutoDispatch'
 import { decideScopeOutcome } from '@/services/dispatchFrontier'
 import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
@@ -126,77 +126,97 @@ export async function runScope(
       return { kind: 'canceled', detail: { summary: 'task canceled', message: 'signal aborted' } }
     }
 
-    // RFC-140 W2 — auto-redispatch the auto-split-DEFERRED task questions (marker set at batch
-    // dispatch + still undispatched + still staged) BEFORE deriving the frontier. The tick re-
-    // enters after EVERY node-run completion, so the home whose in-flight rerun just finished
-    // redispatches its deferred cause batch on this very tick (the in-flight gate inside
-    // dispatchTaskQuestions releases on done, incl. done-no-output — RFC-133/139). Retryable
-    // conflicts keep the marker for the next tick; non-recoverable ones clear it (WARN, back to
-    // the manual board). Runs OUTSIDE lock B (dispatch acquires it internally). A successful
-    // redispatch mints pending rows that the deriveFrontier below picks up in the same tick.
-    await autoDispatchDeferredQuestions(db, taskId)
-    // RFC-311 (audit L2-4): the frontier consumes six scalar columns; the old
-    // select() decoded every run's prompt_text + iso/inventory JSON on EVERY
-    // scheduler tick (the tick re-enters after each node-run completion), so
-    // long tasks made the scheduler itself the event-loop hog.
-    const rows = await db
-      .select({
-        id: nodeRuns.id,
-        nodeId: nodeRuns.nodeId,
-        status: nodeRuns.status,
-        iteration: nodeRuns.iteration,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
-        mergeState: nodeRuns.mergeState,
-        shardKey: nodeRuns.shardKey,
-        consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
-        supersededByReview: nodeRuns.supersededByReview,
-        wrapperProgressJson: nodeRuns.wrapperProgressJson,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
-    const openClarify = await loadOpenClarify(db, taskId)
-    // RFC-132 PR-B (universal deferred model): the park gate applies to ALL tasks now — a
-    // sealed-undispatched entry (a designer waiting for its siblings — "park 等齐" — or a
-    // self/questioner entry whose auto-dispatch was deferred by a recoverable conflict) parks its
-    // home so the frontier never falsely completes the asking node on a clarify-only output
-    // (RFC-076 T0). loadUndispatchedParkTargets returns EMPTY for a task with no sealed-undispatched
-    // entries (every steady-state task the instant its answers dispatch), so this stays byte-for-byte
-    // the old frontier for that case; the `deferredQuestionDispatch` flag is no longer read.
-    // RFC-128 P5-BC (clean-path ③) + P5-D (Codex round-3 fix): the park set classifies designer +
-    // self/questioner entries TOGETHER (loadUndispatchedParkTargets), NOT as the per-role UNION. The
-    // union deadlocks a SAME-HOME node that holds an undispatched entry of one role AND an in-flight
-    // rerun of another (the per-role designer source is blind to an in-flight questioner → parks the
-    // node → stalls its pending rerun forever). The all-role partition is in-flight-aware across every
-    // role, so such a node RUNS its in-flight rerun + re-parks next tick.
-    const deferredHandlerNodeIds = await loadUndispatchedParkTargets(db, taskId)
-    const f = deriveFrontier(
-      rows,
-      definition,
-      scopeNodes,
-      scopeIds,
-      iteration,
-      upstreamsOf,
-      new Set(inFlight.keys()),
-      dispatchedThisInvocation,
-      openClarify.clarifyNodeIds,
-      openClarify.askingRunIds,
-      dispatchedPendingRowIds,
-      deferredHandlerNodeIds,
-    )
+    const handoffRequested =
+      opts.executionContext !== undefined &&
+      db
+        .select({ id: taskExecutionIntents.id })
+        .from(taskExecutionIntents)
+        .where(
+          and(
+            eq(taskExecutionIntents.taskId, taskId),
+            eq(taskExecutionIntents.kind, 'gate-continuation'),
+            eq(taskExecutionIntents.state, 'pending'),
+          ),
+        )
+        .limit(1)
+        .get() !== undefined
 
-    for (const nodeId of f.ready) {
-      const node = scopeNodeById.get(nodeId)
-      if (node === undefined) continue
-      dispatchedThisInvocation.add(nodeId)
-      const anchor = f.pendingAnchors.get(nodeId)
-      if (anchor !== undefined) dispatchedPendingRowIds.add(anchor)
-      inFlight.set(
-        nodeId,
-        runOneNode(state, { node, iteration, log }).then((result) => ({ nodeId, result })),
+    let f: ReturnType<typeof deriveFrontier> | undefined
+    if (!handoffRequested) {
+      // RFC-140 W2 — auto-redispatch the auto-split-DEFERRED task questions (marker set at batch
+      // dispatch + still undispatched + still staged) BEFORE deriving the frontier. The tick re-
+      // enters after EVERY node-run completion, so the home whose in-flight rerun just finished
+      // redispatches its deferred cause batch on this very tick (the in-flight gate inside
+      // dispatchTaskQuestions releases on done, incl. done-no-output — RFC-133/139). Retryable
+      // conflicts keep the marker for the next tick; non-recoverable ones clear it (WARN, back to
+      // the manual board). Runs OUTSIDE lock B (dispatch acquires it internally). A successful
+      // redispatch mints pending rows that the deriveFrontier below picks up in the same tick.
+      await autoDispatchDeferredQuestions(db, taskId)
+      // RFC-311 (audit L2-4): the frontier consumes six scalar columns; the old
+      // select() decoded every run's prompt_text + iso/inventory JSON on EVERY
+      // scheduler tick (the tick re-enters after each node-run completion), so
+      // long tasks made the scheduler itself the event-loop hog.
+      const rows = await db
+        .select({
+          id: nodeRuns.id,
+          nodeId: nodeRuns.nodeId,
+          status: nodeRuns.status,
+          iteration: nodeRuns.iteration,
+          parentNodeRunId: nodeRuns.parentNodeRunId,
+          mergeState: nodeRuns.mergeState,
+          shardKey: nodeRuns.shardKey,
+          consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
+          supersededByReview: nodeRuns.supersededByReview,
+          wrapperProgressJson: nodeRuns.wrapperProgressJson,
+        })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
+      const openClarify = await loadOpenClarify(db, taskId)
+      // RFC-132 PR-B (universal deferred model): the park gate applies to ALL tasks now — a
+      // sealed-undispatched entry (a designer waiting for its siblings — "park 等齐" — or a
+      // self/questioner entry whose auto-dispatch was deferred by a recoverable conflict) parks its
+      // home so the frontier never falsely completes the asking node on a clarify-only output
+      // (RFC-076 T0). loadUndispatchedParkTargets returns EMPTY for a task with no sealed-undispatched
+      // entries (every steady-state task the instant its answers dispatch), so this stays byte-for-byte
+      // the old frontier for that case; the `deferredQuestionDispatch` flag is no longer read.
+      // RFC-128 P5-BC (clean-path ③) + P5-D (Codex round-3 fix): the park set classifies designer +
+      // self/questioner entries TOGETHER (loadUndispatchedParkTargets), NOT as the per-role UNION. The
+      // union deadlocks a SAME-HOME node that holds an undispatched entry of one role AND an in-flight
+      // rerun of another (the per-role designer source is blind to an in-flight questioner → parks the
+      // node → stalls its pending rerun forever). The all-role partition is in-flight-aware across every
+      // role, so such a node RUNS its in-flight rerun + re-parks next tick.
+      const deferredHandlerNodeIds = await loadUndispatchedParkTargets(db, taskId)
+      f = deriveFrontier(
+        rows,
+        definition,
+        scopeNodes,
+        scopeIds,
+        iteration,
+        upstreamsOf,
+        new Set(inFlight.keys()),
+        dispatchedThisInvocation,
+        openClarify.clarifyNodeIds,
+        openClarify.askingRunIds,
+        dispatchedPendingRowIds,
+        deferredHandlerNodeIds,
       )
+
+      for (const nodeId of f.ready) {
+        const node = scopeNodeById.get(nodeId)
+        if (node === undefined) continue
+        dispatchedThisInvocation.add(nodeId)
+        const anchor = f.pendingAnchors.get(nodeId)
+        if (anchor !== undefined) dispatchedPendingRowIds.add(anchor)
+        inFlight.set(
+          nodeId,
+          runOneNode(state, { node, iteration, log }).then((result) => ({ nodeId, result })),
+        )
+      }
     }
 
     if (inFlight.size === 0) {
+      if (handoffRequested) return { kind: 'handoff' }
+      if (f === undefined) throw new Error('task DAG frontier was not derived')
       // Quiescent — nothing running and nothing newly ready. The priority
       // decision (awaiting_human > awaiting_review > firstFailure > exhausted
       // > done > stalled) lives in the pure decideScopeOutcome (RFC-095,

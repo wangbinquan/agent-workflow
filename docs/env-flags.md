@@ -97,15 +97,24 @@ pipeline 及其编号）、`AW_CWI_ROUND_ID` / `AW_CWI_ROUND_SEQ`（本轮标识
 
 这些键在装配之后写入，**作者 env overlay 覆盖不了**：它们是平台身份而非可配置项。
 
+### RFC-333 人工门 decision commit→wake 进程 E2E 屏障（仅专用测试二进制）
+
+`AW_E2E_HUMAN_GATE_DECISION_BARRIER_DIR`（专用 E2E 二进制在 decision 已提交、wake
+尚未发生的窗口写入就绪文件，并等待测试进程放行）、
+`AW_E2E_HUMAN_GATE_DECISION_BARRIER_KIND`（可选的 `review` / `clarify` / `questions` 精确门类型）。
+两者只在构建期 `AW_E2E_BUILD=true` 的 test-only artifact 中生效；正式二进制把该构建期
+define 固定为 `false`，所以同名进程变量不会暂停正式服务。
+
 ## 同形非 env（TS 符号 / 构建期注入 / 模板哨兵——**不是**环境变量）
 
-| token                             | 位置                                                                         | 实为                                               |
-| --------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
-| `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/util/version.ts`（`declare const`） | 构建期 define 注入的全局常量                       |
-| `AW_INTERNAL_GIT_IDENTITY`        | `backend/src/util/git.ts`                                                    | 导出的 TS 常量名（内部 git spawn 的身份 env 集合） |
-| `AW_MANAGED_PROCESS_LAUNCH_ERROR` | `backend/src/services/execution/managedProcessLauncher.ts`                   | launcher stderr 失败控制帧前缀（不是环境变量）     |
-| `AW_MANAGED_PROCESS_LAUNCH_READY` | `backend/src/services/execution/managedProcessLauncher.ts`                   | launcher stderr 就绪控制帧前缀（不是环境变量）     |
-| `__AW_CODEHOST_VAR_`              | `packages/shared/src/codeHost/template.ts`                                   | code-host 模板变量哨兵前缀                         |
+| token                             | 位置                                                                              | 实为                                               |
+| --------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `AW_E2E_BUILD`                    | `scripts/build-binary.ts` → `backend/src/services/humanGateDecisionE2eBarrier.ts` | 构建期 test-only binary 布尔开关                   |
+| `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/util/version.ts`（`declare const`）      | 构建期 define 注入的全局常量                       |
+| `AW_INTERNAL_GIT_IDENTITY`        | `backend/src/util/git.ts`                                                         | 导出的 TS 常量名（内部 git spawn 的身份 env 集合） |
+| `AW_MANAGED_PROCESS_LAUNCH_ERROR` | `backend/src/services/execution/managedProcessLauncher.ts`                        | launcher stderr 失败控制帧前缀（不是环境变量）     |
+| `AW_MANAGED_PROCESS_LAUNCH_READY` | `backend/src/services/execution/managedProcessLauncher.ts`                        | launcher stderr 就绪控制帧前缀（不是环境变量）     |
+| `__AW_CODEHOST_VAR_`              | `packages/shared/src/codeHost/template.ts`                                        | code-host 模板变量哨兵前缀                         |
 
 ## 已删除
 

@@ -309,6 +309,7 @@ export function prepareClarifyDecision(input: {
         .select()
         .from(nodeRuns)
         .where(inArray(nodeRuns.id, [input.originNodeRunId]))
+        .limit(1)
         .all()
       const accepted = humanGateComposition
         .bindTaskDecisionParticipantInTx(sealed.tx)

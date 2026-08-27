@@ -1,6 +1,7 @@
 # RFC-333：人工门原子停驻与持久续跑（RFC-294 P0-C）
 
-> 状态：Approved / Publishing（2026-08-28；用户已批准 D1～D12 与 T2～T12，T2～T11 已完成，当前执行 T12 hosted 收口）
+> 状态：Approved / Publishing（2026-08-28；用户已批准 D1～D12 与 T2～T12，并在实现期明确要求继续完成 RFC-333；
+> D13 是 D3/D12 范围内的同权威交接精化，T2～T11 已完成，当前执行 T12 hosted 收口）
 >
 > 架构位置：RFC-294 N6 / P0-C residual；承接 RFC-326 的 review decision 单事务种子、
 > RFC-328 的 durable owner/intent/fence、RFC-329 的 REST/MCP 人工门完整面，以及 RFC-332 的唯一
@@ -33,10 +34,13 @@
       ├─ answer / review decision / question dispatch
       ├─ node projection
       ├─ task pending transition
-      ├─ exactly one gate-continuation intent
+      ├─ exactly one new gate-continuation intent
       └─ committed event
                               │
                               ▼ after commit
+          current owner drain/handoff（若仍 claimed）
+                              │
+                              ▼
                    TaskDriveCoordinator wake/recovery
 ```
 
@@ -99,7 +103,7 @@ review decision、clarify answer/directive、question dispatch 各自在一个 `
 - 领域答案/决定及其 revision；
 - exact node transition/rerun projection；
 - task lifecycle CAS；
-- exactly one RFC-328 `gate-continuation` intent；
+- exactly one new RFC-328 `gate-continuation` intent；
 - committed domain/lifecycle event。
 
 事务提交后即使当前进程在 wake 前退出，boot/ticker 也能从 intent 恢复，不再依赖原 HTTP 请求活着。
@@ -141,7 +145,7 @@ canonical intent 与 drive。route 不再 mint node、rollback 或 resume。P0-C
 
 - **D1 — 两条事务，不做万能 gate service**：打开走 `TaskParkTx`，决定走 `CollaborationDecisionTx`；两者共享值对象与 operation journal，但不混成一个可任意改 task/gate 的入口。
 - **D2 — collaboration 拥有顺序，task-execution 拥有生命周期与 intent**：collaboration command 决定哪些领域写必须同批；task-execution 的 in-tx participant 校验 exact task/node 状态并追加 canonical intent。任一方都不得直接读写对方内部表。
-- **D3 — 复用唯一 continuation authority**：最终事务必须调用现有 `submitTaskContinuationTx` 能力，`kind='gate-continuation'`；不得新建 queue、worker、active-intent 判据或 route fallback resume。
+- **D3 — 复用唯一 continuation authority**：最终事务必须调用现有 `submitTaskContinuationTx` 能力，`kind='gate-continuation'`；不得新建 queue、worker、alternate intent selector 或 route fallback resume。
 - **D4 — prepared ref 是 TaskParkTx 的唯一门输入**：engine 在外部准备 gate artifacts 后只携带 opaque `PreparedHumanGateRef`；TaskParkTx 校验 operation、task lifecycle revision、gate/source identity 后消费，不能接 raw DB/FS callback bag。
 - **D5 — purpose-specific operation journal**：新增 collaboration-owned gate operation 与 artifact manifest，只表达 `open / decide`、`review / clarify / questions` 的状态机；不抽象成全平台通用 saga engine。
 - **D6 — prepare / commit / pre-drive effect**：FS/worktree 操作不在同步 DB transaction 中执行。review docs 先 stage 再由 open transaction 消费并 roll-forward；worktree rollback 只先做 snapshot check-only 并准备幂等 plan，decision transaction 把它与 continuation 一起登记为现有 RFC-328 `workspace-rollback` effect，coordinator 在 rerun engine 前结算。不得新增 effect queue。
@@ -151,6 +155,7 @@ canonical intent 与 drive。route 不再 mint node、rollback 或 resume。P0-C
 - **D10 — manual question 保持既有能力**：手工提问仍可按当前允许的 task 状态创建。它是 question-board interrupt/park obligation，不伪装成一个新 node gate，也不从 route 强抢 active runtime owner；当前 owner 在下一个由其持有的 settle 点消费 obligation，已停驻任务立即投影可见。
 - **D11 — after-commit 才对外通知**：WS、即时 wake 与 artifact final rename 均只在最终事务提交后触发；消费者按 operation/event id 幂等。未提交 operation 不允许产生用户可见 `*.created` 或 `*.answered` 帧。
 - **D12 — 功能优先**：设计门、实现门与回归只核对功能正确性、恢复能力和模块边界；不夹带新安全策略。若实现会删除、限制或改变任何既有正常能力，必须先修订能力影响并重新请批。
+- **D13 — 同权威的 claimed→pending 交接**：人工门可在同一 DAG 的慢 sibling 仍由当前 claimed owner 执行时先变为可决定。决定事务不得拒绝该正常操作，也不得抢占/取消已经启动的 sibling；它只在同一张 `task_execution_intents` 表中准入一个 pending `gate-continuation` successor。每个 task 最多同时一个 claimed current intent 与一个 pending successor；只有 `TaskDecisionParticipantInTx` 可用该窄准入，普通 launch/resume/retry 继续排他。当前 owner 看到 successor 后停止派发新 frontier、排空已准入工作并释放，随后同一个 `TaskDriveCoordinator` claim exact successor；进程在交接中退出仍由既有 pending-intent recovery 接管。不得新增第二 owner、worker、timer、registry 或 execution queue。
 
 ## 6. 能力影响清单
 
@@ -176,7 +181,7 @@ canonical intent 与 drive。route 不再 mint node、rollback 或 resume。P0-C
 - **AC-2**：review/clarify open 的 gate manifest、node projection、task park 与 committed event 同一个 `TaskParkTx`；失败注入证明零 partial visible state。
 - **AC-3**：多文档 review 在第 1..N 个 artifact prepare、prepared→commit、commit→roll-forward 每个边界 crash 后，只收敛为零轮或完整一轮；digest/path/order 与 DB manifest exact。
 - **AC-4**：clarify open 同事务建立 round 与 eager task-question snapshot；legacy read-time reconciliation 只读兼容旧数据，并有明确删除门。
-- **AC-5**：review、clarify、questions 三类决定均在一个 `CollaborationDecisionTx` 中完成 domain writes、node/task transition、event 与 exactly one active `gate-continuation` intent。
+- **AC-5**：review、clarify、questions 三类决定均在一个 `CollaborationDecisionTx` 中完成 domain writes、node/task transition、event 与 exactly one new `gate-continuation` intent；同一 task 不得出现第二个 pending successor。
 - **AC-6**：三条人工门 route 的生产 `resumeTask`、direct node mint/transition、direct rollback 调用均为 0；MCP 保持派发同一 REST route，不出现第二写实现。
 - **AC-7**：相同 idempotency key/hash/actor 重试返回同一 receipt；同 key 不同 payload、stale task revision、stale gate revision、并发两个决定都只允许一个 winner 且 loser 零业务写。
 - **AC-8**：final transaction 提交后在 wake 前杀进程，boot/ticker 会 claim 同一个 intent、先结算其 linked effect，再最终驱动；不创建第二 intent，不需要原 HTTP 客户端重试 resume。
@@ -185,9 +190,10 @@ canonical intent 与 drive。route 不再 mint node、rollback 或 resume。P0-C
 - **AC-11**：WS 仅在 commit 后发送；commit 前 crash 为 0 帧，重复 recovery 至多产生幂等 invalidate，不暴露未提交 gate/decision。
 - **AC-12**：`e2e/rfc294-human-gate-restart.spec.ts` 从“已 parked 后重启”扩为 clarify/review/questions 边界 crash/restart；REST 与 MCP 走同一 command，结果一致。
 - **AC-13**：RFC-326 的 review anchor、batch prevalidation/zero-write failure、source-offset highlight、distill enqueue 与 review 历史行为全部保持。
-- **AC-14**：RFC-328 owner/intent/fence 与 RFC-332 coordinator 是唯一执行权威；不存在第二 continuation table、第二 active predicate、native interval 或 route-owned worker。
+- **AC-14**：RFC-328 owner/intent/fence 与 RFC-332 coordinator 是唯一执行权威；不存在第二 continuation table、alternate selector/claimer、native interval 或 route-owned worker。claimed/pending 的 state-specific 唯一约束仍由同一 intent repository 承担。
 - **AC-15**：architecture guard 锁定 collaboration/task-execution 双向只经 public/required participant、operation state machine、route thin facade 与 legacy fallback 删除条件。
 - **AC-16**：所有新增/修改测试只审功能正确性、恢复和边界；不新增安全或权限策略断言。
+- **AC-17**：决定发生在慢 sibling 仍 in-flight 的真实 coordinator 路径时，存储最多为一个 claimed current intent + 一个 pending gate successor；旧 owner 不再派发新节点，只排空已准入工作后返回 handoff，同一 coordinator 再 claim successor 并完成 rerun。普通 continuation admission、第二 pending successor 与第二 claimed owner 均继续冲突。
 
 ## 8. 退出条件
 
@@ -198,16 +204,20 @@ RFC-333 只有同时满足以下条件才可标 Done：
 3. 任意 commit 前 crash 不发 ghost WS，任意 commit 后 crash 可由 durable worker 收敛；
 4. 三条 route 不再拥有 resume/mint/rollback 业务顺序；REST/MCP/UI 正常功能保持；
 5. review 文件与 rollback journal 已通过边界 fault matrix，临时 artifact 可回收；
-6. current source-lock、targeted/full gate 与 exact-SHA hosted CI 均提供终态证据；
-7. RFC-294 只关闭 P0-C residual，W2-C/D、W3、W4、W5 继续保持未授权/未完成。
+6. 决定可在已启动 sibling 尚未完成时原子准入一个 successor；旧 owner 排空后由同一 coordinator 接力，不丢 sibling 结果、不产生第二执行权威；
+7. current source-lock、targeted/full gate 与 exact-SHA hosted CI 均提供终态证据；
+8. RFC-294 只关闭 P0-C residual，W2-C/D、W3、W4、W5 继续保持未授权/未完成。
 
-截至 2026-08-28，候选实现已满足 1～5 与 7：三类 open/decision 均切到原子 participant，三条 route 的 direct
+截至 2026-08-28，候选实现已满足 1～6 与 8：三类 open/decision 均切到原子 participant，三条 route 的 direct
 `resumeTask` 为 0；真实 SQLite fault matrix、同 key replay/stale/concurrent guards、artifact recovery 与外部
-SIGKILL/restart E2E 均已通过。第 6 条只剩 canonical provenance 在 payload commit 后重钉，以及 exact-SHA hosted/定时 CI
+SIGKILL/restart E2E 均已通过；真实 coordinator 用例也覆盖慢 sibling 期间决定、claimed→pending handoff 与 exact successor
+接力。第 7 条只剩 canonical provenance 在 payload commit 后重钉，以及 exact-SHA hosted/定时 CI
 终态取证；在这些远端证据完成前，本 RFC 保持 Publishing 而不提前标 Done。
 
 ## 9. 批准记录
 
-2026-08-27，用户以“ok”明确批准 D1～D12 与 `plan.md` T2～T12。实施严格保持本 RFC 的能力影响边界：
+2026-08-27，用户以“ok”明确批准 D1～D12 与 `plan.md` T2～T12；2026-08-28 在 hosted 回归暴露慢 sibling
+交接缺口后，用户明确要求继续完成 RFC-333 并提交，D13 因而作为 D3/D12 范围内、不扩功能面的实现精化纳入 T12。
+实施严格保持本 RFC 的能力影响边界：
 不收缩 review / clarify / questions / manual question 的任何正常能力，不新增安全或权限策略；W2-C/D、W3、W4、W5
 仍需各自的新 RFC 与明确批准。
