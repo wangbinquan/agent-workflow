@@ -51,6 +51,8 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,
   // POSIX process-group semantics; the same file exercises Job Objects on Windows.
   'packages/backend/tests/rfc254-process-tree-ownership.test.ts#skipIf': 2,
+  // Bun's detached `.cmd` pipe behaviour requires a real Windows kernel.
+  'packages/backend/tests/rfc254-version-probe-cmd-wrapper.test.ts#skipIf': 1,
   'packages/backend/tests/rfc135-runtimes-status.test.ts#skipIf': 2,
   // The live icacls/whoami round-trip requires a Windows kernel.
   'packages/backend/tests/rfc254-win32-acl-integration.test.ts#skipIf': 1,

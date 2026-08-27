@@ -52,8 +52,8 @@ export async function probeClaudeCode(
   let version: string | null = null
   let ran = false
   try {
-    // RFC-284 T8：spawn 骨架（detached-iff-timeout / exit 先行 / 有界读 /
-    // finally 组 reap）收敛到 util/process.spawnVersionProbe，本函数只留
+    // RFC-284 T8：spawn 骨架（POSIX detached 进程组 / Windows flat spawn /
+    // exit 先行 / 有界读 / POSIX finally 组 reap）收敛到 util/process.spawnVersionProbe，本函数只留
     // claude 侧策略（告警文案 + best-effort version telemetry）。
     const r = await spawnVersionProbe([...head, '--version'], {
       // RFC-317 T36（EK-02 / C4）—— 省略 timeoutMs 曾意味着「无进程组、无树杀、

@@ -80,10 +80,10 @@ export async function listOpencodeModels(
   if (opts?.refresh) cmd.push('--refresh')
 
   // RFC-284 T8：spawn/双流 capped 读/有界组死 reap 骨架收敛
-  // util/process.spawnVersionProbe（models 形态：maxBytes + awaitReapMs；
-  // detached 恒开——恒有 timeout）。本函数只留 models 策略（超时/非零抛错、
-  // 解析、缓存）；「plain proc.kill 留活孙进程」的 CI 教训与 detached 理由
-  // 见骨架头注。
+  // util/process.spawnVersionProbe（models 形态：maxBytes + awaitReapMs；POSIX
+  // detached 进程组，Windows flat spawn + taskkill）。本函数只留 models 策略
+  //（超时/非零抛错、解析、缓存）；「plain proc.kill 留活孙进程」的 CI 教训与
+  // 平台分流理由见骨架头注。
   const r = await spawnVersionProbe(cmd, {
     timeoutMs: opts?.timeoutMs ?? DEFAULT_MODELS_TIMEOUT_MS,
     ...(opts?.env !== undefined ? { env: opts.env } : {}),

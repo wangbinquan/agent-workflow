@@ -63,9 +63,9 @@ export async function probeOpencode(
   let version: string | null = null
   let ran = false
   try {
-    // RFC-284 T8：spawn 骨架收敛 util/process.spawnVersionProbe（detached 仅在
-    // 有 timeout 时开——无-timeout 保持历史 flat spawn 的承诺由骨架参数化兑现；
-    // exit 先行防孙进程持管道；finally 组 reap 防提前退出的 wrapper 漏杀）。
+    // RFC-284 T8：spawn 骨架收敛 util/process.spawnVersionProbe（POSIX 用 detached
+    // 进程组；Windows 保持 flat spawn，避免 `.cmd` wrapper 丢 pipe 输出；exit 先行
+    // 防孙进程持管道；finally 仅在 POSIX 做组 reap）。
     // 本函数只留 opencode 侧策略：告警文案 + flag-spelling registry 记录。
     const r = await spawnVersionProbe([...head, '--version'], {
       // RFC-317 T36（EK-02 / C4）—— 省略 timeoutMs 曾意味着「无进程组、无树杀、
