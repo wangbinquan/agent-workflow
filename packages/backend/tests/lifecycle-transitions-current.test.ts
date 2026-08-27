@@ -41,6 +41,7 @@ import { retryNode } from '../src/services/task'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -530,7 +531,13 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
 
       await retryNode(h.db, h.taskId, agentRunId, {
         cascade: false,
-        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+        deps: {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          appHome: h.appHome,
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
       })
 
       const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
@@ -562,7 +569,13 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
 
       await retryNode(h.db, h.taskId, agentRunId, {
         cascade: true,
-        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+        deps: {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          appHome: h.appHome,
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
       })
 
       const reviewRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1'))

@@ -191,7 +191,7 @@ import {
   taskBroadcaster,
   tasksListBroadcaster,
 } from '@/ws/broadcaster'
-import { runTask, type RunTaskOptions } from './scheduler'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/topology'
 import { Paths } from '@/util/paths'
 import { createLogger, type Logger } from '@/util/log'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
@@ -223,6 +223,9 @@ import {
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
 
+type TaskDriveRequest = Parameters<SchedulerDriverPort['kick']>[0]
+type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionContext' | 'signal'>
+
 /**
  * RFC-243 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
  * fence on the name fallback). Call-node-free definitions skip everything
@@ -230,7 +233,7 @@ import { branchTraceForTask } from '@/modules/task-execution/application/branchT
  * produce one today) fails closed rather than freezing blind.
  */
 async function freezeClosureForLaunch(
-  deps: StartTaskDeps,
+  deps: Pick<StartTaskDeps, 'db' | 'launchActor'>,
   workflowId: string,
   definition: WorkflowDefinition,
 ): Promise<string | null> {
@@ -667,6 +670,8 @@ export async function finalizeCanceledTaskWithoutDriver(
 }
 
 export interface StartTaskDeps {
+  /** RFC-331: required instance-level scheduler drive surface. */
+  schedulerDriver: Pick<SchedulerDriverPort, 'kick'>
   /**
    * RFC-204: needed to unseal `cached_repos.url_enc` for a reuse-by-id launch.
    * Optional so tests / internal faces that never reuse can omit it; when a row
@@ -1560,7 +1565,7 @@ export function runtimeConfigOpts(
     | 'scriptInterpreters'
     | 'scriptDepsInstallTimeoutMs'
   >,
-): Partial<RunTaskOptions> {
+): Partial<TaskDriveRuntimeOptions> {
   return {
     ...(deps.maxActiveChildTasks !== undefined
       ? { maxActiveChildTasks: deps.maxActiveChildTasks }
@@ -3720,22 +3725,22 @@ async function startTaskImpl(
    * （错误兜底、租约释放、工作区收尾都在这里，漏一样就是一类泄漏）。
    */
   const kickScheduler = (): Promise<void> =>
-    runTask({
-      taskId,
-      db: deps.db,
-      appHome,
-      ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-      ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-      ...(deps.subagentLiveCapture !== undefined
-        ? { subagentLiveCapture: deps.subagentLiveCapture }
-        : {}),
-      // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
-      // config through to the scheduler (single source, see runtimeConfigOpts).
-      ...runtimeConfigOpts(deps),
-      log,
-      signal: controller.signal,
-      executionContext: attachedDriver.executionContext,
-    })
+    deps.schedulerDriver
+      .kick({
+        taskId,
+        appHome,
+        ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
+        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+        ...(deps.subagentLiveCapture !== undefined
+          ? { subagentLiveCapture: deps.subagentLiveCapture }
+          : {}),
+        // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
+        // config through to the scheduler (single source, see runtimeConfigOpts).
+        ...runtimeConfigOpts(deps),
+        log,
+        signal: controller.signal,
+        executionContext: attachedDriver.executionContext,
+      })
       .catch((err) => {
         log.error('runTask threw', {
           taskId,
@@ -4673,23 +4678,23 @@ async function resumeKick(
         })
         return (await getTask(db, id)) as Task
       }
-      const schedulerPromise = runTask({
-        taskId: id,
-        db,
-        appHome: deps.appHome ?? Paths.root,
-        ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-        ...(deps.subagentLiveCapture !== undefined
-          ? { subagentLiveCapture: deps.subagentLiveCapture }
-          : {}),
-        // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
-        // config through to the scheduler (single source, see runtimeConfigOpts).
-        ...runtimeConfigOpts(deps),
-        log,
-        signal: controller.signal,
-        executionContext: attachedDriver.executionContext,
-        ensureWorkspaceProfiles: true,
-      })
+      const schedulerPromise = deps.schedulerDriver
+        .kick({
+          taskId: id,
+          appHome: deps.appHome ?? Paths.root,
+          ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
+          ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
+          ...(deps.subagentLiveCapture !== undefined
+            ? { subagentLiveCapture: deps.subagentLiveCapture }
+            : {}),
+          // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
+          // config through to the scheduler (single source, see runtimeConfigOpts).
+          ...runtimeConfigOpts(deps),
+          log,
+          signal: controller.signal,
+          executionContext: attachedDriver.executionContext,
+          ensureWorkspaceProfiles: true,
+        })
         .catch((err) => {
           log.error(`runTask threw on ${opts.verb}`, {
             taskId: id,
@@ -5386,15 +5391,15 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
         ownership,
       })
       if (!r.ok) return r.preparedTask ?? task
-      void runTask({
-        taskId: task.id,
-        db,
-        appHome,
-        ...runtimeConfigOpts(deps),
-        log,
-        signal: controller.signal,
-        executionContext: attachedDriver.executionContext,
-      })
+      void deps.schedulerDriver
+        .kick({
+          taskId: task.id,
+          appHome,
+          ...runtimeConfigOpts(deps),
+          log,
+          signal: controller.signal,
+          executionContext: attachedDriver.executionContext,
+        })
         .catch((err) => {
           log.error('runTask threw after repo-prep retry', {
             taskId: task.id,
@@ -6314,22 +6319,22 @@ export async function retryNode(
       const next = (await getTask(db, taskId)) as Task
       emitTaskStatus(next)
 
-      void runTask({
-        taskId,
-        db,
-        appHome: opts.deps.appHome ?? Paths.root,
-        ...(opts.deps.binaryOverride ? { binaryOverride: opts.deps.binaryOverride } : {}),
-        ...(opts.deps.configPath !== undefined ? { configPath: opts.deps.configPath } : {}),
-        ...(opts.deps.subagentLiveCapture !== undefined
-          ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
-          : {}),
-        // RFC-103 T2 (01-LIFE-06): retryNode historically dropped commit&push +
-        // maxConcurrentNodes; thread them like start/resume via the single source.
-        ...runtimeConfigOpts(opts.deps),
-        log,
-        signal: controller.signal,
-        executionContext: attachedDriver.executionContext,
-      })
+      void opts.deps.schedulerDriver
+        .kick({
+          taskId,
+          appHome: opts.deps.appHome ?? Paths.root,
+          ...(opts.deps.binaryOverride ? { binaryOverride: opts.deps.binaryOverride } : {}),
+          ...(opts.deps.configPath !== undefined ? { configPath: opts.deps.configPath } : {}),
+          ...(opts.deps.subagentLiveCapture !== undefined
+            ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
+            : {}),
+          // RFC-103 T2 (01-LIFE-06): retryNode historically dropped commit&push +
+          // maxConcurrentNodes; thread them like start/resume via the single source.
+          ...runtimeConfigOpts(opts.deps),
+          log,
+          signal: controller.signal,
+          executionContext: attachedDriver.executionContext,
+        })
         .catch((err) => {
           log.error('runTask threw on node retry', {
             taskId,

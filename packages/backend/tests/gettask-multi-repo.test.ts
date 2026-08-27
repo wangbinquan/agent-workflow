@@ -20,6 +20,7 @@ import { runGit } from '../src/util/git'
 import { basename } from 'node:path'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -85,6 +86,8 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
       },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -117,6 +120,8 @@ describe('RFC-066 PR-A T4 — getTask hydrates repos[]', () => {
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },

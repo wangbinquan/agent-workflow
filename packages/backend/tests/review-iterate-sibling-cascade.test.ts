@@ -45,6 +45,7 @@ import {
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
 } from '../src/services/task'
 import { runTestGit } from './helpers/testCommand'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
@@ -213,7 +214,13 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
+    {
+      db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      appHome,
+      binaryOverride: stubOpencode,
+      awaitScheduler: true,
+    },
   )
 
   const idFor = async (nodeId: string): Promise<string> => {

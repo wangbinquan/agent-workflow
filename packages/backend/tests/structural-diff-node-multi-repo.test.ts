@@ -24,6 +24,7 @@ import { startTask } from '../src/services/task'
 import { nodeRuns, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -77,6 +78,8 @@ async function twoRepoTask(h: Harness) {
     } as unknown as StartTask,
     {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     },

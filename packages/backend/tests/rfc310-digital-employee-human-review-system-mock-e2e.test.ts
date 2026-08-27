@@ -34,6 +34,7 @@ import {
 import { addReviewComment, submitReviewDecision } from '@/services/review'
 import { abortAllActiveTasks, isTaskActive, listTaskItems, resumeTask } from '@/services/task'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
@@ -248,6 +249,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       const processMock = makeAgentProcessMock(root)
       const startDeps = {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
         binaryOverride: processMock.command,
         awaitScheduler: true,

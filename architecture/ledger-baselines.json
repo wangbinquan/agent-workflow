@@ -6,8 +6,8 @@
       "id": "depcheck-known-violations",
       "file": "scripts/depcheck.ts",
       "symbol": "KNOWN_VIOLATIONS",
-      "baseline": 37,
-      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数（35），与运行时 KNOWN_VIOLATIONS.length 一致——只数语法元素会得到 20，而展开内部涨条数时那个 20 纹丝不动"
+      "baseline": 31,
+      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。"
     },
     {
       "id": "spawn-site-allowlist",
@@ -69,8 +69,11 @@
       "id": "rfc294-public-surface-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
-      "baseline": 2,
-      "why": "RFC-294 试点期允许的非 exact public 入口。目标架构下终值为 0 RFC-317 T25 涨到 2（identity-access 的 public 合同把 @/platform 的 TransactionScope 摆进签名），当时的一次性 allowGrowth 已按 T17 在下一笔提交中收回。"
+      "baseline": 7,
+      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-331 DEV-1 临时增加 task-execution topology/config 与 DB-bound query constructor 的五条 exact 偏离，分别在 W2-B/W2-D consumer 迁完后删除。",
+      "allowGrowth": {
+        "why": "RFC-331 DEV-1 为 W2-A 拓扑切割保留两处可删除的一跳 compatibility surface；偏离精确登记并钉死 W2-B/W2-D 退出波次。"
+      }
     },
     {
       "id": "rfc317-no-corpus-floor",
@@ -307,8 +310,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 900,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 905,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-331 W2-A 新增 task-execution topology/read-model 的受管构造与发布函数，完整进入 canonical command/writer 分母。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -342,8 +348,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 962,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 981,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-331 W2-A 新增 task-execution application/query/infrastructure/public 与 legacy composition 的显式连接，全部纳入 observed edge 分母。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -363,8 +372,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 942,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 955,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-331 DEV-1 把 W2-A legacy compatibility 连接逐条登记为 exact exception，并为每条钉住 W2-B/W2-D removeAfterWave。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -377,8 +389,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 286,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 292,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-331 DEV-1 增加 task-execution topology/query compatibility symbols；每个 symbol 的 consumer 与 W2-B/W2-D 删除波次均进入 canonical surface。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -398,12 +413,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 17492,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 17522,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-331 W2-A 新增 task-execution ports、read models、adapters 与 public entrypoints，所有新文件和符号均显式落入唯一 owner。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592",
+    "sourceDigest": "sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

@@ -20,10 +20,12 @@ import {
   splitRepoRef,
   invalidateCallGraphIndex,
 } from '../src/services/structuralDiff/callGraph/expandService'
+import { createTaskExecutionReadModels } from '../src/modules/task-execution/public/queries'
 import { startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 // RFC-254: file:// git clone is slow on Windows; the default 5s timeout kills
 // the in-flight clone (reported as 'git clone failed'). 60s gives it headroom.
@@ -102,6 +104,8 @@ async function twoRepoTask(h: Harness) {
     } as unknown as StartTask,
     {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     },
@@ -128,7 +132,8 @@ describe('getCallTargets — multi-repo (RFC-089 P4)', () => {
     )
     invalidateCallGraphIndex(wtA)
 
-    const out = await getCallTargets(h.db, task.id, `${dirA}/src/A.java#A.run`)
+    const readModel = createTaskExecutionReadModels(h.db).callGraphWorkspace
+    const out = await getCallTargets(readModel, task.id, `${dirA}/src/A.java#A.run`)
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
       label: 'charge()',
@@ -142,7 +147,8 @@ describe('getCallTargets — multi-repo (RFC-089 P4)', () => {
   test('a ref with no matching repo prefix → call-target-repo-unresolved', async () => {
     h = await buildHarness()
     const task = await twoRepoTask(h)
-    await expect(getCallTargets(h.db, task.id, 'nope/src/A.java#A.run')).rejects.toThrow(
+    const readModel = createTaskExecutionReadModels(h.db).callGraphWorkspace
+    await expect(getCallTargets(readModel, task.id, 'nope/src/A.java#A.run')).rejects.toThrow(
       /does not match any repo/,
     )
   })

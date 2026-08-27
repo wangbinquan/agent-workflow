@@ -41,6 +41,7 @@ import {
 } from '../src/services/gc'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -81,6 +82,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -119,6 +122,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -134,6 +139,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY, name: 'scratch-task-2' },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         gitCommitIdentity: { name: 'Alice', email: 'a@example.com' },
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
@@ -153,6 +160,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -176,6 +185,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -210,6 +221,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
         { ...BODY },
         {
           db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
           workspaceCleanupHook: (event) => {
             if (event.stage === 'owned-root-remove') {
               throw new Error('injected scratch rm failure')
@@ -261,6 +274,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -311,6 +326,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
         { ...BODY },
         {
           db: poisoned,
+          schedulerDriver: createTaskExecutionTestTopology({ db: poisoned, driver: 'real' })
+            .schedulerDriver,
           appHome: h.appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         },
@@ -328,7 +345,15 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S7 materializedSpace success handoff: startTask consumes verbatim (F3)', async () => {
     h = buildHarness()
-    const space = await materializeSpace({ ...BODY }, { db: h.db }, h.appHome)
+    const space = await materializeSpace(
+      { ...BODY },
+      {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+      },
+      h.appHome,
+    )
     expect(space.kind).toBe('scratch')
     expect(space.earlyError).toBe(null)
     expect(space.repos.length).toBe(1)
@@ -342,6 +367,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         materializedSpace: space,
@@ -357,7 +384,15 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   test('S8 materializedSpace failure handoff: ONE failed row, no re-materialize (F3)', async () => {
     h = buildHarness()
     writeFileSync(join(h.appHome, 'scratch'), 'not a dir') // force mkdir failure
-    const space = await materializeSpace({ ...BODY }, { db: h.db }, h.appHome)
+    const space = await materializeSpace(
+      { ...BODY },
+      {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+      },
+      h.appHome,
+    )
     expect(space.earlyError ?? '').toContain('scratch-')
     expect(space.worktreePath).toBe('')
 
@@ -365,6 +400,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       { ...BODY },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         materializedSpace: space,
@@ -385,6 +422,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
         { ...BODY },
         {
           db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
           appHome: h.appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           preCreatedWorktree: {

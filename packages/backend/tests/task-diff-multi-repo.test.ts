@@ -26,6 +26,7 @@ import { getTaskDiff, startTask, startTaskWithLocalRepo } from '../src/services/
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -89,6 +90,8 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
       },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -113,6 +116,8 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -148,6 +153,8 @@ describe('RFC-066 PR-B T12 — getTaskDiff multi-repo concat', () => {
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },

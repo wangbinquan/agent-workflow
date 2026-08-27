@@ -29,6 +29,7 @@ import {
 import { dispatchTaskQuestions } from '@/services/taskQuestionDispatch'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import { resumeTask } from '@/services/task'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -247,6 +248,7 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       // up the freshly-minted rerun); it is logged at info, not surfaced as an error.
       const resumeDeps: Parameters<typeof resumeTask>[2] = {
         db: deps.db,
+        schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
         appHome: Paths.root,
         configPath: deps.configPath,
         ...resolveLaunchRuntimeConfig(deps.configPath),

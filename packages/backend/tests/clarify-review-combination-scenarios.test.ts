@@ -35,7 +35,6 @@ import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
-import { runTask as runTaskBase } from '../src/services/scheduler'
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
@@ -53,6 +52,10 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTaskBase,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
@@ -298,7 +301,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_review')
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
@@ -364,7 +374,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     const rev1 = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev1).toBeDefined()
@@ -496,7 +513,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     // RFC-100: the designer asks first (round 0); answer with stop → it outputs v1.
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
@@ -669,7 +693,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
@@ -755,7 +786,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     const revA = await awaitingReviewRun(c.db, task.id, 'revA')
     const revB = await awaitingReviewRun(c.db, task.id, 'revB')
@@ -862,7 +900,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     // RFC-100: the designer asks first (round 0); answer with stop → it outputs v1.
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
@@ -991,7 +1036,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
@@ -1086,7 +1138,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     await submitReviewDecision({
@@ -1187,7 +1246,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
@@ -1258,7 +1324,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     // The pure-agent chain runs straight to done (v1), each node consuming its
     // upstream's v1 run.
@@ -1382,7 +1455,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     // answer A's clarify
     await autoDispatchClarifyRound({
@@ -1502,7 +1582,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     await autoDispatchClarifyRound({
       db: c.db,
@@ -1612,7 +1699,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
@@ -1735,7 +1829,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { req: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     // designer v1 → rev1 awaiting. approve.
     const rev1 = await awaitingReviewRun(c.db, task.id, 'rev1')
@@ -1871,7 +1972,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     const rev1a = await awaitingReviewRun(c.db, task.id, 'rev1')
     expect(rev1a).toBeDefined()
@@ -1977,7 +2085,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
@@ -2081,7 +2196,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { topic: 'x' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     // A asked clarify; B should already be awaiting_review.
     await autoDispatchClarifyRound({
@@ -2239,7 +2361,14 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         baseBranch: 'main',
         inputs: { docs: 'a.md\nb.md' },
       },
-      { db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd(), awaitScheduler: true },
+      {
+        db: c.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: c.appHome,
+        binaryOverride: opencodeCmd(),
+        awaitScheduler: true,
+      },
     )
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()

@@ -29,7 +29,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runGit } from '../src/util/git'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -19,6 +19,7 @@ import { selectAutoApplyOption, type RepairOption } from '@agent-workflow/shared
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -151,6 +152,7 @@ export function startAutoRepairLoop(opts: {
       if (!Object.values(autoRepair).some((v) => v === true)) return // default: nothing enabled
       const deps = {
         db: opts.db,
+        schedulerDriver: createLegacyTaskExecutionTopology(opts.db).schedulerDriver,
         configPath: opts.configPath,
         ...(cfg.subagentLiveCapture !== undefined
           ? { subagentLiveCapture: cfg.subagentLiveCapture }

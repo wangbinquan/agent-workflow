@@ -20,12 +20,31 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows, users, nodeRuns, taskRepos, cachedRepos } from '../src/db/schema'
-import { startTask } from '@/services/task'
+import { startTask as startTaskProduction, type StartTaskDeps } from '@/services/task'
 import { runGit } from '@/util/git'
 import { ulid } from 'ulid'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+
+function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
+  deps: T,
+): T & Pick<StartTaskDeps, 'schedulerDriver'> {
+  return {
+    ...deps,
+    schedulerDriver: createTaskExecutionTestTopology({ db: deps.db, driver: 'real' })
+      .schedulerDriver,
+  }
+}
+
+/** Every start fixture in this file explicitly selects the real test topology. */
+function startTask(
+  input: Parameters<typeof startTaskProduction>[0],
+  deps: Omit<StartTaskDeps, 'schedulerDriver'>,
+): ReturnType<typeof startTaskProduction> {
+  return startTaskProduction(input, withRealSchedulerDriver(deps))
+}
 
 /**
  * 等任务落到终态。
@@ -379,14 +398,14 @@ describe('RFC-287 T13 — 重试准备（AC-11）', () => {
     try {
       await retryNode(db2, task.id, prep!.id, {
         cascade: false,
-        deps: {
+        deps: withRealSchedulerDriver({
           db: db2,
           actorUserId: s.userId,
           appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 3_000,
           gitBaselineSyncWindowMs: 0,
-        } as never,
+        }),
       })
     } catch (err) {
       rejected = err instanceof Error ? err.message : String(err)
@@ -685,14 +704,14 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const { retryNode } = await import('@/services/task')
     await retryNode(db, id, prep!.id, {
       cascade: false,
-      deps: {
+      deps: withRealSchedulerDriver({
         db,
         actorUserId: s.userId,
         appHome: TEST_HOME,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         cloneTimeoutMs: 1_000,
         gitBaselineSyncWindowMs: 0,
-      } as never,
+      }),
     })
     await settle(db, id)
     const after = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
@@ -727,12 +746,12 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     try {
       await retryNode(db, id, prep!.id, {
         cascade: false,
-        deps: {
+        deps: withRealSchedulerDriver({
           db,
           actorUserId: s.userId,
           appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-        } as never,
+        }),
       })
     } catch (err) {
       // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
@@ -792,14 +811,14 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     try {
       await retryNode(db, task.id, prep!.id, {
         cascade: false,
-        deps: {
+        deps: withRealSchedulerDriver({
           db,
           actorUserId: s2.userId,
           appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 1_000,
           gitBaselineSyncWindowMs: 0,
-        } as never,
+        }),
       })
     } catch (err) {
       // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
@@ -828,14 +847,14 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     try {
       await retryNode(db, id, prep!.id, {
         cascade: false,
-        deps: {
+        deps: withRealSchedulerDriver({
           db,
           actorUserId: s2.userId,
           appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 1_000,
           gitBaselineSyncWindowMs: 0,
-        } as never,
+        }),
       })
     } catch (err) {
       // ⚠️ 判据必须是 `.code`：DomainError / ValidationError 把错误码放在 `.code`，
@@ -1134,7 +1153,7 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
     const t0 = Date.now()
     const returned = await retryNode(db, id, prep!.id, {
       cascade: false,
-      deps: {
+      deps: withRealSchedulerDriver({
         db,
         actorUserId: s.userId,
         appHome: TEST_HOME,
@@ -1142,7 +1161,7 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
         // 准备本身要卡满 3 秒才失败；若重试是同步的，下面的耗时断言必然超。
         cloneTimeoutMs: 3_000,
         gitBaselineSyncWindowMs: 0,
-      } as never,
+      }),
     })
     const elapsed = Date.now() - t0
     expect(elapsed, '重试请求必须立刻返回，不能等准备跑完').toBeLessThan(1_500)
@@ -1172,14 +1191,14 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
         .at(-1)!
       await retryNode(db, id, latest.id, {
         cascade: false,
-        deps: {
+        deps: withRealSchedulerDriver({
           db,
           actorUserId: s.userId,
           appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           cloneTimeoutMs: 1_000,
           gitBaselineSyncWindowMs: 0,
-        } as never,
+        }),
       })
       await settle(db, id)
     }
@@ -1317,12 +1336,16 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     let code = ''
     let msg = ''
     try {
-      await resumeTask(db, id, {
+      await resumeTask(
         db,
-        actorUserId: s.userId,
-        appHome: TEST_HOME,
-        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-      } as never)
+        id,
+        withRealSchedulerDriver({
+          db,
+          actorUserId: s.userId,
+          appHome: TEST_HOME,
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        }),
+      )
     } catch (err) {
       code = (err as { code?: string }).code ?? ''
       msg = err instanceof Error ? err.message : String(err)

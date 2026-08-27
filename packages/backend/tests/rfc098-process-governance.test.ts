@@ -34,6 +34,7 @@ import { reapOrphanRuns } from '../src/services/orphans'
 import { runNode } from '../src/services/runner'
 import { resumeTask } from '../src/services/task'
 import { STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const STUBBORN = resolve(import.meta.dir, 'fixtures', 'stubborn-opencode.ts')
@@ -398,6 +399,8 @@ describe('RFC-098 WP-8 — resumeTask kills the target row’s live child before
 
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })

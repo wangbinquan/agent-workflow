@@ -22,6 +22,7 @@ import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
 import { startWorkgroupTask, WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/launch'
 import { createWorkgroup } from '../src/services/workgroups'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_RUNTIME = 'rfc228-opencode'
@@ -220,6 +221,8 @@ describe('RFC-228 Agent resource integrity', () => {
         { name: 'blocked run', goal: 'work', scratch: true },
         {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           appHome: '/unused-before-resource-gate',
           defaultRuntime: VALID_RUNTIME,
           launchProvenance: { kind: 'direct-json', initiator: 'api' },

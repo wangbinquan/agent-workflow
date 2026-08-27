@@ -29,7 +29,8 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { NodeKind } from '@agent-workflow/shared'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { deriveFrontier, runTask } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
 // 同毫秒内多次铸行时保证 id 单调（freshness 是纯 id-order）。

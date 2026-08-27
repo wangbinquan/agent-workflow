@@ -19,6 +19,7 @@ import { setNodeRunStatusTx } from '@/services/lifecycle'
 import { resumeTask, resumeTaskWithAtomicSideEffects } from '@/services/task'
 import { canViewTask } from '@/services/taskCollab'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -105,6 +106,7 @@ export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
   function buildResumeDeps(): Parameters<typeof resumeTask>[2] {
     return {
       db: deps.db,
+      schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
       appHome: Paths.root,
       configPath: deps.configPath,
       ...resolveLaunchRuntimeConfig(deps.configPath),

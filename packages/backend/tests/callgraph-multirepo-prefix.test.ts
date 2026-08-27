@@ -32,10 +32,12 @@ import {
   splitRepoRef,
   invalidateCallGraphIndex,
 } from '../src/services/structuralDiff/callGraph/expandService'
+import { createTaskExecutionReadModels } from '../src/modules/task-execution/public/queries'
 import { startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 // ---------------------------------------------------------------------------
 // GAP 2: splitRepoRef longest-prefix tie-break (pure, deterministic).
@@ -116,6 +118,8 @@ async function twoRepoTask(h: Harness) {
     } as unknown as StartTask,
     {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       launchProvenance: { kind: 'direct-json', initiator: 'manual' },
     },
@@ -151,7 +155,11 @@ describe('getCallTargets — multi-repo external ownerClass re-prefix (RFC-089 P
     )
     invalidateCallGraphIndex(wtA)
 
-    const out = await getCallTargets(h.db, task.id, `${dirA}/src/A.java#A.run`)
+    const out = await getCallTargets(
+      createTaskExecutionReadModels(h.db).callGraphWorkspace,
+      task.id,
+      `${dirA}/src/A.java#A.run`,
+    )
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
       label: 'svc.charge()',

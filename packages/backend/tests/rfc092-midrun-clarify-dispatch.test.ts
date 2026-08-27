@@ -34,7 +34,7 @@ import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/sch
 // mint the 承接 rerun) so the unified flat injector has a DISPATCHED entry to inject; the legacy
 // immediate mint created none.
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

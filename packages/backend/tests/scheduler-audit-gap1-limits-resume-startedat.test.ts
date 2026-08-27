@@ -33,6 +33,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { enforceLimits } from '../src/services/limits'
 import { resumeTask } from '../src/services/task'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -147,6 +148,8 @@ describe('gap1 — pause time counts toward maxDurationMs wall clock (current-be
 
     const returned = await resumeTask(h.db, taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'], // never spawned: empty workflow
     })

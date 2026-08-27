@@ -23,6 +23,7 @@ import {
 } from '../src/services/task'
 import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 import { runGit } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import {
   migrateWorkflowDefinitionToLatest,
   type WorkflowDefinition,
@@ -135,7 +136,13 @@ async function bumpWorkflow(
 }
 
 function syncDeps(h: Harness, expectedVersion: number) {
-  return { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'], expectedVersion }
+  return {
+    db: h.db,
+    schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' }).schedulerDriver,
+    appHome: h.appHome,
+    binaryOverride: ['/usr/bin/env', 'true'],
+    expectedVersion,
+  }
 }
 async function codeOf(fn: () => Promise<unknown>): Promise<string | undefined> {
   try {

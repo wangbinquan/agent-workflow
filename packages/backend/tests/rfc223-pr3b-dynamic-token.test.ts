@@ -61,6 +61,7 @@ import type {
 } from '../src/services/workgroup/engine'
 import { createLogger } from '../src/util/log'
 import { runTestGit } from './helpers/testCommand'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -603,6 +604,8 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
             taskId,
             {
               db,
+              schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+                .schedulerDriver,
               appHome,
               binaryOverride: ['bun', 'run', MOCK_OPENCODE],
               awaitScheduler: true,

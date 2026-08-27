@@ -33,6 +33,7 @@ import { createWorkgroup, getWorkgroupById } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
 import { extractWorkflowAgentRefs, stripWorkflowNodeAgentIds } from '../src/services/resourceRefs'
 import { createUser } from '../src/services/users'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
@@ -245,6 +246,8 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
         { name: 'e2e', goal: 'g', scratch: true },
         {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           appHome,
           binaryOverride: ['bun', '-e', 'process.exit(0)'],
           awaitScheduler: true,
@@ -268,6 +271,8 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
         { name: 'e2e', goal: 'g', scratch: true },
         {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           appHome,
           binaryOverride: ['bun', '-e', 'process.exit(0)'],
           awaitScheduler: true,

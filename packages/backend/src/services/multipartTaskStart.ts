@@ -24,7 +24,10 @@ import {
   resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { resolveSubagentLiveCapture } from '@/services/startTaskDeps'
+import {
+  createLegacyTaskExecutionTopology,
+  resolveSubagentLiveCapture,
+} from '@/services/startTaskDeps'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import {
@@ -126,6 +129,7 @@ export async function handleMultipartTaskStart(
 
   const routeLaunchDeps = {
     db: deps.db,
+    schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
     actorUserId: actor.user.id,
     ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
     configPath: deps.configPath,

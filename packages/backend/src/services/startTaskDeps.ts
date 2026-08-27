@@ -9,7 +9,14 @@ import { loadConfig } from '@/config'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import type { StartTaskDeps } from '@/services/task'
+import { cancelTask, isTaskActive, resumeTask, type StartTaskDeps } from '@/services/task'
+import { runTaskWithTopology, type RunTaskOptions } from '@/services/scheduler'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/public/queries'
+import {
+  createTaskStatusPublisher,
+  type SchedulerDriverPort,
+  type SchedulerRuntimeTopology,
+} from '@/modules/task-execution/public/topology'
 
 /**
  * RFC-048 — subagent live-capture cadence from live config (moved verbatim from
@@ -28,6 +35,43 @@ export function resolveSubagentLiveCapture(
 }
 
 /**
+ * RFC-331 DEV-1 compatibility adapter. It is deliberately stateless and lives
+ * in the existing launch composition seam; task.ts and scheduler.ts never
+ * import it back.
+ */
+export function createLegacyTaskExecutionTopology(db: DbClient): SchedulerRuntimeTopology {
+  const readModels = createTaskExecutionReadModels(db)
+  const schedulerDriver: SchedulerDriverPort = {
+    async kick(request) {
+      await runTaskWithTopology({ ...request, db } as RunTaskOptions, topology)
+    },
+    async cancelChild(input) {
+      await cancelTask(db, input.taskId, { cascadeFromParent: input.cascadeFromParent })
+    },
+    async resumeChild(input) {
+      await resumeTask(db, input.taskId, {
+        db,
+        schedulerDriver,
+        ...(input.runtime.triggerContext === undefined
+          ? {}
+          : { triggerContext: input.runtime.triggerContext }),
+        ...(input.runtime.actorUserId === undefined
+          ? {}
+          : { actorUserId: input.runtime.actorUserId }),
+        ...input.runtime.runConfig,
+      })
+    },
+    isTaskActive,
+  }
+  const topology: SchedulerRuntimeTopology = {
+    schedulerDriver,
+    taskStatusReadModel: readModels.statusProjection,
+    taskStatusPublisher: createTaskStatusPublisher(),
+  }
+  return topology
+}
+
+/**
  * Build the common StartTaskDeps for a launch. Byte-equivalent to the inline object
  * the JSON launch used (routes/tasks.ts:249-256). Callers with extra deps
  * (multipart's `preCreatedWorktree` / `preResolvedSource`) spread them on top.
@@ -40,8 +84,10 @@ export function buildStartTaskDeps(
   secretBox?: SecretBox,
 ): StartTaskDeps {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
+  const topology = createLegacyTaskExecutionTopology(db)
   return {
     db,
+    schedulerDriver: topology.schedulerDriver,
     actorUserId,
     ...(secretBox !== undefined ? { secretBox } : {}),
     // RFC-282 C1-2: the scheduler resolves config.opencodePath itself.

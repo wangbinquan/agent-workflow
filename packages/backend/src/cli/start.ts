@@ -35,7 +35,7 @@ import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/c
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { sha256Hex } from '@/util/hash'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { buildStartTaskDeps, createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentWorkspaceRepositoryPreparation,
@@ -1579,6 +1579,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,
+      schedulerDriver: createLegacyTaskExecutionTopology(db).schedulerDriver,
       // RFC-282 C1-2: the scheduler resolves config heads at the mint freeze.
       configPath: Paths.config,
       // boot 恢复同样会走到 unseal（同文件另外三处都经 buildStartTaskDeps 带上了它）。

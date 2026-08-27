@@ -48,6 +48,14 @@ export const PUBLIC_ENTRYPOINTS = [
   'types',
 ] as const
 
+/** RFC-331 DEV-1: one context-local compatibility surface, removed in W2-B/D. */
+export const TEMPORARY_PUBLIC_COMPATIBILITY_ENTRYPOINTS: ReadonlyMap<
+  string,
+  ReadonlySet<string>
+> = new Map([
+  ['task-execution', new Set(['topology'])],
+] as const)
+
 /**
  * RFC-294 §2 的模块内层集合。`inbound` 是 RFC-317 D3 裁决新承认的入站适配层
  * （目标架构本就有 inbound adapter 概念，只是此前没给它目录名）。
@@ -268,6 +276,17 @@ function isExactPublicEntry(rest: string): boolean {
   return (PUBLIC_ENTRYPOINTS as readonly string[]).includes(entry)
 }
 
+function isAcceptedInboundPublicEntry(location: ModuleLocation): boolean {
+  if (isExactPublicEntry(location.rest)) return true
+  const parts = location.rest.split('/')
+  if (parts.length !== 2 || parts[0] !== 'public') return false
+  return (
+    TEMPORARY_PUBLIC_COMPATIBILITY_ENTRYPOINTS.get(location.context)?.has(
+      withoutTsExtension(parts[1] ?? ''),
+    ) === true
+  )
+}
+
 function isCompositionEntry(rest: string): boolean {
   return rest === 'composition' || rest.startsWith('composition/')
 }
@@ -307,7 +326,7 @@ export function inboundBoundaryEdges(units: readonly SourceUnit[]): BoundaryEdge
       }
       const target = targetModule(edge)
       if (target === null) continue
-      if (isExactPublicEntry(target.rest)) continue
+      if (isAcceptedInboundPublicEntry(target)) continue
       if (isCompositionEntry(target.rest) && bootstrap.has(unit.path)) continue
       out.push({
         rule: 'R1-inbound-module-internals',

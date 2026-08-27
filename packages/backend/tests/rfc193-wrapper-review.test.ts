@@ -21,7 +21,7 @@ import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, docVersions, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
 const ulid = monotonicFactory()

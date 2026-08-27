@@ -60,6 +60,7 @@ import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
+import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import { createWorkflow } from '@/services/workflow'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { gitDiffSnapshot, runGit } from '@/util/git'
@@ -630,6 +631,7 @@ export async function createFusion(
     const taskId = ulid()
     const startDeps: StartTaskDeps = {
       db,
+      schedulerDriver: createLegacyTaskExecutionTopology(db).schedulerDriver,
       appHome,
       actorUserId: actor.user.id,
       launchProvenance: { kind: 'fusion', initiator: launchInitiator },
@@ -1600,6 +1602,7 @@ export async function rejectFusion(
       const taskId = ulid()
       const startDeps: StartTaskDeps = {
         db,
+        schedulerDriver: createLegacyTaskExecutionTopology(db).schedulerDriver,
         appHome,
         actorUserId: actor.user.id,
         launchProvenance: { kind: 'fusion', initiator: launchInitiator },

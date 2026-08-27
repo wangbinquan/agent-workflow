@@ -241,7 +241,6 @@ import {
   encodeWrapperProgress,
   type WrapperProgress,
 } from '@/services/wrapperProgress'
-import { emitTaskStatus, getTask } from '@/services/task'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
@@ -308,7 +307,6 @@ import {
   type FrozenWorkgroupRef,
 } from '@/services/execution/closure'
 import { TERMINAL_TASK_STATUSES, type StartTask } from '@agent-workflow/shared'
-import type { MaterializedSpace, StartTaskDeps } from '@/services/task'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { existsSync } from 'node:fs'
@@ -328,6 +326,16 @@ import { resolveProjectFallback } from '@/services/codeHost/project'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
 import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
+import {
+  INHERITABLE_RUN_CONFIG_KEYS,
+  pickInheritableRunConfig,
+  type SchedulerRuntimeTopology,
+} from '@/modules/task-execution/public/topology'
+
+// Compatibility exports for the existing scheduler test contract. The owner is
+// task-execution/public/topology; production consumers import that public surface.
+export { INHERITABLE_RUN_CONFIG_KEYS, pickInheritableRunConfig }
+export type InheritableRunConfig = ReturnType<typeof pickInheritableRunConfig>
 
 export interface RunTaskOptions {
   taskId: string
@@ -473,52 +481,6 @@ export interface RunTaskOptions {
  * 同名字段的注释各自承载调度语义/路由接线两套契约、不宜合并——注册表 + Pick
  * 派生型给出同等单源与更强的双向锁，类型面零搬迁。
  */
-export const INHERITABLE_RUN_CONFIG_KEYS = [
-  // RFC-304: identifies the PROCESS, so a child task must carry the same one.
-  // A child with a different generation would treat its own parent's live MR
-  // leases as void and take an MR out from under a running round.
-  'daemonGeneration',
-  'binaryOverride',
-  'configPath',
-  'appHome',
-  'defaultPerNodeTimeoutMs',
-  'defaultNodeRetries',
-  'sessionRestartBudget',
-  'defaultRuntime',
-  'maxConcurrentNodes',
-  'maxConcurrentScriptNodes',
-  'maxConcurrentCodeHostCalls',
-  'codeHostRequestTimeoutMs',
-  'codeHostResponseMaxBytes',
-  'multiProcessSubprocessConcurrency',
-  'maxActiveChildTasks',
-  'maxInvocationDepth',
-  'subagentLiveCapture',
-  // RFC-308: a child task remains in the same launch operation and must not
-  // lose the platform publication policy at the call boundary.
-  'commitPushExcludePatterns',
-  // RFC-284 T30 修配（用户拍板转正）：RFC-253 两键此前根任务即断线（launch 臂
-  // runtime 携带、类型缺席、漏斗丢弃）——修通根侧的同时按拍板下传子任务。
-  'scriptInterpreters',
-  'scriptDepsInstallTimeoutMs',
-] as const satisfies ReadonlyArray<keyof RunTaskOptions>
-
-export type InheritableRunConfig = Pick<
-  RunTaskOptions,
-  (typeof INHERITABLE_RUN_CONFIG_KEYS)[number]
->
-
-/** 按注册表拾取继承面；undefined 值不落键（保持 exactOptionalPropertyTypes 语义
- *  与旧逐字段 `!== undefined` 展开逐字节同构）。appHome 为必填恒在。 */
-export function pickInheritableRunConfig(opts: RunTaskOptions): InheritableRunConfig {
-  const out: Record<string, unknown> = {}
-  for (const key of INHERITABLE_RUN_CONFIG_KEYS) {
-    const value = opts[key]
-    if (value !== undefined) out[key] = value
-  }
-  return out as InheritableRunConfig
-}
-
 type NodeStatus =
   | 'pending'
   | 'running'
@@ -537,6 +499,7 @@ interface SchedulerState {
   taskId: string
   definition: WorkflowDefinition
   opts: RunTaskOptions
+  topology: SchedulerRuntimeTopology
   log: Logger
   inputsMap: Record<string, string>
   /** RFC-292: parsed once from the frozen task row; inherited by every scope. */
@@ -638,7 +601,11 @@ export function readCommitExcludePatterns(opts: RunTaskOptions): readonly string
   return [...(opts.commitPushExcludePatterns ?? [])]
 }
 
-export async function runTask(opts: RunTaskOptions): Promise<void> {
+/** Required production entrypoint: callers must provide the complete topology. */
+export async function runTaskWithTopology(
+  opts: RunTaskOptions,
+  topology: SchedulerRuntimeTopology,
+): Promise<void> {
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
   // mutex against our cached SchedulerState.writeSem reference).
@@ -646,9 +613,9 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   // same reasoning (a split pool would run a task at double its configured
   // shard concurrency), so it is reclaimed in this one place too.
   try {
-    if (opts.executionContext === undefined) await runTaskInner(opts)
+    if (opts.executionContext === undefined) await runTaskInner(opts, topology)
     else {
-      await runWithTaskExecutionContext(opts.executionContext, () => runTaskInner(opts))
+      await runWithTaskExecutionContext(opts.executionContext, () => runTaskInner(opts, topology))
     }
   } finally {
     gcTaskWriteSem(opts.taskId)
@@ -656,7 +623,10 @@ export async function runTask(opts: RunTaskOptions): Promise<void> {
   }
 }
 
-async function runTaskInner(opts: RunTaskOptions): Promise<void> {
+async function runTaskInner(
+  opts: RunTaskOptions,
+  topology: SchedulerRuntimeTopology,
+): Promise<void> {
   const log = opts.log ?? createLogger('scheduler')
   const { db, taskId } = opts
 
@@ -752,6 +722,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       }
     } catch (error) {
       await failTask(
+        topology,
         db,
         taskId,
         'workspace-exclude-profile-failed',
@@ -770,6 +741,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     definition = migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(raw))
   } catch (err) {
     await failTask(
+      topology,
       db,
       taskId,
       'snapshot-invalid',
@@ -790,6 +762,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   })
   if (triggerIssue !== null) {
     await failTask(
+      topology,
       db,
       taskId,
       triggerIssue.code,
@@ -817,7 +790,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     log.warn('runTask: task not claimable (not pending) — refusing to drive it', { taskId })
     return
   }
-  await emitStatus(db, taskId)
+  await emitStatus(topology, taskId)
 
   // 4. Validate node kinds. RFC-146: positive membership in the behavior
   // table — a kind the scheduler knows is exactly a kind with a behavior row.
@@ -829,6 +802,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // Object.hasOwn (not `in`) — inherited keys must not pass the whitelist.
     if (!Object.hasOwn(NODE_KIND_BEHAVIORS, node.kind)) {
       await failTask(
+        topology,
         db,
         taskId,
         `scheduler does not yet support ${node.kind} nodes`,
@@ -852,6 +826,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   if (duplicateNode !== undefined) {
     const [nodeId, count] = duplicateNode
     await failTask(
+      topology,
       db,
       taskId,
       'workflow-node-id-duplicate',
@@ -877,6 +852,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
           ? containmentIssue.childId
           : containmentIssue.wrapperId
     await failTask(
+      topology,
       db,
       taskId,
       'wrapper-containment-invalid',
@@ -906,6 +882,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   const topLevelUpstreams = buildScopeUpstreams(definition, topLevelIds, null, containerOf)
   if (findScopeCycle(topLevelNodes, topLevelUpstreams) !== null) {
     await failTask(
+      topology,
       db,
       taskId,
       'workflow has a cycle outside any loop wrapper',
@@ -931,6 +908,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     taskId,
     definition,
     opts,
+    topology,
     // RFC-248: 组名**快照**（`tasks.repo_group_name`）——组被删除后仍能渲染，
     // 这正是 D8 存这一列的理由。
     repoGroupName: task.repoGroupName ?? null,
@@ -1009,6 +987,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       // snapshot through runScope would dispatch the orchestrator node as a
       // regular agent — refuse loudly instead.
       await failTask(
+        topology,
         db,
         taskId,
         'dw-phase-invariant',
@@ -1044,7 +1023,15 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log.error('runTask: scope threw — failing task', { taskId, error: message })
-    await failTask(db, taskId, 'scheduler error', message, undefined, opts.executionContext)
+    await failTask(
+      topology,
+      db,
+      taskId,
+      'scheduler error',
+      message,
+      undefined,
+      opts.executionContext,
+    )
     return
   }
 
@@ -1066,6 +1053,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
 
   if (result.kind === 'failed' && result.detail) {
     await failTask(
+      topology,
       db,
       taskId,
       result.detail.summary,
@@ -1077,6 +1065,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   }
   if (result.kind === 'canceled') {
     await cancelTaskRow(
+      topology,
       db,
       taskId,
       result.detail?.nodeId,
@@ -1091,7 +1080,14 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // RFC-097: cancel wins — an abort that landed after runScope's last
     // signal check must not be overwritten by a park/terminal write.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(db, taskId, undefined, opts.signal.reason, opts.executionContext)
+      await cancelTaskRow(
+        topology,
+        db,
+        taskId,
+        undefined,
+        opts.signal.reason,
+        opts.executionContext,
+      )
       return
     }
     if (
@@ -1104,7 +1100,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         reason: 'scope-awaiting-review',
       })
     ) {
-      await emitStatus(db, taskId)
+      await emitStatus(topology, taskId)
       log.info('task awaiting human review', { taskId })
     } else {
       log.warn('awaiting_review write lost to a concurrent transition — respecting winner', {
@@ -1120,7 +1116,14 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
     // created when the user POSTs answers. Per design §7.3 awaiting_human
     // outranks awaiting_review on the task chip when both can fire at once.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(db, taskId, undefined, opts.signal.reason, opts.executionContext)
+      await cancelTaskRow(
+        topology,
+        db,
+        taskId,
+        undefined,
+        opts.signal.reason,
+        opts.executionContext,
+      )
       return
     }
     if (
@@ -1133,7 +1136,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
         reason: 'scope-awaiting-human',
       })
     ) {
-      await emitStatus(db, taskId)
+      await emitStatus(topology, taskId)
       log.info('task awaiting human clarification', { taskId })
     } else {
       log.warn('awaiting_human write lost to a concurrent transition — respecting winner', {
@@ -1147,7 +1150,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
   // CAS; a cancelTask fallback racing us resolves by whoever's CAS lands
   // (from-sets are disjoint winners: done from=running vs canceled CAS).
   if (opts.signal?.aborted === true) {
-    await cancelTaskRow(db, taskId, undefined, opts.signal.reason, opts.executionContext)
+    await cancelTaskRow(topology, db, taskId, undefined, opts.signal.reason, opts.executionContext)
     return
   }
   if (
@@ -1161,7 +1164,7 @@ async function runTaskInner(opts: RunTaskOptions): Promise<void> {
       reason: 'task-done',
     })
   ) {
-    await emitStatus(db, taskId)
+    await emitStatus(topology, taskId)
     log.info('task done', { taskId })
   } else {
     log.warn('done write lost to a concurrent transition — respecting winner', { taskId })
@@ -3838,10 +3841,21 @@ async function runCallWorkflowNode(
         // User cancel — cascade into the child (belt; cancelTask's own child
         // enumeration is the suspenders) and settle the row canceled.
         try {
-          const { cancelTask } = await import('@/services/task')
-          await cancelTask(db, childTaskId, { cascadeFromParent: true })
-        } catch {
-          // already terminal / racing — the durable marker decides later
+          await state.topology.schedulerDriver.cancelChild({
+            taskId: childTaskId,
+            cascadeFromParent: true,
+          })
+        } catch (error) {
+          // Preserve the legacy terminal/race tolerance without swallowing a
+          // missing or broken topology adapter as cancellation success.
+          if (
+            !(
+              (error instanceof ConflictError && error.code === 'task-not-cancelable') ||
+              error instanceof NotFoundError
+            )
+          ) {
+            throw error
+          }
         }
         await failCallRow(db, taskId, nodeRunId, node.id, 'canceled', 'task canceled', 'canceled')
         return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
@@ -3879,12 +3893,19 @@ async function runCallWorkflowNode(
       // §4.2 ② — parent-driven child recovery (independent of autoResumeOnBoot).
       resumeAttempted = true
       try {
-        const { resumeTask } = await import('@/services/task')
         // RFC-285 B3 Q6（用户拍板）：resume 是既有子任务行的执行延续，
         // **豁免** owner-inactive 检查——D7 边界只拦「新任务创建」两臂。
-        await resumeTask(db, childTaskId, buildChildDeps(state))
+        const childRuntime = buildChildRuntime(state)
+        await state.topology.schedulerDriver.resumeChild({
+          taskId: childTaskId,
+          runtime: childRuntime,
+        })
         continue
-      } catch {
+      } catch (error) {
+        // A missing/broken driver method is a composition defect, not a child
+        // lifecycle race. Preserve the legacy re-read path for business
+        // failures, but never disguise a TypeError as successful reattachment.
+        if (error instanceof TypeError) throw error
         const fresh = await db
           .select({ status: tasks.status, errorSummary: tasks.errorSummary })
           .from(tasks)
@@ -3900,8 +3921,7 @@ async function runCallWorkflowNode(
         // owns the child (a shutdown still draining, a concurrent resume). Its
         // row may read terminal for the moment, but the owner is the authority
         // — re-attach and let the watch settle instead of declaring failure.
-        const { isTaskActive } = await import('@/services/task')
-        if (isTaskActive(childTaskId)) {
+        if (state.topology.schedulerDriver.isTaskActive(childTaskId)) {
           await Bun.sleep(200)
           resumeAttempted = false
           continue
@@ -4229,22 +4249,32 @@ async function awaitShutdownAbort(
   })
 }
 
-/** Child StartTaskDeps assembled from the parent scheduler's runtime options. */
-function buildChildDeps(state: SchedulerState): StartTaskDeps {
-  const { opts, db } = state
+function buildChildRuntime(state: SchedulerState) {
   return {
-    db,
-    // RFC-292: child/grandchild tasks inherit the root launch fact atomically
-    // with their parent linkage; they never re-read a webhook delivery.
     ...(state.triggerContext === null ? {} : { triggerContext: state.triggerContext }),
     actorUserId:
       (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
+    runConfig: pickInheritableRunConfig(state.opts),
+  }
+}
+
+/** Child launch deps assembled from the parent scheduler's runtime options. */
+function buildChildDeps(state: SchedulerState) {
+  const { db } = state
+  const runtime = buildChildRuntime(state)
+  return {
+    db,
+    schedulerDriver: state.topology.schedulerDriver,
+    // RFC-292: child/grandchild tasks inherit the root launch fact atomically
+    // with their parent linkage; they never re-read a webhook delivery.
+    ...(runtime.triggerContext === undefined ? {} : { triggerContext: runtime.triggerContext }),
+    actorUserId: runtime.actorUserId,
     // RFC-284 T20：继承面整体透传（唯一登记 INHERITABLE_RUN_CONFIG_KEYS）。
     // 历史逐字段展开的三段关键注释（RFC-282 收尾门 configPath 漏斗第三段 /
     // RFC-266 两个 daemon-wide 池 resize-on-read 连坐 / RFC-269 code-host 池同理）
     // 已并入注册表与处置表测试——漏配从「人肉记得展开」变「编译期表态」。
-    ...pickInheritableRunConfig(opts),
-  } as StartTaskDeps
+    ...runtime.runConfig,
+  }
 }
 
 /** L — assemble and fire the child launch through the executor facade. */
@@ -4299,9 +4329,9 @@ async function launchCallChild(
   // node's iso worktree(s); cleanup carries ZERO worktrees + no owned root
   // (borrowed semantics — the iso lifecycle stays with the parent).
   const primary = iso.repos[0]
-  const space: MaterializedSpace = {
-    kind: state.repos.length > 1 ? 'multi' : 'single',
-    spaceKind: 'inherited',
+  const space = {
+    kind: state.repos.length > 1 ? ('multi' as const) : ('single' as const),
+    spaceKind: 'inherited' as const,
     taskId: childId,
     worktreePath:
       state.repos.length > 1 ? iso.containerPath : (primary?.isoWorktreePath ?? task.worktreePath),
@@ -4310,7 +4340,13 @@ async function launchCallChild(
     earlyError: null,
     resolvedSources: [],
     nodePaths: [],
-    cleanup: { taskId: childId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
+    cleanup: {
+      taskId: childId,
+      ownedRoot: null,
+      worktrees: [],
+      state: 'owned' as const,
+      report: null,
+    },
     repos: iso.repos.map((r, i) => ({
       repoIndex: i,
       repoPath: r.repoPath,
@@ -4504,9 +4540,9 @@ async function launchCallWorkgroupChild(
   const nodeTitle = pickString(node, 'title') ?? node.id
   const childName = `${task.name} › ${nodeTitle}`.slice(0, 255)
   const primary = iso.repos[0]
-  const space: MaterializedSpace = {
-    kind: state.repos.length > 1 ? 'multi' : 'single',
-    spaceKind: 'inherited',
+  const space = {
+    kind: state.repos.length > 1 ? ('multi' as const) : ('single' as const),
+    spaceKind: 'inherited' as const,
     taskId: childId,
     worktreePath:
       state.repos.length > 1 ? iso.containerPath : (primary?.isoWorktreePath ?? task.worktreePath),
@@ -4515,7 +4551,13 @@ async function launchCallWorkgroupChild(
     earlyError: null,
     resolvedSources: [],
     nodePaths: [],
-    cleanup: { taskId: childId, ownedRoot: null, worktrees: [], state: 'owned', report: null },
+    cleanup: {
+      taskId: childId,
+      ownedRoot: null,
+      worktrees: [],
+      state: 'owned' as const,
+      report: null,
+    },
     repos: iso.repos.map((r, i) => ({
       repoIndex: i,
       repoPath: r.repoPath,
@@ -10317,9 +10359,10 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
 // helpers
 // -----------------------------------------------------------------------------
 
-async function emitStatus(db: DbClient, taskId: string): Promise<void> {
-  const t = await getTask(db, taskId)
-  if (t !== null) emitTaskStatus(t)
+async function emitStatus(topology: SchedulerRuntimeTopology, taskId: string): Promise<void> {
+  const projection = await topology.taskStatusReadModel.find(taskId)
+  if (projection === null) return
+  topology.taskStatusPublisher.publish({ ...projection, canceledNodeRuns: [] })
 }
 
 function broadcastNodeStatus(
@@ -10341,6 +10384,7 @@ function broadcastNodeStatus(
 // the single mint factory — see services/nodeRunMint.ts (grep-guarded).
 
 async function failTask(
+  topology: SchedulerRuntimeTopology,
   db: DbClient,
   taskId: string,
   errorSummary: string,
@@ -10372,10 +10416,11 @@ async function failTask(
     )
     return
   }
-  await emitStatus(db, taskId)
+  await emitStatus(topology, taskId)
 }
 
 async function cancelTaskRow(
+  topology: SchedulerRuntimeTopology,
   db: DbClient,
   taskId: string,
   failedNodeId?: string,
@@ -10383,11 +10428,12 @@ async function cancelTaskRow(
   executionContext?: TaskExecutionContext,
 ): Promise<void> {
   return withTaskReviewMutationLock(taskId, () =>
-    cancelTaskRowUnlocked(db, taskId, failedNodeId, abortReason, executionContext),
+    cancelTaskRowUnlocked(topology, db, taskId, failedNodeId, abortReason, executionContext),
   )
 }
 
 async function cancelTaskRowUnlocked(
+  topology: SchedulerRuntimeTopology,
   db: DbClient,
   taskId: string,
   failedNodeId?: string,
@@ -10418,7 +10464,7 @@ async function cancelTaskRowUnlocked(
       ...(executionContext !== undefined ? { executionContext } : {}),
       reason: 'cancelTaskRow-shutdown',
     })
-    if (won) await emitStatus(db, taskId)
+    if (won) await emitStatus(topology, taskId)
     return
   }
   const structuredCause = taskStopCauseOf(abortReason)
@@ -10451,7 +10497,7 @@ async function cancelTaskRowUnlocked(
     )
     return
   }
-  await emitStatus(db, taskId)
+  await emitStatus(topology, taskId)
 }
 
 function taskStopCauseOf(value: unknown): TaskStopCause | null {

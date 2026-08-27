@@ -22,6 +22,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { __setActiveTaskForTesting, startTask, type MaterializedSpace } from '../src/services/task'
 import { deleteTask } from '../src/services/taskDelete'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
@@ -126,6 +127,8 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
     try {
       const started = await startTask({ workflowId: wf, name: 'child', inputs: {} } as StartTask, {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         materializedSpace: spaceFor('placeholder', childRoot),
         // RFC-328: let the real scheduler release its durable owner before this
         // maintenance-path test overwrites terminal fixtures.
@@ -190,6 +193,8 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const rootId = ulid()
       const root = await startTask({ workflowId: wf, name: 'root', inputs: {} } as StartTask, {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         materializedSpace: spaceFor(rootId, rootDir),
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       })
@@ -215,6 +220,8 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const childId = ulid()
       const child = await startTask({ workflowId: wf, name: 'child', inputs: {} } as StartTask, {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         materializedSpace: spaceFor(childId, rootDir),
         callLaunch: {
           parentTaskId: root.id,
@@ -232,6 +239,8 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
         { workflowId: wf, name: 'grandchild', inputs: {} } as StartTask,
         {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           materializedSpace: spaceFor(ulid(), rootDir),
           callLaunch: {
             parentTaskId: child.id,

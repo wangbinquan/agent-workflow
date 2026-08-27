@@ -32,7 +32,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { archivePortArtifacts, parseArchiveJson } from '../src/services/portArtifacts'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit, snapshotFullState } from '../src/util/git'
 
 const ulid = monotonicFactory()

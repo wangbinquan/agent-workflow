@@ -206,18 +206,32 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   // 启动都把管理员配置的脚本上限静默改回默认 4**（影响整个 daemon，不只是子任务）。
   test('RFC-266: buildChildDeps 透传三个并发键（漏传脚本池 = 全 daemon 被改回默认）', () => {
     const schedulerSrc = readFileSync(join(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
-    const start = schedulerSrc.indexOf('function buildChildDeps(')
-    expect(start).toBeGreaterThan(-1)
-    const body = schedulerSrc.slice(start, schedulerSrc.indexOf('\n}\n', start))
-    // RFC-284 T20 改锚：透传经 INHERITABLE_RUN_CONFIG_KEYS 注册表整体进行——
-    // 锁面从「三段手写展开在场」升级为「整体透传在场 + 三键在登记单源里」。
-    expect(body).toContain('...pickInheritableRunConfig(opts)')
+    const topologySrc = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/application/ports/taskExecutionTopology.ts',
+      ),
+      'utf8',
+    )
+    const runtimeStart = schedulerSrc.indexOf('function buildChildRuntime(')
+    expect(runtimeStart).toBeGreaterThan(-1)
+    const runtimeBody = schedulerSrc.slice(
+      runtimeStart,
+      schedulerSrc.indexOf('\n}\n', runtimeStart),
+    )
+    const depsStart = schedulerSrc.indexOf('function buildChildDeps(')
+    expect(depsStart).toBeGreaterThan(-1)
+    const depsBody = schedulerSrc.slice(depsStart, schedulerSrc.indexOf('\n}\n', depsStart))
+    // RFC-331 后继形状：端口 runtime 仍由唯一注册表拾取，legacy child deps
+    // 只展开这份已拾取结果；两段任一断开都会让子任务静默丢配置。
+    expect(runtimeBody).toContain('runConfig: pickInheritableRunConfig(state.opts)')
+    expect(depsBody).toContain('...runtime.runConfig')
     for (const key of [
       'maxConcurrentNodes',
       'maxConcurrentScriptNodes',
       'multiProcessSubprocessConcurrency',
     ]) {
-      expect(schedulerSrc).toContain(`'${key}',`)
+      expect(topologySrc).toContain(`'${key}',`)
     }
   })
 
@@ -227,12 +241,27 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   // config.opencodePath / claudeCodePath —— 子调度器 spawn 裸协议命令。
   test('RFC-282: buildChildDeps 透传 configPath（漏传 = 子任务丢 config 二进制头）', () => {
     const schedulerSrc = readFileSync(join(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
-    const start = schedulerSrc.indexOf('function buildChildDeps(')
-    expect(start).toBeGreaterThan(-1)
-    const body = schedulerSrc.slice(start, schedulerSrc.indexOf('\n}\n', start))
-    // RFC-284 T20 改锚：同上——configPath 经注册表整体透传。
-    expect(body).toContain('...pickInheritableRunConfig(opts)')
-    expect(schedulerSrc).toContain("'configPath',")
+    const topologySrc = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/application/ports/taskExecutionTopology.ts',
+      ),
+      'utf8',
+    )
+    const runtimeStart = schedulerSrc.indexOf('function buildChildRuntime(')
+    expect(runtimeStart).toBeGreaterThan(-1)
+    const runtimeBody = schedulerSrc.slice(
+      runtimeStart,
+      schedulerSrc.indexOf('\n}\n', runtimeStart),
+    )
+    const depsStart = schedulerSrc.indexOf('function buildChildDeps(')
+    expect(depsStart).toBeGreaterThan(-1)
+    const depsBody = schedulerSrc.slice(depsStart, schedulerSrc.indexOf('\n}\n', depsStart))
+    // RFC-331：configPath 先进入 child runtime port，再由 legacy adapter
+    // 展开回 StartTaskDeps；两段都要锁，不能只看注册表里“名字在场”。
+    expect(runtimeBody).toContain('runConfig: pickInheritableRunConfig(state.opts)')
+    expect(depsBody).toContain('...runtime.runConfig')
+    expect(topologySrc).toContain("'configPath',")
   })
 
   // RFC-266: 防第四次漏接线 —— 三个并发键都必须出现在 config→deps 的那一级里。

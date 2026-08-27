@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 942,
+    "architectureExceptions": 955,
     "backgroundJobs": 215,
-    "crossContextImports": 962,
+    "crossContextImports": 981,
     "facades": 370,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17492,
-    "mutationEntrypoints": 900,
+    "moduleSymbolOwners": 17522,
+    "mutationEntrypoints": 905,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 286,
+    "publicSurfaces": 292,
     "transactionExternalEffects": 245
   },
   "metrics": {
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 841,
+    "backendProductionFiles": 848,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -82,16 +82,6 @@
         "packages/backend/src/services/agent.ts",
         "packages/backend/src/services/agentDeps.ts",
         "packages/backend/src/services/agentResourceIntegrity.ts"
-      ],
-      [
-        "packages/backend/src/services/agentLaunch.ts",
-        "packages/backend/src/services/execution/executor.ts",
-        "packages/backend/src/services/execution/outcome.ts",
-        "packages/backend/src/services/gc.ts",
-        "packages/backend/src/services/scheduler.ts",
-        "packages/backend/src/services/structuralDiff/callGraph/expandService.ts",
-        "packages/backend/src/services/task.ts",
-        "packages/backend/src/services/workgroup/launch.ts"
       ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -130,7 +120,7 @@
     "directNativeIntervals": 20,
     "directNativeTimers": 61,
     "inboundBoundaryEdges": 92,
-    "knownViolations": 37,
+    "knownViolations": 31,
     "moduleContexts": [
       {
         "context": "code-capability",
@@ -178,10 +168,10 @@
       },
       {
         "context": "task-execution",
-        "files": 50
+        "files": 57
       }
     ],
-    "moduleFiles": 326,
+    "moduleFiles": 333,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -217,16 +207,6 @@
         "packages/backend/src/services/agentResourceIntegrity.ts"
       ],
       [
-        "packages/backend/src/services/agentLaunch.ts",
-        "packages/backend/src/services/execution/executor.ts",
-        "packages/backend/src/services/execution/outcome.ts",
-        "packages/backend/src/services/gc.ts",
-        "packages/backend/src/services/scheduler.ts",
-        "packages/backend/src/services/structuralDiff/callGraph/expandService.ts",
-        "packages/backend/src/services/task.ts",
-        "packages/backend/src/services/workgroup/launch.ts"
-      ],
-      [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
@@ -252,5 +232,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592"
+  "sourceDigest": "sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac"
 }

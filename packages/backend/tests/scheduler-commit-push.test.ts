@@ -24,6 +24,7 @@ import { createWorkflow } from '../src/services/workflow'
 import { startTaskWithLocalRepo } from '../src/services/task'
 import { commitPushNodeId, isCommitPushNodeId } from '../src/services/commitPush'
 import type { CommitPushMeta } from '@agent-workflow/shared'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -157,6 +158,8 @@ describe('RFC-075 scheduler auto commit&push', () => {
       },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: [process.execPath, 'run', h.stub],
         awaitScheduler: true,
@@ -204,6 +207,8 @@ describe('RFC-075 scheduler auto commit&push', () => {
       },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: [process.execPath, 'run', h.stub],
         awaitScheduler: true,

@@ -22,7 +22,8 @@ import {
   snapshotNodeIsoFinal,
   type CanonRepo,
 } from '../src/services/nodeIsolation'
-import { deriveFrontier, runTask } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -32,7 +32,6 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
 import {
   abortAllActiveTasks,
   cancelTask,
@@ -44,6 +43,10 @@ import {
   type MaterializedSpace,
 } from '../src/services/task'
 import { runGit } from '../src/util/git'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTask,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -197,6 +200,8 @@ async function seedTask(
 function runtimeDeps(harness: Harness, mock: string) {
   return {
     db: harness.db,
+    schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+      .schedulerDriver,
     appHome: harness.appHome,
     binaryOverride: [process.execPath, 'run', mock],
     defaultNodeRetries: 0,
@@ -408,6 +413,8 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
       },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         deferRepoPreparation: true,

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 168,
-    "exactEntrypointFiles": 31,
+    "consumers": 171,
+    "exactEntrypointFiles": 32,
     "governedFieldSurfaces": 5,
-    "methods": 135,
+    "methods": 139,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1233,
-    "symbols": 286
+    "recursiveFields": 1240,
+    "symbols": 292
   },
   "entries": [
     {
@@ -17167,6 +17167,270 @@
       "version": 1
     },
     {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:69d40540575559642817",
+        "import:f29ed1696f613ff1846a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:createTaskExecutionReadModels",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:6c1f222d473e6bc9746681d0210dc42b447f78a7e32326d23da8211dd52299d0"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:69d40540575559642817",
+          "file": "packages/backend/src/services/startTaskDeps.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f29ed1696f613ff1846a",
+          "file": "packages/backend/src/routes/tasks.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file"
+        }
+      ],
+      "removeAfterWave": "W2-B/W2-D",
+      "serialization": "wire",
+      "signatureDigest": "sha256:5bf3010aefd1e109c074d78fab0fdaa056413e4488ae932a56ea81f1ece24a86",
+      "status": "legacy-context-debt",
+      "symbol": "createTaskExecutionReadModels",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repos",
+          "type": "readonly {\n    readonly worktreeDirName: string\n    readonly worktreePath: string\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "worktreePath",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:TaskCallGraphWorkspace",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": "W2-B/W2-D",
+      "serialization": "wire",
+      "signatureDigest": "sha256:7a283662e49bcf548b9afe3add5283c9aa6880e94c49285362be6d410d83b9f9",
+      "status": "legacy-context-debt",
+      "symbol": "TaskCallGraphWorkspace",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:94ab34eedb3402310a90"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:TaskCallGraphWorkspaceReadModel",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:94ab34eedb3402310a90"
+          ],
+          "name": "find",
+          "signatureDigest": "sha256:801b379799d2b850256da30575522c16cb99aa8ae6b7e3bdabc51e03f219851f"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:94ab34eedb3402310a90",
+          "file": "packages/backend/src/services/structuralDiff/callGraph/expandService.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/structuralDiff/callGraph/expandService.ts#$file"
+        }
+      ],
+      "removeAfterWave": "W2-B/W2-D",
+      "serialization": "wire",
+      "signatureDigest": "sha256:18a8c083f457d524b6581d507048935a25bb215f9ebe7c92b5be1cfd70ca3aa0",
+      "status": "legacy-context-debt",
+      "symbol": "TaskCallGraphWorkspaceReadModel",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:TaskExecutionReadModels",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "find",
+          "signatureDigest": "sha256:801b379799d2b850256da30575522c16cb99aa8ae6b7e3bdabc51e03f219851f"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": "W2-B/W2-D",
+      "serialization": "wire",
+      "signatureDigest": "sha256:63b4ca74cb3ddcbec7d45f6c0733d7a53098452c5ea0df26b22aece43cec23e1",
+      "status": "legacy-context-debt",
+      "symbol": "TaskExecutionReadModels",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:TaskStatusProjectionReadModel",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "find",
+          "signatureDigest": "sha256:95e047449a98140997f0619962c8508ba70b6a784a907d1100d1ab5cff599620"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": "W2-B/W2-D",
+      "serialization": "wire",
+      "signatureDigest": "sha256:7307ca4f971a93bc5329f72b65b0e1c6fe6234587437b4163c991e72acaff463",
+      "status": "legacy-context-debt",
+      "symbol": "TaskStatusProjectionReadModel",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "errorSummary.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "errorSummary.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status",
+          "type": "z.infer<typeof TaskStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:TaskStatusProjectionSnapshot",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [],
+      "removeAfterWave": "W2-B/W2-D",
+      "serialization": "wire",
+      "signatureDigest": "sha256:689567469dab0a2af9f001cf76258abe65b4c31a502dba2e684532b781f112f9",
+      "status": "legacy-context-debt",
+      "symbol": "TaskStatusProjectionSnapshot",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
       "authority": "none",
       "budget": {
         "maxMethods": 5,
@@ -17914,7 +18178,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592",
+  "sourceDigest": "sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac",
   "targetContexts": [
     "collaboration",
     "development-automation",

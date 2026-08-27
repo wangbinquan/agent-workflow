@@ -28,6 +28,7 @@ import {
 } from '../src/services/gitRepoCache'
 import { resolveRepoSourceSingle } from '../src/services/task'
 import { runGit } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -269,7 +270,12 @@ describe('gitRepoCache (RFC-024 T3)', () => {
           repoUrl: unreachableUrl,
           inputs: {},
         } as StartTask,
-        { db, appHome },
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+        },
       )
     } catch (error) {
       err = error

@@ -28,7 +28,6 @@ import {
   listReviewSummaries,
   submitReviewDecision,
 } from '../src/services/review'
-import { runTask as runTaskBase } from '../src/services/scheduler'
 import {
   abortAllActiveTasks,
   isTaskActive,
@@ -36,6 +35,10 @@ import {
 } from '../src/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTaskBase,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
@@ -205,7 +208,13 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
+    {
+      db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      appHome,
+      binaryOverride: stubOpencode,
+      awaitScheduler: true,
+    },
   )
 
   // Locate the review node_run row.

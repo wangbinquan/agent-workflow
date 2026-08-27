@@ -23,6 +23,7 @@ import {
 } from '../src/db/schema'
 import { abortAllActiveTasks } from '../src/services/task'
 import type { StartTaskDeps } from '../src/services/task'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 export const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -92,6 +93,7 @@ export async function buildHarness(opts: {
     cleanup: () => rmSync(tmp, { recursive: true, force: true }),
     deps: {
       db,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome: tmp,
       binaryOverride: ['/nonexistent-opencode-binary-rfc057-test'],
     },

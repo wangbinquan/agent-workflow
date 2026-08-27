@@ -33,6 +33,7 @@ import {
 import { createAgent } from '../src/services/agent'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 setDefaultTimeout(120_000)
 
@@ -142,6 +143,8 @@ function runner(
     db: h.db,
     startDeps: {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       awaitScheduler: extra.awaitScheduler ?? true,

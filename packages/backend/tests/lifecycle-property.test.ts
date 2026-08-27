@@ -30,6 +30,7 @@ import { dispatchReviewNode, submitReviewDecision } from '../src/services/review
 import { retryNode } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -320,7 +321,13 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       if (target === undefined) return false
       await retryNode(h.db, h.taskId, target.id, {
         cascade: true,
-        deps: { db: h.db, appHome: h.appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+        deps: {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          appHome: h.appHome,
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
       })
       return true
     }

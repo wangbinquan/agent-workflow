@@ -15,6 +15,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -72,7 +73,13 @@ describe('retryNode validates nodeRunId before mutating task state (RFC-099 audi
     try {
       await retryNode(db, taskId, 'no_such_node_run', {
         cascade: true,
-        deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+        deps: {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
       })
     } catch (e) {
       code = (e as { code?: string }).code
@@ -143,7 +150,13 @@ describe('retryNode validates nodeRunId before mutating task state (RFC-099 audi
     await expect(
       retryNode(db, taskId, runId, {
         cascade: true,
-        deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+        deps: {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
       }),
     ).rejects.toMatchObject({ code: 'trigger-context-missing' })
 
@@ -229,7 +242,13 @@ describe('retryNode validates nodeRunId before mutating task state (RFC-099 audi
     await expect(
       retryNode(db, targetTaskId, foreignCallRunId, {
         cascade: true,
-        deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+        deps: {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
       }),
     ).rejects.toMatchObject({ code: 'node-run-not-found' })
 

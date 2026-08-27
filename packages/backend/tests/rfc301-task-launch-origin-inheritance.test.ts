@@ -16,6 +16,7 @@ import type { TaskCatalogVisibility, TaskLaunchOrigin } from '@agent-workflow/sh
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { startTask, type MaterializedSpace } from '../src/services/task'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
@@ -164,6 +165,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
       { workflowId: h.workflowId, name: 'child', inputs: {} },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         materializedSpace: inheritedSpace(h, childId, false),
         callLaunch: callLaunch(rootId, rootRunId, 1),
         // A call child may not escape its parent's catalog boundary.
@@ -183,6 +186,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
             { workflowId: h!.workflowId, name: 'grandchild', inputs: {} },
             {
               db: h!.db,
+              schedulerDriver: createTaskExecutionTestTopology({ db: h!.db, driver: 'real' })
+                .schedulerDriver,
               materializedSpace: inheritedSpace(h!, grandchildId),
               callLaunch: callLaunch(event.taskId, childRunId, 2),
             },
@@ -222,6 +227,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
           { workflowId: h!.workflowId, name: `child-${id}`, inputs: {} },
           {
             db: h!.db,
+            schedulerDriver: createTaskExecutionTestTopology({ db: h!.db, driver: 'real' })
+              .schedulerDriver,
             materializedSpace: inheritedSpace(h!, id),
             callLaunch: callLaunch(rootId, runId, 1),
           },
@@ -248,6 +255,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
         { workflowId: h.workflowId, name: 'conflicting-child', inputs: {} },
         {
           db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
           materializedSpace: inheritedSpace(h, ulid()),
           callLaunch: callLaunch(rootId, runId, 1),
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
@@ -260,6 +269,8 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
         { workflowId: h.workflowId, name: 'blank-metadata-child', inputs: {} },
         {
           db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
           materializedSpace: inheritedSpace(h, ulid()),
           callLaunch: callLaunch(rootId, runId, 1),
           webhookFireId: ' ',

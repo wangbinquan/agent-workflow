@@ -28,7 +28,6 @@ import { clarifyRounds, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { runTask } from '../src/services/scheduler'
 import { abortAllActiveTasks, startTaskWithLocalRepo } from '../src/services/task'
 import { listTaskQuestions } from '../src/services/taskQuestions'
 import { reenterScheduler } from './reenter-scheduler'
@@ -39,6 +38,10 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTask,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
@@ -267,6 +270,8 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
       },
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         binaryOverride: opencodeCmd(),
         awaitScheduler: true,

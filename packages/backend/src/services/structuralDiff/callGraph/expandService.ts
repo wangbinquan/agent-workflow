@@ -7,9 +7,8 @@
 
 import { readFile as fsReadFile, readdir } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
-import type { DbClient } from '@/db/client'
 import type { CallTarget } from '@agent-workflow/shared'
-import { getTask } from '@/services/task'
+import type { TaskCallGraphWorkspaceReadModel } from '@/modules/task-execution/public/queries'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { isGitWorkTree } from '@/util/git'
 import { resolveLang } from '../lang/grammars'
@@ -149,23 +148,25 @@ function reprefixTarget(label: string, t: CallTarget): CallTarget {
 
 /** Resolve the task's worktree + expand one method's direct callees. */
 export async function getCallTargets(
-  db: DbClient,
+  workspaceReadModel: TaskCallGraphWorkspaceReadModel,
   taskId: string,
   methodRef: string,
 ): Promise<CallTarget[]> {
-  const task = await getTask(db, taskId)
-  if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  const workspace = await workspaceReadModel.find(taskId)
+  if (workspace === null) {
+    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  }
 
   // Single-repo: expand against the task worktree with the ref as-is. Multi-repo
   // (RFC-089 P4): the ref is `${worktreeDirName}/…`, so pick that repo's worktree
   // and strip the prefix before expanding, then re-prefix the results so the
   // chain keeps resolving within the same repo on the next click.
-  let worktreePath = task.worktreePath
+  let worktreePath = workspace.worktreePath
   let innerRef = methodRef
   let label: string | null = null
-  if (task.repoCount > 1) {
+  if (workspace.repos.length > 1) {
     const split = splitRepoRef(
-      task.repos.map((r) => r.worktreeDirName),
+      workspace.repos.map((repo) => repo.worktreeDirName),
       methodRef,
     )
     if (split.dir === null) {
@@ -174,7 +175,7 @@ export async function getCallTargets(
         `call-chain ref '${methodRef}' does not match any repo in task '${taskId}'`,
       )
     }
-    const repo = task.repos.find((r) => r.worktreeDirName === split.dir)!
+    const repo = workspace.repos.find((candidate) => candidate.worktreeDirName === split.dir)!
     worktreePath = repo.worktreePath
     innerRef = split.innerRef
     label = split.dir

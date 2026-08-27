@@ -28,7 +28,7 @@ import { clarifyRounds, agents, nodeRunEvents, nodeRuns, tasks, workflows } from
 // write the node clarify state) instead of the legacy immediate mint, which created no dispatched
 // entry.
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 

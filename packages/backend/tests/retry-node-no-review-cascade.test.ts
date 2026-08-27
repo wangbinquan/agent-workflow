@@ -19,6 +19,7 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -146,7 +147,13 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
 
     await retryNode(db, taskId, agentRunId, {
       cascade: true,
-      deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+      deps: {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
     })
 
     // The fresh placeholder must exist for agent_1 (retryIndex=1, failed),
@@ -217,7 +224,13 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
 
     await retryNode(db, taskId, aRunId, {
       cascade: false,
-      deps: { db, appHome, binaryOverride: ['/usr/bin/env', 'true'] },
+      deps: {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        binaryOverride: ['/usr/bin/env', 'true'],
+      },
     })
 
     const placeholders = (

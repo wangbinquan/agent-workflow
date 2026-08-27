@@ -27,6 +27,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTask, resumeTask } from '../src/services/task'
 import { gitStashSnapshot, runGit, snapshotRefName } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DEPS_CMD = ['/usr/bin/env', 'true']
@@ -134,7 +135,13 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
     let caught: unknown
     let threw = false
     try {
-      await resumeTask(h.db, h.taskId, { db: h.db, appHome: h.appHome, binaryOverride: DEPS_CMD })
+      await resumeTask(h.db, h.taskId, {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: DEPS_CMD,
+      })
     } catch (err) {
       threw = true
       caught = err
@@ -165,7 +172,13 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
     rmSync(join(h.repoPath, '.git'), { recursive: true, force: true }) // dir still exists
     let code: string | undefined
     try {
-      await resumeTask(h.db, h.taskId, { db: h.db, appHome: h.appHome, binaryOverride: DEPS_CMD })
+      await resumeTask(h.db, h.taskId, {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: DEPS_CMD,
+      })
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -208,7 +221,13 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
 
     let code: string | undefined
     try {
-      await resumeTask(h.db, h.taskId, { db: h.db, appHome: h.appHome, binaryOverride: DEPS_CMD })
+      await resumeTask(h.db, h.taskId, {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: DEPS_CMD,
+      })
     } catch (err) {
       code = (err as { code?: string }).code
     }
@@ -239,6 +258,8 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
 
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: DEPS_CMD,
     })

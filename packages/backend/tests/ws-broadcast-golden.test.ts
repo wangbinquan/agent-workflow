@@ -33,6 +33,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { emitTaskStatus } from '../src/services/task'
+import { createTaskStatusPublisher } from '../src/modules/task-execution/public/topology'
 import {
   resetBroadcastersForTests,
   TASK_CHANNEL,
@@ -199,6 +200,31 @@ beforeEach(() => resetBroadcastersForTests())
 afterEach(() => resetBroadcastersForTests())
 
 describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
+  test('RFC-331 publisher adapter preserves terminal and canceled-node ordering', () => {
+    const taskId = `task_${ulid()}`
+    const { received, unsubscribe } = subscribeBoth(taskId)
+    createTaskStatusPublisher().publish({
+      taskId,
+      status: 'canceled',
+      errorSummary: null,
+      canceledNodeRuns: [{ id: 'run-canceled', nodeId: 'node-canceled' }],
+    })
+    unsubscribe()
+
+    expect(received.list).toEqual([{ type: 'task.status', taskId, status: 'canceled' }])
+    expect(received.task).toEqual([
+      { id: -1, type: 'task.status', status: 'canceled' },
+      { id: -1, type: 'task.done', status: 'canceled' },
+      {
+        id: -1,
+        type: 'node.status',
+        nodeRunId: 'run-canceled',
+        nodeId: 'node-canceled',
+        status: 'canceled',
+      },
+    ])
+  })
+
   test('happy path: pending → running → done emits the canonical 5-message sequence', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedTask(db)

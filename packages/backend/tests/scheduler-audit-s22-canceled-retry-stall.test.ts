@@ -31,6 +31,7 @@ import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
 import { deriveFrontier } from '../src/services/scheduler'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 // 同毫秒多行排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）——freshest
 // 判定是纯 ULID id 序，monotonicFactory 保证后铸的行恒为 latest。
@@ -265,7 +266,13 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       async () => {
         const next = await retryNode(db, taskId, runA, {
           cascade: true,
-          deps: { db, appHome: APP_HOME, binaryOverride: ['bun', 'run', MOCK_OPENCODE] },
+          deps: {
+            db,
+            schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+              .schedulerDriver,
+            appHome: APP_HOME,
+            binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          },
         })
         // 状态门只拒 pending/running——canceled 放行（设计内 UI 流，断言保留）。
         expect(next.status).toBe('pending')
@@ -302,7 +309,13 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     await expect(
       retryNode(db, taskId, runA, {
         cascade: true,
-        deps: { db, appHome: APP_HOME, binaryOverride: ['/usr/bin/env', 'true'] },
+        deps: {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome: APP_HOME,
+          binaryOverride: ['/usr/bin/env', 'true'],
+        },
       }),
     ).rejects.toThrow(/task-still-running|is running/)
   })

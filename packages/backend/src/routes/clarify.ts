@@ -37,6 +37,7 @@ import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import { Paths } from '@/util/paths'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -414,6 +415,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).
         const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
           db: deps.db,
+          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
           appHome: Paths.root,
           configPath: deps.configPath,
           ...resolveLaunchRuntimeConfig(deps.configPath),

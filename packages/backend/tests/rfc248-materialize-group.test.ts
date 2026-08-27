@@ -39,6 +39,7 @@ import { getTask, materializeSpace, startTask } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { DomainError } from '../src/util/errors'
 import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -428,6 +429,8 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       { workflowId: workflow.id, name: 'first', inputs: {}, repoGroupId: gid },
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome: join(tmp, 'home'),
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -472,6 +475,8 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
       { workflowId: workflow.id, name: 'replay', inputs: {}, sourceTaskId: first.id },
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome: join(tmp, 'home'),
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },

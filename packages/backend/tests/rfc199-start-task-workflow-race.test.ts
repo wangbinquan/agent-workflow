@@ -34,6 +34,7 @@ import {
 } from '../src/services/task'
 import { createRepoGroup } from '@/services/repoGroup'
 import { runGit } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-launch-race-test' }
@@ -130,6 +131,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           workflowLaunchCommitHook: async (event) => {
@@ -181,6 +184,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           workflowLaunchCommitHook: async (event) => {
@@ -248,6 +253,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
           workflowLaunchCommitHook: async (event) => {
@@ -293,6 +300,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
@@ -355,6 +364,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
@@ -425,7 +436,12 @@ describe('RFC-199 startTask workflow delete/version race', () => {
           workingBranch: blockedBranch,
           repoGroupId: group.id,
         } as unknown as StartTask,
-        { db: harness.db, appHome: harness.appHome },
+        {
+          db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
+          appHome: harness.appHome,
+        },
         harness.appHome,
       ),
     ).rejects.toMatchObject({ code: 'working-branch-in-use' })
@@ -462,6 +478,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         { workflowId: 'missing-workflow', name: 'fusion-style', inputs: {} },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           launchProvenance: { kind: 'fusion', initiator: 'manual' },
           internalSource: { kind: 'local-path', repoPath: ownedRoot, baseBranch: 'fusion' },
@@ -488,6 +506,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         { workflowId: 'missing-workflow', name: 'fusion-style', inputs: {} },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           launchProvenance: { kind: 'fusion', initiator: 'manual' },
           internalSource: { kind: 'local-path', repoPath: ownedRoot, baseBranch: 'fusion' },
@@ -532,6 +552,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
@@ -590,6 +612,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
@@ -652,6 +676,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
         },
         {
           db: harness.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+            .schedulerDriver,
           appHome: harness.appHome,
           workflowLaunchCommitHook: async (event) => {
             if (event.stage !== 'materialized-before-task-commit') return
@@ -778,6 +804,8 @@ describe('RFC-199 startTask workflow delete/version race', () => {
       },
       {
         db: harness.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
+          .schedulerDriver,
         appHome: harness.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
         awaitScheduler: true,

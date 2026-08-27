@@ -36,6 +36,7 @@ import {
 } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { ulid } from 'ulid'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
@@ -210,6 +211,8 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       } as unknown as StartTask,
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,
@@ -245,7 +248,14 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
         repoUrl: remoteUrlFor(repoPath),
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
-      { db, appHome, binaryOverride: [stubOpencode], awaitScheduler: true },
+      {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        binaryOverride: [stubOpencode],
+        awaitScheduler: true,
+      },
     )
     expect(task.worktreePath).not.toBe('')
     expect(existsSync(task.worktreePath)).toBe(true)
@@ -277,7 +287,13 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
           repoUrl: 'file:///definitely/not/materialized/by-this-test',
           inputs: { topic: 'orders' },
         } as unknown as StartTask,
-        { db, appHome, binaryOverride: [stubOpencode] },
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          binaryOverride: [stubOpencode],
+        },
       ),
     ).rejects.toMatchObject({ code: 'trigger-context-missing' })
 
@@ -308,6 +324,8 @@ describe('startTask with preCreatedWorktree (RFC-020)', () => {
       } as unknown as StartTask,
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,

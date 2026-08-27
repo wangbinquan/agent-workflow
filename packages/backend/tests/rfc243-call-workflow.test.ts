@@ -22,7 +22,10 @@ import { and, eq } from 'drizzle-orm'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTask,
+} from './helpers/taskExecutionTestTopology'
 import type { StartTaskDeps } from '../src/services/task'
 import { freezeCallClosure } from '../src/services/execution/closure'
 import { buildActor } from '../src/auth/actor'
@@ -499,6 +502,8 @@ describe('RFC-243 e2e — 生命周期', () => {
     await retryNode(h.db, parentTaskId, failedCall.id, {
       deps: {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.mockPath],
       } as unknown as StartTaskDeps,
@@ -686,6 +691,8 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     writeFileSync(h.planFile, JSON.stringify({ worker: { output: { out: 'RESUMED', echo: 'x' } } }))
     await resumeTask(h.db, parentTaskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
       awaitScheduler: true,

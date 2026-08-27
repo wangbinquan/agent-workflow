@@ -26,6 +26,7 @@ import { trySetTaskStatus } from '../src/services/lifecycle'
 import { enforceLimits } from '../src/services/limits'
 import { cancelTask, isTaskActive, resumeTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -183,6 +184,8 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
   test('cancel-vs-done：运行中 cancelTask → 最终 canceled 非 done（envelope 已写出也不翻盘）', async () => {
     await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.slowMock],
       // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).

@@ -28,6 +28,7 @@ import { getTask, resumeTask, startTask, startTaskWithLocalRepo } from '../src/s
 import { nodeRuns, tasks as tasksTbl, workflows } from '../src/db/schema'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -91,6 +92,8 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         awaitScheduler: true,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
@@ -114,7 +117,12 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     })
     await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
 
-    await resumeTask(h.db, task.id, { db: h.db, appHome: h.appHome })
+    await resumeTask(h.db, task.id, {
+      db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
+      appHome: h.appHome,
+    })
 
     expect(readFileSync(join(task.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAPSHOT-TIME\n')
     const rerow = (
@@ -135,6 +143,8 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         awaitScheduler: true,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
@@ -165,7 +175,12 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     })
     await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
 
-    await resumeTask(h.db, task.id, { db: h.db, appHome: h.appHome })
+    await resumeTask(h.db, task.id, {
+      db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
+      appHome: h.appHome,
+    })
 
     expect(readFileSync(join(r0.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAP-A\n')
     expect(readFileSync(join(r1.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAP-B\n')
@@ -182,6 +197,8 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         awaitScheduler: true,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
@@ -205,7 +222,12 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     await h.db.update(tasksTbl).set({ status: 'failed' }).where(eq(tasksTbl.id, task.id))
 
     // Should NOT throw.
-    await resumeTask(h.db, task.id, { db: h.db, appHome: h.appHome })
+    await resumeTask(h.db, task.id, {
+      db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
+      appHome: h.appHome,
+    })
 
     const t = await getTask(h.db, task.id)
     expect(t).not.toBeNull()

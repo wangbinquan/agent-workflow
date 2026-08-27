@@ -28,6 +28,7 @@ import {
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
 } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
@@ -175,7 +176,14 @@ describe('RFC-075 — startTask working branch', () => {
         inputs: { topic: 't' },
         ...extra,
       },
-      { db: h.db, appHome: h.appHome, binaryOverride: h.stubOpencode, awaitScheduler: true },
+      {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: h.stubOpencode,
+        awaitScheduler: true,
+      },
     )
   }
 

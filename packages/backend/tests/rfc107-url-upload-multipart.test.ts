@@ -69,6 +69,7 @@ import {
 import { ValidationError } from '../src/util/errors'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -868,6 +869,8 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
       { workflowId: wf.id, name: 'unit', repoUrl: credentialedUrl, inputs: { topic: 'hi' } },
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         binaryOverride: [stubOpencode],
         awaitScheduler: true,

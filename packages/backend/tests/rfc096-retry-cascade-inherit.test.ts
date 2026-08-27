@@ -59,6 +59,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -149,6 +150,7 @@ async function waitForTerminalTask(db: DbClient, taskId: string): Promise<void> 
 
 const DEPS = (h: Harness) => ({
   db: h.db,
+  schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' }).schedulerDriver,
   appHome: h.appHome,
   binaryOverride: ['/usr/bin/env', 'true'],
 })

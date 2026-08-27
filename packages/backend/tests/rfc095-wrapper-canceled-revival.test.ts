@@ -28,10 +28,13 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
 import { retryNode } from '../src/services/task'
 import { decodeWrapperProgress } from '../src/services/wrapperProgress'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTask,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -237,7 +240,13 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     // → findResumableWrapperRun(canceled 可复活) → canceled→running（allowedFrom）。
     const next = await retryNode(h.db, taskId, innerCanceled!.id, {
       cascade: true,
-      deps: { db: h.db, appHome: h.appHome, binaryOverride: ['bun', 'run', h.mockPath] },
+      deps: {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', h.mockPath],
+      },
     })
     expect(next.status).toBe('pending')
     const final = await waitForTerminalTask(h.db, taskId)
@@ -318,7 +327,13 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     // canceled 列为可重试——这正是 UI 上点 wrapper 行 retry 的入口）。
     const next = await retryNode(h.db, taskId, wrapperRunId, {
       cascade: true,
-      deps: { db: h.db, appHome: h.appHome, binaryOverride: ['bun', 'run', h.mockPath] },
+      deps: {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', h.mockPath],
+      },
     })
     expect(next.status).toBe('pending')
     const final = await waitForTerminalTask(h.db, taskId)

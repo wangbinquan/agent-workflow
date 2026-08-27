@@ -26,6 +26,7 @@ import { resumeTask } from '../src/services/task'
 import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -114,6 +115,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })
@@ -128,6 +131,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('interrupted')
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })
@@ -138,6 +143,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('awaiting_review')
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })
@@ -148,6 +155,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('awaiting_human')
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })
@@ -158,6 +167,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('failed')
     await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })
@@ -165,6 +176,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, h.taskId, {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       })
@@ -180,6 +193,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, h.taskId, {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       })
@@ -195,6 +210,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, 'no-such-task', {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       })
@@ -234,6 +251,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     await expect(
       resumeTask(h.db, h.taskId, {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       }),
@@ -297,6 +316,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })
@@ -340,6 +361,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, h.taskId, {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       })
@@ -394,6 +417,8 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     await expect(
       resumeTask(h.db, h.taskId, {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
         killStaleRunProcessTree: async () => 'no-pid',

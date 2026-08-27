@@ -40,6 +40,7 @@ import { runIsoWorktreeGc } from '../src/services/gc'
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { resolveRunLiveness } from '../src/services/runLiveness'
 import type { MaterializedSpace, StartTaskDeps } from '../src/services/task'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -198,6 +199,8 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
       await expect(
         startTask({ workflowId: wf, name: 'late child', inputs: {} } as StartTask, {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           materializedSpace: space,
           callLaunch: {
             parentTaskId: parent,

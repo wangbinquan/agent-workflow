@@ -28,6 +28,7 @@ import { agents, nodeRuns, taskExecutionIntents, tasks, workflows } from '../src
 import { reapOrphanRuns } from '../src/services/orphans'
 import { resumeTask, startTaskWithLocalRepo } from '../src/services/task'
 import { runGit } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -212,6 +213,8 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     // Resume 即可把崩溃残留任务跑到终态。
     const resumed = await resumeTask(h.db, taskId, {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.doneMock],
       // RFC-115: retry budget via StartTaskDeps (was node.retries: 0).
@@ -239,6 +242,8 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
       },
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.doneMock],
         awaitScheduler: true,

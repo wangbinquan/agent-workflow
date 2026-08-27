@@ -46,7 +46,6 @@ import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
-import { runTask as runTaskBase } from '../src/services/scheduler'
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,
@@ -54,6 +53,10 @@ import {
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET, type ClarifyAnswer } from '@agent-workflow/shared'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTaskBase,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
@@ -237,7 +240,13 @@ async function buildHarness(): Promise<Harness> {
       baseBranch: 'main',
       inputs: { topic: 'orders' },
     },
-    { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
+    {
+      db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
+      appHome,
+      binaryOverride: stubOpencode,
+      awaitScheduler: true,
+    },
   )
 
   // RFC-100: the designer has a clarify channel, so its FIRST reply is a

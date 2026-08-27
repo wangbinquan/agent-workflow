@@ -34,6 +34,7 @@ import { getTaskDiff, startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TASK_DIFF_MAX_BYTES = 1024 * 1024 // mirror of the cap in task.ts:1640.
@@ -106,6 +107,8 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -138,6 +141,8 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },

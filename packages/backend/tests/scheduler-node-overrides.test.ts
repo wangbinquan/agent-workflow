@@ -23,7 +23,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

@@ -38,7 +38,7 @@ const ulid = monotonicFactory()
 import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'

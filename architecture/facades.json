@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "boundaryFacades": 34,
+    "boundaryFacades": 36,
     "serviceFiles": 370
   },
   "entries": [
@@ -4776,9 +4776,12 @@
         "import:00897fdc23db22090430",
         "import:364d20bf78bbb1ab7b21",
         "import:4aeb9b2d4becb9caa66a",
+        "import:84b4ce7d90b949b81895",
         "import:94e0d817bdd66e18a226",
         "import:95de9e8bf86b90716021",
+        "import:9ae1bf3156c454e42578",
         "import:a4a1eb64e0e2535aeef4",
+        "import:b5b25c95a8bd8a9d6d98",
         "import:c3ed5dbae7f72f811c95",
         "import:d0f9587c4d94710e7884",
         "import:dbcaaf9c3ce16520a1dd"
@@ -4788,7 +4791,6 @@
         "FRAMEWORK_AUDIT_EVENT_PREFIX",
         "Frontier",
         "FrontierRunRow",
-        "INHERITABLE_RUN_CONFIG_KEYS",
         "InheritableRunConfig",
         "PreviousAttemptShape",
         "RunTaskOptions",
@@ -4801,10 +4803,9 @@
         "deriveFrontier",
         "fanoutInnerAgentKey",
         "freshestPriorRunWithOutput",
-        "pickInheritableRunConfig",
         "readCommitExcludePatterns",
         "resolveUpstreamInputs",
-        "runTask",
+        "runTaskWithTopology",
         "shouldRetryNodeFailure"
       ],
       "file": "packages/backend/src/services/scheduler.ts",
@@ -5316,18 +5317,24 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:59197d6874ab2ee298d8",
+        "import:69d40540575559642817",
+        "import:8f1ea10ffa0501871ff9",
+        "import:c20e775ea1bcae969da8"
+      ],
       "exportedSymbols": [
         "buildStartTaskDeps",
+        "createLegacyTaskExecutionTopology",
         "resolveSubagentLiveCapture"
       ],
       "file": "packages/backend/src/services/startTaskDeps.ts",
       "id": "facade:packages/backend/src/services/startTaskDeps.ts",
       "ownerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "removeAfterWave": "W2-B/W2-D",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
-      "targetLayer": "application"
+      "targetLayer": "composition"
     },
     {
       "boundaryEdgeIds": [],
@@ -5390,7 +5397,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:94ab34eedb3402310a90"
+      ],
       "exportedSymbols": [
         "getCallTargets",
         "invalidateCallGraphIndex",
@@ -5401,7 +5410,7 @@
       "id": "facade:packages/backend/src/services/structuralDiff/callGraph/expandService.ts",
       "ownerEntryId": "owner:packages/backend/src/services/structuralDiff/callGraph/expandService.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "workspace-insight",
       "targetLayer": "application"
     },
@@ -5837,6 +5846,7 @@
         "import:13a2f0644dd229a05dbd",
         "import:248d07243c59a2fbb7e8",
         "import:3bf779c696831f7e9dde",
+        "import:3f9e575dedb851fb3458",
         "import:3fa453b8e3244c836abb",
         "import:479eaa00c4b9275815fd",
         "import:55952bd54b5296609a05",
@@ -7261,5 +7271,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592"
+  "sourceDigest": "sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac"
 }

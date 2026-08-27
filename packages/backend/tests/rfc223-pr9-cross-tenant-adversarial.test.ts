@@ -47,6 +47,7 @@ import { buildFrontierMintPlan } from '../src/services/taskQuestionDispatch'
 import { abortAllActiveTasks, getTask, resumeTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -282,6 +283,8 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       process.env.MOCK_OPENCODE_CAPTURE_CONFIG_JSON_TO = capturePath
       await resumeTask(db, taskId, {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         defaultNodeRetries: 0,

@@ -1429,6 +1429,11 @@ const CROSS_CONTEXT_PILOT_DEBT: string[] = [
 const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
   'modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#insertInitialUserAccessInTransaction: forbidden type import @/platform/persistence/transactionScope#TransactionScope',
   'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
+  'modules/task-execution/application/ports/taskExecutionTopology.ts#SchedulerDriverPort: forbidden type Partial',
+  'modules/task-execution/application/ports/taskExecutionTopology.ts#SchedulerDriverPort: unsafe/open type UnknownKeyword',
+  'modules/task-execution/composition/taskExecutionReadModels.ts#createTaskExecutionReadModels: forbidden type DbClient',
+  'modules/task-execution/composition/taskExecutionReadModels.ts#createTaskExecutionReadModels: forbidden type import @/db/client#DbClient',
+  'modules/task-execution/public/topology.ts: non-exact public entrypoint',
 ]
 
 describe('RFC-294 W0-R current modules ratchet', () => {
@@ -1442,9 +1447,10 @@ describe('RFC-294 W0-R current modules ratchet', () => {
     expect(crossContextViolations(modules)).toEqual(CROSS_CONTEXT_PILOT_DEBT)
   })
 
-  test('public surface has only the reviewed non-exact pilot entrypoint debt and no type taint', () => {
-    // Same stale discipline as the edge inventory above. The named pilot file
-    // is debt, not an accepted alternative to exact public/{...} entrypoints.
+  test('public surface has only the reviewed, expiring compatibility debt', () => {
+    // Same stale discipline as the edge inventory above. RFC-331 DEV-1 keeps
+    // its topology/config and DB-bound constructor deviations exact and
+    // removable at W2-B/W2-D; they are not accepted target alternatives.
     expect(publicSurfaceViolations(modules)).toEqual(PUBLIC_SURFACE_PILOT_DEBT)
   })
 

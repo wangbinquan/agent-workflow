@@ -84,7 +84,11 @@ import { getStartupVerification } from '@/services/execution/startupVerification
 import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { buildStartTaskDeps, resolveSubagentLiveCapture } from '@/services/startTaskDeps'
+import {
+  buildStartTaskDeps,
+  createLegacyTaskExecutionTopology,
+  resolveSubagentLiveCapture,
+} from '@/services/startTaskDeps'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
 import { listRecoveryEventsForTask } from '@/services/recovery'
 import { clearAutoRecoverySuspension, isAutoRecoverySuspended } from '@/services/recoveryBreaker'
@@ -95,6 +99,7 @@ import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/public/queries'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */
@@ -131,6 +136,7 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
 // task routes). Call sites below are unchanged.
 
 export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
+  const taskExecutionReadModels = createTaskExecutionReadModels(deps.db)
   registerRoute(
     app,
     {
@@ -661,7 +667,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           'methodRef query param required for /call-targets',
         )
       }
-      const targets = await getCallTargets(deps.db, c.req.param('id'), methodRef)
+      const targets = await getCallTargets(
+        taskExecutionReadModels.callGraphWorkspace,
+        c.req.param('id'),
+        methodRef,
+      )
       return c.json({ targets })
     },
   )
@@ -797,6 +807,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await resumeTask(deps.db, c.req.param('id'), {
         db: deps.db,
+        schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
         configPath: deps.configPath,
         // RFC-328: a session-backed Resume is the explicit actor decision that
         // advances an outcome-unknown operation to its next generation.
@@ -886,6 +897,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const updated = await syncTaskWorkflow(deps.db, id, {
         db: deps.db,
+        schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
         expectedVersion: body.data.expectedVersion,
         launchActor: actor,
         // RFC-328: workflow sync is one of the existing explicit manual
@@ -921,6 +933,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
+          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
           configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
@@ -965,6 +978,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
+          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
           configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
@@ -1009,6 +1023,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         cascade,
         deps: {
           db: deps.db,
+          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
           configPath: deps.configPath,
           // RFC-328: preserve the authenticated manual retry decision; without
           // it an outcome-unknown task is indistinguishable from actorless auto.

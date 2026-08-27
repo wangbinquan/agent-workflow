@@ -1123,6 +1123,23 @@ interface PublicSurfaceEntry {
   readonly removeAfterWave: string | null
 }
 
+function publicSurfaceLifecycle(location: {
+  context: string
+  entrypoint: string
+}): Pick<PublicSurfaceEntry, 'status' | 'removeAfterWave'> {
+  const rfc331CompatibilitySurface =
+    location.context === 'task-execution' &&
+    (location.entrypoint === 'queries' || location.entrypoint === 'topology')
+  if (rfc331CompatibilitySurface) {
+    return { status: 'legacy-context-debt', removeAfterWave: 'W2-B/W2-D' }
+  }
+  const target = (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
+  return {
+    status: target ? 'target-context-current-surface' : 'legacy-context-debt',
+    removeAfterWave: target ? null : 'W9-D',
+  }
+}
+
 function buildPublicSurfaces(
   backend: readonly SourceUnit[],
   allUnits: readonly SourceUnit[],
@@ -1228,12 +1245,7 @@ function buildPublicSurfaces(
           maxTransitiveLeafFields: Math.max(24, shape.fields.length),
           maxUnionVariants: Math.max(12, shape.unionVariants),
         },
-        status: (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
-          ? 'target-context-current-surface'
-          : 'legacy-context-debt',
-        removeAfterWave: (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
-          ? null
-          : 'W9-D',
+        ...publicSurfaceLifecycle(location),
       })
     }
     for (const statement of unit.source.statements) {
@@ -1293,12 +1305,7 @@ function buildPublicSurfaces(
             maxTransitiveLeafFields: Math.max(24, shape.fields.length),
             maxUnionVariants: Math.max(12, shape.unionVariants),
           },
-          status: (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
-            ? 'target-context-current-surface'
-            : 'legacy-context-debt',
-          removeAfterWave: (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
-            ? null
-            : 'W9-D',
+          ...publicSurfaceLifecycle(location),
         })
       }
     }
@@ -2550,7 +2557,10 @@ function buildFacades(
         file: unit.path,
         ownerEntryId: ownerEntryId(unit.path, '$file'),
         targetContext: targetContextFor(unit.path),
-        targetLayer: targetLayerFor(unit.path, '$file'),
+        targetLayer:
+          unit.path === `${BACKEND_PREFIX}services/startTaskDeps.ts`
+            ? 'composition'
+            : targetLayerFor(unit.path, '$file'),
         status:
           boundaryEdgeIds.length > 0 ? ('boundary-facade' as const) : ('legacy-owner' as const),
         boundaryEdgeIds,
@@ -2558,7 +2568,12 @@ function buildFacades(
           .filter((entry) => entry.exported)
           .map((entry) => entry.name)
           .sort(),
-        removeAfterWave: targetContextFor(unit.path) === 'source-control' ? 'W5' : 'W4/W9',
+        removeAfterWave:
+          unit.path === `${BACKEND_PREFIX}services/startTaskDeps.ts`
+            ? 'W2-B/W2-D'
+            : targetContextFor(unit.path) === 'source-control'
+              ? 'W5'
+              : 'W4/W9',
       }
     })
     .sort((left, right) => left.id.localeCompare(right.id))
@@ -3029,6 +3044,7 @@ interface N1LedgerSpec {
   readonly symbol: string
   readonly baseline: number
   readonly why: string
+  readonly allowGrowth?: { readonly why: string }
 }
 
 function n1LedgerSpecs(artifacts: CanonicalArtifacts): N1LedgerSpec[] {
@@ -3205,13 +3221,22 @@ export function projectGovernanceArtifacts(
     ),
   }
   const specs = n1LedgerSpecs(artifacts)
+  const existingLedgers = new Map(
+    recordArray(ledgerBaselines, 'ledgers').map((entry) => [String(entry.id), entry]),
+  )
+  const projectedSpecs = specs.map((spec): N1LedgerSpec => {
+    const permit = existingLedgers.get(spec.id)?.allowGrowth
+    return permit !== null && typeof permit === 'object' && !Array.isArray(permit)
+      ? { ...spec, allowGrowth: structuredClone(permit) as { readonly why: string } }
+      : spec
+  })
   const specIds = new Set(specs.map((entry) => entry.id))
   const retiredN1Ids = new Set(['rfc294-transaction-external-effects'])
   ledgerBaselines.ledgers = [
     ...recordArray(ledgerBaselines, 'ledgers').filter(
       (entry) => !specIds.has(String(entry.id)) && !retiredN1Ids.has(String(entry.id)),
     ),
-    ...specs,
+    ...projectedSpecs,
   ]
   return { commonsManifest, commonsDebt, guardManifest, ledgerBaselines }
 }

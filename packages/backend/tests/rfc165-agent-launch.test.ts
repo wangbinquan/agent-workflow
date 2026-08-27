@@ -72,6 +72,7 @@ import {
 } from '../src/services/workflow.validator'
 import { runGit } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -226,6 +227,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const task = await startAgentTask(db, daemonActor(), solo.id, BODY(), {
       db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
       appHome,
       launchProvenance: { kind: 'direct-json', initiator: 'api' },
     })
@@ -255,6 +257,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     await expect(
       startAgentTask(db, daemonActor(), 'solo', BODY(), {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'api' },
       }),
@@ -295,6 +299,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     await expect(
       startAgentTask(db, strangerActor, 'no-such-id', BODY(), {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       }),
@@ -302,6 +308,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     await expect(
       startAgentTask(db, strangerActor, privateAgent.id, BODY(), {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       }),
@@ -327,6 +335,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     await expect(
       startAgentTask(db, daemonActor(), builtinId, BODY(), {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'api' },
       }),
@@ -341,6 +351,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         StartAgentTaskSchema.parse({ name: 't', description: 'd' }),
         {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'api' },
         },
@@ -367,6 +379,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         } as never,
         {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'api' },
           agentLaunch: { agentName: 'solo', agentId: 'solo-id', snapshotJson: '{}' },
@@ -793,6 +807,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     // Baseline launch stamps the stable id onto the task.
     const t1 = await startAgentTask(db, daemonActor(), agentId, BODY(), {
       db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
       appHome,
       launchProvenance: { kind: 'direct-json', initiator: 'api' },
     })
@@ -806,6 +821,8 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
       BODY({ expectedAgentId: agentId }),
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'api' },
       },
@@ -817,6 +834,8 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     await expect(
       startAgentTask(db, daemonActor(), agentId, BODY({ expectedAgentId: 'stale-other-id' }), {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'api' },
       }),

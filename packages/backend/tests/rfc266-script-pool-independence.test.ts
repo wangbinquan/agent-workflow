@@ -19,7 +19,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { getNodePoolSemaphore } from '../src/services/processNodeConcurrency'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

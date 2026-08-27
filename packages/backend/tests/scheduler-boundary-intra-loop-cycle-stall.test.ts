@@ -39,7 +39,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { agents } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

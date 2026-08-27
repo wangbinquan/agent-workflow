@@ -52,6 +52,7 @@ import {
   buildWorkflowValidationContext,
   validateWorkflowDef,
 } from '../src/services/workflow.validator'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -323,6 +324,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
     })
     const task = await startAgentTask(db, daemonActor(), ported.id, body, {
       db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
       appHome,
       launchProvenance: { kind: 'direct-json', initiator: 'api' },
     })
@@ -348,6 +350,8 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       StartAgentTaskSchema.parse({ name: 't', description: 'fix it', scratch: true }),
       {
         db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
         appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'api' },
       },

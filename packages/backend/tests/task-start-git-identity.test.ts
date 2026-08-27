@@ -22,6 +22,7 @@ import { createWorkflow } from '../src/services/workflow'
 import { DomainError } from '../src/util/errors'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -207,6 +208,8 @@ function launchWithoutEnv(h: Harness, name: string, actorUserId?: string) {
     },
     {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       ...(actorUserId === undefined ? {} : { actorUserId }),
       binaryOverride: [process.execPath, 'run', MOCK_OPENCODE],
@@ -358,6 +361,8 @@ describe('RFC-320 task Git identity snapshot', () => {
     expect(
       await resolveTaskGitCommitIdentity({
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         actorUserId: 'alice',
         callLaunch: {
           parentTaskId: parent.id,

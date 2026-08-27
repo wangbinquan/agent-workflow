@@ -37,6 +37,7 @@ import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { resumeTask } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import {
   addReviewComment,
   countPendingReviews,
@@ -369,6 +370,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       if (result.resumeRequired) {
         const resumeDeps: Parameters<typeof resumeTask>[2] = {
           db: deps.db,
+          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
           appHome: appHomeFor(deps),
           configPath: deps.configPath,
           // RFC-108 T4 (Codex impl gate P2): a review decision resumes the task;

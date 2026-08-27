@@ -33,7 +33,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { decodeWrapperProgress } from '../src/services/wrapperProgress'
 import { DELETED_BLOB_SENTINEL, gitBlobHashes, runGit } from '../src/util/git'
 

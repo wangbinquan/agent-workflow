@@ -39,7 +39,7 @@ import {
   toContainerRelative,
   truncationNotice,
 } from '../src/services/portArtifacts'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

@@ -20,6 +20,7 @@ import { startTaskWithLocalRepo } from '../src/services/task'
 import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 setDefaultTimeout(120_000)
 
@@ -130,6 +131,8 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
           },
           {
             db,
+            schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+              .schedulerDriver,
             appHome,
             gitCommitIdentity: { name: 'DE Control', email: 'control@example.test' },
             binaryOverride: ['bun', 'run', MOCK_OPENCODE],

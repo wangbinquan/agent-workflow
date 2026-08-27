@@ -18,7 +18,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
 import { clarifyRounds, agents, tasks, workflows } from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 

@@ -23,6 +23,7 @@ import { createAgent } from '../src/services/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
@@ -136,6 +137,8 @@ describe('RFC-187 §4-2 — fan-out 同文件冲突：逐路径救回（真子�
         { name: 'e2e-salvage', goal: '双写冲突', scratch: true },
         {
           db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
           appHome: h.appHome,
           binaryOverride: ['bun', 'run', SCENARIO_STUB],
           awaitScheduler: true,

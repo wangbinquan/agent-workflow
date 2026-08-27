@@ -26,6 +26,7 @@ import { startTask, startTaskWithLocalRepo } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -114,6 +115,8 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -148,6 +151,8 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
       } as unknown as StartTask,
       {
         db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
         appHome: h.appHome,
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
@@ -175,7 +180,12 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
         baseBranch: 'main',
         inputs: {},
       },
-      { db: h.db, appHome: h.appHome },
+      {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+      },
     )
     // Single-repo path keeps RFC-040 / wrapper-git behavior — no 422.
     // Task may or may not run to completion (scheduler is async and may emit

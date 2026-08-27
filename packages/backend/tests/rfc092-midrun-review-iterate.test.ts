@@ -32,7 +32,7 @@ const ulid = monotonicFactory() // 同毫秒插入仍保 id 单调（pure-id fre
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
-import { runTask } from '../src/services/scheduler'
+import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 

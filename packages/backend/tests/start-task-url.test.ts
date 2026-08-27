@@ -30,6 +30,7 @@ import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createWorkflow } from '../src/services/workflow'
 import { abortAllActiveTasks, isTaskActive, startTask as startTaskBase } from '../src/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
@@ -168,7 +169,14 @@ describe('startTask URL mode (RFC-024)', () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const task = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'orders' } },
-      { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
+      {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        binaryOverride: stubOpencode,
+        awaitScheduler: true,
+      },
     )
     expect(task.repoUrl).toBe(remoteUrl)
     expect(task.repoPath.startsWith(join(appHome, 'repos'))).toBe(true)
@@ -193,7 +201,12 @@ describe('startTask URL mode (RFC-024)', () => {
           inputs: { topic: 'x' },
           expectedWorkflowVersion: wf.version + 999,
         },
-        { db, appHome },
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+        },
       ),
     ).rejects.toMatchObject({ code: 'workflow-version-mismatch' })
     // No task row, no cached clone (guard short-circuited before repo work).
@@ -204,11 +217,25 @@ describe('startTask URL mode (RFC-024)', () => {
     const { appHome, db, stubOpencode, wf, remoteUrl } = await setup()
     const t1 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'a' } },
-      { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
+      {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        binaryOverride: stubOpencode,
+        awaitScheduler: true,
+      },
     )
     const t2 = await startTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'b' } },
-      { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
+      {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        binaryOverride: stubOpencode,
+        awaitScheduler: true,
+      },
     )
     expect(t1.repoPath).toBe(t2.repoPath)
     expect(db.select().from(cachedRepos).all().length).toBe(1)
@@ -226,7 +253,14 @@ describe('startTask URL mode (RFC-024)', () => {
           ref: 'this-ref-does-not-exist',
           inputs: { topic: 'orders' },
         },
-        { db, appHome, binaryOverride: stubOpencode, awaitScheduler: true },
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          binaryOverride: stubOpencode,
+          awaitScheduler: true,
+        },
       )
     } catch (e) {
       err = e

@@ -37,12 +37,16 @@ import {
   type CanonRepo,
 } from '../src/services/nodeIsolation'
 import { mintNodeRun } from '../src/services/nodeRunMint'
-import { createOrRebuildWrapperIso, deriveFrontier, runTask } from '../src/services/scheduler'
+import { createOrRebuildWrapperIso, deriveFrontier } from '../src/services/scheduler'
 import { transitionMergeState } from '../src/services/lifecycle'
 import { retryNode } from '../src/services/task'
 import { createLogger } from '../src/util/log'
 import { runGit } from '../src/util/git'
 import { Semaphore } from '../src/util/semaphore'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTask,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
@@ -210,7 +214,13 @@ emit(envelope)`,
     )
     await retryNode(h.db, taskId, staleId, {
       cascade: true,
-      deps: { db: h.db, appHome: h.appHome, binaryOverride: ['bun', 'run', mockPath] },
+      deps: {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', mockPath],
+      },
     })
     const final = await waitForTerminalTask(h.db, taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')

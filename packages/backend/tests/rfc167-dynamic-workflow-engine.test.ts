@@ -61,7 +61,6 @@ import {
   ORCHESTRATOR_AGENT_NAME,
   ORCHESTRATOR_WORKFLOW_PORT,
 } from '../src/services/orchestratorAgent'
-import { runTask } from '../src/services/scheduler'
 import { createUser } from '../src/services/users'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
@@ -71,6 +70,10 @@ import type {
   WorkgroupHostRunResult,
 } from '../src/services/workgroup/engine'
 import { createLogger } from '../src/util/log'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology as runTask,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -608,6 +611,8 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
           { name: 't', goal: 'g', scratch: true, expectedWorkgroupId: 'stale-other-id' },
           {
             db,
+            schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+              .schedulerDriver,
             appHome,
             launchProvenance: { kind: 'direct-json', initiator: 'api' },
           },
@@ -677,6 +682,8 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         { name: 't', goal: '目标', scratch: true },
         {
           db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
           appHome,
           binaryOverride: OPENCODE_CMD,
           awaitScheduler: true,

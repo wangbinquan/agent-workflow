@@ -18,6 +18,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { startExecution } from '../src/services/execution/executor'
 import type { ExecutionInvoker } from '../src/services/execution/types'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ACTOR = { user: { id: '__system__' }, source: 'daemon' } as Actor
@@ -58,6 +59,8 @@ async function launchAndObserveCommit(
     },
     {
       db: h.db,
+      schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+        .schedulerDriver,
       appHome: h.appHome,
       awaitScheduler: true,
       workflowLaunchCommitHook: async (event) => {
@@ -207,13 +210,24 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
         h.db,
         SESSION_ACTOR,
         { ...baseRequest, invoker: { type: 'user' as const, launchKind: 'direct-json' as const } },
-        { db: h.db, appHome: h.appHome, scheduledTaskId: 'spoofed-schedule' },
+        {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          appHome: h.appHome,
+          scheduledTaskId: 'spoofed-schedule',
+        },
       ),
       startExecution(
         h.db,
         ACTOR,
         { ...baseRequest, invoker: { type: 'scheduled' as const, scheduledTaskId: ' ' } },
-        { db: h.db, appHome: h.appHome },
+        {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          appHome: h.appHome,
+        },
       ),
       startExecution(
         h.db,
@@ -227,7 +241,12 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
             triggerContext: { trigger: { webhook: { event_type: 'push' as const } } },
           },
         },
-        { db: h.db, appHome: h.appHome },
+        {
+          db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
+          appHome: h.appHome,
+        },
       ),
       startExecution(
         h.db,
@@ -235,6 +254,8 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
         { ...baseRequest, invoker: { type: 'user' as const, launchKind: 'direct-json' as const } },
         {
           db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
           appHome: h.appHome,
           launchProvenance: { kind: 'direct-json', initiator: 'api' },
         },
@@ -288,6 +309,8 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
         },
         {
           db: h.db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+            .schedulerDriver,
           appHome: h.appHome,
           workflowLaunchCommitHook: (event) => {
             if (event.stage === 'task-committed') committed = true
