@@ -4527,7 +4527,7 @@
     {
       "id": "HUMAN-18",
       "domain": "人机交互门：澄清 / 评审 / 反问 / 人工门",
-      "title": "答案/决策已落库但后续 resume 失败时的警示（不假装成功跳走）",
+      "title": "答案/决策与 durable continuation 同提交；内部 wake 失败不回退业务结论",
       "risk": "P2",
       "tier": "nightly",
       "status": "covered",

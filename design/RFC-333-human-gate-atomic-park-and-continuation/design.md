@@ -1,7 +1,7 @@
 # RFC-333 技术设计：人工门原子停驻与持久续跑
 
-> 状态：Approved / Publishing（2026-08-28；D1～D12 已获用户批准，D13 为用户要求继续完成 RFC-333 后纳入的
-> 同权威交接精化；T2～T11 已完成，当前执行 T12 hosted 收口）
+> 状态：Done（2026-08-28；D1～D13、T2～T12、AC-1～AC-17 全部完成；payload `dda58935e`、
+> provenance/containing SHA `57e45c292` 的 exact-SHA 主 CI 与全部七条 scheduled workflow 均 terminal success）
 >
 > 本设计只闭合 RFC-294 P0-C。它以 RFC-326 已落的 review transaction 为种子，以 RFC-328
 > `task_execution_intents` / ownership fence 为唯一 durable execution authority，以 RFC-332
@@ -833,5 +833,10 @@ RFC-333 Done 后只更新 RFC-294：
   entries `218`、ambient wiring `440`、known violations `31`、route→DB `15`、transport→DB `2`；本 RFC 没有新增第二
   continuation/owner/interval，也没有增加 known violation；
 - 候选本地证据：backend 定向 `286/286`、frontend `100/100`、shared `2/2`、真实二进制 restart E2E `3/3`、
-  architecture 非 provenance `23/23`。四份 content-addressed provenance 在 payload commit 后按该 commit 重钉，随后由 canonical
-  replay 与 hosted CI 给最终证据。
+  architecture 非 provenance `23/23`；scheduled full-tier 暴露的 deferred-question handoff 修复另由 participant/auto-dispatch
+  邻接 `68/68` 与 backend typecheck 复验；
+- 最终 architecture source digest 为 `sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4`，四份
+  content-addressed provenance 均指向 payload `dda58935ec62b62ec1c962628af3af21edf0e9da`，repin/containing SHA 为
+  `57e45c292acec81d8f8cf27fceade4f44369a462`；该 SHA 主 CI `33123261690` 35/35，七条 scheduled workflow
+  `33124599820` / `33124596764` / `33124598119` / `33124599211` / `33124598897` / `33124598027` /
+  `33124598161` 共 19/19 jobs，全部 terminal success。

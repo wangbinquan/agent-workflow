@@ -47,11 +47,12 @@
 
 1. P0-A：Memory generic PATCH 不再接受 scope；move 同事务重读旧/新 scope 授权；rollback 无 durable/WS ghost event。
 2. P0-B：Intent session lock 按实际 derived chain identity 清理；compensation 任一失败保持 retryable；完整 artifact codec；post-commit throw 不补偿 durable commit。
-3. P0-C / [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md)：Clarify/Review/Questions open 与 park 原子化；decision、snapshot、transition、canonical continuation 同事务；route 不再单独 resume。RFC-333 已获批，T2～T7 已完成；三类 open 已切 prepared manifest + TaskParkTx，当前进入 T8 review decision。
-4. W6 幂等身份：Intent 与 Bundle 的同 key 不同 actor 或 canonical request hash 必须 conflict；不得仅按 key 返回 receipt。
-5. Runtime 协议对称：OpenCode 当前没有与 Claude `parseTerminalResultError` 对称的 terminal-result contract；不得把它当成不重试的 `runtime-result-error` 写成绿色兼容语义。
+3. W6 幂等身份：Intent 与 Bundle 的同 key 不同 actor 或 canonical request hash 必须 conflict；不得仅按 key 返回 receipt。
+4. Runtime 协议对称：OpenCode 当前没有与 Claude `parseTerminalResultError` 对称的 terminal-result contract；不得把它当成不重试的 `runtime-result-error` 写成绿色兼容语义。
 
-P0-D 已由 RFC-328 关闭；其 durable owner/epoch/lease/fence 与 stale-writer oracle 现为必须保持的绿色基线，不再属于本节红测。
+P0-C 已由 RFC-333 关闭；三类人工门原子 open/decision、canonical continuation、慢 sibling/deferred-question handoff 与
+route direct resume=0 现为必须保持的绿色基线。P0-D 已由 RFC-328 关闭；其 durable owner/epoch/lease/fence 与 stale-writer oracle
+同样不再属于本节红测。
 
 这些红测至少要覆盖 crash-at-every-boundary、重复请求、同 key 异 payload/actor、stale OCC、compensation/roll-forward 失败、lease takeover 与旧 worker 迟到提交。
 

@@ -2,22 +2,20 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🧭 **当前架构节点（Approved / Publishing，2026-08-28）：[RFC-333 人工门原子停驻与持久续跑（RFC-294 P0-C）](design/RFC-333-human-gate-atomic-park-and-continuation/proposal.md)**
-> —— 用户已批准 D1～D12 与 T2～T12；T0～T11 已完成，当前执行 T12 provenance + exact-SHA hosted/定时 CI 收口。
-> review/clarify/questions open 已以 purpose-specific operation/artifact journal + `TaskParkTx` 同事务提交 gate/node/task；三类
-> decision 已以 `CollaborationDecisionTx` 同事务提交领域决定、node/task projection、receipt 与 exactly one RFC-328
-> `gate-continuation` intent。三条 route direct `resumeTask` 已归零，REST/MCP exact mapping、UI 正常功能与 manual question 可创建
-> 范围保持；内部 wake failure 不再伪装成用户决定失败。
-> T8～T10 新增 review/clarify/questions purpose-specific command/required ports/composition；review rollback 继续走既有
-> `workspace-rollback` effect，coordinator 在 engine 前结算 receipt/projection；shared response schema 与前端三处旧 resume 补偿
-> 类型/提示一并收口。真实 SQLite fault injection 覆盖 dispatch/transaction rollback，source mutation guard 锁 direct resume=0。
-> T11 新增 exact pending gate-continuation boot recovery；orphan reaper 只豁免 task/run 全 pending 且 exact intent pending 的恢复形状，
-> 存在 running row 仍走旧 reap。专用 E2E binary 在 decision commit 后、wake 前停驻，外部 SIGKILL/restart 已覆盖
-> clarify + review + questions，Playwright `3 passed`；生产 binary 不编入 barrier。
-> 最终候选定向证据：backend `286 pass / 0 fail / 1279 expect`、frontend `100/100`、shared `2/2`、RFC-333 recovery/orphan
-> `12/12`、RFC-098 正常进程权限 `5/5`、architecture 非 provenance `23/23`；backend typecheck 与 task-owned lint/format 均绿。
-> canonical 四份 content-addressed provenance 按规则等待 payload commit 后重钉；hosted 终态完成前 RFC-333/P0-C 不提前标 Done。
-> RFC-333 Done 后才把 P0-C 置 Done，并开始另立新编号 RFC 的 W2-C current-source 调研/设计；W2-C 生产实现仍需明确批准。
+> 🧭 **下一架构节点（待另立 RFC，2026-08-28）：RFC-294 W2-C NodeExecutorRegistry current-source 调研与设计。**
+> RFC-333 已关闭 P0-C 前置；W2-C 可开始盘点和起草，但生产实现仍须新 RFC 与明确批准，不能把 RFC-333 的批准外溢到 W2-C。
+
+> ✅ **已完成 RFC（Done，2026-08-28）：[RFC-333 人工门原子停驻与持久续跑（RFC-294 P0-C）](design/RFC-333-human-gate-atomic-park-and-continuation/proposal.md)**
+> —— review/clarify/questions open 已以 purpose-specific journal + `TaskParkTx` 同事务提交 gate/node/task，三类 decision 已以
+> `CollaborationDecisionTx` 同事务提交领域决定、node/task projection、receipt 与 exactly one RFC-328 `gate-continuation` intent；
+> 三条 route direct `resumeTask` 为 0，REST/MCP/UI 与 manual question 正常能力保持。T12 闭合慢 sibling claimed→pending handoff，
+> scheduled full-tier 又照出并修复 auto-dispatch-deferred question 被 `initialManualPark` 抢先重停的功能缺口。
+> 最终 payload `dda58935ec62b62ec1c962628af3af21edf0e9da`，provenance/containing SHA
+> `57e45c292acec81d8f8cf27fceade4f44369a462`，source digest
+> `sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4`。主 CI `33123261690` 35/35；
+> full `33124599820`、WebKit `33124596764`、soak `33124598119`、git protocols `33124599211`、OpenCode
+> `33124598897`、visual `33124598027`、Windows `33124598161` 共 19/19 scheduled jobs，全部 terminal success。
+> RFC-294 只把 P0-C residual 置 Done；W2-C/D、W3、W4、W5 未被倒签完成或授权。
 
 > ✅ **已完成 RFC（Done，2026-08-26）：[RFC-330 数字员工域授权面补齐：工具 / 岗位模版行级 ACL、员工定义前端授权面、案例归属与成员制](design/RFC-330-digital-employee-authoring-acl/proposal.md)**
 > —— 起于用户「现在数字员工的权限控制点是什么，工具、模版、数字员工有权限归属吗，有 edit 权限控制吗」。源码对账：员工定义有完整归属 + RFC-324 两档（第 13 类）；
@@ -52,7 +50,7 @@
 > 历史源码守卫 `196/196`；RFC-294/317/332 architecture `87/87`；canonical `22/22`；ledger high-water `37/37`。
 > **hosted 收口**：exact SHA `4dd30d034f1bcb0c6532301cec11bdd288702105` 的 CI `33052994260` 35/35、
 > git-protocols-e2e `33052994263` 1/1、integration-opencode `33052994318` 2/2 均 terminal `success`。RFC-332 只关闭 W2-B；
-> RFC-294 的 P0-C residual 已进入 RFC-333 实施；D1～D12 与 T2～T12 已获批准。W2-C/D、W3、W5 仍需新 RFC 与明确批准。
+> RFC-294 的 P0-C residual 后续已由 RFC-333 关闭；W2-C 成为下一设计节点。W2-C/D、W3、W5 仍需新 RFC 与明确批准。
 >
 > ✅ **已完成 RFC（Done，2026-08-27）：[RFC-331 Task Execution topology cut（RFC-294 W2-A）](design/RFC-331-task-execution-topology-cut/proposal.md)**
 > —— 主实现 `81d97d060fbbe6e14144b10c17f78f0bc999414e`，canonical payload `262f34bf73735261b05b49363311ee2390311e4b`，
@@ -64,8 +62,8 @@
 > `sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac`；backend/repo SCC
 > `5/7→4/6`，`KNOWN 37→31`，task SCC family 消失；route→DB `15`、transport→DB `2`、AppDeps `54`、
 > inbound/outbound `92/23` 不变。RFC-287 注册 scheduler source-lock corpus 95 files / 926 tests / 10,487 expects 全绿。
-> W2-A 已完成；其 successor RFC-332/W2-B 也已发布收口。W2 整体仍未 Done：RFC-333 正在实施 P0-C residual，
-> W2-C/D 尚未授权。
+> W2-A 已完成；其 successor RFC-332/W2-B 与 P0-C successor RFC-333 也已发布收口。W2 整体仍未 Done：
+> W2-C/D 尚未授权，W2-C 为下一设计节点。
 >
 > ✅ **已完成 RFC（Done，2026-08-26）：[RFC-329 MCP 人工门完整面、死路径修复与全域「路由⟷工具」守卫](design/RFC-329-mcp-gate-surface-completion/proposal.md)**
 > —— PR-A `7131812a47fade80341fce90dc29e860a4c68867` 修四类死路径并新增 2 个工具；PR-B

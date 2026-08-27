@@ -1,7 +1,7 @@
 # RFC-333 实施计划：人工门原子停驻与持久续跑
 
-> 状态：In Progress / Publishing（2026-08-28；T0～T11 完成，D1～D12 与 T2～T12 已获用户批准；D13 是用户
-> 要求继续完成 RFC-333 后纳入 T12 的同权威交接精化，当前执行 hosted 收口）
+> 状态：Done（2026-08-28；T0～T12、AC-1～AC-17 全部完成；D13 是用户要求继续完成 RFC-333 后纳入
+> T12 的同权威交接精化；最终 exact-SHA 主 CI 35/35 与全部七条 scheduled workflow 共 19/19 jobs 均成功）
 >
 > 批准边界：批准本 RFC 才授权下述 P0-C 生产实现。它不授权 RFC-294 W2-C/D、W3、W4、W5，
 > 不授权权限/安全策略或任何正常能力收缩。
@@ -42,6 +42,7 @@ current source pin：`52645b673f6c25d26f629b85b5acaeba5b01e0d1`。相对前一�
 | C13  | 已有 restart E2E 只覆盖 parked 后 kill                                         | `e2e/rfc294-human-gate-restart.spec.ts`                            | 扩为 boundary crash matrix                         |
 | C14  | RFC-329 MCP tools 派发既有 REST routes                                         | MCP tool registry/dispatch guards                                  | 保持 route/tool exact mapping                      |
 | C15  | completion-driven DAG 可让 gate 先可决定而慢 sibling 仍在 claimed owner 下运行 | `taskDagScope#runScope` / RFC-092 mid-run review                   | one claimed + one pending successor；drain/handoff |
+| C16  | auto-dispatch-deferred manual question 已不需用户行动，但仍会触发 initial park | `sqliteHumanGateOpenParticipant` / questions-board full-tier       | obligation 让位给 runnable predecessor             |
 
 T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写入口、doc FS→DB 顺序、现有 intent gateway 与 route/MCP mapping。
 
@@ -68,7 +69,8 @@ T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写�
 - W2-C/W3 仍不随本 RFC 自动授权。
 
 用户已以“ok”批准 D1～D12 与 T2～T12；2026-08-28 hosted 回归暴露 C15 后，用户明确要求继续完成 RFC-333
-并提交，因此 D13 作为 D3/D12 范围内、不扩产品面的修正纳入 T12。W2-C/D、W3、W4、W5 仍未随本 RFC 获得授权。
+并提交，因此 D13 作为 D3/D12 范围内、不扩产品面的修正纳入 T12；随后 scheduled full-tier 暴露 C16，按既有 D10/D12
+功能边界修复。W2-C/D、W3、W4、W5 未随本 RFC 获得生产实现授权。
 
 ### T2 — characterization、source-lock 与 red fault tests（已完成，2026-08-27）
 
@@ -299,17 +301,21 @@ gate intent，且每个 task 最多一个 claimed current + 一个 pending succe
 - migration 0213 以 claimed/pending 两个 state-specific unique index 取代旧合并 active index；普通 continuation admission、
   第二 pending successor 与第二 claimed owner 继续冲突；
 - 更新受到 durable receipt/rollback receipt 精确化影响的旧功能 fixtures，不删除或削弱既有功能断言；
-- handoff 修复 payload 已固化为 `71008fde0407a8cf85ca59322bb34ff5d5d56597`；真实 coordinator 慢 sibling、
-  claimed + pending 约束与邻接回归已完成候选验证，hosted 与全部 scheduled workflow 仍等该 payload
-  发布后的终态证据；
-- 更新 RFC-333 为 Done，逐 AC 写证据；
-- RFC-294 P0-C `partial → Done`，下一指针改为 W2-C（仍需新 RFC/批准）；
-- 更新 `design/plan.md`、`STATE.md` 与需要的 backlog；
-- 精确暂存本 RFC 文件，提交、同步 main、推送；
-- 按 exact SHA 等待主 CI、相关 scheduled/integration/visual 工作流终态；失败只修 task-owned 原因并重新取证。
+- handoff 修复 payload `71008fde0407a8cf85ca59322bb34ff5d5d56597` 已覆盖真实 coordinator 慢 sibling 与
+  claimed + pending 约束；scheduled full-tier 又照出 C16：auto-dispatch-deferred manual question 被误当作仍待用户处理，
+  `initialManualPark` 因而在 runnable predecessor 前重停任务；
+- C16 修复 payload 为 `dda58935ec62b62ec1c962628af3af21edf0e9da`：只有 `autoDispatchDeferredAt === null` 的 manual
+  question 才继续构成 open park obligation；deferred entry 把执行权让给 runnable predecessor，真实 participant/auto-dispatch
+  邻接 `68/68` 与 backend typecheck 通过；
+- canonical source digest 已更新为 `sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4`，四份
+  provenance 均指向 payload `dda58935e`，repin/containing SHA 为 `57e45c292acec81d8f8cf27fceade4f44369a462`；
+- exact-SHA 主 CI `33123261690` 为 35/35 success；全部七条 scheduled workflow：full `33124599820` 5/5、
+  WebKit `33124596764` 8/8、soak `33124598119` 1/1、git protocols `33124599211` 1/1、OpenCode
+  `33124598897` 2/2、visual `33124598027` 1/1、Windows `33124598161` 1/1，均 terminal success；
+- RFC-333、AC 账与 RFC-294 P0-C 已关闭；下一指针改为 W2-C，但生产实现仍须新 RFC 与明确批准。
 
-退出：真实 SQLite constraint test、RFC-092 慢 sibling coordinator E2E、remote ancestry、exact-SHA required jobs 与全部 scheduled
-workflows 均 terminal success；无未记 blocker。
+退出：真实 SQLite constraint test、RFC-092 慢 sibling coordinator E2E、deferred-question handoff、remote ancestry、exact-SHA
+required jobs 与全部 scheduled workflows 均 terminal success；无未记 blocker。**T12 Done。**
 
 ## 4. 建议提交边界
 
@@ -366,25 +372,25 @@ workflows 均 terminal success；无未记 blocker。
 
 ## 6. AC 证据账本
 
-| AC    | 实现前                              | 目标证据                                           | 状态                |
-| ----- | ----------------------------------- | -------------------------------------------------- | ------------------- |
-| AC-1  | current inventory 已完成            | source-lock + exact production inventory           | T2 Done             |
-| AC-2  | open/park 分写                      | real SQLite TaskParkTx fault tests                 | T6/T7 Done          |
-| AC-3  | doc FS→DB 逐项                      | N-member artifact fault/recovery matrix            | T4/T6 Done          |
-| AC-4  | lazy question reconciliation        | eager snapshot + legacy-only guard                 | T7 Done             |
-| AC-5  | route resume saga                   | three CollaborationDecisionTx suites               | T8/T9 Done          |
-| AC-6  | route direct calls=3                | architecture negative guard=0                      | T9 Done             |
-| AC-7  | route-level retry                   | idempotency/stale/concurrent matrix                | T8/T9 Done          |
-| AC-8  | parked-only restart                 | commit→wake process kill/recovery                  | T11 Done            |
-| AC-9  | rollback 在 final tx 前裸执行       | plan→effect→receipt→projection fault matrix        | T5/T8 Done          |
-| AC-10 | manual question current behavior    | all-state + owner-settle tests                     | T7 Done             |
-| AC-11 | some direct created WS              | commit-before-WS failpoints                        | T6～T9 Done         |
-| AC-12 | parked restart only                 | process E2E + REST/MCP exact route guard           | T10/T11 Done        |
-| AC-13 | RFC-326 Done baseline               | full adjacent corpus unchanged                     | T8/T11 Done         |
-| AC-14 | RFC-328/332 already unique          | canonical inventory + mutation                     | T5/T11 Done         |
-| AC-15 | target boundary only in RFC-294     | manifest/guard exact assertions                    | T11 Done            |
-| AC-16 | project hard boundary               | functional-only gate record                        | T0～T11 Done        |
-| AC-17 | gate decision 可早于慢 sibling 完成 | SQLite state constraint + real coordinator handoff | T12 candidate green |
+| AC    | 实现前                              | 目标证据                                           | 状态         |
+| ----- | ----------------------------------- | -------------------------------------------------- | ------------ |
+| AC-1  | current inventory 已完成            | source-lock + exact production inventory           | T2 Done      |
+| AC-2  | open/park 分写                      | real SQLite TaskParkTx fault tests                 | T6/T7 Done   |
+| AC-3  | doc FS→DB 逐项                      | N-member artifact fault/recovery matrix            | T4/T6 Done   |
+| AC-4  | lazy question reconciliation        | eager snapshot + legacy-only guard                 | T7 Done      |
+| AC-5  | route resume saga                   | three CollaborationDecisionTx suites               | T8/T9 Done   |
+| AC-6  | route direct calls=3                | architecture negative guard=0                      | T9 Done      |
+| AC-7  | route-level retry                   | idempotency/stale/concurrent matrix                | T8/T9 Done   |
+| AC-8  | parked-only restart                 | commit→wake process kill/recovery                  | T11 Done     |
+| AC-9  | rollback 在 final tx 前裸执行       | plan→effect→receipt→projection fault matrix        | T5/T8 Done   |
+| AC-10 | manual question current behavior    | all-state + owner-settle + deferred handoff tests  | T7/T12 Done  |
+| AC-11 | some direct created WS              | commit-before-WS failpoints                        | T6～T9 Done  |
+| AC-12 | parked restart only                 | process E2E + REST/MCP exact route guard           | T10/T11 Done |
+| AC-13 | RFC-326 Done baseline               | full adjacent corpus unchanged                     | T8/T11 Done  |
+| AC-14 | RFC-328/332 already unique          | canonical inventory + mutation                     | T5/T11 Done  |
+| AC-15 | target boundary only in RFC-294     | manifest/guard exact assertions                    | T11 Done     |
+| AC-16 | project hard boundary               | functional-only gate record                        | T0～T11 Done |
+| AC-17 | gate decision 可早于慢 sibling 完成 | SQLite state constraint + real coordinator handoff | T12 Done     |
 
 ## 7. 停止门与回退
 

@@ -1,7 +1,8 @@
 # RFC-333：人工门原子停驻与持久续跑（RFC-294 P0-C）
 
-> 状态：Approved / Publishing（2026-08-28；用户已批准 D1～D12 与 T2～T12，并在实现期明确要求继续完成 RFC-333；
-> D13 是 D3/D12 范围内的同权威交接精化，T2～T11 已完成，当前执行 T12 hosted 收口）
+> 状态：Done（2026-08-28；D1～D13、T2～T12 与 AC-1～AC-17 全部完成；最终 payload/provenance
+> `dda58935ec62b62ec1c962628af3af21edf0e9da` → `57e45c292acec81d8f8cf27fceade4f44369a462`，
+> exact-SHA 主 CI 35/35 与仓内全部七条 scheduled workflow 均 terminal success）
 >
 > 架构位置：RFC-294 N6 / P0-C residual；承接 RFC-326 的 review decision 单事务种子、
 > RFC-328 的 durable owner/intent/fence、RFC-329 的 REST/MCP 人工门完整面，以及 RFC-332 的唯一
@@ -208,16 +209,25 @@ RFC-333 只有同时满足以下条件才可标 Done：
 7. current source-lock、targeted/full gate 与 exact-SHA hosted CI 均提供终态证据；
 8. RFC-294 只关闭 P0-C residual，W2-C/D、W3、W4、W5 继续保持未授权/未完成。
 
-截至 2026-08-28，候选实现已满足 1～6 与 8：三类 open/decision 均切到原子 participant，三条 route 的 direct
-`resumeTask` 为 0；真实 SQLite fault matrix、同 key replay/stale/concurrent guards、artifact recovery 与外部
-SIGKILL/restart E2E 均已通过；真实 coordinator 用例也覆盖慢 sibling 期间决定、claimed→pending handoff 与 exact successor
-接力。第 7 条只剩 canonical provenance 在 payload commit 后重钉，以及 exact-SHA hosted/定时 CI
-终态取证；在这些远端证据完成前，本 RFC 保持 Publishing 而不提前标 Done。
+截至 2026-08-28，1～8 全部满足：三类 open/decision 均切到原子 participant，三条 route 的 direct `resumeTask` 为 0；
+真实 SQLite fault matrix、同 key replay/stale/concurrent guards、artifact recovery 与外部 SIGKILL/restart E2E 均已通过；
+真实 coordinator 用例覆盖慢 sibling 期间决定、claimed→pending handoff 与 exact successor 接力。scheduled full-tier 进一步照出
+auto-dispatch-deferred manual question 仍被 `initialManualPark` 当作用户未处理义务、从而抢在 runnable predecessor 前重新 park 的
+功能缺口；`dda58935e` 让 `autoDispatchDeferredAt` 成为“用户无需再行动”的 durable 事实，并以真实 participant 回归锁住交接。
+
+最终 source digest 为 `sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4`，四份
+content-addressed provenance 均指向 payload `dda58935ec62b62ec1c962628af3af21edf0e9da`，repin/containing SHA 为
+`57e45c292acec81d8f8cf27fceade4f44369a462`。该 SHA 的主 CI `33123261690` 为 35/35 success；全部 scheduled workflow
+`33124599820`（full 5/5）、`33124596764`（WebKit 8/8）、`33124598119`（soak 1/1）、`33124599211`
+（git protocols 1/1）、`33124598897`（OpenCode 2/2）、`33124598027`（visual 1/1）、`33124598161`
+（Windows 1/1）均为 terminal success。RFC-333 因而关闭；只把 RFC-294 P0-C residual 置 Done，不倒签后续 wave。
 
 ## 9. 批准记录
 
 2026-08-27，用户以“ok”明确批准 D1～D12 与 `plan.md` T2～T12；2026-08-28 在 hosted 回归暴露慢 sibling
-交接缺口后，用户明确要求继续完成 RFC-333 并提交，D13 因而作为 D3/D12 范围内、不扩功能面的实现精化纳入 T12。
+交接缺口后，用户明确要求继续完成 RFC-333 并提交，D13 因而作为 D3/D12 范围内、不扩功能面的实现精化纳入 T12；
+随后用户要求完成 RFC-333 并提交上库、再开始 W2-C，scheduled full-tier 暴露的 deferred-question 交接缺口也在同一
+D10/D12 功能边界内修复并取齐远端证据。
 实施严格保持本 RFC 的能力影响边界：
 不收缩 review / clarify / questions / manual question 的任何正常能力，不新增安全或权限策略；W2-C/D、W3、W4、W5
 仍需各自的新 RFC 与明确批准。
