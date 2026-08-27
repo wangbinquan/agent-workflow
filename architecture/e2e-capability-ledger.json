@@ -4538,7 +4538,7 @@
         },
         {
           "file": "e2e/review-resume-failure.spec.ts",
-          "test": "工作树被回收后：决策照样落库，但响应必须点名 resume 失败，且不谎称任务在跑 @nightly"
+          "test": "工作树被回收后：决策与 durable continuation 照样落库，且不泄露内部 wake @nightly"
         }
       ]
     },
