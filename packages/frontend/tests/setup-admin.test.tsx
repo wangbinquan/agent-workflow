@@ -1,4 +1,7 @@
 // RFC-221 — mandatory, one-way first-administrator handoff.
+// Regression: the submit button was disabled for passwords shorter than eight
+// characters, so the minimum must stay visible without relying on submit-time
+// browser validation that the user can never trigger.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -116,8 +119,8 @@ describe('/setup/admin', () => {
     })
   })
 
-  test('keeps submission disabled while password confirmation differs', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ required: true }))
+  test('shows a password mismatch and refuses the invalid submission', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ required: true }))
     renderSetup()
 
     fireEvent.change(await screen.findByLabelText(/username/i), { target: { value: 'admin' } })
@@ -129,10 +132,62 @@ describe('/setup/admin', () => {
       target: { value: 'password-two' },
     })
 
-    expect(
-      screen.getByRole('button', { name: /complete.*handoff/i }).hasAttribute('disabled'),
-    ).toBe(true)
     expect(screen.getByText(/passwords do not match/i)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /complete.*handoff/i }))
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  test('keeps every input rule visible and reports every invalid field inline', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ required: true }))
+    renderSetup()
+
+    const username = await screen.findByLabelText(/username/i)
+    const displayName = screen.getByLabelText(/display name/i)
+    const email = screen.getByLabelText(/email/i)
+    const [password, confirm] = screen.getAllByLabelText(/password/i)
+    const submit = screen.getByRole('button', { name: /complete.*handoff/i })
+
+    expect(
+      screen.getByText(
+        'Use 1–64 lowercase letters or numbers; after the first character, - and _ are allowed.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('Use 1–128 characters.')).toBeTruthy()
+    expect(
+      screen.getByText('Optional. Enter a valid email address with at most 254 characters.'),
+    ).toBeTruthy()
+    expect(screen.getByText('Use 8–256 characters.')).toBeTruthy()
+    expect(screen.getByText('Enter the same password again.')).toBeTruthy()
+    expect(submit.hasAttribute('disabled')).toBe(false)
+
+    fireEvent.click(submit)
+
+    expect(screen.getAllByText('This field is required.')).toHaveLength(4)
+    expect(username.getAttribute('aria-invalid')).toBe('true')
+    expect(displayName.getAttribute('aria-invalid')).toBe('true')
+    expect(email.getAttribute('aria-invalid')).toBeNull()
+    expect(password!.getAttribute('aria-invalid')).toBe('true')
+    expect(confirm!.getAttribute('aria-invalid')).toBe('true')
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    fireEvent.change(username, { target: { value: 'Upper Case' } })
+    fireEvent.change(displayName, { target: { value: 'x'.repeat(129) } })
+    fireEvent.change(email, { target: { value: 'not-an-email' } })
+    fireEvent.change(password!, { target: { value: 'short' } })
+    fireEvent.change(confirm!, { target: { value: 'different' } })
+
+    expect(
+      screen.getByText(
+        'Use 1–64 lowercase letters or numbers; after the first character, - and _ are allowed.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('Use 1–128 characters.')).toBeTruthy()
+    expect(
+      screen.getByText('Optional. Enter a valid email address with at most 254 characters.'),
+    ).toBeTruthy()
+    expect(screen.getByText('Use 8–256 characters.')).toBeTruthy()
+    expect(screen.getByText('Passwords do not match.')).toBeTruthy()
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   test('an already-completed bootstrap clears a stale daemon token and returns to login', async () => {

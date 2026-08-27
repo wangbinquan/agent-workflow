@@ -934,6 +934,12 @@ export interface Resources {
     bootstrapStepRetire: string
     bootstrapStepLogin: string
     bootstrapOneWay: string
+    bootstrapUsernameHint: string
+    bootstrapDisplayNameHint: string
+    bootstrapEmailHint: string
+    bootstrapPasswordHint: string
+    bootstrapConfirmHint: string
+    bootstrapFieldRequired: string
     confirmPassword: string
     passwordMismatch: string
     creatingAdmin: string
@@ -7303,6 +7309,12 @@ export const zhCN: Resources = {
     bootstrapStepRetire: '注销 Token',
     bootstrapStepLogin: '账户登录',
     bootstrapOneWay: '这个交接不可逆。继续前请确认你已妥善保存管理员密码。',
+    bootstrapUsernameHint: '使用 1–64 位小写字母或数字；首位之后可使用 - 和 _。',
+    bootstrapDisplayNameHint: '使用 1–128 个字符。',
+    bootstrapEmailHint: '选填。请输入有效的邮箱地址，最多 254 个字符。',
+    bootstrapPasswordHint: '使用 8–256 个字符。',
+    bootstrapConfirmHint: '请再次输入相同的密码。',
+    bootstrapFieldRequired: '此项为必填项。',
     confirmPassword: '确认密码',
     passwordMismatch: '两次输入的密码不一致。',
     creatingAdmin: '正在创建管理员…',

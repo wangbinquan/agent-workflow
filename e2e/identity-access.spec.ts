@@ -49,8 +49,39 @@ test('RFC-319 IAM-01/03: the first-admin handoff creates a real account and reti
     const submit = page.getByRole('button', { name: 'Complete secure handoff' })
     await expect(submit).toBeVisible()
 
-    await page.getByLabel(/^Username/).fill('rfc319-first-admin')
+    // The handoff used to disable this button for a short password while hiding
+    // the minimum in an HTML attribute. Keep every rule visible, let a click
+    // explain all missing fields, and report invalid values beside their inputs.
+    await expect(
+      page.getByText(
+        'Use 1–64 lowercase letters or numbers; after the first character, - and _ are allowed.',
+      ),
+    ).toBeVisible()
+    await expect(page.getByText('Use 1–128 characters.')).toBeVisible()
+    await expect(
+      page.getByText('Optional. Enter a valid email address with at most 254 characters.'),
+    ).toBeVisible()
+    await expect(page.getByText('Use 8–256 characters.')).toBeVisible()
+    await expect(page.getByText('Enter the same password again.')).toBeVisible()
+    await expect(submit).toBeEnabled()
+    await submit.click()
+    await expect(page.getByText('This field is required.')).toHaveCount(4)
+    await expect(page.getByLabel(/^Username/)).toBeFocused()
+
+    await page.getByLabel(/^Username/).fill('Invalid Username')
     await page.getByLabel(/^Display name/).fill('RFC-319 First Admin')
+    await page.getByLabel(/^Email/).fill('not-an-email')
+    await page.getByLabel(/^Password/).fill('short')
+    await page.getByLabel(/^Confirm password/).fill('different')
+    await expect(page.getByLabel(/^Username/)).toHaveAttribute('aria-invalid', 'true')
+    await expect(page.getByLabel(/^Email/)).toHaveAttribute('aria-invalid', 'true')
+    await expect(page.getByLabel(/^Password/)).toHaveAttribute('aria-invalid', 'true')
+    await expect(page.getByText('Passwords do not match.')).toBeVisible()
+    await submit.click()
+    await expect(page).toHaveURL(/\/setup\/admin/)
+
+    await page.getByLabel(/^Username/).fill('rfc319-first-admin')
+    await page.getByLabel(/^Email/).fill('admin@example.com')
     await page.getByLabel(/^Password/).fill('Rfc319HandoffPass!1')
     await page.getByLabel(/^Confirm password/).fill('Rfc319HandoffPass!1')
     await submit.click()

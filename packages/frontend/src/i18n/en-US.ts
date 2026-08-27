@@ -1908,6 +1908,13 @@ export const enUS: Resources = {
     bootstrapStepLogin: 'Sign in',
     bootstrapOneWay:
       'This handoff is one-way. Make sure you have saved the administrator password before continuing.',
+    bootstrapUsernameHint:
+      'Use 1–64 lowercase letters or numbers; after the first character, - and _ are allowed.',
+    bootstrapDisplayNameHint: 'Use 1–128 characters.',
+    bootstrapEmailHint: 'Optional. Enter a valid email address with at most 254 characters.',
+    bootstrapPasswordHint: 'Use 8–256 characters.',
+    bootstrapConfirmHint: 'Enter the same password again.',
+    bootstrapFieldRequired: 'This field is required.',
     confirmPassword: 'Confirm password',
     passwordMismatch: 'Passwords do not match.',
     creatingAdmin: 'Creating administrator…',
