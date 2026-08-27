@@ -378,10 +378,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 353,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-333 CI 修复把 collaboration command ports 与 task continuation pre-drive participant 改经 exact public contract，新增分母是正式纳管的边界面。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -402,10 +399,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18050,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-333 CI 修复新增 exact legacy task-gate discriminator、集中 composition bridge 与 public contract exports；每个新增顶层符号必须进入 owner 分母。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -422,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ef11c953f740a117d438075c2b0def3e4417365d",
-    "contentDigest": "sha256:3a1595255236a9db7cdf5dbd5ccdcfff16ba75aaf69772b0f109eb24e18f9d8b",
+    "currentSnapshotSha": "19f0d2e83385b8c04e3ed34ffd5dee5333b34b13",
+    "contentDigest": "sha256:361b4797bea356fbd1e2e9e498f37f6e78e89855c1478037d726c90be789a889",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
