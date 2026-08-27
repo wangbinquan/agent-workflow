@@ -416,7 +416,7 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b63733a4f77c232d0cb9b285281953f89cea9d8a",
+    "currentSnapshotSha": "a36fd94c28d1b8300e9b67c0b0ca5c3dcc6d0761",
     "contentDigest": "sha256:a79edb5688cf5c0f8644dd5fc0946ac0b8d0e4f05c85f962f7b6189b74600365",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
