@@ -343,9 +343,11 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
         return s
       }, 'open clarify session while slow sibling is still running')
 
-      // 窗口证据：任务整体仍 running（不是停泊后再答的 resume 路径）。
+      // RFC-333 T7 将 gate 投影与任务停泊合并为一次 TaskParkTx；slow sibling
+      // 仍在同一次活调度调用中运行，所以这里锁定新的 awaiting_human 状态，
+      // 后续答案仍由这次调用在 slow settle 后自取，不是另起一次 resume。
       const midTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
-      expect(midTask.status).toBe('running')
+      expect(midTask.status).toBe('awaiting_human')
 
       // 真实入口提交答案（内部自带 RFC-058 clarify_rounds 双表镜像 + rerun 铸行）。
       const res = await autoDispatchClarifyRound({

@@ -23,7 +23,7 @@
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -60,6 +60,33 @@ async function seedDispatchedSelfQuestions(
   triggerRunId: string | null,
 ): Promise<void> {
   for (const qid of questionIds) {
+    const existing = (
+      await db
+        .select({ id: taskQuestions.id })
+        .from(taskQuestions)
+        .where(
+          and(
+            eq(taskQuestions.originNodeRunId, originNodeRunId),
+            eq(taskQuestions.questionId, qid),
+            eq(taskQuestions.roleKind, 'self'),
+          ),
+        )
+        .limit(1)
+    )[0]
+    if (existing !== undefined) {
+      await db
+        .update(taskQuestions)
+        .set({
+          sealedAt: Date.now(),
+          sealedBy: 'u1',
+          dispatchedAt: Date.now(),
+          dispatchedBy: 'u1',
+          triggerRunId,
+          updatedAt: Date.now(),
+        })
+        .where(eq(taskQuestions.id, existing.id))
+      continue
+    }
     await db.insert(taskQuestions).values({
       id: ulid(),
       taskId,

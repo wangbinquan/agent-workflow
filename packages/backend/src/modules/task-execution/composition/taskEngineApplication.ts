@@ -737,6 +737,35 @@ async function runTaskEngineOrchestratorInner(
   let completed = false
   while (true) {
     try {
+      const statusBeforeCompletion = db
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .get()?.status
+      if (
+        statusBeforeCompletion === 'awaiting_review' ||
+        statusBeforeCompletion === 'awaiting_human'
+      ) {
+        // A human decision can land while this exact driver is still attached.
+        // resumeTask correctly refuses to attach a second driver in that
+        // window; after this scope consumes the released rerun and derives
+        // `done`, first apply the canonical unpark edge, then complete from
+        // running. The scope outcome proves no review/clarify gate remains,
+        // and the in-tx manual-question assertion closes the external
+        // late-arrival path.
+        const unparked = await trySetTaskStatus({
+          db,
+          taskId,
+          to: 'running',
+          allowedFrom: ['awaiting_review', 'awaiting_human'],
+          onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
+          ...(opts.executionContext !== undefined
+            ? { executionContext: opts.executionContext }
+            : {}),
+          reason: 'active-human-gate-released-before-complete',
+        })
+        if (unparked) await emitStatus(topology, taskId)
+      }
       completed = await trySetTaskStatus({
         db,
         taskId,

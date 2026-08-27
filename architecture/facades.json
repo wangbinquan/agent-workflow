@@ -7397,5 +7397,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7c994d7c95d8c959b45102d1c424fd473c738157696976aa80f53d9378002d67"
+  "sourceDigest": "sha256:a72b7cd65da8b43960ce3b531c61182d24d80dbf3d880f49754c9b05c2fc6c64"
 }

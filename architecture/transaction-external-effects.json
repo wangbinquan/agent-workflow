@@ -2395,8 +2395,8 @@
       ],
       "file": "packages/backend/src/services/review.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/services/review.ts#dbTxSync:3084",
-      "line": 3084,
+      "id": "tx:packages/backend/src/services/review.ts#dbTxSync:3077",
+      "line": 3077,
       "ownerEntryId": "owner:packages/backend/src/services/review.ts#submitReviewDecisionUnlocked",
       "status": "co-located-risk",
       "symbol": "submitReviewDecisionUnlocked",
@@ -2944,8 +2944,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/services/taskArchive.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/services/taskArchive.ts#dbTxSync:628",
-      "line": 628,
+      "id": "tx:packages/backend/src/services/taskArchive.ts#dbTxSync:658",
+      "line": 658,
       "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#deleteTreeRows",
       "status": "clear",
       "symbol": "deleteTreeRows",
@@ -3256,7 +3256,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7c994d7c95d8c959b45102d1c424fd473c738157696976aa80f53d9378002d67",
+  "sourceDigest": "sha256:a72b7cd65da8b43960ce3b531c61182d24d80dbf3d880f49754c9b05c2fc6c64",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

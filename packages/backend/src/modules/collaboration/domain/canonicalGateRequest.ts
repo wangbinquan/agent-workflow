@@ -78,12 +78,5 @@ export function canonicalHumanGateRequestHash(request: CanonicalHumanGateRequest
 
 export function deriveHumanGateCompatibilityKey(request: CanonicalHumanGateRequest): string {
   const actor = request.actorUserId ?? 'system'
-  return [
-    'compat:v1',
-    request.gateKind,
-    request.gateRef,
-    actor,
-    String(request.expectedGateRevision),
-    canonicalHumanGateRequestHash(request),
-  ].join(':')
+  return `compat:v1:${request.gateKind}:${request.gateRef}:${actor}:${String(request.expectedGateRevision)}:${canonicalHumanGateRequestHash(request)}`
 }

@@ -34,6 +34,8 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
   clarifyRounds,
+  collaborationGateArtifacts,
+  collaborationGateOperations,
   docVersions,
   lifecycleAlerts,
   nodeRunEvents,
@@ -169,6 +171,34 @@ const TASK_SCOPED: readonly ExportSpec[] = [
     load: (db, ids) =>
       chunkedAll(ids, (c) =>
         db.select().from(clarifyRounds).where(inArray(clarifyRounds.taskId, c)),
+      ),
+  },
+  {
+    name: 'collaboration_gate_operations',
+    load: (db, ids) =>
+      chunkedAll(ids, (c) =>
+        db
+          .select()
+          .from(collaborationGateOperations)
+          .where(inArray(collaborationGateOperations.taskId, c)),
+      ),
+  },
+  {
+    name: 'collaboration_gate_artifacts',
+    load: (db, ids) =>
+      chunkedAll(ids, (c) =>
+        db
+          .select()
+          .from(collaborationGateArtifacts)
+          .where(
+            inArray(
+              collaborationGateArtifacts.operationId,
+              db
+                .select({ id: collaborationGateOperations.id })
+                .from(collaborationGateOperations)
+                .where(inArray(collaborationGateOperations.taskId, c)),
+            ),
+          ),
       ),
   },
   {

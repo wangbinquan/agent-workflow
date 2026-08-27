@@ -1010,14 +1010,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       reviewIteration,
       consumedUpstreamRunsJson: consumedJson,
       sourceSnapshotDigest,
-      idempotencyKey: [
-        'review-open:v1',
-        taskId,
-        node.id,
-        String(iteration),
-        String(taskRow.lifecycleEventRevision),
-        sourceSnapshotDigest,
-      ].join(':'),
+      idempotencyKey: `review-open:v1:${taskId}:${node.id}:${String(iteration)}:${String(taskRow.lifecycleEventRevision)}:${sourceSnapshotDigest}`,
       expectedTaskRevision: taskRow.lifecycleEventRevision,
       ...(reuse?.status === 'pending' ? { reusePendingNodeRunId: reuse.id } : {}),
       ...(refreshAwaitingReview

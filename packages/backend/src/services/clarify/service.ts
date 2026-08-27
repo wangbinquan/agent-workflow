@@ -335,13 +335,7 @@ export async function createClarifyRound(
     questions: questions.map((question) => ({ id: question.id, title: question.title })),
     truncationWarningsJson,
     sourceSnapshotDigest,
-    idempotencyKey: [
-      'clarify-open:v1',
-      args.taskId,
-      args.askingNodeRunId,
-      args.intermediaryNodeId,
-      sourceSnapshotDigest,
-    ].join(':'),
+    idempotencyKey: `clarify-open:v1:${args.taskId}:${args.askingNodeRunId}:${args.intermediaryNodeId}:${sourceSnapshotDigest}`,
     expectedTaskRevision: taskRow.lifecycleEventRevision,
     ...(existingRun === undefined
       ? {}
