@@ -57,9 +57,9 @@ import {
   assertTaskExecutionContext,
   currentTaskExecutionContext,
   taskExecutionModule,
-  type TaskExecutionContext,
   withTaskExecutionMutation,
 } from '@/services/taskExecutionParticipants'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/public/types'
 
 const lifecycleLog = createLogger('lifecycle')
 
@@ -148,7 +148,7 @@ export async function transitionNodeRunStatus(args: {
   nodeRunId: string
   event: NodeRunTransitionEvent
   extra?: NodeRunStatusUpdateExtra
-  executionContext?: TaskExecutionContext
+  executionContext?: TaskExecutionContextRef
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
   // RFC-326: a pure wrapper around the transactional companion — the ONLY
   // status write for this event kind now lives in transitionNodeRunStatusTx, so
@@ -291,7 +291,7 @@ export async function setNodeRunStatus(args: {
   allowTerminal?: boolean
   /** Diagnostic label for errors — appears in the IllegalTransition message. */
   reason?: string
-  executionContext?: TaskExecutionContext
+  executionContext?: TaskExecutionContextRef
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
   const row = (
     await args.db
@@ -600,7 +600,7 @@ export async function setTaskStatus(args: {
    * this and enter through their own revision/proof gateways; a scheduler
    * worker must pass the context created by the claim→attach handoff.
    */
-  executionContext?: TaskExecutionContext
+  executionContext?: TaskExecutionContextRef
   /** RFC-207 — injectable clock for the run-time accounting (test determinism). */
   now?: number
   reason: string
@@ -866,7 +866,7 @@ export async function trySetTaskStatus(args: {
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
   onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
-  executionContext?: TaskExecutionContext
+  executionContext?: TaskExecutionContextRef
   reason: string
 }): Promise<boolean> {
   try {
@@ -899,7 +899,7 @@ export async function transitionTaskStatusByEvent(args: {
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
   onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
-  executionContext?: TaskExecutionContext
+  executionContext?: TaskExecutionContextRef
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   return setTaskStatus({

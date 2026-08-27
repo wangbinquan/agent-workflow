@@ -7,6 +7,7 @@
 import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { DbClient } from '@/db/client'
+import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
 
 const taskExecutionContextBrand: unique symbol = Symbol('rfc328.task-execution-context')
 const trustedContexts = new WeakSet<object>()
@@ -38,7 +39,7 @@ export function createTaskExecutionContext(input: {
 }
 
 export function assertTaskExecutionContext(
-  context: TaskExecutionContext,
+  context: TaskExecutionContextRef,
   expectedTaskId?: string,
 ): void {
   if (!trustedContexts.has(context)) throw new Error('untrusted-task-execution-context')
@@ -48,9 +49,9 @@ export function assertTaskExecutionContext(
   }
 }
 
-export function runWithTaskExecutionContext<T>(context: TaskExecutionContext, run: () => T): T {
+export function runWithTaskExecutionContext<T>(context: TaskExecutionContextRef, run: () => T): T {
   assertTaskExecutionContext(context)
-  return taskExecutionContextStorage.run(context, run)
+  return taskExecutionContextStorage.run(context as TaskExecutionContext, run)
 }
 
 export function currentTaskExecutionContext(

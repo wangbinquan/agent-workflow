@@ -1,7 +1,7 @@
 // RFC-040 — wrapper-loop / wrapper-git progress persistence.
 //
-// `runLoopWrapperNode` and `runGitWrapperNode` (services/scheduler.ts) use
-// this module to encode/decode the JSON payload stored in
+// The W2-D compatibility adapter uses this pure codec to encode/decode the
+// JSON payload stored in
 // `node_runs.wrapper_progress_json`. The payload is the minimum scheduler
 // state needed to resume a wrapper after it bubbled awaiting_human /
 // awaiting_review up from its inner scope:

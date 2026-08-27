@@ -307,8 +307,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 905,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 910,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-332 W2-B 把唯一 task drive/coordinator、DAG frontier/graph 与 lifecycle factory 纳入 source-complete 命令分母；增长来自获批的生产 owner cutover。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -342,8 +345,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 981,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 1059,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-332 W2-B 新增 task-execution exact public contracts 与有界 composition bridges；observed edge 增长是完整投影这些真实 consumer/provider，而非放宽扫描。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -363,22 +369,31 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 955,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 1033,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-332 W2-B 必须暂接尚未授权迁移的 W2-C node、W2-D wrapper/replay、W3 status 与 W5 completion mechanics；每条 bridge 都是 exact symbol 且带删除波次，当前不能冒领后续实现来消除。"
+      }
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 370,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
+      "baseline": 371,
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
+      "allowGrowth": {
+        "why": "RFC-332 W2-B 删除旧 engines facade，并把 runtime options 与 mechanics state 拆成两个用途单一的临时 legacy owner；净增长一条且删除责任已进入 bridge ledger。"
+      }
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 292,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 326,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-332 W2-B 首次建立 task-execution public/commands 的 drive、preparation 与 lifecycle exact contracts，并补齐 topology/types 投影；增长用于锁定最小字段、方法和真实 consumer budget。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -398,12 +413,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 17523,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 17610,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-332 W2-B 新增 task-execution drive application、三路 TaskEngine、DAG graph/frontier composition 与 lifecycle infrastructure 的唯一 symbol owners；增长是批准模块拆分的完整分母。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:429634a3ef996f850943f83b85091b38d076ecdb4dd74fa77647b2f5a68b7c70",
+    "sourceDigest": "sha256:85d8ab76161aef027be6c7c780e54633f86544e5b849f393394402d9465ee508",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

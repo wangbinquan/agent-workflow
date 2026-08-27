@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 955,
+    "architectureExceptions": 1033,
     "backgroundJobs": 215,
-    "crossContextImports": 981,
-    "facades": 370,
+    "crossContextImports": 1059,
+    "facades": 371,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17523,
-    "mutationEntrypoints": 905,
+    "moduleSymbolOwners": 17610,
+    "mutationEntrypoints": 910,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 292,
+    "publicSurfaces": 326,
     "transactionExternalEffects": 245
   },
   "metrics": {
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 848,
+    "backendProductionFiles": 864,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -101,6 +101,7 @@
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
       "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
+      "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "packages/backend/src/services/autoKill.ts",
       "packages/backend/src/services/autoRepair.ts",
       "packages/backend/src/services/backupScheduler.ts",
@@ -114,12 +115,11 @@
       "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
       "packages/backend/src/services/scheduledTaskScheduler.ts",
       "packages/backend/src/services/scheduler.ts",
-      "packages/backend/src/services/stuckTaskDetector.ts",
-      "packages/backend/src/services/task.ts"
+      "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 20,
     "directNativeTimers": 61,
-    "inboundBoundaryEdges": 92,
+    "inboundBoundaryEdges": 93,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -168,10 +168,10 @@
       },
       {
         "context": "task-execution",
-        "files": 57
+        "files": 72
       }
     ],
-    "moduleFiles": 333,
+    "moduleFiles": 348,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -227,10 +227,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 370,
+    "serviceFiles": 371,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:429634a3ef996f850943f83b85091b38d076ecdb4dd74fa77647b2f5a68b7c70"
+  "sourceDigest": "sha256:85d8ab76161aef027be6c7c780e54633f86544e5b849f393394402d9465ee508"
 }

@@ -22,7 +22,7 @@ import {
   snapshotNodeIsoFinal,
   type CanonRepo,
 } from '../src/services/nodeIsolation'
-import { deriveFrontier } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 

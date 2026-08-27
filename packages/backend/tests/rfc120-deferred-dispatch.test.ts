@@ -51,7 +51,7 @@ import {
 } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { deriveFrontier } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'

@@ -4,7 +4,8 @@
 - 迁移进度状态：Out-of-order in progress（RFC-287、RFC-297～330 已按各自范围形成
   production/architecture vertical slices；RFC-317/319/326～330 已 Done；RFC-328 完成 N2/P0-D 但不领取 W2 credit；
   RFC-329/330 只作为 W4 输入/纵切，不抵扣整波；RFC-288/289 已关闭且未实现；RFC-294 N1a/N1b 治理基线已落，
-  RFC-331 T3～T12 / W2-A 已发布并完成 provenance/exact-SHA hosted closeout；当前执行指针为 W2-B）
+  RFC-331 T3～T12 / W2-A 已发布并完成 provenance/exact-SHA hosted closeout；RFC-332 已承接 W2-B，
+  implementation candidate 已完成，待发布/provenance/exact-SHA hosted closeout）
 - 规划单位：历史偏差收口 + P0 正确性阻断 + W0-R～W9 迁移波次
 - 总原则：承认已落事实、前向修复前置偏差；单写源、逐 consumer 切换、每波可独立验收/回退；禁止
   big-bang 搬树
@@ -50,11 +51,11 @@ composition root、cross-context edge 或 worker/lifecycle owner 发生变化时
 
 | 指标                                |           基线 | 采集口径                                                                 |
 | ----------------------------------- | -------------: | ------------------------------------------------------------------------ |
-| dep graph modules                   | current replay | RFC-331 landed graph；31 accepted known、first-party unresolved=0         |
+| dep graph modules                   | current replay | RFC-331 landed graph；31 accepted known、first-party unresolved=0        |
 | backend production TypeScript       |            848 | `packages/backend/src/**/*.ts` production corpus；services=370           |
 | `modules/**` production TS/TSX      |       333 / 12 | 12 个非空物理模块；`task-execution=57`                                   |
 | `scheduler.ts` / `task.ts`          | 11,165 / 7,590 | god-module 行数只作形状指标，不替代 symbol owner/consumer 账             |
-| backend value SCC                   |              4 | RFC-331 已消除 task family；排除 type-only 后 Tarjan                           |
+| backend value SCC                   |              4 | RFC-331 已消除 task family；排除 type-only 后 Tarjan                     |
 | repo value SCC                      |              6 | backend 4 + shared 1 + frontend 1                                        |
 | `KNOWN_VIOLATIONS`                  |             31 | task-family 六条 exact `(rule,from,to)` debt 已删                        |
 | route→DB value imports              |             15 | `no-routes-to-db`；另有 type-only，不计值通路                            |
@@ -104,7 +105,7 @@ unresolved first-party=0。required-port/target-edge 分栏继续由对应 canon
 | P0-E | 已收束                                  | RFC-287 Done；RFC-288/289 CLOSED，结论分别转交 W2 新号实现 RFC 与 W7 后新号能力 RFC                                                                                                               |
 | W0-R | N1 governance baseline Done             | 七份 canonical manifest/report、四 artifact current provenance、global FK、23 required-port liveness 分类、ambient/background/public 全分母已落；物理 debt cutover 不计本波 credit                |
 | W1   | behavior landed / architecture residual | RFC-287 的 assembly 与 G4～G7 产品行为作为既有基线；target module、ownership、admission/event/SC 边界仍待后续波次                                                                                 |
-| W2   | W2-A Done / W2-B next                         | RFC-328 已满足 durable authority/context 前置；RFC-331 已切除 task SCC family 六条 exact edge并完成 hosted closeout；四级 engine 仍归 W2-B/C/D |
+| W2   | W2-A Done / W2-B candidate ready        | RFC-328 已满足 durable authority/context 前置；RFC-331 已切除 task SCC family 六条 exact edge并完成 hosted closeout；RFC-332 T3～T13 候选已完成、待发布 closeout，W2-C/D 未授权                   |
 | W3   | pilot-expanded                          | RFC-328 已落 task lifecycle outbox，RFC-300/303/314/326 提供其他 oracle；三类 gate common continuation 与全量 committed-event consumer cutover仍未落                                              |
 | W4   | partial vertical slices                 | RFC-318/320/323/324/326/327/329/330 推进合同、ACL、MCP inventory与DE；route→DB=15、AppDeps=54、TE↔DE contract debt与deep ingress仍在；RFC-329不等于catalog完成                                    |
 | W5   | partial vertical slices                 | RFC-308/310/321 已落 source-control candidate/commit/publication transport/credential seam；git SCC、repo/cache/workspace owner、SC endpoint/transport required SPI 与 opaque WorkspaceRef 未收口 |
@@ -120,7 +121,7 @@ unresolved first-party=0。required-port/target-edge 分栏继续由对应 canon
 
 1. RFC-287 已交付行为全部进入兼容 oracle，不以 RFC-294 名义重写；
 2. P0-A/B/C 重新绑定其真实消费者，分别阻断 W4-E2、W6、W2-C/W3；
-3. N1/W0-R、P0-D（RFC-328）与 RFC-331 W2-A topology cut 已落；当前执行指针为 W2-B；
+3. N1/W0-R、P0-D（RFC-328）与 RFC-331 W2-A topology cut 已落；RFC-332 W2-B implementation candidate 已完成，待发布 closeout；
 4. RFC-300～330 的已发布临时 seam 进入 facade/owner/background ledger，不因已有 module 文件、专项 architecture lock 或行为 Done 而豁免；
 5. 任何新 schema/worker/port 都必须满足 W0-R 最小 surface/authority/forge gate，不能继续扩大偏差。
 
@@ -341,7 +342,7 @@ RFC-331 current payload `262f34bf7` 的 digest 为 `e9f8a0…`，provenance repi
 `4152b377a` 的 exact-SHA CI `33034946053` terminal `success`（35/35 jobs）。source pin、current exact-SHA verdict、containing evidence 与
 architecture counts 始终分栏，不用任一祖先结论代替当前提交的判定。
 N1/W0-R、N2/P0-D 与 RFC-331 W2-A 均已满足；RFC-331 D1～D8/能力影响/DEV-1 已获用户批准，T3～T12
-已发布并完成 provenance/exact-SHA hosted closeout，当前执行指针为 W2-B。
+已发布并完成 provenance/exact-SHA hosted closeout；RFC-332 W2-B implementation candidate 已完成，待发布、provenance replay 与 exact-SHA hosted closeout。
 P0-C 必须同时先于 review/clarify executor cutover
 与 W3。RFC-288/289 只作历史输入，不是节点。W5 的每个 SCC family 需 W4 已断 transport/root 回边；W6 在 W4 +
 P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队。W8 是 post-W7 独立能力线：未获批时保留挡板并
@@ -349,16 +350,16 @@ P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队
 
 ### 3.2 从当前 HEAD 起的执行队列
 
-| 顺序 | 批次                                | 本轮产出                                                                                                                                                         | 开工/停止门                                                                                              |
-| ---- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| B0   | baseline refresh（本设计已完成）    | 保留 `158b67296` / `4aa081…` 为 RFC-331 前历史基线；current payload `262f34bf7` / digest `e9f8a0…`，containing SHA `4152b377a` CI success | source/hosted/behavior/architecture evidence 分开归因                                                    |
-| N1a  | current manifest provenance（Done） | 保留 RFC-317 Done oracle，统一 commons manifest/debt、guard、ledger baseline 的 origin/current SHA + content digest；补 replay/tamper equality                   | 已落：ancestor-only 判据升级为四份 content-addressed current snapshot                                    |
-| N1b  | W0-R canonical completion（Done）   | 把 RFC-317 subset 生成/投影进七份 canonical manifest，补 owner/symbol/edge FK、required-port liveness、ambient/public/background 全分母                          | 已落：唯一 canonical 真值、global referential integrity 与 mutation gate；不计 production cutover credit |
-| N2   | P0-D / RFC-328（Done）              | durable owner/intent/effect/fence/maintenance/lineage、exact registry/context/outbox已落                                                                         | containing SHA `5c762c197` hosted CI/visual success；W2 credit=0                                         |
-| N3   | RFC-331 三件套（Done）              | current四kick/三child-control/status/call-graph/六账 inventory，锁 D1～D8、两刀切换、零能力影响与DEV-1                                                           | 文档与用户批准门已完成                                                                                   |
-| N4   | RFC-331 W2-A（Done）                 | A1+B1～B4 与 E3 已切，`KNOWN 37→31`、task SCC family 消失；payload/provenance 已真实固定，exact-SHA CI 35/35 success | `81d97d060` → `262f34bf7` → `89b19057d` → `4152b377a` / `33034946053` |
-| N5   | W2-B → P0-C residual → W2-C/D → W3  | 下一项另立/批准 W2-B TaskEngine RFC，后补 clarify/questions/common continuation，再切 executor/wrapper 与 lifecycle/outbox                           | RFC-326 只抵扣 review transaction seed；RFC-331 不自动授权 W2-B；scheduler/task/lifecycle 高冲突面串行  |
-| OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                         | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                 |
+| 顺序 | 批次                                                          | 本轮产出                                                                                                                                                                | 开工/停止门                                                                                              |
+| ---- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| B0   | baseline refresh（本设计已完成）                              | 保留 `158b67296` / `4aa081…` 为 RFC-331 前历史基线；current payload `262f34bf7` / digest `e9f8a0…`，containing SHA `4152b377a` CI success                               | source/hosted/behavior/architecture evidence 分开归因                                                    |
+| N1a  | current manifest provenance（Done）                           | 保留 RFC-317 Done oracle，统一 commons manifest/debt、guard、ledger baseline 的 origin/current SHA + content digest；补 replay/tamper equality                          | 已落：ancestor-only 判据升级为四份 content-addressed current snapshot                                    |
+| N1b  | W0-R canonical completion（Done）                             | 把 RFC-317 subset 生成/投影进七份 canonical manifest，补 owner/symbol/edge FK、required-port liveness、ambient/public/background 全分母                                 | 已落：唯一 canonical 真值、global referential integrity 与 mutation gate；不计 production cutover credit |
+| N2   | P0-D / RFC-328（Done）                                        | durable owner/intent/effect/fence/maintenance/lineage、exact registry/context/outbox已落                                                                                | containing SHA `5c762c197` hosted CI/visual success；W2 credit=0                                         |
+| N3   | RFC-331 三件套（Done）                                        | current四kick/三child-control/status/call-graph/六账 inventory，锁 D1～D8、两刀切换、零能力影响与DEV-1                                                                  | 文档与用户批准门已完成                                                                                   |
+| N4   | RFC-331 W2-A（Done）                                          | A1+B1～B4 与 E3 已切，`KNOWN 37→31`、task SCC family 消失；payload/provenance 已真实固定，exact-SHA CI 35/35 success                                                    | `81d97d060` → `262f34bf7` → `89b19057d` → `4152b377a` / `33034946053`                                    |
+| N5   | RFC-332 W2-B candidate closeout → P0-C residual → W2-C/D → W3 | 唯一 drive coordinator、repository preparation phase 0、三路 TaskEngine、DAG owner、exact W2-C/D/W3/W5 bridge 与 canonical scheduler owner 已形成；value SCC 保持 `4/6` | 尚待 payload publish、四 provenance replay、exact-SHA hosted CI；此前不推进 P0-C，W2-C/D 仍未授权        |
+| OPT  | W7 后新号 fanout capability RFC                               | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                 |
 
 P0-A、P0-B 可从当前 committed measurement source 按非重叠文件面独立做设计准备：P0-A 只阻断 W4-E2，P0-B 只阻断 W6；生产
 cutover 仍须分别通过自己的 authority/transaction/behavior gate。它们不再被错误地用作
@@ -515,8 +516,9 @@ task stranded。后续重构只能行为对拍或通过独立 RFC 明确改变�
 ## 6. W2：Topology、Driver 与四级引擎
 
 **前置状态**：W0-R 与 P0-D/RFC-328 已完成；基于 RFC-287/300/301/303/306/310/328 committed 事实建立的
-RFC-331 已获批准并完成发布，W2-A 为 Done，当前执行指针为 W2-B。RFC-288 只提供关闭时保存的九条结论，不再修订、不再
-充当 gate。W2 不等待“补做 W1”，只消费 §5 已冻结的 production baseline；RFC-331 只批准 W2-A，不顺带批准 W2-B/C/D。
+RFC-331 已获批准并完成发布，W2-A 为 Done；RFC-332 已承接 W2-B，implementation candidate 已完成并等待发布 closeout。RFC-288 只提供关闭时保存的
+九条结论，不再修订、不再充当 gate。W2 不等待“补做 W1”，只消费 §5 已冻结的 production baseline；RFC-331 只批准 W2-A，
+RFC-332 的批准只覆盖 W2-B，不自动批准 W2-C/D。
 
 > **执行种类刷新（RFC-304 → RFC-310）**：持久 schema/history 的 `ExecutionKind` 仍能解码
 > `workflow | agent | workgroup | code-round` 四个 discriminant，但当前可准入 `StartExecutionRequest` 只有前三种。
@@ -544,18 +546,27 @@ RFC-331 已获批准并完成发布，W2-A 为 Done，当前执行指针为 W2-B
 
 ### W2-B TaskEngine decomposition
 
-- [ ] inventory DAG task、workgroup round、dynamic workflow 的所有生产入口、resume/recovery/terminal 路径；
-- [ ] 把 RFC-287 `__repo_prep__`、RFC-301 immutable `launch_origin`、RFC-300 prune claim、RFC-303 source termination、
+> 承载 RFC：[RFC-332 TaskEngine 拆分](../RFC-332-task-engine-decomposition/proposal.md)（In Progress，2026-08-27；
+> current source `b598d4a35e681d3623f44c15ef632d50a2b710d9`；D1～D12、能力影响与 DEV-1/DEV-2 已获用户批准）。
+> RFC-332 T3～T13 implementation candidate 已完成；以下 implementation checklist 已闭合，但正式 Done 仍等待
+> payload publish、四份 current provenance replay 与 exact-SHA hosted CI terminal success。
+
+- [x] inventory DAG task、workgroup round、dynamic workflow 的所有生产入口、resume/recovery/terminal 路径；
+- [x] 把 RFC-287 `__repo_prep__`、RFC-301 immutable `launch_origin`、RFC-300 prune claim、RFC-303 source termination、
       RFC-306 branch `skipped/consumed` 与 RFC-310 AgentAttempt host task 纳入同一 admission/drive/settle inventory；
       不得在拆 engine 时丢失任一 fence/历史终态；
-- [ ] 保持已落的 TaskCatalog membership：root admission 只能由 task-owned trusted launch adapter 铸
+- [x] 保持已落的 TaskCatalog membership：root admission 只能由 task-owned trusted launch adapter 铸
       `public|internal`，call child 在同一 INSERT 事务继承 parent，普通 transport 不接受 visibility；禁止从 ExecutionKind/space kind/
-      `digital_employee_round_id` 动态反推，后者只供一次性 legacy backfill；终局以 closed codec + storage integrity check 锁非法值，
-      禁止拆 engine 时默认回 public；
-- [ ] 提炼 `TaskEngine` 最小 interface；workflow/agent/workgroup 三个 active admission 分支保留各自 domain state machine，
+      `digital_employee_round_id` 动态反推，后者只供一次性 legacy backfill；以现有两值 codec、root/child 行为 oracle 与 storage decode
+      保持数据域，禁止拆 engine 时默认回 public；本波不新增权限策略或写点加固；
+- [x] 提炼 `TaskEngine` 最小 interface；workflow/agent/workgroup 三个 active admission 分支保留各自 domain state machine，
       只共享 ownership/lifecycle/kernel ports；不得把 TaskSourceId 或历史 code-round 当成第四个 active engine；
-- [ ] 按 single consumer 切换，旧 scheduler/task inline frontier/drive body 归零；
-- [ ] workgroup host execution 只调用共同 NodeExecutor/Assembly，不把 round assignment 混入 DAG。
+- [x] 按 single consumer 切换，旧 scheduler/task inline frontier/drive body 归零；
+- [x] workgroup host execution 只调用共同 NodeExecutor/Assembly，不把 round assignment 混入 DAG。
+
+候选证据：canonical denominator 为 mutation `910`、cross-context `1059`、exception `1033`、facade `371`、
+public surface `326`、owner `17610`；新增 bridge 全部具名 RFC-332 与 remove wave，backend/repo value SCC 保持 `4/6`，
+没有恢复 task SCC 或新增 `KNOWN_VIOLATIONS`。四份 N1a provenance 只可在真实 payload commit 后重放。
 
 ### W2-C NodeExecutorRegistry
 
@@ -1091,18 +1102,18 @@ import=0；终局指标全绿。
 
 ## 14. 量化里程碑
 
-| 时点                       |                         Repo SCC |                      Backend SCC |                              KNOWN | route→DB | AppDeps imports | Ambient wiring / background                                                                                      |
-| -------------------------- | -------------------------------: | -------------------------------: | ---------------------------------: | -------: | --------------: | ---------------------------------------------------------------------------------------------------------------- |
-| published source `158b67296` |                              7 |                              5 |                               37 |       15 |              54 | ambient 440/background 215；direct native interval 20/19；baseline report digest `4aa081…`                       |
-| N1/W0-R（Done）            |                                7 |                                5 |                                 37 |       15 |              54 | 七份 canonical manifest + content-addressed provenance/global RI 已建立；不抵扣 production cutover               |
-| RFC-328 / P0-D（Done）     |                                7 |                                5 |                                 37 |       15 |              54 | durable execution authority/context/outbox已落；SCC/KNOWN不降且W2 credit=0，符合范围                             |
-| RFC-331 W2-A（Done）       |                                6 |                                4 |                                 31 |       15 |              54 | task SCC family/六条 exact ids 已消失；digest `e9f8a0…`；CI `33034946053` terminal success（35/35）        |
-| W2 后                      |             销 task SCC family 1 |             销 task SCC family 1 |              销六条 task exact ids | 不得上升 |        不得上升 | 不得上升                                                                                                         |
-| W3 后                      |                         不得上升 |                         不得上升 |  按 lifecycle/event exact ids 下降 | 不得上升 |        不得上升 | committed event/continuation register 全覆盖                                                                     |
-| W4 后                      | 按 transport/root exact ids 下降 | 按 transport/root exact ids 下降 |    按 route/service exact ids 下降 |        0 |               0 | 不得上升                                                                                                         |
-| W5 后                      |                                0 |                                0 | 仅允许已明确归后续波次的非 SCC ids |        0 |               0 | 不得上升                                                                                                         |
-| W6/W7 后                   |                                0 |                                0 |                           不得上升 |        0 |               0 | AtomicApply=1；identity/provenance 100%                                                                          |
-| W9 终局                    |                                0 |                                0 |                                  0 |        0 |               0 | 未登记 ambient wiring=0；eligible job/worker 100% managed，execution-local timer 100% owner/lifecycle classified |
+| 时点                         |                         Repo SCC |                      Backend SCC |                              KNOWN | route→DB | AppDeps imports | Ambient wiring / background                                                                                      |
+| ---------------------------- | -------------------------------: | -------------------------------: | ---------------------------------: | -------: | --------------: | ---------------------------------------------------------------------------------------------------------------- |
+| published source `158b67296` |                                7 |                                5 |                                 37 |       15 |              54 | ambient 440/background 215；direct native interval 20/19；baseline report digest `4aa081…`                       |
+| N1/W0-R（Done）              |                                7 |                                5 |                                 37 |       15 |              54 | 七份 canonical manifest + content-addressed provenance/global RI 已建立；不抵扣 production cutover               |
+| RFC-328 / P0-D（Done）       |                                7 |                                5 |                                 37 |       15 |              54 | durable execution authority/context/outbox已落；SCC/KNOWN不降且W2 credit=0，符合范围                             |
+| RFC-331 W2-A（Done）         |                                6 |                                4 |                                 31 |       15 |              54 | task SCC family/六条 exact ids 已消失；digest `e9f8a0…`；CI `33034946053` terminal success（35/35）              |
+| W2 后                        |             销 task SCC family 1 |             销 task SCC family 1 |              销六条 task exact ids | 不得上升 |        不得上升 | 不得上升                                                                                                         |
+| W3 后                        |                         不得上升 |                         不得上升 |  按 lifecycle/event exact ids 下降 | 不得上升 |        不得上升 | committed event/continuation register 全覆盖                                                                     |
+| W4 后                        | 按 transport/root exact ids 下降 | 按 transport/root exact ids 下降 |    按 route/service exact ids 下降 |        0 |               0 | 不得上升                                                                                                         |
+| W5 后                        |                                0 |                                0 | 仅允许已明确归后续波次的非 SCC ids |        0 |               0 | 不得上升                                                                                                         |
+| W6/W7 后                     |                                0 |                                0 |                           不得上升 |        0 |               0 | AtomicApply=1；identity/provenance 100%                                                                          |
+| W9 终局                      |                                0 |                                0 |                                  0 |        0 |               0 | 未登记 ambient wiring=0；eligible job/worker 100% managed，execution-local timer 100% owner/lifecycle classified |
 
 所有 architecture debt 必须逐 exact id 不增、new violation/edge=0，不能靠“总数没升”用新债替换旧债。N1 已把
 RFC-297～330 的已发布 module/register/worker/facade 纳入分母；这只建立 lifecycle 分类与 debt owner，不宣称 215 个存量

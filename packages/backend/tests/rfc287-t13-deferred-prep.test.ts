@@ -295,53 +295,28 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
 import { readFileSync as readSrc } from 'node:fs'
 
 describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
-  test('AbortController 注册在准备开始之前（回收器据此判活）', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    // ⚠ 判据必须限定在 **startTaskImpl 这一个函数体内**。
-    // `activeTasks.set(taskId, controller)` 全文有 3 处（另两处在别的函数里），
-    // 用全局 indexOf / lastIndexOf 都会被别处的命中喂饱，于是断言恒真、怎么改
-    // 都绿——实测两次：变异确实落地却 0 红，靠逐次核对才查出锁是空的。
-    // 这是「变异点要由被断言的锚定位」的镜像版：**断言本身也得锚对**。
-    const fnStart = src.indexOf('async function startTaskImpl(')
-    expect(fnStart).toBeGreaterThan(-1)
-    const fnEnd = src.indexOf('\n}\n', fnStart)
-    const body = src.slice(fnStart, fnEnd)
-    // T14：准备块已被提成闭包（`runRepoPreparation`），以便在请求路径之外跑
-    // （G7 启动异步化）。锚点随之从「延后准备的 if 块」换成**闭包的调用点**——
-    // 锁的语义没变：注册必须先于准备真正开始。
-    const prepare = body.indexOf('runRepoPreparation()')
-    // 驱动注册的 API 名会随重构变（曾是 `activeTasks.set(taskId, controller)`，
-    // RFC-288/taskDriver 之后是 `tryAttachTaskDriver(...)`）。锁的是**语义**——
-    // 「准备开始前任务必须已被本进程调度器持有」——所以判据取「任一注册形态」，
-    // 而不是某个具体函数名；名字变了不该红，顺序反了才该红。
-    const register = [
-      body.indexOf('tryAttachTaskDriver('),
-      body.indexOf('activeTasks.set(taskId, controller)'),
-      body.indexOf('taskDriverRegistry.tryAttach('),
-    ]
-      .filter((i) => i !== -1)
-      .sort((a, b) => a - b)[0]
-    expect(prepare, 'startTaskImpl 里应有延后准备的调用点').toBeGreaterThan(-1)
-    expect(register, 'startTaskImpl 里应有驱动注册（任一形态）').not.toBe(undefined)
-    expect(
-      register as number,
-      '注册必须在准备之前——否则长克隆期间任务无驱动，会被孤儿回收器判死',
-    ).toBeLessThan(prepare)
-    // 注册与准备之间不得出现「放弃驱动」的动作。原先这里锁的是「中间不得有
-    // await」，但 taskDriver 重构后注册本身就是 `await tryAttachTaskDriver(...)`，
-    // 那条判据已不适用。真正要防的是**中途把驱动放掉**——一旦释放，剩下的准备
-    // 过程就落在无驱动窗口里，正是孤儿回收器要收的形状。
-    //
-    // 射程必须止于**闭包定义**而不是调用点：T14 把准备提成闭包后，「注册 → 调用点」
-    // 这一段文本里整个包住了闭包体，而闭包体里有一处**正当的** release（准备失败后
-    // 任务已终态，租约本来就该还）。拿它当违规会把正确实现判红——这正是「文本射程
-    // 必须跟着结构走」的又一例。取「注册 → 闭包定义」这一小段：那里若出现放弃驱动，
-    // 才是真的在准备开始前把租约丢了。
-    const prepareDef = body.indexOf('const runRepoPreparation')
-    expect(prepareDef, 'startTaskImpl 里应有准备闭包的定义').toBeGreaterThan(-1)
-    expect(register as number).toBeLessThan(prepareDef)
-    const between = body.slice(register as number, prepareDef)
-    expect(between).not.toMatch(/release\(|detachTaskDriver|clearForTesting/)
+  test('TaskDriveCoordinator 在准备开始之前完成 attach（回收器据此判活）', () => {
+    const src = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'drive',
+        'taskDriveCoordinator.ts',
+      ),
+      'utf8',
+    )
+    const attach = src.indexOf('const attached = await this.options.lifecycle.attach({')
+    const startDrive = src.indexOf('const completion = this.driveAttached(')
+    const prepare = src.indexOf('await this.options.repositoryPreparation.run(context)')
+    const engine = src.indexOf('await this.options.engineOrchestrator.drive(context)')
+    expect(attach, 'coordinator 必须 attach driver').toBeGreaterThan(-1)
+    expect(startDrive, 'attach 后必须进入受控 drive').toBeGreaterThan(attach)
+    expect(prepare, '受控 drive 必须执行 repository preparation').toBeGreaterThan(startDrive)
+    expect(engine, 'engine 必须在 preparation ready 后执行').toBeGreaterThan(prepare)
   })
 
   test('回收器确实以 activeTasks 为豁免依据（判活单点未被绕过）', () => {
@@ -1533,15 +1508,31 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
     // 判据已扩成「状态离开 pending **或**信号已 abort」——取消是「先 abort、5 秒后
     // 才写状态」，只看状态会漏掉「物化恰好在这段窗口里成功」的那一支。
-    const i = src.indexOf("if (stillPending !== 'pending' || controller.signal.aborted) {")
+    const i = src.indexOf("if (stillPending !== 'pending' || signal.aborted) {")
     expect(i, 'branch-3 应存在').toBeGreaterThan(-1)
     const body = src.slice(i, src.indexOf('\n  }\n', i))
-    expect(body, '该出口必须还租约').toContain('releaseTaskDriverAndFinalizeWorkspace(')
     // F4 同处：准备行不得留在 running（恢复扫描会把它当还在跑）。
     expect(body, '该出口必须终结准备行').toMatch(
       /setNodeRunStatus\(\{[\s\S]{0,300}nodeRunId: prepRunId/,
     )
     expect(body).toContain('repo-prep-task-left-window')
+    // RFC-332：租约释放成为 coordinator 的唯一 finally，不再由准备分支各自释放。
+    const coordinator = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'drive',
+        'taskDriveCoordinator.ts',
+      ),
+      'utf8',
+    )
+    expect(coordinator).toMatch(
+      /finally \{[\s\S]{0,180}this\.options\.lifecycle\.releaseAndFinalize\(/,
+    )
   })
 
   test('F3：冷克隆在 INSERT 前必须复读（两把锁分家后会撞 UNIQUE）', () => {

@@ -29,7 +29,7 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { NodeKind } from '@agent-workflow/shared'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { deriveFrontier } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 

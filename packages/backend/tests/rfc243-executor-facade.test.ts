@@ -23,7 +23,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
-import { resolveTaskEngine } from '../src/services/execution/engines'
+import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
 import { startExecution } from '../src/services/execution/executor'
 import {
   resetTaskTerminalWatchersForTests,
@@ -91,8 +91,8 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
     expect(body.slice(aStart, aEnd)).not.toContain('mintNodeRun(')
   })
 
-  test('scheduler consumes the engine registry (no inline dispatch left)', () => {
-    const text = srcText('services/scheduler.ts')
+  test('task orchestrator consumes the engine registry (no inline dispatch left)', () => {
+    const text = srcText('modules/task-execution/composition/taskEngineApplication.ts')
     expect(text).toContain('resolveTaskEngine')
     expect(/\bderiveWorkgroupDispatch\(/.test(text)).toBe(false)
   })

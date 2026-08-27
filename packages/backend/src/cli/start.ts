@@ -46,9 +46,6 @@ import {
 import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
-import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
-import { nodeRuns } from '@/db/schema'
-import { and, eq } from 'drizzle-orm'
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { createApp } from '@/server'
@@ -71,7 +68,7 @@ import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
 import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { isTaskActive, resumeTask, retryNode } from '@/services/task'
+import { isTaskActive, resumeTask, retryRepositoryPreparation } from '@/services/task'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -1622,17 +1619,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       // `task-repo-prep-incomplete`。重跑的是**准备本身**，入口是既有的单节点重试
       // （retryNode 认 `__repo_prep__` 并分流到 retryRepoPreparation）。
       retryRepoPrep: async (taskId) => {
-        const prep = (
-          await db
-            .select({ id: nodeRuns.id, retryIndex: nodeRuns.retryIndex })
-            .from(nodeRuns)
-            .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-        ).sort((a, b) => a.retryIndex - b.retryIndex)
-        const latest = prep.at(-1)
-        if (latest === undefined) {
-          throw new Error(`task '${taskId}' has no repository-preparation row to retry`)
-        }
-        await retryNode(db, taskId, latest.id, { cascade: false, deps: resumeDeps })
+        await retryRepositoryPreparation(db, taskId, resumeDeps)
       },
     }).catch((err) =>
       log.warn('boot auto-resume failed', {

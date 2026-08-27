@@ -183,12 +183,15 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
     'createVerifiedTakeoverProof',
     new Set(['packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts']),
   ],
-  ['createVerifiedStopProof', new Set(['packages/backend/src/services/task.ts'])],
+  [
+    'createVerifiedStopProof',
+    new Set(['packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts']),
+  ],
   [
     'createVerifiedOutcomeUnknownClosure',
     new Set([
       'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
-      'packages/backend/src/services/task.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
     ]),
   ],
 ])

@@ -750,24 +750,44 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     expect(row?.errorSummary).toBe('dw-phase-invariant')
   })
 
-  test('source locks: three-way dispatch wiring in scheduler.ts', () => {
+  test('source locks: task orchestrator consumes the task-execution engine registry', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    expect(src).toContain('isWorkgroupTask(task)') // RFC-164 lock stays (RFC-217 G4: oracle form)
-    // RFC-243 §1.2: the three-way oracle moved VERBATIM into the executor
-    // engine registry (services/execution/engines.ts) — the lock follows the
-    // mechanism: scheduler must consume resolveTaskEngine, and the registry
-    // must keep the RFC-217 T2 shape (frozen-config mode + task-state phase).
-    expect(src).toContain('resolveTaskEngine(')
-    expect(src).toContain('loadWorkgroupTaskState(db, taskId)')
-    expect(src).toContain("engine === 'dw-generate'")
-    expect(src).toContain("wgDispatch === 'dw-execute'")
-    expect(src).toContain('runDynamicWorkflowGenerate({')
-    expect(src).toContain("'dw-phase-invariant'")
+    const orchestrator = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'taskEngineApplication.ts',
+      ),
+      'utf8',
+    )
+    expect(orchestrator).toContain('isWorkgroupTask(task)') // RFC-164 lock stays (RFC-217 G4: oracle form)
+    // RFC-332 T10: the three-way oracle now belongs to the task-execution
+    // registry. The scheduler mechanics bridge consumes the selected engine;
+    // it must not regain an inline workgroup/dynamic dispatch truth table.
+    expect(orchestrator).toContain('resolveTaskEngineSelection(')
+    expect(orchestrator).toContain('loadWorkgroupTaskState(db, taskId)')
+    expect(orchestrator).toContain("engine === 'dw-generate'")
+    expect(orchestrator).toContain("wgDispatch === 'dw-execute'")
+    expect(orchestrator).toContain('runDynamicWorkflowGenerate({')
+    expect(orchestrator).toContain("'dw-phase-invariant'")
     const enginesSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'engines.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'task',
+        'taskEngineRegistry.ts',
+      ),
       'utf8',
     )
     expect(enginesSrc).toContain('deriveWorkgroupDispatch(')

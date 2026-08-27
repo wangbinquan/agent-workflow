@@ -71,7 +71,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  like,
   sql,
   type SQL,
 } from 'drizzle-orm'
@@ -93,8 +92,6 @@ import {
   runtimeSessionLeases,
   taskCollaborators,
   taskExecutionIntents,
-  taskExecutionEffectAttempts,
-  taskExecutionEffects,
   taskExecutionOwners,
   taskRepos,
   taskSpaceNodes,
@@ -125,15 +122,7 @@ import {
   type TaskStopCause,
 } from '@/modules/task-execution/domain/sourceTermination'
 import {
-  canonicalTaskExecutionJson as canonicalJson,
   createLocalEffectAttemptObserver,
-  createTaskExecutionContext,
-  createVerifiedOutcomeUnknownClosure,
-  createVerifiedStopProof,
-  DEFAULT_OWNERSHIP_HEARTBEAT_MS,
-  DEFAULT_OWNERSHIP_LEASE_MS,
-  ownershipTokenKey,
-  runWithTaskExecutionContext,
   submitTaskContinuationTx,
   taskExecutionModule,
   terminalizeTaskExecutionIntentsTx,
@@ -141,7 +130,6 @@ import {
   type RuntimeStopTicket as TaskDriverStopTicket,
   type TaskExecutionIntentKind,
   type TaskExecutionIntentSource,
-  type TaskExecutionContext,
   TaskExecutionError,
 } from '@/services/taskExecutionParticipants'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
@@ -222,8 +210,21 @@ import {
   type TaskLaunchProvenance,
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
+import {
+  activeTaskDriverController,
+  clearTaskDriverLifecycleForTesting,
+  createTaskDriverLifecyclePort,
+  DefaultTaskDriveCoordinator,
+  isTaskDriverActive,
+  PersistedRepositoryPreparationStep,
+  resolveTaskDriveConfig,
+  skipRepositoryPreparation,
+  type RepositoryPreparationDescriptorReader,
+  type RepositoryPreparationStep,
+  type TaskDriveFailureReporter,
+} from '@/modules/task-execution/public/commands'
 
-type TaskDriveRequest = Parameters<SchedulerDriverPort['kick']>[0]
+type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionContext' | 'signal'>
 
 /**
@@ -273,9 +274,6 @@ const log = createLogger('task')
 
 const taskDriverRegistry = taskExecutionModule.runtimeRegistry
 const testActiveControllers = new Map<string, AbortController>()
-const ownerHeartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
-
-const DRIVER_ATTACHABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(['pending', 'running'])
 
 function continuationSource(
   deps: StartTaskDeps,
@@ -306,261 +304,17 @@ function submitContinuationIntentTx(input: {
   submitTaskContinuationTx(input.tx, input)
 }
 
-/**
- * RFC-303: driver ownership and source termination share the same per-task
- * coordinator.  A terminal fence that commits first rejects the attach; an
- * attach that wins first becomes visible to exact-token terminal control before the
- * coordinator is released.
- */
-async function tryAttachTaskDriver(
-  db: DbClient,
-  taskId: string,
-  controller: AbortController,
-  requestedIntentId?: string,
-): Promise<
-  | Readonly<{ kind: 'attached'; executionContext: TaskExecutionContext }>
-  | Readonly<{ kind: 'rejected-status-or-source-fence' }>
-> {
-  return withTaskReviewMutationLock(taskId, async () => {
-    const row = db
-      .select({ status: tasks.status, sourceTerminationFence: tasks.sourceTerminationFence })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-      .all()[0]
-    if (
-      row === undefined ||
-      !DRIVER_ATTACHABLE_STATUSES.has(row.status) ||
-      row.sourceTerminationFence !== null
-    ) {
-      return { kind: 'rejected-status-or-source-fence' }
-    }
-    const intentId =
-      requestedIntentId ??
-      db
-        .select({ id: taskExecutionIntents.id })
-        .from(taskExecutionIntents)
-        .where(
-          and(eq(taskExecutionIntents.taskId, taskId), eq(taskExecutionIntents.state, 'pending')),
-        )
-        .orderBy(asc(taskExecutionIntents.createdAt))
-        .limit(1)
-        .all()[0]?.id
-    if (intentId === undefined) return { kind: 'rejected-status-or-source-fence' }
-
-    const claimed = taskExecutionModule.claim({ db, intentId })
-    let attached: ReturnType<typeof taskDriverRegistry.tryAttach>
-    try {
-      attached = taskDriverRegistry.tryAttach({
-        token: claimed.token,
-        intentId,
-        permit: claimed.permit,
-        controller,
-      })
-    } finally {
-      taskExecutionModule.claimGate.leave(claimed.permit)
-    }
-    if (attached !== 'attached') {
-      // The sticky-stop path has already closed the supplied controller.  The
-      // owner was either revoked by terminal control or has no runtime handle;
-      // leave it for the proof-backed closer instead of silently attaching.
-      return { kind: 'rejected-status-or-source-fence' }
-    }
-    startOwnerHeartbeat(db, claimed.token, controller)
-    return {
-      kind: 'attached',
-      executionContext: createTaskExecutionContext({ intentId, token: claimed.token, db }),
-    }
-  })
-}
-
-function startOwnerHeartbeat(
-  db: DbClient,
-  token: OwnershipToken,
-  controller: AbortController,
-): void {
-  const key = ownershipTokenKey(token)
-  const existing = ownerHeartbeatTimers.get(key)
-  if (existing !== undefined) clearInterval(existing)
-  const timer = setInterval(() => {
-    try {
-      taskExecutionModule.ownership.heartbeat({
-        db,
-        token,
-        now: Date.now(),
-        leaseMs: DEFAULT_OWNERSHIP_LEASE_MS,
-      })
-    } catch (error) {
-      controller.abort('task-execution-stale-owner')
-      log.warn('durable task owner heartbeat was fenced', {
-        taskId: token.taskId,
-        epoch: token.epoch,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }, DEFAULT_OWNERSHIP_HEARTBEAT_MS)
-  timer.unref?.()
-  ownerHeartbeatTimers.set(key, timer)
-}
-
-function activeTaskController(taskId: string): AbortController | undefined {
-  const token = taskDriverRegistry.tokenForTask(taskId)
-  return (
-    (token === null ? null : taskDriverRegistry.controllerFor(token)) ??
-    testActiveControllers.get(taskId)
-  )
-}
-
-/** RFC-300: release the in-process scheduler owner before touching its
- * workspace, then complete any lifecycle-created durable prune claim. The
- * identity check preserves RFC-097's successor-controller fence. */
-async function releaseTaskDriverAndFinalizeWorkspace(
-  db: DbClient,
-  taskId: string,
-  controller: AbortController,
-): Promise<void> {
-  // Duplicate/stale finally paths are expected (deferred prep has an outer
-  // compensation finally). Check ownership before touching DB: after the real
-  // owner released, a test/daemon shutdown may close this handle or a successor
-  // may already own the task, and the stale callback has no evidence to read.
-  const token = taskDriverRegistry.tokenForTask(taskId)
-  if (token === null || taskDriverRegistry.controllerFor(token) !== controller) return
-  const intentId = taskDriverRegistry.intentFor(token)
-  if (intentId === null) return
-  const unreaped = depsUnreapedProcessCode(db, taskId)
-  if (
-    !taskDriverRegistry.release({
-      token,
-      controller,
-      result: unreaped === null ? { kind: 'released' } : { kind: 'unreaped', code: unreaped },
-    })
-  ) {
-    return
-  }
-  const timer = ownerHeartbeatTimers.get(ownershipTokenKey(token))
-  if (timer !== undefined) clearInterval(timer)
-  ownerHeartbeatTimers.delete(ownershipTokenKey(token))
-  const stopResult = await taskDriverRegistry.awaitStopped({
-    token,
-    tokenKey: ownershipTokenKey(token),
-  })
-  const owner = taskExecutionModule.ownership.read(db, taskId)
-  if (owner !== null && owner.epoch === token.epoch) {
-    if (stopResult.kind === 'released') {
-      const verifiedAt = Date.now()
-      const stopProof = createVerifiedStopProof({
-        taskId,
-        ownerRevision: owner.revision,
-        epoch: token.epoch,
-        evidenceDigest: stopResult.evidenceDigest,
-        verifiedAt,
-      })
-      // A cancellation/shutdown revokes the worker before it can write its
-      // final process settlement. Once the exact registry handle is stopped,
-      // use the durable pre-activation receipt to resolve that process attempt
-      // as known instead of turning an ordinary cancel into actor-required
-      // outcome ambiguity.
-      taskExecutionModule.effects.resolveQuiescedManagedProcesses({
-        db,
-        authority: 'exact-stop',
-        token,
-        expectedRevision: owner.revision,
-        proof: stopProof,
-        quiescenceEvidenceDigest: stopResult.evidenceDigest,
-        now: verifiedAt,
-      })
-      const unresolvedEffectIds = [
-        ...new Set(
-          db
-            .select({ effectId: taskExecutionEffects.id })
-            .from(taskExecutionEffectAttempts)
-            .innerJoin(
-              taskExecutionEffects,
-              eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-            )
-            .where(
-              and(
-                eq(taskExecutionEffects.taskId, taskId),
-                eq(taskExecutionEffects.state, 'open'),
-                inArray(taskExecutionEffectAttempts.state, [
-                  'prepared',
-                  'acting',
-                  'recovery-required',
-                ]),
-              ),
-            )
-            .all()
-            .map((row) => row.effectId),
-        ),
-      ].sort()
-      if (unresolvedEffectIds.length > 0) {
-        const quiescenceDigest = sha256Hex(
-          canonicalJson({
-            v: 1,
-            taskId,
-            epoch: token.epoch,
-            runtimeStopEvidence: stopResult.evidenceDigest,
-            unresolvedEffectIds,
-          }),
-        )
-        taskExecutionModule.effects.closeOutcomeUnknownAndRelease({
-          db,
-          token,
-          intentId,
-          proof: createVerifiedOutcomeUnknownClosure({
-            taskId,
-            ownerRevision: owner.revision,
-            epoch: token.epoch,
-            quiescenceDigest,
-            unresolvedEffectIds,
-            verifiedAt,
-          }),
-          now: verifiedAt,
-        })
-      } else {
-        taskExecutionModule.ownership.releaseAfterStop({
-          db,
-          token,
-          intentId,
-          proof: stopProof,
-          now: verifiedAt,
-        })
-      }
-    } else {
-      taskExecutionModule.ownership.markRecoveryRequired({
-        db,
-        token,
-        expectedRevision: owner.revision,
-        code: stopResult.code,
-        evidenceDigest: stopResult.evidenceDigest,
-        now: Date.now(),
-      })
-    }
-  }
-  await finishClaimedWebhookWorkspacePrune(db, taskId)
-}
-
-function depsUnreapedProcessCode(db: DbClient, taskId: string): string | null {
-  const row = db
-    .select({ errorMessage: nodeRuns.errorMessage })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), like(nodeRuns.errorMessage, '%child-unkillable%')))
-    .limit(1)
-    .all()[0]
-  return row === undefined ? null : 'child-unkillable'
-}
-
 /** RFC-097 (audit S-8/S-23): is an in-process scheduler loop attached to this
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's
  *  scheduler-liveness preflight. */
 export function isTaskActive(taskId: string): boolean {
-  return taskDriverRegistry.hasTask(taskId) || testActiveControllers.has(taskId)
+  return isTaskDriverActive(taskId) || testActiveControllers.has(taskId)
 }
 
 /** RFC-222 — test-only: inject/clear the in-memory active-task set so the delete
  *  front-gate ('task-active') can be exercised without a live scheduler loop. */
 export function __setActiveTaskForTesting(taskId: string | undefined): void {
-  taskDriverRegistry.clearForTesting()
+  clearTaskDriverLifecycleForTesting()
   testActiveControllers.clear()
   if (taskId !== undefined) testActiveControllers.set(taskId, new AbortController())
 }
@@ -670,8 +424,8 @@ export async function finalizeCanceledTaskWithoutDriver(
 }
 
 export interface StartTaskDeps {
-  /** RFC-331: required instance-level scheduler drive surface. */
-  schedulerDriver: Pick<SchedulerDriverPort, 'kick'>
+  /** RFC-332: required instance-level TaskEngine application surface. */
+  schedulerDriver: Pick<SchedulerDriverPort, 'drive'>
   /**
    * RFC-204: needed to unseal `cached_repos.url_enc` for a reuse-by-id launch.
    * Optional so tests / internal faces that never reuse can omit it; when a row
@@ -1638,6 +1392,197 @@ export function runtimeConfigOpts(
       : {}),
     ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
   }
+}
+
+function createTaskDriveCoordinator(input: {
+  readonly deps: StartTaskDeps
+  readonly appHome: string
+  readonly ensureWorkspaceProfiles?: boolean
+  readonly admittedContinuation?: RepositoryPreparationStep
+  readonly repositoryPreparation?: RepositoryPreparationStep
+  readonly engineFailureMessage: string
+  readonly failureReporter: TaskDriveFailureReporter
+}): DefaultTaskDriveCoordinator {
+  const runtime = resolveTaskDriveConfig({
+    appHome: input.appHome,
+    ...(input.deps.binaryOverride !== undefined
+      ? { binaryOverride: input.deps.binaryOverride }
+      : {}),
+    ...(input.deps.configPath !== undefined ? { configPath: input.deps.configPath } : {}),
+    ...(input.deps.subagentLiveCapture !== undefined
+      ? { subagentLiveCapture: input.deps.subagentLiveCapture }
+      : {}),
+    ...runtimeConfigOpts(input.deps),
+    log,
+    ...(input.ensureWorkspaceProfiles === true ? { ensureWorkspaceProfiles: true } : {}),
+  })
+  return new DefaultTaskDriveCoordinator({
+    runtime,
+    lifecycle: createTaskDriverLifecyclePort({
+      db: input.deps.db,
+      log,
+      finalizeWorkspace: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(input.deps.db, taskId)
+      },
+    }),
+    ...(input.admittedContinuation === undefined
+      ? {}
+      : { admittedContinuation: input.admittedContinuation }),
+    repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
+    engineOrchestrator: {
+      async drive(context) {
+        try {
+          await input.deps.schedulerDriver.drive({
+            taskId: context.taskId,
+            appHome: context.runtime.appHome,
+            ...context.runtime.runtime,
+            ...(context.runtime.ensureWorkspaceProfiles ? { ensureWorkspaceProfiles: true } : {}),
+            signal: context.signal,
+            executionContext: context.execution,
+          })
+        } catch (error) {
+          log.error(input.engineFailureMessage, {
+            taskId: context.taskId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      },
+    },
+    failureReporter: input.failureReporter,
+  })
+}
+
+function createPersistedRepositoryPreparationStep(input: {
+  readonly deps: StartTaskDeps
+  readonly appHome: string
+}): PersistedRepositoryPreparationStep {
+  const reader: RepositoryPreparationDescriptorReader = {
+    async read(taskId) {
+      const row = input.deps.db
+        .select({
+          id: tasks.id,
+          status: tasks.status,
+          workflowId: tasks.workflowId,
+          name: tasks.name,
+          repoGroupId: tasks.repoGroupId,
+          cachedRepoId: tasks.cachedRepoId,
+          workingBranch: tasks.workingBranch,
+          baseBranch: tasks.baseBranch,
+          spaceKind: tasks.spaceKind,
+          gitUserName: tasks.gitUserName,
+          gitUserEmail: tasks.gitUserEmail,
+          worktreePath: tasks.worktreePath,
+          workspacePruningAt: tasks.workspacePruningAt,
+          workspacePrunedAt: tasks.workspacePrunedAt,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
+        .all()[0]
+      if (row === undefined) return { kind: 'terminal-won' }
+      if (
+        (row.status !== 'pending' && row.status !== 'running') ||
+        row.workspacePruningAt !== null ||
+        row.workspacePrunedAt !== null
+      ) {
+        return { kind: 'terminal-won' }
+      }
+      if (row.worktreePath !== '') return { kind: 'ready' }
+      const latestPrep = input.deps.db
+        .select({ id: nodeRuns.id })
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+        .orderBy(desc(nodeRuns.retryIndex), desc(nodeRuns.id))
+        .limit(1)
+        .all()[0]
+      const source =
+        row.repoGroupId !== null && row.repoGroupId.length > 0
+          ? ({ kind: 'repo-group', repoGroupId: row.repoGroupId } as const)
+          : row.cachedRepoId !== null && row.cachedRepoId.length > 0
+            ? ({ kind: 'cached-repo', cachedRepoId: row.cachedRepoId } as const)
+            : null
+      if (source === null) {
+        throw new ConflictError(
+          'repo-prep-source-unavailable',
+          `task '${taskId}' has no persisted repository preparation source`,
+        )
+      }
+      return {
+        kind: 'prepare',
+        descriptor: {
+          taskId,
+          workflowId: row.workflowId,
+          taskName: row.name,
+          source,
+          workingBranch: row.workingBranch,
+          requestedRef:
+            source.kind === 'cached-repo' && row.baseBranch !== '' ? row.baseBranch : null,
+          spaceKind: row.spaceKind,
+          gitCommitIdentity:
+            row.gitUserName !== null && row.gitUserEmail !== null
+              ? { name: row.gitUserName, email: row.gitUserEmail }
+              : null,
+          hasPriorAttempt: latestPrep !== undefined,
+        },
+      }
+    },
+  }
+  return new PersistedRepositoryPreparationStep(reader, {
+    async prepare({ descriptor, context }) {
+      const task = await getTask(input.deps.db, descriptor.taskId)
+      if (task === null) return { kind: 'terminal-won' }
+      if (descriptor.hasPriorAttempt) {
+        taskExecutionModule.ownership.withOwnedTaskTx({
+          db: input.deps.db,
+          token: context.execution.token,
+          now: Date.now(),
+          run: () => undefined,
+        })
+        await reclaimStalePrepArtifacts(input.deps.db, input.appHome, task)
+      }
+      const preparationInput = {
+        workflowId: descriptor.workflowId,
+        name: descriptor.taskName,
+        inputs: {},
+        ...(descriptor.source.kind === 'repo-group'
+          ? { repoGroupId: descriptor.source.repoGroupId }
+          : { cachedRepoId: descriptor.source.cachedRepoId }),
+        ...(descriptor.workingBranch !== null ? { workingBranch: descriptor.workingBranch } : {}),
+        ...(descriptor.requestedRef !== null ? { ref: descriptor.requestedRef } : {}),
+      } as unknown as StartTask
+      const ownership: StartTaskOwnership = {
+        cleanup: createMaterializedSpaceCleanup(descriptor.taskId, null),
+        taskRowCommitted: true,
+      }
+      const result = await runDeferredRepoPreparation({
+        deps: {
+          ...input.deps,
+          gitCommitIdentity: descriptor.gitCommitIdentity,
+        },
+        input: preparationInput,
+        appHome: input.appHome,
+        signal: context.signal,
+        taskId: descriptor.taskId,
+        prepTaskId: descriptor.taskId,
+        task,
+        space: {
+          kind: 'single',
+          spaceKind: descriptor.spaceKind,
+          taskId: descriptor.taskId,
+          worktreePath: '',
+          branch: '',
+          baseCommit: null,
+          earlyError: null,
+          resolvedSources: [],
+          repos: [],
+          nodePaths: [],
+          cleanup: ownership.cleanup as MaterializedSpaceCleanup,
+        } as MaterializedSpace,
+        ownership,
+      })
+      return result.ok ? { kind: 'ready' } : { kind: 'terminal-won' }
+    },
+  })
 }
 
 /**
@@ -3670,114 +3615,21 @@ async function startTaskImpl(
     return task
   }
 
-  // Kick the scheduler. HTTP route returns immediately; tests can await.
-  const controller = new AbortController()
-  // RFC-287 G7：AbortController 必须在**行落库之后、准备开始之前**注册——准备是
-  // 后台推进的第一步，若此刻还没注册，用户在「正在准备仓库」阶段点取消就取消不到
-  // 任何东西（而那恰恰是最想取消的阶段：一个拉不动的大仓）。
-  const attachedDriver =
-    launchIntentId === null
-      ? { kind: 'rejected-status-or-source-fence' as const }
-      : await tryAttachTaskDriver(deps.db, taskId, controller, launchIntentId)
-  if (attachedDriver.kind !== 'attached') {
-    // Silent until now, and the silence is the problem: the row exists, the
-    // caller gets a Task back, and NOTHING ever runs it. Whoever launched it
-    // sees a task that stays pending for good with no error anywhere — which is
-    // exactly how a preempted code round's replacement looked when its launch
-    // hit this branch.
-    const fenced = await getTask(deps.db, taskId)
-    log.warn('task will not be driven: the scheduler refused to attach', {
-      taskId,
-      status: fenced?.status ?? 'unknown',
-      sourceTerminationFence: (fenced as { sourceTerminationFence?: unknown } | null)
-        ?.sourceTerminationFence,
-    })
-    return fenced as Task
-  }
-  let preparedTask: Task | null = null
-  /**
-   * G7 的仓库准备（第 0 步）。抽成闭包是为了让它能**在请求路径之外**跑——见下面
-   * 的分叉：延后准备的启动到「任务行落库」为止就返回，准备与调度在后台推进。
-   *
-   * 返回 false = 准备失败且已记账（合成行 failed、任务 failed、租约已释放），
-   * 调用方不得再往下走调度。
-   */
-  const runRepoPreparation = async (): Promise<boolean> => {
-    return await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
-      const r = await runDeferredRepoPreparation({
-        deps,
-        input,
-        appHome,
-        controller,
-        taskId,
-        prepTaskId: deferredTaskId as string,
-        task,
-        space,
-        ownership,
-      })
-      preparedTask = r.preparedTask
-      return r.ok
-    })
-  }
+  const repositoryPreparation: RepositoryPreparationStep =
+    deferredTaskId === null
+      ? skipRepositoryPreparation
+      : createPersistedRepositoryPreparationStep({ deps, appHome })
 
-  /**
-   * 调度器点火。**同步启动与后台续跑共用这一份**——两条路各抄一遍必然走散
-   * （错误兜底、租约释放、工作区收尾都在这里，漏一样就是一类泄漏）。
-   */
-  const kickScheduler = (): Promise<void> =>
-    deps.schedulerDriver
-      .kick({
-        taskId,
-        appHome,
-        ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-        ...(deps.subagentLiveCapture !== undefined
-          ? { subagentLiveCapture: deps.subagentLiveCapture }
-          : {}),
-        // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
-        // config through to the scheduler (single source, see runtimeConfigOpts).
-        ...runtimeConfigOpts(deps),
-        log,
-        signal: controller.signal,
-        executionContext: attachedDriver.executionContext,
-      })
-      .catch((err) => {
-        log.error('runTask threw', {
-          taskId,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
-      .finally(() => {
-        return releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
-      })
-
-  // ---------------------------------------------------------------------
-  // G7 的**异步启动**分叉（proposal §2 G7：「任务行先落 pending，克隆/fetch/
-  // 快进/多仓物化/建工作树在后台推进」）。
-  //
-  // 修复前整条 `await` 链都还在请求路径上（routes/tasks.ts → executor.ts →
-  // startTask），所以「启动接口同步阻塞到工作树就绪」这条 G7 要消灭的现象原样
-  // 还在——一个 500MB 的仓照旧把 POST /api/tasks 挂几分钟，G6 的重试窗口更是
-  // 直接叠在请求上。（T14 实现门；当时的测试反而在**测量**这个阻塞时长，等于把
-  // 错的行为锁死了。）
-  //
-  // `awaitScheduler` 那条路不动：它是测试与内联调用要的「跑完再回来」语义。
-  if (deferredTaskId !== null && deps.awaitScheduler !== true) {
-    void (async () => {
-      try {
-        if (!(await runRepoPreparation())) return // 失败已记账（行 + 任务 + 租约）
-        await kickScheduler()
-      } catch (err) {
-        // 后台续跑没有调用方接错，所以这里必须**真做补偿**，不能只记日志。
-        //
-        // 二轮实现门 B-F1：`runDeferredRepoPreparation` 里只有 `materializeSpace`
-        // 在 try 内，其余步骤（铸合成行、回填事务、置 done、重读任务）任何一处抛出
-        // ——例如 SQLITE_FULL——都会冒到这里。原先只记一行日志，后果是：任务永远
-        // 停在 `pending`、驱动租约永久占用（此后每次重试撞 task-still-running）、
-        // 若物化已成功还留下一棵没有任务行锚定的工作树。我原注释写的「失败记账在
-        // 内部已做」只对 materializeSpace 那一段成立。
-        const msg = err instanceof Error ? err.message : String(err)
-        log.error('deferred repo preparation continuation threw', { taskId, error: msg })
+  const coordinator = createTaskDriveCoordinator({
+    deps,
+    appHome,
+    repositoryPreparation,
+    engineFailureMessage: 'runTask threw',
+    failureReporter: {
+      async report({ error, execution }) {
+        const message = error instanceof Error ? error.message : String(error)
+        log.error('deferred task drive threw', { taskId, error: message })
+        if (deferredTaskId === null) return
         try {
           await setTaskStatus({
             db: deps.db,
@@ -3787,43 +3639,40 @@ async function startTaskImpl(
             reason: 'repo-prep-crashed',
             extra: {
               finishedAt: Date.now(),
-              errorSummary: `repository preparation crashed: ${msg}`,
-              errorMessage: msg,
+              errorSummary: `repository preparation crashed: ${message}`,
+              errorMessage: message,
             },
-            executionContext: attachedDriver.executionContext,
+            executionContext: execution,
           })
         } catch (inner) {
-          // 任务已被取消/已推进——保留既有终态，不覆写（与准备失败分支同口径）。
           log.warn('could not record prep crash (task left the prep window)', {
             taskId,
             error: inner instanceof Error ? inner.message : String(inner),
           })
         }
-      } finally {
-        // 无论走哪条路，租约都必须还回去。`releaseTaskDriverAndFinalizeWorkspace`
-        // 是幂等的：正常路径上 `kickScheduler` 的 finally 已经还过一次，这里再调
-        // 不会重复释放（registry 按 controller 身份匹配）。
-        await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
-      }
-    })()
-    // 请求路径到此为止：返回**刚落库的 pending 行**（worktreePath 仍为空——这正是
-    // AC-10 把不变量从「有任务行就有工作树」改成「`__repo_prep__` 行 done 之后才有
-    // 工作树」的原因）。
-    return (await getTask(deps.db, taskId)) as Task
+      },
+    },
+  })
+  if (launchIntentId === null) return task
+  const receipt = await coordinator.submit({
+    taskId,
+    intentId: launchIntentId,
+    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
+  })
+  if (receipt.kind === 'not-attached') {
+    const fenced = await getTask(deps.db, taskId)
+    log.warn('task will not be driven: the task coordinator refused to attach', {
+      taskId,
+      status: fenced?.status ?? 'unknown',
+      sourceTerminationFence: (fenced as { sourceTerminationFence?: unknown } | null)
+        ?.sourceTerminationFence,
+    })
+    return fenced as Task
   }
-
-  if (deferredTaskId !== null && !(await runRepoPreparation())) {
-    // preparedTask 由闭包写入（失败态的真实状态），TS 的流分析看不见闭包赋值，
-    // 故用 `??` 兜底而不是断言——真取到 task 也是对的（同一行的快照）。
-    return preparedTask ?? task
-  }
-  const schedulerPromise = kickScheduler()
-
   if (deps.awaitScheduler === true) {
-    await schedulerPromise
     return (await getTask(deps.db, taskId)) as Task
   }
-  return preparedTask ?? task
+  return (await getTask(deps.db, taskId)) as Task
 }
 
 /**
@@ -4599,15 +4448,9 @@ async function resumeKick(
     throw err
   }
 
-  // Up to this point the request committed only lifecycle + intent.  Claim
-  // before any reap, rollback, child cancellation or node-row mutation.
-  const controller = new AbortController()
-  const attachedDriver = await tryAttachTaskDriver(db, id, controller, intentId)
-  if (attachedDriver.kind !== 'attached') {
-    return (await getTask(db, id)) as Task
-  }
-  try {
-    return await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
+  let admittedTask: Task | null = null
+  const admittedContinuation: RepositoryPreparationStep = {
+    async run(context) {
       // Direct framework children (commit-message / merge-resolve agents) are
       // nested node_runs and intentionally absent from `toRollback`. Fence every
       // held native-session owner for the task before any rollback or fresh kick.
@@ -4668,61 +4511,45 @@ async function resumeKick(
       }
 
       const next = (await getTask(db, id)) as Task
+      admittedTask = next
       emitTaskStatus(next)
 
-      // Kick the scheduler — same plumbing as startTask but without re-creating
-      // the worktree.
-      if (activeTaskController(id) !== controller) {
-        log.error(`${opts.reason}: exact controller was replaced before scheduler kick`, {
+      const controller = activeTaskDriverController(id)
+      if (controller === undefined || controller.signal !== context.signal) {
+        log.error(`${opts.reason}: exact controller was replaced before task drive`, {
           taskId: id,
         })
-        return (await getTask(db, id)) as Task
+        return { kind: 'terminal-won' }
       }
-      const schedulerPromise = deps.schedulerDriver
-        .kick({
-          taskId: id,
-          appHome: deps.appHome ?? Paths.root,
-          ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
-          ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-          ...(deps.subagentLiveCapture !== undefined
-            ? { subagentLiveCapture: deps.subagentLiveCapture }
-            : {}),
-          // RFC-075 + RFC-103 T2: thread commit&push + maxConcurrentNodes runtime
-          // config through to the scheduler (single source, see runtimeConfigOpts).
-          ...runtimeConfigOpts(deps),
-          log,
-          signal: controller.signal,
-          executionContext: attachedDriver.executionContext,
-          ensureWorkspaceProfiles: true,
-        })
-        .catch((err) => {
-          log.error(`runTask threw on ${opts.verb}`, {
-            taskId: id,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        })
-        .finally(() => {
-          return releaseTaskDriverAndFinalizeWorkspace(db, id, controller)
-        })
-
-      // Mirror startTask: tests opt into awaiting the scheduler; production callers
-      // (HTTP routes) fire-and-forget and get the post-flip task immediately.
-      if (deps.awaitScheduler === true) {
-        await schedulerPromise
-        return (await getTask(db, id)) as Task
-      }
-      return next
-    })
-  } catch (error) {
-    controller.abort('task-continuation-preparation-failed')
-    await releaseTaskDriverAndFinalizeWorkspace(db, id, controller).catch((releaseError) => {
-      log.warn(`${opts.reason}: could not release failed continuation owner`, {
-        taskId: id,
-        error: releaseError instanceof Error ? releaseError.message : String(releaseError),
-      })
-    })
-    throw error
+      return { kind: 'ready' }
+    },
   }
+  const coordinator = createTaskDriveCoordinator({
+    deps,
+    appHome: deps.appHome ?? Paths.root,
+    ensureWorkspaceProfiles: true,
+    admittedContinuation,
+    engineFailureMessage: `runTask threw on ${opts.verb}`,
+    failureReporter: {
+      report({ error }) {
+        activeTaskDriverController(id)?.abort('task-continuation-preparation-failed')
+        log.error(`${opts.reason}: continuation preparation threw`, {
+          taskId: id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      },
+    },
+  })
+  const receipt = await coordinator.submit({
+    taskId: id,
+    intentId,
+    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
+  })
+  if (receipt.kind === 'not-attached') {
+    return (await getTask(db, id)) as Task
+  }
+  if (deps.awaitScheduler === true) return (await getTask(db, id)) as Task
+  return admittedTask ?? ((await getTask(db, id)) as Task)
 }
 
 /**
@@ -5313,132 +5140,62 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
         advanceOperationGeneration: true,
       }),
   })
-  // 重跑准备：走**同一份**实现（runDeferredRepoPreparation），不是抄第二套。
-  // 复用要点是它只认「一个已存在的任务行 + 一份可解析的来源」，其余（合成行、窗口
-  // 重试、回填同事务、租约换真）都在里面，重试与首次因此逐字同构。
   const appHome = deps.appHome ?? Paths.root
-  const controller = new AbortController()
-  const attachedDriver = await tryAttachTaskDriver(db, task.id, controller, intentId)
-  if (attachedDriver.kind !== 'attached') {
+  const repositoryPreparation = createPersistedRepositoryPreparationStep({
+    deps: { ...deps, db },
+    appHome,
+  })
+  const coordinator = createTaskDriveCoordinator({
+    deps: { ...deps, db },
+    appHome,
+    repositoryPreparation,
+    engineFailureMessage: 'runTask threw after repo-prep retry',
+    failureReporter: {
+      report({ error }) {
+        log.error('repo-prep retry threw', {
+          taskId: task.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      },
+    },
+  })
+  const receipt = await coordinator.submit({
+    taskId: task.id,
+    intentId,
+    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
+  })
+  if (receipt.kind === 'not-attached') {
     throw new ConflictError(
       'task-still-running',
       `task '${task.id}' was picked up by another driver; retry once it settles`,
     )
   }
-  // 清掉上一次准备可能留下的残骸（SIGKILL 窗口），否则建树必撞 already exists。
-  // 放在 attach 之后：租约在手才动磁盘，避免与另一个驱动抢。
-  await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
-    // Validate the exact owner immediately before the first workspace write.
-    // A superseding stop/recovery revision must make this preparation fail
-    // before it removes or recreates task-owned paths.
-    taskExecutionModule.ownership.withOwnedTaskTx({
-      db,
-      token: attachedDriver.executionContext.token,
-      now: Date.now(),
-      run: () => undefined,
-    })
-    await reclaimStalePrepArtifacts(db, appHome, task)
-  })
-  // 重跑用的启动输入：只带**来源**三件（组 / 缓存仓 / 工作分支）。其余启动参数
-  // （工作流、成员、冻结闭包…）在任务行上已经定死，重试不得改动它们。
-  const input = {
-    workflowId: task.workflowId,
-    name: task.name,
-    inputs: {},
-    ...(hasGroup ? { repoGroupId: task.repoGroupId } : {}),
-    ...(hasCached && !hasGroup ? { cachedRepoId: task.cachedRepoId } : {}),
-    ...(task.workingBranch !== null ? { workingBranch: task.workingBranch } : {}),
-    // 四轮门两路独立实测的 P1：`ref` 不带上，重试会静默把任务换到镜像默认分支。
-    // 占位行把请求的 ref 存进了 `base_branch`(见落行处的长注释)，这里取回来。
-    // 组启动不需要——成员 ref 在组定义里，`repoGroupId` 已经带了。
-    ...(!hasGroup && task.baseBranch !== '' ? { ref: task.baseBranch } : {}),
-  } as unknown as StartTask
-  const ownership: StartTaskOwnership = {
-    cleanup: createMaterializedSpaceCleanup(task.id, null),
-    // 行早就在库里了——重试不建行，所以这一位从一开始就是 true。
-    taskRowCommitted: true,
-  }
-  const runPrepThenTask = async (): Promise<Task | null> =>
-    await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
-      const r = await runDeferredRepoPreparation({
-        deps: {
-          ...deps,
-          db,
-          gitCommitIdentity:
-            task.gitUserName !== null && task.gitUserEmail !== null
-              ? { name: task.gitUserName, email: task.gitUserEmail }
-              : null,
-        },
-        input,
-        appHome,
-        controller,
-        taskId: task.id,
-        prepTaskId: task.id,
-        task,
-        space: {
-          kind: 'single',
-          spaceKind: 'remote',
-          taskId: task.id,
-          worktreePath: '',
-          branch: '',
-          baseCommit: null,
-          earlyError: null,
-          resolvedSources: [],
-          repos: [],
-          nodePaths: [],
-          cleanup: ownership.cleanup as MaterializedSpaceCleanup,
-        } as MaterializedSpace,
-        ownership,
-      })
-      if (!r.ok) return r.preparedTask ?? task
-      void deps.schedulerDriver
-        .kick({
-          taskId: task.id,
-          appHome,
-          ...runtimeConfigOpts(deps),
-          log,
-          signal: controller.signal,
-          executionContext: attachedDriver.executionContext,
-        })
-        .catch((err) => {
-          log.error('runTask threw after repo-prep retry', {
-            taskId: task.id,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        })
-        .finally(() => releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller))
-      return r.preparedTask ?? null
-    })
-
-  // RFC-287 AC-11 —— 重试与**首启同一套语义**：准备在后台推进，请求立刻返回。
-  //
-  // 三轮门（Codex 契约面）P1：这里原本 `await` 整个准备。单次 clone 默认可跑 30
-  // 分钟，而 Bun 的入站连接 255 秒无响应就关闭 —— 一次跑 270 秒的 clone 会让客户端
-  // 在 ~255s 收到断连 / network-unreachable，而 clone 与任务其实还在后台推进并可能
-  // 成功。前端自己的 300 秒总时限救不了（它更晚），部署前置网关时限更短则更早发作。
-  // 结果是「客户端认为失败、任务实际仍在跑」的未知态——正是 G7 要消灭的那类体验。
-  //
-  // 判据与首启一致：`awaitScheduler === true` 是「跑完再回来」的内联/测试语义，
-  // 其余（含 HTTP 路由）一律后台推进。CAS 回 pending 已在上面同步完成，所以调用方
-  // 立刻就能看到任务重新处于「准备中」。
   if (deps.awaitScheduler === true) {
-    const prepared = await runPrepThenTask()
-    return prepared ?? ((await getTask(db, task.id)) as Task)
+    return (await getTask(db, task.id)) as Task
   }
-  void (async () => {
-    try {
-      await runPrepThenTask()
-    } catch (err) {
-      log.error('repo-prep retry threw', {
-        taskId: task.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
-      // 补偿：后台段抛穿时既有的记账路径没走完，至少把驱动租约放掉，
-      // 否则这行任务会一直「被别的驱动持有」，连重试都 409。
-      await releaseTaskDriverAndFinalizeWorkspace(db, task.id, controller).catch(() => {})
-    }
-  })()
   return (await getTask(db, task.id)) as Task
+}
+
+/** Boot/application recovery adapter for the persisted phase-0 descriptor. */
+export async function retryRepositoryPreparation(
+  db: DbClient,
+  taskId: string,
+  deps: StartTaskDeps,
+): Promise<Task> {
+  const latest = db
+    .select({ id: nodeRuns.id })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+    .orderBy(desc(nodeRuns.retryIndex), desc(nodeRuns.id))
+    .limit(1)
+    .all()[0]
+  if (latest === undefined) {
+    throw new ConflictError(
+      'repo-prep-run-missing',
+      `task '${taskId}' has no repository-preparation attempt to retry`,
+    )
+  }
+  return await retryNode(db, taskId, latest.id, { cascade: false, deps })
 }
 
 /**
@@ -5479,14 +5236,14 @@ async function runDeferredRepoPreparation(args: {
   deps: StartTaskDeps
   input: StartTask
   appHome: string
-  controller: AbortController
+  signal: AbortSignal
   taskId: string
   prepTaskId: string
   task: Task
   space: MaterializedSpace
   ownership: StartTaskOwnership
 }): Promise<{ ok: boolean; preparedTask: Task | null }> {
-  const { deps, input, appHome, controller, taskId, prepTaskId, task, space, ownership } = args
+  const { deps, input, appHome, signal, taskId, prepTaskId, task, space, ownership } = args
   // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
   // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
   //
@@ -5581,7 +5338,7 @@ async function runDeferredRepoPreparation(args: {
     try {
       prepared = await materializeSpace(
         input,
-        { ...deps, sourceTerminationLaunchSignal: controller.signal },
+        { ...deps, sourceTerminationLaunchSignal: signal },
         appHome,
         prepTaskId,
       )
@@ -5607,10 +5364,10 @@ async function runDeferredRepoPreparation(args: {
       error: prepared.earlyError,
     })
     await prepEffect?.retry(new Error(prepared.earlyError), 'transport-policy')
-    if (controller.signal.aborted) break
+    if (signal.aborted) break
     await new Promise<void>((resolve) => {
       const settle = (): void => {
-        controller.signal.removeEventListener('abort', onAbort)
+        signal.removeEventListener('abort', onAbort)
         resolve()
       }
       const onAbort = (): void => {
@@ -5618,11 +5375,11 @@ async function runDeferredRepoPreparation(args: {
         settle()
       }
       const timer = setTimeout(settle, Math.min(backoffMs, remaining))
-      controller.signal.addEventListener('abort', onAbort, { once: true })
+      signal.addEventListener('abort', onAbort, { once: true })
     })
     backoffMs = Math.min(backoffMs * 2, 15_000)
   }
-  if (prepared.earlyError !== null && controller.signal.aborted) {
+  if (prepared.earlyError !== null && signal.aborted) {
     // 停机与用户取消**共用同一个信号**，但归宿完全相反（三轮门并发面抓到的回归：
     // 本分支上一版只判 `aborted`，把优雅停机也当成用户取消）。
     //
@@ -5633,7 +5390,7 @@ async function runDeferredRepoPreparation(args: {
     // `RETRYABLE_PREP_STATUSES` 只认 failed/interrupted ⇒ 重试撞 `repo-prep-not-retryable`、
     // resume 撞 `task-repo-prep-incomplete`、auto-resume 按设计跳过，只剩删任务重开。
     // 这恰好把下面 AC-16 那扇刚修好的门（认 interrupted）从 canceled 这一侧又打开了。
-    const daemonShutdown = controller.signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+    const daemonShutdown = signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
     // RFC-287 AC-14 —— **取消导致的失败不是失败**。
     //
     // 三轮门 AC 对账实测（该 AC 此前一条测试都没有）：在准备窗口内点取消，git 子
@@ -5666,7 +5423,6 @@ async function runDeferredRepoPreparation(args: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
-    await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
     const cur = (
       await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
     )[0]
@@ -5735,8 +5491,6 @@ async function runDeferredRepoPreparation(args: {
         status: finalStatus,
         error: err instanceof Error ? err.message : String(err),
       })
-    } finally {
-      await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
     }
     // B-F8 的回收**不能放在这里**——这一点是实测逼出来的。
     //
@@ -5771,7 +5525,7 @@ async function runDeferredRepoPreparation(args: {
   // 终局是 `task=canceled` 但 `__repo_prep__=done`、路径与仓库投影都已落库、调度器
   // 确实起来过——AC-14 的「取消不得完成准备或 kick」没有兑现。
   // 信号一旦 aborted，无论任务行有没有写完，这次准备的产物都不该落库。
-  if (stillPending !== 'pending' || controller.signal.aborted) {
+  if (stillPending !== 'pending' || signal.aborted) {
     log.warn('task left the prep window before backfill; discarding the materialized space', {
       taskId,
       status: stillPending ?? '(gone)',
@@ -5803,8 +5557,7 @@ async function runDeferredRepoPreparation(args: {
     // 这里漏了。状态跟着任务的真实归宿走：任务 interrupted ⇒ 行也 interrupted（保持
     // 可重试）；其余（canceled / 被删）⇒ canceled。
     const leftStatus =
-      (stillPending ?? '') === 'interrupted' ||
-      controller.signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+      (stillPending ?? '') === 'interrupted' || signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
         ? 'interrupted'
         : 'canceled'
     try {
@@ -5831,9 +5584,6 @@ async function runDeferredRepoPreparation(args: {
     // `task-still-running`、deleteTask 409 `task-active`、lifecycle 修复被
     // liveness gate 拒、orphanReconcile 与 gc 永久跳过它、`awaitTaskDriverStopped`
     // 永不 resolve（终止参与者跟着挂死）。只有重启 daemon 能解。
-    // `releaseTaskDriverAndFinalizeWorkspace` 幂等（registry 按 controller 身份匹配），
-    // 所以首启那层 finally 再调一次也无害。
-    await releaseTaskDriverAndFinalizeWorkspace(deps.db, taskId, controller)
     return { ok: false, preparedTask: (await getTask(deps.db, taskId)) as Task }
   }
   // 所有权租约换成真的：占位态给的是空租约（ownedRoot=null、零 worktree），
@@ -6162,13 +5912,9 @@ export async function retryNode(
     throw err
   }
 
-  const controller = new AbortController()
-  const attachedDriver = await tryAttachTaskDriver(db, taskId, controller, intentId)
-  if (attachedDriver.kind !== 'attached') {
-    return (await getTask(db, taskId)) as Task
-  }
-  try {
-    return await runWithTaskExecutionContext(attachedDriver.executionContext, async () => {
+  let admittedTask: Task | null = null
+  const admittedContinuation: RepositoryPreparationStep = {
+    async run(context) {
       await reapHeldRuntimeSessionOwnersForTask(db, taskId, 'retryNode', opts.deps, log)
 
       // RFC-243 D12 — only the retry CAS winner may supersede child invocations.
@@ -6317,45 +6063,41 @@ export async function retryNode(
 
       // Task row already flipped pending above (RFC-097 admission winner).
       const next = (await getTask(db, taskId)) as Task
+      admittedTask = next
       emitTaskStatus(next)
 
-      void opts.deps.schedulerDriver
-        .kick({
-          taskId,
-          appHome: opts.deps.appHome ?? Paths.root,
-          ...(opts.deps.binaryOverride ? { binaryOverride: opts.deps.binaryOverride } : {}),
-          ...(opts.deps.configPath !== undefined ? { configPath: opts.deps.configPath } : {}),
-          ...(opts.deps.subagentLiveCapture !== undefined
-            ? { subagentLiveCapture: opts.deps.subagentLiveCapture }
-            : {}),
-          // RFC-103 T2 (01-LIFE-06): retryNode historically dropped commit&push +
-          // maxConcurrentNodes; thread them like start/resume via the single source.
-          ...runtimeConfigOpts(opts.deps),
-          log,
-          signal: controller.signal,
-          executionContext: attachedDriver.executionContext,
-        })
-        .catch((err) => {
-          log.error('runTask threw on node retry', {
-            taskId,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        })
-        .finally(() => {
-          return releaseTaskDriverAndFinalizeWorkspace(db, taskId, controller)
-        })
-      return next
-    })
-  } catch (error) {
-    controller.abort('task-retry-node-preparation-failed')
-    await releaseTaskDriverAndFinalizeWorkspace(db, taskId, controller).catch((releaseError) => {
-      log.warn('retryNode: could not release failed continuation owner', {
-        taskId,
-        error: releaseError instanceof Error ? releaseError.message : String(releaseError),
-      })
-    })
-    throw error
+      const controller = activeTaskDriverController(taskId)
+      if (controller === undefined || controller.signal !== context.signal) {
+        log.error('retryNode: exact controller was replaced before task drive', { taskId })
+        return { kind: 'terminal-won' }
+      }
+      return { kind: 'ready' }
+    },
   }
+  const coordinator = createTaskDriveCoordinator({
+    deps: { ...opts.deps, db },
+    appHome: opts.deps.appHome ?? Paths.root,
+    admittedContinuation,
+    engineFailureMessage: 'runTask threw on node retry',
+    failureReporter: {
+      report({ error }) {
+        activeTaskDriverController(taskId)?.abort('task-retry-node-preparation-failed')
+        log.error('retryNode continuation preparation threw', {
+          taskId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      },
+    },
+  })
+  const receipt = await coordinator.submit({
+    taskId,
+    intentId,
+    completionMode: 'background',
+  })
+  if (receipt.kind === 'not-attached') {
+    return (await getTask(db, taskId)) as Task
+  }
+  return admittedTask ?? ((await getTask(db, taskId)) as Task)
 }
 
 function parseSnapshot(v: unknown): Record<string, unknown> | null {

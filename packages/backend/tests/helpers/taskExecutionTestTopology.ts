@@ -4,9 +4,10 @@ import type {
   SchedulerRuntimeTopology,
 } from '../../src/modules/task-execution/public/topology'
 import { createLegacyTaskExecutionTopology } from '../../src/services/startTaskDeps'
-import { runTaskWithTopology, type RunTaskOptions } from '../../src/services/scheduler'
+import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
+import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 
-type TaskDriveRequest = Parameters<SchedulerDriverPort['kick']>[0]
+type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
 export interface RecordingSchedulerDriver {
   readonly driver: SchedulerDriverPort
@@ -29,7 +30,7 @@ export function createRecordingSchedulerDriver(
     resumptions,
     activeChecks,
     driver: {
-      async kick(request) {
+      async drive(request) {
         kicks.push(request)
       },
       async cancelChild(input) {
@@ -48,7 +49,7 @@ export function createRecordingSchedulerDriver(
 
 export function createNoopSchedulerDriver(): SchedulerDriverPort {
   return {
-    async kick() {},
+    async drive() {},
     async cancelChild() {},
     async resumeChild() {},
     isTaskActive: () => false,
@@ -62,7 +63,7 @@ export function createPoisonSchedulerDriver(
     throw new TypeError(label)
   }
   return {
-    kick: async () => fail(),
+    drive: async () => fail(),
     cancelChild: async () => fail(),
     resumeChild: async () => fail(),
     isTaskActive: fail,
@@ -92,7 +93,7 @@ export function createTaskExecutionTestTopology(input: {
 
 /** Direct scheduler fixtures explicitly select the real instance topology. */
 export function runTaskWithRealTestTopology(options: RunTaskOptions): Promise<void> {
-  return runTaskWithTopology(
+  return driveTaskEngineApplication(
     options,
     createTaskExecutionTestTopology({ db: options.db, driver: 'real' }),
   )

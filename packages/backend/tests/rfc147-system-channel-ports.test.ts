@@ -197,10 +197,12 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
     expect(prompt).toContain('PROMPT_INJECTED_PORT_NAMES')
   })
 
-  test('scheduler / dispatchFrontier 手抄对收敛为 channelEdgeDataflowSkip', () => {
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+  test('taskDagGraph / dispatchFrontier 手抄对收敛为 channelEdgeDataflowSkip', () => {
+    const taskDagGraph = read(
+      'packages/backend/src/modules/task-execution/composition/taskDagGraph.ts',
+    )
     const frontier = read('packages/backend/src/services/dispatchFrontier.ts')
-    for (const src of [scheduler, frontier]) {
+    for (const src of [taskDagGraph, frontier]) {
       expect(src).toContain('channelEdgeDataflowSkip(')
       // 手写块指纹：response+feedback+to_* 四端口字面量组成的跳边条件不得回潮
       //（注册表文件本身是唯一的字面量之家）。

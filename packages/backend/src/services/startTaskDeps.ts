@@ -10,7 +10,8 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { cancelTask, isTaskActive, resumeTask, type StartTaskDeps } from '@/services/task'
-import { runTaskWithTopology, type RunTaskOptions } from '@/services/scheduler'
+import { driveTaskEngineApplication } from '@/modules/task-execution/composition/taskEngineApplication'
+import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/public/queries'
 import {
   createTaskStatusPublisher,
@@ -49,8 +50,8 @@ export function createLegacyTaskExecutionTopology(
 ): SchedulerRuntimeTopology {
   const readModels = createTaskExecutionReadModels(db)
   const schedulerDriver: SchedulerDriverPort = {
-    async kick(request) {
-      await runTaskWithTopology(
+    async drive(request) {
+      await driveTaskEngineApplication(
         {
           ...request,
           db,

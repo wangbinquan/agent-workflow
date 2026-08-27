@@ -28,3 +28,11 @@ export type TaskExecutionCommandResult =
       message: string
       winnerIntentRef?: string
     }>
+
+export type {
+  SchedulerRuntimeTopology,
+  TaskExecutionContextRef,
+} from '../application/ports/taskExecutionTopology'
+export type { TaskScopeOutcome } from '../domain/taskEngine'
+
+export { SETTLES_WITHOUT_ROW_KINDS } from '../composition/dagFrontier'

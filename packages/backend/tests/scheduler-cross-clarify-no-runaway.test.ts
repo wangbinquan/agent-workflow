@@ -1,7 +1,7 @@
 // RFC-056 follow-up — 2026-05-22 UI bug "21 pending cross_clarify_6c910f"
 //
 // Root cause:
-//   1. scheduler.buildScopeUpstreams skipped `questioner.__clarify__ →
+//   1. taskDagGraph.buildScopeUpstreams skipped `questioner.__clarify__ →
 //      cross-clarify.questions` as a "channel edge" — this is correct for
 //      RFC-023 clarify targets but WRONG for RFC-056 cross-clarify
 //      targets. Without the upstream dep, cross-clarify was a no-upstream
@@ -119,14 +119,22 @@ afterEach(() => {
 
 describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
   test('buildScopeUpstreams treats questioner→cross.questions as a dataflow dep (NOT skipped as channel edge)', async () => {
-    // Source-text lock on the scheduler decision: the predicate that
+    // Source-text lock on the DAG graph decision: the predicate that
     // skips RFC-023's `__clarify__ →` channel edges MUST gate on the
     // target node kind being 'clarify' (RFC-023). For cross-clarify
     // targets the edge is a legitimate dataflow dependency that lets the
     // scheduler wait for the questioner before activating cross.
     const { readFileSync } = await import('node:fs')
-    const SCHEDULER_TS = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
-    const src = readFileSync(SCHEDULER_TS, 'utf-8')
+    const DAG_GRAPH_TS = resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'taskDagGraph.ts',
+    )
+    const src = readFileSync(DAG_GRAPH_TS, 'utf-8')
     // We don't try to lex the full predicate — just lock that the
     // 'clarify-cross-agent' kind is referenced in close proximity to
     // the `__clarify__` skip rule, so any refactor that drops this

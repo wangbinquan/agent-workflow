@@ -3,16 +3,13 @@
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
 import { taskExecutionModule } from '../composition'
-import {
-  assertTaskExecutionContext,
-  currentTaskExecutionContext,
-  type TaskExecutionContext,
-} from './taskExecutionContext'
+import { assertTaskExecutionContext, currentTaskExecutionContext } from './taskExecutionContext'
+import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
 
 export function withTaskExecutionMutation<T>(input: {
   db: DbClient
   taskId: string
-  context?: TaskExecutionContext
+  context?: TaskExecutionContextRef
   now?: number
   run: (tx: DbTxSync | DbClient) => T
 }): T {
@@ -50,7 +47,7 @@ export function withCurrentTaskExecutionMutation<T>(input: {
 export function withTaskExecutionTransaction<T>(input: {
   db: DbClient
   taskId: string
-  context?: TaskExecutionContext
+  context?: TaskExecutionContextRef
   now?: number
   run: (tx: DbTxSync) => T
 }): T {

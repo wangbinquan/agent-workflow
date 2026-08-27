@@ -37,7 +37,8 @@ import {
   type CanonRepo,
 } from '../src/services/nodeIsolation'
 import { mintNodeRun } from '../src/services/nodeRunMint'
-import { createOrRebuildWrapperIso, deriveFrontier } from '../src/services/scheduler'
+import { createOrRebuildWrapperIso } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { transitionMergeState } from '../src/services/lifecycle'
 import { retryNode } from '../src/services/task'
 import { createLogger } from '../src/util/log'

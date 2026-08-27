@@ -35,7 +35,7 @@ import {
   reassignTaskQuestion,
 } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
-import { deriveFrontier } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

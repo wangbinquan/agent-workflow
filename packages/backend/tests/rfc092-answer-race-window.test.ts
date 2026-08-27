@@ -19,7 +19,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import type { nodeRuns } from '../src/db/schema'
-import { deriveFrontier } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 
 type Row = typeof nodeRuns.$inferSelect
 type WorkflowNode = WorkflowDefinition['nodes'][number]

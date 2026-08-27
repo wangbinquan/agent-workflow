@@ -8,11 +8,10 @@
 // two speculative-mint cascade layers (cascadeDownstreamFromDesigner +
 // applyClarifyFreshnessInvariant).
 //
-// Pure module: only the nodeRuns row TYPE is imported (no DB, no scheduler), so
-// both functions are trivially unit-testable and there is no import cycle with
-// scheduler.ts (which imports from here).
+// Pure legacy compatibility primitive: it owns a structural row projection
+// and has no DB or scheduler dependency.
 
-import type { nodeRuns } from '../db/schema'
+import type { NodeRunStatus } from '@agent-workflow/shared'
 
 /**
  * RFC-311 — the freshness/frontier column contract. Narrowed from the full
@@ -21,20 +20,19 @@ import type { nodeRuns } from '../db/schema'
  * columns; the compiler points here the moment a frontier consumer starts
  * needing a column the projections do not carry.
  */
-export type NodeRunRow = Pick<
-  typeof nodeRuns.$inferSelect,
-  | 'id'
-  | 'nodeId'
-  | 'status'
-  | 'iteration'
-  | 'parentNodeRunId'
-  | 'mergeState'
-  | 'shardKey'
-  | 'consumedUpstreamRunsJson'
-  | 'supersededByReview'
-  // wrapper 行的进度快照（wrapperRevivalEvidence 消费；仅 wrapper 行非空）。
-  | 'wrapperProgressJson'
->
+export interface NodeRunRow {
+  readonly id: string
+  readonly nodeId: string
+  readonly status: NodeRunStatus
+  readonly iteration: number
+  readonly parentNodeRunId: string | null
+  readonly mergeState: string | null
+  readonly shardKey: string | null
+  readonly consumedUpstreamRunsJson: string | null
+  readonly supersededByReview: string | null
+  /** Wrapper progress snapshot; non-null only for wrapper rows. */
+  readonly wrapperProgressJson: string | null
+}
 
 /**
  * Parse `node_runs.consumed_upstream_runs_json` into a `{ upstreamNodeId:

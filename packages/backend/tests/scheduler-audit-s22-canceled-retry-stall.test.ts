@@ -29,7 +29,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import type { nodeRuns as nodeRunsTable } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
-import { deriveFrontier } from '../src/services/scheduler'
+import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 

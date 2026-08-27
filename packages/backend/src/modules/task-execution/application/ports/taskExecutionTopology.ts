@@ -27,8 +27,7 @@ export interface TaskExecutionTopologyLogger {
  * RFC-331 moves their ownership out of scheduler.ts without changing defaults or
  * adding a second configuration source.
  */
-export interface TaskDriveRuntimeOptions {
-  readonly appHome: string
+export interface TaskDriveRuntimeKnobs {
   readonly daemonGeneration?: string
   readonly binaryOverride?: readonly string[]
   readonly configPath?: string
@@ -58,9 +57,13 @@ export interface TaskDriveRuntimeOptions {
   readonly commitPushMaxRepairRetries?: number
   readonly commitPushDiffMaxBytes?: number
   readonly commitPushExcludePatterns?: readonly string[]
-  readonly ensureWorkspaceProfiles?: boolean
   readonly commitPushLang?: Language
   readonly defaultRuntime?: string
+}
+
+export interface TaskDriveRuntimeOptions extends TaskDriveRuntimeKnobs {
+  readonly appHome: string
+  readonly ensureWorkspaceProfiles?: boolean
 }
 
 export interface TaskDriveRequest extends TaskDriveRuntimeOptions {
@@ -116,7 +119,8 @@ export interface ChildResumeRuntime {
 }
 
 export interface SchedulerDriverPort {
-  kick(request: TaskDriveRequest): Promise<void>
+  /** RFC-332 W2-B task-level application entry; scheduler mechanics do not own this body. */
+  drive(request: TaskDriveRequest): Promise<void>
   cancelChild(input: { readonly taskId: string; readonly cascadeFromParent: true }): Promise<void>
   resumeChild(input: {
     readonly taskId: string

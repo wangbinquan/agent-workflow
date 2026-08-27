@@ -3,8 +3,10 @@
 > 本文描述目标态合同，不是一次性目录搬迁清单。实施期允许旧路径 facade，但不允许旧行为内核与新行为
 > 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～330 的已发布批次已在其后
 > 改变 production shape，因此“当前已落事实、量化基线、前置偏差与下一步顺序”统一以 `plan.md` §1/§3.2 的
-> 2026-08-27 刷新为准。N1a/N1b、RFC-328 P0-D 与 RFC-331 W2-A topology cut 已落；当前执行指针为
-> W2-B TaskEngine，RFC-331 containing SHA `4152b377afa357e2e339f921dac09b21770cebc0` 的 exact-SHA CI
+> 2026-08-27 刷新为准。N1a/N1b、RFC-328 P0-D 与 RFC-331 W2-A topology cut 已落；
+> [RFC-332](../RFC-332-task-engine-decomposition/proposal.md) 已承接 W2-B TaskEngine，implementation candidate 已完成，
+> canonical value SCC 保持 `4/6`，当前等待发布/provenance/exact-SHA hosted closeout；
+> RFC-331 containing SHA `4152b377afa357e2e339f921dac09b21770cebc0` 的 exact-SHA CI
 > `33034946053` terminal `success`（35/35 jobs）。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
@@ -137,20 +139,20 @@ payload commit `262f34bf73735261b05b49363311ee2390311e4b` 固定，report digest
 把四份治理 artifact 真实 repin 到该 payload。最终 containing SHA `4152b377afa357e2e339f921dac09b21770cebc0`
 的 exact-SHA CI `33034946053` terminal `success`（35/35 jobs）。下表是该已发布 shape：
 
-| current module           | production TS/TSX | architecture interpretation                                                                                                  |
-| ------------------------ | ----------------: | ---------------------------------------------------------------------------------------------------------------------------- |
-| `development-automation` |               113 | active writer/type package；aggregate、工具合同与功能闭环已落，public/required/inbound/bootstrap cutover 未完成              |
-| `identity-access`        |                33 | role/grant/authority、presence、profile/email/Git identity slices landed；route 直读与 full Actor facade 未退役              |
-| `integration`            |                31 | webhook/code-host、adapter definition/connection + Event Center adapter；仍有 schema/inbound 装配债                          |
-| `task-execution`         |                57 | RFC-331 topology/query/adapter 已切掉 task SCC family/六条 exact edge；四级 engine 仍待 W2-B/C/D     |
-| `digital-employee`       |                23 | EmployeeCase/Context/Reaction/authoring/runtime + frozen adapter binding landed；TE required-port cutover 未完成             |
-| `source-control`         |                22 | candidate/commit/publication transport/credential slices；WorkspaceRef/repo/cache/worktree owner 未收口                      |
-| `event-center`           |                20 | catalog/subscription/observer/delivery/automation-rule writer landed；canonical outbox/background/root 收口未完成            |
-| `code-capability`        |                19 | legacy history/template island；仅 upstream merge 为有账临时 writer，非 active execution owner                               |
-| `execution-contract`     |                 7 | executor-neutral guide/fixture/exact-output contract landed；legacy resource/script provider adapter 未退役                  |
-| `task-catalog`           |                 4 | 多来源目录读模型 landed；当前仍传 full Actor/string filter 且 route 直取 composition，未达最终 public query contract         |
-| `collaboration`          |                 3 | RFC-326 review-anchor/public-query seed 已落；review 主体、route/MCP/continuation 仍在 legacy                                |
-| `intent`                 |                 1 | pure domain seed                                                                                                             |
+| current module           | production TS/TSX | architecture interpretation                                                                                          |
+| ------------------------ | ----------------: | -------------------------------------------------------------------------------------------------------------------- |
+| `development-automation` |               113 | active writer/type package；aggregate、工具合同与功能闭环已落，public/required/inbound/bootstrap cutover 未完成      |
+| `identity-access`        |                33 | role/grant/authority、presence、profile/email/Git identity slices landed；route 直读与 full Actor facade 未退役      |
+| `integration`            |                31 | webhook/code-host、adapter definition/connection + Event Center adapter；仍有 schema/inbound 装配债                  |
+| `task-execution`         |                57 | RFC-331 topology/query/adapter 已切掉 task SCC family/六条 exact edge；四级 engine 仍待 W2-B/C/D                     |
+| `digital-employee`       |                23 | EmployeeCase/Context/Reaction/authoring/runtime + frozen adapter binding landed；TE required-port cutover 未完成     |
+| `source-control`         |                22 | candidate/commit/publication transport/credential slices；WorkspaceRef/repo/cache/worktree owner 未收口              |
+| `event-center`           |                20 | catalog/subscription/observer/delivery/automation-rule writer landed；canonical outbox/background/root 收口未完成    |
+| `code-capability`        |                19 | legacy history/template island；仅 upstream merge 为有账临时 writer，非 active execution owner                       |
+| `execution-contract`     |                 7 | executor-neutral guide/fixture/exact-output contract landed；legacy resource/script provider adapter 未退役          |
+| `task-catalog`           |                 4 | 多来源目录读模型 landed；当前仍传 full Actor/string filter 且 route 直取 composition，未达最终 public query contract |
+| `collaboration`          |                 3 | RFC-326 review-anchor/public-query seed 已落；review 主体、route/MCP/continuation 仍在 legacy                        |
+| `intent`                 |                 1 | pure domain seed                                                                                                     |
 
 物理 module 已增至 326 个 production TS/TSX 文件，但增长没有自动形成唯一 bootstrap：当前 CLI `start.ts`、HTTP `server.ts` 与 MCP dispatch 各自装配一部分 context，
 Integration 还用 deferred participant 避免重复 composition 覆盖；54 个 route/MCP 文件继续导入 `AppDeps`，15 条 route→DB 与两条

@@ -41,7 +41,10 @@ import {
   type ScopeOutcome,
   type ScopeOutcomeInput,
 } from '../src/services/dispatchFrontier'
-import { deriveFrontier, type Frontier } from '../src/services/scheduler'
+import {
+  deriveFrontier,
+  type Frontier,
+} from '../src/modules/task-execution/composition/dagFrontier'
 
 type Row = typeof nodeRuns.$inferSelect
 type WorkflowNode = WorkflowDefinition['nodes'][number]

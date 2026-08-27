@@ -3,6 +3,7 @@ import { createWebSocketTaskStatusPublisher } from '../infrastructure/webSocketT
 export type {
   SchedulerDriverPort,
   SchedulerRuntimeTopology,
+  TaskDriveRuntimeOptions,
   TaskStatusPublisher,
 } from '../application/ports/taskExecutionTopology'
 export {

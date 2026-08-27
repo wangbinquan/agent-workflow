@@ -332,7 +332,21 @@ function physicalLayer(unit: SourceUnit): string {
   return relative.split('/')[0] ?? 'legacy'
 }
 
-function targetContextFor(path: string, symbol = ''): TargetOwner {
+function semanticTokens(path: string, symbol: string): readonly string[] {
+  return `${path}#${symbol}`
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 0)
+}
+
+export function hasScheduleTargetToken(path: string, symbol = ''): boolean {
+  return semanticTokens(path, symbol).some((token) =>
+    ['schedule', 'scheduled', 'schedules', 'scheduling'].includes(token),
+  )
+}
+
+export function targetContextFor(path: string, symbol = ''): TargetOwner {
   const location = moduleLocation(path)
   if (
     location !== null &&
@@ -353,7 +367,9 @@ function targetContextFor(path: string, symbol = ''): TargetOwner {
   if (/fusion|skillversion|knowledge/.test(value)) return 'knowledge-evolution'
   if (/structural|symbol|insight|narrative/.test(value)) return 'workspace-insight'
   if (/runtime|opencode|claudecode|providerprofile/.test(value)) return 'runtime-management'
-  if (/webhook|codehost|gitlab|github|integration|schedule/.test(value)) return 'integration'
+  if (/webhook|codehost|gitlab|github|integration/.test(value) || hasScheduleTargetToken(path, symbol)) {
+    return 'integration'
+  }
   if (/repo|git|worktree|workspace|candidate|commit|publish/.test(value)) return 'source-control'
   if (/review|clarify|question|collaboration|continuation/.test(value)) return 'collaboration'
   if (/employee|reaction|casecontext/.test(value)) return 'digital-employee'
@@ -362,6 +378,60 @@ function targetContextFor(path: string, symbol = ''): TargetOwner {
   if (/agent|workflow|workgroup|plugin|skill|mcp/.test(value)) return 'resource-catalog'
   if (/backup|restore|maintenance|doctor|migrate/.test(value)) return 'system-operations'
   return 'task-execution'
+}
+
+const SCHEDULER_W2_B_SYMBOLS = new Set([
+  'buildScopeUpstreams',
+  'deriveFrontier',
+  'findScopeCycle',
+  'runScope',
+  'runTaskInner',
+  'runTaskWithTopology',
+])
+const SCHEDULER_W2_C_SYMBOLS = new Set(['buildWorkgroupHooks', 'runHostNode', 'runOneNode'])
+const SCHEDULER_W2_D_SYMBOLS = new Set([
+  'dispatchFanoutAggregator',
+  'dispatchFanoutShard',
+  'replayConflictHumanResolutions',
+  'replayPendingMerges',
+  'runGitWrapperNode',
+  'runLoopWrapperNode',
+  'runWrapperNode',
+])
+const SCHEDULER_W3_SYMBOLS = new Set(['cancelTaskRow', 'emitStatus', 'failTask'])
+const SCHEDULER_W5_SYMBOLS = new Set(['inspectReadonlyRepos', 'maybeRunCommitPush'])
+
+const RFC_332_COMPATIBILITY_BRIDGE_FILES = new Set([
+  'packages/backend/src/modules/task-execution/composition/dagFrontier.ts',
+  'packages/backend/src/modules/task-execution/composition/taskDagGraph.ts',
+  'packages/backend/src/modules/task-execution/composition/taskDagScope.ts',
+  'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
+])
+
+function isRfc332CompatibilityEdge(edge: Pick<ObservedContextEdge, 'fromFile' | 'toFile'>): boolean {
+  return (
+    RFC_332_COMPATIBILITY_BRIDGE_FILES.has(edge.fromFile) ||
+    (edge.fromFile === 'packages/backend/src/services/startTaskDeps.ts' &&
+      edge.toFile ===
+        'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts')
+  )
+}
+
+export function targetRemoveAfterWaveFor(
+  path: string,
+  symbol: string,
+  targetContext: TargetOwner = targetContextFor(path, symbol),
+): string {
+  if (path === 'packages/backend/src/services/scheduler.ts') {
+    if (SCHEDULER_W2_B_SYMBOLS.has(symbol)) return 'W2-B'
+    if (SCHEDULER_W2_C_SYMBOLS.has(symbol)) return 'W2-C'
+    if (SCHEDULER_W2_D_SYMBOLS.has(symbol)) return 'W2-D'
+    if (SCHEDULER_W3_SYMBOLS.has(symbol)) return 'W3'
+    if (SCHEDULER_W5_SYMBOLS.has(symbol)) return 'W5'
+    return 'W2-C/W2-D/W3/W5'
+  }
+  return targetContext === 'source-control' ? 'W5' : 'W4/W9'
 }
 
 function targetLayerFor(path: string, symbol: string): string {
@@ -437,9 +507,7 @@ function buildOwnerEntries(units: readonly SourceUnit[]): OwnerEntry[] {
               : 'current-module',
         removeAfterWave:
           unit.path.startsWith(BACKEND_PREFIX) && location === null
-            ? targetContextFor(unit.path, item.name) === 'source-control'
-              ? 'W5'
-              : 'W4/W9'
+            ? targetRemoveAfterWaveFor(unit.path, item.name)
             : null,
         signatureDigest: digestText(item.node.getText(unit.source).replace(/\s+/g, ' ').trim()),
       })
@@ -668,10 +736,15 @@ function observedContextEdges(
       let removeAfterWave: string | null = null
       if (fromLocation === null) {
         role = 'legacy-inbound'
-        removeAfterWave = 'W4/W9'
+        removeAfterWave =
+          unit.path === 'packages/backend/src/services/startTaskDeps.ts' &&
+          item.toFile ===
+            'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts'
+            ? 'W2-D'
+            : 'W4/W9'
       } else if (toLocation === null) {
         role = 'legacy-outbound'
-        removeAfterWave = 'W4/W5/W9'
+        removeAfterWave = targetRemoveAfterWaveFor(item.toFile, item.importedName)
       } else {
         const publicEntry = publicLocation(item.toFile)
         const requiredPort = requiredPortLocation(item.toFile)
@@ -2619,12 +2692,16 @@ function buildArchitectureExceptions(
       edgeKind: edge.edgeKind,
       owner: edge.owner,
       why:
-        edge.role === 'legacy-inbound'
+        isRfc332CompatibilityEdge(edge)
+          ? 'RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover.'
+          : edge.role === 'legacy-inbound'
           ? 'Legacy inbound caller reaches a module boundary before its W4 public use-case cutover.'
           : edge.role === 'legacy-outbound'
             ? 'A module still reaches a legacy implementation before its owner adapter cutover.'
             : 'Current module edge reaches a non-public internal entrypoint and must not become precedent.',
-      introducedByRFC: 'pre-RFC-294-current-debt',
+      introducedByRFC: isRfc332CompatibilityEdge(edge)
+        ? 'RFC-332'
+        : 'pre-RFC-294-current-debt',
       removeAfterWave: edge.removeAfterWave!,
       expiresOn: '2027-12-31',
       mutationTest: 'rfc294-canonical-manifests: exact exception stale/unknown mutation',

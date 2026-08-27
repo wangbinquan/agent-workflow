@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 905,
+    "entries": 910,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -6914,6 +6914,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinator.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinator.ts#AdmittedContinuationStep",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinator.ts#AdmittedContinuationStep",
+      "symbol": "AdmittedContinuationStep",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": false,
@@ -7209,6 +7234,70 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition.ts#createTaskExecutionTestModule",
       "symbol": "createTaskExecutionTestModule",
+      "targetContext": "task-execution",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/dagFrontier.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/dagFrontier.ts#SETTLES_WITHOUT_ROW_KINDS",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/dagFrontier.ts#SETTLES_WITHOUT_ROW_KINDS",
+      "symbol": "SETTLES_WITHOUT_ROW_KINDS",
+      "targetContext": "task-execution",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/taskDagScope.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/taskDagScope.ts#runScope",
+      "missingControls": [
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDagScope.ts#runScope",
+      "symbol": "runScope",
+      "targetContext": "task-execution",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "finalCriterion": "controls-complete",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#runTaskEngineOrchestratorInner",
+      "missingControls": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#runTaskEngineOrchestratorInner",
+      "symbol": "runTaskEngineOrchestratorInner",
       "targetContext": "task-execution",
       "targetLayer": "composition"
     },
@@ -7826,6 +7915,78 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts#createSqliteTaskLifecycleEventPublisher",
       "symbol": "createSqliteTaskLifecycleEventPublisher",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#attachTaskDriver",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#attachTaskDriver",
+      "symbol": "attachTaskDriver",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createTaskDriverLifecyclePort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createTaskDriverLifecyclePort",
+      "symbol": "createTaskDriverLifecyclePort",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "effect",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat",
+      "symbol": "startOwnerHeartbeat",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -8758,7 +8919,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#runPrune",
       "symbol": "runPrune",
-      "targetContext": "integration",
+      "targetContext": "system-operations",
       "targetLayer": "engine"
     },
     {
@@ -8783,7 +8944,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#runWalCheckpointTick",
       "symbol": "runWalCheckpointTick",
-      "targetContext": "integration",
+      "targetContext": "system-operations",
       "targetLayer": "engine"
     },
     {
@@ -8808,7 +8969,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#startBackupScheduler",
       "symbol": "startBackupScheduler",
-      "targetContext": "integration",
+      "targetContext": "system-operations",
       "targetLayer": "engine"
     },
     {
@@ -8833,7 +8994,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#startWalCheckpointLoop",
       "symbol": "startWalCheckpointLoop",
-      "targetContext": "integration",
+      "targetContext": "system-operations",
       "targetLayer": "engine"
     },
     {
@@ -10522,6 +10683,29 @@
       "symbol": "DisabledPolicyEntry",
       "targetContext": "task-execution",
       "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#RunTaskOptions",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#RunTaskOptions",
+      "symbol": "RunTaskOptions",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -16518,7 +16702,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#cancelTaskRow",
       "symbol": "cancelTaskRow",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16539,7 +16723,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#cancelTaskRowUnlocked",
       "symbol": "cancelTaskRowUnlocked",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16561,7 +16745,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#createOrRebuildWrapperIso",
       "symbol": "createOrRebuildWrapperIso",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16585,7 +16769,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#launchCallChild",
       "symbol": "launchCallChild",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16610,7 +16794,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#launchCallWorkgroupChild",
       "symbol": "launchCallWorkgroupChild",
-      "targetContext": "integration",
+      "targetContext": "resource-catalog",
       "targetLayer": "engine"
     },
     {
@@ -16628,7 +16812,7 @@
       "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCallWorkflowNode",
       "symbol": "runCallWorkflowNode",
-      "targetContext": "integration",
+      "targetContext": "resource-catalog",
       "targetLayer": "engine"
     },
     {
@@ -16668,7 +16852,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runFanoutWrapperNode",
       "symbol": "runFanoutWrapperNode",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16689,7 +16873,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runGitWrapperNode",
       "symbol": "runGitWrapperNode",
-      "targetContext": "integration",
+      "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
     {
@@ -16710,7 +16894,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runLoopWrapperNode",
       "symbol": "runLoopWrapperNode",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16728,7 +16912,7 @@
       "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
       "symbol": "runOneNode",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16749,28 +16933,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneScriptAttempt",
       "symbol": "runOneScriptAttempt",
-      "targetContext": "integration",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/scheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/scheduler.ts#runScope",
-      "missingControls": [
-        "authority",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runScope",
-      "symbol": "runScope",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16792,72 +16955,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runScriptNode",
       "symbol": "runScriptNode",
-      "targetContext": "integration",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/services/scheduler.ts",
-      "finalCriterion": "controls-complete",
-      "id": "mutation:packages/backend/src/services/scheduler.ts#runTaskInner",
-      "missingControls": [],
-      "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runTaskInner",
-      "symbol": "runTaskInner",
-      "targetContext": "integration",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/scheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/scheduler.ts#RunTaskOptions",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#RunTaskOptions",
-      "symbol": "RunTaskOptions",
-      "targetContext": "integration",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/scheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/scheduler.ts#runTaskWithTopology",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runTaskWithTopology",
-      "symbol": "runTaskWithTopology",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16882,32 +16980,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runWrapperNode",
       "symbol": "runWrapperNode",
-      "targetContext": "integration",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/scheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/scheduler.ts#SETTLES_WITHOUT_ROW_KINDS",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#SETTLES_WITHOUT_ROW_KINDS",
-      "symbol": "SETTLES_WITHOUT_ROW_KINDS",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16930,7 +17003,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#upsertWrapperOutput",
       "symbol": "upsertWrapperOutput",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "engine"
     },
     {
@@ -16953,7 +17026,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/schedulerAssembly.ts#runAssembly",
       "symbol": "runAssembly",
-      "targetContext": "integration",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -17789,6 +17862,53 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/task.ts#createPersistedRepositoryPreparationStep",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#createPersistedRepositoryPreparationStep",
+      "symbol": "createPersistedRepositoryPreparationStep",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/task.ts#createTaskDriveCoordinator",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#createTaskDriveCoordinator",
+      "symbol": "createTaskDriveCoordinator",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "internal-family",
         "authorization": false,
         "event": true,
@@ -17810,7 +17930,7 @@
     {
       "controls": {
         "audit": true,
-        "authority": "internal-family",
+        "authority": "system",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -17872,18 +17992,16 @@
     {
       "controls": {
         "audit": true,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
       },
       "file": "packages/backend/src/services/task.ts",
-      "finalCriterion": "W3/W4 owner cutover",
+      "finalCriterion": "controls-complete",
       "id": "mutation:packages/backend/src/services/task.ts#retryNode",
-      "missingControls": [
-        "authority"
-      ],
+      "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#retryNode",
       "symbol": "retryNode",
       "targetContext": "task-execution",
@@ -17909,6 +18027,30 @@
       "symbol": "retryRepoPreparation",
       "targetContext": "source-control",
       "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/task.ts#retryRepositoryPreparation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#retryRepositoryPreparation",
+      "symbol": "retryRepositoryPreparation",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -17952,29 +18094,6 @@
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#runtimeConfigOpts",
       "symbol": "runtimeConfigOpts",
       "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "effect",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/task.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/task.ts#startOwnerHeartbeat",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/task.ts#startOwnerHeartbeat",
-      "symbol": "startOwnerHeartbeat",
-      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -18025,18 +18144,16 @@
     {
       "controls": {
         "audit": true,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
       },
       "file": "packages/backend/src/services/task.ts",
-      "finalCriterion": "W3/W4 owner cutover",
+      "finalCriterion": "controls-complete",
       "id": "mutation:packages/backend/src/services/task.ts#startTaskImpl",
-      "missingControls": [
-        "authority"
-      ],
+      "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
       "symbol": "startTaskImpl",
       "targetContext": "task-execution",
@@ -21495,7 +21612,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:429634a3ef996f850943f83b85091b38d076ecdb4dd74fa77647b2f5a68b7c70",
+  "sourceDigest": "sha256:85d8ab76161aef027be6c7c780e54633f86544e5b849f393394402d9465ee508",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -23468,22 +23585,6 @@
       },
       {
         "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "recordClarifyInlineEvent",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#11033:nodeRunEvents",
-        "line": 11033,
-        "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#recordClarifyInlineEvent",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "recordClarifyInlineEvent"
-      },
-      {
-        "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
@@ -23491,8 +23592,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#3714:nodeRuns",
-        "line": 3714,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#2009:nodeRuns",
+        "line": 2009,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCallWorkflowNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23507,8 +23608,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#3751:nodeRuns",
-        "line": 3751,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#2046:nodeRuns",
+        "line": 2046,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCallWorkflowNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23523,8 +23624,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#3791:nodeRuns",
-        "line": 3791,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#2086:nodeRuns",
+        "line": 2086,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCallWorkflowNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23539,8 +23640,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#4060:nodeRunOutputs",
-        "line": 4060,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#2355:nodeRunOutputs",
+        "line": 2355,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCallWorkflowNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23555,8 +23656,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#4947:nodeRunOutputs",
-        "line": 4947,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#3242:nodeRunOutputs",
+        "line": 3242,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCodeHostCallNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23571,8 +23672,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5338:nodeRunEvents",
-        "line": 5338,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#3633:nodeRunEvents",
+        "line": 3633,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneScriptAttempt",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23587,8 +23688,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5434:nodeRuns",
-        "line": 5434,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#3729:nodeRuns",
+        "line": 3729,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneScriptAttempt",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23603,8 +23704,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5466:nodeRunEvents",
-        "line": 5466,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#3761:nodeRunEvents",
+        "line": 3761,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneScriptAttempt",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23619,8 +23720,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5487:nodeRunEvents",
-        "line": 5487,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#3782:nodeRunEvents",
+        "line": 3782,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneScriptAttempt",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23635,8 +23736,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5521:nodeRunEvents",
-        "line": 5521,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#3816:nodeRunEvents",
+        "line": 3816,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneScriptAttempt",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23651,8 +23752,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5614:nodeRunOutputs",
-        "line": 5614,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#3909:nodeRunOutputs",
+        "line": 3909,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneScriptAttempt",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23667,8 +23768,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5743:nodeRuns",
-        "line": 5743,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#4038:nodeRuns",
+        "line": 4038,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#judgeBranchActivation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23683,8 +23784,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#5865:nodeRunOutputs",
-        "line": 5865,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#4160:nodeRunOutputs",
+        "line": 4160,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23699,8 +23800,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#6071:nodeRunOutputs",
-        "line": 6071,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#4366:nodeRunOutputs",
+        "line": 4366,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23715,8 +23816,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#6459:nodeRunEvents",
-        "line": 6459,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#4754:nodeRunEvents",
+        "line": 4754,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23731,8 +23832,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#6482:nodeRunEvents",
-        "line": 6482,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#4777:nodeRunEvents",
+        "line": 4777,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23747,8 +23848,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#6508:nodeRunEvents",
-        "line": 6508,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#4803:nodeRunEvents",
+        "line": 4803,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23763,8 +23864,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#7054:nodeRuns",
-        "line": 7054,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#5349:nodeRuns",
+        "line": 5349,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23779,8 +23880,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#7539:nodeRuns",
-        "line": 7539,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#5834:nodeRuns",
+        "line": 5834,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#persistWrapperProgress",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23795,8 +23896,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#8244:nodeRuns",
-        "line": 8244,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#6539:nodeRuns",
+        "line": 6539,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runFanoutWrapperNode",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23811,8 +23912,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#8790:nodeRuns",
-        "line": 8790,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#7085:nodeRuns",
+        "line": 7085,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#dispatchFanoutShardAttempt",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23827,12 +23928,28 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/scheduler.ts",
-        "id": "task-authority:packages/backend/src/services/scheduler.ts#9753:nodeRunOutputs",
-        "line": 9753,
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#8048:nodeRunOutputs",
+        "line": 8048,
         "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#upsertWrapperOutput",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "upsertWrapperOutput"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "recordClarifyInlineEvent",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/services/scheduler.ts",
+        "id": "task-authority:packages/backend/src/services/scheduler.ts#9297:nodeRunEvents",
+        "line": 9297,
+        "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#recordClarifyInlineEvent",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "recordClarifyInlineEvent"
       },
       {
         "allowedTables": [
@@ -23843,8 +23960,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3360:tasks",
-        "line": 3360,
+        "id": "task-authority:packages/backend/src/services/task.ts#3305:tasks",
+        "line": 3305,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -23859,8 +23976,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3485:taskExecutionIntents",
-        "line": 3485,
+        "id": "task-authority:packages/backend/src/services/task.ts#3430:taskExecutionIntents",
+        "line": 3430,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -23875,8 +23992,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3543:tasks",
-        "line": 3543,
+        "id": "task-authority:packages/backend/src/services/task.ts#3488:tasks",
+        "line": 3488,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -23891,8 +24008,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4267:tasks",
-        "line": 4267,
+        "id": "task-authority:packages/backend/src/services/task.ts#4116:tasks",
+        "line": 4116,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -23907,8 +24024,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5854:tasks",
-        "line": 5854,
+        "id": "task-authority:packages/backend/src/services/task.ts#5604:tasks",
+        "line": 5604,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

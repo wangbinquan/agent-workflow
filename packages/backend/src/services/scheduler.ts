@@ -19,10 +19,7 @@ import type {
   ClarifyNode,
   EnvelopeFollowupReason,
   FailureCode,
-  Language,
   MergeState,
-  MergeStateOrNull,
-  NodeKind,
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
@@ -39,14 +36,7 @@ import {
   retryAttemptCap,
   type RetryShapeState,
   type EnvelopeFollowupOutcome,
-  channelEdgeDataflowSkip,
-  NODE_KIND,
-  NODE_KIND_BEHAVIORS,
-  WorkflowDefinitionSchema,
-  migrateWorkflowDefinitionToLatest,
-  parseTriggerContextJson,
   agentHasClarifyChannel,
-  analyzeWorkflowScopeTree,
   buildWorkflowScopeParentMap,
   buildPriorOutputBlock,
   deriveWrapperFanoutOutputs,
@@ -56,26 +46,19 @@ import {
   findDesignerNodeForCrossClarify,
   findFanoutAggregator,
   findQuestionerNodeForCrossClarify,
-  isMergeStateSettled,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
   resolveKeyOf,
-  projectWorkflowDependency,
   readContinueOnMaxIterations,
   resolveWorkflowSourceRef,
   renderCallWorkgroupGoalTemplate,
   stringifyKind,
   tryParseKind,
-  exclusionPlanFor,
   describeWrapperKind,
   splitPortItems,
   isCodeHostAction,
 } from '@agent-workflow/shared'
-import {
-  bindWorkspaceExcludeParticipant,
-  resolveRepositoryPublicationTransportFromKeyFile,
-} from '@/modules/source-control/composition'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
+import { resolveRepositoryPublicationTransportFromKeyFile } from '@/modules/source-control/composition'
 import {
   applyAutoPromote,
   computeShardScope,
@@ -108,7 +91,6 @@ import {
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import {
-  clarifyRounds,
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
@@ -120,7 +102,6 @@ import {
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { fanoutInnerAgentRefKey, resolveNodeAgentRef } from '@/services/ref/runtimeRef'
 import { resolveInjection } from '@/services/execution/resolveInjection'
-import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,
@@ -139,9 +120,7 @@ import {
   type ClarifyInlineFallbackReason,
 } from '@/services/sessionModeFallback'
 import { evaluateExitCondition, parseExitCondition } from '@/services/exitCondition'
-import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
 import { resolveBorrowForNode } from '@/services/taskQuestionDispatch'
-import { autoDispatchDeferredQuestions } from '@/services/clarifyAutoDispatch'
 import {
   trySetTaskStatus,
   setNodeRunStatus,
@@ -161,7 +140,6 @@ import {
 } from '@/services/nodeRunMint'
 
 import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
-import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import {
   taskStopProjection,
@@ -175,14 +153,11 @@ import {
 import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import {
-  assertTaskExecutionContext,
   createCodeHostEffectAttemptObserver,
   createProcessEffectAttemptObserver,
   decodeLineageSlotPath,
   encodeLineageSlotPath,
-  exactOwnerMatches,
   operationFamilyKey,
-  runWithTaskExecutionContext,
   taskExecutionModule,
   taskExecutionRequestHash as executionEffectRequestHash,
   withCurrentTaskExecutionMutation,
@@ -191,29 +166,18 @@ import {
   type ProcessEffectAttemptObserver,
   type TaskExecutionContext,
 } from '@/services/taskExecutionParticipants'
-import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
-import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/public/types'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import {
-  areTransitiveUpstreamsCompleted,
-  buildFreshestSettledPerNode,
   consumedMapsEqual,
   isFresherNodeRun,
-  isNodeRunFresh,
   parseConsumedJson,
   pickFreshestRun,
   pickReusableShardRun,
   pickUpstreamSourceRun,
-  type NodeRunRow,
 } from '@/services/freshness'
-import {
-  decideScopeOutcome,
-  isDispatchable,
-  isReviewSupersededRow,
-  WRAPPER_KINDS,
-  wrapperExternalUpstreamSources,
-  wrapperRevivalEvidence,
-} from '@/services/dispatchFrontier'
+import { wrapperExternalUpstreamSources } from '@/services/dispatchFrontier'
+import { SETTLES_WITHOUT_ROW_KINDS } from '@/modules/task-execution/public/types'
 import { runNode, type RunResult } from '@/services/runner'
 import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
@@ -281,18 +245,14 @@ import {
   type MergeConflictManifest,
 } from '@/services/mergeAgent'
 import {
-  runWorkgroupEngine,
   type WorkgroupEngineHooks,
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
 } from '@/services/workgroup/engine'
-import { loadWorkgroupTaskState } from '@/services/workgroup/state'
-import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
-import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
-import { isWorkgroupTask } from '@agent-workflow/shared'
-// RFC-243 §1.2 — the engine fork is decided by the executor registry (a pure
-// resolver extracted verbatim from the inline dispatch this file used to own).
-import { resolveTaskEngine } from '@/services/execution/engines'
+import type {
+  LegacyNodeResult,
+  LegacyTaskMechanicsState,
+} from '@/services/execution/taskMechanicsState'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import {
@@ -311,17 +271,10 @@ import { TERMINAL_TASK_STATUSES, type StartTask } from '@agent-workflow/shared'
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { existsSync } from 'node:fs'
 import { basename, join as pathJoin } from 'node:path'
-// RFC-266: the scheduler no longer CONSTRUCTS any semaphore — all three come
-// from the daemon-scoped registries (processNodeConcurrency / taskFanoutPools /
-// taskWriteLocks), so a settings change resizes the very instances in use.
-import type { Semaphore } from '@/util/semaphore'
 import { ulid } from 'ulid'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { executeCodeHostCall } from '@/services/codeHost/call'
-import {
-  resolveCodeHostConnectionsFromKeyFile,
-  type CodeHostConnectionsService,
-} from '@/services/codeHost/connections'
+import { resolveCodeHostConnectionsFromKeyFile } from '@/services/codeHost/connections'
 import { resolveProjectFallback } from '@/services/codeHost/project'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
@@ -337,139 +290,8 @@ import {
 export { INHERITABLE_RUN_CONFIG_KEYS, pickInheritableRunConfig }
 export type InheritableRunConfig = ReturnType<typeof pickInheritableRunConfig>
 
-export interface RunTaskOptions {
-  taskId: string
-  db: DbClient
-  appHome: string
-  /**
-   * RFC-328 exact durable claim, supplied only by the claim→attach handoff.
-   * Optional solely for legacy unit fixtures that call runTask against an
-   * ownerless in-memory database; a durable claimed owner always requires it.
-   * It is intentionally absent from the child inheritance registry because a
-   * child task obtains its own intent/epoch.
-   */
-  executionContext?: TaskExecutionContext
-  /**
-   * RFC-304: fences MR leases across a restart. A lease minted by a previous
-   * daemon is void, so a machine that died holding leases does not lock every
-   * MR it touched until each one expires. Defaults to `'dev'` when unset, which
-   * is correct for tests and single-process runs.
-   */
-  daemonGeneration?: string
-  /** TEST-ONLY runtime-neutral command-head override (mock binaries; its
-   *  presence also keeps real credential bridges off — RFC-282 C1). */
-  binaryOverride?: readonly string[]
-  /** Daemon config path — config.opencodePath/claudeCodePath fold into the
-   *  FROZEN binary at mint time (RFC-282 C1-2; RFC-111 D15 alignment). */
-  configPath?: string
-  log?: Logger
-  /**
-   * When aborted, any node currently running is SIGTERMed via runNode and the
-   * task transitions to status=canceled. Subsequent nodes are not started.
-   */
-  signal?: AbortSignal
-  /**
-   * Default per-node timeout in ms (from settings). RFC-115: the per-node
-   * `timeoutMs` override is removed — this global value applies to every node.
-   */
-  defaultPerNodeTimeoutMs?: number
-  /**
-   * RFC-115: global per-node retry budget (from config.defaultNodeRetries).
-   * Replaces the per-node `retries` override; `?? 3` fallback for mock/unwired.
-   */
-  defaultNodeRetries?: number
-  /**
-   * RFC-313: 同会话追问链触顶后允许整体换几次干净会话（from config.sessionRestartBudget）。
-   * 与 defaultNodeRetries 相乘决定 attempt 硬上限，见 shared `retryAttemptCap`。
-   */
-  sessionRestartBudget?: number
-  /**
-   * RFC-253 — administrator interpreter overrides for script nodes. Absent
-   * entries resolve from the daemon's PATH.
-   */
-  scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
-  /** RFC-253 — wall clock for one dependency-environment build. */
-  scriptDepsInstallTimeoutMs?: number
-  /**
-   * Daemon-wide pool shared across tasks by AGENT-class process nodes — agent
-   * nodes, workgroup host nodes, fan-out shards and aggregators. Default 4.
-   * RFC-266: script nodes have their own pool below and no longer compete here.
-   */
-  maxConcurrentNodes?: number
-  /** RFC-266: daemon-wide pool for script nodes, independent of the agent pool. Default 4. */
-  maxConcurrentScriptNodes?: number
-  /** RFC-269: independent pool for code-host call nodes (default 8). */
-  maxConcurrentCodeHostCalls?: number
-  /** RFC-269: per-request wall clock; node-level `timeoutMs` overrides it. */
-  codeHostRequestTimeoutMs?: number
-  /** RFC-269: cap on the `response` port value before explicit truncation. */
-  codeHostResponseMaxBytes?: number
-  /**
-   * RFC-269: the credential service. Absent ⇒ code-host nodes fail with
-   * `code-host-not-configured` (the same self-skip discipline the OIDC and
-   * webhook surfaces use when `secretBox` is missing).
-   */
-  codeHostConnections?: CodeHostConnectionsService
-  /** RFC-269: outbound fetch seam; production omits it, tests inject a stub. */
-  codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
-  /** RFC-321 exact publication transport; tests may inject, production resolves the daemon key. */
-  repositoryPublicationTransport?: RepositoryPublicationTransport
-  /** Concurrency cap for fan-out child subprocesses (P-3-02). Default 4. */
-  multiProcessSubprocessConcurrency?: number
-  /**
-   * RFC-060 D.T6: runtime cartesian guard for wrapper-fanout. When a single
-   * wrapper-fanout (possibly with nested wrapper-fanouts) would mint more
-   * than this many total shards, the wrapper finalizes 'failed' with
-   * `wrapper-fanout-cartesian-exceeds-max` rather than minting the shards.
-   * Default 256.
-   */
-  fanoutMaxShardTotal?: number
-  /** RFC-243 §3.2: daemon-wide active-child-task cap (default 8). */
-  maxActiveChildTasks?: number
-  /** RFC-243 §3.2: invocation-chain depth ceiling (default 3). */
-  maxInvocationDepth?: number
-  /**
-   * RFC-048: forwarded verbatim to every `runNode` call so the runner spins
-   * up its subagent live-capture poller with the operator-configured cadence.
-   * Omitted → runner falls back to its compile-time defaults.
-   */
-  subagentLiveCapture?: { pollMs: number; consecutiveFailureLimit: number }
-  /**
-   * RFC-075: model for the built-in commit agent (commit message + push
-   * repair). Omitted → opencode's installed default. Repair budget + diff
-   * truncation use the DEFAULT_COMMIT_PUSH_* constants (Settings wiring is a
-   * follow-up; the runtime reads sensible defaults today).
-   */
-  commitPushModel?: string
-  /** RFC-117: runtime profile NAME for the built-in commit agent (config.commitPushRuntime); wins over commitPushModel. */
-  commitPushRuntime?: string
-  /** RFC-130 §6.1: deprecated model fallback for the built-in merge-conflict resolver agent (config.mergeAgentModel). */
-  mergeAgentModel?: string
-  /** RFC-130 §6.1: runtime profile NAME for the built-in merge agent (config.mergeAgentRuntime); wins over mergeAgentModel. */
-  mergeAgentRuntime?: string
-  /** RFC-075: repair-retry budget; falls back to DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES. */
-  commitPushMaxRepairRetries?: number
-  /** RFC-075: diff byte cap for the commit-message prompt; falls back to DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES. */
-  commitPushDiffMaxBytes?: number
-  /** RFC-308: immutable exclusion settings slice for this scheduler operation. */
-  commitPushExcludePatterns?: readonly string[]
-  /** RFC-308: resume/retry asks the scheduler to rebuild persisted worktree profiles. */
-  ensureWorkspaceProfiles?: boolean
-  /** RFC-157: commit-message output language (initial + repair); undefined ≡ en-US. */
-  commitPushLang?: Language
-  /**
-   * RFC-111 D1/D15 + RFC-112: global default runtime NAME (from
-   * config.defaultRuntime). At the agent-dispatch site each node's runtime is
-   * resolved once from `agent.runtime ?? defaultRuntime` (name → protocol+binary
-   * via the registry) and frozen onto node_runs. resume reads the frozen value.
-   * Omitted → 'opencode'. Internal agents (commit&push) stay on opencode (D14).
-   */
-  defaultRuntime?: string
-  // RFC-113 §5: the RFC-112 P2 `claudeCodePath` thread is GONE — the built-in
-  // claude binary now lives on the claude runtime row's binary_path (config
-  // migrated into it) and flows through the normal runtimeBinary freeze.
-}
-
+export type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
+import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 /**
  * RFC-284 T20（§4）—— 子任务继承面的唯一登记：buildChildDeps 按本清单整体透传，
  * 新增 RunTaskOptions 字段时**必须**在测试的处置表里表态（inherit / per-task /
@@ -493,85 +315,7 @@ type NodeStatus =
   | 'awaiting_review'
   | 'awaiting_human'
 
-interface SchedulerState {
-  db: DbClient
-  task: typeof tasks.$inferSelect
-  taskId: string
-  definition: WorkflowDefinition
-  opts: RunTaskOptions
-  topology: SchedulerRuntimeTopology
-  log: Logger
-  inputsMap: Record<string, string>
-  /** RFC-292: parsed once from the frozen task row; inherited by every scope. */
-  triggerContext: TriggerContext | null
-  /**
-   * RFC-266: the two INDEPENDENT daemon-wide pools. `agentSem` covers agent
-   * nodes, workgroup host nodes and fan-out shards/aggregators; `scriptSem`
-   * covers RFC-253 script nodes. A given executor takes exactly ONE of them and
-   * never both, so the pools introduce no lock order between themselves.
-   */
-  agentSem: Semaphore
-  scriptSem: Semaphore
-  /** RFC-269: the code-host call pool. */
-  codeHostSem: Semaphore
-  writeSem: Semaphore
-  /** RFC-266: per-task fan-out sub-pool, from the daemon-scoped registry so a
-   *  settings change reaches a task that is already running. */
-  subprocessSem: Semaphore
-  /** nodeId → innermost wrapper id containing it. */
-  containerOf: Map<string, string>
-  /** Top-level scope set of node ids. */
-  topLevelIds: Set<string>
-  /**
-   * RFC-066: per-repo metadata loaded once at scheduler entry, threaded
-   * through every templateMeta dispatch + the multi-repo
-   * `pre_snapshot_repos_json` write path. Single-repo tasks get a length-1
-   * array mirroring the legacy `task.repoPath` / `task.baseBranch` columns
-   * (`worktreeDirName: ''`, so `{{__repo_names__}}` renders empty — the
-   * single-repo byte-baseline is preserved). Always non-empty; defensive
-   * fallback in runTask handles the ultra-rare task row that predates
-   * migration 0034's INSERT FROM backfill.
-   */
-  repos: Array<{
-    /** RFC-248 AC-19: 回写 `task_repos.readonly_dirty_count` 时定位行。 */
-    repoIndex: number
-    repoPath: string
-    worktreePath: string
-    worktreeDirName: string
-    /** RFC-248: 规范仓 key = 挂载路径；'' = 挂根。取代 worktreeDirName。 */
-    mountPath: string
-    /**
-     * RFC-248 D11: 只读成员——不写 pre_snapshot、resume 不回滚、不进 git_diff、
-     * 不参与自动提交推送。物理上仍可写（框架不在文件系统层面阻止），任务收尾时
-     * 检出 dirty 就发告警。
-     */
-    readonly: boolean
-    baseBranch: string
-    /** RFC-187 §4 (Codex impl-gate P1) — per-repo base for the zero-delta-done check.
-     *  A multi-repo task's `tasks.worktreePath` is a NON-git parent container, so
-     *  diffing it would just throw; each repo must be diffed at its own worktree/base. */
-    baseCommit: string | null
-  }>
-  /**
-   * RFC-193 D9 — THIS scope's canonical container root. Top level =
-   * `task.worktreePath`; inside a git/loop wrapper the innerState carries the
-   * wrapper-canonical's containerPath (single-repo: == repos[0] iso root;
-   * multi-repo: their parent dir — same container semantics as
-   * task.worktreePath). Consumers that read files relative to "the scope the
-   * node lives in" (review fallback chain, S1 repair) use THIS, never
-   * task.worktreePath directly — the latter is wrong inside wrappers (the
-   * exact bug this RFC roots out).
-   */
-  scopeRoot: string
-  /** RFC-248: 用仓库组启动时的组名快照（`tasks.repo_group_name`）；否则 null。
-   *  只喂 `{{__repo_group__}}` 占位符用。 */
-  repoGroupName: string | null
-}
-
-/**
- * Drive one task from "pending" to a terminal status. Caller decides whether
- * to await this (tests) or fire-and-forget (HTTP route).
- */
+export type SchedulerState = LegacyTaskMechanicsState
 
 /** RFC-282 C1-2 — config binary fallbacks for the mint-time freeze. Read at
  *  freeze time (same read-current family as the old per-entry resolution),
@@ -602,575 +346,9 @@ export function readCommitExcludePatterns(opts: RunTaskOptions): readonly string
 }
 
 /** Required production entrypoint: callers must provide the complete topology. */
-export async function runTaskWithTopology(
-  opts: RunTaskOptions,
-  topology: SchedulerRuntimeTopology,
-): Promise<void> {
-  // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
-  // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
-  // mutex against our cached SchedulerState.writeSem reference).
-  // RFC-266: the fan-out sub-pool registry entry follows the SAME rule and the
-  // same reasoning (a split pool would run a task at double its configured
-  // shard concurrency), so it is reclaimed in this one place too.
-  try {
-    if (opts.executionContext === undefined) await runTaskInner(opts, topology)
-    else {
-      await runWithTaskExecutionContext(opts.executionContext, () => runTaskInner(opts, topology))
-    }
-  } finally {
-    gcTaskWriteSem(opts.taskId)
-    gcTaskFanoutSem(opts.taskId)
-  }
-}
-
-async function runTaskInner(
-  opts: RunTaskOptions,
-  topology: SchedulerRuntimeTopology,
-): Promise<void> {
-  const log = opts.log ?? createLogger('scheduler')
-  const { db, taskId } = opts
-
-  // 1. Load task row.
-  const taskRows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
-  const task = taskRows[0]
-  if (!task) {
-    log.error('runTask: task not found', { taskId })
-    return
-  }
-
-  const durableOwner = taskExecutionModule.ownership.read(db, taskId)
-  if (opts.executionContext !== undefined) {
-    assertTaskExecutionContext(opts.executionContext, taskId)
-    if (durableOwner === null || !exactOwnerMatches(durableOwner, opts.executionContext.token)) {
-      log.warn('runTask: durable owner no longer matches execution context', { taskId })
-      return
-    }
-  } else if (durableOwner?.state === 'claimed') {
-    // A production-owned task may never fall back to the pre-RFC-328 status
-    // claim. Ownerless direct fixtures keep their historical test seam.
-    log.error('runTask: durable owner requires exact execution context', { taskId })
-    return
-  }
-
-  // RFC-066 PR-B T9: load per-repo metadata once at the top so every runner
-  // dispatch site can thread it through `templateMeta.repos` without an extra
-  // round-trip. Single-repo tasks get a length-1 array mirroring the legacy
-  // `tasks.*` columns (`worktreeDirName === ''` → `{{__repo_names__}}`
-  // renders empty, byte-baseline). Defensive fallback handles the ultra-rare
-  // case of a task row predating migration 0034's INSERT FROM backfill.
-  const repoRows = await db
-    .select()
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, taskId))
-    .orderBy(asc(taskRepos.repoIndex))
-  const repos: SchedulerState['repos'] =
-    repoRows.length > 0
-      ? repoRows.map((r) => ({
-          repoIndex: r.repoIndex,
-          repoPath: r.repoPath,
-          worktreePath: r.worktreePath,
-          worktreeDirName: r.worktreeDirName,
-          // RFC-248: 真值来自 DB 列（migration 0131 已 backfill 存量行）。
-          mountPath: r.mountPath,
-          readonly: r.readonly,
-          baseBranch: r.baseBranch,
-          baseCommit: r.baseCommit,
-        }))
-      : [
-          {
-            repoIndex: 0,
-            repoPath: task.repoPath,
-            worktreePath: task.worktreePath,
-            worktreeDirName: '',
-            mountPath: '',
-            readonly: false,
-            baseBranch: task.baseBranch,
-            baseCommit: task.baseCommit,
-          },
-        ]
-
-  // RFC-308: resume/retry/recovery never trust a profile left by the prior
-  // process or by an agent. Rebuild the exact per-worktree profile before any
-  // runner can observe or mutate the workspace.
-  if (
-    repoRows.length > 0 &&
-    (opts.ensureWorkspaceProfiles === true ||
-      repoRows.some(
-        (row) => row.workspaceProfileVersion !== 1 || row.workspaceProfileDigest === null,
-      ))
-  ) {
-    try {
-      const allMounts = repos.map((repo) => repo.mountPath)
-      for (const repo of repos) {
-        const receipt = await bindWorkspaceExcludeParticipant({
-          worktreePath: repo.worktreePath,
-          appHome: opts.appHome ?? Paths.root,
-        }).ensure({ directChildMounts: exclusionPlanFor(repo.mountPath, allMounts) })
-        withTaskExecutionMutation({
-          db,
-          taskId,
-          run: (tx) =>
-            tx
-              .update(taskRepos)
-              .set({
-                workspaceProfileVersion: receipt.version,
-                workspaceProfileDigest: receipt.digest,
-              })
-              .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.repoIndex, repo.repoIndex)))
-              .run(),
-        })
-      }
-    } catch (error) {
-      await failTask(
-        topology,
-        db,
-        taskId,
-        'workspace-exclude-profile-failed',
-        error instanceof Error ? error.message : String(error),
-        undefined,
-        opts.executionContext,
-      )
-      return
-    }
-  }
-
-  // 2. Parse workflow snapshot.
-  let definition: WorkflowDefinition
-  try {
-    const raw: unknown = JSON.parse(task.workflowSnapshot)
-    definition = migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(raw))
-  } catch (err) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'snapshot-invalid',
-      (err as Error).message,
-      undefined,
-      opts.executionContext,
-    )
-    return
-  }
-
-  // RFC-292: keep NULL, valid context and corrupt JSON distinct. Historical
-  // flat RFC-269 rows are wrapped in memory by the shared decoder.
-  const parsedTriggerContext = parseTriggerContextJson(task.triggerContextJson)
-  const triggerIssue = triggerPreflightIssue({
-    root: definition,
-    closureJson: task.refClosureJson,
-    source: parsedTriggerContext,
-  })
-  if (triggerIssue !== null) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      triggerIssue.code,
-      triggerIssue.code,
-      undefined,
-      opts.executionContext,
-    )
-    return
-  }
-  const triggerContext = parsedTriggerContext.kind === 'ok' ? parsedTriggerContext.value : null
-
-  // 3. Mark running — CAS from 'pending' ONLY (RFC-097, audit S-8/S-14).
-  // The unconditional write here used to revive canceled/done tasks and let a
-  // second runTask take over a live one. CAS loss → another driver owns the
-  // task (or it is terminal): log and step away without minting anything.
-  const claimed = await trySetTaskStatus({
-    db,
-    taskId,
-    to: 'running',
-    allowedFrom: ['pending'],
-    ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
-    reason: 'runTask-start',
-  })
-  if (!claimed) {
-    log.warn('runTask: task not claimable (not pending) — refusing to drive it', { taskId })
-    return
-  }
-  await emitStatus(topology, taskId)
-
-  // 4. Validate node kinds. RFC-146: positive membership in the behavior
-  // table — a kind the scheduler knows is exactly a kind with a behavior row.
-  // (The historical negative enum listed 6 `!==` clauses and silently
-  // admitted nothing new; now adding a NodeKind admits it here by
-  // construction, and runOneNode's fall-through guard catches kinds the
-  // dispatch switch doesn't actually handle yet.)
-  for (const node of definition.nodes) {
-    // Object.hasOwn (not `in`) — inherited keys must not pass the whitelist.
-    if (!Object.hasOwn(NODE_KIND_BEHAVIORS, node.kind)) {
-      await failTask(
-        topology,
-        db,
-        taskId,
-        `scheduler does not yet support ${node.kind} nodes`,
-        `node kind ${node.kind} unsupported`,
-        node.id,
-        opts.executionContext,
-      )
-      return
-    }
-  }
-
-  // Defense in depth for legacy/imported snapshots that predate the validator
-  // rule. Scheduler maps key by node id; allowing duplicates would silently
-  // fold one node away and the later topological check would lie to the user
-  // with an unrelated cycle error.
-  const nodeIdCounts = new Map<string, number>()
-  for (const node of definition.nodes) {
-    nodeIdCounts.set(node.id, (nodeIdCounts.get(node.id) ?? 0) + 1)
-  }
-  const duplicateNode = [...nodeIdCounts].find(([, count]) => count > 1)
-  if (duplicateNode !== undefined) {
-    const [nodeId, count] = duplicateNode
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'workflow-node-id-duplicate',
-      `node id '${nodeId}' appears ${count} times; node ids must be unique`,
-      nodeId,
-      opts.executionContext,
-    )
-    return
-  }
-
-  // Wrapper containment is the coordinate system for recursive scheduling.
-  // Launch validation normally guarantees a tree, but imported/historical
-  // snapshots and direct DB callers can bypass it. Never execute against the
-  // deterministic diagnostic fallback map when membership is ambiguous:
-  // two wrappers could otherwise dispatch the same child concurrently.
-  const scopeTree = analyzeWorkflowScopeTree(definition)
-  const containmentIssue = scopeTree.issues[0]
-  if (containmentIssue !== undefined) {
-    const failedNodeId =
-      containmentIssue.code === 'wrapper-containment-cycle'
-        ? containmentIssue.cycle[0]
-        : containmentIssue.code === 'wrapper-child-multiple-parents'
-          ? containmentIssue.childId
-          : containmentIssue.wrapperId
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'wrapper-containment-invalid',
-      `${containmentIssue.code}: ${JSON.stringify(containmentIssue)}`,
-      failedNodeId,
-      opts.executionContext,
-    )
-    return
-  }
-
-  // RFC-248 D9: 多仓 + wrapper-git 的禁令**已解除**。RFC-066 当年禁它是因为
-  // 包裹器只会对单一 worktree 取快照；现在它逐仓快照、逐仓 diff，并把每个仓的
-  // 路径用挂载路径前缀化后合并成一个 `list<path>`（见 runGitWrapperNode）。
-  // 这里原本有一条 `multi-repo-wrapper-git-unsupported` 的纵深防御门，随禁令
-  // 一并删除——留着它会让组任务永远跑不了平台的 Code → Audit → Fix 主链路。
-
-  // 5. Direct child → wrapper map. Chained entries retain nested scope ancestry.
-  const containerOf = scopeTree.parents
-  const topLevelIds = new Set<string>()
-  for (const n of definition.nodes) {
-    if (!containerOf.has(n.id)) topLevelIds.add(n.id)
-  }
-
-  // 6. Pre-validate the same projected graph the runtime frontier will use.
-  //    Raw-edge filtering misses cycles that cross a wrapper boundary.
-  const topLevelNodes = definition.nodes.filter((n) => topLevelIds.has(n.id))
-  const topLevelUpstreams = buildScopeUpstreams(definition, topLevelIds, null, containerOf)
-  if (findScopeCycle(topLevelNodes, topLevelUpstreams) !== null) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'workflow has a cycle outside any loop wrapper',
-      'cycle detected',
-      undefined,
-      opts.executionContext,
-    )
-    return
-  }
-
-  // 7. Inputs map from launcher form.
-  const inputsMap: Record<string, string> = (() => {
-    try {
-      return JSON.parse(task.inputs) as Record<string, string>
-    } catch {
-      return {}
-    }
-  })()
-
-  const state: SchedulerState = {
-    db,
-    task,
-    taskId,
-    definition,
-    opts,
-    topology,
-    // RFC-248: 组名**快照**（`tasks.repo_group_name`）——组被删除后仍能渲染，
-    // 这正是 D8 存这一列的理由。
-    repoGroupName: task.repoGroupName ?? null,
-    log,
-    inputsMap,
-    triggerContext,
-    // RFC-266: two independent daemon-wide pools (script nodes no longer queue
-    // behind agent runs). Both come from the daemon-scoped registry, which
-    // resizes the SAME instance when the setting changes — so a settings save
-    // applies to this run, not just to the next launch.
-    agentSem: getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4, 'seed-only'),
-    scriptSem: getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4, 'seed-only'),
-    // RFC-269: the third pool — one outbound HTTP request is a second-scale
-    // step and holds no subprocess, so it gets its own (larger) budget.
-    codeHostSem: getNodePoolSemaphore(
-      db,
-      'code-host',
-      opts.maxConcurrentCodeHostCalls ?? 8,
-      'seed-only',
-    ),
-    // RFC-098 B1 (audit S-9): the writer lock comes from the per-task
-    // registry so HTTP rollback paths (clarify/review/cross-clarify) hold THE
-    // SAME instance. gc happens in this function's finally only (see
-    // taskWriteLocks.ts lifecycle doc).
-    writeSem: getTaskWriteSem(taskId),
-    // RFC-266: from the per-task registry (same lifecycle rule as writeSem) so
-    // PUT /api/config can resize a RUNNING task's fan-out. Before RFC-266 this
-    // was a local `new Semaphore(...)` fed by a value nothing ever threaded.
-    subprocessSem: getTaskFanoutSem(taskId, opts.multiProcessSubprocessConcurrency ?? 4),
-    containerOf,
-    topLevelIds,
-    // RFC-066: thread per-repo metadata through every inner dispatch.
-    repos,
-    // RFC-193 D9: top-level scope canonical = the task worktree container.
-    scopeRoot: task.worktreePath,
-  }
-
-  // 8. Drive the top-level scope. Any thrown error must land the task in
-  // `failed` rather than wedge it on `running`: runTask is fire-and-forget from
-  // the HTTP/resume path, so an unhandled rejection (e.g. an illegal node_run
-  // transition, or a DB error inside a sink/wrapper branch that — unlike the
-  // agent path — has no local try/catch) would otherwise leave the task stuck
-  // `running` and unresumable (resumeTask refuses `running`). See
-  // scheduler-boundary-wrapper-resume-interrupted.test.ts.
-  let result: ScopeResult
-  try {
-    // RFC-130 T3c2: recover any 'pending-merge' rows from a crash between
-    // agent-success and merge-back BEFORE the scope runs (so the frontier only
-    // sees merged rows). A no-op on a fresh run / non-isolated task.
-    await replayPendingMerges(state, log)
-    // RFC-130 §6.3 resume: complete any conflict-human node whose human resolved
-    // its conflict in the preserved resolve-iso (flips 'merged' + releases
-    // downstream; still-unresolved stays parked). No-op on a fresh run.
-    await replayConflictHumanResolutions(state, log)
-    // RFC-164: workgroup tasks are driven by the round engine, NEVER by the
-    // DAG frontier (design §4). The host snapshot's nodes exist only as mint
-    // anchors + clarify wiring; runScope/deriveFrontier must not see them.
-    // RFC-167: dynamic_workflow workgroups are the exception — their dispatch
-    // follows the dw phase. RFC-243 §1.2: the decision itself now lives in
-    // the executor engine registry (resolveTaskEngine — same oracle, extracted
-    // verbatim); this file keeps consuming it. RFC-217 T2: the phase lives in
-    // workgroup_task_state (an unknown mode still routes to the turn engine,
-    // which fails with its own precise config diagnostics).
-    const { engine, wgDispatch } = resolveTaskEngine(
-      task,
-      isWorkgroupTask(task)
-        ? ((await loadWorkgroupTaskState(db, taskId)).dwState?.phase ?? null)
-        : null,
-    )
-    if (
-      wgDispatch === 'dw-execute' &&
-      definition.nodes.some((n) => n.id === DW_ORCHESTRATOR_NODE_ID)
-    ) {
-      // Fail-fast invariant (design §3): phase='executing' promises the
-      // snapshot is the confirmed generated DAG. Running the generation host
-      // snapshot through runScope would dispatch the orchestrator node as a
-      // regular agent — refuse loudly instead.
-      await failTask(
-        topology,
-        db,
-        taskId,
-        'dw-phase-invariant',
-        `task is phase='executing' but its snapshot still contains the generation host node`,
-        undefined,
-        opts.executionContext,
-      )
-      return
-    }
-    result =
-      engine === 'dw-generate'
-        ? await runDynamicWorkflowGenerate({
-            db,
-            taskId,
-            log,
-            ...(opts.signal ? { signal: opts.signal } : {}),
-            hooks: buildWorkgroupHooks(state),
-          })
-        : engine === 'workgroup-turns'
-          ? await runWorkgroupEngine({
-              db,
-              taskId,
-              log,
-              ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildWorkgroupHooks(state),
-            })
-          : await runScope(state, {
-              scopeId: null,
-              scopeIds: topLevelIds,
-              iteration: 0,
-              log,
-            })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    log.error('runTask: scope threw — failing task', { taskId, error: message })
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'scheduler error',
-      message,
-      undefined,
-      opts.executionContext,
-    )
-    return
-  }
-
-  // RFC-248 AC-19（实现门 P1）：只读成员的脏检查必须在**每一条终态路径**上都
-  // 跑一次，而不是搭在自动提交推送里——`maybeRunCommitPush` 只在
-  // `task.autoCommitPush` 开启且顶层节点成功后触发，于是默认配置的任务、以及
-  // 失败 / 取消的任务，`readonly_dirty_count` 永远是 NULL、详情页永远没有提示。
-  // 放在这里：跑完节点、分派终态之前，done / failed / canceled / awaiting_* 全覆盖。
-  //
-  // 包 try/catch：这只是一条给人看的通报，绝不能因为它把任务收尾搞垮。
-  try {
-    await inspectReadonlyRepos(state, log)
-  } catch (err) {
-    log.warn('[rfc248/readonly-dirty] inspection failed (ignored)', {
-      taskId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  if (result.kind === 'failed' && result.detail) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      result.detail.summary,
-      result.detail.message,
-      result.detail.nodeId,
-      opts.executionContext,
-    )
-    return
-  }
-  if (result.kind === 'canceled') {
-    await cancelTaskRow(
-      topology,
-      db,
-      taskId,
-      result.detail?.nodeId,
-      opts.signal?.reason,
-      opts.executionContext,
-    )
-    return
-  }
-  if (result.kind === 'awaiting_review') {
-    // RFC-005: task pauses with status=awaiting_review until a decision lands
-    // via REST. Decision handler will call resumeTask which re-enters here.
-    // RFC-097: cancel wins — an abort that landed after runScope's last
-    // signal check must not be overwritten by a park/terminal write.
-    if (opts.signal?.aborted === true) {
-      await cancelTaskRow(
-        topology,
-        db,
-        taskId,
-        undefined,
-        opts.signal.reason,
-        opts.executionContext,
-      )
-      return
-    }
-    if (
-      await trySetTaskStatus({
-        db,
-        taskId,
-        to: 'awaiting_review',
-        allowedFrom: ['running'],
-        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
-        reason: 'scope-awaiting-review',
-      })
-    ) {
-      await emitStatus(topology, taskId)
-      log.info('task awaiting human review', { taskId })
-    } else {
-      log.warn('awaiting_review write lost to a concurrent transition — respecting winner', {
-        taskId,
-      })
-    }
-    return
-  }
-  if (result.kind === 'awaiting_human') {
-    // RFC-023: an agent (or one or more agent-multi shard children) emitted a
-    // <workflow-clarify> envelope. The clarify node_run is parked
-    // awaiting_human; the source agent has no rerun row yet — that's
-    // created when the user POSTs answers. Per design §7.3 awaiting_human
-    // outranks awaiting_review on the task chip when both can fire at once.
-    if (opts.signal?.aborted === true) {
-      await cancelTaskRow(
-        topology,
-        db,
-        taskId,
-        undefined,
-        opts.signal.reason,
-        opts.executionContext,
-      )
-      return
-    }
-    if (
-      await trySetTaskStatus({
-        db,
-        taskId,
-        to: 'awaiting_human',
-        allowedFrom: ['running'],
-        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
-        reason: 'scope-awaiting-human',
-      })
-    ) {
-      await emitStatus(topology, taskId)
-      log.info('task awaiting human clarification', { taskId })
-    } else {
-      log.warn('awaiting_human write lost to a concurrent transition — respecting winner', {
-        taskId,
-      })
-    }
-    return
-  }
-
-  // 9. Done. RFC-097: cancel wins — final aborted check before the terminal
-  // CAS; a cancelTask fallback racing us resolves by whoever's CAS lands
-  // (from-sets are disjoint winners: done from=running vs canceled CAS).
-  if (opts.signal?.aborted === true) {
-    await cancelTaskRow(topology, db, taskId, undefined, opts.signal.reason, opts.executionContext)
-    return
-  }
-  if (
-    await trySetTaskStatus({
-      db,
-      taskId,
-      to: 'done',
-      allowedFrom: ['running'],
-      extra: { finishedAt: Date.now() },
-      ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
-      reason: 'task-done',
-    })
-  ) {
-    await emitStatus(topology, taskId)
-    log.info('task done', { taskId })
-  } else {
-    log.warn('done write lost to a concurrent transition — respecting winner', { taskId })
-  }
-}
-
+// RFC-332 W2-B: task-level hydrate/claim/engine-selection/settle moved to
+// composition/taskEngineApplication.ts. This file now retains only the
+// W2-C/D scheduler mechanics consumed through explicit compatibility exports.
 // -----------------------------------------------------------------------------
 // RFC-164 — workgroup engine integration. The engine (workgroupRunner.ts) owns
 // orchestration; this hook owns the MECHANICS of one host-node run, copied
@@ -1673,20 +851,6 @@ export function buildWorkgroupHooks(state: SchedulerState): WorkgroupEngineHooks
 // scope execution
 // -----------------------------------------------------------------------------
 
-interface ScopeResult {
-  kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
-  detail?: { summary: string; message: string; nodeId?: string }
-  processUnreaped?: true
-}
-
-interface ScopeArgs {
-  /** Wrapper node that owns this scope; null for the workflow root. */
-  scopeId: string | null
-  scopeIds: Set<string>
-  iteration: number
-  log: Logger
-}
-
 // RFC-096: `isFresherNodeRun` moved to freshness.ts (the row-ordering
 // authority lives with the freshness primitives now; audit S-13 / WP-3).
 // Re-exported here so the six existing test files importing it from the
@@ -1825,403 +989,10 @@ export function shouldRetryNodeFailure(
   return true
 }
 
-async function runScope(state: SchedulerState, args: ScopeArgs): Promise<ScopeResult> {
-  const { db, taskId, definition, opts } = state
-  const { scopeId, scopeIds, iteration, log } = args
-
-  // RFC-076 PR-B — completion-driven dispatch frontier (replaces the
-  // snapshot-batch + Promise.all-barrier + rescan/recompute reconcile model).
-  //
-  // Each tick re-reads node_runs and re-derives the dispatchable frontier from
-  // scratch (`deriveFrontier`); there is no mutable completed/remaining snapshot
-  // to keep in sync, so the old `rescanScopeForNewPendingRows` (mid-execution
-  // clarify answers) and `recomputeFreshnessAndDemote` (RFC-074 multi-hop
-  // demotion) are subsumed — both effects fall out of re-deriving from the DB.
-  //
-  // Newly-ready nodes start IMMEDIATELY and we await the FIRST in-flight
-  // completion (`Promise.race`), so a finished node's downstream dispatches the
-  // instant its last upstream settles — no waiting on the slowest sibling in a
-  // batch. RFC-130: every node runs in its OWN isolated worktree, so ALL nodes
-  // run truly in parallel under the node pool (the `readonly` flag was removed —
-  // there is no read/write distinction); `writeSem` only serializes the brief
-  // per-node snapshot-at-dispatch (§段①) + merge-back (§段③), not the agent run.
-  //
-  // `scopeNodes` includes output sinks: each gets a virtual node_run mirroring
-  // its upstream port content, so invariant T3 (task.done ⟹ every output node
-  // has a done node_run) holds and the detail page reads outputs uniformly.
-  const scopeNodes = definition.nodes.filter((n) => scopeIds.has(n.id))
-  const upstreamsOf = buildScopeUpstreams(definition, scopeIds, scopeId, state.containerOf)
-  const scopeNodeById = new Map(scopeNodes.map((n) => [n.id, n]))
-
-  // Defensive cycle check for the dispatch graph. runTask topologically validates
-  // the TOP scope at launch, but inner wrapper scopes (loop / git / fanout) were
-  // never checked: a same-iteration data cycle between two inner nodes makes
-  // areTransitiveUpstreamsCompleted false for both forever, so the scope goes
-  // quiescent and fails with an opaque "scheduler stalled". Surface a clear cycle
-  // error instead (channel/back edges are already dropped by buildScopeUpstreams,
-  // so a cycle here is a genuine same-iteration data cycle). See
-  // scheduler-boundary-intra-loop-cycle-stall.test.ts.
-  const cycleNode = findScopeCycle(scopeNodes, upstreamsOf)
-  if (cycleNode !== null) {
-    return {
-      kind: 'failed',
-      detail: {
-        summary: `cycle detected inside scope at node '${cycleNode}'`,
-        message: 'scope-cycle',
-        nodeId: cycleNode,
-      },
-    }
-  }
-
-  // In-flight node promises keyed by nodeId; `dispatchedThisInvocation` recovers
-  // the per-invocation dedup the old `remaining.delete(n.id)` provided (N3): a
-  // pure status read can't distinguish "failed row already (re-)dispatched this
-  // call" from "failed row awaiting a fresh resume", so we remember what we
-  // started. `parkedDetail` captures awaiting/failed summaries as they happen so
-  // the terminal block can bubble the right message (a node parked in a PRIOR
-  // invocation has no entry → falls back to '' / the generic detail, matching
-  // the old `?? ''` wrapper bubbling).
-  const inFlight = new Map<string, Promise<{ nodeId: string; result: OneNodeResult }>>()
-  const dispatchedThisInvocation = new Set<string>()
-  // One top-level node can complete more than once in the same scope iteration:
-  // a fresh pending clarify/review rerun is deliberately redispatched below.
-  // Commit synthetics therefore need a trigger generation in addition to
-  // nodeId+iteration; otherwise Map.set overwrites the older live Promise and
-  // cancel/normal drain can return while that worktree writer still runs.
-  let nextCommitPushSequence = 0
-  // Synthetic publication stays non-blocking for the DAG, but two publication
-  // attempts for the same canonical task worktree must never mutate its Git
-  // index concurrently. The tail only orders commit synthetics created by this
-  // scope invocation; ordinary node promises continue racing in `inFlight`.
-  let commitPushTail: Promise<void> = Promise.resolve()
-  // RFC-092 (audit S-1): pending anchor rows already released this invocation.
-  // A node in `dispatchedThisInvocation` re-dispatches when an out-of-band
-  // rerun mints a FRESH pending row (mid-run clarify answer / review
-  // decision); this set bounds that bypass to one release per row id.
-  const dispatchedPendingRowIds = new Set<string>()
-  const parkedDetail = new Map<string, { summary: string; message: string }>()
-  let firstFailureDetail: { summary: string; message: string; nodeId?: string } | undefined
-
-  // RFC-098 B1: in-flight auto commit&push promises are keyed
-  // 'commitpush:<nodeId>:<iter>:<sequence>' — a unique NON-node key, so
-  // repeated same-node reruns cannot overwrite a still-live commit Promise;
-  // deriveFrontier's in-flight node set never matches a scope node, so dispatch is
-  // not frozen while a commit session runs (the synchronous await here used
-  // to freeze the whole dispatch loop, audit S-17 second half). Canceled
-  // exits MUST drain them (their inner runNode holds the shared signal and
-  // returns quickly) — abandoning a commit session past runTask's finally
-  // would orphan a worktree-writing process AND let the write-lock registry
-  // gc race it (adversarial-review revision #2).
-  const drainCommitPush = async (): Promise<void> => {
-    const pending = [...inFlight.entries()].filter(([k]) => k.startsWith('commitpush:'))
-    for (const [k, p] of pending) {
-      try {
-        await p
-      } catch {
-        /* commit failures never break task execution */
-      }
-      inFlight.delete(k)
-    }
-  }
-
-  while (true) {
-    if (opts.signal?.aborted === true) {
-      // Cancel is a hard short-circuit: the abort already fired, so every live
-      // child receives SIGTERM through the shared signal. Return immediately
-      // without draining in-flight NODE promises — but commit&push synthetics
-      // must be drained (see drainCommitPush above).
-      await drainCommitPush()
-      return { kind: 'canceled', detail: { summary: 'task canceled', message: 'signal aborted' } }
-    }
-
-    // RFC-140 W2 — auto-redispatch the auto-split-DEFERRED task questions (marker set at batch
-    // dispatch + still undispatched + still staged) BEFORE deriving the frontier. The tick re-
-    // enters after EVERY node-run completion, so the home whose in-flight rerun just finished
-    // redispatches its deferred cause batch on this very tick (the in-flight gate inside
-    // dispatchTaskQuestions releases on done, incl. done-no-output — RFC-133/139). Retryable
-    // conflicts keep the marker for the next tick; non-recoverable ones clear it (WARN, back to
-    // the manual board). Runs OUTSIDE lock B (dispatch acquires it internally). A successful
-    // redispatch mints pending rows that the deriveFrontier below picks up in the same tick.
-    await autoDispatchDeferredQuestions(db, taskId)
-    // RFC-311 (audit L2-4): the frontier consumes six scalar columns; the old
-    // select() decoded every run's prompt_text + iso/inventory JSON on EVERY
-    // scheduler tick (the tick re-enters after each node-run completion), so
-    // long tasks made the scheduler itself the event-loop hog.
-    const rows = await db
-      .select({
-        id: nodeRuns.id,
-        nodeId: nodeRuns.nodeId,
-        status: nodeRuns.status,
-        iteration: nodeRuns.iteration,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
-        mergeState: nodeRuns.mergeState,
-        shardKey: nodeRuns.shardKey,
-        consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
-        supersededByReview: nodeRuns.supersededByReview,
-        wrapperProgressJson: nodeRuns.wrapperProgressJson,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
-    const openClarify = await loadOpenClarify(db, taskId)
-    // RFC-132 PR-B (universal deferred model): the park gate applies to ALL tasks now — a
-    // sealed-undispatched entry (a designer waiting for its siblings — "park 等齐" — or a
-    // self/questioner entry whose auto-dispatch was deferred by a recoverable conflict) parks its
-    // home so the frontier never falsely completes the asking node on a clarify-only output
-    // (RFC-076 T0). loadUndispatchedParkTargets returns EMPTY for a task with no sealed-undispatched
-    // entries (every steady-state task the instant its answers dispatch), so this stays byte-for-byte
-    // the old frontier for that case; the `deferredQuestionDispatch` flag is no longer read.
-    // RFC-128 P5-BC (clean-path ③) + P5-D (Codex round-3 fix): the park set classifies designer +
-    // self/questioner entries TOGETHER (loadUndispatchedParkTargets), NOT as the per-role UNION. The
-    // union deadlocks a SAME-HOME node that holds an undispatched entry of one role AND an in-flight
-    // rerun of another (the per-role designer source is blind to an in-flight questioner → parks the
-    // node → stalls its pending rerun forever). The all-role partition is in-flight-aware across every
-    // role, so such a node RUNS its in-flight rerun + re-parks next tick.
-    const deferredHandlerNodeIds = await loadUndispatchedParkTargets(db, taskId)
-    const f = deriveFrontier(
-      rows,
-      definition,
-      scopeNodes,
-      scopeIds,
-      iteration,
-      upstreamsOf,
-      new Set(inFlight.keys()),
-      dispatchedThisInvocation,
-      openClarify.clarifyNodeIds,
-      openClarify.askingRunIds,
-      dispatchedPendingRowIds,
-      deferredHandlerNodeIds,
-    )
-
-    for (const nodeId of f.ready) {
-      const node = scopeNodeById.get(nodeId)
-      if (node === undefined) continue
-      dispatchedThisInvocation.add(nodeId)
-      const anchor = f.pendingAnchors.get(nodeId)
-      if (anchor !== undefined) dispatchedPendingRowIds.add(anchor)
-      inFlight.set(
-        nodeId,
-        runOneNode(state, { node, iteration, log }).then((result) => ({ nodeId, result })),
-      )
-    }
-
-    if (inFlight.size === 0) {
-      // Quiescent — nothing running and nothing newly ready. The priority
-      // decision (awaiting_human > awaiting_review > firstFailure > exhausted
-      // > done > stalled) lives in the pure decideScopeOutcome (RFC-095,
-      // dispatchFrontier.ts) so it is table-testable; the stalled branch now
-      // names the blocked nodes (audit S-12) instead of a bare message.
-      const outcome = decideScopeOutcome(f, firstFailureDetail)
-      if (outcome.kind === 'awaiting_human' || outcome.kind === 'awaiting_review') {
-        return { kind: outcome.kind, detail: detailFor(outcome.nodeId, parkedDetail) }
-      }
-      return outcome
-    }
-
-    const { nodeId, result } = await Promise.race(inFlight.values())
-    inFlight.delete(nodeId)
-
-    if (result.processUnreaped === true) {
-      // Do not derive another frontier while an old framework child can still
-      // write the canonical worktree. Existing siblings were already admitted;
-      // let them settle, but mint no replacement work in this invocation.
-      await Promise.allSettled(inFlight.values())
-      inFlight.clear()
-      return {
-        kind: 'failed',
-        processUnreaped: true,
-        detail: {
-          summary: result.summary,
-          message: result.message,
-          nodeId,
-        },
-      }
-    }
-
-    if (result.kind === 'canceled') {
-      // Hard short-circuit (user-tripped signal): no point draining the rest
-      // of the NODE promises; commit&push synthetics are drained (revision #2).
-      await drainCommitPush()
-      return {
-        kind: 'canceled',
-        detail: { summary: result.summary, message: result.message, nodeId },
-      }
-    }
-    if (result.kind === 'awaiting_review' || result.kind === 'awaiting_human') {
-      // Park: record the detail and re-derive next tick. Other branches may
-      // still be in flight; only when the scope goes quiescent does the
-      // terminal block bubble this up (priority canceled > awaiting_human >
-      // awaiting_review > failed). An un-answered clarify cannot be silently
-      // lost just because a sibling failed.
-      parkedDetail.set(nodeId, { summary: result.summary, message: result.message })
-      continue
-    }
-    if (result.kind === 'failed') {
-      // Record the first failure but do NOT short-circuit — sibling branches
-      // may still surface awaiting_human / awaiting_review. The failed row is
-      // in `dispatchedThisInvocation`, so deriveFrontier will NOT re-dispatch
-      // it this call (it lands in the `failed` bucket); a fresh invocation
-      // (resume/retry) re-mints it via isDispatchable (N1).
-      if (firstFailureDetail === undefined) {
-        firstFailureDetail = { summary: result.summary, message: result.message, nodeId }
-      }
-      continue
-    }
-    // ok — RFC-075 auto commit&push after a top-level node completes (opt-in;
-    // a commit failure must NEVER break task execution). RFC-098 B1: runs as
-    // a SYNTHETIC in-flight entry instead of a synchronous await — the
-    // dispatch loop keeps racing node completions and dispatching ready
-    // nodes while the commit session runs. The synthetic resolves kind 'ok'
-    // unconditionally (failures are logged inside).
-    if (
-      state.task.autoCommitPush &&
-      state.topLevelIds.has(nodeId) &&
-      !nodeId.startsWith('commitpush:')
-    ) {
-      const node = scopeNodeById.get(nodeId)
-      if (node !== undefined) {
-        const syntheticKey = `commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`
-        const commitWork = commitPushTail.then(() =>
-          maybeRunCommitPush(state, node, iteration, log),
-        )
-        commitPushTail = commitWork.then(
-          () => undefined,
-          () => undefined,
-        )
-        inFlight.set(
-          syntheticKey,
-          commitWork
-            .catch((err) => {
-              log.warn('auto commit&push trigger failed (ignored)', {
-                nodeId,
-                syntheticKey,
-                error: err instanceof Error ? err.message : String(err),
-              })
-              return {} as { processUnreaped?: true }
-            })
-            .then((commitResult) => ({
-              nodeId: syntheticKey,
-              result: (commitResult.processUnreaped === true
-                ? {
-                    kind: 'failed',
-                    summary: 'commit agent child could not be reaped',
-                    message: 'commit-agent-child-unreaped',
-                    processUnreaped: true,
-                  }
-                : {
-                    kind: 'ok',
-                    summary: 'commit&push settled',
-                    message: '',
-                  }) as OneNodeResult,
-            })),
-        )
-      }
-    }
-  }
-}
-
-/**
- * RFC-076 PR-B — terminal detail for a parked / failed node when the scope goes
- * quiescent. A node parked THIS invocation has its summary/message captured in
- * `parked`; a node parked in a PRIOR invocation (e.g. a resume that never had to
- * re-run it) has no entry and falls back to '' — matching the old wrapper
- * bubbling (`subRes.detail?.summary ?? ''`) and the fact that the top-level
- * runTask ignores awaiting detail entirely (it only sets the task status chip).
- */
-function detailFor(
-  nodeId: string,
-  parked: Map<string, { summary: string; message: string }>,
-): { summary: string; message: string; nodeId: string } {
-  const d = parked.get(nodeId)
-  return { summary: d?.summary ?? '', message: d?.message ?? '', nodeId }
-}
-
-/**
- * RFC-076 PR-B — the open-clarify evidence `deriveFrontier` needs to honor a
- * clarify park while re-deriving the frontier purely from node_runs. Two sets,
- * both from UNANSWERED (`awaiting_human`) self / cross-clarify sessions:
- *
- *   - `clarifyNodeIds` (N6): clarify / cross-clarify NODE ids with an open
- *     session. Positive evidence that prevents settling a clarify leaf without a
- *     row during the "agent emitted <workflow-clarify>, createClarifyRound(kind='self')
- *     mid-write" window (the session row can land before the clarify node_run).
- *
- *   - `askingRunIds`: the node_run ids of the ASKING agent / questioner runs
- *     (`source_agent_node_run_id` / `source_questioner_node_run_id`). When an
- *     agent emits <workflow-clarify>, the runner marks the agent's OWN run
- *     `done` and runOneNode returns `awaiting_human`; the old batch model used
- *     that return value to keep the agent OUT of `completed` (so downstream
- *     stayed blocked until the answer minted a rerun). A DB-derived frontier
- *     sees only the `done` row, so without this set it would complete the asking
- *     agent and run its downstream against an empty/clarify-only output (S12:
- *     the diamond's sibling builder ran twice). An asking run id parks its node
- *     in awaitingHuman until submitClarifyAnswers mints the rerun.
- *
- * A task parked awaiting a clarify never advances its loop iteration, so no
- * iteration filter is needed (a stale awaiting session from a prior iteration
- * cannot coexist with active scheduling of a later one).
- */
-async function loadOpenClarify(
-  db: DbClient,
-  taskId: string,
-): Promise<{ clarifyNodeIds: Set<string>; askingRunIds: Set<string> }> {
-  const clarifyNodeIds = new Set<string>()
-  const askingRunIds = new Set<string>()
-  const self = await db
-    .select({
-      nodeId: clarifyRounds.intermediaryNodeId,
-      askingRunId: clarifyRounds.askingNodeRunId,
-    })
-    .from(clarifyRounds)
-    .where(
-      and(
-        eq(clarifyRounds.kind, 'self'),
-        eq(clarifyRounds.taskId, taskId),
-        eq(clarifyRounds.status, 'awaiting_human'),
-      ),
-    )
-  for (const r of self) {
-    clarifyNodeIds.add(r.nodeId)
-    if (r.askingRunId !== null && r.askingRunId !== '') askingRunIds.add(r.askingRunId)
-  }
-  const cross = await db
-    .select({
-      nodeId: clarifyRounds.intermediaryNodeId,
-      askingRunId: clarifyRounds.askingNodeRunId,
-    })
-    .from(clarifyRounds)
-    .where(
-      and(
-        eq(clarifyRounds.kind, 'cross'),
-        eq(clarifyRounds.taskId, taskId),
-        eq(clarifyRounds.status, 'awaiting_human'),
-      ),
-    )
-  for (const r of cross) {
-    clarifyNodeIds.add(r.nodeId)
-    if (r.askingRunId !== null && r.askingRunId !== '') askingRunIds.add(r.askingRunId)
-  }
-  return { clarifyNodeIds, askingRunIds }
-}
-
-/**
- * RFC-248 AC-19 —— 只读成员的脏检查。
- *
- * 只读成员不快照、不进 diff、不自动提交推送（D11）。但框架**不在文件系统层面
- * 阻止写入**——agent 拿到的就是一个普通目录。改动被静默丢弃是本 RFC 里最难排查
- * 的一类问题：agent 报告「已修复 vendor/sdk」→ 工作树里确实改了 → 推上去空空
- * 如也。所以把「丢弃了几处」持久化，任务详情据此提示。
- *
- * **每条终态路径都要跑**（done / failed / canceled / awaiting_*）。早先版本把它
- * 搭在自动提交推送里，于是只有 `autoCommitPush=true` 且顶层节点成功的任务才会
- * 被检查——默认配置与失败任务全都漏了（Codex 实现门 P1）。
- *
- * 干净时写 0 而不是留 NULL：UI 要能区分「检查过且干净」与「从未检查」。
- *
- * **刻意不用 `lifecycle_alerts`**：那张表绑 `LifecycleAlertRule`，RFC-108 的
- * 自动修复循环会全局扫描并尝试**修复**每一条。这不是待修复的不变量违反，是
- * 给人看的事实通报，让修复循环去碰它只会误修。
- */
-async function inspectReadonlyRepos(state: SchedulerState, log: Logger): Promise<void> {
+// RFC-332 W2-B: DAG scope ownership moved to
+// modules/task-execution/composition/taskDagScope.ts. W2-C/D mechanics below
+// receive only the nested-scope capability carried by SchedulerState.
+export async function inspectReadonlyRepos(state: SchedulerState, log: Logger): Promise<void> {
   for (const repo of state.repos) {
     if (!repo.readonly) continue
     const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
@@ -2259,7 +1030,7 @@ async function inspectReadonlyRepos(state: SchedulerState, log: Logger): Promise
  * gates it), so this is a pure addition for opt-in tasks. Each repo's commit
  * runs sequentially in the scope's result loop, so commits never interleave.
  */
-async function maybeRunCommitPush(
+export async function maybeRunCommitPush(
   state: SchedulerState,
   node: WorkflowNode,
   iteration: number,
@@ -2515,490 +1286,11 @@ async function maybeRunCommitPush(
 // The row-ordering primitives (isFresherNodeRun / buildFreshestSettledPerNode)
 // live in freshness.ts since RFC-096. Pure-function locks: derive-frontier.test.ts.
 
-export interface Frontier {
-  /** done∧fresh ∪ exhausted(loop-max terminal, HIGH-2) ∪ settles-without-row leaves. */
-  completed: Set<string>
-  /** transitive upstreams completed ∧ isDispatchable ∧ ∉ inFlight ∧ ∉ dispatchedThisInvocation. */
-  ready: string[]
-  /**
-   * RFC-092 (audit S-1): for every `ready` node whose latest row is `pending`,
-   * that row's id. The caller records these into its per-invocation
-   * `dispatchedPendingRowIds` set so each pending anchor row is released AT
-   * MOST ONCE — an out-of-band rerun mint (clarify answer / review decision)
-   * carries a fresh ULID and re-releases the node; a leaked pending row that a
-   * dispatch failed to consume degrades back to the stall semantics instead of
-   * hot-looping.
-   *
-   * RFC-098 B3 (audit S-3): a ready WRAPPER whose latest row is awaiting_*
-   * contributes its inner revival-EVIDENCE row id here instead (the inner
-   * pending rerun / approved review row, wrapperRevivalEvidence) — same
-   * one-shot release contract, keyed on the evidence rather than the wrapper
-   * row itself.
-   */
-  pendingAnchors: Map<string, string>
-  /** latest awaiting_review / awaiting_human, NOT going to ready (terminal bubbling). */
-  awaitingReview: string[]
-  awaitingHuman: string[]
-  /** latest failed, NOT going to ready (a dispatchable failed row = pending resume, not terminal). */
-  failed: string[]
-  /** latest 'exhausted' (loop-max) — a terminal FAILURE, surfaced when the scope is quiescent. */
-  exhausted: string[]
-  /**
-   * RFC-095 (audit S-12): nodes whose upstreams are complete and which are not
-   * in flight, yet are neither dispatchable nor in any park bucket — the old
-   * silent black holes (orphaned running rows, supersede-marker canceled rows,
-   * consumed pending anchors, skipped, …). Surfaced in the stalled diagnostic;
-   * `reason` is free-text payload, not an API contract.
-   */
-  blocked: Array<{ nodeId: string; status: string; reason: string }>
-  /** every in-scope node is completed ⇒ scope may return done. */
-  allSettled: boolean
-}
-
-// Graph-visit no-op kinds write NO node_run row (C1); they settle without one
-// once upstreams are done and no session is open (N6). RFC-146: derived from
-// the behavior table (today: clarify / clarify-cross-agent) instead of a
-// hand-maintained literal twin.
-const SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>(
-  NODE_KIND.filter((k) => NODE_KIND_BEHAVIORS[k].settlesWithoutRow),
-)
-
-function isLiveStatus(status: string): boolean {
-  return (
-    status === 'pending' ||
-    status === 'running' ||
-    status === 'awaiting_human' ||
-    status === 'awaiting_review'
-  )
-}
-
-/**
- * @param rows                     all node_runs for the task (filtered inside)
- * @param openClarifyNodeIds       clarify / clarify-cross-agent node ids with an
- *   UNANSWERED session (N6 positive evidence — caller queries clarify_sessions /
- *   cross_clarify_sessions). A no-row clarify leaf only settles when NOT here,
- *   closing the "agent done, createClarifyRound(kind='self') not yet written" window.
- * @param dispatchedThisInvocation nodes already dispatched this runScope call
- *   (N3 — recovers the old remaining.delete per-invocation dedup; pure status
- *   read can't tell "already-dispatched parked wrapper" from "fresh resume").
- * @param openClarifyNodeIds       clarify / cross-clarify NODE ids with an open
- *   session (N6 — see loadOpenClarify).
- * @param askingRunIds             node_run ids of asking agent / questioner runs
- *   with an open clarify session. Their `done` row is a clarify park, NOT a
- *   completion: excluded from `completed` and bucketed awaitingHuman until the
- *   answer mints a rerun (S12). See loadOpenClarify.
- * @param dispatchedPendingRowIds  pending row ids already released through the
- *   RFC-092 pending-anchor bypass this invocation (caller records
- *   `Frontier.pendingAnchors` of every dispatch). Bounds the bypass to one
- *   release per row — see Frontier.pendingAnchors.
- */
-/**
- * RFC-306 (design-gate P1#7) — the upstream run that makes a stale skip stale.
- *
- * Returns the freshest settled run id among this node's structural upstreams
- * that the skip row did NOT consume. That id is the release key: it identifies
- * the generation of new evidence, so the release fires once per upstream re-run
- * rather than once per tick.
- */
-function freshestUpstreamEvidenceId(
-  skippedRow: NodeRunRow,
-  upstreams: readonly string[],
-  freshestSettled: Map<string, NodeRunRow>,
-): string | undefined {
-  const consumed = parseConsumedJson(skippedRow.consumedUpstreamRunsJson)
-  let best: string | undefined
-  for (const upstreamId of upstreams) {
-    const current = freshestSettled.get(upstreamId)
-    if (current === undefined) continue
-    if (consumed[upstreamId] === current.id) continue // this leg is unchanged
-    if (best === undefined || current.id > best) best = current.id
-  }
-  return best
-}
-
-/** RFC-311 — the frontier consumes the freshness column contract (see
- *  `NodeRunRow` in services/freshness.ts); the per-tick query projects exactly
- *  those columns instead of dragging prompt_text / iso JSON along. */
-export type FrontierRunRow = NodeRunRow
-
-export function deriveFrontier(
-  rows: ReadonlyArray<FrontierRunRow>,
-  definition: WorkflowDefinition,
-  scopeNodes: WorkflowNode[],
-  scopeIds: Set<string>,
-  iteration: number,
-  upstreamsOf: Map<string, string[]>,
-  inFlight: ReadonlySet<string>,
-  dispatchedThisInvocation: ReadonlySet<string>,
-  openClarifyNodeIds: ReadonlySet<string>,
-  askingRunIds: ReadonlySet<string> = new Set(),
-  dispatchedPendingRowIds: ReadonlySet<string> = new Set(),
-  // RFC-120 T9 (model A): effective handler nodes (override ?? designer) of a
-  // deferred-dispatch task's undispatched designer task_questions. Each is kept
-  // OUT of `completed` (its done draft is NOT a completion — downstream blocks)
-  // and parked awaiting_human until batch-dispatch mints its rerun. Empty for
-  // every non-deferred task → byte-for-byte today's frontier (golden-lock).
-  deferredHandlerNodeIds: ReadonlySet<string> = new Set(),
-): Frontier {
-  const latestPerNode = new Map<string, FrontierRunRow>()
-  for (const r of rows) {
-    if (r.iteration !== iteration) continue
-    if (!scopeIds.has(r.nodeId)) continue
-    if (r.parentNodeRunId !== null) continue // skip fan-out child rows
-    if (isFresherNodeRun(r, latestPerNode.get(r.nodeId))) latestPerNode.set(r.nodeId, r)
-  }
-  const freshestSettled = buildFreshestSettledPerNode(rows, scopeIds, iteration)
-
-  // Pass 1 — done∧fresh (old seed口径) + exhausted (loop-max true terminal,
-  // HIGH-2). An asking agent's `done` run with an OPEN clarify session is NOT a
-  // completion (it is mid-conversation, parked awaiting the answer) — excluded
-  // here, bucketed awaitingHuman below (S12: matches the old batch model keeping
-  // the asking agent out of `completed` via runOneNode's awaiting_human return).
-  const completed = new Set<string>()
-  const exhausted: string[] = []
-  for (const [nodeId, r] of latestPerNode) {
-    if (askingRunIds.has(r.id)) continue
-    // RFC-120 T9: a deferred designer handler's done draft is NOT a completion —
-    // exclude it from `completed` so its downstream stays blocked until dispatch.
-    if (deferredHandlerNodeIds.has(nodeId)) continue
-    // RFC-130 D15: an ISOLATED done run counts as complete ONLY once its delta has
-    // been merged back into the canonical worktree (merge_state='merged'). A row
-    // still in 'pending-merge' / 'conflict-*' / 'isolating' / 'merge-failed' has a
-    // 'done' status (the runner set it) but its output never reached canonical —
-    // gating downstream on merge_state closes the crash window (runner-done →
-    // daemon crash → merge-back never ran). Legacy / passthrough rows leave
-    // merge_state NULL and pass this gate byte-for-byte (golden-lock).
-    if (
-      r.status === 'done' &&
-      isNodeRunFresh(r, freshestSettled) &&
-      // RFC-144: the settled set {NULL, merged} now derives from the shared
-      // transition table (SETTLED_MERGE_STATES) — in-flight iso states
-      // ('isolating' / 'pending-merge' / 'conflict-human' / 'merge-failed' /
-      // 'abandoned') are gated out; null/'merged' pass (legacy golden-lock).
-      isMergeStateSettled(r.mergeState)
-    ) {
-      completed.add(nodeId)
-    }
-    // RFC-306: a fresh `skipped` row completes its node. The node did not run —
-    // by design — and holding the scope open for it would turn every closed
-    // branch into `scheduler stalled` (the pre-RFC-306 outcome of a node that
-    // could never become ready). No merge_state gate: a skipped node spawns no
-    // process and therefore owns no isolated worktree to merge back.
-    //
-    // Downstream is NOT force-skipped from here. Each downstream node becomes
-    // ready and makes its OWN judgment at dispatch (runOneNode), because with
-    // `joinMode: 'any'` a node fed by one skipped and one live upstream must
-    // still run. Propagation is the emergent result of that per-node judgment,
-    // never a graph walk that assumes it.
-    else if (r.status === 'skipped' && isNodeRunFresh(r, freshestSettled)) {
-      completed.add(nodeId)
-    }
-    // 'exhausted' (loop hit maxIterations without exit) is a TERMINAL FAILURE,
-    // not a completion. Marking it completed made a resume invocation see an
-    // exhausted top-level loop as done → the task silently flipped failed→done
-    // and downstream consumed empty output. Bucket it as a failure so the scope
-    // fails consistently on the first run AND any resume. See
-    // scheduler-boundary-loop-exhausted-resume.test.ts.
-    else if (r.status === 'exhausted') exhausted.push(nodeId)
-  }
-  // Pass 2 — settles-without-row (C1/N6). clarify nodes have no structural
-  // upstream (channel edges dropped) so are leaves; cross-clarify depends on its
-  // questioner (settled in pass 1), so one pass over pass-1 `completed` suffices.
-  for (const n of scopeNodes) {
-    if (completed.has(n.id)) continue
-    if (!SETTLES_WITHOUT_ROW_KINDS.has(n.kind)) continue
-    const latest = latestPerNode.get(n.id)
-    if (latest !== undefined && isLiveStatus(latest.status)) continue
-    if (openClarifyNodeIds.has(n.id)) continue
-    if (areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed)) completed.add(n.id)
-  }
-
-  // RFC-092 (audit S-1, design §1.2b): node ids whose ASKING run still has an
-  // open (un-answered) clarify session. submitClarifyAnswers mints the rerun
-  // row BEFORE writing the answers / flipping the session (clarify.ts, no real
-  // transaction under bun:sqlite) — releasing that pending row inside the
-  // window would start the rerun without its answers. Derived from the rows we
-  // already hold; the set empties the tick after the session flips answered.
-  const openAskingNodeIds = new Set<string>()
-  if (askingRunIds.size > 0) {
-    for (const r of rows) {
-      if (askingRunIds.has(r.id)) openAskingNodeIds.add(r.nodeId)
-    }
-  }
-
-  const awaitingReview: string[] = []
-  const awaitingHuman: string[] = []
-  const failed: string[] = []
-  const blocked: Array<{ nodeId: string; status: string; reason: string }> = []
-  const ready: string[] = []
-  const pendingAnchors = new Map<string, string>()
-  let remainingCount = 0
-  for (const n of scopeNodes) {
-    if (completed.has(n.id)) continue
-    remainingCount += 1
-    // RFC-120 T9 (model A): a deferred designer handler parks awaiting_human until
-    // batch-dispatch mints its rerun (mirrors the askingRunIds park below). Its
-    // done draft is not (re-)dispatchable here — dispatchTaskQuestions stamps
-    // trigger_run_id + mints the pending rerun, which the next tick picks up once
-    // this node leaves the deferred set.
-    if (deferredHandlerNodeIds.has(n.id)) {
-      awaitingHuman.push(n.id)
-      continue
-    }
-    const latest = latestPerNode.get(n.id)
-    // Asking agent parked on an open clarify: its `done` row is mid-conversation,
-    // not a completion and not (re-)dispatchable — submitClarifyAnswers mints the
-    // rerun. Park it in awaitingHuman so the scope bubbles awaiting_human (and so
-    // a `done`-status latest doesn't fall through to no bucket → false stall).
-    if (latest !== undefined && askingRunIds.has(latest.id)) {
-      awaitingHuman.push(n.id)
-      continue
-    }
-    // RFC-092 (audit S-1): a `pending` latest row is an explicit new-work
-    // signal (out-of-band rerun mint by submitClarifyAnswers / review
-    // iterate-reject, or a resume placeholder). The per-invocation node-level
-    // dedup must NOT permanently mask it — that turned a mid-run clarify
-    // answer into a false `scheduler stalled` failure. Release it once per
-    // ROW (dispatchedPendingRowIds), and never while its asking session is
-    // still open (answer-write race window — see openAskingNodeIds above).
-    const pendingAnchorReleasable =
-      latest !== undefined &&
-      latest.status === 'pending' &&
-      !dispatchedPendingRowIds.has(latest.id) &&
-      !openAskingNodeIds.has(n.id)
-    // RFC-098 B3 (audit S-3 + the RFC-092 documented limitation): a parked
-    // WRAPPER row (awaiting_*) gets the same one-shot in-invocation release,
-    // keyed on its inner REVIVAL EVIDENCE row (the pending rerun a mid-run
-    // clarify answer minted, or the done∧fresh review row an approve flipped
-    // — wrapperRevivalEvidence, dispatchFrontier.ts). Without this, a wrapper
-    // already in `dispatchedThisInvocation` could never pick up the human
-    // action and the task fell back to awaiting_* needing a manual resume.
-    //
-    // No-busy-loop argument (five layers, mirrors RFC-092 §1.3):
-    //   ① the evidence ROW id is recorded into dispatchedPendingRowIds on
-    //      dispatch (pendingAnchors below) — the same evidence releases the
-    //      wrapper at most once per invocation;
-    //   ② a dispatched wrapper enters `inFlight` — no re-dispatch same tick;
-    //   ③ the wrapper resume immediately flips its row running — `latest`
-    //      leaves awaiting_*, this predicate stops matching while it runs;
-    //   ④ the inner runScope consumes a pending evidence row via its
-    //      pendingExisting reuse (row flips running → terminal) — the
-    //      evidence disappears; NEW evidence can only be minted by a new
-    //      human action (fresh ULID re-arms exactly one more release);
-    //   ④' while the evidence node's clarify session is still OPEN (answers
-    //      mid-write), openAskingNodeIds blocks the release — the next tick
-    //      after the session flips answered releases it;
-    //   ⑤ pathological leak (inner exits without consuming the pending row —
-    //      the known RFC-092 shape): the anchor is already recorded, so no
-    //      further release — degrades to the bounded park/stalled semantics.
-    const wrapperEvidence =
-      latest !== undefined &&
-      (latest.status === 'awaiting_human' || latest.status === 'awaiting_review') &&
-      WRAPPER_KINDS.has(n.kind)
-        ? wrapperRevivalEvidence(latest, rows, definition)
-        : null
-    const wrapperAnchorReleasable =
-      wrapperEvidence !== null &&
-      !dispatchedPendingRowIds.has(wrapperEvidence.rowId) &&
-      !openAskingNodeIds.has(wrapperEvidence.nodeId)
-    // RFC-306 (design-gate P1#7) — a STALE skip gets the same one-shot release.
-    //
-    // Without it: `N` is skipped early in an invocation; later in the SAME
-    // invocation the deciding upstream re-runs (a review iterate released by a
-    // pending anchor) and re-opens the branch. `N`'s skip is now stale, but `N`
-    // is already in `dispatchedThisInvocation` and owns no pending row of its
-    // own, so it can never go ready again — the scope quiesces and reports
-    // `scheduler stalled`, i.e. a NORMAL branch flip surfaces as task failure.
-    //
-    // The release is keyed on the EVIDENCE — the upstream run that made the skip
-    // stale — not on the skip row, so it is one-shot per new upstream generation
-    // (layer ① of the RFC-092 no-busy-loop argument): the same upstream row can
-    // release this node at most once per invocation, and a further release needs
-    // a genuinely newer upstream run.
-    const staleSkipEvidenceId =
-      latest !== undefined &&
-      latest.status === 'skipped' &&
-      !isNodeRunFresh(latest, freshestSettled)
-        ? (freshestUpstreamEvidenceId(latest, upstreamsOf.get(n.id) ?? [], freshestSettled) ?? null)
-        : null
-    const staleSkipReleasable =
-      staleSkipEvidenceId !== null && !dispatchedPendingRowIds.has(staleSkipEvidenceId)
-    const dispatchable =
-      areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed) &&
-      !inFlight.has(n.id) &&
-      (pendingAnchorReleasable ||
-        wrapperAnchorReleasable ||
-        staleSkipReleasable ||
-        !dispatchedThisInvocation.has(n.id)) &&
-      isDispatchable(latest, n.kind, freshestSettled, rows, definition)
-    if (dispatchable) {
-      ready.push(n.id)
-      if (latest !== undefined && latest.status === 'pending') {
-        pendingAnchors.set(n.id, latest.id)
-      } else if (staleSkipEvidenceId !== null) {
-        // Record the evidence on EVERY ready pass (same reasoning as the wrapper
-        // anchor below): a re-skip against the same upstream generation must not
-        // release the node a second time.
-        pendingAnchors.set(n.id, staleSkipEvidenceId)
-      } else if (wrapperEvidence !== null) {
-        // Record the wrapper's evidence row EVERY time it goes ready (also on
-        // the plain !dispatchedThisInvocation release) so layer ① holds: a
-        // re-park at the same window with the same done-review evidence stays
-        // parked instead of hot-looping.
-        pendingAnchors.set(n.id, wrapperEvidence.rowId)
-      }
-      continue
-    }
-    // RFC-095 (audit S-12): EXHAUSTIVE bucketing over the full NodeRunStatus
-    // universe — a new status fails compilation here instead of silently
-    // becoming an undiagnosable "scheduler stalled". The three park buckets
-    // collect UNCONDITIONALLY (pre-RFC-095 semantics: an awaiting/failed row
-    // parks regardless of upstream readiness — quiescent priority awaiting_* >
-    // failed depends on it; derive-frontier.test.ts locks the failed case).
-    // Only the `blocked` diagnostic branches gate on "upstreams complete ∧ not
-    // in flight" — waiting-on-upstream / in-flight nodes are not stuck points.
-    switch (latest?.status) {
-      case 'awaiting_review':
-        awaitingReview.push(n.id)
-        break
-      case 'awaiting_human':
-        awaitingHuman.push(n.id)
-        break
-      case 'failed':
-        failed.push(n.id)
-        break
-      case 'exhausted':
-        break // already collected into the exhausted bucket in pass 1
-      default: {
-        if (!areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed)) break
-        if (inFlight.has(n.id)) break
-        const st = latest?.status
-        switch (st) {
-          case undefined:
-            // clarify / cross-clarify graph-visit no-ops write no row; with an
-            // open session pass 2 keeps them unsettled — a normal park, not a
-            // dedup pathology. Anything else here was dispatched this
-            // invocation and produced no row.
-            blocked.push({
-              nodeId: n.id,
-              status: 'absent',
-              reason: openClarifyNodeIds.has(n.id) ? 'open-clarify-window' : 'in-invocation-dedup',
-            })
-            break
-          case 'pending':
-            blocked.push({
-              nodeId: n.id,
-              status: st,
-              reason: openAskingNodeIds.has(n.id)
-                ? 'open-clarify-window'
-                : 'pending-anchor-consumed',
-            })
-            break
-          case 'running':
-            blocked.push({
-              nodeId: n.id,
-              status: st,
-              reason: 'orphaned-running-row (restart daemon to reap, audit S-12)',
-            })
-            break
-          case 'canceled':
-            // RFC-095: plain canceled rows are revival-dispatchable; only
-            // review-supersede marker rows stay parked (see isDispatchable). A
-            // plain canceled row lands here only via the per-invocation dedup.
-            blocked.push({
-              nodeId: n.id,
-              status: st,
-              reason: isReviewSupersededRow(latest!)
-                ? 'review-superseded'
-                : 'canceled-in-invocation-dedup',
-            })
-            break
-          case 'skipped':
-            blocked.push({
-              nodeId: n.id,
-              status: st,
-              reason: 'skipped-has-no-dispatch-semantics',
-            })
-            break
-          case 'done': {
-            // RFC-130 §6.3 / RFC-144: exhaustive over MergeStateOrNull — a done row
-            // parked at 'conflict-human' bubbles awaiting_human (decideScopeOutcome);
-            // 'merge-failed' is a hard merge failure → the scope fails; 'abandoned'
-            // (superseded generation, RFC-144) joins the stale-done dedup bucket like
-            // every other stale row; a NEW merge state added to the union without a
-            // bucket here is a compile error.
-            const ms = (latest?.mergeState ?? null) as MergeStateOrNull
-            switch (ms) {
-              case 'conflict-human':
-                awaitingHuman.push(n.id)
-                break
-              case 'merge-failed':
-                failed.push(n.id)
-                break
-              case null:
-              case 'isolating':
-              case 'pending-merge':
-              case 'merged':
-              case 'abandoned':
-                blocked.push({
-                  nodeId: n.id,
-                  status: st,
-                  reason: 'stale-done-in-invocation-dedup',
-                })
-                break
-              default: {
-                const _exhaustive: never = ms
-                void _exhaustive
-                // Runtime-unknown legacy value — same dedup bucket as before.
-                blocked.push({
-                  nodeId: n.id,
-                  status: st,
-                  reason: 'stale-done-in-invocation-dedup',
-                })
-              }
-            }
-            break
-          }
-          case 'interrupted':
-            blocked.push({
-              nodeId: n.id,
-              status: st,
-              reason: 'interrupted-in-invocation-dedup',
-            })
-            break
-          default: {
-            // awaiting_* / failed / exhausted were collected by the outer
-            // switch — anything reaching here is a NEW NodeRunStatus value.
-            const _exhaustive: never = st
-            void _exhaustive
-          }
-        }
-      }
-    }
-  }
-  return {
-    completed,
-    ready,
-    pendingAnchors,
-    awaitingReview,
-    awaitingHuman,
-    failed,
-    exhausted,
-    blocked,
-    allSettled: remainingCount === 0,
-  }
-}
-
 // -----------------------------------------------------------------------------
 // per-node execution
 // -----------------------------------------------------------------------------
 
-interface OneNodeResult {
-  kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
-  summary: string
-  message: string
-  processUnreaped?: true
-}
+export type OneNodeResult = LegacyNodeResult
 
 interface OneNodeArgs {
   node: WorkflowNode
@@ -3126,7 +1418,7 @@ function replaySubmodulesMissing(
  * ever sees merged/failed rows. A conflict or missing node_tree throws → the caller
  * fails the task loudly (PR-B upgrades the conflict path to the merge agent).
  */
-async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<void> {
+export async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<void> {
   const { db, taskId, task } = state
   const rows = await db
     .select()
@@ -3226,7 +1518,10 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
  * 'conflict-human' → the frontier re-parks the task at awaiting_human. Runs at the
  * resume entry (before the scope loop), right after replayPendingMerges.
  */
-async function replayConflictHumanResolutions(state: SchedulerState, log: Logger): Promise<void> {
+export async function replayConflictHumanResolutions(
+  state: SchedulerState,
+  log: Logger,
+): Promise<void> {
   const { db, taskId, task } = state
   const rows = await db
     .select()
@@ -4818,7 +3113,7 @@ async function runCodeHostCallNode(
     )
     return createCodeHostEffectAttemptObserver({
       db,
-      context: opts.executionContext,
+      context: opts.executionContext as TaskExecutionContext,
       action,
       nodeRunId,
       initialRetryAuthority: attemptPlan.retryAuthority,
@@ -5789,7 +4084,7 @@ async function judgeBranchActivation(
   return { kind: 'ok', summary: '', message: 'branch-skipped' }
 }
 
-async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
+export async function runOneNode(state: SchedulerState, args: OneNodeArgs): Promise<OneNodeResult> {
   const { db, task, taskId, definition, opts, inputsMap, agentSem, writeSem, log } = state
   const { node, iteration } = args
 
@@ -7922,7 +6217,7 @@ async function runLoopWrapperNode(
       phase: 'inner-running',
     })
 
-    const subRes = await runScope(innerState, {
+    const subRes = await state.driveScope(innerState, {
       scopeId: node.id,
       scopeIds: innerSet,
       iteration: i,
@@ -10215,7 +8510,7 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
     }
   }
 
-  const subRes = await runScope(innerState, {
+  const subRes = await state.driveScope(innerState, {
     scopeId: node.id,
     scopeIds: new Set(inner),
     iteration,
@@ -10359,7 +8654,10 @@ async function runGitWrapperNode(state: SchedulerState, args: OneNodeArgs): Prom
 // helpers
 // -----------------------------------------------------------------------------
 
-async function emitStatus(topology: SchedulerRuntimeTopology, taskId: string): Promise<void> {
+export async function emitStatus(
+  topology: SchedulerRuntimeTopology,
+  taskId: string,
+): Promise<void> {
   const projection = await topology.taskStatusReadModel.find(taskId)
   if (projection === null) return
   topology.taskStatusPublisher.publish({ ...projection, canceledNodeRuns: [] })
@@ -10383,14 +8681,14 @@ function broadcastNodeStatus(
 // RFC-098 WP-10 T-a: the old `insertNodeRun` half-factory was absorbed into
 // the single mint factory — see services/nodeRunMint.ts (grep-guarded).
 
-async function failTask(
+export async function failTask(
   topology: SchedulerRuntimeTopology,
   db: DbClient,
   taskId: string,
   errorSummary: string,
   errorMessage: string,
   failedNodeId?: string,
-  executionContext?: TaskExecutionContext,
+  executionContext?: TaskExecutionContextRef,
 ): Promise<void> {
   // RFC-097: callers sit either before mark-running (snapshot-invalid /
   // unsupported-kind → from=pending) or inside the running scope. A canceled
@@ -10419,13 +8717,13 @@ async function failTask(
   await emitStatus(topology, taskId)
 }
 
-async function cancelTaskRow(
+export async function cancelTaskRow(
   topology: SchedulerRuntimeTopology,
   db: DbClient,
   taskId: string,
   failedNodeId?: string,
   abortReason?: unknown,
-  executionContext?: TaskExecutionContext,
+  executionContext?: TaskExecutionContextRef,
 ): Promise<void> {
   return withTaskReviewMutationLock(taskId, () =>
     cancelTaskRowUnlocked(topology, db, taskId, failedNodeId, abortReason, executionContext),
@@ -10438,7 +8736,7 @@ async function cancelTaskRowUnlocked(
   taskId: string,
   failedNodeId?: string,
   abortReason?: unknown,
-  executionContext?: TaskExecutionContext,
+  executionContext?: TaskExecutionContextRef,
 ): Promise<void> {
   // RFC-202 T4: a graceful daemon shutdown aborts the scheduler exactly like
   // a user cancel did — but writing 'canceled by user' misattributes it and
@@ -10695,40 +8993,6 @@ async function readPortRowAtIteration(
     archiveJson: out[0]?.archiveJson ?? null,
     active,
   }
-}
-
-/**
- * Detect a cycle in a scope's structural upstream graph (the same `upstreamsOf`
- * the dispatch frontier walks). Returns a node id that lies on a cycle, or null
- * when the scope is acyclic. DFS with white/grey/black coloring; a grey re-visit
- * is a back-edge. `upstreamsOf` values are always in-scope (buildScopeUpstreams
- * drops out-of-scope sources), so the walk stays within the scope.
- */
-function findScopeCycle(
-  scopeNodes: WorkflowNode[],
-  upstreamsOf: Map<string, string[]>,
-): string | null {
-  const color = new Map<string, 0 | 1 | 2>() // 0=unvisited 1=visiting 2=done
-  const visit = (id: string): string | null => {
-    color.set(id, 1)
-    for (const up of upstreamsOf.get(id) ?? []) {
-      const c = color.get(up) ?? 0
-      if (c === 1) return up // back-edge → cycle
-      if (c === 0) {
-        const found = visit(up)
-        if (found !== null) return found
-      }
-    }
-    color.set(id, 2)
-    return null
-  }
-  for (const n of scopeNodes) {
-    if ((color.get(n.id) ?? 0) === 0) {
-      const found = visit(n.id)
-      if (found !== null) return found
-    }
-  }
-  return null
 }
 
 function pickString(node: WorkflowNode, key: string): string | null {
@@ -11040,114 +9304,6 @@ async function recordClarifyInlineEvent(
         })
         .run(),
   })
-}
-
-/**
- * Build the structural dependency map for one recursive execution scope.
- *
- * Flat workflow edges are projected to the direct representatives at their
- * endpoint LCA. Therefore `external → loop-inner` becomes
- * `external → loop` in the parent scope, while the child scope correctly sees
- * no local dependency for that already-settled external value. This same
- * projection handles git wrappers, nested wrappers, and dependencies leaving a
- * wrapper. Implicit review/output/loop references use the identical path.
- */
-function buildScopeUpstreams(
-  definition: WorkflowDefinition,
-  ids: Set<string>,
-  scopeId: string | null,
-  parents: ReadonlyMap<string, string>,
-): Map<string, string[]> {
-  const scopeNodes = definition.nodes.filter((node) => ids.has(node.id))
-  const m = new Map<string, string[]>()
-  for (const n of scopeNodes) m.set(n.id, [])
-  // Build a quick node-kind lookup so the channel-edge skip can
-  // distinguish RFC-023 clarify targets (skip the edge — clarify nodes
-  // are dispatched out-of-band by the runner) from RFC-056 cross-clarify
-  // targets (KEEP the edge — the cross-clarify node legitimately
-  // depends on the questioner reaching a terminal state).
-  const kindById = new Map<string, string>()
-  for (const n of definition.nodes) kindById.set(n.id, n.kind)
-
-  const addProjected = (sourceNodeId: string, targetNodeId: string): void => {
-    const projected = projectWorkflowDependency(sourceNodeId, targetNodeId, parents)
-    if (projected === null || projected.scopeId !== scopeId) return
-    if (projected.sourceNodeId === projected.targetNodeId) return
-    if (!ids.has(projected.sourceNodeId) || !ids.has(projected.targetNodeId)) return
-    const list = m.get(projected.targetNodeId) ?? []
-    if (!list.includes(projected.sourceNodeId)) list.push(projected.sourceNodeId)
-    m.set(projected.targetNodeId, list)
-  }
-
-  for (const e of definition.edges) {
-    // Fan-out boundary mirrors are consumed by runFanoutWrapperNode; projecting
-    // them would only collapse wrapper↔inner into a self-dependency.
-    if (e.boundary !== undefined) continue
-    // RFC-147: channel-edge dataflow semantics come from the shared
-    // system-channel-port registry. The nuanced rule lives there —
-    // agent.__clarify__ → clarify is dispatched out-of-band (skip to
-    // prevent agent→clarify→agent cycles) while a cross-clarify TARGET
-    // keeps the edge as a real dependency (2026-05-22 bug: skipping it
-    // made cross-clarify a no-upstream leaf the dispatcher re-fired every
-    // tick); answer / back-channel ports are prompt-injected, never
-    // dataflow inputs.
-    if (channelEdgeDataflowSkip(e, (id) => kindById.get(id))) continue
-    const resolved = resolveWorkflowSourceRef(definition, e.source, e.target.nodeId, parents)
-    addProjected(resolved.ok ? resolved.source.nodeId : e.source.nodeId, e.target.nodeId)
-  }
-  // RFC-060 PR-E: agent-multi removed; its sourcePort dep handling deleted
-  // (wrapper-fanout uses boundary edges instead, which are real graph edges).
-  // Walk implicit dependencies from the whole flat definition, then let the
-  // LCA projection select the dependency that belongs to this scope. Limiting
-  // this walk to `scopeNodes` loses `external → nested review/output` at the
-  // parent scope for exactly the same reason raw cross-scope edges used to be
-  // lost.
-  for (const n of definition.nodes) {
-    // RFC-005: review.inputSource.nodeId is an implicit upstream dep — it
-    // isn't an edge in the user-authored graph, but the scheduler must wait
-    // for the source node before parking the review at awaiting_review.
-    if (n.kind === 'review') {
-      const inp = (n as Record<string, unknown>).inputSource as { nodeId?: unknown } | undefined
-      if (inp === undefined || typeof inp.nodeId !== 'string') continue
-      const portName =
-        typeof (inp as { portName?: unknown }).portName === 'string'
-          ? ((inp as { portName: string }).portName ?? '')
-          : ''
-      const resolved = resolveWorkflowSourceRef(
-        definition,
-        { nodeId: inp.nodeId, portName },
-        n.id,
-        parents,
-      )
-      addProjected(resolved.ok ? resolved.source.nodeId : inp.nodeId, n.id)
-    }
-    // Output nodes carry their dependencies in `ports[].bind` (not always as
-    // edges; the canvas editor emits both in practice but bindings are the
-    // canonical form per workflow.validator.ts §output bindings). Treating
-    // them as implicit upstream deps keeps the scheduler from snapshotting
-    // empty port content when an output node would otherwise be considered
-    // a graph root with no incoming edges.
-    if (n.kind === 'output') {
-      const bindings = readBindings(n, 'ports')
-      for (const b of bindings) {
-        const resolved = resolveWorkflowSourceRef(definition, b.bind, n.id, parents)
-        addProjected(resolved.ok ? resolved.source.nodeId : b.bind.nodeId, n.id)
-      }
-    }
-    // Defensive compatibility for historical/direct-seeded snapshots whose
-    // loop condition or output binding points outside the loop. Current
-    // validation rejects these references, but projecting them here keeps old
-    // snapshots ordered and avoids the former empty-read race.
-    if (n.kind === 'wrapper-loop') {
-      const condition = parseExitCondition((n as Record<string, unknown>).exitCondition)
-      if (condition !== null) addProjected(condition.nodeId, n.id)
-      for (const binding of readBindings(n, 'outputBindings')) {
-        addProjected(binding.bind.nodeId, n.id)
-      }
-    }
-  }
-  for (const list of m.values()) list.sort()
-  return m
 }
 
 /**

@@ -18,7 +18,7 @@ import {
   createRecordingSchedulerDriver,
 } from './helpers/taskExecutionTestTopology'
 
-type TaskDriveRequest = Parameters<SchedulerDriverPort['kick']>[0]
+type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -119,7 +119,7 @@ function objectKeys(node: ts.ObjectLiteralExpression, file: ts.SourceFile): Set<
   return keys
 }
 
-function kickRequestObjects(): Array<Set<string>> {
+function driveRequestObjects(): Array<Set<string>> {
   const path = 'packages/backend/src/services/task.ts'
   const text = source(path)
   const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
@@ -128,7 +128,7 @@ function kickRequestObjects(): Array<Set<string>> {
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'kick' &&
+      node.expression.name.text === 'drive' &&
       /schedulerDriver$/.test(node.expression.expression.getText(file)) &&
       node.arguments[0] !== undefined &&
       ts.isObjectLiteralExpression(node.arguments[0])
@@ -150,7 +150,7 @@ describe('RFC-331 scheduler topology contract', () => {
       signal: new AbortController().signal,
       executionContext: {} as TaskDriveRequest['executionContext'],
     } satisfies TaskDriveRequest
-    await recording.driver.kick(request)
+    await recording.driver.drive(request)
     await recording.driver.cancelChild({ taskId: 'cancel-child', cascadeFromParent: true })
     await recording.driver.resumeChild({
       taskId: 'resume-child',
@@ -163,16 +163,16 @@ describe('RFC-331 scheduler topology contract', () => {
     expect(recording.activeChecks).toEqual(['active-child'])
 
     const noop = createNoopSchedulerDriver()
-    await expect(noop.kick(request)).resolves.toBeUndefined()
+    await expect(noop.drive(request)).resolves.toBeUndefined()
     expect(noop.isTaskActive('anything')).toBe(false)
     const poison = createPoisonSchedulerDriver('rfc331-poison')
-    await expect(poison.kick(request)).rejects.toThrow('rfc331-poison')
+    await expect(poison.drive(request)).rejects.toThrow('rfc331-poison')
     expect(() => poison.isTaskActive('anything')).toThrow('rfc331-poison')
   })
 
-  test('all four task kick sites carry the required production envelope and never leak db', () => {
-    const requests = kickRequestObjects()
-    expect(requests).toHaveLength(4)
+  test('the single TaskEngine application adapter carries the required envelope and never leaks db', () => {
+    const requests = driveRequestObjects()
+    expect(requests).toHaveLength(1)
     for (const keys of requests) {
       expect([...keys].sort()).toEqual(
         expect.arrayContaining(['appHome', 'executionContext', 'signal', 'taskId']),
@@ -180,7 +180,7 @@ describe('RFC-331 scheduler topology contract', () => {
       expect(keys.has('db')).toBe(false)
     }
     const task = source('packages/backend/src/services/task.ts')
-    expect(task).toContain("schedulerDriver: Pick<SchedulerDriverPort, 'kick'>")
+    expect(task).toContain("schedulerDriver: Pick<SchedulerDriverPort, 'drive'>")
     expect(task).not.toContain('schedulerDriver?:')
   })
 })

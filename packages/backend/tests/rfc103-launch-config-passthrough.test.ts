@@ -190,15 +190,12 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     }
   })
 
-  test('start/resume/retry 三处 kick 都经 runtimeConfigOpts 透传', () => {
+  test('四种 admission 共用一个 runtimeConfigOpts → coordinator 漏斗', () => {
     const spreads = taskSrc.match(/\.\.\.runtimeConfigOpts\(/g) ?? []
-    // startTask + resumeTask（同块 replace_all）+ retryNode + retryRepoPreparation = 4
-    //
-    // 第 4 处是 RFC-287 AC-11 的「重试准备仓库」：它自己点火调度器，所以同样必须
-    // 透传运行时配置。这条锁按**计数**断言正是为了让每一个新增的 kick 站点都被迫
-    // 在这里登记一次——漏了就是又一处「管理员配置对某条路径不生效」的静默断线
-    // （RFC-108 / RFC-103 / RFC-266 三次同形事故的由来）。
-    expect(spreads.length).toBe(4)
+    // RFC-332 把 start/resume/retry/retry-prep 四份 spread 收进一个 coordinator
+    // factory；配置单源应恰好出现一次，而四个 admission 都必须调用该 factory。
+    expect(spreads).toHaveLength(1)
+    expect(taskSrc.match(/createTaskDriveCoordinator\(\{/g) ?? []).toHaveLength(4)
   })
 
   // RFC-266: RFC-243 子任务的 deps 装配（buildChildDeps）必须原样带上三个并发键。

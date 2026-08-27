@@ -3,9 +3,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1080",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1077",
       "kind": "register-call",
-      "line": 1080,
+      "line": 1077,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerTerminalTaskHook",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalTaskHook:1106",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalTaskHook:1103",
       "kind": "register-call",
-      "line": 1106,
+      "line": 1103,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -25,9 +25,9 @@
     {
       "callee": "registerTerminalWorkspacePruneEffect",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePruneEffect:501",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePruneEffect:498",
       "kind": "register-call",
-      "line": 501,
+      "line": 498,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -36,9 +36,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:495",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:492",
       "kind": "register-call",
-      "line": 495,
+      "line": 492,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +47,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1094",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1091",
       "kind": "global-setter",
-      "line": 1094,
+      "line": 1091,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -4799,13 +4799,13 @@
     {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/services/scheduler.ts",
-      "id": "ambient:packages/backend/src/services/scheduler.ts#registerKnownChildTask:3743",
+      "id": "ambient:packages/backend/src/services/scheduler.ts#registerKnownChildTask:2038",
       "kind": "register-call",
-      "line": 3743,
+      "line": 2038,
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#runCallWorkflowNode",
       "removeAfterWave": "W6/W9",
       "symbol": "runCallWorkflowNode",
-      "targetContext": "integration"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerMint",
@@ -4917,7 +4917,7 @@
       ],
       "file": "packages/backend/src/cli/start.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1269",
+      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1266",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -4931,7 +4931,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1269",
+      "symbol": "$setInterval:1266",
       "targetContext": "bootstrap"
     },
     {
@@ -6094,6 +6094,74 @@
       "targetContext": "task-execution"
     },
     {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:94",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setInterval:94",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#ownerHeartbeatTimers",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#ownerHeartbeatTimers",
+      "phase": "unknown",
+      "symbol": "ownerHeartbeatTimers",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "db",
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat",
+      "phase": "unknown",
+      "symbol": "startOwnerHeartbeat",
+      "targetContext": "task-execution"
+    },
+    {
       "dependencies": [],
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "finalCriterion": "W9-B registry",
@@ -6426,7 +6494,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#$file",
       "phase": "unknown",
       "symbol": "$setInterval:209",
-      "targetContext": "integration"
+      "targetContext": "system-operations"
     },
     {
       "dependencies": [
@@ -6449,7 +6517,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#$file",
       "phase": "unknown",
       "symbol": "$setInterval:277",
-      "targetContext": "integration"
+      "targetContext": "system-operations"
     },
     {
       "dependencies": [
@@ -6472,7 +6540,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#pruneBackups",
       "phase": "unknown",
       "symbol": "pruneBackups",
-      "targetContext": "integration"
+      "targetContext": "system-operations"
     },
     {
       "dependencies": [],
@@ -6493,7 +6561,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#runPrune",
       "phase": "unknown",
       "symbol": "runPrune",
-      "targetContext": "integration"
+      "targetContext": "system-operations"
     },
     {
       "dependencies": [],
@@ -8514,7 +8582,7 @@
       ],
       "file": "packages/backend/src/services/scheduler.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/scheduler.ts#$setInterval:3825",
+      "id": "background:packages/backend/src/services/scheduler.ts#$setInterval:2120",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8528,8 +8596,8 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:3825",
-      "targetContext": "integration"
+      "symbol": "$setInterval:2120",
+      "targetContext": "task-execution"
     },
     {
       "dependencies": [
@@ -8537,7 +8605,7 @@
       ],
       "file": "packages/backend/src/services/scheduler.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/scheduler.ts#$setTimeout:4240",
+      "id": "background:packages/backend/src/services/scheduler.ts#$setTimeout:2535",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8551,8 +8619,8 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:4240",
-      "targetContext": "integration"
+      "symbol": "$setTimeout:2535",
+      "targetContext": "task-execution"
     },
     {
       "dependencies": [
@@ -8854,10 +8922,10 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setInterval:385",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:364",
       "kind": "periodic",
       "lifecycle": {
-        "health": true,
+        "health": false,
         "readiness": true,
         "run": true,
         "start": true,
@@ -8868,7 +8936,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:385",
+      "symbol": "$setTimeout:364",
       "targetContext": "task-execution"
     },
     {
@@ -8877,10 +8945,10 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5620",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5377",
       "kind": "periodic",
       "lifecycle": {
-        "health": true,
+        "health": false,
         "readiness": true,
         "run": true,
         "start": true,
@@ -8891,75 +8959,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5620",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/services/task.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:610",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": true,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:610",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/task.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#ownerHeartbeatTimers",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": true,
-        "readiness": false,
-        "run": false,
-        "start": true,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/task.ts#ownerHeartbeatTimers",
-      "phase": "unknown",
-      "symbol": "ownerHeartbeatTimers",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
-        "db",
-        "timer"
-      ],
-      "file": "packages/backend/src/services/task.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#startOwnerHeartbeat",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": true,
-        "readiness": false,
-        "run": false,
-        "start": true,
-        "state": false,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/task.ts#startOwnerHeartbeat",
-      "phase": "unknown",
-      "symbol": "startOwnerHeartbeat",
+      "symbol": "$setTimeout:5377",
       "targetContext": "task-execution"
     },
     {
@@ -9682,5 +9682,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:429634a3ef996f850943f83b85091b38d076ecdb4dd74fa77647b2f5a68b7c70"
+  "sourceDigest": "sha256:85d8ab76161aef027be6c7c780e54633f86544e5b849f393394402d9465ee508"
 }
