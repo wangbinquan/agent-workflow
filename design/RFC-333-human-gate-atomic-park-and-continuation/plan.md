@@ -299,6 +299,9 @@ gate intent，且每个 task 最多一个 claimed current + 一个 pending succe
 - migration 0213 以 claimed/pending 两个 state-specific unique index 取代旧合并 active index；普通 continuation admission、
   第二 pending successor 与第二 claimed owner 继续冲突；
 - 更新受到 durable receipt/rollback receipt 精确化影响的旧功能 fixtures，不删除或削弱既有功能断言；
+- handoff 修复 payload 已固化为 `71008fde0407a8cf85ca59322bb34ff5d5d56597`；真实 coordinator 慢 sibling、
+  claimed + pending 约束与邻接回归已完成候选验证，hosted 与全部 scheduled workflow 仍等该 payload
+  发布后的终态证据；
 - 更新 RFC-333 为 Done，逐 AC 写证据；
 - RFC-294 P0-C `partial → Done`，下一指针改为 W2-C（仍需新 RFC/批准）；
 - 更新 `design/plan.md`、`STATE.md` 与需要的 backlog；
