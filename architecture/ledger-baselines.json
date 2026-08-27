@@ -63,10 +63,7 @@
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CROSS_CONTEXT_PILOT_DEBT",
       "baseline": 3,
-      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B：TaskEngine application 复用 RFC-308 的 WorkspaceExcludeParticipant 临时 composition binder；该 exact seam 在 RFC-294 W5 删除。"
-      }
+      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0"
     },
     {
       "id": "rfc294-public-surface-pilot-debt",
@@ -311,10 +308,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 911,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B：新增单一 taskDriveLegacy composition 出口，承载 legacy task service 的 exact 兼容接缝；RFC-294 W4 切换该 caller 后删除。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -405,10 +399,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 17622,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B：新增 taskDriveLegacy.ts 单一 namespace composition seam 及其精确投影符号；RFC-294 W4 完成 legacy caller 切换后删除。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -425,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e186d9dc621e36dde1ab9e195e114b638541ae97",
-    "contentDigest": "sha256:57f7999befa1446e851b96e5242471bc6f5df9bbba3c95395b8d4b2ab14e2ccb",
+    "currentSnapshotSha": "b63733a4f77c232d0cb9b285281953f89cea9d8a",
+    "contentDigest": "sha256:a79edb5688cf5c0f8644dd5fc0946ac0b8d0e4f05c85f962f7b6189b74600365",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
