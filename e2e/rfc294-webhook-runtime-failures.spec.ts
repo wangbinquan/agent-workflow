@@ -110,6 +110,7 @@ interface DurableTaskProvenance {
 
 const TERMINAL_TASK_STATUSES = new Set(['done', 'failed', 'canceled', 'interrupted'])
 const AGENT_NODE_ID = 'runtime_agent'
+const NODE_RETRIES = 1
 const NODE_TIMEOUT_MS = 10_000
 const TIMEOUT_STUB_DELAY_MS = 12_000
 // The per-node deadline starts before the compiled stub has finished parsing
@@ -117,6 +118,13 @@ const TIMEOUT_STUB_DELAY_MS = 12_000
 // remaining 2s response delay, otherwise a cold start can make the fixture's
 // own exit timer win before it writes the deliberately late envelope.
 const TIMEOUT_TERMINATION_DELAY_MS = 14_000
+// The timeout fixture exercises every automatic attempt and then waits for
+// each signalled child to release.  Derive the task-level observation budget
+// from that complete path instead of a generic 45s poll: on a saturated macOS
+// runner, two 10s deadlines plus both delayed termination windows crossed the
+// old bound twice while the task was still legitimately running.
+const TIMEOUT_TASK_TERMINAL_WAIT_MS =
+  (NODE_RETRIES + 1) * (NODE_TIMEOUT_MS + TIMEOUT_TERMINATION_DELAY_MS) + TIMEOUT_STUB_DELAY_MS
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(180_000)
@@ -317,6 +325,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
     async function waitForLaunchedLineage(
       fixture: Fixture,
       deliveryId: string,
+      terminalTimeoutMs = 45_000,
     ): Promise<{ delivery: DeliveryRow; fire: FireRow; task: TaskRow }> {
       const durableDelivery = await waitFor(
         () => delivery(deliveryId),
@@ -336,7 +345,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         () => task(fire.taskId!),
         (row) => TERMINAL_TASK_STATUSES.has(row.status),
         `task ${fire.taskId} terminal`,
-        45_000,
+        terminalTimeoutMs,
       )
       expect(terminalTask.id).toBe(fire.taskId)
       expect(terminalTask.webhookSourceLink).toEqual({
@@ -481,7 +490,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         // stub cold start while the timeout fixture remains deterministically
         // later than the same global deadline.
         configOverrides: {
-          defaultNodeRetries: 1,
+          defaultNodeRetries: NODE_RETRIES,
           // RFC-313: 上限已是两个预算的乘积；置 0 保持「1+defaultNodeRetries」的既有计数。
           sessionRestartBudget: 0,
           defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
@@ -592,7 +601,11 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       const uuid = `${protocol}-webhook-runtime-timeout`
       const accepted = await deliver(endpoint, fixture, uuid)
       expect(accepted.status).toBe('received')
-      const lineage = await waitForLaunchedLineage(fixture, accepted.deliveryId)
+      const lineage = await waitForLaunchedLineage(
+        fixture,
+        accepted.deliveryId,
+        TIMEOUT_TASK_TERMINAL_WAIT_MS,
+      )
 
       expect(lineage.delivery).toMatchObject({
         eventUuid: uuid,

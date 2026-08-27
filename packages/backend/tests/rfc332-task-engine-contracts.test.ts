@@ -264,6 +264,9 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
     expect(targetRemoveAfterWaveFor(path, 'maybeRunCommitPush')).toBe('W5')
   })
 
+  // This is the same source-complete canonical inventory build guarded by the
+  // RFC-294/RFC-328 60s budgets. Keep the full corpus oracle, but do not cap it
+  // at 15s while the macOS shard is running the rest of the backend suite.
   test('compatibility exceptions carry their exact owner wave and RFC provenance', () => {
     const artifacts = buildCanonicalArtifacts(REPO_ROOT)
     const exceptions = artifacts.crossContextImports['architectureExceptions'] as Array<
@@ -310,5 +313,5 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
         component.some((file) => file.includes('/modules/task-execution/')),
       ),
     ).toBe(false)
-  }, 15_000)
+  }, 60_000)
 })
