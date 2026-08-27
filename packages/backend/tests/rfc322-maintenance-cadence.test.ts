@@ -8,10 +8,9 @@
 // ——墙钟单独一个量会骗人。所以这里同时锁住「要看 cpu 才能判别」这个判据：把相位表
 // 改回全 0，或把 cpu 字段去掉，下面都必须转红。
 import { describe, expect, test } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { Database } from 'bun:sqlite'
-import { instrumentSlowStatements } from '../src/db/client'
 import {
   HOUR_MS,
   MAINTENANCE_PHASE,
@@ -340,52 +339,38 @@ describe('RFC-322 错峰实证', () => {
 })
 
 describe('RFC-322 [db-slow] 的 CPU 判别', () => {
-  /** 睡而不烧 CPU——用来构造「墙钟 ≫ CPU」的进程停顿。 */
-  const sleepWithoutCpu = (ms: number): void => {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+  interface CpuProbeResult {
+    idle: { ms: number; cpuMs: number }
+    busy: { ms: number; cpuMs: number }
   }
 
   /**
-   * 停顿窗口取 300ms、且先做一次不记账的预热——**首版取 60ms、阈值 ms/4，在 CI 上红了**
-   * （ubuntu runner 实测 `cpuMs=22` vs 阈值 15）。原因是 `process.cpuUsage()` 统计的是
-   * **整个进程所有线程**的 CPU：bun 自带二十来个线程，JIT / GC / 首次 getrusage 的固定
-   * 成本都会落进测量窗口，本机安静时只有 0.03ms，CI 上是几十毫秒。
+   * `process.cpuUsage()` 统计整个进程。Bun 会并行执行同一 shard 的测试文件，所以直接在
+   * shard 进程里测量会把别的用例的 CPU 算到这条假 SQL 上；2026-08-27 的 Ubuntu CI
+   * 实测停顿 300ms、却记到了 405ms CPU。那不是生产判据失败，而是测试把其他测试线程
+   * 当成了被测语句。
    *
-   * 处置是把信噪比做够，而不是把判据调松到没意义：预热把固定成本挪出窗口，300ms 让残余
-   * 噪声摊薄。两种噪声模型下都留足余量——固定 ~22ms ⇒ 比值 0.07；即便按 CI 上那个
-   * 最坏的 37% 占空比外推 ⇒ 111ms、比值 0.37，都仍在 0.5 的判据之内。
+   * 探针因此在独立 Bun 子进程里同时跑「睡眠」与「真 CPU 查询」，仍经过生产
+   * `instrumentSlowStatements`，但不再受同 shard 其他测试污染。缓存结果让两个断言共享
+   * 同一次探针，不为隔离付两次启动成本。
    */
-  const STALL_MS = 300
+  let cachedProbe: CpuProbeResult | undefined
+  const cpuProbe = (): CpuProbeResult => {
+    if (cachedProbe !== undefined) return cachedProbe
+    const probe = spawnSync(
+      process.execPath,
+      [join(import.meta.dir, 'fixtures', 'rfc322-cpu-probe.ts')],
+      { encoding: 'utf8' },
+    )
+    expect(probe.status, probe.stderr).toBe(0)
+    expect(probe.signal, probe.stderr).toBeNull()
+    cachedProbe = JSON.parse(probe.stdout) as CpuProbeResult
+    return cachedProbe
+  }
 
   test('进程被冻住时 cpuMs ≪ ms —— 慢的不是这条 SQL', () => {
-    const seen: { ms: number; sql: string; cpuMs: number }[] = []
-    let sleepMs = 40
-    const fake = {
-      prepare: () => ({
-        all: () => {
-          sleepWithoutCpu(sleepMs)
-          return []
-        },
-      }),
-      query: () => ({ all: () => [] }),
-      exec: () => undefined,
-    }
-    // 阈值 100ms：预热那次（40ms）不记账，只把固定成本付掉。
-    instrumentSlowStatements(fake as never, 100, (ms, sql, cpuMs) => seen.push({ ms, sql, cpuMs }))
-    const run = (): void => {
-      ;(fake.prepare as unknown as (s: string) => { all: () => unknown[] })('SELECT 1').all()
-    }
-    // 预热只为把固定成本付掉，**本身不做任何断言**：负载高的 runner 上
-    // `Atomics.wait(40)` 实测能睡到 185ms（macOS CI 实测），断言「预热不该被记账」
-    // 等于把测试押在定时器精度上——首版这么写过，CI 上就是这么红的。
-    run()
-    seen.length = 0
-
-    sleepMs = STALL_MS
-    run()
-    expect(seen.length).toBe(1)
-    const rec = seen[0]!
-    expect(rec.ms).toBeGreaterThanOrEqual(STALL_MS * 0.8)
+    const rec = cpuProbe().idle
+    expect(rec.ms).toBeGreaterThanOrEqual(240)
     // 判据本身：CPU 时间明显小于墙钟 ⇒ 进程在等，不是这条语句在算。
     // 真正在算的语句是 cpuMs ≈ ms（下一条用例守的就是另一侧）。
     expect(rec.cpuMs).toBeLessThan(rec.ms / 2)
@@ -396,19 +381,9 @@ describe('RFC-322 [db-slow] 的 CPU 判别', () => {
   })
 
   test('真正吃 CPU 的语句 cpuMs 与 ms 同量级 —— 这才是查询问题', () => {
-    const sqlite = new Database(':memory:')
-    const seen: { ms: number; cpuMs: number }[] = []
-    instrumentSlowStatements(sqlite, 5, (ms, _sql, cpuMs) => seen.push({ ms, cpuMs }))
-    sqlite
-      .prepare(
-        'WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n < 300000) SELECT count(*) AS n FROM c',
-      )
-      .all()
-    expect(seen.length).toBeGreaterThanOrEqual(1)
-    const rec = seen[0]!
+    const rec = cpuProbe().busy
     expect(rec.cpuMs).toBeGreaterThan(0)
     expect(rec.cpuMs).toBeGreaterThanOrEqual(rec.ms / 2)
-    sqlite.close()
   })
 })
 

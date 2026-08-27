@@ -273,9 +273,12 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     const engine = read(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
-    expect(engine.match(/settleManualQuestionParkObligations\(\{/g)).toHaveLength(3)
+    expect(engine.match(/settleManualQuestionParkObligations\(\{/g)).toHaveLength(4)
     expect(engine).toContain('onTransitionTx: (tx) =>')
     expect(engine).toContain('assertNoManualQuestionParkObligationTx(tx, taskId, humanGates)')
+    expect(engine).toContain("if (statusBeforeReviewPark === 'awaiting_human')")
+    expect(engine).toContain("reason: 'active-clarify-released-before-review'")
+    expect(engine).toContain('task review outcome yielded to a durable manual question')
 
     const operationStore = read(
       'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOperationStore.ts',
