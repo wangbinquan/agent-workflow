@@ -16,9 +16,10 @@ describe('RFC-202 source locks', () => {
   test('scheduler abort checkpoints thread signal.reason into cancelTaskRow', () => {
     const src = read('packages/backend/src/services/scheduler.ts')
     // All four checkpoints must pass the abort reason — dropping it silently
-    // reverts daemon shutdowns to "canceled by user" (audit P1 F-13).
+    // reverts daemon shutdowns to "canceled by user" (audit P1 F-13). RFC-331
+    // makes the application-owned topology the required first argument.
     const threaded = src.match(
-      /cancelTaskRow\(\s*db,\s*taskId,[\s\S]{0,160}?opts\.signal\??\.reason,\s*opts\.executionContext\s*,?\s*\)/g,
+      /cancelTaskRow\(\s*topology,\s*db,\s*taskId,[\s\S]{0,180}?opts\.signal\??\.reason,\s*opts\.executionContext\s*,?\s*\)/g,
     )
     expect(threaded?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(src).toContain('DAEMON_SHUTDOWN_ABORT_REASON')
