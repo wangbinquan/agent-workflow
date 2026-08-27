@@ -525,7 +525,12 @@ test('task lifecycle: failed (stub exit 1, retries=0)', async ({ page }) => {
     })
     const taskId = await launchTask(daemon, fixtures.workflowId, repo.repoDir)
 
-    await waitForStatus(daemon, taskId, (s) => s === 'failed', 30_000, 'failed-api')
+    // This path includes the real clone + runner teardown before the task can
+    // publish its terminal state. On a loaded macOS CI shard, the same product
+    // revision has taken just over 30 seconds to converge, so a 30-second
+    // oracle races the behavior it is meant to observe. Keep the wait bounded
+    // by the case's 120-second budget while allowing the terminal transition.
+    await waitForStatus(daemon, taskId, (s) => s === 'failed', 60_000, 'failed-api')
     await waitForWsStatus(rec, taskId, 'failed', 5_000)
     await page.goto(`${daemon.baseUrl}/tasks/${taskId}`)
     await expect(page.locator('.status-chip', { hasText: /^failed$/i }).first()).toBeVisible({
