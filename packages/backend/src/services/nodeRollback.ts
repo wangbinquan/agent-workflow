@@ -53,6 +53,49 @@ export interface RollbackOutcome {
   failures: Array<{ worktreeDirName?: string; code: string; message: string }>
 }
 
+export interface PlannedNodeRunRollbackTarget {
+  worktreePath: string
+  worktreeDirName: string
+  snapshot: string
+}
+
+/**
+ * RFC-333 T8: resolve the exact worktree/snapshot pairs without touching the
+ * worktree.  The legacy executor and the durable human-gate effect share this
+ * shape so multi-repo fallback semantics cannot drift during the cutover.
+ */
+export function planNodeRunRollbackTargets(
+  target: RollbackTarget,
+  run: RollbackRunRow,
+  opts: { resetOnEmptySnapshot: boolean },
+): PlannedNodeRunRollbackTarget[] {
+  const multiRepo = target.repoCount > 1 && target.repos.length > 0
+  if (multiRepo && (run.preSnapshotReposJson !== null || opts.resetOnEmptySnapshot)) {
+    let map: Record<string, string> = {}
+    if (run.preSnapshotReposJson !== null) {
+      try {
+        const decoded: unknown = JSON.parse(run.preSnapshotReposJson)
+        if (decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)) {
+          map = decoded as Record<string, string>
+        }
+      } catch {
+        // Preserve the historical malformed-map behavior: every repo resolves
+        // to an empty snapshot (skip in resume mode, reset-only in retry mode).
+      }
+    }
+    return target.repos.flatMap((repo) => {
+      const snapshot = typeof map[repo.worktreeDirName] === 'string' ? map[repo.worktreeDirName]! : ''
+      if (snapshot === '' && !opts.resetOnEmptySnapshot) return []
+      return [{ ...repo, snapshot }]
+    })
+  }
+
+  if (target.worktreePath === '') return []
+  const snapshot = run.preSnapshot ?? ''
+  if (snapshot === '' && !opts.resetOnEmptySnapshot) return []
+  return [{ worktreePath: target.worktreePath, worktreeDirName: '', snapshot }]
+}
+
 /**
  * RFC-098 B1 (audit ⑥-10): load the RollbackTarget for a task — tasks row +
  * taskRepos (repoIndex order), with the same single-repo synthesized fallback

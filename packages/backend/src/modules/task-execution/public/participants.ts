@@ -34,6 +34,7 @@ import {
   finalizeTaskExecutionRecovery as finalizeTaskExecutionRecoveryInternal,
   prepareTaskExecutionRecovery as prepareTaskExecutionRecoveryInternal,
 } from '../application/recoverTaskExecutions'
+import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '../composition/humanGate'
 import {
   buildCodeHostRecoveryDescriptor as buildCodeHostRecoveryDescriptorInternal,
   classifyCodeHostProbeResponse as classifyCodeHostProbeResponseInternal,
@@ -61,6 +62,7 @@ import {
   ownershipTokenKey as ownershipTokenKeyInternal,
 } from '../domain/ownership'
 import {
+  humanGateNodeProjectionFence as humanGateNodeProjectionFenceInternal,
   type HumanGateContinuationLineage,
   type HumanGateNodeProjectionFence,
   type HumanGateWorkspaceRollbackRef,
@@ -191,6 +193,8 @@ export const withCurrentTaskExecutionTransaction = withCurrentTaskExecutionTrans
 export const withTaskExecutionMutation = withTaskExecutionMutationInternal
 export const withTaskExecutionTransaction = withTaskExecutionTransactionInternal
 export const submitTaskContinuationTx = submitTaskContinuationTxInternal
+export const bindTaskDecisionParticipantInTx = bindTaskDecisionParticipantInTxInternal
+export const humanGateNodeProjectionFence = humanGateNodeProjectionFenceInternal
 export const terminalizeTaskExecutionIntentsTx = terminalizeTaskExecutionIntentsTxInternal
 export const prepareTaskExecutionRecovery = prepareTaskExecutionRecoveryInternal
 export const finalizeTaskExecutionRecovery = finalizeTaskExecutionRecoveryInternal

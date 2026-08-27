@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "boundaryFacades": 55,
-    "serviceFiles": 372
+    "boundaryFacades": 62,
+    "serviceFiles": 379
   },
   "entries": [
     {
@@ -433,19 +433,24 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:42caefedb3ffb3a2bf5f",
+        "import:9fa1900dd74b562335de"
+      ],
       "exportedSymbols": [
+        "AutoDispatchClarifyDecisionResult",
         "AutoDispatchClarifyRoundArgs",
         "AutoDispatchClarifyRoundResult",
         "DESIGNER_DEFERRABLE_CONFLICTS",
         "autoDispatchClarifyRound",
+        "autoDispatchClarifyRoundWithDecision",
         "autoDispatchDeferredQuestions"
       ],
       "file": "packages/backend/src/services/clarify/autoDispatch.ts",
       "id": "facade:packages/backend/src/services/clarify/autoDispatch.ts",
       "ownerEntryId": "owner:packages/backend/src/services/clarify/autoDispatch.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -515,6 +520,7 @@
     {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
+        "ClarifySealDecisionParticipantInTx",
         "SealRoundQuestionsArgs",
         "SealRoundQuestionsResult",
         "sealRoundQuestions"
@@ -570,6 +576,54 @@
       "file": "packages/backend/src/services/clarifyAutoDispatch.ts",
       "id": "facade:packages/backend/src/services/clarifyAutoDispatch.ts",
       "ownerEntryId": "owner:packages/backend/src/services/clarifyAutoDispatch.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "boundary-facade",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [
+        "import:0f21ec2f5d8cfd04f2c7",
+        "import:23e4ce4987248ac57856",
+        "import:37c560ce2b2293bdad0b",
+        "import:5b1ec9c0d24166738eb5",
+        "import:5c196cf50eeeb1dcc38a",
+        "import:5dde0786c9bf02e6466f",
+        "import:897b79ab567fb43dc535",
+        "import:a5fd77bc9ae24fa2203a",
+        "import:af5a490e648c0f552d9f",
+        "import:b74ee40b59a0fc85534e",
+        "import:c0aa339fd448f1867c65",
+        "import:d431b003782c62cb1c8f",
+        "import:d7962c741fbe6189518c",
+        "import:dace83c20633fe685860"
+      ],
+      "exportedSymbols": [
+        "ClarifyDecisionArgs",
+        "PreparedClarifyDecision",
+        "prepareClarifyDecision",
+        "replayCommittedClarifyDecision"
+      ],
+      "file": "packages/backend/src/services/clarifyDecision.ts",
+      "id": "facade:packages/backend/src/services/clarifyDecision.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "boundary-facade",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [
+        "import:47399645662f94e9a74b",
+        "import:66db07f931bc0894c85d",
+        "import:eb85fb54dec9772eb20c"
+      ],
+      "exportedSymbols": [
+        "createClarifyDecisionCommandContext"
+      ],
+      "file": "packages/backend/src/services/clarifyDecisionComposition.ts",
+      "id": "facade:packages/backend/src/services/clarifyDecisionComposition.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/clarifyDecisionComposition.ts#$file",
       "removeAfterWave": "W4/W9",
       "status": "boundary-facade",
       "targetContext": "collaboration",
@@ -1837,6 +1891,60 @@
       "targetLayer": "application"
     },
     {
+      "boundaryEdgeIds": [
+        "import:043fe8911b0fb8e19a50",
+        "import:14c46975b6878da9608f",
+        "import:2d786e387dd446f860cb",
+        "import:3c606fd7f430b388674c",
+        "import:76b6048968bbecb615f2",
+        "import:c0ed65786c048851873b",
+        "import:c87baa7fd06fda8cf2cd",
+        "import:f85c0d5dd2099370d70a",
+        "import:fec957579a99588a7d89"
+      ],
+      "exportedSymbols": [
+        "SqliteGateWorkspaceRollbackExecutor",
+        "SqliteGateWorkspaceRollbackProjectionFactory",
+        "createGateContinuationPreDriveStep"
+      ],
+      "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+      "id": "facade:packages/backend/src/services/humanGateContinuationEffects.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "boundary-facade",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
+        "HumanGateContinuationRecoveryResult",
+        "PendingHumanGateContinuation",
+        "recoverPendingHumanGateContinuations"
+      ],
+      "file": "packages/backend/src/services/humanGateContinuationRecovery.ts",
+      "id": "facade:packages/backend/src/services/humanGateContinuationRecovery.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationRecovery.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "legacy-owner",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
+        "HumanGateDecisionBarrierKind",
+        "waitAtHumanGateDecisionCommitBarrier"
+      ],
+      "file": "packages/backend/src/services/humanGateDecisionE2eBarrier.ts",
+      "id": "facade:packages/backend/src/services/humanGateDecisionE2eBarrier.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/humanGateDecisionE2eBarrier.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "legacy-owner",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
         "ImportRefResolutionFence",
@@ -3021,10 +3129,12 @@
     {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
+        "PlannedNodeRunRollbackTarget",
         "RollbackOutcome",
         "RollbackRunRow",
         "RollbackTarget",
         "loadRollbackTarget",
+        "planNodeRunRollbackTargets",
         "rollbackNodeRunWorktrees"
       ],
       "file": "packages/backend/src/services/nodeRollback.ts",
@@ -3432,6 +3542,23 @@
       "removeAfterWave": "W4/W9",
       "status": "legacy-owner",
       "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [
+        "import:3c5c980188fbf51fe9f7",
+        "import:577f75f4be456c71d121",
+        "import:c054bef784af7e456df6"
+      ],
+      "exportedSymbols": [
+        "createQuestionDispatchCommandContext"
+      ],
+      "file": "packages/backend/src/services/questionDispatchComposition.ts",
+      "id": "facade:packages/backend/src/services/questionDispatchComposition.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/questionDispatchComposition.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "boundary-facade",
+      "targetContext": "collaboration",
       "targetLayer": "application"
     },
     {
@@ -3950,11 +4077,26 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:01934c21d9e91f5e6c96",
         "import:03c5c5821dbc66ecef64",
         "import:15d52dbcc5e457a912cd",
+        "import:205d8c349ed1bc08165d",
+        "import:2547070a314d92073296",
         "import:30a6613c0e08ce11c0b2",
+        "import:355737219daa0d531cb0",
+        "import:3934d6c75724b7ec59cc",
+        "import:3b49aaa34c0c3e8843a3",
+        "import:3be933e3f4d0ff337ca4",
+        "import:3c7d83b740b22db438ed",
         "import:5fb92fc1db85b1e884ac",
+        "import:65d84f497b64a3d359d1",
+        "import:672b4365b278a91fd11b",
+        "import:70fdc7aa47cad335ac8f",
         "import:ac8057bde3a7ea3c8e87",
+        "import:b710fa6d395e2f866008",
+        "import:c80cfe1cd020cd69abc9",
+        "import:d844793e3bf57669063a",
+        "import:db606d5ddd5f772767d0",
         "import:e6a195947dd1f581629b",
         "import:f4f06fa560bee6701077",
         "import:f777a2e4b746b263a89e"
@@ -4017,6 +4159,23 @@
       "file": "packages/backend/src/services/review.ts",
       "id": "facade:packages/backend/src/services/review.ts",
       "ownerEntryId": "owner:packages/backend/src/services/review.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "boundary-facade",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [
+        "import:02b49efd87675bbdccea",
+        "import:4687932e12fdd365aa05",
+        "import:de528558cf3c4ebcd70e"
+      ],
+      "exportedSymbols": [
+        "createReviewDecisionCommandContext"
+      ],
+      "file": "packages/backend/src/services/reviewDecisionComposition.ts",
+      "id": "facade:packages/backend/src/services/reviewDecisionComposition.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/reviewDecisionComposition.ts#$file",
       "removeAfterWave": "W4/W9",
       "status": "boundary-facade",
       "targetContext": "collaboration",
@@ -6026,7 +6185,8 @@
         "startTask",
         "startTaskWithLocalRepo",
         "syncTaskWorkflow",
-        "taskVisibilityCondition"
+        "taskVisibilityCondition",
+        "wakeHumanGateContinuation"
       ],
       "file": "packages/backend/src/services/task.ts",
       "id": "facade:packages/backend/src/services/task.ts",
@@ -6288,14 +6448,33 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:13cb4dbf36babaa62116",
+        "import:1d619ddaecc79546c74d",
+        "import:20a6f931df23bc0c0f67",
+        "import:2162802a5b89f0a0be73",
+        "import:2636a875ee5dd7a39a87",
+        "import:2932782e1aa7ed87df73",
+        "import:603dbc3faeb280675cc0",
+        "import:6bc3f4f86ddf808f509e",
+        "import:6d0cea50ec2a2c70c79f",
+        "import:7c9fa817a53cf3047228",
+        "import:7ed8ca057be10e3708ff",
+        "import:a8b215a7729ea46d2828",
+        "import:aa1f1e81ea971445e394",
+        "import:ba0025e50807a16dfd36",
+        "import:cb7491bcb8ee43deadd9"
+      ],
       "exportedSymbols": [
         "DispatchTaskQuestionsActor",
+        "DispatchTaskQuestionsDecisionArgs",
+        "DispatchTaskQuestionsDecisionResult",
         "DispatchTaskQuestionsResult",
         "DispatchedRerun",
         "buildFrontierMintPlan",
         "dispatchDeferredTaskQuestions",
         "dispatchTaskQuestions",
+        "dispatchTaskQuestionsWithDecision",
         "resolveBorrowForNode",
         "resolveEntryShardKeys"
       ],
@@ -6303,7 +6482,7 @@
       "id": "facade:packages/backend/src/services/taskQuestionDispatch.ts",
       "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -7397,5 +7576,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3912e9a9203265ae06dba5d93c70184a37326948815cf5bc93b1c39752ac607c"
+  "sourceDigest": "sha256:7df8e2ff481838fee825c4a983e991b2ec579365d30622807bb21a38c315a2ce"
 }

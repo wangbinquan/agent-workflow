@@ -859,9 +859,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     title: 'Send the staged questions and resume the task',
     description:
       'THIS IS THE STEP THAT RESUMES THE RUN. Sends every staged entry (or just `entryIds`) to their nodes. ' +
-      'Two things can fail independently: the send is recorded first, then the engine is kicked — a reply of ' +
-      'HTTP 200 with `resume.ok === false` means the questions WERE dispatched but the task did not restart. ' +
-      'Check `resume` before reporting success.',
+      'HTTP 200 includes a durable `receipt`: question stamping, rerun minting, task release, and continuation ' +
+      'admission committed atomically. A later engine wake is recovered from that continuation.',
     permissions: ['tasks:execute'],
     inputSchema: {
       id: taskId,

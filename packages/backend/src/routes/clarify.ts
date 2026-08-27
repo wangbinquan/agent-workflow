@@ -26,7 +26,8 @@ import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { broadcastClarifyAnsweredForRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/services/clarifySeal'
-import { autoDispatchClarifyRound } from '@/services/clarifyAutoDispatch'
+import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
+import { createClarifyDecisionCommandContext } from '@/services/clarifyDecisionComposition'
 import {
   countAwaitingClarifyRounds,
   getClarifyRoundDetail,
@@ -35,11 +36,11 @@ import {
 } from '@/services/clarifyRounds'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
-import { resumeTask } from '@/services/task'
+import { wakeHumanGateContinuation } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
 import { Paths } from '@/util/paths'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -389,16 +390,34 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
             })
           }
         }
-        let auto: Awaited<ReturnType<typeof autoDispatchClarifyRound>>
+        const commandContext = createClarifyDecisionCommandContext({
+          db: deps.db,
+          actor,
+          role,
+          wake: async (taskId, continuationRef) => {
+            await wakeHumanGateContinuation(taskId, continuationRef, {
+              db: deps.db,
+              schedulerDriver: createLegacyTaskExecutionTopology(
+                deps.db,
+                deps.repositoryPublicationTransport,
+              ).schedulerDriver,
+              appHome: Paths.root,
+              configPath: deps.configPath,
+              ...resolveLaunchRuntimeConfig(deps.configPath),
+            })
+          },
+        })
+        let auto: Awaited<ReturnType<typeof submitClarifyDecision>>
         try {
-          auto = await autoDispatchClarifyRound({
-            db: deps.db,
-            originNodeRunId: nodeRunId,
+          auto = await submitClarifyDecision(commandContext, {
+            nodeRunId,
             answers: parsed.data.answers,
             directive: parsed.data.directive,
             // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
             ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
-            actor: { userId: actor.user.id, role },
+            ...(c.req.header('Idempotency-Key') === undefined
+              ? {}
+              : { idempotencyKey: c.req.header('Idempotency-Key')! }),
           })
         } catch (err) {
           // A NON-recoverable dispatch conflict (terminal/snapshot/...) rethrown AFTER the seal committed:
@@ -409,55 +428,18 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
           throw err
         }
         // Success: the dispatched rerun id (or '' when dispatch was deferred to the board).
-        await emitAutoAnswered(auto.dispatch.reruns[0]?.nodeRunId ?? '')
-        // Release the gate so the freshly-minted self/questioner reruns dispatch — mirroring the
-        // manual dispatch route + the legacy quick path. Best-effort: a `running` deferred task'
-        // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).
-        const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
-          db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(
-            deps.db,
-            deps.repositoryPublicationTransport,
-          ).schedulerDriver,
-          appHome: Paths.root,
-          configPath: deps.configPath,
-          ...resolveLaunchRuntimeConfig(deps.configPath),
-        }
-        // RFC-202 T8: real resume failures ride in the response (the answers
-        // ARE sealed — 2xx stays true); the UI shows a warning instead of the
-        // old silent parked-forever outcome. task-not-resumable stays a benign
-        // deferral (live loop picks the reruns up).
-        let resumeFailure: { ok: false; code: string; message: string } | undefined
-        try {
-          await resumeTask(deps.db, auto.taskId, resumeDepsAuto)
-        } catch (err) {
-          if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-            log.info(
-              'clarify autodispatch resume deferred — live loop picks up the pending reruns',
-              {
-                taskId: auto.taskId,
-              },
-            )
-          } else {
-            const message = err instanceof Error ? err.message : String(err)
-            log.warn('clarify autodispatch resume threw', { taskId: auto.taskId, error: message })
-            resumeFailure = {
-              ok: false,
-              code: err instanceof DomainError ? err.code : 'resume-failed',
-              message,
-            }
-          }
-        }
+        await emitAutoAnswered(auto.reruns[0]?.nodeRunId ?? '')
         return c.json({
           ok: true,
-          ...(resumeFailure ? { resume: resumeFailure } : {}),
           kind: 'autodispatch' as const,
-          roundKind: auto.kind,
+          taskId: auto.taskId,
+          receipt: auto.receipt,
+          roundKind: auto.roundKind,
           sealedQuestionIds: auto.sealedQuestionIds,
           roundFullySealed: auto.roundFullySealed,
-          reruns: auto.dispatch.reruns,
-          dispatchedEntryIds: auto.dispatch.dispatchedEntryIds,
-          deferred: auto.dispatch.deferred,
+          reruns: auto.reruns,
+          dispatchedEntryIds: auto.dispatchedEntryIds,
+          deferred: auto.deferred,
           // Codex round-5: set when the answer WAS sealed but auto-dispatch was deferred to the board
           // (a post-seal dispatch conflict, e.g. a same-home in-flight rerun). The answer is saved +
           // parked; the user dispatches it from the board. The request still succeeds (not a failure).

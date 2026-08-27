@@ -1,6 +1,6 @@
 # RFC-333 技术设计：人工门原子停驻与持久续跑
 
-> 状态：Approved / In Progress（2026-08-27；D1～D12 已获用户批准，T2～T7 已完成，当前进入 T8）
+> 状态：Approved / Publishing（2026-08-28；D1～D12 已获用户批准，T2～T11 已完成，当前执行 T12 hosted 收口）
 >
 > 本设计只闭合 RFC-294 P0-C。它以 RFC-326 已落的 review transaction 为种子，以 RFC-328
 > `task_execution_intents` / ownership fence 为唯一 durable execution authority，以 RFC-332
@@ -662,13 +662,17 @@ RFC-329 的 named MCP tools 继续 dispatch exact route template，因此自动�
 
 ### 12.3 process E2E
 
-扩展 `e2e/rfc294-human-gate-restart.spec.ts`：
+边界分两层验证：open/artifact/事务内 mutation 用真实 SQLite deterministic failpoint 精确覆盖每个 member gap；只有必须证明
+“进程真的消失、HTTP 请求真的中断、下一 daemon 从 durable state 接手”的不可逆边界进入真实二进制 E2E。扩展
+`e2e/rfc294-human-gate-restart.spec.ts`：
 
-1. clarify prepared→park、answer commit→wake 两个 kill 点；
-2. review artifact N/commit/rename、decision commit→wake 四类 kill 点；
-3. question dispatch final tx/wake 两个 kill 点；
-4. REST 与 MCP 各至少一条真实入口；
-5. 每次 restart 后断言 same gate id/operation、exact one continuation、task 最终完成。
+1. 保留 clarify/review 已停驻后的独立 SIGKILL/restart 与 same identity 断言；
+2. clarify answer commit→wake 与 review decision commit→wake 各做一次外部 SIGKILL；
+3. question dispatch final tx→wake 做一次外部 SIGKILL；
+4. E2E 走真实 REST，RFC-329 exact route mapping guard 证明 named MCP 仍派发同一 command，没有 MCP-only writer；
+5. restart 后断言原 gate/node identity 保持、pending canonical intent 被同一 coordinator 接管、task 最终完成。
+
+barrier 只允许编入专用 E2E binary；production binary 对应常量为 `false`，不能出现环境变量即可暂停正式服务的测试后门。
 
 ### 12.4 architecture guards
 
@@ -731,3 +735,20 @@ RFC-333 Done 后只更新 RFC-294：
 - RFC-326/328/329/332：作为已复用种子，不倒签额外 credit。
 
 若任一 AC 未满足，P0-C 保持 partial，不允许用“主 happy path 已跑通”代替 crash/retry/route boundary 的退出门。
+
+## 15. 2026-08-28 implementation 对账
+
+- review、clarify、questions 分别由 purpose-specific domain command + required in-transaction participant 完成 final commit；
+  `services/*DecisionComposition.ts` 只负责 concrete adapter 与 after-commit wake，不把领域顺序放回 route/bootstrap；
+- `wakeHumanGateContinuation` 只提交已经原子 admitted 的 exact continuation ref，不再做第二次 lifecycle transition 或 mint 第二个
+  intent；boot 的 `humanGateContinuationRecovery` 扫描 exact pending intent 并复用同一入口；
+- orphan reaper 只保留“task pending、相关 run 全 pending、存在 exact pending gate-continuation intent”的恢复形状；任何 running
+  row 仍按既有 orphan contract 中断，避免把真实存活执行误当 durable wake；
+- shared response schema、REST/MCP facade 与 UI 都以 committed receipt 为成功边界；内部 wake failure 不再暴露给用户，真实领域
+  rejection/conflict 继续原样返回；
+- current architecture report 为 backend production files `920`、module files `396`、service files `379`、background
+  entries `218`、ambient wiring `440`、known violations `31`、route→DB `15`、transport→DB `2`；本 RFC 没有新增第二
+  continuation/owner/interval，也没有增加 known violation；
+- 候选本地证据：backend 定向 `286/286`、frontend `100/100`、shared `2/2`、真实二进制 restart E2E `3/3`、
+  architecture 非 provenance `23/23`。四份 content-addressed provenance 在 payload commit 后按该 commit 重钉，随后由 canonical
+  replay 与 hosted CI 给最终证据。

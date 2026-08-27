@@ -9,8 +9,8 @@
 // PATCH  /api/reviews/:nodeRunId/comments/:id     edit comment body (RFC-009)
 // DELETE /api/reviews/:nodeRunId/comments/:id     delete review comment
 //
-// RFC-005 PR-B T11 + T12. After decision lands, resumeTask re-enters the
-// scheduler so approve advances downstream, reject/iterate re-runs upstream.
+// RFC-333 T8: review decisions enter collaboration's atomic command. The
+// committed continuation is woken by composition, never by this route.
 
 import {
   ListReviewsQuerySchema,
@@ -35,9 +35,11 @@ import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
-import { resumeTask } from '@/services/task'
+import { wakeHumanGateContinuation } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
+import { submitReviewDecision } from '@/modules/collaboration/public/commands'
+import { createReviewDecisionCommandContext } from '@/services/reviewDecisionComposition'
 import {
   addReviewComment,
   countPendingReviews,
@@ -48,14 +50,10 @@ import {
   listReviewRounds,
   listReviewSummaries,
   setDocumentSelection,
-  submitReviewDecision,
   updateReviewCommentText,
 } from '@/services/review'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
-
-const log = createLogger('reviews')
 
 /**
  * RFC-326 P10 — the two write routes accept batched comments (≤ 200 × 50 000
@@ -339,17 +337,31 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       // user id + role snapshot on the decision row.
       const actor = actorOf(c)
       const role = await ensureReviewMember(deps, nodeRunId, actor)
-      const args: Parameters<typeof submitReviewDecision>[0] = {
+      const commandContext = createReviewDecisionCommandContext({
         db: deps.db,
         appHome: appHomeFor(deps),
+        actor,
+        authorRole: role,
+        wake: async (taskId, continuationRef) => {
+          await wakeHumanGateContinuation(taskId, continuationRef, {
+            db: deps.db,
+            schedulerDriver: createLegacyTaskExecutionTopology(
+              deps.db,
+              deps.repositoryPublicationTransport,
+            ).schedulerDriver,
+            appHome: appHomeFor(deps),
+            configPath: deps.configPath,
+            ...resolveLaunchRuntimeConfig(deps.configPath),
+          })
+        },
+      })
+      const result = await submitReviewDecision(commandContext, {
         nodeRunId,
         decision: parsed.data.decision,
         expectedReviewIteration: parsed.data.reviewIteration,
-        author: actor.user.id,
-        authorRole: role,
-        // RFC-326 P16: the acting user, re-verified by the service before any
-        // worktree rollback and again at the commit point.
-        actor,
+        ...(c.req.header('Idempotency-Key') === undefined
+          ? {}
+          : { idempotencyKey: c.req.header('Idempotency-Key')! }),
         ...(parsed.data.rejectReason !== undefined
           ? { rejectReason: parsed.data.rejectReason }
           : {}),
@@ -358,56 +370,15 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
           ? { comments: parsed.data.comments.map(toBatchComment) }
           : {}),
         ...(parsed.data.selections !== undefined ? { selections: parsed.data.selections } : {}),
-      }
-      const result = await submitReviewDecision(args)
-      // RFC-202 T8: the resume kick is no longer pure fire-and-forget — real
-      // failures (worktree GC'd → 410, spawn errors, …) used to vanish into
-      // the daemon log while the HTTP response claimed unqualified success and
-      // the task sat parked (audit R4 "伪成功"). The decision itself DID land
-      // (2xx stays correct); the kick outcome now rides in the response as an
-      // optional `resume` field the UI surfaces as a warning.
-      let resumeFailure: { ok: false; code: string; message: string } | undefined
-      if (result.resumeRequired) {
-        const resumeDeps: Parameters<typeof resumeTask>[2] = {
-          db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(
-            deps.db,
-            deps.repositoryPublicationTransport,
-          ).schedulerDriver,
-          appHome: appHomeFor(deps),
-          configPath: deps.configPath,
-          // RFC-108 T4 (Codex impl gate P2): a review decision resumes the task;
-          // thread the per-node timeout floor (+commit&push/concurrency) so the
-          // continued nodes are not unbounded.
-          ...resolveLaunchRuntimeConfig(deps.configPath),
-        }
-        // RFC-097 (audit S-27): classified swallow — `task-not-resumable` is
-        // EXPECTED when the task is still running or actively driven (the live
-        // dispatch loop picks the freshly minted pending rerun row up via
-        // deriveFrontier's pending-anchor release, RFC-092).
-        try {
-          await resumeTask(deps.db, result.taskId, resumeDeps)
-        } catch (err) {
-          if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-            log.info('review resume deferred — live dispatch loop picks up the pending rerun', {
-              taskId: result.taskId,
-            })
-          } else {
-            const message = err instanceof Error ? err.message : String(err)
-            const code = err instanceof DomainError ? err.code : 'resume-failed'
-            log.warn('review resume threw', { taskId: result.taskId, error: message })
-            resumeFailure = { ok: false, code, message }
-          }
-        }
-      }
-      const { batch, ...decided } = result
+      })
       return c.json({
         ok: true,
-        ...decided,
-        commentsAdded: batch?.commentsAdded ?? 0,
-        commentsSkippedAsDuplicate: batch?.commentsSkippedAsDuplicate ?? 0,
-        selectionsApplied: batch?.selectionsApplied ?? 0,
-        ...(resumeFailure ? { resume: resumeFailure } : {}),
+        taskId: result.taskId,
+        reviewIteration: result.reviewIteration,
+        receipt: result.receipt,
+        commentsAdded: result.commentsAdded,
+        commentsSkippedAsDuplicate: result.commentsSkippedAsDuplicate,
+        selectionsApplied: result.selectionsApplied,
       })
     },
   )

@@ -32,6 +32,7 @@ import {
   eq,
   gt,
   inArray,
+  isNotNull,
   isNull,
   ne,
   notExists,
@@ -39,7 +40,7 @@ import {
   sql,
 } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ulid } from 'ulid'
 import type {
   AgentOutputKind,
@@ -101,6 +102,25 @@ import {
   prepareReviewGateOpen,
 } from '@/modules/collaboration/public/commands'
 import {
+  canonicalHumanGateValueJson,
+  canonicalHumanGateRequestHash,
+  deriveHumanGateCompatibilityKey,
+} from '@/modules/collaboration/domain/canonicalGateRequest'
+import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
+import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
+import {
+  decodeReviewDecisionManifest,
+  decodeReviewDecisionReceipt,
+  encodeReviewDecisionManifest,
+  encodeReviewDecisionReceipt,
+  type ReviewDecisionManifest,
+  type ReviewDecisionReceiptEnvelope,
+} from '@/modules/collaboration/domain/reviewDecision'
+import { prepareWorkspaceRollbackPlan } from '@/modules/collaboration/application/prepareWorkspaceRollbackPlan'
+import type { ValidatedWorkspaceRollbackPlan } from '@/modules/collaboration/domain/workspaceRollbackPlan'
+import { GitWorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector'
+import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
+import {
   createCollaborationCommandContext,
   parkPreparedHumanGate,
 } from '@/services/humanGateComposition'
@@ -116,6 +136,7 @@ import type {
 } from '@/modules/collaboration/public/types'
 import {
   agents as agentsTable,
+  collaborationGateOperations,
   docVersions,
   nodeRunEvents,
   nodeRunOutputs,
@@ -139,10 +160,11 @@ import {
 import { snapshotNodeAgentWhere } from '@/services/agent'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { nextRetryIndex, mintNodeRun, mintNodeRunTx } from '@/services/nodeRunMint'
-import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
-import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
 import {
+  bindTaskDecisionParticipantInTx,
   currentTaskExecutionContext,
+  humanGateNodeProjectionFence,
   withTaskExecutionMutation,
   withTaskExecutionTransaction,
 } from '@/services/taskExecutionParticipants'
@@ -2701,6 +2723,12 @@ export interface SubmitReviewDecisionArgs {
   rejectReason?: string
   /** Optimistic-lock guard against the iteration the client saw. */
   expectedReviewIteration: number
+  /** RFC-333 optional official-client lifecycle fence; legacy callers snapshot it at prepare. */
+  expectedTaskRevision?: number
+  /** RFC-333 optional official-client gate fence; legacy callers snapshot the current revision. */
+  expectedGateRevision?: number
+  /** RFC-333 explicit header value; absent callers use the canonical compatibility key. */
+  idempotencyKey?: string
   author?: string
   /** RFC-099 (D7) — task-relationship role snapshot of the decider. */
   authorRole?: TaskActorRole
@@ -2734,6 +2762,10 @@ export interface SubmitReviewDecisionResult {
    * resumeTask(taskId); approve completes inline.
    */
   resumeRequired: boolean
+  /** Durable command identity; route facades expose the narrow receipt, never the intent id. */
+  receipt: ReviewDecisionReceiptEnvelope['decision']
+  /** Opaque hand-off used only by the composition root to wake the committed intent. */
+  continuationRef: string
   /** RFC-326 — present only when the request carried a batch. */
   batch?: {
     commentsAdded: number
@@ -2792,6 +2824,8 @@ interface PreparedRerunUpstream {
   nodeId: string
   latest: typeof nodeRuns.$inferSelect
   nextRetry: number
+  /** Preallocated so the decision manifest and the committed projection are exact. */
+  rerunNodeRunId: string
   /** True when the external phase actually rolled at least one worktree back. */
   rolledBack: boolean
 }
@@ -2876,6 +2910,194 @@ function assertDecisionAdmissible(
   return role
 }
 
+function canonicalReviewDecisionPayload(args: SubmitReviewDecisionArgs) {
+  return {
+    kind: 'review-decision' as const,
+    decision: args.decision,
+    reviewIteration: args.expectedReviewIteration,
+    rejectReason: args.rejectReason ?? null,
+    commentsJson: canonicalHumanGateValueJson(args.comments ?? []),
+    selectionsJson: canonicalHumanGateValueJson(args.selections ?? []),
+  }
+}
+
+function resultFromReviewDecisionReceipt(
+  envelope: ReviewDecisionReceiptEnvelope,
+  hasBatch: boolean,
+): SubmitReviewDecisionResult {
+  return {
+    taskId: envelope.result.taskId,
+    reviewIteration: envelope.result.reviewIteration,
+    resumeRequired: true,
+    receipt: gateDecisionReceipt({ ...envelope.decision, replayed: true }),
+    continuationRef: envelope.result.continuationRef,
+    ...(hasBatch
+      ? {
+          batch: {
+            commentsAdded: envelope.result.commentsAdded,
+            commentsSkippedAsDuplicate: envelope.result.commentsSkippedAsDuplicate,
+            selectionsApplied: envelope.result.selectionsApplied,
+          },
+        }
+      : {}),
+  }
+}
+
+/**
+ * A compatibility retry arrives after the review row has already closed, so it
+ * must be recognized before the ordinary `awaiting_review` admission check.
+ * Explicit keys match their one row; keyless web/MCP callers match the latest
+ * canonical payload/actor and reuse that row's captured revisions.
+ */
+function replayCommittedReviewDecision(
+  args: SubmitReviewDecisionArgs,
+  taskId: string,
+): SubmitReviewDecisionResult | null {
+  const gateRef = `review:${args.nodeRunId}`
+  const payload = canonicalReviewDecisionPayload(args)
+  const actorUserId = args.actor?.user.id ?? null
+  const rows = args.db
+    .select()
+    .from(collaborationGateOperations)
+    .where(
+      and(
+        eq(collaborationGateOperations.taskId, taskId),
+        eq(collaborationGateOperations.gateKind, 'review'),
+        eq(collaborationGateOperations.gateRef, gateRef),
+        eq(collaborationGateOperations.operationKind, 'decide'),
+      ),
+    )
+    .orderBy(desc(collaborationGateOperations.createdAt))
+    .all()
+  const explicit = args.idempotencyKey
+  const candidate = rows.find((row) => {
+    if (explicit !== undefined && row.idempotencyKey !== explicit) return false
+    if (row.receiptJson === null || row.actorUserId !== actorUserId) return false
+    let manifest: ReviewDecisionManifest
+    try {
+      manifest = decodeReviewDecisionManifest(row.manifestJson)
+    } catch {
+      return false
+    }
+    const request: CanonicalHumanGateRequest = {
+      schemaVersion: 1,
+      taskId,
+      gateKind: 'review',
+      operationKind: 'decide',
+      gateRef,
+      actorUserId,
+      expectedTaskRevision: args.expectedTaskRevision ?? row.expectedTaskRevision,
+      expectedGateRevision: args.expectedGateRevision ?? row.expectedGateRevision,
+      payload,
+    }
+    return (
+      canonicalHumanGateRequestHash(request) === row.requestHash &&
+      canonicalHumanGateRequestHash(manifest.request) === row.requestHash
+    )
+  })
+  if (candidate === undefined) {
+    if (explicit !== undefined && rows.some((row) => row.idempotencyKey === explicit)) {
+      throw new ConflictError(
+        'human-gate-idempotency-conflict',
+        `review decision idempotency key is already bound to another request`,
+      )
+    }
+    return null
+  }
+  return resultFromReviewDecisionReceipt(
+    decodeReviewDecisionReceipt(candidate.receiptJson!),
+    args.comments !== undefined || args.selections !== undefined,
+  )
+}
+
+function ensureLegacyReviewGateRevisionTx(input: {
+  tx: DbTxSync
+  operations: SqliteHumanGateOperationStore
+  taskId: string
+  nodeRunId: string
+  expectedTaskRevision: number
+  reviewIteration: number
+  now: number
+}): number {
+  const gateRef = `review:${input.nodeRunId}`
+  const current = input.operations.latestGateRevisionTx({
+    tx: input.tx,
+    gateKind: 'review',
+    gateRef,
+  })
+  if (current !== 0) return current
+  const request: CanonicalHumanGateRequest = {
+    schemaVersion: 1,
+    taskId: input.taskId,
+    gateKind: 'review',
+    operationKind: 'legacy-seed',
+    gateRef,
+    actorUserId: null,
+    expectedTaskRevision: input.expectedTaskRevision,
+    expectedGateRevision: 0,
+    payload: {
+      kind: 'legacy-seed',
+      factDigest: sha256Hex(
+        canonicalHumanGateValueJson({
+          taskId: input.taskId,
+          nodeRunId: input.nodeRunId,
+          reviewIteration: input.reviewIteration,
+        }),
+      ),
+    },
+  }
+  const operationId = ulid(input.now)
+  const begun = input.operations.beginTx({
+    tx: input.tx,
+    operationId,
+    request,
+    idempotencyKey: `legacy:review:${input.nodeRunId}:1`,
+    now: input.now,
+  })
+  input.operations.commitTx({
+    tx: input.tx,
+    operationId: begun.operation.id,
+    expectedClaimEpoch: begun.operation.claimEpoch,
+    receiptJson: canonicalHumanGateValueJson({
+      schemaVersion: 1,
+      kind: 'legacy-seed',
+      gateRef,
+      gateRevision: 1,
+    }),
+    now: input.now,
+  })
+  input.operations.completeTx({
+    tx: input.tx,
+    operationId: begun.operation.id,
+    expectedClaimEpoch: begun.operation.claimEpoch,
+    now: input.now,
+  })
+  return 1
+}
+
+function reviewDecisionProjectionMember(row: typeof nodeRuns.$inferSelect) {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    nodeId: row.nodeId,
+    parentNodeRunId: row.parentNodeRunId,
+    iteration: row.iteration,
+    shardKey: row.shardKey,
+    retryIndex: row.retryIndex,
+    reviewIteration: row.reviewIteration,
+    status: row.status,
+    failureCode: row.failureCode,
+    preSnapshot: row.preSnapshot,
+    preSnapshotReposJson: row.preSnapshotReposJson,
+    rerunCause: row.rerunCause,
+    supersededByReview: row.supersededByReview,
+    rolledBack: row.rolledBack,
+    continuationSlotKey: row.continuationSlotKey,
+    lineageSlotPathJson: row.lineageSlotPathJson,
+    operationGeneration: row.operationGeneration,
+  }
+}
+
 async function submitReviewDecisionUnlocked(
   args: SubmitReviewDecisionArgs,
 ): Promise<SubmitReviewDecisionResult> {
@@ -2890,6 +3112,14 @@ async function submitReviewDecisionUnlocked(
   if (taskRow === undefined) {
     throw new NotFoundError('task-not-found', `task ${run.taskId} not found`)
   }
+  if (args.idempotencyKey !== undefined && args.idempotencyKey.trim().length === 0) {
+    throw new ValidationError(
+      'review-decision-invalid',
+      'review decision idempotency key must not be empty',
+    )
+  }
+  const replay = replayCommittedReviewDecision(args, run.taskId)
+  if (replay !== null) return replay
   // Widened to the lookup view (RFC-149): `rerun` is absent on approve and the
   // full re-run policy on reject / iterate — the ONE place the path forks.
   const policy: ReviewDecisionPolicy = REVIEW_DECISION_POLICY[args.decision]
@@ -3046,31 +3276,69 @@ async function submitReviewDecisionUnlocked(
     rerun = await planRerun(args, run, taskRow, dv)
   }
 
-  // ── external phase: worktree rollback (idempotent) ────────────────────────
+  // ── prepare G: durable rollback plan; canonical worktree is untouched ─────
+  let workspaceRollbackPlan: ValidatedWorkspaceRollbackPlan | null = null
   if (rerun !== null && rerun.rollbackFlag && rerun.rollbackTarget !== null) {
-    for (const up of rerun.upstreams) {
-      if (up.latest.preSnapshot === null && up.latest.preSnapshotReposJson === null) continue
-      // RFC-098 B1 (audit S-9 / ⑥-10): write-lock + shared multi-repo rollback;
-      // `rolledBack` (the '-rollback' supersede-marker suffix) means "at least one
-      // worktree actually rolled back with zero failures".
-      try {
-        const outcome = await getTaskWriteSem(taskRow.id).run(() =>
-          rollbackNodeRunWorktrees(
-            rerun!.rollbackTarget!,
-            up.latest,
-            { resetOnEmptySnapshot: false },
-            log,
-          ),
-        )
-        up.rolledBack = outcome.attempted && outcome.failures.length === 0
-      } catch (err) {
-        log.warn('review rollback failed', {
-          nodeRunId: up.latest.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
+    const candidates = rerun.upstreams.map((up) => ({
+      sourceNodeRunId: up.latest.id,
+      targets: planNodeRunRollbackTargets(rerun!.rollbackTarget!, up.latest, {
+        resetOnEmptySnapshot: false,
+      }),
+    }))
+    if (candidates.some((candidate) => candidate.targets.length > 0)) {
+      workspaceRollbackPlan = await prepareWorkspaceRollbackPlan({
+        taskId: taskRow.id,
+        candidates,
+        inspector: new GitWorkspaceRollbackSnapshotInspector(),
+      })
     }
   }
+
+  const operationId = ulid(decidedAt)
+  const gateRef = `review:${args.nodeRunId}`
+  const capturedTaskRevision = args.expectedTaskRevision ?? taskRow.lifecycleEventRevision
+  const latestGateRevision =
+    db
+      .select({ revision: collaborationGateOperations.resultGateRevision })
+      .from(collaborationGateOperations)
+      .where(
+        and(
+          eq(collaborationGateOperations.gateKind, 'review'),
+          eq(collaborationGateOperations.gateRef, gateRef),
+          isNotNull(collaborationGateOperations.resultGateRevision),
+        ),
+      )
+      .orderBy(desc(collaborationGateOperations.resultGateRevision))
+      .limit(1)
+      .get()?.revision ?? 0
+  // A legacy gate is seeded to revision 1 in the final transaction before the
+  // decision operation begins. New RFC-333 gates already have open revision 1.
+  const capturedGateRevision =
+    args.expectedGateRevision ?? (latestGateRevision === 0 ? 1 : latestGateRevision)
+  const request: CanonicalHumanGateRequest = {
+    schemaVersion: 1,
+    taskId: taskRow.id,
+    gateKind: 'review',
+    operationKind: 'decide',
+    gateRef,
+    actorUserId: args.actor?.user.id ?? null,
+    expectedTaskRevision: capturedTaskRevision,
+    expectedGateRevision: capturedGateRevision,
+    payload: canonicalReviewDecisionPayload(args),
+  }
+  const idempotencyKey = args.idempotencyKey ?? deriveHumanGateCompatibilityKey(request)
+  const sourceNodeRunIds = rerun?.upstreams.map((up) => up.latest.id) ?? []
+  const rerunNodeRunIds = rerun?.upstreams.map((up) => up.rerunNodeRunId) ?? []
+  const decisionManifest: ReviewDecisionManifest = {
+    schemaVersion: 1,
+    kind: 'review-decision',
+    request,
+    sourceNodeRunIds,
+    rerunNodeRunIds,
+    workspaceRollbackPlan,
+  }
+  const decisionManifestJson = encodeReviewDecisionManifest(decisionManifest)
+  const operations = new SqliteHumanGateOperationStore()
 
   // ── commit: one transaction ───────────────────────────────────────────────
   const nextIter = policy.bumpsIteration ? run.reviewIteration + 1 : run.reviewIteration
@@ -3105,6 +3373,48 @@ async function submitReviewDecisionUnlocked(
     // when an actor is known, the caller's snapshot otherwise (internal paths).
     const effectiveRole: TaskActorRole | null =
       args.actor !== undefined ? freshRole : (args.authorRole ?? null)
+
+    const currentGateRevision = ensureLegacyReviewGateRevisionTx({
+      tx,
+      operations,
+      taskId: taskRow.id,
+      nodeRunId: args.nodeRunId,
+      expectedTaskRevision: capturedTaskRevision,
+      reviewIteration: run.reviewIteration,
+      now: decidedAt,
+    })
+    if (currentGateRevision !== capturedGateRevision) {
+      throw new ConflictError(
+        'human-gate-operation-stale',
+        `review gate revision changed (expected ${capturedGateRevision}, current ${currentGateRevision})`,
+      )
+    }
+    const begun = operations.beginTx({
+      tx,
+      operationId,
+      request,
+      idempotencyKey,
+      now: decidedAt,
+    })
+    if (begun.replayed) {
+      if (begun.operation.receiptJson === null) {
+        throw new ConflictError(
+          'human-gate-operation-conflict',
+          `review decision operation '${begun.operation.id}' has not committed`,
+        )
+      }
+      return {
+        kind: 'replayed' as const,
+        receipt: decodeReviewDecisionReceipt(begun.operation.receiptJson),
+      }
+    }
+    operations.markPreparedTx({
+      tx,
+      operationId: begun.operation.id,
+      expectedClaimEpoch: begun.operation.claimEpoch,
+      manifestJson: decisionManifestJson,
+      now: decidedAt,
+    })
 
     // 1. Batch selections (RFC-129: judging the current content clears stale).
     let selectionsApplied = 0
@@ -3288,6 +3598,7 @@ async function submitReviewDecisionUnlocked(
         // (RFC-074 PR-C: no clarifyIteration inherit, see
         // review-iterate-inherits-clarify-iteration.test.ts).
         mintNodeRunTx(tx, {
+          id: up.rerunNodeRunId,
           taskId: dv.taskId,
           nodeId: up.nodeId,
           status: 'pending',
@@ -3332,8 +3643,74 @@ async function submitReviewDecisionUnlocked(
       })
     }
 
-    return { inserted, skipped, selectionsApplied }
+    const lineageIds = [...sourceNodeRunIds, ...rerunNodeRunIds]
+    const projectionRows =
+      lineageIds.length === 0
+        ? []
+        : tx.select().from(nodeRuns).where(inArray(nodeRuns.id, lineageIds)).all()
+    const expectedNodeProjection = humanGateNodeProjectionFence(
+      projectionRows.map(reviewDecisionProjectionMember),
+    )
+    const accepted = bindTaskDecisionParticipantInTx(tx).acceptGateDecisionTx({
+      taskId: taskRow.id,
+      gate: { kind: 'review', ref: gateRef },
+      expectedTaskRevision: capturedTaskRevision,
+      expectedNodeProjection,
+      continuationLineage: { sourceNodeRunIds, rerunNodeRunIds },
+      ...(workspaceRollbackPlan === null
+        ? {}
+        : {
+            workspaceRollbackPlan: {
+              operationId: begun.operation.id,
+              planDigest: workspaceRollbackPlan.digest,
+            },
+          }),
+      operationId: begun.operation.id,
+      now: decidedAt,
+    })
+    const receipt: ReviewDecisionReceiptEnvelope = {
+      schemaVersion: 1,
+      kind: 'review-decision',
+      decision: gateDecisionReceipt({
+        operationId: begun.operation.id,
+        gate: { kind: 'review', ref: gateRef },
+        gateRevision: capturedGateRevision + 1,
+        taskRevision: accepted.taskRevision,
+        acceptedAt: decidedAt,
+        replayed: false,
+      }),
+      result: {
+        taskId: taskRow.id,
+        reviewIteration: nextIter,
+        continuationRef: accepted.continuationRef,
+        commentsAdded: inserted.length,
+        commentsSkippedAsDuplicate: skipped,
+        selectionsApplied,
+      },
+    }
+    operations.commitTx({
+      tx,
+      operationId: begun.operation.id,
+      expectedClaimEpoch: begun.operation.claimEpoch,
+      receiptJson: encodeReviewDecisionReceipt(receipt),
+      now: decidedAt,
+    })
+    operations.completeTx({
+      tx,
+      operationId: begun.operation.id,
+      expectedClaimEpoch: begun.operation.claimEpoch,
+      now: decidedAt,
+    })
+
+    return { kind: 'committed' as const, inserted, skipped, selectionsApplied, receipt }
   })
+
+  if (committed.kind === 'replayed') {
+    return resultFromReviewDecisionReceipt(
+      committed.receipt,
+      args.comments !== undefined || args.selections !== undefined,
+    )
+  }
 
   // ── after commit: events + best-effort distill ────────────────────────────
   for (const s of selections) {
@@ -3359,6 +3736,8 @@ async function submitReviewDecisionUnlocked(
     taskId: dv.taskId,
     reviewIteration: nextIter,
     resumeRequired: true,
+    receipt: committed.receipt.decision,
+    continuationRef: committed.receipt.result.continuationRef,
     ...(hasBatch
       ? {
           batch: {
@@ -3549,7 +3928,13 @@ async function planRerun(
     const latest = pickFreshestRun(upRuns, { topLevelOnly: true })
     if (latest === undefined) continue
     // RFC-284 T21：latest 单行口径 = 单元素集特例，收编 nextRetryIndex。
-    upstreams.push({ nodeId, latest, nextRetry: nextRetryIndex([latest]), rolledBack: false })
+    upstreams.push({
+      nodeId,
+      latest,
+      nextRetry: nextRetryIndex([latest]),
+      rerunNodeRunId: ulid(),
+      rolledBack: false,
+    })
   }
   const needsRollback =
     rollbackFlag &&

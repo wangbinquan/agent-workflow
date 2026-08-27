@@ -16,10 +16,10 @@
 // it. Rows with pid NULL (pre-RFC-098 / never-spawned) take the old
 // flip-only path.
 
-import { inArray, isNotNull } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { nodeRuns, runtimeSessionLeases, tasks } from '@/db/schema'
+import { nodeRuns, runtimeSessionLeases, taskExecutionIntents, tasks } from '@/db/schema'
 import { transitionNodeRunStatus, trySetTaskStatus } from '@/services/lifecycle'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -55,14 +55,44 @@ export async function reapOrphanRuns(
   // CAS-claimed task pending with nobody attached — the gap5 task-side
   // asymmetry this closes, mirroring the node_runs branch below which always
   // reaped pending rows).
-  const runningTasks = await db
+  const runningTaskCandidates = await db
     .select()
     .from(tasks)
     .where(inArray(tasks.status, ['running', 'pending'] as const))
-  const runningRuns = await db
+  const runningRunCandidates = await db
     .select()
     .from(nodeRuns)
     .where(inArray(nodeRuns.status, ['running', 'pending'] as const))
+  // RFC-333: commit -> wake leaves a task + its freshly minted rerun rows in
+  // `pending` together with one canonical pending gate-continuation intent.
+  // That is durable boot work, not an abandoned in-process kick. Preserve the
+  // exact all-pending shape for the dedicated intent recovery below; a task
+  // with any `running` row is still a real orphan and follows the legacy reap.
+  const pendingGateContinuationTaskIds = new Set(
+    (
+      await db
+        .select({ taskId: taskExecutionIntents.taskId })
+        .from(taskExecutionIntents)
+        .where(
+          and(
+            eq(taskExecutionIntents.kind, 'gate-continuation'),
+            eq(taskExecutionIntents.state, 'pending'),
+          ),
+        )
+    ).map((row) => row.taskId),
+  )
+  const gateRecoveryTaskIds = new Set(
+    [...pendingGateContinuationTaskIds].filter(
+      (taskId) =>
+        !runningRunCandidates.some((row) => row.taskId === taskId && row.status === 'running'),
+    ),
+  )
+  const runningTasks = runningTaskCandidates.filter(
+    (task) => !(task.status === 'pending' && gateRecoveryTaskIds.has(task.id)),
+  )
+  const runningRuns = runningRunCandidates.filter(
+    (run) => !(run.status === 'pending' && gateRecoveryTaskIds.has(run.taskId)),
+  )
   // A runner that exhausted TERM→KILL records a terminal row but deliberately
   // leaves its native-session lease held. Boot must prove that child gone too
   // before the subsequent lease repair can release/discard the holder.

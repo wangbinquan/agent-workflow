@@ -68,7 +68,13 @@ import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
 import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { isTaskActive, resumeTask, retryRepositoryPreparation } from '@/services/task'
+import {
+  isTaskActive,
+  resumeTask,
+  retryRepositoryPreparation,
+  wakeHumanGateContinuation,
+} from '@/services/task'
+import { recoverPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -1586,6 +1592,45 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     loadConfig: () => loadConfig(Paths.config),
     buildLaunch: buildScheduleLaunch(db, Paths.config, repositoryPublicationTransport),
   })
+
+  // RFC-333 T11 — a committed gate decision already owns one exact durable
+  // continuation. A daemon exit between commit and post-commit wake leaves it
+  // pending; boot claims that same ref rather than submitting a second intent.
+  // The scan is launched before the ready line but remains non-blocking because
+  // pre-drive rollback or scheduler work may be long-running.
+  const gateContinuationDeps = {
+    db,
+    schedulerDriver: createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)
+      .schedulerDriver,
+    configPath: Paths.config,
+    ...(secretBox !== undefined ? { secretBox } : {}),
+    ...(config.subagentLiveCapture !== undefined
+      ? { subagentLiveCapture: config.subagentLiveCapture }
+      : {}),
+    ...resolveLaunchRuntimeConfig(Paths.config),
+  }
+  void recoverPendingHumanGateContinuations({
+    db,
+    wake: ({ taskId, continuationRef }) =>
+      wakeHumanGateContinuation(taskId, continuationRef, gateContinuationDeps),
+  })
+    .then((result) => {
+      if (result.attempted.length > 0) {
+        log.info('pending human-gate continuation recovery on boot', {
+          attempted: result.attempted.length,
+          woken: result.woken.length,
+          failed: result.failed.length,
+        })
+      }
+      for (const failure of result.failed) {
+        log.warn('pending human-gate continuation wake failed', failure)
+      }
+    })
+    .catch((error) =>
+      log.warn('pending human-gate continuation recovery failed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    )
 
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
   // the daemon-restart loop: every task `reapOrphanRuns` just flipped to

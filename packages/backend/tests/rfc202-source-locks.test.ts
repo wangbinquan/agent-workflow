@@ -73,7 +73,7 @@ describe('RFC-202 source locks', () => {
       expect(b).toContain("'task-terminal'")
       expect(b).toContain("'clarify-round-terminal'")
       expect(b).toContain("'workflow-scheduled-referenced'")
-      expect(b).toContain('resumeFailedAfterSubmit')
+      expect(b).not.toContain('resumeFailedAfterSubmit')
     }
   })
 
@@ -88,13 +88,13 @@ describe('RFC-202 source locks', () => {
     expect(lifecycle).not.toContain("from '@/services/clarify")
   })
 
-  test('resume-failure surfacing is wired on all three submit surfaces', () => {
-    for (const [file, marker] of [
-      ['packages/frontend/src/routes/reviews.detail.tsx', 'resumeFailedAfterSubmit'],
-      ['packages/frontend/src/routes/clarify.detail.tsx', 'resumeFailedAfterSubmit'],
-      ['packages/frontend/src/components/tasks/TaskQuestionList.tsx', 'resumeFailedAfterSubmit'],
-    ] as const) {
-      expect(read(file)).toContain(marker)
+  test('durable decision receipts remove all three obsolete resume-failure branches', () => {
+    for (const file of [
+      'packages/frontend/src/routes/reviews.detail.tsx',
+      'packages/frontend/src/routes/clarify.detail.tsx',
+      'packages/frontend/src/components/tasks/TaskQuestionList.tsx',
+    ]) {
+      expect(read(file)).not.toContain('resumeFailedAfterSubmit')
     }
   })
 })

@@ -11,7 +11,7 @@
 //   SIGKILL/restart -> approve -> task done with the original run identities.
 
 import { expect, test } from '@playwright/test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -39,6 +39,22 @@ interface ReviewSummary {
   nodeRunId: string
   reviewIteration: number
   awaitingReview: boolean
+}
+
+interface TaskQuestionSummary {
+  id: string
+  phase: string
+  staged: boolean
+  sealed: boolean
+}
+
+type DecisionBarrierKind = 'review' | 'clarify' | 'questions'
+
+interface DecisionBarrierMarker {
+  kind: DecisionBarrierKind
+  taskId: string
+  operationId: string
+  committedAt: number
 }
 
 function expectOk(response: Response, label: string): void {
@@ -111,6 +127,36 @@ async function pendingReview(
     await new Promise((resolveWait) => setTimeout(resolveWait, 250))
   }
   throw new Error(`review gate did not reappear for ${taskId}; last=${JSON.stringify(last)}`)
+}
+
+async function waitForDecisionCommitBarrier(
+  barrierDir: string,
+  kind: DecisionBarrierKind,
+  timeoutMs = 15_000,
+): Promise<DecisionBarrierMarker> {
+  const markerPath = join(barrierDir, `${kind}.committed.json`)
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (existsSync(markerPath)) {
+      return JSON.parse(readFileSync(markerPath, 'utf8')) as DecisionBarrierMarker
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 25))
+  }
+  throw new Error(`${kind} decision never reached the committed-before-wake barrier`)
+}
+
+function crashBarrierEnv(barrierDir: string, kind: DecisionBarrierKind): Record<string, string> {
+  return {
+    AW_E2E_HUMAN_GATE_DECISION_BARRIER_DIR: barrierDir,
+    AW_E2E_HUMAN_GATE_DECISION_BARRIER_KIND: kind,
+  }
+}
+
+function observeInterruptedRequest(request: Promise<Response>): Promise<'response' | 'error'> {
+  return request.then(
+    () => 'response' as const,
+    () => 'error' as const,
+  )
 }
 
 async function seedWorkflow(daemon: DaemonHandle): Promise<string> {
@@ -211,6 +257,31 @@ async function seedWorkflow(daemon: DaemonHandle): Promise<string> {
   })
   expectOk(workflowResponse, 'create restart workflow')
   return ((await workflowResponse.json()) as { id: string }).id
+}
+
+async function launchWorkflowTask(
+  daemon: DaemonHandle,
+  workflowId: string,
+  repoDir: string,
+  name: string,
+  topic: string,
+): Promise<string> {
+  const response = await fetch(`${daemon.baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${daemon.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      workflowId,
+      name,
+      repoUrl: repoRemoteUrl(repoDir),
+      ref: 'main',
+      inputs: { topic },
+    }),
+  })
+  expectOk(response, `launch ${name}`)
+  return ((await response.json()) as { id: string }).id
 }
 
 test('clarify and review keep their durable identities across separate daemon crashes', async () => {
@@ -353,5 +424,246 @@ test('clarify and review keep their durable identities across separate daemon cr
     if (home !== undefined) rmSync(home, { recursive: true, force: true })
     rmSync(repoDir, { recursive: true, force: true })
     rmSync(stubState, { recursive: true, force: true })
+  }
+})
+
+test('clarify and review continuations recover when SIGKILL lands after commit but before wake', async () => {
+  const repoDir = mkdtempSync(join(tmpdir(), 'aw-rfc333-decision-restart-repo-'))
+  const stubState = mkdtempSync(join(tmpdir(), 'aw-rfc333-decision-restart-stub-'))
+  const barrierDir = mkdtempSync(join(tmpdir(), 'aw-rfc333-decision-restart-barrier-'))
+  writeFileSync(join(repoDir, 'README.md'), '# RFC-333 decision restart\n', 'utf8')
+  initGitRepo(repoDir)
+
+  let daemonA: DaemonHandle | undefined
+  let daemonB: DaemonHandle | undefined
+  let daemonC: DaemonHandle | undefined
+  let home: string | undefined
+  try {
+    daemonA = await startDaemon({
+      stubMode: 'clarify',
+      extraEnv: {
+        CLARIFY_STUB_STATE: stubState,
+        ...crashBarrierEnv(barrierDir, 'clarify'),
+      },
+    })
+    home = daemonA.home
+    const workflowId = await seedWorkflow(daemonA)
+    const taskId = await launchWorkflowTask(
+      daemonA,
+      workflowId,
+      repoDir,
+      'rfc333-clarify-review-decision-restart',
+      'recover committed clarify and review decisions',
+    )
+    await waitForTaskStatus(daemonA, taskId, 'awaiting_human')
+    const clarify = await pendingClarify(daemonA, taskId)
+
+    const answerRequest = observeInterruptedRequest(
+      fetch(`${daemonA.baseUrl}/api/clarify/${clarify.intermediaryNodeRunId}/answers`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${daemonA.token}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'rfc333-e2e-clarify-commit-wake',
+        },
+        body: JSON.stringify({
+          answers: [
+            {
+              questionId: 'q-db',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+            {
+              questionId: 'q-lang',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+          ],
+          directive: 'stop',
+          ifMatchIteration: clarify.iteration,
+        }),
+      }),
+    )
+    expect(await waitForDecisionCommitBarrier(barrierDir, 'clarify')).toMatchObject({ taskId })
+    await daemonA.killChild('SIGKILL')
+    daemonA = undefined
+    expect(await answerRequest).toBe('error')
+
+    daemonB = await startDaemon({
+      home,
+      stubMode: 'clarify',
+      extraEnv: {
+        CLARIFY_STUB_STATE: stubState,
+        ...crashBarrierEnv(barrierDir, 'review'),
+      },
+    })
+    const review = await pendingReview(daemonB, taskId)
+    const approveRequest = observeInterruptedRequest(
+      fetch(`${daemonB.baseUrl}/api/reviews/${review.nodeRunId}/decision`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${daemonB.token}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'rfc333-e2e-review-commit-wake',
+        },
+        body: JSON.stringify({ decision: 'approved', reviewIteration: review.reviewIteration }),
+      }),
+    )
+    expect(await waitForDecisionCommitBarrier(barrierDir, 'review')).toMatchObject({ taskId })
+    await daemonB.killChild('SIGKILL')
+    daemonB = undefined
+    expect(await approveRequest).toBe('error')
+
+    daemonC = await startDaemon({
+      home,
+      stubMode: 'clarify',
+      extraEnv: { CLARIFY_STUB_STATE: stubState },
+    })
+    await waitForTaskStatus(daemonC, taskId, 'done')
+    const runsResponse = await fetch(`${daemonC.baseUrl}/api/tasks/${taskId}/node-runs`, {
+      headers: { Authorization: `Bearer ${daemonC.token}` },
+    })
+    expectOk(runsResponse, 'read recovered clarify/review node runs')
+    const runs = ((await runsResponse.json()) as { runs: Array<{ id: string; status: string }> })
+      .runs
+    expect(runs.find((run) => run.id === clarify.intermediaryNodeRunId)?.status).toBe('done')
+    expect(runs.find((run) => run.id === review.nodeRunId)?.status).toBe('done')
+  } finally {
+    if (daemonC !== undefined) await daemonC.stop()
+    if (daemonB !== undefined) await daemonB.stop()
+    if (daemonA !== undefined) await daemonA.stop()
+    if (home !== undefined) rmSync(home, { recursive: true, force: true })
+    rmSync(repoDir, { recursive: true, force: true })
+    rmSync(stubState, { recursive: true, force: true })
+    rmSync(barrierDir, { recursive: true, force: true })
+  }
+})
+
+test('question dispatch recovers the committed continuation after SIGKILL before wake', async () => {
+  const repoDir = mkdtempSync(join(tmpdir(), 'aw-rfc333-question-restart-repo-'))
+  const stubState = mkdtempSync(join(tmpdir(), 'aw-rfc333-question-restart-stub-'))
+  const barrierDir = mkdtempSync(join(tmpdir(), 'aw-rfc333-question-restart-barrier-'))
+  writeFileSync(join(repoDir, 'README.md'), '# RFC-333 question restart\n', 'utf8')
+  initGitRepo(repoDir)
+
+  let daemonA: DaemonHandle | undefined
+  let daemonB: DaemonHandle | undefined
+  let daemonC: DaemonHandle | undefined
+  let home: string | undefined
+  try {
+    daemonA = await startDaemon({
+      stubMode: 'clarify',
+      extraEnv: { CLARIFY_STUB_STATE: stubState },
+    })
+    home = daemonA.home
+    const workflowId = await seedWorkflow(daemonA)
+    const taskId = await launchWorkflowTask(
+      daemonA,
+      workflowId,
+      repoDir,
+      'rfc333-question-decision-restart',
+      'recover a committed question dispatch',
+    )
+    await waitForTaskStatus(daemonA, taskId, 'awaiting_human')
+    const clarify = await pendingClarify(daemonA, taskId)
+
+    const sealResponse = await fetch(
+      `${daemonA.baseUrl}/api/clarify/${clarify.intermediaryNodeRunId}/answers`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${daemonA.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          answers: [
+            {
+              questionId: 'q-db',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+            {
+              questionId: 'q-lang',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+          ],
+          directive: 'stop',
+          defer: true,
+          ifMatchIteration: clarify.iteration,
+        }),
+      },
+    )
+    expectOk(sealResponse, 'seal clarify questions without releasing the gate')
+    expect((await sealResponse.json()) as { kind: string }).toMatchObject({ kind: 'seal' })
+
+    const questionsResponse = await fetch(`${daemonA.baseUrl}/api/tasks/${taskId}/questions`, {
+      headers: { Authorization: `Bearer ${daemonA.token}` },
+    })
+    expectOk(questionsResponse, 'list staged task questions')
+    const questions = (await questionsResponse.json()) as TaskQuestionSummary[]
+    const stagedIds = questions
+      .filter((row) => row.phase === 'staged' && row.staged && row.sealed)
+      .map((row) => row.id)
+    expect(stagedIds.length).toBeGreaterThan(0)
+
+    await daemonA.killChild('SIGKILL')
+    daemonA = undefined
+    daemonB = await startDaemon({
+      home,
+      stubMode: 'clarify',
+      extraEnv: {
+        CLARIFY_STUB_STATE: stubState,
+        ...crashBarrierEnv(barrierDir, 'questions'),
+      },
+    })
+    expect(await taskStatus(daemonB, taskId)).toBe('awaiting_human')
+    const dispatchRequest = observeInterruptedRequest(
+      fetch(`${daemonB.baseUrl}/api/tasks/${taskId}/questions/dispatch`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${daemonB.token}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'rfc333-e2e-questions-commit-wake',
+        },
+        body: JSON.stringify({ entryIds: stagedIds }),
+      }),
+    )
+    expect(await waitForDecisionCommitBarrier(barrierDir, 'questions')).toMatchObject({ taskId })
+    await daemonB.killChild('SIGKILL')
+    daemonB = undefined
+    expect(await dispatchRequest).toBe('error')
+
+    daemonC = await startDaemon({
+      home,
+      stubMode: 'clarify',
+      extraEnv: { CLARIFY_STUB_STATE: stubState },
+    })
+    const review = await pendingReview(daemonC, taskId)
+    const approveResponse = await fetch(
+      `${daemonC.baseUrl}/api/reviews/${review.nodeRunId}/decision`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${daemonC.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ decision: 'approved', reviewIteration: review.reviewIteration }),
+      },
+    )
+    expectOk(approveResponse, 'approve review after question continuation recovery')
+    await waitForTaskStatus(daemonC, taskId, 'done')
+  } finally {
+    if (daemonC !== undefined) await daemonC.stop()
+    if (daemonB !== undefined) await daemonB.stop()
+    if (daemonA !== undefined) await daemonA.stop()
+    if (home !== undefined) rmSync(home, { recursive: true, force: true })
+    rmSync(repoDir, { recursive: true, force: true })
+    rmSync(stubState, { recursive: true, force: true })
+    rmSync(barrierDir, { recursive: true, force: true })
   }
 })

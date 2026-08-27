@@ -11,6 +11,11 @@
 
 import { z } from 'zod'
 import { TaskActorRoleSchema } from './resourceAcl'
+import {
+  GateDecisionDeferredEntrySchema,
+  GateDecisionReceiptSchema,
+  GateDecisionRerunSchema,
+} from './humanGate'
 
 export const CLARIFY_MAX_QUESTIONS = 5
 export const CLARIFY_MAX_OPTIONS_PER_QUESTION = 4
@@ -521,9 +526,26 @@ export const ClarifyPendingCountSchema = z.object({
 })
 export type ClarifyPendingCount = z.infer<typeof ClarifyPendingCountSchema>
 
-export const SubmitClarifyAnswersResponseSchema = z.object({
-  session: ClarifySessionSchema,
-  /** Newly minted source agent node_run id (clarifyIteration + 1, retry_index = 0). */
-  rerunNodeRunId: z.string(),
-})
+export const SubmitClarifyAnswersResponseSchema = z.discriminatedUnion('kind', [
+  z.object({
+    ok: z.literal(true),
+    kind: z.literal('seal'),
+    sealedQuestionIds: z.array(z.string().min(1)),
+    resealedQuestionIds: z.array(z.string().min(1)),
+    roundFullySealed: z.boolean(),
+  }),
+  z.object({
+    ok: z.literal(true),
+    kind: z.literal('autodispatch'),
+    taskId: z.string().min(1),
+    receipt: GateDecisionReceiptSchema,
+    roundKind: z.enum(['self', 'cross']),
+    sealedQuestionIds: z.array(z.string().min(1)),
+    roundFullySealed: z.boolean(),
+    reruns: z.array(GateDecisionRerunSchema),
+    dispatchedEntryIds: z.array(z.string().min(1)),
+    deferred: z.array(GateDecisionDeferredEntrySchema),
+    dispatchDeferredReason: z.string().min(1).optional(),
+  }),
+])
 export type SubmitClarifyAnswersResponse = z.infer<typeof SubmitClarifyAnswersResponseSchema>

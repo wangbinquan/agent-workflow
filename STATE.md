@@ -2,29 +2,22 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🧭 **当前架构节点（Approved / In Progress，2026-08-27）：[RFC-333 人工门原子停驻与持久续跑（RFC-294 P0-C）](design/RFC-333-human-gate-atomic-park-and-continuation/proposal.md)**
-> —— 已基于 current source `52645b673f6c25d26f629b85b5acaeba5b01e0d1` 完成 review/clarify/questions 的 open、decision、route/MCP、
-> durable continuation 与 crash/recovery 盘点。核心缺口是三条 route 仍在领域决定提交后直接 `resumeTask`，而 gate open 的
-> node/gate/doc 与 task park 也不是同一提交；review 多文档还存在逐文件写入后逐 row 落库的中间窗口。目标分为两条原子链：
-> open 用 purpose-specific operation/artifact prepare journal + `TaskParkTx` 同事务提交 gate/node/task；decide 用
-> `CollaborationDecisionTx` 同事务提交领域决定、node/task transition 与 exactly one RFC-328 `gate-continuation` intent，
-> commit 后复用 RFC-332 `TaskDriveCoordinator` wake/recovery。REST/MCP/UI 正常能力保持，route 不再 mint/rollback/resume；
-> manual question 保持 current 可创建范围，以 durable park obligation 在 owner 安全 settle 点消费。
-> **用户已于 2026-08-27 批准 D1～D12 与 T2～T12；T0～T7 已完成，当前进入 T8 review decision；review/clarify/questions open 已切生产原子链，三类 decision 与 route resume 尚未切换。**
-> T2 新增 AST source-lock 与真实 SQLite fault witness，关联 17 文件合跑 `216 pass / 0 fail / 967 expect`；已确定性复现 review 半轮与 clarify 孤立 node，作为 T6/T7 必须翻转的目标红证据。
-> T5 已把 task lifecycle 物理写点保持为 1 个并提炼 transaction-bound park/decision participant；真实 SQLite 证明 gate
-> consume、node projection、task event、canonical intent 与 linked rollback effect 任一点失败均整笔回滚，coordinator 在后台
-> receipt/engine 前结算 pre-drive effect。T5/相邻 guard 合跑 `25 pass / 0 fail / 97 expect`，backend typecheck 通过。
-> T6 已把新 review open 与 source refresh 切为 complete manifest + operation-private staging + owned `TaskParkTx`：review node、
-> 全量 docs、旧轮次 retire/comment cleanup、source provenance、gate revision、task park 与 event 同提交；task/doc/refresh 任一点故障
-> 均零 partial visible state且可复用 prepared operation。空列表保持 auto-approve，stale visible gate 刷新为空时同事务 release task。
-> 28 个 review dispatch 相关文件合跑 `190 pass / 0 fail / 955 expect`，RFC-333 七文件 `32 pass / 0 fail / 189 expect`；
-> backend typecheck/本批 ESLint 通过，canonical N1b payload 已重生成，N1a snapshot provenance 随本次 T7 发布的归一化/重钉提交固定。
-> T7 已把 self/cross clarify node、round、eager questions、task park 与 event 收进同一 `TaskParkTx`；manual question 同事务写 row +
-> durable park obligation，由 active owner settle，不抢 owner、不收缩可创建 task 状态。required port 只携 opaque `TransactionScope`，
-> ORM/lifecycle/projection 落 infrastructure；九条 legacy 装配直连压为一条具名 bridge，新增 R2=0，backend/repo SCC 保持 `4/6`。
-> 14 文件功能回归 `105 pass / 0 fail / 527 expect`，preflight `13/13`、boundary `25/25`、backend typecheck 均绿。
-> RFC-333 Done 后才把 P0-C 置 Done，并把下一节点推进到需另立 RFC/另行批准的 W2-C。
+> 🧭 **当前架构节点（Approved / Publishing，2026-08-28）：[RFC-333 人工门原子停驻与持久续跑（RFC-294 P0-C）](design/RFC-333-human-gate-atomic-park-and-continuation/proposal.md)**
+> —— 用户已批准 D1～D12 与 T2～T12；T0～T11 已完成，当前执行 T12 provenance + exact-SHA hosted/定时 CI 收口。
+> review/clarify/questions open 已以 purpose-specific operation/artifact journal + `TaskParkTx` 同事务提交 gate/node/task；三类
+> decision 已以 `CollaborationDecisionTx` 同事务提交领域决定、node/task projection、receipt 与 exactly one RFC-328
+> `gate-continuation` intent。三条 route direct `resumeTask` 已归零，REST/MCP exact mapping、UI 正常功能与 manual question 可创建
+> 范围保持；内部 wake failure 不再伪装成用户决定失败。
+> T8～T10 新增 review/clarify/questions purpose-specific command/required ports/composition；review rollback 继续走既有
+> `workspace-rollback` effect，coordinator 在 engine 前结算 receipt/projection；shared response schema 与前端三处旧 resume 补偿
+> 类型/提示一并收口。真实 SQLite fault injection 覆盖 dispatch/transaction rollback，source mutation guard 锁 direct resume=0。
+> T11 新增 exact pending gate-continuation boot recovery；orphan reaper 只豁免 task/run 全 pending 且 exact intent pending 的恢复形状，
+> 存在 running row 仍走旧 reap。专用 E2E binary 在 decision commit 后、wake 前停驻，外部 SIGKILL/restart 已覆盖
+> clarify + review + questions，Playwright `3 passed`；生产 binary 不编入 barrier。
+> 最终候选定向证据：backend `286 pass / 0 fail / 1279 expect`、frontend `100/100`、shared `2/2`、RFC-333 recovery/orphan
+> `12/12`、RFC-098 正常进程权限 `5/5`、architecture 非 provenance `23/23`；backend typecheck 与 task-owned lint/format 均绿。
+> canonical 四份 content-addressed provenance 按规则等待 payload commit 后重钉；hosted 终态完成前 RFC-333/P0-C 不提前标 Done。
+> RFC-333 Done 后才把 P0-C 置 Done，并开始另立新编号 RFC 的 W2-C current-source 调研/设计；W2-C 生产实现仍需明确批准。
 
 > ✅ **已完成 RFC（Done，2026-08-26）：[RFC-330 数字员工域授权面补齐：工具 / 岗位模版行级 ACL、员工定义前端授权面、案例归属与成员制](design/RFC-330-digital-employee-authoring-acl/proposal.md)**
 > —— 起于用户「现在数字员工的权限控制点是什么，工具、模版、数字员工有权限归属吗，有 edit 权限控制吗」。源码对账：员工定义有完整归属 + RFC-324 两档（第 13 类）；

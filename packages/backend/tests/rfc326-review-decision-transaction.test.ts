@@ -53,6 +53,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { submitReviewDecision, type SubmitReviewDecisionArgs } from '../src/services/review'
+import { wakeHumanGateContinuation } from '../src/services/task'
 import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMutationCoordinator'
 import { hasActingMembership, updateTaskMembers } from '../src/services/taskCollab'
 import { DomainError } from '../src/util/errors'
@@ -107,6 +108,18 @@ function actorFor(id: string): Actor {
   return buildActor({
     user: { id, username: `u-${id.slice(-8)}`, displayName: id, role: 'user', status: 'active' },
     source: 'session',
+  })
+}
+
+async function settleDecisionContinuation(
+  f: Fixture,
+  result: Awaited<ReturnType<typeof submitReviewDecision>>,
+): Promise<void> {
+  await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    db: f.db,
+    appHome: f.appHome,
+    schedulerDriver: { async drive() {} },
+    awaitScheduler: true,
   })
 }
 
@@ -461,7 +474,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     expect(ev.types.at(-1)).toBe('review.decision_made')
   })
 
-  test('iterate with rollback: the worktree rollback stands, the transaction does not (design §6.3 residual form)', async () => {
+  test('iterate with rollback: a failed decision leaves both DB and canonical worktree untouched', async () => {
     f = await buildFixture({ rollbackOnIterate: true })
     ev = taskEvents(f.taskId)
     expect(worktreeState(f.repo)).toEqual(DIRTY)
@@ -477,14 +490,15 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     expect(err.message).toContain('injected after rollback')
     const upstream = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.docRunId)))[0]!
     expect(upstream.status).toBe('done')
-    // The external phase ran before the transaction: the worktree is at the
-    // snapshot, the document is still pending. The documented repair is to
-    // re-issue the iterate (the rollback is idempotent).
-    expect(worktreeState(f.repo)).toEqual(SNAPSHOT)
+    // RFC-333: prepare produced only a validated plan. The canonical worktree
+    // cannot move unless the decision transaction commits an exact linked
+    // continuation effect.
+    expect(worktreeState(f.repo)).toEqual(DIRTY)
     f.db.$client.exec('DROP TRIGGER inject_mint')
     const ok = await submitReviewDecision(
       decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] }),
     )
+    await settleDecisionContinuation(f, ok)
     expect(ok.reviewIteration).toBe(1)
     const retired = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.docRunId)))[0]!
     expect(retired.status).toBe('canceled')
@@ -598,7 +612,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     expect(await hasActingMembership(f.db, f.taskId, f.member)).toBe(false)
   })
 
-  test('decision queued first: it commits (rollback included); the revoke applies afterwards', async () => {
+  test('decision queued first: it commits, its continuation settles rollback, then revoke applies', async () => {
     f = await buildFixture({ rollbackOnIterate: true })
     ev = taskEvents(f.taskId)
     const decide = submitReviewDecision(
@@ -611,6 +625,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
       { members: [] },
     )
     const result = await decide
+    await settleDecisionContinuation(f, result)
     await revoke
     expect(result.reviewIteration).toBe(1)
     expect(worktreeState(f.repo)).toEqual(SNAPSHOT)

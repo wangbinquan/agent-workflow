@@ -22,7 +22,7 @@
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,8 +33,10 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
 import {
   clarifyRounds,
+  collaborationGateOperations,
   nodeRunOutputs,
   nodeRuns,
+  taskExecutionIntents,
   taskQuestions,
   tasks,
   workflows,
@@ -49,7 +51,10 @@ import {
   reassignTaskQuestion,
   stageTaskQuestion,
 } from '../src/services/taskQuestions'
-import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
+import {
+  dispatchTaskQuestions,
+  dispatchTaskQuestionsWithDecision,
+} from '../src/services/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
@@ -569,6 +574,92 @@ describe('RFC-120 T9 — dispatchTaskQuestions', () => {
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
     expect(designerRuns.filter((r) => r.status === 'pending').length).toBe(1) // exactly one rerun
+  })
+
+  test('RFC-333 decision atomically stamps, mints, releases and returns one replayable receipt', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, entryId } = await seedDeferredAnswered(db)
+    const command = {
+      db,
+      taskId,
+      entryIds: [entryId],
+      actor,
+      decision: { idempotencyKey: 'question-dispatch-1' },
+    }
+
+    const decided = await dispatchTaskQuestionsWithDecision(
+      command.db,
+      command.taskId,
+      command.entryIds,
+      command.actor,
+      command.decision,
+    )
+    expect(decided.receipt).toMatchObject({
+      gate: { kind: 'questions', ref: `questions:${taskId}` },
+      replayed: false,
+    })
+    expect((await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0])
+      .toMatchObject({ dispatchedBy: actor.userId })
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      status: 'pending',
+      lifecycleEventRevision: decided.receipt.taskRevision,
+    })
+    expect(await db.select().from(taskExecutionIntents)).toEqual([
+      expect.objectContaining({
+        id: decided.continuationRef,
+        kind: 'gate-continuation',
+        state: 'pending',
+      }),
+    ])
+    const runCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+
+    const replay = await dispatchTaskQuestionsWithDecision(
+      command.db,
+      command.taskId,
+      command.entryIds,
+      command.actor,
+      command.decision,
+    )
+    expect(replay.receipt).toEqual({ ...decided.receipt, replayed: true })
+    expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+      runCount,
+    )
+    await expect(
+      dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
+        idempotencyKey: 'question-dispatch-1',
+        expectedTaskRevision: 999,
+      }),
+    ).rejects.toMatchObject({ code: 'human-gate-idempotency-conflict' })
+  })
+
+  test('RFC-333 intent fault rolls question stamp, rerun, task release and operation back', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId, entryId } = await seedDeferredAnswered(db)
+    const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    const beforeOperations = (await db.select().from(collaborationGateOperations)).length
+    db.run(sql`
+      CREATE TRIGGER rfc333_fail_question_intent
+      BEFORE INSERT ON task_execution_intents
+      BEGIN SELECT RAISE(ABORT, 'rfc333-question-intent-fault'); END
+    `)
+
+    await expect(
+      dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
+        idempotencyKey: 'question-dispatch-fault',
+      }),
+    ).rejects.toThrow('rfc333-question-intent-fault')
+
+    expect((await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0])
+      .toMatchObject({ dispatchedAt: null, dispatchedBy: null })
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      status: 'awaiting_human',
+    })
+    expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+      beforeRuns,
+    )
+    expect((await db.select().from(collaborationGateOperations)).length).toBe(beforeOperations)
   })
 })
 

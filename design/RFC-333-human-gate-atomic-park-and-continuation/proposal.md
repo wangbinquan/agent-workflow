@@ -1,6 +1,6 @@
 # RFC-333：人工门原子停驻与持久续跑（RFC-294 P0-C）
 
-> 状态：Approved / In Progress（2026-08-27；用户已批准 D1～D12 与 T2～T12，T2～T7 已完成，当前进入 T8）
+> 状态：Approved / Publishing（2026-08-28；用户已批准 D1～D12 与 T2～T12，T2～T11 已完成，当前执行 T12 hosted 收口）
 >
 > 架构位置：RFC-294 N6 / P0-C residual；承接 RFC-326 的 review decision 单事务种子、
 > RFC-328 的 durable owner/intent/fence、RFC-329 的 REST/MCP 人工门完整面，以及 RFC-332 的唯一
@@ -200,6 +200,11 @@ RFC-333 只有同时满足以下条件才可标 Done：
 5. review 文件与 rollback journal 已通过边界 fault matrix，临时 artifact 可回收；
 6. current source-lock、targeted/full gate 与 exact-SHA hosted CI 均提供终态证据；
 7. RFC-294 只关闭 P0-C residual，W2-C/D、W3、W4、W5 继续保持未授权/未完成。
+
+截至 2026-08-28，候选实现已满足 1～5 与 7：三类 open/decision 均切到原子 participant，三条 route 的 direct
+`resumeTask` 为 0；真实 SQLite fault matrix、同 key replay/stale/concurrent guards、artifact recovery 与外部
+SIGKILL/restart E2E 均已通过。第 6 条只剩 canonical provenance 在 payload commit 后重钉，以及 exact-SHA hosted/定时 CI
+终态取证；在这些远端证据完成前，本 RFC 保持 Publishing 而不提前标 Done。
 
 ## 9. 批准记录
 

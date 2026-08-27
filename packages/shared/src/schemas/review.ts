@@ -17,6 +17,7 @@ import {
   isReviewableBodyKindString,
 } from '../kindParser'
 import { PortRefSchema } from './workflow'
+import { GateDecisionReceiptSchema } from './humanGate'
 
 // -----------------------------------------------------------------------------
 // AgentOutputKind — the per-port output "shape" hint declared on the agent.
@@ -513,13 +514,11 @@ export const SubmitReviewDecisionResponseSchema = z.object({
   ok: z.literal(true),
   taskId: z.string(),
   reviewIteration: z.number().int().nonnegative(),
-  resumeRequired: z.boolean(),
+  receipt: GateDecisionReceiptSchema,
   /** RFC-326 batch counters (all 0 for a plain decision). */
   commentsAdded: z.number().int().nonnegative(),
   commentsSkippedAsDuplicate: z.number().int().nonnegative(),
   selectionsApplied: z.number().int().nonnegative(),
-  /** RFC-202: the resume kick's failure, when the decision landed but the resume did not. */
-  resume: z.object({ ok: z.literal(false), code: z.string(), message: z.string() }).optional(),
 })
 export type SubmitReviewDecisionResponse = z.infer<typeof SubmitReviewDecisionResponseSchema>
 

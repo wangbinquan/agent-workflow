@@ -3188,8 +3188,6 @@ export const enUS: Resources = {
     saving: 'Saving…',
     creating: 'Creating…',
     unknownError: 'Unknown error',
-    resumeFailedAfterSubmit:
-      'Submitted, but resuming the task failed ({{code}}). Use Resume on the task page, or run Diagnose.',
     yes: 'yes',
     no: 'no',
     details: 'Details',

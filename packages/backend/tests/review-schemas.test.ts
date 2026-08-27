@@ -607,28 +607,33 @@ describe('RFC-326 wire contract — simplified anchors + batched decisions', () 
     ).toThrow()
   })
 
-  test('SubmitReviewDecisionResponseSchema carries the batch counters and the optional resume failure', () => {
+  test('SubmitReviewDecisionResponseSchema carries a durable receipt and batch counters', () => {
     const ok = SubmitReviewDecisionResponseSchema.parse({
       ok: true,
       taskId: 't',
       reviewIteration: 1,
-      resumeRequired: true,
+      receipt: {
+        operationId: 'op-1',
+        gate: { kind: 'review', ref: 'review:nr-1' },
+        gateRevision: 2,
+        taskRevision: 3,
+        acceptedAt: 4,
+        replayed: false,
+      },
       commentsAdded: 2,
       commentsSkippedAsDuplicate: 1,
       selectionsApplied: 0,
     })
-    expect(ok.resume).toBeUndefined()
-    const withResume = SubmitReviewDecisionResponseSchema.parse({
-      ...ok,
-      resume: { ok: false, code: 'worktree-gone', message: 'gc' },
-    })
-    expect(withResume.resume?.code).toBe('worktree-gone')
+    expect(ok.receipt.operationId).toBe('op-1')
+    expect('resume' in ok).toBe(false)
     expect(() =>
       SubmitReviewDecisionResponseSchema.parse({
         ok: true,
         taskId: 't',
         reviewIteration: 0,
-        resumeRequired: true,
+        commentsAdded: 0,
+        commentsSkippedAsDuplicate: 0,
+        selectionsApplied: 0,
       }),
     ).toThrow()
   })

@@ -484,11 +484,6 @@ export function ClarifyDetailPage() {
   // list refetch fills in the data otherwise). For self-clarify this stays
   // false and the legacy redirect-to-task-detail behavior is preserved.
   const [crossWaiting, setCrossWaiting] = useState<{ pending: string[] } | null>(null)
-  // RFC-202 T8: answers sealed but the follow-up task resume failed — the
-  // backend reports it in the response's optional `resume` field; stay on the
-  // page with a warning instead of navigating away like nothing happened.
-  const [resumeWarning, setResumeWarning] = useState<{ code: string } | null>(null)
-
   const submitMut = useMutation<SubmitClarifyAnswersResponse, Error, ClarifyDirective>({
     mutationFn: async (directive) => {
       const s = session.data
@@ -548,14 +543,6 @@ export function ClarifyDetailPage() {
         setCrossWaiting({
           pending: respMaybeCross.outcome.pendingCrossClarifyNodeIds ?? [],
         })
-        void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(nodeRunId) })
-        return
-      }
-      // RFC-202 T8: answers landed but the resume kick failed (e.g. worktree
-      // GC'd) — do not navigate away pretending success.
-      const respMaybeResume = resp as unknown as { resume?: { ok: false; code: string } }
-      if (respMaybeResume.resume !== undefined && respMaybeResume.resume.ok === false) {
-        setResumeWarning({ code: respMaybeResume.resume.code })
         void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(nodeRunId) })
         return
       }
@@ -843,13 +830,6 @@ export function ClarifyDetailPage() {
       )}
 
       <FeedbackStack variant="section">
-        {/* RFC-202 T8: answers sealed, but the follow-up task resume failed. */}
-        {resumeWarning !== null && (
-          <NoticeBanner tone="warning" size="compact" className="clarify-resume-failed">
-            {t('common.resumeFailedAfterSubmit', { code: resumeWarning.code })}
-          </NoticeBanner>
-        )}
-
         {/* RFC-056: multi-source waiting banner — appears after this
           cross-clarify has been answered but sibling cross-clarify nodes
           targeting the same designer are still awaiting. Sources its data

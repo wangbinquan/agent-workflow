@@ -20,12 +20,23 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve } from 'node:path'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import {
+  clarifyRounds,
+  collaborationGateOperations,
+  nodeRuns,
+  taskExecutionIntents,
+  taskQuestions,
+  tasks,
+  workflows,
+} from '../src/db/schema'
+import {
+  autoDispatchClarifyRound,
+  autoDispatchClarifyRoundWithDecision,
+} from '../src/services/clarifyAutoDispatch'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import {
@@ -104,6 +115,98 @@ function ans(qid: string) {
     customText: '',
   }
 }
+
+describe('RFC-333 clarify decision transaction', () => {
+  test('answer, task release, one intent and replay receipt remain one durable decision', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const command = {
+      db,
+      originNodeRunId: intermediaryNodeRunId,
+      answers: [ans('q1')],
+      actor,
+      decision: { idempotencyKey: 'clarify-decision-1' },
+    }
+
+    const decided = await autoDispatchClarifyRoundWithDecision(command)
+    expect(decided.receipt).toMatchObject({
+      operationId: expect.any(String),
+      gate: { kind: 'clarify', ref: `clarify:${intermediaryNodeRunId}` },
+      replayed: false,
+    })
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      status: 'pending',
+      lifecycleEventRevision: decided.receipt.taskRevision,
+    })
+    expect(
+      (await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)))[0],
+    ).toMatchObject({ status: 'answered' })
+    const intents = await db
+      .select()
+      .from(taskExecutionIntents)
+      .where(eq(taskExecutionIntents.taskId, taskId))
+    expect(intents).toHaveLength(1)
+    expect(intents[0]).toMatchObject({
+      id: decided.continuationRef,
+      kind: 'gate-continuation',
+      state: 'pending',
+    })
+    const runCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+
+    const replay = await autoDispatchClarifyRoundWithDecision(command)
+    expect(replay.receipt).toEqual({ ...decided.receipt, replayed: true })
+    expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+      runCount,
+    )
+
+    await expect(
+      autoDispatchClarifyRoundWithDecision({
+        ...command,
+        directive: 'stop',
+      }),
+    ).rejects.toMatchObject({ code: 'human-gate-idempotency-conflict' })
+  })
+
+  test('intent fault rolls answer, node, task and decision operation back together', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const beforeOperations = (await db.select().from(collaborationGateOperations)).length
+    const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    db.run(sql`
+      CREATE TRIGGER rfc333_fail_clarify_intent
+      BEFORE INSERT ON task_execution_intents
+      BEGIN SELECT RAISE(ABORT, 'rfc333-clarify-intent-fault'); END
+    `)
+
+    await expect(
+      autoDispatchClarifyRoundWithDecision({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        actor,
+        decision: { idempotencyKey: 'clarify-decision-fault' },
+      }),
+    ).rejects.toThrow('rfc333-clarify-intent-fault')
+
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      status: 'awaiting_human',
+      lifecycleEventRevision: 2,
+    })
+    expect(
+      (await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)))[0],
+    ).toMatchObject({ status: 'awaiting_human', answersJson: null })
+    expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
+    expect((await db.select().from(collaborationGateOperations)).length).toBe(beforeOperations)
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+      beforeRuns,
+    )
+  })
+})
 
 async function seedTask(db: DbClient, taskId: string, _deferred = true): Promise<void> {
   const def = liveDef()
@@ -1172,7 +1275,7 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
   test('source — the route broadcasts the answered event on the autodispatch ERROR path too (catch → emit → rethrow), so a committed answer is never hidden behind a failed response', () => {
     const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
     // The autodispatch is wrapped in try/catch; the catch emits the answered broadcast then rethrows.
-    const autoIdx = src.indexOf('auto = await autoDispatchClarifyRound({')
+    const autoIdx = src.indexOf('auto = await submitClarifyDecision(commandContext, {')
     const catchIdx = src.indexOf("await emitAutoAnswered('')")
     const throwIdx = src.indexOf('throw err', catchIdx)
     expect(autoIdx).toBeGreaterThan(0)

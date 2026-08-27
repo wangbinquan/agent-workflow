@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 1119,
-    "backgroundJobs": 217,
-    "crossContextImports": 1151,
-    "facades": 372,
+    "architectureExceptions": 1186,
+    "backgroundJobs": 218,
+    "crossContextImports": 1218,
+    "facades": 379,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17906,
-    "mutationEntrypoints": 924,
+    "moduleSymbolOwners": 18016,
+    "mutationEntrypoints": 934,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 332,
+    "publicSurfaces": 337,
     "transactionExternalEffects": 263
   },
   "metrics": {
@@ -71,12 +71,19 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 907,
+    "backendProductionFiles": 920,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
         "packages/backend/src/mcp/server.ts",
         "packages/backend/src/server.ts"
+      ],
+      [
+        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
+        "packages/backend/src/modules/task-execution/public/participants.ts",
+        "packages/backend/src/services/lifecycle.ts",
+        "packages/backend/src/services/taskExecutionParticipants.ts"
       ],
       [
         "packages/backend/src/services/agent.ts",
@@ -95,7 +102,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 217,
+    "backgroundEntries": 218,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -119,7 +126,7 @@
     ],
     "directNativeIntervals": 20,
     "directNativeTimers": 61,
-    "inboundBoundaryEdges": 95,
+    "inboundBoundaryEdges": 129,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -128,7 +135,7 @@
       },
       {
         "context": "collaboration",
-        "files": 34
+        "files": 40
       },
       {
         "context": "development-automation",
@@ -171,7 +178,7 @@
         "files": 83
       }
     ],
-    "moduleFiles": 390,
+    "moduleFiles": 396,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -186,8 +193,8 @@
       {
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1009",
-        "line": 1009,
+        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1444",
+        "line": 1444,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "removeAfterWave": "W2/W7",
         "status": "reviewed-dispatch-exception",
@@ -200,6 +207,13 @@
         "packages/backend/src/mcp/dispatch.ts",
         "packages/backend/src/mcp/server.ts",
         "packages/backend/src/server.ts"
+      ],
+      [
+        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
+        "packages/backend/src/modules/task-execution/public/participants.ts",
+        "packages/backend/src/services/lifecycle.ts",
+        "packages/backend/src/services/taskExecutionParticipants.ts"
       ],
       [
         "packages/backend/src/services/agent.ts",
@@ -227,10 +241,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 372,
+    "serviceFiles": 379,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3912e9a9203265ae06dba5d93c70184a37326948815cf5bc93b1c39752ac607c"
+  "sourceDigest": "sha256:7df8e2ff481838fee825c4a983e991b2ec579365d30622807bb21a38c315a2ce"
 }

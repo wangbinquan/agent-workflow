@@ -154,7 +154,7 @@ interface ReviewFixture {
   docIds: string[]
 }
 
-/** A pending review on a task the PAT user owns (task `running`: the resume kick is a no-op). */
+/** A pending review on a task the PAT user owns. */
 async function seedReview(
   h: Harness,
   mode: 'single' | 'multi-path',
@@ -185,7 +185,7 @@ async function seedReview(
     worktreePath: h.appHome,
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
-    status: 'running',
+    status: 'awaiting_review',
     inputs: '{}',
     startedAt: NOW,
     ownerUserId: h.userId,
@@ -776,13 +776,14 @@ describe('RFC-326 AC-23 / AC-25 — over the Streamable HTTP transport', () => {
 // P16 — the route hands the acting user to the service
 // ---------------------------------------------------------------------------
 
-describe('RFC-326 P16 — the decision route passes `actor` to submitReviewDecision', () => {
+describe('RFC-326 P16 — the decision route binds the acting user into the collaboration command', () => {
   test('source lock', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'routes', 'reviews.ts'), 'utf8')
     const start = src.indexOf("path: '/api/reviews/:nodeRunId/decision'")
-    const end = src.indexOf('submitReviewDecision(args)', start)
+    const end = src.indexOf('const result = await submitReviewDecision(commandContext', start)
     expect(start).toBeGreaterThan(0)
     expect(end).toBeGreaterThan(start)
-    expect(src.slice(start, end)).toMatch(/\n\s+actor,\n/)
+    expect(src.slice(start, end)).toContain('actor,')
+    expect(src.slice(start, end)).toContain('createReviewDecisionCommandContext({')
   })
 })

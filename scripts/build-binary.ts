@@ -227,6 +227,7 @@ async function buildDaemonBinary(input: {
   readonly outfile: string
   readonly buildVersion: string
   readonly generatedContents: string
+  readonly e2e: boolean
 }): Promise<void> {
   process.stdout.write(
     `\n$ bun build ${mainEntry} ${WORKER_ENTRIES.join(' ')} --compile --target=bun --minify --virtual-embed=${generatedPath}\n`,
@@ -235,7 +236,10 @@ async function buildDaemonBinary(input: {
     entrypoints: [mainEntry, ...WORKER_ENTRIES],
     target: 'bun',
     minify: true,
-    define: { AW_BUILD_VERSION: JSON.stringify(input.buildVersion) },
+    define: {
+      AW_BUILD_VERSION: JSON.stringify(input.buildVersion),
+      AW_E2E_BUILD: JSON.stringify(input.e2e),
+    },
     compile: { outfile: input.outfile },
     files: { [generatedPath]: input.generatedContents },
   })
@@ -310,6 +314,7 @@ async function main(): Promise<void> {
     outfile,
     buildVersion,
     generatedContents: generated.contents,
+    e2e: false,
   })
   const size = statSync(outfile).size
   process.stdout.write(`\nbuilt: ${outfile} (${(size / 1024 / 1024).toFixed(1)} MiB)\n`)
@@ -318,6 +323,7 @@ async function main(): Promise<void> {
       outfile: e2eOutfile,
       buildVersion,
       generatedContents: generated.contents,
+      e2e: true,
     })
     const e2eSize = statSync(e2eOutfile).size
     process.stdout.write(

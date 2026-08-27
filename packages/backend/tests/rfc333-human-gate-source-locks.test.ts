@@ -1,8 +1,6 @@
-// RFC-333 T2 — executable inventory of the three legacy human-gate sagas.
-//
-// These assertions track the mixed cutover: review-open is target-green at T6,
-// clarify-open at T7; questions and the three decision routes remain executable debt until
-// their named later stages. No skipped/todo test is checked in.
+// RFC-333 — executable inventory of the completed human-gate cutover. No
+// skipped/todo witness is checked in: route-owned resume and compatibility
+// failure branches must remain absent from production source.
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -62,12 +60,6 @@ function countNamedCalls(relativePath: string, name: string, source?: string): n
   return calls(relativePath, source).filter((call) => call.name === name).length
 }
 
-function firstNamedCall(relativePath: string, name: string): number {
-  const call = calls(relativePath).find((candidate) => candidate.name === name)
-  if (call === undefined) throw new Error(`${relativePath}: call ${name} not found`)
-  return call.position
-}
-
 function toolBlock(name: string): string {
   const source = read('packages/backend/src/mcp/tools.ts')
   const marker = `name: '${name}'`
@@ -88,7 +80,7 @@ describe('RFC-333 T2 current human-gate inventory', () => {
     },
     {
       file: 'packages/backend/src/routes/clarify.ts',
-      command: 'autoDispatchClarifyRound',
+      command: 'submitClarifyDecision',
       path: "path: '/api/clarify/:nodeRunId/answers'",
       tool: 'answer_clarify',
       toolPath: 'path: `/api/clarify/${enc(args.nodeRunId)}/answers`',
@@ -102,39 +94,29 @@ describe('RFC-333 T2 current human-gate inventory', () => {
     },
   ] as const
 
-  test('CURRENT debt witness: each domain command commits before one route-owned resumeTask call', () => {
+  test('each route calls one public domain command and owns zero resumeTask calls', () => {
     const inventory = routes.map(({ file, command }) => ({
       file,
       commandCalls: countNamedCalls(file, command),
       directResumeCalls: countNamedCalls(file, 'resumeTask'),
-      commandBeforeResume: firstNamedCall(file, command) < firstNamedCall(file, 'resumeTask'),
     }))
 
     expect(inventory).toEqual(
       routes.map(({ file }) => ({
         file,
         commandCalls: 1,
-        directResumeCalls: 1,
-        commandBeforeResume: true,
+        directResumeCalls: 0,
       })),
     )
-    expect(inventory.reduce((sum, row) => sum + row.directResumeCalls, 0)).toBe(3)
-
-    // RFC-333 AC-6 target is zero. This inequality is the executable red
-    // witness; T8/T9 must replace it with equality to zero as each route cuts.
-    expect(inventory.every((row) => row.directResumeCalls === 0)).toBe(false)
+    expect(inventory.every((row) => row.directResumeCalls === 0)).toBe(true)
   })
 
-  test('the AST inventory ignores prose/type references and turns red when a production call is removed', () => {
+  test('the AST inventory ignores prose/type references and turns red if direct resume is restored', () => {
     const file = 'packages/backend/src/routes/reviews.ts'
     const source = read(file)
-    const mutated = source.replace(
-      'await resumeTask(deps.db, result.taskId, resumeDeps)',
-      'await wake()',
-    )
-    expect(mutated).not.toBe(source)
-    expect(countNamedCalls(file, 'resumeTask', source)).toBe(1)
-    expect(countNamedCalls(file, 'resumeTask', mutated)).toBe(0)
+    const mutated = `${source}\nresumeTask()`
+    expect(countNamedCalls(file, 'resumeTask', source)).toBe(0)
+    expect(countNamedCalls(file, 'resumeTask', mutated)).toBe(1)
   })
 
   test('REST and named MCP tools still map one-to-one onto the three current commands', () => {
@@ -145,11 +127,11 @@ describe('RFC-333 T2 current human-gate inventory', () => {
     }
   })
 
-  test('CURRENT compatibility surface still exposes optional resume failures on all three paths', () => {
+  test('all three paths expose durable receipts and no optional resume failure branch', () => {
     for (const route of routes) {
       const source = read(route.file)
-      expect(source).toContain('let resumeFailure: { ok: false; code: string; message: string }')
-      expect(source).toContain('...(resumeFailure ? { resume: resumeFailure } : {})')
+      expect(source).toContain('receipt:')
+      expect(source).not.toContain('resumeFailure')
     }
 
     for (const file of [
@@ -157,7 +139,7 @@ describe('RFC-333 T2 current human-gate inventory', () => {
       'packages/frontend/src/routes/clarify.detail.tsx',
       'packages/frontend/src/components/tasks/TaskQuestionList.tsx',
     ]) {
-      expect(read(file)).toContain('resumeFailedAfterSubmit')
+      expect(read(file)).not.toContain('resumeFailedAfterSubmit')
     }
   })
 })

@@ -1,6 +1,6 @@
 # RFC-333 实施计划：人工门原子停驻与持久续跑
 
-> 状态：In Progress（2026-08-27；T0～T7 完成，D1～D12 与 T2～T12 已获用户批准，当前执行 T8）
+> 状态：In Progress / Publishing（2026-08-28；T0～T11 完成，D1～D12 与 T2～T12 已获用户批准，当前执行 T12 hosted 收口）
 >
 > 批准边界：批准本 RFC 才授权下述 P0-C 生产实现。它不授权 RFC-294 W2-C/D、W3、W4、W5，
 > 不授权权限/安全策略或任何正常能力收缩。
@@ -205,7 +205,7 @@ T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写�
   backend typecheck 通过。architecture N1b/current report 已按 live source 重生成，四份 N1a snapshot provenance 随本次 T7
   发布的归一化/重钉提交固定。
 
-### T8 — review decision vertical cut
+### T8 — review decision vertical cut（已完成，2026-08-28）
 
 - 保留 RFC-326 全量预校验与 review domain transaction 顺序；
 - rollback 改为 T4 validated idempotent plan；不在 final tx 前修改 canonical worktree；
@@ -216,7 +216,16 @@ T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写�
 
 退出：approve/reject/iterate、single/multi/comments/selections/anchor/history/rollback fault matrix 全绿；retry 返回同一 receipt。
 
-### T9 — clarify 与 questions decision vertical cut
+完成证据：
+
+- `ReviewDecisionCommand` 将 request hash、actor/revision、domain decision、node/task projection、optional
+  `workspace-rollback` effect 与 exact one `gate-continuation` intent 收进同一 final transaction；same-key replay 返回同一
+  receipt，stale/conflict/任一 mutation failure 都是零部分写；
+- `reviewDecisionComposition` 只在 commit 后触发 canonical wake，route 不再直接 rollback/resume；approve/reject/iterate、
+  comments/selections/anchor/history、distill enqueue 与 RFC-326 batch zero-write 语义保持；
+- RFC-326 review transaction/MCP 邻接回归与 RFC-333 fault/source lock 进入最终 backend 定向合跑，未出现能力收缩。
+
+### T9 — clarify 与 questions decision vertical cut（已完成，2026-08-28）
 
 - clarify partial answer 只前进 gate revision、不 release；full/directive 分支 final tx 追加 intent；
 - question dispatch 的 answer stamping/reruns 与 task participant 同 tx；
@@ -225,7 +234,17 @@ T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写�
 
 退出：三类 route direct `resumeTask`=0；stale/concurrent/retry/commit→wake crash matrix 全绿。
 
-### T10 — route/MCP/UI compatibility closeout
+完成证据：
+
+- `ClarifyDecisionCommand` 保持 partial answer 不 release，full/directive release 在 final transaction 同时提交 answer、node/task
+  projection、receipt 与 canonical intent；`QuestionDispatchCommand` 同事务提交 answer stamping、targeted rerun projection、task
+  transition 与 exact one intent；
+- `rfc120-deferred-dispatch.test.ts` / `rfc128-p5-d-autodispatch.test.ts` 的真实 SQLite fault 注入证明 dispatch 中途抛错全回滚；
+  same-key replay、hash conflict 与 stale revision 由三类 composition/domain 测试锁定；
+- reviews/clarify/taskQuestions 三条 route 的 production `resumeTask` 已归零，RFC-333 source-lock 以 mutation fixture 证明任一
+  direct resume 回流都会转红。
+
+### T10 — route/MCP/UI compatibility closeout（已完成，2026-08-28）
 
 - optional `Idempotency-Key` + compatibility derived key；
 - view/official clients 显式回传 task/gate revisions；过渡期缺字段由 facade 在 operation 快照阶段捕获，final tx 仍做 CAS；
@@ -236,7 +255,15 @@ T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写�
 
 退出：REST/MCP 相同输入得到相同业务结果；没有 MCP-only writer 或 UI 手工 resume。
 
-### T11 — process crash E2E、full regression 与 architecture artifacts
+完成证据：
+
+- shared 新增统一 human-gate committed response schema，review/clarify 显式复用；REST 继续兼容可选
+  `Idempotency-Key`，MCP 仍 dispatch exact REST route，未形成 MCP-only writer；
+- 前端三处内部 resume 补偿提示/类型已删除，只保留真实 command rejection/conflict；相关 Vitest 8 文件
+  `100 pass / 0 fail`，shared schema `2 pass / 0 fail`；
+- RFC-202/326/329 source/route/tool guards 已改锁 durable receipt、thin facade 与 exact mapping。
+
+### T11 — process crash E2E、full regression 与 architecture artifacts（已完成，2026-08-28）
 
 - 扩 `e2e/rfc294-human-gate-restart.spec.ts` 覆盖 review/clarify/questions boundary kill；
 - 跑 review/clarify/questions 定向 backend/frontend/E2E；
@@ -246,6 +273,18 @@ T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写�
 - task candidate 不变时只跑一次 full local gate。
 
 退出：所有 AC 有 durable CI assertion 或 process E2E；canonical replay 与 source digest 对齐。
+
+完成证据：
+
+- e2e-only compiled barrier 精确停在 decision commit 后、wake 前；真实二进制经外部 SIGKILL/restart 覆盖 clarify、review、
+  questions 三类 continuation，并保留原 parked identity restart 旅程，Playwright `3 passed`；生产 binary 不编译该 barrier；
+- boot 新增 exact pending `gate-continuation` recovery；orphan reaper 只豁免“task 与全部相关 run 均 pending + exact pending
+  gate intent”的恢复形状，存在任何 running row 仍走旧 reap。RFC-333 recovery/orphan 邻接 `12 pass / 0 fail`，RFC-098
+  正常进程权限复跑 `5 pass / 0 fail`；
+- 最终 backend 定向聚合 `286 pass / 0 fail / 1279 expect`，frontend `100/100`，shared `2/2`，backend typecheck、
+  task-owned lint/format 与 E2E 均绿；
+- N1b/current architecture artifacts 已从 live source 重生成；非 provenance architecture 定向门 `23 pass / 0 fail`，
+  canonical `18 pass` 且只剩四份按设计等待 payload commit 后重钉的 current provenance mismatch。
 
 ### T12 — 文档关闭、发布与 hosted 收口
 
@@ -311,24 +350,24 @@ T2 source-lock 必须同时锁：三条 direct resume 数量、open/park 分写�
 
 ## 6. AC 证据账本
 
-| AC    | 实现前                           | 目标证据                                    | 状态    |
-| ----- | -------------------------------- | ------------------------------------------- | ------- |
-| AC-1  | current inventory 已完成         | source-lock + exact production inventory    | T2 Done |
-| AC-2  | open/park 分写                   | real SQLite TaskParkTx fault tests          | Pending |
-| AC-3  | doc FS→DB 逐项                   | N-member artifact crash E2E                 | Pending |
-| AC-4  | lazy question reconciliation     | eager snapshot + legacy-only guard          | Pending |
-| AC-5  | route resume saga                | three CollaborationDecisionTx suites        | Pending |
-| AC-6  | route direct calls=3             | architecture negative guard=0               | Pending |
-| AC-7  | route-level retry                | idempotency/stale/concurrent matrix         | Pending |
-| AC-8  | parked-only restart              | commit→wake process kill/recovery           | Pending |
-| AC-9  | rollback 在 final tx 前裸执行    | plan→effect→receipt→projection fault matrix | Pending |
-| AC-10 | manual question current behavior | all-state + owner-settle tests              | Pending |
-| AC-11 | some direct created WS           | commit-before-WS failpoints                 | Pending |
-| AC-12 | parked restart only              | expanded REST/MCP process E2E               | Pending |
-| AC-13 | RFC-326 Done baseline            | full adjacent corpus unchanged              | Pending |
-| AC-14 | RFC-328/332 already unique       | canonical inventory + mutation              | Pending |
-| AC-15 | target boundary only in RFC-294  | manifest/guard exact assertions             | Pending |
-| AC-16 | project hard boundary            | functional-only gate record                 | Pending |
+| AC    | 实现前                           | 目标证据                                    | 状态         |
+| ----- | -------------------------------- | ------------------------------------------- | ------------ |
+| AC-1  | current inventory 已完成         | source-lock + exact production inventory    | T2 Done      |
+| AC-2  | open/park 分写                   | real SQLite TaskParkTx fault tests          | T6/T7 Done   |
+| AC-3  | doc FS→DB 逐项                   | N-member artifact fault/recovery matrix     | T4/T6 Done   |
+| AC-4  | lazy question reconciliation     | eager snapshot + legacy-only guard          | T7 Done      |
+| AC-5  | route resume saga                | three CollaborationDecisionTx suites        | T8/T9 Done   |
+| AC-6  | route direct calls=3             | architecture negative guard=0               | T9 Done      |
+| AC-7  | route-level retry                | idempotency/stale/concurrent matrix         | T8/T9 Done   |
+| AC-8  | parked-only restart              | commit→wake process kill/recovery           | T11 Done     |
+| AC-9  | rollback 在 final tx 前裸执行    | plan→effect→receipt→projection fault matrix | T5/T8 Done   |
+| AC-10 | manual question current behavior | all-state + owner-settle tests              | T7 Done      |
+| AC-11 | some direct created WS           | commit-before-WS failpoints                 | T6～T9 Done  |
+| AC-12 | parked restart only              | process E2E + REST/MCP exact route guard    | T10/T11 Done |
+| AC-13 | RFC-326 Done baseline            | full adjacent corpus unchanged              | T8/T11 Done  |
+| AC-14 | RFC-328/332 already unique       | canonical inventory + mutation              | T5/T11 Done  |
+| AC-15 | target boundary only in RFC-294  | manifest/guard exact assertions             | T11 Done     |
+| AC-16 | project hard boundary            | functional-only gate record                 | T0～T11 Done |
 
 ## 7. 停止门与回退
 

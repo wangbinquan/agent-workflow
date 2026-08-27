@@ -44,7 +44,16 @@ import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify/service'
 import { hasOpenDispatchedEntryOnHome } from './rerunLedger'
-import { sealRoundQuestions } from './seal'
+import {
+  sealRoundQuestions,
+  type ClarifySealDecisionParticipantInTx,
+} from './seal'
+import {
+  prepareClarifyDecision,
+  replayCommittedClarifyDecision,
+  type ClarifyDecisionArgs,
+} from '@/services/clarifyDecision'
+import { gateDecisionReceipt, type GateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { buildFrozenAttributionSet } from './rounds'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
@@ -251,6 +260,8 @@ export interface AutoDispatchClarifyRoundArgs {
   ifMatchIteration?: number
   /** Audit-only actor; NEVER enters a prompt (RFC-099). */
   actor: { userId: string; role: TaskActorRole }
+  /** RFC-333 T9 internal seam; public route callers use the collaboration command wrapper. */
+  decisionParticipant?: ClarifySealDecisionParticipantInTx
   now?: () => number
 }
 
@@ -270,6 +281,12 @@ export interface AutoDispatchClarifyRoundResult {
    *  SUCCESS (idempotent: a retry hits the answered-round guard, but the entries are already parked
    *  for manual dispatch) instead of surfacing a failed response for a committed answer. */
   dispatchDeferredReason?: string
+}
+
+export interface AutoDispatchClarifyDecisionResult extends AutoDispatchClarifyRoundResult {
+  readonly receipt: GateDecisionReceipt
+  /** Composition-only exact wake ref. */
+  readonly continuationRef: string
 }
 
 /**
@@ -322,6 +339,9 @@ async function sealRoundAsWholeFinalize(
     answers: sealAnswers,
     ...(args.directive !== undefined ? { directive: args.directive } : {}),
     sealedBy: args.actor.userId,
+    ...(args.decisionParticipant === undefined
+      ? {}
+      : { decisionParticipant: args.decisionParticipant }),
     ...(args.now !== undefined ? { now: args.now } : {}),
   })
   const sealedQuestionIds = sealResult.sealedQuestionIds
@@ -505,6 +525,94 @@ async function dispatchSealedDesignerEntries(
     }
   }
   return designerDispatch
+}
+
+/** RFC-333 T9 collaboration command implementation. The answer seal owns the
+ * transaction and calls the prepared decision participant before commit; the
+ * existing dispatch phase then mints the same functional reruns while the
+ * already-admitted continuation remains the sole drive authority. */
+export async function autoDispatchClarifyRoundWithDecision(
+  args: AutoDispatchClarifyRoundArgs & { readonly decision?: ClarifyDecisionArgs },
+): Promise<AutoDispatchClarifyDecisionResult> {
+  const round = (
+    await args.db
+      .select({
+        id: clarifyRounds.id,
+        kind: clarifyRounds.kind,
+        taskId: clarifyRounds.taskId,
+      })
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.intermediaryNodeRunId, args.originNodeRunId))
+      .limit(1)
+  )[0]
+  if (round === undefined) {
+    throw new NotFoundError(
+      'clarify-round-not-found',
+      `no clarify_round for origin node_run ${args.originNodeRunId}`,
+    )
+  }
+  const task = (
+    await args.db
+      .select({ lifecycleEventRevision: tasks.lifecycleEventRevision })
+      .from(tasks)
+      .where(eq(tasks.id, round.taskId))
+      .limit(1)
+  )[0]
+  if (task === undefined) {
+    throw new NotFoundError('task-not-found', `task ${round.taskId} not found`)
+  }
+  const directive = args.directive ?? 'continue'
+  const decision = args.decision ?? {}
+  const replay = replayCommittedClarifyDecision({
+    db: args.db,
+    taskId: round.taskId,
+    originNodeRunId: args.originNodeRunId,
+    roundId: round.id,
+    actorUserId: args.actor.userId,
+    answers: args.answers,
+    directive,
+    decision,
+  })
+  if (replay !== null) {
+    return {
+      taskId: replay.result.taskId,
+      kind: round.kind,
+      sealedQuestionIds: [...replay.result.sealedQuestionIds],
+      roundFullySealed: replay.result.roundFullySealed,
+      dispatch: EMPTY_DISPATCH,
+      receipt: gateDecisionReceipt({ ...replay.decision, replayed: true }),
+      continuationRef: replay.result.continuationRef,
+    }
+  }
+
+  const prepared = prepareClarifyDecision({
+    db: args.db,
+    taskId: round.taskId,
+    originNodeRunId: args.originNodeRunId,
+    roundId: round.id,
+    actorUserId: args.actor.userId,
+    answers: args.answers,
+    directive,
+    taskRevision: task.lifecycleEventRevision,
+    decision,
+  })
+  const result = await autoDispatchClarifyRound({
+    ...args,
+    directive,
+    decisionParticipant: prepared.participant,
+  })
+  const envelope = prepared.capture.envelope
+  if (envelope === undefined) {
+    throw new ConflictError(
+      'clarify-decision-conflict',
+      `clarify decision for ${args.originNodeRunId} did not commit a durable receipt`,
+    )
+  }
+  return {
+    ...result,
+    receipt: envelope.decision,
+    continuationRef: envelope.result.continuationRef,
+  }
 }
 
 export async function autoDispatchClarifyRound(

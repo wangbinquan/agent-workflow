@@ -30,11 +30,18 @@
 // exclusion / dispatch-time trigger_run_id binding are GONE — the per-node queue model
 // (buildExternalFeedbackContext / markClarifyRoundsConsumedBy) replaces them.
 
-import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
+import {
+  clarifyRounds,
+  collaborationGateOperations,
+  nodeRunOutputs,
+  nodeRuns,
+  taskQuestions,
+  tasks,
+} from '@/db/schema'
 
 // RFC-311 (audit L2-5) — this file's per-task run fetches never consume the
 // heavy columns (prompt_text, iso/inventory/startup JSON, pre-snapshots…), but
@@ -87,8 +94,29 @@ import {
   QUESTION_DISPATCH_CLOSED_TASK_STATUSES,
 } from '@/services/taskQuestions'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
+import {
+  canonicalHumanGateRequestHash,
+  canonicalHumanGateValueJson,
+  deriveHumanGateCompatibilityKey,
+  type CanonicalHumanGateRequest,
+} from '@/modules/collaboration/domain/canonicalGateRequest'
+import { gateDecisionReceipt, type GateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
+import {
+  decodeQuestionDispatchManifest,
+  decodeQuestionDispatchReceipt,
+  encodeQuestionDispatchManifest,
+  encodeQuestionDispatchReceipt,
+  type QuestionDispatchManifest,
+  type QuestionDispatchReceiptEnvelope,
+} from '@/modules/collaboration/domain/questionDispatchDecision'
+import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
+import {
+  bindTaskDecisionParticipantInTx,
+  humanGateNodeProjectionFence,
+} from '@/modules/task-execution/public/participants'
 import {
   isClarifyChannelEdge,
   isTurnEngineWorkgroupTask,
@@ -128,12 +156,200 @@ export interface DispatchTaskQuestionsResult {
   deferred: Array<{ entryId: string; homeNodeId: string; reason: string }>
 }
 
+export interface DispatchTaskQuestionsDecisionArgs {
+  readonly expectedTaskRevision?: number
+  readonly expectedGateRevision?: number
+  readonly idempotencyKey?: string
+}
+
+export interface DispatchTaskQuestionsDecisionResult extends DispatchTaskQuestionsResult {
+  readonly taskId: string
+  readonly receipt: GateDecisionReceipt
+  /** Composition-only wake hand-off; REST/MCP receive only the business receipt. */
+  readonly continuationRef: string | null
+}
+
+interface PreparedQuestionDispatchDecision {
+  readonly operationId: string
+  readonly request: CanonicalHumanGateRequest
+  readonly idempotencyKey: string
+  readonly manifestJson: string
+  readonly gateRef: string
+  readonly capturedGateRevision: number
+  readonly capture: { envelope?: QuestionDispatchReceiptEnvelope }
+}
+
 type TaskQuestionRow = typeof taskQuestions.$inferSelect
 
 const EMPTY_RESULT: DispatchTaskQuestionsResult = {
   reruns: [],
   dispatchedEntryIds: [],
   deferred: [],
+}
+
+function questionDispatchPayload(entryIds: readonly string[]) {
+  return {
+    kind: 'question-dispatch' as const,
+    entryIds: [...new Set(entryIds)].sort(),
+  }
+}
+
+function decisionResultFromEnvelope(
+  envelope: QuestionDispatchReceiptEnvelope,
+  replayed: boolean,
+): DispatchTaskQuestionsDecisionResult {
+  return {
+    taskId: envelope.result.taskId,
+    receipt: gateDecisionReceipt({ ...envelope.decision, replayed }),
+    continuationRef: envelope.result.continuationRef,
+    reruns: envelope.result.reruns.map((rerun) => ({
+      ...rerun,
+      entryIds: [...rerun.entryIds],
+    })),
+    dispatchedEntryIds: [...envelope.result.dispatchedEntryIds],
+    deferred: envelope.result.deferred.map((entry) => ({ ...entry })),
+  }
+}
+
+function replayCommittedQuestionDispatch(input: {
+  db: DbClient
+  taskId: string
+  entryIds: readonly string[]
+  actor: DispatchTaskQuestionsActor
+  decision: DispatchTaskQuestionsDecisionArgs
+}): DispatchTaskQuestionsDecisionResult | null {
+  const gateRef = `questions:${input.taskId}`
+  const payload = questionDispatchPayload(input.entryIds)
+  const rows = input.db
+    .select()
+    .from(collaborationGateOperations)
+    .where(
+      and(
+        eq(collaborationGateOperations.taskId, input.taskId),
+        eq(collaborationGateOperations.gateKind, 'questions'),
+        eq(collaborationGateOperations.gateRef, gateRef),
+        eq(collaborationGateOperations.operationKind, 'decide'),
+      ),
+    )
+    .orderBy(desc(collaborationGateOperations.createdAt))
+    .all()
+  const explicit = input.decision.idempotencyKey
+  const candidate = rows.find((row) => {
+    if (explicit !== undefined && row.idempotencyKey !== explicit) return false
+    if (row.receiptJson === null || row.actorUserId !== input.actor.userId) return false
+    let manifest: QuestionDispatchManifest
+    try {
+      manifest = decodeQuestionDispatchManifest(row.manifestJson)
+    } catch {
+      return false
+    }
+    const request: CanonicalHumanGateRequest = {
+      schemaVersion: 1,
+      taskId: input.taskId,
+      gateKind: 'questions',
+      operationKind: 'decide',
+      gateRef,
+      actorUserId: input.actor.userId,
+      expectedTaskRevision: input.decision.expectedTaskRevision ?? row.expectedTaskRevision,
+      expectedGateRevision: input.decision.expectedGateRevision ?? row.expectedGateRevision,
+      payload,
+    }
+    return (
+      canonicalHumanGateRequestHash(request) === row.requestHash &&
+      canonicalHumanGateRequestHash(manifest.request) === row.requestHash
+    )
+  })
+  if (candidate === undefined) {
+    if (explicit !== undefined && rows.some((row) => row.idempotencyKey === explicit)) {
+      throw new ConflictError(
+        'human-gate-idempotency-conflict',
+        'question dispatch idempotency key is already bound to another request',
+      )
+    }
+    return null
+  }
+  return decisionResultFromEnvelope(decodeQuestionDispatchReceipt(candidate.receiptJson!), true)
+}
+
+function ensureLegacyQuestionGateRevisionTx(input: {
+  tx: DbTxSync
+  operations: SqliteHumanGateOperationStore
+  taskId: string
+  expectedTaskRevision: number
+  gateRef: string
+  now: number
+}): number {
+  const current = input.operations.latestGateRevisionTx({
+    tx: input.tx,
+    gateKind: 'questions',
+    gateRef: input.gateRef,
+  })
+  if (current !== 0) return current
+  const request: CanonicalHumanGateRequest = {
+    schemaVersion: 1,
+    taskId: input.taskId,
+    gateKind: 'questions',
+    operationKind: 'legacy-seed',
+    gateRef: input.gateRef,
+    actorUserId: null,
+    expectedTaskRevision: input.expectedTaskRevision,
+    expectedGateRevision: 0,
+    payload: {
+      kind: 'legacy-seed',
+      factDigest: sha256Hex(
+        canonicalHumanGateValueJson({ taskId: input.taskId, gateRef: input.gateRef }),
+      ),
+    },
+  }
+  const begun = input.operations.beginTx({
+    tx: input.tx,
+    operationId: ulid(input.now),
+    request,
+    idempotencyKey: `legacy:${input.gateRef}:1`,
+    now: input.now,
+  })
+  input.operations.commitTx({
+    tx: input.tx,
+    operationId: begun.operation.id,
+    expectedClaimEpoch: begun.operation.claimEpoch,
+    receiptJson: canonicalHumanGateValueJson({
+      schemaVersion: 1,
+      kind: 'legacy-seed',
+      gateRef: input.gateRef,
+      gateRevision: 1,
+    }),
+    now: input.now,
+  })
+  input.operations.completeTx({
+    tx: input.tx,
+    operationId: begun.operation.id,
+    expectedClaimEpoch: begun.operation.claimEpoch,
+    now: input.now,
+  })
+  return 1
+}
+
+function questionDispatchProjectionMember(row: typeof nodeRuns.$inferSelect) {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    nodeId: row.nodeId,
+    parentNodeRunId: row.parentNodeRunId,
+    iteration: row.iteration,
+    shardKey: row.shardKey,
+    retryIndex: row.retryIndex,
+    reviewIteration: row.reviewIteration,
+    status: row.status,
+    failureCode: row.failureCode,
+    preSnapshot: row.preSnapshot,
+    preSnapshotReposJson: row.preSnapshotReposJson,
+    rerunCause: row.rerunCause,
+    supersededByReview: row.supersededByReview,
+    rolledBack: row.rolledBack,
+    continuationSlotKey: row.continuationSlotKey,
+    lineageSlotPathJson: row.lineageSlotPathJson,
+    operationGeneration: row.operationGeneration,
+  }
 }
 
 /** Thrown inside the atomic tx to roll it back when a concurrent dispatcher already
@@ -381,6 +597,38 @@ export async function dispatchTaskQuestions(
   return await getTaskQuestionWriteSem(taskId).run(() =>
     dispatchTaskQuestionsLocked(db, taskId, entryIds, actor),
   )
+}
+
+/** RFC-333 T9 — route/MCP decision entry. Domain stamping, rerun minting,
+ * lifecycle release, one canonical continuation, and the replay receipt share
+ * the same transaction. The returned continuation ref is composition-only. */
+export async function dispatchTaskQuestionsWithDecision(
+  db: DbClient,
+  taskId: string,
+  entryIds: string[],
+  actor: DispatchTaskQuestionsActor,
+  decision: DispatchTaskQuestionsDecisionArgs = {},
+): Promise<DispatchTaskQuestionsDecisionResult> {
+  if (entryIds.length === 0) {
+    throw new ValidationError(
+      'entry-ids-required',
+      'entryIds (a non-empty array of task_question ids) is required',
+    )
+  }
+  const replay = replayCommittedQuestionDispatch({ db, taskId, entryIds, actor, decision })
+  if (replay !== null) return replay
+
+  const capture: PreparedQuestionDispatchDecision['capture'] = {}
+  await getTaskQuestionWriteSem(taskId).run(() =>
+    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, { args: decision, capture }),
+  )
+  if (capture.envelope === undefined) {
+    throw new ConflictError(
+      'question-dispatch-conflict',
+      `task question dispatch for task ${taskId} did not commit a durable decision`,
+    )
+  }
+  return decisionResultFromEnvelope(capture.envelope, false)
 }
 
 /** RFC-140 W2 (Codex impl-gate P1) — the auto-redispatch entry: SELECT the auto-split-deferred
@@ -638,6 +886,10 @@ async function dispatchTaskQuestionsLocked(
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
+  decision?: {
+    readonly args: DispatchTaskQuestionsDecisionArgs
+    readonly capture: PreparedQuestionDispatchDecision['capture']
+  },
 ): Promise<DispatchTaskQuestionsResult> {
   // 0. RFC-132 PR-B (universal deferred model): every task dispatches through this ONE path now
   //    (the route routes ALL clarify answers to autoDispatchClarifyRound → dispatchTaskQuestions).
@@ -649,6 +901,7 @@ async function dispatchTaskQuestionsLocked(
       .select({
         snapshot: tasks.workflowSnapshot,
         status: tasks.status,
+        lifecycleEventRevision: tasks.lifecycleEventRevision,
         workgroupId: tasks.workgroupId,
         workgroupConfigJson: tasks.workgroupConfigJson,
       })
@@ -683,7 +936,34 @@ async function dispatchTaskQuestionsLocked(
         eq(taskQuestions.confirmation, 'open'),
       ),
     )
-  if (requested.length === 0) return EMPTY_RESULT
+  if (requested.length === 0) {
+    if (decision === undefined) return EMPTY_RESULT
+    const prepared = prepareQuestionDispatchDecision({
+      db,
+      taskId,
+      entryIds,
+      actor,
+      taskRevision: taskRow.lifecycleEventRevision,
+      rerunNodeRunIds: [],
+      args: decision.args,
+      capture: decision.capture,
+    })
+    return commitDispatchPlan(
+      db,
+      taskId,
+      actor,
+      {
+        dispatchEntries: [],
+        deferredEntries: [],
+        affected: new Set(),
+        mintPlans: [],
+        mintCauseByTarget: new Map(),
+        mintShardsByTarget: new Map(),
+        shardOf: () => null,
+      },
+      prepared,
+    )
+  }
 
   // 1a. RFC-128 P5-BC dispatch readiness gate (F2, §5.2.11): every CLARIFY-derived requested
   //     entry must be SEALED before dispatch — otherwise a not-yet-answered question would be
@@ -768,20 +1048,121 @@ async function dispatchTaskQuestionsLocked(
   }
 
   const { dispatchEntries, deferredEntries, byTarget } = selectDispatchBatch(requested)
-  if (byTarget.size === 0) return EMPTY_RESULT
+  if (byTarget.size === 0) {
+    if (decision === undefined) return EMPTY_RESULT
+    const prepared = prepareQuestionDispatchDecision({
+      db,
+      taskId,
+      entryIds,
+      actor,
+      taskRevision: taskRow.lifecycleEventRevision,
+      rerunNodeRunIds: [],
+      args: decision.args,
+      capture: decision.capture,
+    })
+    return commitDispatchPlan(
+      db,
+      taskId,
+      actor,
+      {
+        dispatchEntries: [],
+        deferredEntries,
+        affected: new Set(),
+        mintPlans: [],
+        mintCauseByTarget: new Map(),
+        mintShardsByTarget: new Map(),
+        shardOf: () => null,
+      },
+      prepared,
+    )
+  }
 
   const { affected, mintPlans, mintCauseByTarget, mintShardsByTarget, shardOf } =
     await planDispatchFrontier(db, taskId, taskRow.snapshot, byTarget, dispatchEntries)
 
-  return commitDispatchPlan(db, taskId, actor, {
-    dispatchEntries,
-    deferredEntries,
-    affected,
-    mintPlans,
-    mintCauseByTarget,
-    mintShardsByTarget,
-    shardOf,
-  })
+  const prepared =
+    decision === undefined
+      ? undefined
+      : prepareQuestionDispatchDecision({
+          db,
+          taskId,
+          entryIds,
+          actor,
+          taskRevision: taskRow.lifecycleEventRevision,
+          rerunNodeRunIds: mintPlans.map((plan) => plan.preId),
+          args: decision.args,
+          capture: decision.capture,
+        })
+  return commitDispatchPlan(
+    db,
+    taskId,
+    actor,
+    {
+      dispatchEntries,
+      deferredEntries,
+      affected,
+      mintPlans,
+      mintCauseByTarget,
+      mintShardsByTarget,
+      shardOf,
+    },
+    prepared,
+  )
+}
+
+function prepareQuestionDispatchDecision(input: {
+  db: DbClient
+  taskId: string
+  entryIds: readonly string[]
+  actor: DispatchTaskQuestionsActor
+  taskRevision: number
+  rerunNodeRunIds: readonly string[]
+  args: DispatchTaskQuestionsDecisionArgs
+  capture: PreparedQuestionDispatchDecision['capture']
+}): PreparedQuestionDispatchDecision {
+  const gateRef = `questions:${input.taskId}`
+  const latestGateRevision =
+    input.db
+      .select({ revision: collaborationGateOperations.resultGateRevision })
+      .from(collaborationGateOperations)
+      .where(
+        and(
+          eq(collaborationGateOperations.gateKind, 'questions'),
+          eq(collaborationGateOperations.gateRef, gateRef),
+          isNotNull(collaborationGateOperations.resultGateRevision),
+        ),
+      )
+      .orderBy(desc(collaborationGateOperations.resultGateRevision))
+      .limit(1)
+      .get()?.revision ?? 0
+  const capturedGateRevision =
+    input.args.expectedGateRevision ?? (latestGateRevision === 0 ? 1 : latestGateRevision)
+  const request: CanonicalHumanGateRequest = {
+    schemaVersion: 1,
+    taskId: input.taskId,
+    gateKind: 'questions',
+    operationKind: 'decide',
+    gateRef,
+    actorUserId: input.actor.userId,
+    expectedTaskRevision: input.args.expectedTaskRevision ?? input.taskRevision,
+    expectedGateRevision: capturedGateRevision,
+    payload: questionDispatchPayload(input.entryIds),
+  }
+  const manifest: QuestionDispatchManifest = {
+    schemaVersion: 1,
+    kind: 'question-dispatch',
+    request,
+    rerunNodeRunIds: [...input.rerunNodeRunIds],
+  }
+  return {
+    operationId: ulid(),
+    request,
+    idempotencyKey: input.args.idempotencyKey ?? deriveHumanGateCompatibilityKey(request),
+    manifestJson: encodeQuestionDispatchManifest(manifest),
+    gateRef,
+    capturedGateRevision,
+    capture: input.capture,
+  }
 }
 
 /** RFC-217 T9 (§8.3 拆函数) — step 7 锁编排: the ONE dbTxSync (terminal recheck
@@ -801,6 +1182,7 @@ async function commitDispatchPlan(
     mintShardsByTarget: ReadonlyMap<string, Set<string | null>>
     shardOf: (e: TaskQuestionRow) => string | null
   },
+  decision?: PreparedQuestionDispatchDecision,
 ): Promise<DispatchTaskQuestionsResult> {
   const { dispatchEntries, deferredEntries, affected, mintPlans } = plan
   const { mintCauseByTarget, mintShardsByTarget, shardOf } = plan
@@ -827,6 +1209,7 @@ async function commitDispatchPlan(
   )
   const now = Date.now()
   let committed = false
+  let replayed = false
   try {
     // RFC-128 §5.2.14 final-gate (user-authorized): the per-task QUESTION-WRITE lock (B) protects
     // this stamp+mint tx from a clarify/cross-clarify SUBMIT's {precheck→rollback→tx} interleave —
@@ -843,7 +1226,10 @@ async function commitDispatchPlan(
         // if the task went terminal, so nothing is minted onto a finished task. Reuses the SAME
         // terminal set as the pre-check (no drift).
         const curTask = tx
-          .select({ status: tasks.status })
+          .select({
+            status: tasks.status,
+            lifecycleEventRevision: tasks.lifecycleEventRevision,
+          })
           .from(tasks)
           .where(eq(tasks.id, taskId))
           .all()[0]
@@ -853,14 +1239,61 @@ async function commitDispatchPlan(
             `task ${taskId} became ${curTask?.status ?? 'missing'} before dispatch committed; nothing stamped or minted`,
           )
         }
-        const stillNull = tx
-          .select({
-            id: taskQuestions.id,
-            override: taskQuestions.overrideTargetNodeId,
-            def: taskQuestions.defaultTargetNodeId,
-            origin: taskQuestions.originNodeRunId,
+        let begun: ReturnType<SqliteHumanGateOperationStore['beginTx']> | undefined
+        const operations = decision === undefined ? undefined : new SqliteHumanGateOperationStore()
+        if (decision !== undefined && operations !== undefined) {
+          const currentGateRevision = ensureLegacyQuestionGateRevisionTx({
+            tx,
+            operations,
+            taskId,
+            expectedTaskRevision: decision.request.expectedTaskRevision,
+            gateRef: decision.gateRef,
+            now,
           })
-          .from(taskQuestions)
+          if (currentGateRevision !== decision.capturedGateRevision) {
+            throw new ConflictError(
+              'human-gate-operation-stale',
+              `question gate revision changed (expected ${decision.capturedGateRevision}, current ${currentGateRevision})`,
+            )
+          }
+          begun = operations.beginTx({
+            tx,
+            operationId: decision.operationId,
+            request: decision.request,
+            idempotencyKey: decision.idempotencyKey,
+            now,
+          })
+          if (begun.replayed) {
+            if (begun.operation.receiptJson === null) {
+              throw new ConflictError(
+                'human-gate-operation-conflict',
+                `question dispatch operation '${begun.operation.id}' has not committed`,
+              )
+            }
+            decision.capture.envelope = decodeQuestionDispatchReceipt(begun.operation.receiptJson)
+            replayed = true
+            committed = true
+            return
+          }
+          operations.markPreparedTx({
+            tx,
+            operationId: begun.operation.id,
+            expectedClaimEpoch: begun.operation.claimEpoch,
+            manifestJson: decision.manifestJson,
+            now,
+          })
+        }
+        const stillNull =
+          dispatchIds.length === 0
+            ? []
+            : tx
+                .select({
+                  id: taskQuestions.id,
+                  override: taskQuestions.overrideTargetNodeId,
+                  def: taskQuestions.defaultTargetNodeId,
+                  origin: taskQuestions.originNodeRunId,
+                })
+                .from(taskQuestions)
           // RFC-128 P5-BC §5.2.14 (Codex impl-gate finding B): the CAS re-checks `confirmation='open'`
           // too, NOT just `dispatched_at IS NULL`. A quick whole-round finalize that committed between
           // the async `requested` read and this tx CONSUMES (confirms) the round's sealed-undispatched
@@ -868,14 +1301,14 @@ async function commitDispatchPlan(
           // blocks, so without this predicate a now-confirmed entry would still pass the CAS (its
           // `dispatched_at` is still NULL) and get stamped/minted → duplicate rerun. A confirmed entry
           // now shrinks `stillNull` → ConcurrentClaim → whole-tx rollback (nothing stamped/minted).
-          .where(
-            and(
-              inArray(taskQuestions.id, dispatchIds),
-              isNull(taskQuestions.dispatchedAt),
-              eq(taskQuestions.confirmation, 'open'),
-            ),
-          )
-          .all()
+                .where(
+                  and(
+                    inArray(taskQuestions.id, dispatchIds),
+                    isNull(taskQuestions.dispatchedAt),
+                    eq(taskQuestions.confirmation, 'open'),
+                  ),
+                )
+                .all()
         if (stillNull.length !== dispatchIds.length) throw new ConcurrentClaim()
         // Re-verify the planned snapshot is unchanged (atomic with the stamp+mint). A concurrent
         // reassign/reconcile that moved any entry's effective target (or origin) → retryable
@@ -952,19 +1385,21 @@ async function commitDispatchPlan(
         // RFC-132 ③: the in-tx IMMEDIATE (quick-channel) recheck is GONE with the immediate
         // ledger — nothing mints quick continuations anymore (autoDispatchClarifyRound is the
         // only answer path and it dispatches), so the dispatched-ledger recheck above is complete.
-        tx.update(taskQuestions)
-          .set({ dispatchedAt: now, dispatchedBy: actor.userId, updatedAt: now })
-          // §5.2.14 finding B: confirmation='open' mirrors the CAS guard — never stamp a SUPERSEDED
-          // (quick-finalize-confirmed) entry (the CAS above already threw ConcurrentClaim if any
-          // dispatchId got confirmed; this keeps the write itself self-consistent).
-          .where(
-            and(
-              inArray(taskQuestions.id, dispatchIds),
-              isNull(taskQuestions.dispatchedAt),
-              eq(taskQuestions.confirmation, 'open'),
-            ),
-          )
-          .run()
+        if (dispatchIds.length > 0) {
+          tx.update(taskQuestions)
+            .set({ dispatchedAt: now, dispatchedBy: actor.userId, updatedAt: now })
+            // §5.2.14 finding B: confirmation='open' mirrors the CAS guard — never stamp a SUPERSEDED
+            // (quick-finalize-confirmed) entry (the CAS above already threw ConcurrentClaim if any
+            // dispatchId got confirmed; this keeps the write itself self-consistent).
+            .where(
+              and(
+                inArray(taskQuestions.id, dispatchIds),
+                isNull(taskQuestions.dispatchedAt),
+                eq(taskQuestions.confirmation, 'open'),
+              ),
+            )
+            .run()
+        }
         // RFC-140 W2 — stamp the auto-serial redispatch marker on the auto-split-DEFERRED entries
         // (same tx = atomic with the batch's dispatched_at stamp; lock B is held across the whole
         // read→plan→stamp pipeline, so the plan cannot be stale vs a concurrent stage/unstage).
@@ -1012,16 +1447,79 @@ async function commitDispatchPlan(
         // （能过 assertRequestedEntriesSealed 只因源轮已 answered——契约「已下发 ≠ 可渲染」），
         // 同事务补行戳，凡下发必可被 selectAgentQueue 渲染。sealed_by 留 NULL =「answered 轮证据
         // 落戳」审计语义；manual 不补（无 seal 概念）；已 sealed 不改写（黄金锁）；forward-only。
-        tx.update(taskQuestions)
-          .set({ sealedAt: now, updatedAt: now })
-          .where(
-            and(
-              inArray(taskQuestions.id, dispatchIds),
-              isNull(taskQuestions.sealedAt),
-              ne(taskQuestions.sourceKind, 'manual'),
+        if (dispatchIds.length > 0) {
+          tx.update(taskQuestions)
+            .set({ sealedAt: now, updatedAt: now })
+            .where(
+              and(
+                inArray(taskQuestions.id, dispatchIds),
+                isNull(taskQuestions.sealedAt),
+                ne(taskQuestions.sourceKind, 'manual'),
+              ),
+            )
+            .run()
+        }
+        if (decision !== undefined && operations !== undefined && begun !== undefined) {
+          const rerunNodeRunIds = mintPlans.map((plan) => plan.preId)
+          const projectionRows =
+            rerunNodeRunIds.length === 0
+              ? []
+              : tx.select().from(nodeRuns).where(inArray(nodeRuns.id, rerunNodeRunIds)).all()
+          const accepted = bindTaskDecisionParticipantInTx(tx).acceptGateDecisionTx({
+            taskId,
+            gate: { kind: 'questions', ref: decision.gateRef },
+            expectedTaskRevision: decision.request.expectedTaskRevision,
+            expectedNodeProjection: humanGateNodeProjectionFence(
+              projectionRows.map(questionDispatchProjectionMember),
             ),
-          )
-          .run()
+            continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
+            operationId: begun.operation.id,
+            now,
+          })
+          const reruns: DispatchedRerun[] = mintPlans.map((plan) => ({
+            targetNodeId: plan.nodeId,
+            nodeRunId: plan.preId,
+            entryIds: dispatchEntries
+              .filter(
+                (entry) =>
+                  effectiveTarget(entry) === plan.nodeId && shardOf(entry) === plan.shardKey,
+              )
+              .map((entry) => entry.id),
+          }))
+          const envelope: QuestionDispatchReceiptEnvelope = {
+            schemaVersion: 1,
+            kind: 'question-dispatch',
+            decision: gateDecisionReceipt({
+              operationId: begun.operation.id,
+              gate: { kind: 'questions', ref: decision.gateRef },
+              gateRevision: decision.capturedGateRevision + 1,
+              taskRevision: accepted.taskRevision,
+              acceptedAt: now,
+              replayed: false,
+            }),
+            result: {
+              taskId,
+              continuationRef: accepted.continuationRef,
+              reruns,
+              dispatchedEntryIds: dispatchIds,
+              deferred: deferredEntries,
+            },
+          }
+          operations.commitTx({
+            tx,
+            operationId: begun.operation.id,
+            expectedClaimEpoch: begun.operation.claimEpoch,
+            receiptJson: encodeQuestionDispatchReceipt(envelope),
+            now,
+          })
+          operations.completeTx({
+            tx,
+            operationId: begun.operation.id,
+            expectedClaimEpoch: begun.operation.claimEpoch,
+            now,
+          })
+          decision.capture.envelope = envelope
+        }
         // RFC-162: the asker-echo (roleKind='echo') materialization is DELETED. Reassign no
         // longer MOVES the asker's entry (it keeps it + ADDS a designer handler), so the asker
         // always reruns and gets the Q&A — there is no strand to compensate with a receipt.
@@ -1050,6 +1548,17 @@ async function commitDispatchPlan(
     throw e
   }
   if (!committed) return EMPTY_RESULT
+  if (replayed && decision?.capture.envelope !== undefined) {
+    const envelope = decision.capture.envelope
+    return {
+      reruns: envelope.result.reruns.map((rerun) => ({
+        ...rerun,
+        entryIds: [...rerun.entryIds],
+      })),
+      dispatchedEntryIds: [...envelope.result.dispatchedEntryIds],
+      deferred: envelope.result.deferred.map((entry) => ({ ...entry })),
+    }
+  }
 
   // RFC-182 D6 (design-gate P2) — a clarify-answer HOST rerun is minted here
   // (outside the engine) and later ADOPTED via adoptedRunId, so the engine's

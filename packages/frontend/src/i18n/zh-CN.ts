@@ -2597,7 +2597,6 @@ export interface Resources {
     saving: string
     creating: string
     unknownError: string
-    resumeFailedAfterSubmit: string
     yes: string
     no: string
     details: string
@@ -9559,8 +9558,6 @@ export const zhCN: Resources = {
     saving: '保存中…',
     creating: '创建中…',
     unknownError: '未知错误',
-    resumeFailedAfterSubmit:
-      '已提交成功，但任务续跑失败（{{code}}）。请到任务详情页点「继续执行」，或使用「诊断」修复。',
     yes: '是',
     no: '否',
     details: '详情',

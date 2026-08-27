@@ -26,17 +26,15 @@ import {
   reassignTaskQuestion,
   stageTaskQuestion,
 } from '@/services/taskQuestions'
-import { dispatchTaskQuestions } from '@/services/taskQuestionDispatch'
+import { dispatchTaskQuestions } from '@/modules/collaboration/public/commands'
+import { createQuestionDispatchCommandContext } from '@/services/questionDispatchComposition'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
-import { resumeTask } from '@/services/task'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { wakeHumanGateContinuation } from '@/services/task'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
-
-const log = createLogger('task-questions-route')
 
 async function loadVisibleTask(deps: AppDeps, taskId: string, actor: Actor) {
   const [t] = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
@@ -236,48 +234,37 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
           'entryIds (a non-empty array of task_question ids) is required',
         )
       }
-      const result = await dispatchTaskQuestions(deps.db, taskId, entryIds, {
-        userId: actor.user.id,
-        role,
-      })
-      // Release the gate: re-enter scheduling so the minted reruns dispatch and the
-      // task leaves awaiting_human. Best-effort, mirroring the clarify route. NB: a
-      // TERMINAL task (done/canceled) is already rejected by dispatchTaskQuestions'
-      // status pre-check ABOVE (nothing minted), so `task-not-resumable` here is ONLY
-      // the benign live-scheduler race (a `running` deferred task — the live loop picks
-      // up the freshly-minted rerun); it is logged at info, not surfaced as an error.
-      const resumeDeps: Parameters<typeof resumeTask>[2] = {
+      const commandContext = createQuestionDispatchCommandContext({
         db: deps.db,
-        schedulerDriver: createLegacyTaskExecutionTopology(
-          deps.db,
-          deps.repositoryPublicationTransport,
-        ).schedulerDriver,
-        appHome: Paths.root,
-        configPath: deps.configPath,
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-      }
-      // RFC-202 T8: surface real resume failures in the response (dispatch DID
-      // land; the UI shows a warning) instead of the old silent log-only path.
-      let resumeFailure: { ok: false; code: string; message: string } | undefined
-      try {
-        await resumeTask(deps.db, taskId, resumeDeps)
-      } catch (err) {
-        if (err instanceof ConflictError && err.code === 'task-not-resumable') {
-          log.info('task-questions dispatch resume deferred', { taskId })
-        } else {
-          const message = err instanceof Error ? err.message : String(err)
-          log.warn('task-questions dispatch resume threw', { taskId, error: message })
-          resumeFailure = {
-            ok: false,
-            code: err instanceof DomainError ? err.code : 'resume-failed',
-            message,
-          }
-        }
-      }
+        actor,
+        role,
+        wake: async (committedTaskId, continuationRef) => {
+          await wakeHumanGateContinuation(committedTaskId, continuationRef, {
+            db: deps.db,
+            schedulerDriver: createLegacyTaskExecutionTopology(
+              deps.db,
+              deps.repositoryPublicationTransport,
+            ).schedulerDriver,
+            appHome: Paths.root,
+            configPath: deps.configPath,
+            ...resolveLaunchRuntimeConfig(deps.configPath),
+          })
+        },
+      })
+      const result = await dispatchTaskQuestions(commandContext, {
+        taskId,
+        entryIds,
+        ...(c.req.header('Idempotency-Key') === undefined
+          ? {}
+          : { idempotencyKey: c.req.header('Idempotency-Key')! }),
+      })
       return c.json({
         ok: true,
+        taskId: result.taskId,
+        receipt: result.receipt,
         reruns: result.reruns,
-        ...(resumeFailure ? { resume: resumeFailure } : {}),
+        dispatchedEntryIds: result.dispatchedEntryIds,
+        deferred: result.deferred,
       })
     },
   )

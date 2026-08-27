@@ -168,13 +168,12 @@ describe('RFC-329 AC-7 — the clarify board is reachable, and says what advance
     expect(claims).toEqual(['dispatch_task_questions'])
   })
 
-  test('dispatch_task_questions warns that a 200 can still mean "not resumed"', () => {
-    // The route records the send, then kicks the engine; the kick can fail while
-    // the response stays 200 with `resume.ok === false`. A model that reports
-    // success on the status code alone leaves the task parked.
+  test('dispatch_task_questions documents the atomic durable receipt', () => {
     const description = toolNamed('dispatch_task_questions').description
-    expect(description).toContain('resume')
-    expect(description).toMatch(/resume\.ok === false|Check `resume`/)
+    expect(description).toContain('durable `receipt`')
+    expect(description).toContain('committed atomically')
+    expect(description).toContain('recovered from that continuation')
+    expect(description).not.toMatch(/resume\.ok === false|Check `resume`/)
   })
 
   test('set_clarify_directive and answer_clarify point at each other', () => {

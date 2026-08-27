@@ -4,10 +4,16 @@
 
 import type { DbClient } from '@/db/client'
 import type { CollaborationCommandContext } from '../public/types'
+import type { ReviewDecisionCommandPort } from '../application/ports/reviewDecisionCommand'
+import type { QuestionDispatchCommandPort } from '../application/ports/questionDispatchCommand'
+import type { ClarifyDecisionCommandPort } from '../application/ports/clarifyDecisionCommand'
 
 export interface CollaborationCommandDependencies {
   readonly db: DbClient
   readonly appHome?: string
+  readonly reviewDecisions?: ReviewDecisionCommandPort
+  readonly questionDispatches?: QuestionDispatchCommandPort
+  readonly clarifyDecisions?: ClarifyDecisionCommandPort
 }
 
 const dependencies = new WeakMap<object, CollaborationCommandDependencies>()
@@ -34,4 +40,28 @@ export function requireCollaborationAppHome(context: CollaborationCommandContext
     throw new Error('collaboration command context has no app home')
   }
   return appHome
+}
+
+export function requireReviewDecisionCommand(
+  context: CollaborationCommandContext,
+): ReviewDecisionCommandPort {
+  const command = resolveCollaborationCommandContext(context).reviewDecisions
+  if (command === undefined) throw new Error('collaboration review decision command is not composed')
+  return command
+}
+
+export function requireQuestionDispatchCommand(
+  context: CollaborationCommandContext,
+): QuestionDispatchCommandPort {
+  const command = resolveCollaborationCommandContext(context).questionDispatches
+  if (command === undefined) throw new Error('collaboration question dispatch command is not composed')
+  return command
+}
+
+export function requireClarifyDecisionCommand(
+  context: CollaborationCommandContext,
+): ClarifyDecisionCommandPort {
+  const command = resolveCollaborationCommandContext(context).clarifyDecisions
+  if (command === undefined) throw new Error('collaboration clarify decision command is not composed')
+  return command
 }

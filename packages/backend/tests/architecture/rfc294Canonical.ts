@@ -1979,6 +1979,14 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'CanonicalControlTransaction',
     }
   }
+  if (/services\/humanGateContinuationEffects\.ts#projectWorkspaceRollbackTx/.test(value)) {
+    return {
+      authorityKind: 'worker-epoch',
+      controlSubtype: null,
+      revisionPredicate: 'exact-owned-intent-and-succeeded-effect-receipt',
+      requiredBrandedProof: 'OwnershipToken+TaskExecutionEffectReceipt',
+    }
+  }
   if (
     /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/sqliteHumanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpenTx|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
       value,
@@ -2097,8 +2105,8 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
   },
   {
     subtype: 'gate-control',
-    file: 'packages/backend/src/services/task.ts',
-    symbol: 'resumeTaskWithAtomicSideEffects',
+    file: 'packages/backend/src/modules/task-execution/composition/humanGate.ts',
+    symbol: 'bindTaskDecisionParticipantInTx',
     allowedTables: ['tasks', 'taskExecutionIntents', 'gate-companion-table'],
     allowedTransitions: ['awaiting-gate->pending', 'intent-absent->pending'],
     revisionPredicate: 'task-lifecycle-event-revision',

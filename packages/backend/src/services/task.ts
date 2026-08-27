@@ -111,6 +111,7 @@ import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
 import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { createGateContinuationPreDriveStep } from '@/services/humanGateContinuationEffects'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
@@ -1433,9 +1434,8 @@ function createTaskDriveCoordinator(input: {
     ...(input.admittedContinuation === undefined
       ? {}
       : { admittedContinuation: input.admittedContinuation }),
-    ...(input.gateContinuationPreDrive === undefined
-      ? {}
-      : { gateContinuationPreDrive: input.gateContinuationPreDrive }),
+    gateContinuationPreDrive:
+      input.gateContinuationPreDrive ?? createGateContinuationPreDriveStep(input.deps.db),
     repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {
@@ -4213,6 +4213,39 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
     conflictCode: 'task-not-resumable',
     verb: 'resume',
     worktreePreflight: true, // RFC-108 T6 (AR-15)
+  })
+}
+
+/**
+ * RFC-333: wake an intent that was already admitted atomically by a human-gate
+ * decision.  Unlike `resumeTask`, this performs no second lifecycle transition
+ * and submits no second intent; it claims the exact durable continuation ref.
+ */
+export async function wakeHumanGateContinuation(
+  taskId: string,
+  continuationRef: string,
+  deps: StartTaskDeps,
+): Promise<void> {
+  const coordinator = createTaskDriveCoordinator({
+    deps,
+    appHome: deps.appHome ?? Paths.root,
+    ensureWorkspaceProfiles: true,
+    engineFailureMessage: 'runTask threw on human-gate continuation',
+    failureReporter: {
+      report({ error, stage }) {
+        log.warn('human-gate continuation could not enter task drive', {
+          taskId,
+          continuationRef,
+          stage,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      },
+    },
+  })
+  await coordinator.submit({
+    taskId,
+    intentId: continuationRef,
+    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
   })
 }
 

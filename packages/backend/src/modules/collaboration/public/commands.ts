@@ -16,8 +16,23 @@ import {
 } from '../application/prepareReviewGateOpen'
 import {
   requireCollaborationAppHome,
+  requireClarifyDecisionCommand,
+  requireQuestionDispatchCommand,
+  requireReviewDecisionCommand,
   resolveCollaborationCommandContext,
 } from '../composition/commandContext'
+import type {
+  SubmitReviewDecisionCommandInput,
+  SubmitReviewDecisionCommandResult,
+} from '../application/ports/reviewDecisionCommand'
+import type {
+  DispatchTaskQuestionsCommandInput,
+  DispatchTaskQuestionsCommandResult,
+} from '../application/ports/questionDispatchCommand'
+import type {
+  SubmitClarifyDecisionCommandInput,
+  SubmitClarifyDecisionCommandResult,
+} from '../application/ports/clarifyDecisionCommand'
 import type { PreparedHumanGateRef } from '../domain/humanGateOperation'
 import { FsHumanGateArtifactStore } from '../infrastructure/fsHumanGateArtifactStore'
 import { SqliteClarifyQuestionSnapshotReader } from '../infrastructure/sqliteClarifyQuestionSnapshotReader'
@@ -131,4 +146,28 @@ export function finalizeCommittedHumanGate(
     new SqliteHumanGateOperationStore(),
     new FsHumanGateArtifactStore(requireCollaborationAppHome(context)),
   ).finalize(input)
+}
+
+/** RFC-333 T8: the sole REST/MCP-facing review decision command. */
+export async function submitReviewDecision(
+  context: CollaborationCommandContext,
+  input: SubmitReviewDecisionCommandInput,
+): Promise<SubmitReviewDecisionCommandResult> {
+  return requireReviewDecisionCommand(context).submit(input)
+}
+
+/** RFC-333 T9: the sole REST/MCP-facing task-question dispatch command. */
+export async function dispatchTaskQuestions(
+  context: CollaborationCommandContext,
+  input: DispatchTaskQuestionsCommandInput,
+): Promise<DispatchTaskQuestionsCommandResult> {
+  return requireQuestionDispatchCommand(context).dispatch(input)
+}
+
+/** RFC-333 T9: the sole REST/MCP-facing quick clarify decision command. */
+export async function submitClarifyDecision(
+  context: CollaborationCommandContext,
+  input: SubmitClarifyDecisionCommandInput,
+): Promise<SubmitClarifyDecisionCommandResult> {
+  return requireClarifyDecisionCommand(context).submit(input)
 }

@@ -37,7 +37,7 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify/service'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
@@ -99,7 +99,26 @@ export interface SealRoundQuestionsArgs {
    *  double-submit stays 409 → no double-mint, rfc128-p5-bc §5.2.14 finding 1).
    *  Omitted/empty ⇒ pre-RFC-136 behaviour byte-for-byte. */
   allowResealFor?: readonly string[]
+  /** RFC-333 T9 — purpose-specific in-transaction decision participant. The
+   * quick channel supplies it so answer sealing and durable continuation
+   * admission share one commit; the deferred control channel omits it. */
+  decisionParticipant?: ClarifySealDecisionParticipantInTx
   now?: () => number
+}
+
+export interface ClarifySealDecisionParticipantInTx {
+  acceptTx(input: {
+    readonly tx: DbTxSync
+    readonly taskId: string
+    readonly roundId: string
+    readonly originNodeRunId: string
+    readonly roundKind: 'self' | 'cross'
+    readonly answersJson: string
+    readonly directive: ClarifyDirective
+    readonly sealedQuestionIds: readonly string[]
+    readonly roundFullySealed: boolean
+    readonly now: number
+  }): void
 }
 
 export interface SealRoundQuestionsResult {
@@ -414,6 +433,19 @@ export async function sealRoundQuestions(
           )
           .run()
       }
+
+      args.decisionParticipant?.acceptTx({
+        tx,
+        taskId: round.taskId,
+        roundId: round.id,
+        originNodeRunId: args.originNodeRunId,
+        roundKind: round.kind,
+        answersJson: mergedJson,
+        directive: effectiveDirective,
+        sealedQuestionIds: [...freshSet],
+        roundFullySealed: fullySealed,
+        now: ts,
+      })
 
       return {
         // RFC-136: fresh-only — reseal ids are reported separately (quick-path consumers

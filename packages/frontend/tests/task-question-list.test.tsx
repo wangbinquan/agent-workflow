@@ -447,6 +447,7 @@ describe('TaskQuestionList 待下发 gate (加入 hidden until answered)', () =>
 describe('TaskQuestionList batch-dispatch（全下、无逐卡勾选）', () => {
   test('点批量下发 → POST 全部 staged ids（无需任何勾选步骤）', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
+    vi.spyOn(api, 'get').mockResolvedValue([] as never)
     await wrap([
       entry({ id: 's1', phase: 'staged', roleKind: 'designer' }),
       entry({ id: 's2', phase: 'staged', roleKind: 'designer' }),
@@ -477,6 +478,7 @@ describe('TaskQuestionList batch-dispatch（全下、无逐卡勾选）', () => 
 
   test('有节点 filter 时发该 filter 视图中的全部 staged（不含视图外的）', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
+    vi.spyOn(api, 'get').mockResolvedValue([] as never)
     await wrap([
       // RFC-163: 三条独立问题（独立 questionId）——本测锁「filter 视图范围的批量下发」；
       // 组内跨节点整组下发另见 grouping describe（P1 保全组）。
@@ -938,6 +940,7 @@ describe('TaskQuestionList RFC-163 分组卡（下发前一问一卡）', () => 
 
   test('批量下发展开整组：staged 组的 entryIds 含 asker+designer（filter 到 asker 节点也不裁掉 off-filter designer——P1 保全组）', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue(undefined as never)
+    vi.spyOn(api, 'get').mockResolvedValue([] as never)
     await wrap([
       entry({ id: 's', roleKind: 'self', phase: 'staged', staged: true, sealed: true }),
       entry({
