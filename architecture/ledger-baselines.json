@@ -308,10 +308,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 910,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B 把唯一 task drive/coordinator、DAG frontier/graph 与 lifecycle factory 纳入 source-complete 命令分母；增长来自获批的生产 owner cutover。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -346,10 +343,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 1059,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B 新增 task-execution exact public contracts 与有界 composition bridges；observed edge 增长是完整投影这些真实 consumer/provider，而非放宽扫描。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -370,30 +364,21 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 1033,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B 必须暂接尚未授权迁移的 W2-C node、W2-D wrapper/replay、W3 status 与 W5 completion mechanics；每条 bridge 都是 exact symbol 且带删除波次，当前不能冒领后续实现来消除。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
       "baseline": 371,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B 删除旧 engines facade，并把 runtime options 与 mechanics state 拆成两个用途单一的临时 legacy owner；净增长一条且删除责任已进入 bridge ledger。"
-      }
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 326,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B 首次建立 task-execution public/commands 的 drive、preparation 与 lifecycle exact contracts，并补齐 topology/types 投影；增长用于锁定最小字段、方法和真实 consumer budget。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -414,10 +399,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 17610,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-332 W2-B 新增 task-execution drive application、三路 TaskEngine、DAG graph/frontier composition 与 lifecycle infrastructure 的唯一 symbol owners；增长是批准模块拆分的完整分母。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -434,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "177ba32fbb2475c53e2b298645d7794228a49cc8",
-    "contentDigest": "sha256:7ed4aba0749599ec5cee12608310112fd8c319c79ca8a81c7b71f9cc62e044c3",
+    "currentSnapshotSha": "fced3066790551ba6408ca7016b46e26b41c9bc5",
+    "contentDigest": "sha256:8f527ed757c7af347d13aba3541a52d25618d3df8ac7528c41b95397a2daece8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
