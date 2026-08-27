@@ -18,9 +18,11 @@ import { selectAutoApplyOption, type RepairOption } from '@agent-workflow/shared
 
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
+import {
+  createLegacyTaskExecutionTopology,
+  type TaskRepositoryPublicationTransport,
+} from '@/services/startTaskDeps'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -135,7 +137,7 @@ export function startAutoRepairLoop(opts: {
   db: DbClient
   appHome: string
   configPath: string
-  repositoryPublicationTransport?: RepositoryPublicationTransport
+  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
   onAlert?: (
     row: { taskId: string; rule: string; severity: 'warning' | 'error' },
     transition: 'new' | 'promoted',

@@ -363,20 +363,23 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)',
     )
     expect(startTaskDeps).toContain(
-      'repositoryPublicationTransport?: RepositoryPublicationTransport',
+      'repositoryPublicationTransport?: TaskRepositoryPublicationTransport',
     )
-    expect(server).toContain('repositoryPublicationTransport?: RepositoryPublicationTransport')
+    expect(server).toContain(
+      'repositoryPublicationTransport?: ReturnType<typeof createRepositoryPublicationTransport>',
+    )
     expect(server).toContain('deps.repositoryPublicationTransport ??')
     expect(server).toContain(
       'const routeDeps: AppDeps = { ...deps, repositoryPublicationTransport }',
     )
     expect(taskRoutes).toContain('deps.repositoryPublicationTransport')
     expect(scheduleLaunch).toContain(
-      'repositoryPublicationTransport?: RepositoryPublicationTransport',
+      'repositoryPublicationTransport?: TaskRepositoryPublicationTransport',
     )
     expect(webhookDispatch).toContain(
-      'repositoryPublicationTransport?: RepositoryPublicationTransport',
+      'repositoryPublicationTransport?: TaskRepositoryPublicationTransport',
     )
+    expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
     expect(cli.match(/repositoryPublicationTransport,/g)?.length).toBeGreaterThanOrEqual(7)
 
     const topologyCalls = directFunctionCalls('createLegacyTaskExecutionTopology')

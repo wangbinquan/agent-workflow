@@ -17,9 +17,11 @@
 // attribution (previously a hand-spread deps field).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import {
+  buildStartTaskDeps,
+  type TaskRepositoryPublicationTransport,
+} from '@/services/startTaskDeps'
 import { startExecution } from '@/services/execution/executor'
 import type {
   ScheduledAgentPayload,
@@ -35,7 +37,7 @@ import type {
 export function buildScheduleLaunch(
   db: DbClient,
   configPath: string,
-  repositoryPublicationTransport?: RepositoryPublicationTransport,
+  repositoryPublicationTransport?: TaskRepositoryPublicationTransport,
 ): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
     const deps = {

@@ -11,7 +11,6 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import { WorkflowNameSchema } from '@agent-workflow/shared'
 import { nodeRuns, tasks, workgroupAssignments, workgroupMessages } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
@@ -20,7 +19,10 @@ import { setNodeRunStatusTx } from '@/services/lifecycle'
 import { resumeTask, resumeTaskWithAtomicSideEffects } from '@/services/task'
 import { canViewTask } from '@/services/taskCollab'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
+import {
+  createLegacyTaskExecutionTopology,
+  type TaskRepositoryPublicationTransport,
+} from '@/services/startTaskDeps'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -101,7 +103,7 @@ export const ConfirmSchema = z
 export interface WorkgroupTaskActionDeps {
   db: DbClient
   configPath: string
-  repositoryPublicationTransport?: RepositoryPublicationTransport
+  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
 }
 
 export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {

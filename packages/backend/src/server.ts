@@ -137,7 +137,6 @@ import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
   reconcileRepositoryTransportConnectionProjections,
-  type RepositoryPublicationTransport,
   type RepositoryTransportCredentialModule,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
@@ -169,7 +168,7 @@ export interface AppDeps {
    * reuse its GitHub/GitLab endpoint discovery instead of rebuilding a
    * key-file-only transport that can only apply URL rules.
    */
-  repositoryPublicationTransport?: RepositoryPublicationTransport
+  repositoryPublicationTransport?: ReturnType<typeof createRepositoryPublicationTransport>
   /**
    * RFC-317 T54 —— RFC-321 传输凭据模块，**由 bootstrap 装配**后传进来。
    *

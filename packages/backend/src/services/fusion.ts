@@ -50,7 +50,6 @@ import {
   bindWorkspaceExcludeParticipant,
   ensureBoundPlatformWorkspaceDirectory,
 } from '@/modules/source-control/composition'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
@@ -61,7 +60,10 @@ import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
-import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
+import {
+  createLegacyTaskExecutionTopology,
+  type TaskRepositoryPublicationTransport,
+} from '@/services/startTaskDeps'
 import { createWorkflow } from '@/services/workflow'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { gitDiffSnapshot, runGit } from '@/util/git'
@@ -88,7 +90,7 @@ type FusionRow = typeof fusions.$inferSelect
 export interface FusionDeps {
   db: DbClient
   appHome: string
-  repositoryPublicationTransport?: RepositoryPublicationTransport
+  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
   /** TEST-ONLY runtime-neutral command-head override; production passes configPath. */
   binaryOverride?: readonly string[]
   /** Daemon config path — threaded to the scheduler's single resolution point. */

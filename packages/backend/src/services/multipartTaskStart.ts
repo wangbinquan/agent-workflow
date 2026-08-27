@@ -15,7 +15,6 @@ import {
 import type { Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import { startExecution } from '@/services/execution/executor'
 import {
   bufferUploadParts,
@@ -28,6 +27,7 @@ import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import {
   createLegacyTaskExecutionTopology,
   resolveSubagentLiveCapture,
+  type TaskRepositoryPublicationTransport,
 } from '@/services/startTaskDeps'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
@@ -47,7 +47,7 @@ export interface MultipartLaunchDeps {
   db: DbClient
   secretBox?: SecretBox
   configPath: string
-  repositoryPublicationTransport?: RepositoryPublicationTransport
+  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
 }
 
 export async function handleMultipartTaskStart(

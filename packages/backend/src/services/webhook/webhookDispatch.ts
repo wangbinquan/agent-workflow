@@ -37,7 +37,10 @@ import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAd
 import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import {
+  buildStartTaskDeps,
+  type TaskRepositoryPublicationTransport,
+} from '@/services/startTaskDeps'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
   evaluateCircuit,
@@ -92,7 +95,6 @@ import type {
   WorkStartReceipt,
   WorkStartTarget,
 } from '@/modules/integration/public/participants'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { EventResponseTarget } from '@/modules/event-center/public/types'
 
 const log = createLogger('webhook-dispatch')
@@ -101,7 +103,7 @@ export type WebhookDispatchDeps = {
   db: DbClient
   configPath: string
   secretBox: SecretBox
-  repositoryPublicationTransport?: RepositoryPublicationTransport
+  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
   /** per-dispatch 读取（对齐 scheduledTaskScheduler 的 per-tick cfg.defaultRuntime）。 */
   getDefaultRuntime: () => Promise<string | null | undefined>
   /**
