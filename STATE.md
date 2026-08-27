@@ -235,6 +235,12 @@
 > 重录并人工验图通过。最终发布批次 `cde92d4c6`、`3a0e237c9` 均已入 `origin/main`，且均为
 > `089015b1a` 的祖先；该 SHA 的 CI run `32806211369` 31/31 全绿，visual-regression run
 > `32806211353` 1/1 全绿。按用户裁决未运行本地 Bun gate，托管结果为最终权威门禁。
+> **2026-08-27 后续接线修复**：provider API → 管理员 mapping → GitHub/GitLab SaaS 约定的解析器顺序本身无误；
+> 缺口是普通 task auto-push 的 legacy execution topology 没有复用 daemon bootstrap 已装配的
+> `repositoryPublicationTransport`，因此运行时重建成无 endpoint discovery 的 key-file-only transport，表现为直接走 URL
+> 规则。现已把同一 API-capable transport 贯穿 HTTP 路由、手动/定时/Webhook 启动、resume/retry、自动修复与 boot
+> auto-resume；provider metadata 获取不到时仍按既有契约回退 mapping/SaaS。回归测试先红后绿，相关 backend 60/60、
+> backend typecheck、精确 eslint/prettier 均通过；完整结论仍以本批 exact-SHA hosted CI 为准。
 > ✅ **已完成 RFC（Done，2026-08-26；hosted CI 按 exact SHA `b5467bbce` 全绿）：[RFC-319 用户面 system-mock e2e 覆盖加固](design/RFC-319-user-facing-e2e-coverage-hardening/proposal.md)**
 > —— 用户已批准实施（全做、不取舍；棘轮四层全要；分层落位；允许扩分片）。**四层棘轮已全部落地并入网**
 > RFC-317 的 `architecture/ledger-baselines.json` 高水位机制；能力账本从 679 条缺口一路收敛到 **0**

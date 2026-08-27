@@ -415,7 +415,10 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         // live loop picks up the pending reruns (task-not-resumable logged at info, not surfaced).
         const resumeDepsAuto: Parameters<typeof resumeTask>[2] = {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+          schedulerDriver: createLegacyTaskExecutionTopology(
+            deps.db,
+            deps.repositoryPublicationTransport,
+          ).schedulerDriver,
           appHome: Paths.root,
           configPath: deps.configPath,
           ...resolveLaunchRuntimeConfig(deps.configPath),

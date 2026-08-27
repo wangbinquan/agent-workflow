@@ -370,7 +370,10 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       if (result.resumeRequired) {
         const resumeDeps: Parameters<typeof resumeTask>[2] = {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+          schedulerDriver: createLegacyTaskExecutionTopology(
+            deps.db,
+            deps.repositoryPublicationTransport,
+          ).schedulerDriver,
           appHome: appHomeFor(deps),
           configPath: deps.configPath,
           // RFC-108 T4 (Codex impl gate P2): a review decision resumes the task;

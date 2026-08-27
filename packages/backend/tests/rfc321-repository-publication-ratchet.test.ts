@@ -56,6 +56,39 @@ function backendTypeScriptFiles(): string[] {
   return files.sort()
 }
 
+function directFunctionCalls(functionName: string): readonly {
+  readonly file: string
+  readonly line: number
+  readonly argumentCount: number
+}[] {
+  const calls: { file: string; line: number; argumentCount: number }[] = []
+  for (const file of backendTypeScriptFiles()) {
+    const parsed = ts.createSourceFile(
+      file,
+      read(file),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    )
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === functionName
+      ) {
+        calls.push({
+          file,
+          line: parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
+          argumentCount: node.arguments.length,
+        })
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(parsed)
+  }
+  return calls
+}
+
 export function gitNetworkCommandsInSource(file: string, source: string): GitNetworkCommand[] {
   const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const commands = new Set<GitNetworkCommand>()
@@ -311,6 +344,47 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(route).toContain('credentials.resolvePersonalForTest(subject, provider, parsed.data)')
     expect(route).not.toContain("tokenAccess: 'pat'")
     expect(route).not.toContain('parsed.error')
+  })
+
+  test('task auto-push keeps bootstrap provider discovery instead of dropping to URL rules', () => {
+    // Regression: the HTTP and digital-employee publication paths received the
+    // bootstrap transport, but ordinary task auto-push rebuilt a key-file-only
+    // transport after StartTaskDeps. That transport had no GitHub/GitLab metadata
+    // participant, so SSH publication skipped provider API discovery and went
+    // straight to mapping/SaaS URL rules even though RFC-321 requires API first.
+    const startTaskDeps = read('packages/backend/src/services/startTaskDeps.ts')
+    const server = read('packages/backend/src/server.ts')
+    const cli = read('packages/backend/src/cli/start.ts')
+    const taskRoutes = read('packages/backend/src/routes/tasks.ts')
+    const scheduleLaunch = read('packages/backend/src/services/scheduleLaunch.ts')
+    const webhookDispatch = read('packages/backend/src/services/webhook/webhookDispatch.ts')
+
+    expect(startTaskDeps).toContain(
+      'createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)',
+    )
+    expect(startTaskDeps).toContain(
+      'repositoryPublicationTransport?: RepositoryPublicationTransport',
+    )
+    expect(server).toContain('repositoryPublicationTransport?: RepositoryPublicationTransport')
+    expect(server).toContain('deps.repositoryPublicationTransport ??')
+    expect(server).toContain(
+      'const routeDeps: AppDeps = { ...deps, repositoryPublicationTransport }',
+    )
+    expect(taskRoutes).toContain('deps.repositoryPublicationTransport')
+    expect(scheduleLaunch).toContain(
+      'repositoryPublicationTransport?: RepositoryPublicationTransport',
+    )
+    expect(webhookDispatch).toContain(
+      'repositoryPublicationTransport?: RepositoryPublicationTransport',
+    )
+    expect(cli.match(/repositoryPublicationTransport,/g)?.length).toBeGreaterThanOrEqual(7)
+
+    const topologyCalls = directFunctionCalls('createLegacyTaskExecutionTopology')
+    const startDepsCalls = directFunctionCalls('buildStartTaskDeps')
+    expect(topologyCalls.length).toBeGreaterThan(0)
+    expect(startDepsCalls.length).toBeGreaterThan(0)
+    expect(topologyCalls.filter((call) => call.argumentCount < 2)).toEqual([])
+    expect(startDepsCalls.filter((call) => call.argumentCount < 5)).toEqual([])
   })
 
   test('personal credentials stay inside Git publication and their explicit identity probe', () => {

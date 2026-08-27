@@ -281,7 +281,9 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       // RFC-324 —— run-now 触发的是 owner 已经选定的目标，属于「推动」而不是
       // 「改绑」，因此归编辑档；改目标仍需 owner（requireScheduleGovern）。
       await requireScheduleEdit(deps, actor, existing)
-      const launch = deps.buildScheduleLaunch ?? buildScheduleLaunch(deps.db, deps.configPath)
+      const launch =
+        deps.buildScheduleLaunch ??
+        buildScheduleLaunch(deps.db, deps.configPath, deps.repositoryPublicationTransport)
       const result = await runScheduleNow(
         deps.db,
         existing.id,

@@ -15,6 +15,7 @@ import {
 import type { Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import { startExecution } from '@/services/execution/executor'
 import {
   bufferUploadParts,
@@ -46,6 +47,7 @@ export interface MultipartLaunchDeps {
   db: DbClient
   secretBox?: SecretBox
   configPath: string
+  repositoryPublicationTransport?: RepositoryPublicationTransport
 }
 
 export async function handleMultipartTaskStart(
@@ -129,7 +131,8 @@ export async function handleMultipartTaskStart(
 
   const routeLaunchDeps = {
     db: deps.db,
-    schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+    schedulerDriver: createLegacyTaskExecutionTopology(deps.db, deps.repositoryPublicationTransport)
+      .schedulerDriver,
     actorUserId: actor.user.id,
     ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
     configPath: deps.configPath,

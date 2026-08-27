@@ -92,6 +92,7 @@ import type {
   WorkStartReceipt,
   WorkStartTarget,
 } from '@/modules/integration/public/participants'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { EventResponseTarget } from '@/modules/event-center/public/types'
 
 const log = createLogger('webhook-dispatch')
@@ -100,6 +101,7 @@ export type WebhookDispatchDeps = {
   db: DbClient
   configPath: string
   secretBox: SecretBox
+  repositoryPublicationTransport?: RepositoryPublicationTransport
   /** per-dispatch 读取（对齐 scheduledTaskScheduler 的 per-tick cfg.defaultRuntime）。 */
   getDefaultRuntime: () => Promise<string | null | undefined>
   /**
@@ -627,7 +629,13 @@ async function launchViaExecutor(
     }
   }
   const launchDeps = {
-    ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
+    ...buildStartTaskDeps(
+      deps.db,
+      deps.configPath,
+      actor.user.id,
+      deps.secretBox,
+      deps.repositoryPublicationTransport,
+    ),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,
     // RFC-287 G7：定时/webhook 触发与手动启动**同一套语义**（proposal §G7 原话：

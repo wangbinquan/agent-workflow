@@ -408,7 +408,13 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           payload: parsed.data,
           ...(uploads !== undefined ? { uploads } : {}),
         },
-        buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
+        buildStartTaskDeps(
+          deps.db,
+          deps.configPath,
+          actor.user.id,
+          deps.secretBox,
+          deps.repositoryPublicationTransport,
+        ),
       )
       return c.json(task, 201)
     },

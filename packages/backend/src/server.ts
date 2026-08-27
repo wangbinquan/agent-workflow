@@ -137,6 +137,7 @@ import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
   reconcileRepositoryTransportConnectionProjections,
+  type RepositoryPublicationTransport,
   type RepositoryTransportCredentialModule,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
@@ -163,6 +164,12 @@ export interface RuntimeDiagnosticTestDependencies {
 }
 
 export interface AppDeps {
+  /**
+   * RFC-321 bootstrap publication transport. Task launch/continuation topologies
+   * reuse its GitHub/GitLab endpoint discovery instead of rebuilding a
+   * key-file-only transport that can only apply URL rules.
+   */
+  repositoryPublicationTransport?: RepositoryPublicationTransport
   /**
    * RFC-317 T54 —— RFC-321 传输凭据模块，**由 bootstrap 装配**后传进来。
    *
@@ -536,14 +543,17 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
           },
           ...(deps.codeHostFetch === undefined ? {} : { fetchImpl: deps.codeHostFetch }),
         })
-  const repositoryPublicationTransport = createRepositoryPublicationTransport({
-    db: deps.db,
-    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-    appHome,
-    ...(repositoryEndpointDiscovery === undefined
-      ? {}
-      : { endpointDiscovery: repositoryEndpointDiscovery }),
-  })
+  const repositoryPublicationTransport =
+    deps.repositoryPublicationTransport ??
+    createRepositoryPublicationTransport({
+      db: deps.db,
+      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+      appHome,
+      ...(repositoryEndpointDiscovery === undefined
+        ? {}
+        : { endpointDiscovery: repositoryEndpointDiscovery }),
+    })
+  const routeDeps: AppDeps = { ...deps, repositoryPublicationTransport }
   const approvalGateway = composeApprovalGatewayRunner(deps.db)
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     db: deps.db,
@@ -598,7 +608,13 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
         composeDigitalEmployeeExecution({
           db: deps.db,
           appHome,
-          startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
+          startDeps: buildStartTaskDeps(
+            deps.db,
+            deps.configPath,
+            SYSTEM_USER_ID,
+            deps.secretBox,
+            repositoryPublicationTransport,
+          ),
           workspace: developmentWorkspace,
           executionContracts,
         }),
@@ -651,7 +667,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountRuntimeRoutes(app, deps)
   mountRuntimesRoutes(app, deps)
   mountOverviewRoutes(app, deps) // RFC-190
-  mountAgentRoutes(app, deps)
+  mountAgentRoutes(app, routeDeps)
   mountMcpRoutes(app, deps)
   mountPluginRoutes(app, deps)
   mountSkillRoutes(app, deps)
@@ -659,7 +675,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountCachedRepoRoutes(app, deps)
   mountRepoGroupRoutes(app, deps)
   mountWorkflowRoutes(app, deps)
-  mountWorkgroupRoutes(app, deps) // RFC-164
+  mountWorkgroupRoutes(app, routeDeps) // RFC-164
   // RFC-271 配置包：导出六条 + 导入两条。需要 secretBox 来签 previewToken——
   // 缺它时**整组不挂**（与 OIDC 路由同姿势），而不是退化成一个不签名的版本：
   // 不签名的 preview→commit 绑定等于没有绑定。
@@ -670,12 +686,12 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
       box: deps.secretBox,
     })
   }
-  mountWorkgroupTaskRoutes(app, deps) // RFC-164 PR-4
-  mountTaskRoutes(app, deps)
+  mountWorkgroupTaskRoutes(app, routeDeps) // RFC-164 PR-4
+  mountTaskRoutes(app, routeDeps)
   mountTaskCatalogRoutes(app, taskCatalog)
   mountTaskArchiveRoutes(app, deps) // RFC-311 T19
   mountMaintenanceDiskRoutes(app, deps) // RFC-311 T20
-  mountScheduledTaskRoutes(app, deps) // RFC-159
+  mountScheduledTaskRoutes(app, routeDeps) // RFC-159
   mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
   mountCodeHostRoutes(app, deps, codeHostConnections) // RFC-269
   if (repositoryTransportModule !== null) {
@@ -701,11 +717,11 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   mountRestoreRoutes(app, deps)
   mountWorktreeFilesRoutes(app, deps)
   mountPortArtifactRoutes(app, deps)
-  mountReviewRoutes(app, deps)
-  mountClarifyRoutes(app, deps)
-  mountTaskQuestionRoutes(app, deps)
+  mountReviewRoutes(app, routeDeps)
+  mountClarifyRoutes(app, routeDeps)
+  mountTaskQuestionRoutes(app, routeDeps)
   mountTaskClarifyDirectiveRoutes(app, deps)
-  mountFusionRoutes(app, deps)
+  mountFusionRoutes(app, routeDeps)
   mountIntentSessionRoutes(app, deps) // RFC-234
   mountMemoryRoutes(app, deps)
   mountMemoryDistillJobRoutes(app, deps)

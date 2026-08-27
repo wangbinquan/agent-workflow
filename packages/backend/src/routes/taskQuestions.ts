@@ -248,7 +248,10 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       // up the freshly-minted rerun); it is logged at info, not surfaced as an error.
       const resumeDeps: Parameters<typeof resumeTask>[2] = {
         db: deps.db,
-        schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+        schedulerDriver: createLegacyTaskExecutionTopology(
+          deps.db,
+          deps.repositoryPublicationTransport,
+        ).schedulerDriver,
         appHome: Paths.root,
         configPath: deps.configPath,
         ...resolveLaunchRuntimeConfig(deps.configPath),

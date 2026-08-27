@@ -43,6 +43,9 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
       db: deps.db,
       appHome: Paths.root,
       configPath: deps.configPath,
+      ...(deps.repositoryPublicationTransport === undefined
+        ? {}
+        : { repositoryPublicationTransport: deps.repositoryPublicationTransport }),
       ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
       ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),
       ...(sessionRestartBudget !== undefined ? { sessionRestartBudget } : {}),

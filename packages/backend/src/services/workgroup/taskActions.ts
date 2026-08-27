@@ -11,6 +11,7 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import { WorkflowNameSchema } from '@agent-workflow/shared'
 import { nodeRuns, tasks, workgroupAssignments, workgroupMessages } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
@@ -100,13 +101,17 @@ export const ConfirmSchema = z
 export interface WorkgroupTaskActionDeps {
   db: DbClient
   configPath: string
+  repositoryPublicationTransport?: RepositoryPublicationTransport
 }
 
 export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
   function buildResumeDeps(): Parameters<typeof resumeTask>[2] {
     return {
       db: deps.db,
-      schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+      schedulerDriver: createLegacyTaskExecutionTopology(
+        deps.db,
+        deps.repositoryPublicationTransport,
+      ).schedulerDriver,
       appHome: Paths.root,
       configPath: deps.configPath,
       ...resolveLaunchRuntimeConfig(deps.configPath),

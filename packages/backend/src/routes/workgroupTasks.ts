@@ -43,6 +43,9 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   const core = buildWorkgroupTaskActions({
     db: deps.db,
     configPath: deps.configPath,
+    ...(deps.repositoryPublicationTransport === undefined
+      ? {}
+      : { repositoryPublicationTransport: deps.repositoryPublicationTransport }),
   })
   const actions = {
     ...core,

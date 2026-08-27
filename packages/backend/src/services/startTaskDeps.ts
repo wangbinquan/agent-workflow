@@ -17,6 +17,7 @@ import {
   type SchedulerDriverPort,
   type SchedulerRuntimeTopology,
 } from '@/modules/task-execution/public/topology'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 
 /**
  * RFC-048 — subagent live-capture cadence from live config (moved verbatim from
@@ -39,11 +40,23 @@ export function resolveSubagentLiveCapture(
  * in the existing launch composition seam; task.ts and scheduler.ts never
  * import it back.
  */
-export function createLegacyTaskExecutionTopology(db: DbClient): SchedulerRuntimeTopology {
+export function createLegacyTaskExecutionTopology(
+  db: DbClient,
+  repositoryPublicationTransport?: RepositoryPublicationTransport,
+): SchedulerRuntimeTopology {
   const readModels = createTaskExecutionReadModels(db)
   const schedulerDriver: SchedulerDriverPort = {
     async kick(request) {
-      await runTaskWithTopology({ ...request, db } as RunTaskOptions, topology)
+      await runTaskWithTopology(
+        {
+          ...request,
+          db,
+          ...(repositoryPublicationTransport === undefined
+            ? {}
+            : { repositoryPublicationTransport }),
+        } as RunTaskOptions,
+        topology,
+      )
     },
     async cancelChild(input) {
       await cancelTask(db, input.taskId, { cascadeFromParent: input.cascadeFromParent })
@@ -82,9 +95,11 @@ export function buildStartTaskDeps(
   actorUserId: string,
   /** RFC-204: needed to unseal a cached repo for a reuse-by-id launch. */
   secretBox?: SecretBox,
+  /** RFC-321: bootstrap transport keeps provider API discovery ahead of URL-rule fallback. */
+  repositoryPublicationTransport?: RepositoryPublicationTransport,
 ): StartTaskDeps {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
-  const topology = createLegacyTaskExecutionTopology(db)
+  const topology = createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)
   return {
     db,
     schedulerDriver: topology.schedulerDriver,

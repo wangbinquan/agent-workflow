@@ -876,6 +876,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     configPath: Paths.config,
     secretBox,
+    repositoryPublicationTransport,
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
     terminalControl: webhookTerminalControl,
     digitalEmployeeWorkStart: digitalEmployeeWorkStart.participant,
@@ -933,6 +934,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     dbVersion,
     db,
     secretBox,
+    repositoryPublicationTransport,
     webhookDispatcher,
     webhookTerminalControl,
     digitalEmployeeEventCenter: employeeHttpEventCenter,
@@ -1181,7 +1183,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ...buildDevelopmentMrFactsDeps(db, secretBox),
     agentLauncher: composeAgentActionExecution({
       db,
-      startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
+      startDeps: buildStartTaskDeps(
+        db,
+        Paths.config,
+        SYSTEM_USER_ID,
+        secretBox,
+        repositoryPublicationTransport,
+      ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(db, executionRef)
         if (missionId === null) return
@@ -1212,7 +1220,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }),
     scriptLauncher: composeScriptActionExecution({
       db,
-      startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
+      startDeps: buildStartTaskDeps(
+        db,
+        Paths.config,
+        SYSTEM_USER_ID,
+        secretBox,
+        repositoryPublicationTransport,
+      ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(db, executionRef)
         if (missionId === null) return
@@ -1366,7 +1380,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         composeDigitalEmployeeExecution({
           db,
           appHome: Paths.root,
-          startDeps: buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox),
+          startDeps: buildStartTaskDeps(
+            db,
+            Paths.config,
+            SYSTEM_USER_ID,
+            secretBox,
+            repositoryPublicationTransport,
+          ),
           workspace: employeeWorkspace,
           executionContracts: employeeExecutionContracts,
         }),
@@ -1551,6 +1571,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     appHome: Paths.root,
     configPath: Paths.config,
+    repositoryPublicationTransport,
     onAlert: broadcastAlert,
     onResolved: broadcastResolved,
   })
@@ -1566,7 +1587,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const scheduledTaskTicker = startScheduledTaskLoop({
     db,
     loadConfig: () => loadConfig(Paths.config),
-    buildLaunch: buildScheduleLaunch(db, Paths.config),
+    buildLaunch: buildScheduleLaunch(db, Paths.config, repositoryPublicationTransport),
   })
 
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
@@ -1579,7 +1600,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,
-      schedulerDriver: createLegacyTaskExecutionTopology(db).schedulerDriver,
+      schedulerDriver: createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)
+        .schedulerDriver,
       // RFC-282 C1-2: the scheduler resolves config heads at the mint freeze.
       configPath: Paths.config,
       // boot 恢复同样会走到 unseal（同文件另外三处都经 buildStartTaskDeps 带上了它）。

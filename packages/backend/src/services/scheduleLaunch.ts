@@ -17,6 +17,7 @@
 // attribution (previously a hand-spread deps field).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startExecution } from '@/services/execution/executor'
@@ -31,10 +32,14 @@ import type {
  * launch deps live (so scheduled / manual launches match a manual UI launch)
  * and threads the `scheduled` invoker for run-history attribution.
  */
-export function buildScheduleLaunch(db: DbClient, configPath: string): BuildScheduleLaunch {
+export function buildScheduleLaunch(
+  db: DbClient,
+  configPath: string,
+  repositoryPublicationTransport?: RepositoryPublicationTransport,
+): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
     const deps = {
-      ...buildStartTaskDeps(db, configPath, ownerUserId, undefined),
+      ...buildStartTaskDeps(db, configPath, ownerUserId, undefined, repositoryPublicationTransport),
       // RFC-243 实现门 P0-1: scheduled fires resolve call-node closures inside
       // the rebuilt owner actor's visibility (same fence as a manual launch).
       launchActor: actor,

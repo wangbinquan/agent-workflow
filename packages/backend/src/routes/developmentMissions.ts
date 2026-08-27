@@ -171,7 +171,13 @@ export function mountDevelopmentMissionRoutes(
     // sweep 仍是进程退出/瞬时失败后的 durable 兜底。
     agentLauncher: composeAgentActionExecution({
       db: deps.db,
-      startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
+      startDeps: buildStartTaskDeps(
+        deps.db,
+        deps.configPath,
+        SYSTEM_USER_ID,
+        deps.secretBox,
+        routeDeps.repositoryPublicationTransport,
+      ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(deps.db, executionRef)
         if (missionId === null) return
@@ -187,7 +193,13 @@ export function mountDevelopmentMissionRoutes(
     }),
     scriptLauncher: composeScriptActionExecution({
       db: deps.db,
-      startDeps: buildStartTaskDeps(deps.db, deps.configPath, SYSTEM_USER_ID, deps.secretBox),
+      startDeps: buildStartTaskDeps(
+        deps.db,
+        deps.configPath,
+        SYSTEM_USER_ID,
+        deps.secretBox,
+        routeDeps.repositoryPublicationTransport,
+      ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(deps.db, executionRef)
         if (missionId === null) return

@@ -50,6 +50,7 @@ import {
   bindWorkspaceExcludeParticipant,
   ensureBoundPlatformWorkspaceDirectory,
 } from '@/modules/source-control/composition'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
@@ -87,6 +88,7 @@ type FusionRow = typeof fusions.$inferSelect
 export interface FusionDeps {
   db: DbClient
   appHome: string
+  repositoryPublicationTransport?: RepositoryPublicationTransport
   /** TEST-ONLY runtime-neutral command-head override; production passes configPath. */
   binaryOverride?: readonly string[]
   /** Daemon config path — threaded to the scheduler's single resolution point. */
@@ -631,7 +633,8 @@ export async function createFusion(
     const taskId = ulid()
     const startDeps: StartTaskDeps = {
       db,
-      schedulerDriver: createLegacyTaskExecutionTopology(db).schedulerDriver,
+      schedulerDriver: createLegacyTaskExecutionTopology(db, deps.repositoryPublicationTransport)
+        .schedulerDriver,
       appHome,
       actorUserId: actor.user.id,
       launchProvenance: { kind: 'fusion', initiator: launchInitiator },
@@ -1602,7 +1605,8 @@ export async function rejectFusion(
       const taskId = ulid()
       const startDeps: StartTaskDeps = {
         db,
-        schedulerDriver: createLegacyTaskExecutionTopology(db).schedulerDriver,
+        schedulerDriver: createLegacyTaskExecutionTopology(db, deps.repositoryPublicationTransport)
+          .schedulerDriver,
         appHome,
         actorUserId: actor.user.id,
         launchProvenance: { kind: 'fusion', initiator: launchInitiator },

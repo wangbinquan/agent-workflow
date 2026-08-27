@@ -324,7 +324,13 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // and missing produce the identical 404; built-in → 403. Shared gate — the
       // multipart path and scheduled-task fires enforce the exact same policy.
       const startDeps = {
-        ...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox),
+        ...buildStartTaskDeps(
+          deps.db,
+          deps.configPath,
+          actor.user.id,
+          deps.secretBox,
+          deps.repositoryPublicationTransport,
+        ),
         // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
         // THIS actor's visibility.
         launchActor: actor,
@@ -807,7 +813,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await resumeTask(deps.db, c.req.param('id'), {
         db: deps.db,
-        schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+        schedulerDriver: createLegacyTaskExecutionTopology(
+          deps.db,
+          deps.repositoryPublicationTransport,
+        ).schedulerDriver,
         configPath: deps.configPath,
         // RFC-328: a session-backed Resume is the explicit actor decision that
         // advances an outcome-unknown operation to its next generation.
@@ -897,7 +906,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const updated = await syncTaskWorkflow(deps.db, id, {
         db: deps.db,
-        schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+        schedulerDriver: createLegacyTaskExecutionTopology(
+          deps.db,
+          deps.repositoryPublicationTransport,
+        ).schedulerDriver,
         expectedVersion: body.data.expectedVersion,
         launchActor: actor,
         // RFC-328: workflow sync is one of the existing explicit manual
@@ -933,7 +945,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+          schedulerDriver: createLegacyTaskExecutionTopology(
+            deps.db,
+            deps.repositoryPublicationTransport,
+          ).schedulerDriver,
           configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
@@ -978,7 +993,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+          schedulerDriver: createLegacyTaskExecutionTopology(
+            deps.db,
+            deps.repositoryPublicationTransport,
+          ).schedulerDriver,
           configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
@@ -1023,7 +1041,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         cascade,
         deps: {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(deps.db).schedulerDriver,
+          schedulerDriver: createLegacyTaskExecutionTopology(
+            deps.db,
+            deps.repositoryPublicationTransport,
+          ).schedulerDriver,
           configPath: deps.configPath,
           // RFC-328: preserve the authenticated manual retry decision; without
           // it an outcome-unknown task is indistinguishable from actorless auto.
