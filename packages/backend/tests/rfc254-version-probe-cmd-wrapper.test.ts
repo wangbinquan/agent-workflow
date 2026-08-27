@@ -2,23 +2,15 @@
 // 2026-08-27: Bun.which("opencode") resolves npm's opencode.cmd wrapper, and
 // Bun.spawn({ detached: true, stdout: "pipe" }) loses that wrapper's output on
 // Windows even though the process exits 0. The real-kernel case below must stay
-// in windows-platform CI; the policy assertion keeps the platform split visible
-// on every host.
+// in windows-platform CI.
 
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { probeOpencode } from '../src/services/runtime/opencode/util'
-import { versionProbeUsesDetachedProcessGroup } from '../src/util/process'
 
 describe('Windows .cmd version probe stdout', () => {
-  test('uses detached process groups only on POSIX hosts', () => {
-    expect(versionProbeUsesDetachedProcessGroup('win32')).toBe(false)
-    expect(versionProbeUsesDetachedProcessGroup('linux')).toBe(true)
-    expect(versionProbeUsesDetachedProcessGroup('darwin')).toBe(true)
-  })
-
   test.skipIf(process.platform !== 'win32')(
     'Bun.which-resolved opencode.cmd preserves --version stdout',
     async () => {

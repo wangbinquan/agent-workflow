@@ -340,9 +340,8 @@ export function raceWithFallback<T>(p: Promise<T>, ms: number, fallback: T): Pro
 // 此前三胞胎（runtime/opencode/util probeOpencode、runtime/claudeCode/probe、
 // util/opencode-models〔T19 已迁 runtime/opencode/models〕）各持同形骨架且杀链
 // 已现分叉。统一语义（设计门修订版）：
-//   - POSIX 用 detached 进程组承接整树清理；Windows 不开 detached——Bun 通过
-//     npm 的 `.cmd` wrapper 启动时，detached 会让已 pipe 的 stdout/stderr 丢失，
-//     而 Windows 的 killProcessTree 本来就走 Job Object / taskkill，不依赖 PGID；
+//   - POSIX 用 detached 进程组承接整树清理；Windows 不开 detached，因为 Bun
+//     通过 `.cmd` wrapper 启动时会丢 pipe 输出，且树杀本来就走 Job Object/taskkill；
 //   - 超时杀 = killProcessTree（posix 与原「kill(-pid) 回退 proc.kill」字节
 //     等价，win32 额外获得 taskkill 树杀）；
 //   - finally 收尾 reap = **仅负 PGID、无正 PID 回退**（direct child 已被
@@ -359,9 +358,8 @@ export interface VersionProbeOpts {
   /**
    * RFC-317 T36（EK-02 / 能力影响 C4）—— **必填**。
    *
-   * 改造前它可省略，而省略时这个函数会同时失去四样东西：进程树治理（POSIX 不
-   * detached；Windows 不会进入 taskkill 超时链）、树杀（没有 timer 就没有
-   * killProcessTree）、超时本身、以及 stdout 的读取上限
+   * 改造前它可省略，而省略时这个函数会同时失去四样东西：进程树治理、树杀
+   * （没有 timer 就没有 killProcessTree）、超时本身、以及 stdout 的读取上限
    * （`outPromise` 不再与超时赛跑）。也就是说「忘了写一个字段」= 一次可以永久挂起、
    * 且挂起时连子孙进程都收不掉的 spawn——而 daemon 启动路径与 doctor 正是这么调的。
    *
@@ -384,17 +382,6 @@ export interface VersionProbeOpts {
  * 代码里长得一模一样，而这两件事在一次可能永久挂起的 spawn 上不是一回事。
  */
 export const DEFAULT_VERSION_PROBE_TIMEOUT_MS = 10_000
-
-/**
- * POSIX needs a detached process group so timeout cleanup can signal the whole
- * tree. Windows has no POSIX PGID, and Bun loses piped output from `.cmd`/shell
- * wrappers when they are detached; its tree cleanup uses Job Object/taskkill.
- */
-export function versionProbeUsesDetachedProcessGroup(
-  platform: NodeJS.Platform = process.platform,
-): boolean {
-  return platform !== 'win32'
-}
 
 export interface VersionProbeResult {
   timedOut: boolean
@@ -474,7 +461,6 @@ export async function spawnVersionProbe(
   argv: readonly string[],
   opts: VersionProbeOpts,
 ): Promise<VersionProbeResult> {
-  const usesDetachedProcessGroup = versionProbeUsesDetachedProcessGroup()
   const proc = Bun.spawn({
     ...platformSpawnOptionsForHost(),
     cmd: [...argv],
@@ -483,7 +469,7 @@ export async function spawnVersionProbe(
     stdout: 'pipe',
     stderr: 'pipe',
     ...(opts.maxBytes !== undefined ? { stdin: 'ignore' } : {}),
-    detached: usesDetachedProcessGroup,
+    detached: process.platform !== 'win32',
   })
   let timedOut = false
   const timer = setTimeout(() => {
@@ -512,8 +498,6 @@ export async function spawnVersionProbe(
     return { timedOut, exitCode, stdout, stderr: '' }
   } finally {
     clearTimeout(timer)
-    if (usesDetachedProcessGroup) {
-      await reapDetachedGroup(proc.pid, opts.awaitReapMs ?? 0)
-    }
+    if (process.platform !== 'win32') await reapDetachedGroup(proc.pid, opts.awaitReapMs ?? 0)
   }
 }

@@ -1412,7 +1412,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:198c9c144acf161eac9fa45e18c13fa3c2f120c07f9526d701c9568ceafe4f15",
+    "sourceDigest": "sha256:ca399d817f7e01cf3b2e4541aa17f872831ac22e0d8611d8f279ee74310d83ee",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
