@@ -122,6 +122,8 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc313-source-locks.test.ts',
   // RFC-321：发布架构棘轮仍读取 scheduler 源码，必须登记在迁移清单。
   'rfc321-repository-publication-ratchet.test.ts',
+  // RFC-331：拓扑切割的 source guard 锁住 task↔scheduler 与 call-graph 三条断边。
+  'rfc331-task-execution-topology.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',

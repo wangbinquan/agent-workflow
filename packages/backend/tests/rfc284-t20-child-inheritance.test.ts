@@ -1,8 +1,8 @@
-// RFC-284 T20（§4）—— buildChildDeps 子任务继承面的双向锁。
+// RFC-284 T20（§4）—— buildChildRuntime/buildChildDeps 子任务继承面的双向锁。
 //
-// 方向一（防漏配）：INHERITABLE_RUN_CONFIG_KEYS 是唯一登记，buildChildDeps 整体
-// 透传；picker 语义与旧逐字段 `!== undefined` 展开逐字节同构（undefined 不落键、
-// appHome 必填恒在）。
+// 方向一（防漏配）：INHERITABLE_RUN_CONFIG_KEYS 是唯一登记，buildChildRuntime
+// 生成窄义 resume envelope，buildChildDeps 再整体透传；picker 语义与旧逐字段
+// `!== undefined` 展开逐字节同构（undefined 不落键、appHome 必填恒在）。
 // 方向二（防顺手多配）：处置表以 `satisfies Record<keyof RunTaskOptions, …>`
 // 编译期穷尽——RunTaskOptions 新增任何字段，此文件不表态就不编译；把 dropped
 // 改标 inherit 还要同时动 registry 与本文件两处快照，评审必然可见。
@@ -157,17 +157,19 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     expect(Object.keys(sparse)).toEqual(['appHome']) // undefined 不落键（exactOptional 同构）
   })
 
-  test('源码锁：buildChildDeps 整体透传且旧逐字段展开归零', () => {
+  test('源码锁：child runtime 只经单一 picker 构造、deps 整体透传且旧逐字段展开归零', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
-    const start = src.indexOf('function buildChildDeps')
+    const start = src.indexOf('function buildChildRuntime')
     expect(start).toBeGreaterThan(-1)
     const section = src.slice(start, src.indexOf('async function launchCallChild', start))
-    expect(section).toContain('...pickInheritableRunConfig(opts)')
+    expect(section).toContain('runConfig: pickInheritableRunConfig(state.opts)')
+    expect(section).toContain('...runtime.runConfig')
     for (const key of INHERITABLE_RUN_CONFIG_KEYS) {
       expect(section.includes(`opts.${key}`)).toBe(false)
+      expect(section.includes(`state.opts.${key}`)).toBe(false)
     }
   })
 })

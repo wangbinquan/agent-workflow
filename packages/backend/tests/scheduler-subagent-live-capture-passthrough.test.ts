@@ -27,17 +27,22 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
 
   test('scheduler forwards opts.subagentLiveCapture into runNode (every call site)', () => {
     const src = read('packages/backend/src/services/scheduler.ts')
+    const topology = read(
+      'packages/backend/src/modules/task-execution/application/ports/taskExecutionTopology.ts',
+    )
     const matches = src.match(/subagentLiveCapture: opts\.subagentLiveCapture/g) ?? []
     // RFC-060 PR-D added wrapper-fanout dispatch sites (dispatchFanoutShard +
     // dispatchFanoutAggregator); RFC-060 PR-E removed agent-multi's
     // runFanOutNode call site. RFC-164 added buildWorkgroupHooks.runHostNode.
     // Currently: agent-single + dispatchFanoutShard + dispatchFanoutAggregator
     // + workgroup runHostNode = 4. RFC-243 buildChildDeps 的第 5 处字面展开
-    // 随 RFC-284 T20 收进 INHERITABLE_RUN_CONFIG_KEYS 注册表整体透传——下一行
-    // 断言其登记在场（子任务继承语义不变），计数锁回到 4 个 runNode 直传点。
+    // 随 RFC-284 T20 收进 INHERITABLE_RUN_CONFIG_KEYS；RFC-331 再把 child resume
+    // envelope 切成 buildChildRuntime.runConfig，下面同时锁登记、picker 与展开三段，
+    // 保证子任务继承语义不变，计数仍是 4 个 runNode 直传点。
     expect(matches.length).toBe(4)
-    expect(src).toContain("'subagentLiveCapture',")
-    expect(src).toContain('...pickInheritableRunConfig(opts)')
+    expect(topology).toContain("'subagentLiveCapture',")
+    expect(src).toContain('runConfig: pickInheritableRunConfig(state.opts)')
+    expect(src).toContain('...runtime.runConfig')
   })
 
   test('StartTaskDeps declares the field and runTask receives it from every kick-off path', () => {
