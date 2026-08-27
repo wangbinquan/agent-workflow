@@ -593,7 +593,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#cancelTaskRow",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "cancelTaskRow",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -695,7 +695,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskRepos",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskRepos",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -746,7 +746,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#LegacyTaskMechanicsState",
       "toPath": "packages/backend/src/services/execution/taskMechanicsState.ts",
       "toSymbol": "LegacyTaskMechanicsState",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -780,7 +780,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskWriteLocks.ts#gcTaskWriteSem",
       "toPath": "packages/backend/src/services/taskWriteLocks.ts",
       "toSymbol": "gcTaskWriteSem",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -950,7 +950,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/dispatchFrontier.ts#wrapperRevivalEvidence",
       "toPath": "packages/backend/src/services/dispatchFrontier.ts",
       "toSymbol": "wrapperRevivalEvidence",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -1395,23 +1395,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/scheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:0c1702f407f00c689e85",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toSymbol": "TaskExecutionContextRef",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#$file",
@@ -1531,23 +1514,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#$file",
-      "fromPath": "packages/backend/src/services/execution/taskMechanicsState.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:0e7aa4003b6d8b2751cb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toSymbol": "SchedulerRuntimeTopology",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#$file",
@@ -1647,7 +1613,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#isNodeRunFresh",
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "isNodeRunFresh",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -2089,7 +2055,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -2157,7 +2123,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "clarifyRounds",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -2211,6 +2177,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file",
+      "fromPath": "packages/backend/src/services/lifecycle.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:18789bac550a28bc3755",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toSymbol": "TaskExecutionContextRef",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#$file",
@@ -2242,7 +2225,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/clarifyAutoDispatch.ts#$file",
       "toPath": "packages/backend/src/services/clarifyAutoDispatch.ts",
       "toSymbol": "autoDispatchDeferredQuestions",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -2277,23 +2260,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "employeeDefinitions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1a3211ff3514bc710b38",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "isTaskDriverActive",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -2463,7 +2429,7 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package",
       "toPath": "external:drizzle-orm",
       "toSymbol": "*",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -2701,7 +2667,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#inspectReadonlyRepos",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "inspectReadonlyRepos",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -2770,23 +2736,6 @@
       "toPath": "packages/backend/src/db/txSync.ts",
       "toSymbol": "NotPromise",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1f2e18de4aca17f2308f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "RepositoryPreparationDescriptorReader",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -3483,7 +3432,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#TaskScopeArgs",
       "toPath": "packages/backend/src/services/execution/taskMechanicsState.ts",
       "toSymbol": "TaskScopeArgs",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -3670,7 +3619,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "toPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toSymbol": "taskExecutionModule",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -3909,23 +3858,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "workflows",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2f7bc89777b09306b42c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "createTaskDriverLifecyclePort",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -4214,7 +4146,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "toPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toSymbol": "exactOwnerMatches",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -4248,7 +4180,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#NodeRunRow",
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "NodeRunRow",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -5115,7 +5047,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#driveTaskEngineApplication",
       "toPath": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "toSymbol": "driveTaskEngineApplication",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -5234,7 +5166,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#replayConflictHumanResolutions",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "replayConflictHumanResolutions",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -5438,7 +5370,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#runDynamicWorkflowGenerate",
       "toPath": "packages/backend/src/services/dynamicWorkflowRunner.ts",
       "toSymbol": "runDynamicWorkflowGenerate",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -5540,7 +5472,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "toPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toSymbol": "withTaskExecutionMutation",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -5676,7 +5608,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#buildFreshestSettledPerNode",
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "buildFreshestSettledPerNode",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -6016,7 +5948,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskWriteLocks.ts#getTaskWriteSem",
       "toPath": "packages/backend/src/services/taskWriteLocks.ts",
       "toSymbol": "getTaskWriteSem",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -6152,7 +6084,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths",
       "toPath": "packages/backend/src/util/paths.ts",
       "toSymbol": "Paths",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -6509,7 +6441,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -6526,7 +6458,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/dispatchFrontier.ts#decideScopeOutcome",
       "toPath": "packages/backend/src/services/dispatchFrontier.ts",
       "toSymbol": "decideScopeOutcome",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -6730,7 +6662,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "toPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toSymbol": "assertTaskExecutionContext",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -6884,23 +6816,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "webhookMrStreamStates",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:5d5bbc8c21f9fa6f9d00",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "TaskDriveFailureReporter",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -7189,7 +7104,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/processNodeConcurrency.ts#getNodePoolSemaphore",
       "toPath": "packages/backend/src/services/processNodeConcurrency.ts",
       "toSymbol": "getNodePoolSemaphore",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -7534,6 +7449,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#$file",
+      "fromPath": "packages/backend/src/services/execution/taskMechanicsState.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:65a1314d27509b894fb5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toSymbol": "SchedulerRuntimeTopology",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "fromPath": "packages/backend/src/services/task.ts",
       "fromSymbol": "$file",
@@ -7648,7 +7580,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/orchestratorAgent.ts#DW_ORCHESTRATOR_NODE_ID",
       "toPath": "packages/backend/src/services/orchestratorAgent.ts",
       "toSymbol": "DW_ORCHESTRATOR_NODE_ID",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -7835,7 +7767,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#areTransitiveUpstreamsCompleted",
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "areTransitiveUpstreamsCompleted",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -8039,7 +7971,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#loadUndispatchedParkTargets",
       "toPath": "packages/backend/src/services/taskQuestions.ts",
       "toSymbol": "loadUndispatchedParkTargets",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -8770,7 +8702,7 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package",
       "toPath": "external:drizzle-orm",
       "toSymbol": "*",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -8821,7 +8753,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#RunTaskOptions",
       "toPath": "packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
       "toSymbol": "RunTaskOptions",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -8906,7 +8838,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#maybeRunCommitPush",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "maybeRunCommitPush",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -8923,7 +8855,7 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package",
       "toPath": "external:drizzle-orm",
       "toSymbol": "*",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -9144,7 +9076,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#emitStatus",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "emitStatus",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -9195,7 +9127,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/workgroup/engine.ts#runWorkgroupEngine",
       "toPath": "packages/backend/src/services/workgroup/engine.ts",
       "toSymbol": "runWorkgroupEngine",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -9212,7 +9144,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "tasks",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -9688,7 +9620,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/triggerPreflight.ts#triggerPreflightIssue",
       "toPath": "packages/backend/src/services/execution/triggerPreflight.ts",
       "toSymbol": "triggerPreflightIssue",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -9739,7 +9671,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#buildWorkgroupHooks",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "buildWorkgroupHooks",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -9824,7 +9756,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#LegacyTaskMechanicsState",
       "toPath": "packages/backend/src/services/execution/taskMechanicsState.ts",
       "toSymbol": "LegacyTaskMechanicsState",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -10198,7 +10130,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#isFresherNodeRun",
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "isFresherNodeRun",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -10250,23 +10182,6 @@
       "toPath": "external:drizzle-orm",
       "toSymbol": "*",
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:91888567174d21475e68",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "skipRepositoryPreparation",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -10419,7 +10334,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#replayPendingMerges",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "replayPendingMerges",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -10623,7 +10538,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#bindWorkspaceExcludeParticipant",
       "toPath": "packages/backend/src/modules/source-control/composition.ts",
       "toSymbol": "bindWorkspaceExcludeParticipant",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -10730,6 +10645,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "fromPath": "packages/backend/src/services/task.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:97c531fe52763d6b60f8",
+      "introducedByRFC": "RFC-332",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts",
+      "toSymbol": "*",
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "fromSymbol": "$file",
@@ -10742,7 +10674,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#trySetTaskStatus",
       "toPath": "packages/backend/src/services/lifecycle.ts",
       "toSymbol": "trySetTaskStatus",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -10878,7 +10810,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskFanoutPools.ts#gcTaskFanoutSem",
       "toPath": "packages/backend/src/services/taskFanoutPools.ts",
       "toSymbol": "gcTaskFanoutSem",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -11762,7 +11694,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -12340,7 +12272,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/dispatchFrontier.ts#WRAPPER_KINDS",
       "toPath": "packages/backend/src/services/dispatchFrontier.ts",
       "toSymbol": "WRAPPER_KINDS",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -12476,7 +12408,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "toPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toSymbol": "runWithTaskExecutionContext",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -12853,23 +12785,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:b96c94506875688157cf",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "resolveTaskDriveConfig",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
@@ -12935,7 +12850,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/workgroup/state.ts#loadWorkgroupTaskState",
       "toPath": "packages/backend/src/services/workgroup/state.ts",
       "toSymbol": "loadWorkgroupTaskState",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -13263,23 +13178,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:bfd1dafe693d050d90f7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "clearTaskDriverLifecycleForTesting",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "fromSymbol": "$file",
@@ -13292,7 +13190,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskFanoutPools.ts#getTaskFanoutSem",
       "toPath": "packages/backend/src/services/taskFanoutPools.ts",
       "toSymbol": "getTaskFanoutSem",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -13360,7 +13258,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/exitCondition.ts#parseExitCondition",
       "toPath": "packages/backend/src/services/exitCondition.ts",
       "toSymbol": "parseExitCondition",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -13751,7 +13649,24 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "fromPath": "packages/backend/src/services/scheduler.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c92cebd3807db733080d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toSymbol": "TaskExecutionContextRef",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -13802,7 +13717,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#runOneNode",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "runOneNode",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -13870,7 +13785,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#withTaskReviewMutationLock",
       "toPath": "packages/backend/src/services/reviewMutationCoordinator.ts",
       "toSymbol": "withTaskReviewMutationLock",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -13973,23 +13888,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskExecutionOwners",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cc37e48eb6b401c416eb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "RepositoryPreparationStep",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -14159,7 +14057,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#failTask",
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "failTask",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -14754,7 +14652,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#LegacyNodeResult",
       "toPath": "packages/backend/src/services/execution/taskMechanicsState.ts",
       "toSymbol": "LegacyNodeResult",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -14839,7 +14737,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/dispatchFrontier.ts#isDispatchable",
       "toPath": "packages/backend/src/services/dispatchFrontier.ts",
       "toSymbol": "isDispatchable",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -14924,7 +14822,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/dispatchFrontier.ts#isReviewSupersededRow",
       "toPath": "packages/backend/src/services/dispatchFrontier.ts",
       "toSymbol": "isReviewSupersededRow",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -15264,7 +15162,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#parseConsumedJson",
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "parseConsumedJson",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -15774,7 +15672,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionEffectAttempts",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskExecutionEffectAttempts",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -15911,23 +15809,6 @@
       "toPath": "packages/backend/src/util/hash.ts",
       "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e6b3f318be85a4d2968d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "activeTaskDriverController",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -16233,7 +16114,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "tasks",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -16340,23 +16221,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:edc676de381c12ddbd3a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "PersistedRepositoryPreparationStep",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
       "fromPath": "packages/backend/src/routes/developmentConfig.ts",
       "fromSymbol": "$file",
@@ -16438,6 +16302,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "employeeReactionRounds",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#$file",
+      "fromPath": "packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:eef72dd10e3f1e244722",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toSymbol": "TaskExecutionContextRef",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -16816,23 +16697,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "fromPath": "packages/backend/src/services/task.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f53bbdafdef2a24c85f9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toSymbol": "DefaultTaskDriveCoordinator",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#$file",
       "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "fromSymbol": "$file",
@@ -16897,23 +16761,6 @@
       "toPath": "packages/backend/src/util/hash.ts",
       "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#$file",
-      "fromPath": "packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f69a37931d1d06516ad8",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "runtime-management",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toSymbol": "TaskExecutionContextRef",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -17100,7 +16947,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
       "toPath": "packages/backend/src/util/log.ts",
       "toSymbol": "createLogger",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "type",
@@ -17253,7 +17100,7 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionEffects",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskExecutionEffects",
-      "why": "RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover."
+      "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
       "edgeKind": "value",
@@ -17321,23 +17168,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/participants.ts#DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2",
       "toPath": "packages/backend/src/modules/development-automation/public/participants.ts",
       "toSymbol": "DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file",
-      "fromPath": "packages/backend/src/services/lifecycle.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:fc98fe4d875027b8d691",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toSymbol": "TaskExecutionContextRef",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -17563,9 +17393,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1033,
+    "architectureExceptions": 1023,
     "implementationSccs": 0,
-    "observedEdges": 1059,
+    "observedEdges": 1049,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -18422,22 +18252,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionIntents"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/scheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
-      "id": "import:0c1702f407f00c689e85",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "TaskExecutionContextRef",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
@@ -18580,22 +18394,6 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeReactionRoundQueryPort"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/execution/taskMechanicsState.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#$file",
-      "id": "import:0e7aa4003b6d8b2751cb",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "SchedulerRuntimeTopology",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -19270,6 +19068,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#getDigitalEmployee"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/lifecycle.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file",
+      "id": "import:18789bac550a28bc3755",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/topology",
+      "syntax": "static-import",
+      "targetSymbol": "TaskExecutionContextRef",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
@@ -19332,22 +19146,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeDefinitions"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:1a3211ff3514bc710b38",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "isTaskDriverActive",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -19812,22 +19610,6 @@
       "toContext": "event-center",
       "toFile": "packages/backend/src/modules/event-center/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/public/types.ts#EventObservationInput"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:1f2e18de4aca17f2308f",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "RepositoryPreparationDescriptorReader",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -20900,22 +20682,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workflows"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:2f7bc89777b09306b42c",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "createTaskDriverLifecyclePort",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -23798,22 +23564,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookMrStreamStates"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:5d5bbc8c21f9fa6f9d00",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "TaskDriveFailureReporter",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -24468,6 +24218,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/types.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/execution/taskMechanicsState.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#$file",
+      "id": "import:65a1314d27509b894fb5",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/topology",
+      "syntax": "static-import",
+      "targetSymbol": "SchedulerRuntimeTopology",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -27158,22 +26924,6 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:91888567174d21475e68",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "skipRepositoryPreparation",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
@@ -27620,6 +27370,22 @@
       "toContext": "execution-contract",
       "toFile": "packages/backend/src/modules/execution-contract/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/public/types.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/task.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "id": "import:97c531fe52763d6b60f8",
+      "owner": "task-execution",
+      "removeAfterWave": "W4",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/taskDriveLegacy",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -29862,22 +29628,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#DigitalEmployeeModule"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:b96c94506875688157cf",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "resolveTaskDriveConfig",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/developmentDeliveryDeps.ts",
@@ -30244,22 +29994,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/redact.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/redact.ts#redactSensitiveString"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:bfd1dafe693d050d90f7",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "clearTaskDriverLifecycleForTesting",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -30758,6 +30492,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/public/types.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/scheduler.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "id": "import:c92cebd3807db733080d",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/topology",
+      "syntax": "static-import",
+      "targetSymbol": "TaskExecutionContextRef",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/composition.ts",
@@ -30980,22 +30730,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionOwners"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:cc37e48eb6b401c416eb",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "RepositoryPreparationStep",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -32918,22 +32652,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:e6b3f318be85a4d2968d",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "activeTaskDriverController",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/users.ts",
@@ -33336,22 +33054,6 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:edc676de381c12ddbd3a",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "PersistedRepositoryPreparationStep",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/developmentConfig.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
       "id": "import:edcbca50c79f87d2021a",
@@ -33428,6 +33130,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeReactionRounds"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#$file",
+      "id": "import:eef72dd10e3f1e244722",
+      "owner": "runtime-management",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/topology",
+      "syntax": "static-import",
+      "targetSymbol": "TaskExecutionContextRef",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/topology.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/topology.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -33783,22 +33501,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/task.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "id": "import:f53bbdafdef2a24c85f9",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "DefaultTaskDriveCoordinator",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "digital-employee",
       "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#$file",
@@ -33860,22 +33562,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/hash.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#$file",
-      "id": "import:f69a37931d1d06516ad8",
-      "owner": "runtime-management",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "TaskExecutionContextRef",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -34276,22 +33962,6 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/participants.ts#DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/lifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file",
-      "id": "import:fc98fe4d875027b8d691",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "TaskExecutionContextRef",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -34928,7 +34598,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:85d8ab76161aef027be6c7c780e54633f86544e5b849f393394402d9465ee508",
+  "sourceDigest": "sha256:db8ee412d9cb1d96fede43392faa65095ccd2447f5af16f88dd805325daa6084",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

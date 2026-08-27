@@ -412,6 +412,9 @@ const RFC_332_COMPATIBILITY_BRIDGE_FILES = new Set([
 function isRfc332CompatibilityEdge(edge: Pick<ObservedContextEdge, 'fromFile' | 'toFile'>): boolean {
   return (
     RFC_332_COMPATIBILITY_BRIDGE_FILES.has(edge.fromFile) ||
+    (edge.fromFile === 'packages/backend/src/services/task.ts' &&
+      edge.toFile ===
+        'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts') ||
     (edge.fromFile === 'packages/backend/src/services/startTaskDeps.ts' &&
       edge.toFile ===
         'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts')
@@ -737,9 +740,13 @@ function observedContextEdges(
       if (fromLocation === null) {
         role = 'legacy-inbound'
         removeAfterWave =
-          unit.path === 'packages/backend/src/services/startTaskDeps.ts' &&
+          unit.path === 'packages/backend/src/services/task.ts' &&
           item.toFile ===
-            'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts'
+            'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts'
+            ? 'W4'
+            : unit.path === 'packages/backend/src/services/startTaskDeps.ts' &&
+                item.toFile ===
+                  'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts'
             ? 'W2-D'
             : 'W4/W9'
       } else if (toLocation === null) {
@@ -2693,7 +2700,7 @@ function buildArchitectureExceptions(
       owner: edge.owner,
       why:
         isRfc332CompatibilityEdge(edge)
-          ? 'RFC-332 W2-B retains this exact compatibility dependency in composition until its declared owner cutover.'
+          ? 'RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover.'
           : edge.role === 'legacy-inbound'
           ? 'Legacy inbound caller reaches a module boundary before its W4 public use-case cutover.'
           : edge.role === 'legacy-outbound'

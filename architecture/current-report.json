@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 1033,
+    "architectureExceptions": 1023,
     "backgroundJobs": 215,
-    "crossContextImports": 1059,
+    "crossContextImports": 1049,
     "facades": 371,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17610,
-    "mutationEntrypoints": 910,
+    "moduleSymbolOwners": 17622,
+    "mutationEntrypoints": 911,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 326,
+    "publicSurfaces": 300,
     "transactionExternalEffects": 245
   },
   "metrics": {
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 864,
+    "backendProductionFiles": 865,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -119,7 +119,7 @@
     ],
     "directNativeIntervals": 20,
     "directNativeTimers": 61,
-    "inboundBoundaryEdges": 93,
+    "inboundBoundaryEdges": 94,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -168,10 +168,10 @@
       },
       {
         "context": "task-execution",
-        "files": 72
+        "files": 73
       }
     ],
-    "moduleFiles": 348,
+    "moduleFiles": 349,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -232,5 +232,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:85d8ab76161aef027be6c7c780e54633f86544e5b849f393394402d9465ee508"
+  "sourceDigest": "sha256:db8ee412d9cb1d96fede43392faa65095ccd2447f5af16f88dd805325daa6084"
 }

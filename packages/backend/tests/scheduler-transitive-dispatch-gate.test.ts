@@ -174,8 +174,28 @@ describe('areTransitiveUpstreamsCompleted — pure semantics', () => {
 })
 
 describe('source guard — runScope wires the transitive gate', () => {
-  const SCHEDULER_SRC = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  const DAG_FRONTIER_SRC = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'dagFrontier.ts',
+    ),
+    'utf8',
+  )
+  const DAG_SCOPE_SRC = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'taskDagScope.ts',
+    ),
     'utf8',
   )
 
@@ -191,8 +211,8 @@ describe('source guard — runScope wires the transitive gate', () => {
     // dispatch loop (the OLD bug shape, ending in `ready.push(n)`) must NOT
     // reappear (the prose comments quote the one-hop EXPRESSION but never the
     // code-only token `ready.push`).
-    expect(SCHEDULER_SRC).toContain('areTransitiveUpstreamsCompleted(')
-    expect(SCHEDULER_SRC).not.toContain('ready.push(n)')
+    expect(DAG_FRONTIER_SRC).toContain('areTransitiveUpstreamsCompleted(')
+    expect(DAG_FRONTIER_SRC).not.toContain('ready.push(n)')
   })
 
   test('runScope is completion-driven (deriveFrontier + Promise.race, no batch barrier)', () => {
@@ -200,10 +220,10 @@ describe('source guard — runScope wires the transitive gate', () => {
     // downstream dispatch the instant its last upstream settles. The old batch
     // barrier (`Promise.all(ready.map((node) => runOneNode...))`) is gone, as is
     // the direct computeReadyNodes call — both replaced by per-tick re-derivation.
-    expect(SCHEDULER_SRC).toContain('deriveFrontier(')
-    expect(SCHEDULER_SRC).toContain('Promise.race(')
-    expect(SCHEDULER_SRC).not.toContain('ready.map((node) => runOneNode')
-    expect(SCHEDULER_SRC).not.toContain('computeReadyNodes(remaining.values()')
+    expect(DAG_SCOPE_SRC).toContain('deriveFrontier(')
+    expect(DAG_SCOPE_SRC).toContain('Promise.race(')
+    expect(DAG_SCOPE_SRC).not.toContain('ready.map((node) => runOneNode')
+    expect(DAG_SCOPE_SRC).not.toContain('computeReadyNodes(remaining.values()')
   })
 
   test('RFC-076 T5 — the batch-model reconcile passes are deleted', () => {
@@ -215,7 +235,7 @@ describe('source guard — runScope wires the transitive gate', () => {
     // completed/remaining snapshot drift the rewrite eliminated has returned.
     // (We match the `function` DEFINITION form — the runScope comment quotes the
     // historical names in prose to explain what they replaced, which is fine.)
-    expect(SCHEDULER_SRC).not.toContain('function rescanScopeForNewPendingRows')
-    expect(SCHEDULER_SRC).not.toContain('function recomputeFreshnessAndDemote')
+    expect(DAG_SCOPE_SRC).not.toContain('function rescanScopeForNewPendingRows')
+    expect(DAG_SCOPE_SRC).not.toContain('function recomputeFreshnessAndDemote')
   })
 })

@@ -210,7 +210,14 @@ import {
   type TaskLaunchProvenance,
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
-import {
+import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
+
+type RepositoryPreparationStep = taskDriveComposition.RepositoryPreparationStep
+type RepositoryPreparationDescriptorReader =
+  taskDriveComposition.RepositoryPreparationDescriptorReader
+type TaskDriveFailureReporter = taskDriveComposition.TaskDriveFailureReporter
+
+const {
   activeTaskDriverController,
   clearTaskDriverLifecycleForTesting,
   createTaskDriverLifecyclePort,
@@ -219,10 +226,7 @@ import {
   PersistedRepositoryPreparationStep,
   resolveTaskDriveConfig,
   skipRepositoryPreparation,
-  type RepositoryPreparationDescriptorReader,
-  type RepositoryPreparationStep,
-  type TaskDriveFailureReporter,
-} from '@/modules/task-execution/public/commands'
+} = taskDriveComposition
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionContext' | 'signal'>
@@ -1402,7 +1406,7 @@ function createTaskDriveCoordinator(input: {
   readonly repositoryPreparation?: RepositoryPreparationStep
   readonly engineFailureMessage: string
   readonly failureReporter: TaskDriveFailureReporter
-}): DefaultTaskDriveCoordinator {
+}): taskDriveComposition.DefaultTaskDriveCoordinator {
   const runtime = resolveTaskDriveConfig({
     appHome: input.appHome,
     ...(input.deps.binaryOverride !== undefined
@@ -1455,7 +1459,7 @@ function createTaskDriveCoordinator(input: {
 function createPersistedRepositoryPreparationStep(input: {
   readonly deps: StartTaskDeps
   readonly appHome: string
-}): PersistedRepositoryPreparationStep {
+}): taskDriveComposition.PersistedRepositoryPreparationStep {
   const reader: RepositoryPreparationDescriptorReader = {
     async read(taskId) {
       const row = input.deps.db

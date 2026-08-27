@@ -90,7 +90,11 @@ describe('RFC-187 §4 — source locks', () => {
     expect(scheduler).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
     expect(scheduler).not.toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')
     // and SchedulerState.repos carries the per-repo base that makes it possible.
-    expect(scheduler).toContain('baseCommit: string | null')
+    const mechanicsState = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'taskMechanicsState.ts'),
+      'utf8',
+    )
+    expect(mechanicsState).toContain('readonly baseCommit: string | null')
     expect(scheduler).toContain('state.repos.filter((r) => r.baseCommit !== null)')
   })
 })

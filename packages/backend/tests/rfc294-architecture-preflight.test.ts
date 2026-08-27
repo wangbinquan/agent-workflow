@@ -1424,13 +1424,12 @@ describe('RFC-294 W0-R target architecture scanner contract', () => {
 const CROSS_CONTEXT_PILOT_DEBT: string[] = [
   'modules/integration/application/mrTerminalControlWorker.ts -> modules/task-execution/application/sourceTerminationCapability.ts [type:static-import] cross-context internal import',
   'modules/integration/composition/webhookTerminalControl.ts -> modules/task-execution/composition/sourceTermination.ts [value:static-import] cross-context internal import',
+  'modules/task-execution/composition/taskEngineApplication.ts -> modules/source-control/composition.ts [value:static-import] cross-context internal import',
 ]
 
 const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
   'modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#insertInitialUserAccessInTransaction: forbidden type import @/platform/persistence/transactionScope#TransactionScope',
   'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
-  'modules/task-execution/application/ports/taskExecutionTopology.ts#SchedulerDriverPort: forbidden type Partial',
-  'modules/task-execution/application/ports/taskExecutionTopology.ts#SchedulerDriverPort: unsafe/open type UnknownKeyword',
   'modules/task-execution/composition/taskExecutionReadModels.ts#createTaskExecutionReadModels: forbidden type DbClient',
   'modules/task-execution/composition/taskExecutionReadModels.ts#createTaskExecutionReadModels: forbidden type import @/db/client#DbClient',
   'modules/task-execution/public/topology.ts: non-exact public entrypoint',

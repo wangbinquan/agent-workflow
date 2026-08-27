@@ -906,8 +906,11 @@ describe('RFC-128 P5-D all-role deferred park (same-home deadlock fix)', () => {
     expect(allRoleParked.has(D)).toBe(true) // same as the union (no same-home in-flight)
   })
 
-  test('source — scheduler uses loadUndispatchedParkTargets (all-role), not the per-role union', () => {
-    const src = readFileSync(resolve(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
+  test('source — DAG scope uses loadUndispatchedParkTargets (all-role), not the per-role union', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '../src/modules/task-execution/composition/taskDagScope.ts'),
+      'utf8',
+    )
     expect(src).toContain('loadUndispatchedParkTargets(db, taskId)')
   })
 })

@@ -30,6 +30,22 @@ const runnerSrc = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'services', 'runner.ts'),
   'utf8',
 )
+const taskEngineApplicationSrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'taskEngineApplication.ts',
+  ),
+  'utf8',
+)
+const taskEngineRuntimeOptionsSrc = readFileSync(
+  resolve(import.meta.dirname, '..', 'src', 'services', 'execution', 'taskEngineRuntimeOptions.ts'),
+  'utf8',
+)
 
 describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
   test("validate-node-kinds whitelist includes 'wrapper-fanout'", () => {
@@ -39,7 +55,7 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
     // passes the whitelist) now rests on the table lock: wrapper-fanout is a
     // NODE_KIND_BEHAVIORS key (packages/backend/tests/
     // node-kind-behavior-table.test.ts asserts key-set === NODE_KIND).
-    expect(schedulerSrc).toMatch(/!Object\.hasOwn\(NODE_KIND_BEHAVIORS, node\.kind\)/)
+    expect(taskEngineApplicationSrc).toMatch(/!Object\.hasOwn\(NODE_KIND_BEHAVIORS, node\.kind\)/)
   })
 
   test("runOneNode dispatches to runFanoutWrapperNode on kind === 'wrapper-fanout'", () => {
@@ -64,7 +80,7 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
   })
 
   test('opts.fanoutMaxShardTotal field exists on RunTaskOptions', () => {
-    expect(schedulerSrc).toContain('fanoutMaxShardTotal?:')
+    expect(taskEngineRuntimeOptionsSrc).toContain('fanoutMaxShardTotal?:')
   })
 })
 

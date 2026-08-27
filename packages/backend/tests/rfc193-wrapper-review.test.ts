@@ -407,6 +407,15 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
 // innerState 的 scopeRoot 拆掉，这里比 e2e 更快地红出来。
 describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
   const SCHEDULER = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
+  const TASK_ENGINE_APPLICATION = resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'taskEngineApplication.ts',
+  )
   const REVIEW = resolve(import.meta.dir, '..', 'src', 'services', 'review.ts')
   const S1 = resolve(import.meta.dir, '..', 'src', 'services', 'lifecycleRepair', 'options-S1.ts')
 
@@ -415,11 +424,12 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     expect(src).not.toContain('task.worktreePath')
   })
 
-  test('scheduler wires scopeRoot: top level + both wrapper innerStates', () => {
-    const src = readFileSync(SCHEDULER, 'utf8')
-    expect(src).toContain('scopeRoot: task.worktreePath')
-    expect(src.split('scopeRoot: wrapperIso.containerPath').length - 1).toBe(2)
-    expect(src).toContain('scopeRoot: state.scopeRoot')
+  test('task engine application wires top-level scopeRoot; scheduler wires both wrapper innerStates', () => {
+    const application = readFileSync(TASK_ENGINE_APPLICATION, 'utf8')
+    const scheduler = readFileSync(SCHEDULER, 'utf8')
+    expect(application).toContain('scopeRoot: task.worktreePath')
+    expect(scheduler.split('scopeRoot: wrapperIso.containerPath').length - 1).toBe(2)
+    expect(scheduler).toContain('scopeRoot: state.scopeRoot')
   })
 
   test('S1 repair derives scopeRoot from wrapper lineage, not task.worktreePath directly (case 8d)', () => {

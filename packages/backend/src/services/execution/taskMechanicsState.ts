@@ -1,10 +1,8 @@
 import type { TriggerContext, WorkflowDefinition } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { tasks } from '@/db/schema'
-import type {
-  SchedulerRuntimeTopology,
-  TaskScopeOutcome,
-} from '@/modules/task-execution/public/types'
+import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/topology'
+import type { TaskScopeOutcome } from '@/modules/task-execution/public/types'
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/util/semaphore'
 import type { RunTaskOptions } from './taskEngineRuntimeOptions'

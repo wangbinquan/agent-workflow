@@ -32,7 +32,7 @@ const MUST_BECOME_BEHAVIOR_FIXTURE = [
 ] as const
 
 /**
- * 读 `src/services/scheduler.ts` 源码文本的测试文件全集（2026-08-13 基线，79 个）。
+ * 读 `src/services/scheduler.ts` 源码文本的测试文件全集（RFC-332 迁移后的精确基线）。
  * 改动本清单 = 迁移动作，必须同批说明处置分类。
  */
 const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
@@ -53,7 +53,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc098-commitpush-nonblocking.test.ts',
   'rfc098-git-wrapper-diff-fail.test.ts',
   'rfc098-rerun-cause-gates.test.ts',
-  'rfc098-write-lock-registry.test.ts',
   'rfc103-fanout-kind-aware-split.test.ts',
   'rfc103-launch-config-passthrough.test.ts',
   'rfc120-deferred-dispatch.test.ts',
@@ -63,12 +62,10 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc127-borrow.test.ts',
   'rfc127-self-questioner-borrow.test.ts',
   'rfc128-p5-a-pre-refactor-net.test.ts',
-  'rfc128-p5-d-autodispatch.test.ts',
   'rfc130-shard-rerun-undo.test.ts',
   'rfc143-runtime-driver-capability.test.ts',
   'rfc144-stale-replay-regression.test.ts',
   'rfc146-kind-predicate-guard.test.ts',
-  'rfc147-system-channel-ports.test.ts',
   'rfc164-workgroup-engine.test.ts',
   'rfc165-optional-clarify.test.ts',
   'rfc167-dynamic-workflow-engine.test.ts',
@@ -88,7 +85,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc243-executor-facade.test.ts',
   'rfc243-parent-child-lifecycle.test.ts',
   'rfc253-script-execution.test.ts',
-  'rfc266-task-fanout-pools.test.ts',
   'rfc271-ref-contract.test.ts',
   'rfc282-b2-resolve-injection.test.ts',
   'rfc284-t20-child-inheritance.test.ts',
@@ -124,6 +120,8 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc321-repository-publication-ratchet.test.ts',
   // RFC-331：拓扑切割的 source guard 锁住 task↔scheduler 与 call-graph 三条断边。
   'rfc331-task-execution-topology.test.ts',
+  // RFC-332：旧 body 灭绝断言仍显式读取 scheduler facade。
+  'rfc332-task-engine-contracts.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',
@@ -141,7 +139,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'scheduler-node-overrides.test.ts',
   'scheduler-shard-item-kind-stringify.test.ts',
   'scheduler-subagent-live-capture-passthrough.test.ts',
-  'scheduler-transitive-dispatch-gate.test.ts',
   'scheduler-wrapper-fanout-routing.test.ts',
   'source-text-rfc066-guards.test.ts',
   'source-text-rfc066-pr-b-guards.test.ts',

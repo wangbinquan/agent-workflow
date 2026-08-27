@@ -18,8 +18,8 @@ function read(p: string): string {
 }
 
 describe('RFC-048 subagentLiveCapture passthrough', () => {
-  test('scheduler RunTaskOptions declares the field', () => {
-    const src = read('packages/backend/src/services/scheduler.ts')
+  test('task engine RunTaskOptions declares the field', () => {
+    const src = read('packages/backend/src/services/execution/taskEngineRuntimeOptions.ts')
     expect(src).toContain(
       'subagentLiveCapture?: { pollMs: number; consecutiveFailureLimit: number }',
     )
@@ -45,17 +45,17 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     expect(src).toContain('...runtime.runConfig')
   })
 
-  test('StartTaskDeps declares the field and runTask receives it from every kick-off path', () => {
+  test('StartTaskDeps declares the field and the coordinator freezes it once for every drive path', () => {
     const src = read('packages/backend/src/services/task.ts')
     expect(src).toContain(
       'subagentLiveCapture?: { pollMs: number; consecutiveFailureLimit: number }',
     )
-    // Three runTask sites: startTask, resumeTask, retryNode — all must
-    // forward the option (omitted when undefined so legacy callers keep
-    // their existing behavior).
-    const forwards = src.match(/subagentLiveCapture: deps\.subagentLiveCapture/g) ?? []
-    const forwardsViaOpts = src.match(/subagentLiveCapture: opts\.deps\.subagentLiveCapture/g) ?? []
-    expect(forwards.length + forwardsViaOpts.length).toBe(3)
+    // RFC-332 folds the former three hand-written runTask spreads into one
+    // coordinator construction. The resolved immutable runtime profile is the
+    // sole hand-off, so start/resume/retry cannot drift independently.
+    expect(src.match(/subagentLiveCapture: input\.deps\.subagentLiveCapture/g)).toHaveLength(1)
+    expect(src).toContain('const runtime = resolveTaskDriveConfig({')
+    expect(src).toContain('new DefaultTaskDriveCoordinator({\n    runtime,')
   })
 
   test('subagentLiveCapture is assembled into StartTaskDeps and every launch path carries it', () => {

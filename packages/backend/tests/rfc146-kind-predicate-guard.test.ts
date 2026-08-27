@@ -73,22 +73,46 @@ describe('RFC-146 ratchet: kind 谓词单源 — 不得再 fork 本地拷贝', (
   })
 })
 
-describe('RFC-146: scheduler 三处表接线形态锁', () => {
+describe('RFC-146: task engine 三处表接线形态锁', () => {
   const schedulerSrc = readFileSync(
     resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
     'utf8',
   )
+  const applicationSrc = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'taskEngineApplication.ts',
+    ),
+    'utf8',
+  )
+  const frontierSrc = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'dagFrontier.ts',
+    ),
+    'utf8',
+  )
 
-  test('runTask kind 白名单 = 行为表正向成员判定（负枚举不得回潮）', () => {
-    expect(schedulerSrc).toMatch(/!Object\.hasOwn\(NODE_KIND_BEHAVIORS, node\.kind\)/)
+  test('task engine kind 白名单 = 行为表正向成员判定（负枚举不得回潮）', () => {
+    expect(applicationSrc).toMatch(/!Object\.hasOwn\(NODE_KIND_BEHAVIORS, node\.kind\)/)
     // 负枚举的指纹：白名单里对具体 kind 的 !== 长链。
-    expect(schedulerSrc).not.toMatch(
+    expect(applicationSrc).not.toMatch(
       /node\.kind !== 'input' &&\s*\n\s*node\.kind !== 'agent-single'/,
     )
   })
 
   test('SETTLES_WITHOUT_ROW_KINDS 从行为表派生（字面量孪生不得回潮）', () => {
-    expect(schedulerSrc).toMatch(
+    expect(frontierSrc).toMatch(
       /SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>\(\s*\n\s*NODE_KIND\.filter\(\(k\) => NODE_KIND_BEHAVIORS\[k\]\.settlesWithoutRow\)/,
     )
   })

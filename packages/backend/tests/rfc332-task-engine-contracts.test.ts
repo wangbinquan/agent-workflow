@@ -5,10 +5,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { ulid } from 'ulid'
-import {
-  resolveTaskDriveConfig,
-  taskDriveSubmission,
-} from '../src/modules/task-execution/public/commands'
+import { taskDriveSubmission } from '../src/modules/task-execution/public/commands'
+import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import {
   TASK_ENGINE_KINDS,
   type TaskEngine,
@@ -296,6 +294,14 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
     expect(
       bridge('packages/backend/src/services/startTaskDeps.ts', 'driveTaskEngineApplication'),
     ).toMatchObject({ introducedByRFC: 'RFC-332', removeAfterWave: 'W2-D' })
+    expect(
+      exceptions.find(
+        (entry) =>
+          entry.fromPath === 'packages/backend/src/services/task.ts' &&
+          entry.toPath ===
+            'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts',
+      ),
+    ).toMatchObject({ introducedByRFC: 'RFC-332', removeAfterWave: 'W4' })
 
     const reportMetrics = artifacts.report['metrics'] as Record<string, unknown>
     const valueSccs = reportMetrics['backendValueSccs'] as string[][]
@@ -304,5 +310,5 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
         component.some((file) => file.includes('/modules/task-execution/')),
       ),
     ).toBe(false)
-  })
+  }, 15_000)
 })

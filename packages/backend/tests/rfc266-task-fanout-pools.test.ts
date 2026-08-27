@@ -128,14 +128,22 @@ describe('RFC-266 task fan-out pool registry', () => {
     gcTaskFanoutSem(id)
   })
 
-  test('the scheduler gc-s the entry in runTask finally and nowhere else', () => {
-    const scheduler = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  test('the task engine application gc-s the entry in its drive finally and nowhere else', () => {
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'taskEngineApplication.ts',
+      ),
       'utf8',
     )
     // 与 gcTaskWriteSem 同处、同一个 finally —— 唯一允许的 gc 点。
-    expect(scheduler).toContain('gcTaskWriteSem(opts.taskId)\n    gcTaskFanoutSem(opts.taskId)')
-    expect(scheduler.match(/gcTaskFanoutSem\(/g)).toHaveLength(1)
+    expect(application).toContain('gcTaskWriteSem(opts.taskId)\n    gcTaskFanoutSem(opts.taskId)')
+    expect(application.match(/gcTaskFanoutSem\(/g)).toHaveLength(1)
     // HTTP 侧绝不允许 gc（会与调度器缓存的引用竞争 ⇒ 裂池）。
     const routes = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes', 'config.ts'),

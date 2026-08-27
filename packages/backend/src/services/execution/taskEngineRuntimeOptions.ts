@@ -3,7 +3,7 @@ import type { DbClient } from '@/db/client'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { Logger } from '@/util/log'
-import type { TaskExecutionContextRef } from '@/modules/task-execution/public/types'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/public/topology'
 
 export interface RunTaskOptions {
   taskId: string

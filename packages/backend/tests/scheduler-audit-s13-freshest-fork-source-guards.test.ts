@@ -23,8 +23,9 @@
 //
 // 终态语义（本文件锁定的 ratchet）：freshest 选行只有一个权威——
 //   freshness.ts 的 pickFreshestRun / isFresherNodeRun（纯 id 序 + 显式谓词）。
-//   `desc(nodeRuns.retryIndex)` 与 `desc(nodeRuns.startedAt)` 在 src/ 全域
-//   清零且不得回归；内存里的 retryIndex 大小比较收敛到唯一白名单形态
+//   freshness 路径中的 `desc(nodeRuns.retryIndex)` 与 `desc(nodeRuns.startedAt)`
+//   清零且不得回归；前者只允许 `__repo_prep__` 两个因果尝试读取，内存里的
+//   retryIndex 大小比较收敛到唯一白名单形态
 //   （task.ts nextRetry 分配器，见 G8）。任何新 fork——哪怕出现在本家族
 //   从未听说过的新文件——立即翻红，至少强制 review 看见。
 //
@@ -129,7 +130,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     expect(countOccurrences(rollbackSrc, FORK_MARKER)).toBe(0)
   })
 
-  test('G3 fork #5 FIXED (RFC-096): task.ts retryNode cascade prev-inheritance picks via shared pickFreshestRun (top-level only, pure id order) — desc(retryIndex) is gone from task.ts', () => {
+  test('G3 fork #5 FIXED (RFC-096): retryNode cascade uses shared pickFreshestRun and contains no desc(retryIndex)', () => {
     // Anchor updated by RFC-098 B3 (audit ⑥-11): the targets set is no longer
     // seeded inline with runRow.nodeId — the wrapper-revival carve-out guards
     // the seed (`if (!wrapperRevivalTarget) targets.add(runRow.nodeId)`).
@@ -139,11 +140,9 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
       "errorMessage: 'queued for retry'",
     )
     // The fork is dead: no retryIndex ordering anywhere in the cascade — nor
-    // anywhere else in task.ts (resumeTask was already fixed for this exact
-    // bug class, locked by scheduler-boundary-resume-retryindex-vs-id.test.ts;
-    // count === 0 keeps BOTH sites from regressing).
+    // in this cascade. Repository-preparation attempts are a separate causal
+    // sequence and their exact two allowed reads are pinned by G6 below.
     expect(cascade.includes('.orderBy(desc(nodeRuns.retryIndex))')).toBe(false)
-    expect(countOccurrences(TASK_SRC, FORK_MARKER)).toBe(0)
     // Positive anchor: the inheritance source is the shared picker with the
     // top-level predicate (a placeholder must never inherit a fan-out child's
     // parentNodeRunId — that made it invisible to the frontier and the
@@ -175,14 +174,20 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     expect(countOccurrences(REPAIR_HELPERS_SRC, FORK_MARKER)).toBe(0)
   })
 
-  test('G6 whole-src fork inventory: desc(nodeRuns.retryIndex) appears NOWHERE in src/ — the audit ratchet reached its empty end state', () => {
+  test('G6 whole-src fork inventory: desc(nodeRuns.retryIndex) exists only on the two __repo_prep__ causal-order reads', () => {
     // The R2 ratchet the audit asks for ("desc(nodeRuns.retryIndex) 不得再出现
     // 在快照/继承路径"), made global: RFC-092 removed the scheduler.ts entry
     // (fork #4), RFC-096 removed task.ts (fork #5) and lifecycleRepair/
-    // helpers.ts (fork #6). The inventory is EMPTY and must stay that way —
-    // any new fork, in any src file (including ones this family never heard
-    // of), flips red immediately.
-    expect(srcInventory(FORK_MARKER)).toEqual({})
+    // helpers.ts (fork #6). RFC-287 later added two intentional repository-
+    // preparation reads: prep retries have a strictly increasing retryIndex
+    // and no clarify/parent/iteration fork, so causal order is the contract.
+    // The scoped regex proves both occurrences are tied to __repo_prep__ and
+    // the exact inventory makes any third occurrence flip red.
+    const prepCausalReads = TASK_SRC.match(
+      /eq\(nodeRuns\.nodeId, REPO_PREP_NODE_ID\)\)\)\s*\.orderBy\(desc\(nodeRuns\.retryIndex\), desc\(nodeRuns\.id\)\)/g,
+    )
+    expect(prepCausalReads).toHaveLength(2)
+    expect(srcInventory(FORK_MARKER)).toEqual({ 'services/task.ts': 2 })
   })
 
   test('G7 (RFC-096 §4 new ratchet): desc(nodeRuns.startedAt) appears NOWHERE in src/ — startedAt is not a freshness ordering', () => {

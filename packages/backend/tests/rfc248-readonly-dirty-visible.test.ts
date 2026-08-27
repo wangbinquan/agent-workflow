@@ -97,16 +97,29 @@ describe('AC-19 —— 语义边界', () => {
     // 搭在 `maybeRunCommitPush` 里的话，只有 `autoCommitPush=true` 且顶层节点
     // 成功的任务才会被检查——默认配置的任务、失败 / 取消的任务全都漏掉，
     // `readonly_dirty_count` 永远是 NULL、详情页永远没有提示。
-    const src = await Bun.file(
+    const application = await Bun.file(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'taskEngineApplication.ts',
+      ),
+    ).text()
+    const scheduler = await Bun.file(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
     ).text()
-    const callIdx = src.indexOf('await inspectReadonlyRepos(state, log)')
+    const callIdx = application.indexOf('await inspectReadonlyRepos(state, log)')
     expect(callIdx).toBeGreaterThan(0)
     // 调用点在终态分派**之前**（failed / canceled / awaiting_* / done 都在它后面）。
-    expect(callIdx).toBeLessThan(src.indexOf("if (result.kind === 'failed'"))
+    expect(callIdx).toBeLessThan(application.indexOf("if (result.kind === 'failed'"))
     // 而且不在 maybeRunCommitPush 体内。
-    const cpIdx = src.indexOf('async function maybeRunCommitPush(')
-    expect(callIdx).toBeLessThan(cpIdx)
+    const cpIdx = scheduler.indexOf('export async function maybeRunCommitPush(')
+    const cpBody = scheduler.slice(cpIdx, scheduler.indexOf('\n}\n', cpIdx))
+    expect(cpIdx).toBeGreaterThan(0)
+    expect(cpBody).not.toContain('inspectReadonlyRepos(')
   })
 
   test('**不**使用 lifecycle_alerts 通道', async () => {

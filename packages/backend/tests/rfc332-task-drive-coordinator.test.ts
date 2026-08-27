@@ -7,13 +7,13 @@ import {
 } from '../src/modules/task-execution/domain/ownership'
 import {
   DefaultTaskDriveCoordinator,
-  resolveTaskDriveConfig,
   type AdmittedContinuationStep,
   type RepositoryPreparationStep,
   type TaskDriveFailureReporter,
   type TaskDriverLifecyclePort,
   type TaskEngineOrchestrationPort,
-} from '../src/modules/task-execution/public/commands'
+} from '../src/modules/task-execution/application/drive/taskDriveCoordinator'
+import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import type { DbClient } from '../src/db/client'
 
 function deferred<T>() {

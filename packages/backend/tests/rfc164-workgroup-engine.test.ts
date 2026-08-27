@@ -904,14 +904,28 @@ describe('RFC-164 engine — source locks', () => {
     resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
     'utf8',
   )
+  const TASK_ENGINE_APPLICATION_SRC = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'taskEngineApplication.ts',
+    ),
+    'utf8',
+  )
   const PROMPT_SRC = readFileSync(
     resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
     'utf8',
   )
 
-  test('runTask branches to the workgroup engine BEFORE runScope (never frontier)', () => {
-    expect(SCHEDULER_SRC).toContain('isWorkgroupTask(task)')
-    expect(SCHEDULER_SRC).toContain('runWorkgroupEngine(')
+  test('the task engine registry routes workgroup turns without entering the DAG frontier', () => {
+    expect(TASK_ENGINE_APPLICATION_SRC).toContain('isWorkgroupTask(task)')
+    expect(TASK_ENGINE_APPLICATION_SRC).toContain('resolveTaskEngineSelection(')
+    expect(TASK_ENGINE_APPLICATION_SRC).toContain("'workgroup-turns': new WorkgroupTaskEngine")
+    expect(TASK_ENGINE_APPLICATION_SRC).toContain('runWorkgroupEngine(')
   })
 
   test('renderUserPrompt: workgroup protocol REPLACES the agent-outputs block (else-if chain)', () => {

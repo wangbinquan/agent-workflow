@@ -14,16 +14,19 @@ const read = (rel: string): string => readFileSync(resolve(ROOT, rel), 'utf8')
 
 describe('RFC-202 source locks', () => {
   test('scheduler abort checkpoints thread signal.reason into cancelTaskRow', () => {
-    const src = read('packages/backend/src/services/scheduler.ts')
+    const application = read(
+      'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
+    )
+    const scheduler = read('packages/backend/src/services/scheduler.ts')
     // All four checkpoints must pass the abort reason — dropping it silently
     // reverts daemon shutdowns to "canceled by user" (audit P1 F-13). RFC-331
     // makes the application-owned topology the required first argument.
-    const threaded = src.match(
+    const threaded = application.match(
       /cancelTaskRow\(\s*topology,\s*db,\s*taskId,[\s\S]{0,180}?opts\.signal\??\.reason,\s*opts\.executionContext\s*,?\s*\)/g,
     )
     expect(threaded?.length ?? 0).toBeGreaterThanOrEqual(4)
-    expect(src).toContain('DAEMON_SHUTDOWN_ABORT_REASON')
-    expect(src).toContain("to: 'interrupted'")
+    expect(scheduler).toContain('DAEMON_SHUTDOWN_ABORT_REASON')
+    expect(scheduler).toContain("to: 'interrupted'")
   })
 
   test('runner persists shutdown-aborted node_runs as interrupted (resume rollback eligibility)', () => {

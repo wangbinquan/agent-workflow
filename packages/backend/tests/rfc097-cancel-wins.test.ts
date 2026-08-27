@@ -272,15 +272,23 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
 
   test('stale/duplicate driver finally checks ownership before reading DB', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'taskDriverLifecycle.ts',
+      ),
       'utf8',
     )
-    const start = source.indexOf('async function releaseTaskDriverAndFinalizeWorkspace')
-    const body = source.slice(start, source.indexOf('function depsUnreapedProcessCode', start))
-    expect(body.indexOf('taskDriverRegistry.tokenForTask(taskId)')).toBeGreaterThan(-1)
-    expect(body.indexOf('taskDriverRegistry.controllerFor(token)')).toBeGreaterThan(-1)
-    expect(body.indexOf('taskDriverRegistry.controllerFor(token)')).toBeLessThan(
-      body.indexOf('depsUnreapedProcessCode'),
+    const start = source.indexOf('export async function releaseTaskDriverAndFinalize(')
+    const body = source.slice(start, source.indexOf('function unreapedProcessCode', start))
+    expect(body.indexOf('registry.tokenForTask(input.taskId)')).toBeGreaterThan(-1)
+    expect(body.indexOf('registry.controllerFor(token)')).toBeGreaterThan(-1)
+    expect(body.indexOf('registry.controllerFor(token)')).toBeLessThan(
+      body.indexOf('unreapedProcessCode'),
     )
   })
 })

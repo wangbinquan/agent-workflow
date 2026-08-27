@@ -537,8 +537,20 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
   }, 40_000)
 
   test("source guard: the synthetic key is unique/non-node ('commitpush:<nodeId>:<iter>:<sequence>') and BOTH canceled exits drain before returning", () => {
-    const src = readFileSync(
+    const schedulerSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      'utf-8',
+    )
+    const scopeSrc = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'taskDagScope.ts',
+      ),
       'utf-8',
     )
     const publicationSrc = readFileSync(
@@ -555,13 +567,13 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     )
     // Non-node key: a real node id can never collide with the prefix, so
     // deriveFrontier's in-flight set cannot freeze a scope node on it.
-    expect(src).toContain('`commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`')
+    expect(scopeSrc).toContain('`commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`')
     // Diagnostics name the exact trigger generation whose promise failed.
-    expect(src).toMatch(/auto commit&push trigger failed \(ignored\)[\s\S]{0,180}syntheticKey/)
+    expect(scopeSrc).toMatch(/auto commit&push trigger failed \(ignored\)[\s\S]{0,180}syntheticKey/)
     // Canonical worktree Git mutations serialize without moving the synthetic
     // out of the non-node in-flight lane used by the dispatch race.
-    expect(src).toContain('let commitPushTail: Promise<void> = Promise.resolve()')
-    expect(src).toContain('const commitWork = commitPushTail.then(() =>')
+    expect(scopeSrc).toContain('let commitPushTail: Promise<void> = Promise.resolve()')
+    expect(scopeSrc).toContain('const commitWork = commitPushTail.then(() =>')
     // The history scan and the push must use the same immutable tip even when
     // an ordinary node advances the local branch while publication is live.
     expect(publicationSrc).toContain('`${input.tipSha}:refs/heads/${input.mode.branch}`')
@@ -569,10 +581,10 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     // Revision #2: every canceled return inside the dispatch loop drains the
     // synthetics first. Two exits: loop-head aborted check + raced node
     // 'canceled' result.
-    const drainCalls = src.match(/await drainCommitPush\(\)/g) ?? []
+    const drainCalls = scopeSrc.match(/await drainCommitPush\(\)/g) ?? []
     expect(drainCalls.length).toBeGreaterThanOrEqual(2)
     // maybeRunCommitPush's per-repo loop bails out once the signal aborted.
-    expect(src).toMatch(
+    expect(schedulerSrc).toMatch(
       /for \(const repo of state\.repos\) \{[\s\S]{0,400}aborted === true\) return/,
     )
   })

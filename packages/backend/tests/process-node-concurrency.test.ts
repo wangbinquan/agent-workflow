@@ -16,6 +16,19 @@ import { getNodePoolSemaphore, resizeAllNodePools } from '../src/services/proces
 
 const schedulerSrc = (): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8')
+const taskEngineApplicationSrc = (): string =>
+  readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'taskEngineApplication.ts',
+    ),
+    'utf8',
+  )
 
 describe('process node concurrency', () => {
   test('same daemon scope shares one limiter; a second task waits on the first', async () => {
@@ -104,8 +117,8 @@ describe('process node concurrency', () => {
     expect(getNodePoolSemaphore(daemonScope, 'script', 5).capacity).toBe(5)
   })
 
-  test('scheduler uses the pool registry and never constructs a per-task pool', () => {
-    const scheduler = schedulerSrc()
+  test('task engine application uses the pool registry and never constructs a per-task pool', () => {
+    const application = taskEngineApplicationSrc()
     // RFC-287 T10（G4-C9）：三处池获取都带上 'seed-only'——任务启动只播种、不改写
     // daemon 级容量。少了它，一个带旧 opts 的子任务启动就会把用户刚在设置页改好的
     // 并发数静默改回去（resize-on-read）。锁「必须带 seed-only」而不只是「调了这个
@@ -121,15 +134,16 @@ describe('process node concurrency', () => {
       const call = new RegExp(
         `getNodePoolSemaphore\\(\\s*db,\\s*'${kind}',\\s*opts\\.${cfgKey}[^)]*'seed-only'`,
       )
-      expect(call.test(scheduler), `${kind} 池必须以 'seed-only' 取（否则子任务会撤销配置）`).toBe(
-        true,
-      )
+      expect(
+        call.test(application),
+        `${kind} 池必须以 'seed-only' 取（否则子任务会撤销配置）`,
+      ).toBe(true)
     }
-    expect(scheduler).not.toContain('new Semaphore(opts.maxConcurrentNodes ?? 4)')
-    expect(scheduler).not.toContain('new Semaphore(opts.maxConcurrentScriptNodes ?? 4)')
+    expect(application).not.toContain('new Semaphore(opts.maxConcurrentNodes ?? 4)')
+    expect(application).not.toContain('new Semaphore(opts.maxConcurrentScriptNodes ?? 4)')
     // RFC-266: 扇出子池也不再 per-task new（否则设置改动到不了运行中的任务）。
-    expect(scheduler).not.toContain('new Semaphore(opts.multiProcessSubprocessConcurrency ?? 4)')
-    expect(scheduler).toContain(
+    expect(application).not.toContain('new Semaphore(opts.multiProcessSubprocessConcurrency ?? 4)')
+    expect(application).toContain(
       'getTaskFanoutSem(taskId, opts.multiProcessSubprocessConcurrency ?? 4)',
     )
   })

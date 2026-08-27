@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 910,
+    "entries": 911,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17909,6 +17909,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/task.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/task.ts#createTaskDriverLifecyclePort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/task.ts#createTaskDriverLifecyclePort",
+      "symbol": "createTaskDriverLifecyclePort",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "internal-family",
         "authorization": false,
         "event": true,
@@ -21612,7 +21637,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:85d8ab76161aef027be6c7c780e54633f86544e5b849f393394402d9465ee508",
+  "sourceDigest": "sha256:db8ee412d9cb1d96fede43392faa65095ccd2447f5af16f88dd805325daa6084",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -23960,8 +23985,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3305:tasks",
-        "line": 3305,
+        "id": "task-authority:packages/backend/src/services/task.ts#3309:tasks",
+        "line": 3309,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -23976,8 +24001,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3430:taskExecutionIntents",
-        "line": 3430,
+        "id": "task-authority:packages/backend/src/services/task.ts#3434:taskExecutionIntents",
+        "line": 3434,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -23992,8 +24017,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3488:tasks",
-        "line": 3488,
+        "id": "task-authority:packages/backend/src/services/task.ts#3492:tasks",
+        "line": 3492,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -24008,8 +24033,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4116:tasks",
-        "line": 4116,
+        "id": "task-authority:packages/backend/src/services/task.ts#4120:tasks",
+        "line": 4120,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -24024,8 +24049,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5604:tasks",
-        "line": 5604,
+        "id": "task-authority:packages/backend/src/services/task.ts#5608:tasks",
+        "line": 5608,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

@@ -111,7 +111,7 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
     gcTaskWriteSem(taskId) // leave the registry clean
   })
 
-  test('revision #1 source guard: gc is called ONLY from runTask finally — HTTP rollback services never gc', () => {
+  test('revision #1 source guard: gc is called ONLY from task-engine drive finally — HTTP rollback services never gc', () => {
     // An HTTP-side gc would race the scheduler's cached SchedulerState.writeSem
     // reference (delete + recreate ⇒ two instances ⇒ mutex silently split).
     // crossClarify.ts dropped from this list per RFC-056 patch 2026-06-22: its
@@ -126,14 +126,25 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
       expect(src).toContain('getTaskWriteSem')
       expect(src.includes('gcTaskWriteSem')).toBe(false)
     }
-    const scheduler = readFileSync(SRC('scheduler.ts'), 'utf-8')
-    // The one-and-only delete point: runTask's try/finally shell.
-    expect(scheduler).toMatch(/finally\s*\{\s*gcTaskWriteSem\(opts\.taskId\)/)
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'taskEngineApplication.ts',
+      ),
+      'utf-8',
+    )
+    // The one-and-only delete point: the application drive's try/finally shell.
+    expect(application).toMatch(/finally\s*\{\s*gcTaskWriteSem\(opts\.taskId\)/)
     // No second call site sneaks in (one import line + one call).
-    const calls = scheduler.match(/gcTaskWriteSem\(/g) ?? []
+    const calls = application.match(/gcTaskWriteSem\(/g) ?? []
     expect(calls.length).toBe(1)
-    // The scheduler's writer lock comes from the registry (S-9 wiring).
-    expect(scheduler).toContain('writeSem: getTaskWriteSem(taskId)')
+    // The task engine's mechanics state writer lock comes from the registry (S-9 wiring).
+    expect(application).toContain('writeSem: getTaskWriteSem(taskId)')
   })
 })
 
