@@ -646,16 +646,65 @@ async function runTaskEngineOrchestratorInner(
       )
       return
     }
-    if (
-      await trySetTaskStatus({
-        db,
-        taskId,
-        to: 'awaiting_review',
-        allowedFrom: ['running'],
-        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
-        reason: 'scope-awaiting-review',
-      })
-    ) {
+    let parkedForReview = false
+    while (true) {
+      try {
+        const statusBeforeReviewPark = db
+          .select({ status: tasks.status })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .get()?.status
+        if (statusBeforeReviewPark === 'awaiting_human') {
+          // RFC-333 parks a clarify as soon as its projection commits. If the
+          // answer lands while this exact driver is still attached, the live
+          // scope can consume the rerun and reach a later review gate without
+          // resumeTask ever owning a second driver. Restore the canonical
+          // running state before parking the new gate; otherwise workgroup
+          // completion can be awaiting_confirmation forever while the task row
+          // remains awaiting_human. This mirrors the done-settle path below.
+          const unparked = await trySetTaskStatus({
+            db,
+            taskId,
+            to: 'running',
+            allowedFrom: ['awaiting_human'],
+            onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
+            ...(opts.executionContext !== undefined
+              ? { executionContext: opts.executionContext }
+              : {}),
+            reason: 'active-clarify-released-before-review',
+          })
+          if (unparked) await emitStatus(topology, taskId)
+        }
+        parkedForReview = await trySetTaskStatus({
+          db,
+          taskId,
+          to: 'awaiting_review',
+          allowedFrom: ['running'],
+          onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
+          ...(opts.executionContext !== undefined
+            ? { executionContext: opts.executionContext }
+            : {}),
+          reason: 'scope-awaiting-review',
+        })
+        break
+      } catch (error) {
+        if (!(error instanceof ManualQuestionParkRequired)) throw error
+        const manualPark = settleManualQuestionParkObligations({
+          db,
+          humanGates,
+          taskId,
+          ...(opts.executionContext === undefined
+            ? {}
+            : { executionContext: opts.executionContext }),
+        })
+        if (manualPark.parked) {
+          await emitStatus(topology, taskId)
+          log.info('task review outcome yielded to a durable manual question', { taskId })
+          return
+        }
+      }
+    }
+    if (parkedForReview) {
       await emitStatus(topology, taskId)
       log.info('task awaiting human review', { taskId })
     } else {

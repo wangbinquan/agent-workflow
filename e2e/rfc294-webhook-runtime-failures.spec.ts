@@ -110,13 +110,13 @@ interface DurableTaskProvenance {
 
 const TERMINAL_TASK_STATUSES = new Set(['done', 'failed', 'canceled', 'interrupted'])
 const AGENT_NODE_ID = 'runtime_agent'
-const NODE_TIMEOUT_MS = 2_500
-const TIMEOUT_STUB_DELAY_MS = 4_000
+const NODE_TIMEOUT_MS = 10_000
+const TIMEOUT_STUB_DELAY_MS = 12_000
 // The per-node deadline starts before the compiled stub has finished parsing
 // its invocation.  Keep the post-SIGTERM window comfortably wider than the
-// remaining 4s response delay, otherwise a cold start can make the fixture's
+// remaining 2s response delay, otherwise a cold start can make the fixture's
 // own exit timer win before it writes the deliberately late envelope.
-const TIMEOUT_TERMINATION_DELAY_MS = 6_000
+const TIMEOUT_TERMINATION_DELAY_MS = 14_000
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(180_000)
@@ -476,9 +476,10 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       daemon = await startDaemon({
         stubMode: 'runtime-scenario',
         extraEnv: { SCENARIO_PLAN_FILE: planFile, SCENARIO_STATE_DIR: stateDir },
-        // Each failed node gets exactly one automatic retry.  2.5s leaves
-        // headroom for a cold compiled-stub spawn while remaining below the
-        // timeout scenario's 4s late output.
+        // Each failed node gets exactly one automatic retry. Keep ordinary
+        // runtime fixtures well clear of a loaded Windows runner's compiled-
+        // stub cold start while the timeout fixture remains deterministically
+        // later than the same global deadline.
         configOverrides: {
           defaultNodeRetries: 1,
           // RFC-313: 上限已是两个预算的乘积；置 0 保持「1+defaultNodeRetries」的既有计数。
