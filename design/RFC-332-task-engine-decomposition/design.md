@@ -1,8 +1,9 @@
 # RFC-332 技术设计：TaskEngine 拆分
 
-> 状态：In Progress（2026-08-27；D1～D12、能力影响与 DEV-1/DEV-2 已获用户批准）
+> 状态：Done（2026-08-27；W2-B 实现、canonical provenance 与 exact-SHA hosted closeout 已完成）
 >
-> 对齐：RFC-294 W2-B；current source `b598d4a35e681d3623f44c15ef632d50a2b710d9`。
+> 对齐：RFC-294 W2-B；baseline source `b598d4a35e681d3623f44c15ef632d50a2b710d9`，最终功能快照
+> `4dd30d034f1bcb0c6532301cec11bdd288702105`。
 > 复用 RFC-328 durable authority/context/effect/outbox 与 RFC-331 topology ports，不建立平行权威。
 
 ## 1. 当前执行形状
@@ -535,4 +536,11 @@ flowchart TD
 
 W2-B 的边界成果是：TaskEngine/drive 与 DAG graph/frontier 的唯一生产 owner 已形成；node/wrapper mechanics
 仍明确待 W2-C/D，status projection 待 W3，completion/source-control implementation 待 W5，而不是被整体搬进一个
-改名后的 scheduler。实现候选已满足该图；正式 Done 仍等待 payload commit 后 provenance replay 与 exact-SHA hosted CI。
+改名后的 scheduler。该图已在 `4dd30d034f1bcb0c6532301cec11bdd288702105` 成为已发布事实：四份治理
+artifact 重放到归一化快照 `a36fd94c28d1b8300e9b67c0b0ca5c3dcc6d0761`，canonical source digest 为
+`sha256:db8ee412d9cb1d96fede43392faa65095ccd2447f5af16f88dd805325daa6084`；该 exact SHA 的 CI `33052994260`、
+git-protocols-e2e `33052994263` 与 integration-opencode `33052994318` 均为 terminal `success`。
+
+边界不因 Done 而扩张：`taskDriveLegacy` 只是 legacy `services/task.ts` 在 W4 前的单一 exact composition seam；
+node/workgroup-host、wrapper/replay、status、completion 依次仍归 W2-C、W2-D、W3、W5。下一个必做的依赖节点是
+P0-C residual，它和后续 wave 都不在 RFC-332 授权内。

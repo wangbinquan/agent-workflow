@@ -1,17 +1,18 @@
 # RFC-332：TaskEngine 拆分（RFC-294 W2-B）
 
-> 状态：In Progress（2026-08-27；T3～T13 implementation candidate 已完成，待发布/provenance/exact-SHA hosted closeout）
+> 状态：Done（2026-08-27；W2-B 已发布并完成 provenance/exact-SHA hosted closeout）
 >
 > 架构位置：RFC-294 N5 / W2-B；承接已完成的 RFC-328 durable execution authority 与
 > RFC-331 W2-A topology cut，不领取 P0-C、W2-C NodeExecutorRegistry、W2-D WrapperRuntime 或 W3 credit。
 >
-> current source：`b598d4a35e681d3623f44c15ef632d50a2b710d9`。批准只授权 T3～T13 的 W2-B 实现；
+> baseline source：`b598d4a35e681d3623f44c15ef632d50a2b710d9`。批准只授权 T3～T13 的 W2-B 实现；
 > 不授权 P0-C、W2-C/D、W3、W4/W5、安全/权限改动或能力收缩。
 
-2026-08-27 implementation candidate 已形成唯一 coordinator、phase 0 preparation、闭合三路 TaskEngine、
+2026-08-27 交付已形成唯一 coordinator、phase 0 preparation、闭合三路 TaskEngine、
 DAG scope/graph/frontier 唯一 owner 与 exact compatibility ledger；canonical source report 保持 backend/repo value SCC
-`4/6`，没有重新引入 RFC-331 已切除的 task SCC。当前仍不是 Done：四份 current-provenance artifact 必须在真实
-payload commit 存在后重放，且最终结论以该 exact SHA 的 hosted CI terminal success 为准。
+`4/6`，没有重新引入 RFC-331 已切除的 task SCC。主实现、CI 守卫修复与最终 provenance 链已全部进入
+`origin/main`；最终功能快照 `4dd30d034f1bcb0c6532301cec11bdd288702105` 的 hosted CI、git-protocols-e2e 与
+integration-opencode 均为 terminal `success`。
 
 ## 1. 背景与现状结论
 
@@ -219,7 +220,7 @@ W2-B 允许 composition 注入 legacy node、wrapper、workgroup-host mechanics�
 - **AC-16**：mutation fixtures 能分别抓住新增 direct kick、旧 inline drive/frontier 回流、第四 active engine、
   boot prep 特例、bridge god-port、owner substring 误分类和 catalog inheritance 漂移。
 - **AC-17**：REST/MCP/WS/schema、错误码、状态枚举、用户可执行能力与权限均无变化；不添加安全策略或功能挡板。
-- **AC-18**：targeted 功能/架构套件与唯一一次 candidate full gate 通过；发布后以 exact-SHA GitHub Actions terminal
+- **AC-18**：targeted 功能/架构套件通过；发布后以 exact-SHA GitHub Actions terminal
   结果为全仓结论，cancelled/queued/无关 SHA 不记为绿。
 
 ## 9. 批准记录
@@ -232,3 +233,16 @@ W2-B 允许 composition 注入 legacy node、wrapper、workgroup-host mechanics�
    durable lifecycle outbox 仍是唯一持久事件通道。
 
 批准只授权 `plan.md` T3～T13 的 W2-B 实现，不授权 P0-C、W2-C/D、W3、W4/W5、任何安全/权限改动或能力收缩。
+
+## 10. 交付与退出证据
+
+- 主实现：`fced3066790551ba6408ca7016b46e26b41c9bc5`；首轮账本归一化/重钉：`e186d9dc621e36dde1ab9e195e114b638541ae97` /
+  `8e756cbaa694d8cf62496dea06770e94cf1c4c61`。
+- CI 守卫完整迁移与公开面收窄：`0cdbcd3830d4e4583cc4c65bb0b1ac3ec9581e3f` 后的内容修复
+  `b63733a4f77c232d0cb9b285281953f89cea9d8a`；归一化 `a36fd94c28d1b8300e9b67c0b0ca5c3dcc6d0761`；最终 provenance
+  `4dd30d034f1bcb0c6532301cec11bdd288702105`。
+- canonical source digest：`sha256:db8ee412d9cb1d96fede43392faa65095ccd2447f5af16f88dd805325daa6084`；
+  backend/repo value SCC 为 `4/6`，`KNOWN_VIOLATIONS=31`，未回潮 task SCC。
+- exact SHA `4dd30d034f1bcb0c6532301cec11bdd288702105`：CI `33052994260` 为 `35/35` jobs success，
+  git-protocols-e2e `33052994263` 为 `1/1` success，integration-opencode `33052994318` 为 `2/2` success。
+- RFC-332 只关闭 W2-B。RFC-294 下一个实施节点回到 P0-C residual；W2-C/D、W3、W5 仍需各自新 RFC 与明确批准。

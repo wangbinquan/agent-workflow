@@ -1,6 +1,6 @@
 # RFC-332 实施计划：TaskEngine 拆分
 
-> 状态：In Progress（2026-08-27；T0～T13 implementation candidate 已完成，待发布、provenance replay 与 exact-SHA hosted CI）
+> 状态：Done（2026-08-27；T0～T13 已发布，provenance replay 与 exact-SHA hosted CI 已收口）
 >
 > 批准边界：用户已授权 T3～T13；不授权 P0-C、W2-C/D、W3、
 > W4/W5、安全/权限或能力收缩工作。
@@ -50,12 +50,12 @@ T7～T9 在同一 production candidate 内完成，但尚不单独发布一个�
 
 ### 2.4 Batch C：三 engine 与 single-consumer cutover
 
-| ID          | 任务                                           | 状态/依赖                | 完成条件                                                                                                                                                  |
-| ----------- | ---------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| RFC-332-T10 | orchestrator + registry                        | 已完成（依赖 T5,T9）     | hydrate/claim/preflight/settle 迁 module；registry 恰好 dag/workgroup-turns/dw-generate；code-round 无 active arm                                         |
-| RFC-332-T11 | DagTaskEngine                                  | 已完成（依赖 T10）       | `runScope/deriveFrontier` 迁唯一 owner；top/nested scope、questions、commit-push、skipped/consumed 全等价                                                 |
-| RFC-332-T12 | workgroup/dynamic strategies + mechanics ports | 已完成（依赖 T10,T11）   | round/dynamic state machine 不改；typed host/node/nested-scope/replay adapters 有 W2-C/D remove wave，completion effect 经长期 required port，无 god-port |
-| RFC-332-T13 | production cutover + closeout                  | 候选完成（依赖 T10-T12） | 全入口改 coordinator；四 kick/boot 特例/legacy task drive/frontier body=0；artifacts重放；正式 closeout 待发布/provenance/CI                              |
+| ID          | 任务                                           | 状态/依赖              | 完成条件                                                                                                                                                  |
+| ----------- | ---------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RFC-332-T10 | orchestrator + registry                        | 已完成（依赖 T5,T9）   | hydrate/claim/preflight/settle 迁 module；registry 恰好 dag/workgroup-turns/dw-generate；code-round 无 active arm                                         |
+| RFC-332-T11 | DagTaskEngine                                  | 已完成（依赖 T10）     | `runScope/deriveFrontier` 迁唯一 owner；top/nested scope、questions、commit-push、skipped/consumed 全等价                                                 |
+| RFC-332-T12 | workgroup/dynamic strategies + mechanics ports | 已完成（依赖 T10,T11） | round/dynamic state machine 不改；typed host/node/nested-scope/replay adapters 有 W2-C/D remove wave，completion effect 经长期 required port，无 god-port |
+| RFC-332-T13 | production cutover + closeout                  | 已完成（依赖 T10-T12） | 全入口改 coordinator；四 kick/boot 特例/legacy task drive/frontier body=0；artifacts 已重放；发布/provenance/exact-SHA CI 已收口                          |
 
 T10～T13 的 consumer switch、旧 body 删除与 facade ledger 更新必须作为一个 cohesive production commit；
 Batch A 的 additive contract commit 可以独立存在，Batch B/C 不能发布可双驱动的中间态。
@@ -94,6 +94,12 @@ Batch A 的 additive contract commit 可以独立存在，Batch B/C 不能发布
 4. **Canonical replay**：由 generator 重放 owner/facade/cross-context/current-report；若内容足够小可与 cutover 同笔，
    否则紧随 payload commit，且不在 replay 前声明 W2-B Done。
 5. **Docs closeout**：回填真实 commits、artifact digest、targeted checks 与 exact-SHA hosted CI。
+
+实际发布链：主实现 `fced3066790551ba6408ca7016b46e26b41c9bc5` → 首轮归一化/重钉
+`e186d9dc621e36dde1ab9e195e114b638541ae97` / `8e756cbaa694d8cf62496dea06770e94cf1c4c61` → 首轮守卫修复
+`0cdbcd3830d4e4583cc4c65bb0b1ac3ec9581e3f` → 最终内容修复 `b63733a4f77c232d0cb9b285281953f89cea9d8a` →
+归一化 `a36fd94c28d1b8300e9b67c0b0ca5c3dcc6d0761` → provenance 重钉
+`4dd30d034f1bcb0c6532301cec11bdd288702105`。
 
 每笔提交前 exact-path 检查 shared index；若 `origin/main` 前进，按共享 main 规则安全 fast-forward/merge 并只对受影响内容做
 比例验证。不得 reset/stash/rebase/amend/force-push 或携带并发无关 WIP。
@@ -141,28 +147,31 @@ Batch A 的 additive contract commit 可以独立存在，Batch B/C 不能发布
 - [x] RFC 三件套、RFC-294、index、STATE 完成一致性回填。
 - [x] 用户显式批准 D1～D12、能力影响与 DEV-1/DEV-2（2026-08-27，“ok”）。
 - [x] T3～T6 Batch A 完成。
-- [x] T7～T9 coordinator/prep candidate 完成。
-- [x] T10～T13 engine/cutover/artifact implementation candidate 完成。
+- [x] T7～T9 coordinator/prep 实现完成。
+- [x] T10～T13 engine/cutover/artifact 实现与发布收口完成。
 - [x] production direct kick/boot prep special dispatch/legacy task drive-frontier body 全部归零。
 - [x] 三 engine、prep、recovery、adjacent RFC 与 lifecycle/WS targeted oracle 全绿。
 - [x] canonical payload artifacts 由真实 source 重放，关键 owner/wave、RI 与 source digest 对齐。
 - [x] backend/repo value SCC 保持 RFC-331 收口后的 `4/6`，无 task-execution SCC 回归。
-- [ ] payload commit 后重放四份 N1a provenance，content digest 与真实 published snapshot 对齐。
-- [ ] exact-SHA hosted CI terminal success，失败/取消/排队均已精确归因。
-- [ ] RFC-332 标 Done；RFC-294 指针推进到 P0-C residual，而非误标 W2 全部完成。
+- [x] payload commit 后重放四份 N1a provenance，content digest 与真实 published snapshot 对齐。
+- [x] exact-SHA hosted CI terminal success，失败/取消/排队均已精确归因。
+- [x] RFC-332 标 Done；RFC-294 指针推进到 P0-C residual，而非误标 W2 全部完成。
 
-### 6.1 implementation candidate 验证记录（2026-08-27）
+### 6.1 最终验证记录（2026-08-27）
 
 - backend typecheck 绿色；RFC-287 deferred preparation 全矩阵 `58/58`；resume/retry/lifecycle/prune 定向矩阵 `63/63`；
 - RFC-331/RFC-332/RFC-243 与 architecture 定向组合 `65/65`；最终 engine/DAG/source-lock 行为组合 `158/158`；
-- RFC-317 module boundary + ledger high-water `62/62`；`startTaskDeps → taskEngineApplication` 是唯一新增 R1
-  composition bridge，已同时进入 canonical exception 与 commons debt，具名 `RFC-332` 且在 `W2-D` 删除；六项分母增长均以一次性
-  `allowGrowth` 点名 RFC-332，未新增 `KNOWN_VIOLATIONS`；
-- canonical manifest payload/RI `18` 项绿色；四份 N1a provenance 用例按设计保持 publication-dependent 红，
-  因为当前尚无 payload commit SHA，禁止手工伪造 content digest/current snapshot；
-- current canonical denominator：mutation `910`、cross-context `1059`、exception `1033`、facade `371`、
-  public surface `326`、owner `17610`；backend/repo value SCC 仍为 `4/6`；
-- 本地尚未 commit/push；正式 Done 与 RFC-294 next pointer 只在发布、provenance replay、exact-SHA hosted CI 后更新。
+- RFC-317 module boundary + ledger high-water 最终分别 `25/25` 与 `37/37`；
+  `startTaskDeps → taskEngineApplication` 与 `task → taskDriveLegacy` 两条 exact composition seam 均进入 canonical exception/
+  commons debt，具名 `RFC-332` 与各自 `W2-D` / `W4` 删除波次；内容提交使用的一次性 `allowGrowth`
+  已在归一化提交中全部删除，未新增 `KNOWN_VIOLATIONS`；
+- canonical manifest N1a/N1b 最终 `22/22`绿色；source digest
+  `sha256:db8ee412d9cb1d96fede43392faa65095ccd2447f5af16f88dd805325daa6084`，四份 governance artifact 的
+  `currentSnapshotSha` 均为 `a36fd94c28d1b8300e9b67c0b0ca5c3dcc6d0761`；
+- current canonical denominator：mutation `911`、cross-context `1049`、exception `1023`、facade `371`、
+  public surface `300`、owner `17622`；backend/repo value SCC 仍为 `4/6`；
+- exact SHA `4dd30d034f1bcb0c6532301cec11bdd288702105` 已在 `origin/main`：CI `33052994260` `35/35`、
+  git-protocols-e2e `33052994263` `1/1`、integration-opencode `33052994318` `2/2` 均 terminal `success`。
 
 ## 7. 已批准的精确内容
 
@@ -183,4 +192,5 @@ Batch A 的 additive contract commit 可以独立存在，Batch B/C 不能发布
 - 能力影响清单十二行全部零行为变化；
 - DEV-1 W2-C/D legacy adapters + W5 completion adapter 迁位，与 DEV-2 W3 前 status publisher compatibility。
 
-T3～T13 implementation candidate 已完成；本次批准不外溢到后续 wave，且“候选完成”不替代发布与 hosted closeout。
+T3～T13 已发布并完成 hosted closeout；本次批准不外溢到后续 wave。下一节点是 P0-C residual；
+W2-C/D、W3、W5 仍需新 RFC 与明确批准。
