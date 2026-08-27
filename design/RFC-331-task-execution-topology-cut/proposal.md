@@ -1,13 +1,14 @@
 # RFC-331：Task Execution 拓扑切割（W2-A 第一刀）
 
-> 状态：Approved / Implementation Complete / Publication Pending（2026-08-27；T3～T12 本地候选已完成，待发布与 exact-SHA hosted CI 收口）
+> 状态：Done（2026-08-27；T3～T12 已发布，exact-SHA hosted CI 已收口）
 >
 > 架构位置：RFC-294 N3 / W2-A topology cut；承接已完成的 RFC-328，不领取 W2-B TaskEngine、
 > W2-C NodeExecutor 或 W2-D WrapperRuntime 的 credit。
 >
-> 已发布基线：`158b67296b05a11f22a92ab64b2045643f895f9f`（`HEAD=origin/main`）；该 SHA 的
-> exact-SHA CI `33024515076` 已达到 terminal `success`。RFC-331 本地候选尚未提交/发布；按候选生产源码
-> 重放的 `architecture/current-report.json` digest 为
+> 发布证据：主实现 `81d97d060fbbe6e14144b10c17f78f0bc999414e`，canonical census 归一
+> `262f34bf73735261b05b49363311ee2390311e4b`，provenance repin `89b19057d189676ed95c6a5312cf7714f65fde95`；
+> 最终功能 source-lock 修复收口于 `4152b377afa357e2e339f921dac09b21770cebc0`，其 exact-SHA CI
+> `33034946053` terminal `success`（35/35 jobs）。已发布 `architecture/current-report.json` digest 为
 > `sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac`。
 
 ## 1. 背景
@@ -40,7 +41,7 @@ RFC-294 P0-D：回答“哪一代 worker 可以继续写”。它刻意没有领
 workspace 字段导入完整 `getTask`。该基线为 repo SCC=7、backend SCC=5、
 `KNOWN_VIOLATIONS=37`。
 
-2026-08-27 本地候选已重放出以下结果：
+2026-08-27 已发布实现重放出以下结果：
 
 - `task.ts` 四个 kick 全部经必填 `SchedulerDriverPort.kick`，传递同一 RFC-328 context
   instance 的窄 identity ref、原 `AbortSignal` 与完整 runtime config；`task.ts → scheduler.ts` 值级 import=0。
@@ -50,7 +51,7 @@ workspace 字段导入完整 `getTask`。该基线为 repo SCC=7、backend SCC=5
   不再依赖 `DbClient` 或 `task.ts`，单仓 fallback、多仓 longest-prefix 与错误顺序保持。
 - RFC-328 的 durable ownership/context/runtime registry/lifecycle outbox 未增加平行实现；WS adapter 只发现有
   ephemeral frame 序列。
-- 六条 exact depcheck debt 已删；候选报告为 repo SCC=6、backend SCC=4、
+- 六条 exact depcheck debt 已删；已发布报告为 repo SCC=6、backend SCC=4、
   `KNOWN_VIOLATIONS=31`，task SCC family 消失。route→DB=15、transport→DB=2、AppDeps=54、
   inbound/outbound=92/23 均不变，未把其他 wave 倒签完成。
 
@@ -81,7 +82,7 @@ child cancel/resume/is-active、daemon shutdown→interrupted、WS frame 顺序�
 
 ### G5：让边界由机器持续保护
 
-两笔 production cut 各自同步删除精确 depcheck 账目并补负向 fixture：未来重新增加
+两个逻辑 production cut 各自同步删除精确 depcheck 账目并补负向 fixture：未来重新增加
 `task.ts → scheduler.ts`、`scheduler.ts → task.ts` 或 `expandService.ts → task.ts` 必须转红。
 
 ## 4. 非目标
@@ -109,8 +110,9 @@ child cancel/resume/is-active、daemon shutdown→interrupted、WS frame 顺序�
 - **D6 — 两个目的化 query**：scheduler 状态 projection 与 call-graph workspace projection 分开；
   不复用 full `Task` DTO，不让结构差异服务读取 task 内部聚合。query 合同经 public surface 暴露、SQLite 实现留 module 内，
   `getCallTargets` 接收显式绑定的 read-model instance，不反向 import implementation。
-- **D7 — 两刀提交**：第一刀原子切 A1+B1～B4 并删除前五条账；第二刀切 E3 call-graph query
-  并删除第六条账。任一刀不允许临时新增 `KNOWN_VIOLATIONS`。
+- **D7 — 两刀逻辑切割**：第一刀原子切 A1+B1～B4 并删除前五条账；第二刀切 E3 call-graph query
+  并删除第六条账。任一刀不允许临时新增 `KNOWN_VIOLATIONS`。批准时计划分两笔提交；最终发布时两刀已在同一
+  candidate snapshot 共存，故以 `81d97d060` 单笔 cohesive commit 收口，逻辑账目与验证仍分刀断言。
 - **D8 — 功能保真优先**：所有既有正向路径先有 golden/interaction oracle，再做接线；发现设计会改变
   正常能力时退回 RFC 重新请批，不以“架构更干净”为理由接受功能损失。
 
@@ -158,16 +160,18 @@ child cancel/resume/is-active、daemon shutdown→interrupted、WS frame 顺序�
 2026-08-27，用户在确认上述范围后以“开始”显式批准 D1～D8、能力影响清单与 design DEV-1 临时
 compatibility 偏离，并授权进入 `plan.md` 的 T3～T12。批准不扩展到 W2-B/C/D、安全/权限或能力收缩工作。
 
-## 10. 本地候选收口证据
+## 10. 发布收口证据
 
-2026-08-27，T3～T12 的 production/test/architecture 候选已完成，但尚未 commit/push，因此不标
-Done，也不把基线 SHA 的绿灯冒充候选证据。本地已验证：
+2026-08-27，T3～T12 已完整发布。两刀逻辑切割在同一 cohesive 主实现提交 `81d97d060` 中原子落地，
+未制造可长期存在的半态；canonical census 由 `262f34bf7` 归一，四条 committed-provenance 由
+`89b19057d` 真实 repin。发布后已验证：
 
 - 新 topology suite 8/8、task-execution compatibility 4/4、WS golden 5/5、call workflow 12/12；
 - call-graph 单/多仓 3/3 + 6/6，RFC-103 config inheritance 21/21，RFC-287 deferred prep 58/58；
 - architecture preflight/module-boundary/high-water 75/75，typecheck、lint、depcheck 通过；
-- canonical payload 重生成并通过内容投影；未发布工作树的 4 条 committed-provenance 断言保持待发布
-  后按真实 commit SHA repin，不写假 SHA。
+- RFC-287 注册的 scheduler source-lock corpus 95 files / 926 tests / 10,487 expects 全绿；
+- 首轮 hosted CI 暴露四处真实 source-lock 漂移，依次由 `11634edc7`、`2cad7c2f4`、`4152b377a`
+  收口；最终 exact-SHA run `33034946053` 为 terminal `success`，35/35 jobs 无失败。
 
-待用户授权发布后，必须按候选的 exact SHA 获得 hosted CI 终态，再把 RFC-331/STATE/index
-从 Publication Pending 收口为 Done，并将 RFC-294 的执行指针正式移到 W2-B。
+RFC-331 至此 Done，RFC-294 W2-A topology cut 完成，执行指针移到 W2-B TaskEngine。该状态只关闭
+W2-A，不把 W2 或 RFC-294 总体标 Done，也不自动授权 W2-B/C/D 的生产实现。

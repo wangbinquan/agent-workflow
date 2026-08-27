@@ -1,7 +1,6 @@
 # RFC-331 实施计划：Task Execution 拓扑切割
 
-> 状态：Approved / Implementation Complete / Publication Pending（2026-08-27；T3～T12
-> 本地候选与定向验证已完成，待两个逻辑 cut 的发布、provenance repin 与 exact-SHA hosted CI）
+> 状态：Done（2026-08-27；T3～T12 已发布，provenance 已真实 repin，exact-SHA hosted CI 已收口）
 >
 > 批准边界：只授权 RFC-331 T3～T12，不授权 W2-B/C/D、安全/权限或能力收缩改动。
 
@@ -10,7 +9,7 @@
 1. 只清理 RFC-294 W2-A 指定的六条 exact task-family debt，不扩展到 W2-B/C/D。
 2. 复用 RFC-328 的 module/context/ownership/runtime/outbox；任何第二实现直接阻断。
 3. 先锁功能 oracle，再切接线；架构指标不得以功能损失换取。
-4. 两刀各自可构建、可测试、可回滚；不添加临时 `KNOWN_VIOLATIONS`。
+4. 两刀各自可构建、可测试；最终以单笔 cohesive implementation commit 发布，不添加临时 `KNOWN_VIOLATIONS`。
 5. 不跑本地全量 Bun gate；实现发布后以 GitHub Actions exact-SHA 为全仓权威，本地只做可归因的 targeted checks。
 6. 共享 `main` 精确路径 stage/commit，保留并发输出；发布前按仓规同步 origin 并进入短 Git 临界区。
 
@@ -52,17 +51,21 @@ T7/T8/T9 必须在一个 production commit 中原子出现，避免 graph 已绿
 | ----------- | -------------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
 | RFC-331-T10 | call-graph workspace query | T5,T9 | SQLite 窄投影 + public composition factory + legacy 单仓 fallback；不返回 full Task DTO               |
 | RFC-331-T11 | expandService cutover      | T10   | route/composition 显式注入；行为逐字保持；`expandService→task`=0、module deep import=0                |
-| RFC-331-T12 | 第二刀销账与候选收口       | T11   | 第六条 exact ledger 删除；KNOWN 37→31；8-file task SCC 消失；RFC/STATE/index 回填 Publication Pending |
+| RFC-331-T12 | 第二刀销账与发布收口       | T11   | 第六条 exact ledger 删除；KNOWN 37→31；8-file task SCC 消失；RFC/STATE/index 回填 Done                |
 
 ## 3. 提交与发布拆分
 
-文档批与未来 production 批分开：
+实际发布链：
 
 1. **Docs baseline（已完成）**：RFC-328/329 closeout、RFC-294 current reconciliation、RFC-331 三件套/index/STATE。
-2. **Implementation A（本地候选已完成）**：T3～T9，合同/oracle + A1/B1～B4 cohesive cut，删除前五条账。
-3. **Implementation B（本地候选已完成）**：T10～T12，call-graph 窄读模型，删除第六条账并把文档收到 Publication Pending。
+2. **Implementation A+B（`81d97d060`）**：T3～T12 在一个 cohesive snapshot 中原子发布；合同/oracle、
+   A1/B1～B4 与 call-graph 窄读模型同时落地，六条账全部删除，未制造长期半态。
+3. **Canonical normalization（`262f34bf7`）**：重放 report/manifests 并固定内容投影。
+4. **Provenance repin（`89b19057d`）**：四份 artifact 的 `currentSnapshotSha` 指向真实 payload commit。
+5. **Hosted source-lock repairs（`11634edc7`、`2cad7c2f4`、`4152b377a`）**：只对齐已改变接线的历史源码锁；
+   最终 run `33034946053` terminal `success`（35/35 jobs）。
 
-每个 production batch 推送后按自己的 exact SHA 查询 CI；若 run 被 newer main 取消，只接受包含该提交的后继 exact-SHA
+production batch 推送后按自己的 exact SHA 查询 CI；若 run 被 newer main 取消，只接受包含该提交的后继 exact-SHA
 终态并逐 job 归因，不把 queued/cancelled/无关红写成绿。
 
 ## 4. 验证矩阵
@@ -82,18 +85,18 @@ T7/T8/T9 必须在一个 production commit 中原子出现，避免 graph 已绿
 - [x] RFC 三件套已定义范围、合同、两刀顺序、能力影响与验收标准。
 - [x] 用户显式批准 D1～D8、能力影响清单与 DEV-1（2026-08-27，“开始”）。
 - [x] T3～T6 additive contract/oracle 完成。
-- [x] T7～T9 Cut A 本地候选完成，前五条账删除。
-- [x] T10～T12 Cut B 本地候选完成，第六条账删除；正式 Done 仍等发布门。
+- [x] T7～T9 Cut A 已发布，前五条账删除。
+- [x] T10～T12 Cut B 已发布，第六条账删除。
 - [x] `KNOWN_VIOLATIONS` 37→31，task SCC family 消失，其他受管 debt 无未登记增长。
 - [x] 本地功能 oracle 与对外合同零回归。
-- [ ] exact-SHA hosted CI 终态绿。
-- [ ] RFC-331/STATE/index 标 Done；RFC-294 下一步刷新为 W2-B。
+- [x] exact-SHA hosted CI 终态绿：`4152b377a` / `33034946053` / 35 of 35 jobs。
+- [x] RFC-331/STATE/index 标 Done；RFC-294 下一步刷新为 W2-B。
 
-候选数字：`architecture/current-report.json` digest
+落地数字：`architecture/current-report.json` digest
 `sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac`；backend/repo SCC
 `5/7 → 4/6`，KNOWN `37 → 31`，backend production/module `848/333`，route→DB `15`、
-transport→DB `2`、AppDeps `54`、inbound/outbound `92/23`。canonical payload 的内容投影已重生成；
-当前四条 provenance assertion 必须在发布后用真实 commit SHA repin，不在未提交工作树写假 SHA。
+transport→DB `2`、AppDeps `54`、inbound/outbound `92/23`。canonical payload 由 `262f34bf7` 固定；
+四条 provenance assertion 已由 `89b19057d` 真实 repin 到该 payload commit。
 
 ## 6. 已批准的精确内容
 
@@ -105,7 +108,7 @@ transport→DB `2`、AppDeps `54`、inbound/outbound `92/23`。canonical payload
 - D4 一个 driver 总合同、消费方窄取；
 - D5 WS publisher 与 durable outbox 分相；
 - D6 两个目的化 read model；
-- D7 两刀提交；
+- D7 两刀逻辑切割，最终单笔 cohesive 发布；
 - D8 功能保真优先；
 - 能力影响清单七行均为零行为变化。
 - design DEV-1：只在既有 `startTaskDeps.ts` composition seam 临时绑定 legacy task/scheduler，并新增两处一跳 public

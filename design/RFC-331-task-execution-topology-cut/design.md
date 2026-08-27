@@ -1,7 +1,7 @@
 # RFC-331 技术设计：Task Execution 拓扑切割
 
-> 状态：Approved / Implementation Complete / Publication Pending；2026-08-27 的 T3～T12
-> 本地候选已实现并完成定向验证，待真实 commit provenance 与 exact-SHA hosted CI。
+> 状态：Done（2026-08-27）；T3～T12 已发布，最终 containing SHA
+> `4152b377afa357e2e339f921dac09b21770cebc0` 的 exact-SHA CI `33034946053` terminal `success`（35/35 jobs）。
 >
 > 对齐：RFC-294 N3 / W2-A；复用 RFC-328 durable execution authority，不创建第二套 ownership、
 > runtime registry、execution context 或 lifecycle outbox。
@@ -255,7 +255,8 @@ driver 断言完整请求，不依赖真的启动 scheduler。
 4. 删除第六条 depcheck exact debt；
 5. current task SCC family 消失，`KNOWN_VIOLATIONS` 37→31。
 
-Cut B 独立提交与回滚；它不移动 call-graph 或 GC owner。
+Cut B 在设计上保持独立验证边界，且不移动 call-graph 或 GC owner。批准时计划独立提交；最终发布时 A/B 已在同一
+candidate snapshot 共存，故由 `81d97d060` 单笔 cohesive commit 收口，不伪造中间历史。
 
 ## 6. 失败模式
 
@@ -297,10 +298,10 @@ Cut B 独立提交与回滚；它不移动 call-graph 或 GC owner。
 
 ## 8. 兼容与回滚
 
-- 零 schema/API/MCP/WS 变化，两个 cut 均可按提交独立 revert；
+- 零 schema/API/MCP/WS 变化；两个 cut 保持独立 oracle/ledger 边界，最终 Git 发布单元为 cohesive commit `81d97d060`；
 - 回滚必须恢复对应 exact ledger，不能保留未解释依赖；
 - RFC-328 migration、ownership/effect ledger、runtime registry 与 lifecycle outbox 不回滚；
-- 若 Cut A 已落而 Cut B 失败，可保留已消失的前五条，仅第六条继续挂账；
+- 批准期允许 Cut A 先落、Cut B 失败时保留前五条下降；最终发布未产生该半态，回滚 `81d97d060` 时必须连同六条 ledger 一致恢复；
 - 任一功能 oracle 变化先停实施、回到 proposal 能力影响与用户批准门。
 
 ## 9. 遗留债与后续
@@ -313,7 +314,7 @@ Cut B 独立提交与回滚；它不移动 call-graph 或 GC owner。
 
 完成 RFC-331 只能标记 W2-A topology cut 完成，不能把 W2 或 RFC-294 总体标 Done。
 
-## 10. 2026-08-27 本地候选落地形状
+## 10. 2026-08-27 已发布落地形状
 
 ```mermaid
 flowchart LR
@@ -346,7 +347,11 @@ flowchart LR
 - 测试经 `tests/helpers/taskExecutionTestTopology.ts` 显式选择 real/recording/no-op/poison instance；
   production 禁止 import 该 test seam。
 
-候选量化：backend production=848、module=333（`task-execution`=57）、backend SCC=4、
+落地量化：backend production=848、module=333（`task-execution`=57）、backend SCC=4、
 repo SCC=6、`KNOWN_VIOLATIONS=31`。公开面 292、facade 370；RFC-331 DEV-1 的五条 public
-pilot debt 均有 exact owner 与 W2-B/W2-D `removeAfterWave`。候选 report digest 为
+pilot debt 均有 exact owner 与 W2-B/W2-D `removeAfterWave`。已发布 report digest 为
 `sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac`。
+
+发布链：`81d97d060` 落主实现，`262f34bf7` 固定 canonical payload，`89b19057d` 以真实 payload commit
+repin provenance，`11634edc7` / `2cad7c2f4` / `4152b377a` 逐项对齐 hosted CI 暴露的历史 source lock。
+最终 `4152b377a` 的 run `33034946053` 35/35 jobs 全绿；因此本图是 W2-A 的已发布现状，不是候选目标图。

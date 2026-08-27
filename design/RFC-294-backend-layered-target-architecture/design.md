@@ -3,8 +3,9 @@
 > 本文描述目标态合同，不是一次性目录搬迁清单。实施期允许旧路径 facade，但不允许旧行为内核与新行为
 > 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～330 的已发布批次已在其后
 > 改变 production shape，因此“当前已落事实、量化基线、前置偏差与下一步顺序”统一以 `plan.md` §1/§3.2 的
-> 2026-08-27 刷新为准。N1a/N1b 与 RFC-328 P0-D 已落；RFC-331 W2-A topology cut 的本地实现候选已完成，
-> 待发布、真实 provenance repin 与 exact-SHA hosted CI 收口。
+> 2026-08-27 刷新为准。N1a/N1b、RFC-328 P0-D 与 RFC-331 W2-A topology cut 已落；当前执行指针为
+> W2-B TaskEngine，RFC-331 containing SHA `4152b377afa357e2e339f921dac09b21770cebc0` 的 exact-SHA CI
+> `33034946053` terminal `success`（35/35 jobs）。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
 ## 1. 设计原则
@@ -129,19 +130,19 @@ RFC-309 `capability_templates` 的 upstream merge；临时 owner 明确为 `code
 command/query/writer 收成 exact compatibility surface，并在 migration analyzer 与 legacy template consumer=0 后迁入
 `development-automation` 的 ActionTemplate 或退役。除此之外不得恢复 code-round admission/writer。
 
-已发布基线为 `158b67296b05a11f22a92ab64b2045643f895f9f`（采样时 `HEAD=origin/main`），已包含
-RFC-317/319/326～330 Done，migration journal 到 `0211`；基线 report digest 为
-`sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592`。current exact-SHA CI
-`33024515076` 已于本次刷新期间达到 terminal `success`；包含 RFC-328/329 的更早 exact SHA `5c762c197` 另有 CI
-`32998902223` 与 visual `32998902239` 双 success。下表叠加尚未发布的 RFC-331 production 候选；候选 report
-digest 为 `sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac`，不借用基线绿灯：
+RFC-331 前的历史基线为 `158b67296b05a11f22a92ab64b2045643f895f9f`，report digest 为
+`sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592`。当前已发布 shape 由
+payload commit `262f34bf73735261b05b49363311ee2390311e4b` 固定，report digest 为
+`sha256:e9f8a0ec9d551929295bd43b5d271237448e099c6fdb1c60d2d43aa26ebd0cac`；`89b19057d189676ed95c6a5312cf7714f65fde95`
+把四份治理 artifact 真实 repin 到该 payload。最终 containing SHA `4152b377afa357e2e339f921dac09b21770cebc0`
+的 exact-SHA CI `33034946053` terminal `success`（35/35 jobs）。下表是该已发布 shape：
 
 | current module           | production TS/TSX | architecture interpretation                                                                                                  |
 | ------------------------ | ----------------: | ---------------------------------------------------------------------------------------------------------------------------- |
 | `development-automation` |               113 | active writer/type package；aggregate、工具合同与功能闭环已落，public/required/inbound/bootstrap cutover 未完成              |
 | `identity-access`        |                33 | role/grant/authority、presence、profile/email/Git identity slices landed；route 直读与 full Actor facade 未退役              |
 | `integration`            |                31 | webhook/code-host、adapter definition/connection + Event Center adapter；仍有 schema/inbound 装配债                          |
-| `task-execution`         |                57 | RFC-331 topology/query/adapter 候选已切掉 task SCC family/六条 exact edge；四级 engine 仍待 W2-B/C/D |
+| `task-execution`         |                57 | RFC-331 topology/query/adapter 已切掉 task SCC family/六条 exact edge；四级 engine 仍待 W2-B/C/D     |
 | `digital-employee`       |                23 | EmployeeCase/Context/Reaction/authoring/runtime + frozen adapter binding landed；TE required-port cutover 未完成             |
 | `source-control`         |                22 | candidate/commit/publication transport/credential slices；WorkspaceRef/repo/cache/worktree owner 未收口                      |
 | `event-center`           |                20 | catalog/subscription/observer/delivery/automation-rule writer landed；canonical outbox/background/root 收口未完成            |
@@ -3755,10 +3756,10 @@ RFC-288 已于 2026-08-14 关闭，未实现且零生产改动。三轮门后其
 结论是 successor 的输入，不是第二套 authority。
 
 current 承接路径为：N1/W0-R 已落；RFC-328 已完成 P0-D、`TaskExecutionModule`、exact-token registry、同一
-`TaskExecutionContext` 四 kick 线程化与 durable lifecycle outbox。RFC-331 候选已把
+`TaskExecutionContext` 四 kick 线程化与 durable lifecycle outbox。RFC-331 已把
 `SchedulerDriverPort`、ephemeral `TaskStatusPublisher` 与 purpose-specific read model 的 consumer/import topology 切换完成，
-复用已落 authority，未新建 lease/schema/registry/outbox；A1+B1～B4 前五条与 E3 第六条 exact debt 均已从候选账本删除。
-发布与 hosted closeout 后进入 W2-B；非可选 abort reason、bootstrap fail-fast、child recovery 与功能保真继续作为后续 oracle。W9 只做
+复用已落 authority，未新建 lease/schema/registry/outbox；A1+B1～B4 前五条与 E3 第六条 exact debt 均已从账本删除。
+RFC-331 / W2-A 已发布并完成 hosted closeout，当前进入 W2-B；非可选 abort reason、bootstrap fail-fast、child recovery 与功能保真继续作为后续 oracle。W9 只做
 全局 container/facade 清仓，不回头重做 RFC-328。
 
 ### 16.3 RFC-289（CLOSED）
