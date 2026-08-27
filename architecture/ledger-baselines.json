@@ -403,7 +403,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e13bbb135b780566e51d9ffe905bd763314cbdb2ee090fd1d60cd4b511c8b2f2",
+    "sourceDigest": "sha256:3912e9a9203265ae06dba5d93c70184a37326948815cf5bc93b1c39752ac607c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -416,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7687a0ce85cfa62c9cdf08a40640de85361e5dc4",
-    "contentDigest": "sha256:8384d4ff4d1b4553998a6524d4a3ae28266ccf8928d90efadc988180e7f2a555",
+    "currentSnapshotSha": "a19eb6a74efd968cb6c8e7a1f9b7a3f5c42c450d",
+    "contentDigest": "sha256:ca41f2b5816f386c8c082870b25812d1802ae9d1471cbb12ca635afa7a9bd619",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
