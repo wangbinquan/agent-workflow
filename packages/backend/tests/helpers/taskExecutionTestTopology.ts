@@ -1,4 +1,5 @@
 import type { DbClient } from '../../src/db/client'
+import { composeTaskExecutionHumanGateAdapter } from '../../src/modules/collaboration/application/adapters/task-execution-human-gate-adapter'
 import type {
   SchedulerDriverPort,
   SchedulerRuntimeTopology,
@@ -96,5 +97,6 @@ export function runTaskWithRealTestTopology(options: RunTaskOptions): Promise<vo
   return driveTaskEngineApplication(
     options,
     createTaskExecutionTestTopology({ db: options.db, driver: 'real' }),
+    composeTaskExecutionHumanGateAdapter(),
   )
 }

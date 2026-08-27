@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "boundaryFacades": 50,
-    "serviceFiles": 371
+    "boundaryFacades": 55,
+    "serviceFiles": 372
   },
   "entries": [
     {
@@ -528,7 +528,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:e382d3f4ba1ebaa48eab"
+      ],
       "exportedSymbols": [
         "ClarifyRoundDto",
         "ClarifyRoundKind",
@@ -556,7 +558,7 @@
       "id": "facade:packages/backend/src/services/clarify/service.ts",
       "ownerEntryId": "owner:packages/backend/src/services/clarify/service.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -1816,6 +1818,25 @@
       "targetLayer": "infrastructure"
     },
     {
+      "boundaryEdgeIds": [
+        "import:2cad8b73b382ab2a79a4",
+        "import:b99ff6a3b945e8252db3",
+        "import:e0fa4035273ad5a73fb6"
+      ],
+      "exportedSymbols": [
+        "composeTaskExecutionHumanGateAdapter",
+        "createCollaborationCommandContext",
+        "parkPreparedHumanGate"
+      ],
+      "file": "packages/backend/src/services/humanGateComposition.ts",
+      "id": "facade:packages/backend/src/services/humanGateComposition.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "boundary-facade",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
         "ImportRefResolutionFence",
@@ -2176,7 +2197,10 @@
       "boundaryEdgeIds": [
         "import:18789bac550a28bc3755",
         "import:1e146b37d4cd8c56c11e",
+        "import:29768ca659a0280fda50",
+        "import:49b4198c95812210b3fd",
         "import:52b6f287fd8c62b9046f",
+        "import:8fb47e78c260997055a1",
         "import:9812840393d4bc9cc2bf",
         "import:e3708cb755459a85c894"
       ],
@@ -2184,6 +2208,7 @@
         "ConcurrentMergeStateTransition",
         "ConcurrentNodeRunTransition",
         "ConcurrentTaskTransition",
+        "HumanGateTaskTransition",
         "MergeStateUpdateExtra",
         "NodeRunStatusUpdateExtra",
         "TaskStatusUpdateExtra",
@@ -2197,12 +2222,14 @@
         "cancelOpenNodeRunsTx",
         "enqueueTaskLifecycleEventTx",
         "isTerminalTaskStatus",
+        "notifyHumanGateTaskParkAfterCommit",
         "registerTerminalTaskHook",
         "registerTerminalWorkspacePruneEffect",
         "registerTerminalWorkspacePrunePolicy",
         "setNodeRunStatus",
         "setNodeRunStatusTx",
         "setTaskStatus",
+        "transitionHumanGateTaskTx",
         "transitionMergeState",
         "transitionNodeRunStatus",
         "transitionNodeRunStatusTx",
@@ -2549,7 +2576,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:5c2dfd3e4ddd8e880b64",
+        "import:a683a9c7b6b3df454888",
+        "import:cd4a28357b673a75eac3"
+      ],
       "exportedSymbols": [
         "MaintenanceTickerHandle",
         "MaintenanceTickerOptions",
@@ -2560,7 +2591,7 @@
       "id": "facade:packages/backend/src/services/maintenanceTicker.ts",
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -2782,7 +2813,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:58430f3a7f8a1bcbc95d"
+      ],
       "exportedSymbols": [
         "BuildDistillerPromptInput",
         "DISTILLER_AGENT_NAME",
@@ -2816,7 +2849,7 @@
       "id": "facade:packages/backend/src/services/memoryDistiller.ts",
       "ownerEntryId": "owner:packages/backend/src/services/memoryDistiller.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "memory",
       "targetLayer": "application"
     },
@@ -3003,7 +3036,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:d0b3d667578549eec96f"
+      ],
       "exportedSymbols": [
         "CLARIFY_RERUN_CAUSES",
         "FrozenRuntime",
@@ -3031,7 +3066,7 @@
       "id": "facade:packages/backend/src/services/nodeRunMint.ts",
       "ownerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -3915,10 +3950,14 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:03c5c5821dbc66ecef64",
         "import:15d52dbcc5e457a912cd",
         "import:30a6613c0e08ce11c0b2",
         "import:5fb92fc1db85b1e884ac",
-        "import:ac8057bde3a7ea3c8e87"
+        "import:ac8057bde3a7ea3c8e87",
+        "import:e6a195947dd1f581629b",
+        "import:f4f06fa560bee6701077",
+        "import:f777a2e4b746b263a89e"
       ],
       "exportedSymbols": [
         "AddReviewCommentArgs",
@@ -6270,7 +6309,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:6d849d258c69b92f4a37"
+        "import:6d849d258c69b92f4a37",
+        "import:cc934dc0799f23fed90c"
       ],
       "exportedSymbols": [
         "CreateManualTaskQuestionInput",
@@ -7357,5 +7397,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ca399d817f7e01cf3b2e4541aa17f872831ac22e0d8611d8f279ee74310d83ee"
+  "sourceDigest": "sha256:7c994d7c95d8c959b45102d1c424fd473c738157696976aa80f53d9378002d67"
 }

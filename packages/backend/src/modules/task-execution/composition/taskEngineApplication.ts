@@ -52,10 +52,17 @@ import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/topology'
+import type { HumanGateOpenParticipant } from '../application/ports/humanGateOpenParticipant'
+import {
+  ManualQuestionParkRequired,
+  assertNoManualQuestionParkObligationTx,
+  settleManualQuestionParkObligations,
+} from './humanGate'
 
 export async function driveTaskEngineApplication(
   opts: RunTaskOptions,
   topology: SchedulerRuntimeTopology,
+  humanGates: HumanGateOpenParticipant,
 ): Promise<void> {
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
@@ -64,10 +71,11 @@ export async function driveTaskEngineApplication(
   // same reasoning (a split pool would run a task at double its configured
   // shard concurrency), so it is reclaimed in this one place too.
   try {
-    if (opts.executionContext === undefined) await runTaskEngineOrchestratorInner(opts, topology)
-    else {
+    if (opts.executionContext === undefined) {
+      await runTaskEngineOrchestratorInner(opts, topology, humanGates)
+    } else {
       await runWithTaskExecutionContext(opts.executionContext, () =>
-        runTaskEngineOrchestratorInner(opts, topology),
+        runTaskEngineOrchestratorInner(opts, topology, humanGates),
       )
     }
   } finally {
@@ -79,6 +87,7 @@ export async function driveTaskEngineApplication(
 async function runTaskEngineOrchestratorInner(
   opts: RunTaskOptions,
   topology: SchedulerRuntimeTopology,
+  humanGates: HumanGateOpenParticipant,
 ): Promise<void> {
   const log = opts.log ?? createLogger('scheduler')
   const { db, taskId } = opts
@@ -244,6 +253,21 @@ async function runTaskEngineOrchestratorInner(
     return
   }
   await emitStatus(topology, taskId)
+
+  // RFC-333 T7: a manual question may have been created while this task was
+  // pending/failed/interrupted. The exact owner consumes its durable park
+  // obligation immediately after claim, before any new node work can start.
+  const initialManualPark = settleManualQuestionParkObligations({
+    db,
+    humanGates,
+    taskId,
+    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+  })
+  if (initialManualPark.parked) {
+    await emitStatus(topology, taskId)
+    log.info('task parked for a durable manual question before drive', { taskId })
+    return
+  }
 
   // 4. Validate node kinds. RFC-146: positive membership in the behavior
   // table — a kind the scheduler knows is exactly a kind with a behavior row.
@@ -566,6 +590,23 @@ async function runTaskEngineOrchestratorInner(
     })
   }
 
+  // A question can arrive after the frontier's last read. Consume the
+  // obligation at the owner-held settle point before choosing any outcome.
+  // Explicit cancellation keeps its existing precedence.
+  if (result.kind !== 'canceled' && opts.signal?.aborted !== true) {
+    const manualPark = settleManualQuestionParkObligations({
+      db,
+      humanGates,
+      taskId,
+      ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+    })
+    if (manualPark.parked) {
+      await emitStatus(topology, taskId)
+      log.info('task parked for a durable manual question at settle', { taskId })
+      return
+    }
+  }
+
   if (result.kind === 'failed' && result.detail) {
     await failTask(
       topology,
@@ -618,9 +659,22 @@ async function runTaskEngineOrchestratorInner(
       await emitStatus(topology, taskId)
       log.info('task awaiting human review', { taskId })
     } else {
-      log.warn('awaiting_review write lost to a concurrent transition — respecting winner', {
-        taskId,
-      })
+      const parked = db
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .get()
+      if (parked?.status === 'awaiting_review') {
+        // RFC-333: the review executor already committed TaskParkTx together
+        // with the gate projection. Publish that committed status; do not issue
+        // a second lifecycle write.
+        await emitStatus(topology, taskId)
+        log.info('task review gate already parked atomically', { taskId })
+      } else {
+        log.warn('awaiting_review write lost to a concurrent transition — respecting winner', {
+          taskId,
+        })
+      }
     }
     return
   }
@@ -654,9 +708,21 @@ async function runTaskEngineOrchestratorInner(
       await emitStatus(topology, taskId)
       log.info('task awaiting human clarification', { taskId })
     } else {
-      log.warn('awaiting_human write lost to a concurrent transition — respecting winner', {
-        taskId,
-      })
+      const parked = db
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .get()
+      if (parked?.status === 'awaiting_human') {
+        // RFC-333 T7: clarify creation already committed the node, round,
+        // eager question snapshots and task park in one TaskParkTx.
+        await emitStatus(topology, taskId)
+        log.info('task clarify gate already parked atomically', { taskId })
+      } else {
+        log.warn('awaiting_human write lost to a concurrent transition — respecting winner', {
+          taskId,
+        })
+      }
     }
     return
   }
@@ -668,17 +734,39 @@ async function runTaskEngineOrchestratorInner(
     await cancelTaskRow(topology, db, taskId, undefined, opts.signal.reason, opts.executionContext)
     return
   }
-  if (
-    await trySetTaskStatus({
-      db,
-      taskId,
-      to: 'done',
-      allowedFrom: ['running'],
-      extra: { finishedAt: Date.now() },
-      ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
-      reason: 'task-done',
-    })
-  ) {
+  let completed = false
+  while (true) {
+    try {
+      completed = await trySetTaskStatus({
+        db,
+        taskId,
+        to: 'done',
+        allowedFrom: ['running'],
+        extra: { finishedAt: Date.now() },
+        onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
+        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
+        reason: 'task-done',
+      })
+      break
+    } catch (error) {
+      if (!(error instanceof ManualQuestionParkRequired)) throw error
+      const manualPark = settleManualQuestionParkObligations({
+        db,
+        humanGates,
+        taskId,
+        ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+      })
+      if (manualPark.parked) {
+        await emitStatus(topology, taskId)
+        log.info('task completion yielded to a durable manual question', { taskId })
+        return
+      }
+      // The row was dispatched/confirmed between creation and settle. Its
+      // obligation is now completed; retry the terminal CAS with the same
+      // business outcome and a fresh in-transaction no-obligation check.
+    }
+  }
+  if (completed) {
     await emitStatus(topology, taskId)
     log.info('task done', { taskId })
   } else {

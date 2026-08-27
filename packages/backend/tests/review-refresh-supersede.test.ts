@@ -7,7 +7,7 @@
 // row's consumed provenance to the new source run. This locks that transaction.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -16,6 +16,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import {
   agents as agentsTable,
+  collaborationGateOperations,
   docVersions,
   nodeRunOutputs,
   nodeRuns,
@@ -46,7 +47,7 @@ describe('RFC-074 — review awaiting-refresh: supersede + recomment-drop + v(n+
     rmSync(worktree, { recursive: true, force: true })
   })
 
-  async function seed(): Promise<{
+  async function seed(status: 'running' | 'awaiting_review' = 'awaiting_review'): Promise<{
     taskId: string
     task: typeof tasks.$inferSelect
     definition: WorkflowDefinition
@@ -93,7 +94,7 @@ describe('RFC-074 — review awaiting-refresh: supersede + recomment-drop + v(n+
       worktreePath: worktree,
       baseBranch: 'main',
       branch: 'agent-workflow/' + taskId,
-      status: 'awaiting_review',
+      status,
       inputs: '{}',
       startedAt: Date.now(),
     })
@@ -199,5 +200,181 @@ describe('RFC-074 — review awaiting-refresh: supersede + recomment-drop + v(n+
     // The review row's provenance is re-stamped to the NEW source run.
     const reviewAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
     expect(JSON.parse(reviewAfter.consumedUpstreamRunsJson ?? '{}').src).toBe('01B_NEW')
+  })
+
+  test('a T6 review refresh reuses one stable gate and advances its committed revision without overwriting v1', async () => {
+    const { taskId, task, definition, reviewNode } = await seed('running')
+    await seedSrc(taskId, '01A_OLD', 0, '# old body')
+
+    const opened = await dispatchReviewNode({
+      db,
+      taskId,
+      scopeRoot: task.worktreePath,
+      appHome,
+      definition,
+      node: reviewNode,
+      iteration: 0,
+    })
+    expect(opened.kind).toBe('awaiting_review')
+    const firstRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1')))[0]!
+    const firstVersion = (
+      await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, firstRun.id))
+    )[0]!
+    const revisionAfterOpen = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      .lifecycleEventRevision
+
+    await seedSrc(taskId, '01B_NEW', 4, '# new body after upstream rerun')
+    const refreshed = await dispatchReviewNode({
+      db,
+      taskId,
+      scopeRoot: task.worktreePath,
+      appHome,
+      definition,
+      node: reviewNode,
+      iteration: 0,
+    })
+    expect(refreshed.kind).toBe('awaiting_review')
+
+    const reviewRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1'))
+    expect(reviewRuns.map((run) => run.id)).toEqual([firstRun.id])
+    const versions = await db
+      .select()
+      .from(docVersions)
+      .where(eq(docVersions.reviewNodeRunId, firstRun.id))
+    expect(versions.map((version) => [version.versionIndex, version.decision])).toEqual([
+      [1, 'superseded'],
+      [2, 'pending'],
+    ])
+    expect(versions[0]!.bodyPath).not.toBe(versions[1]!.bodyPath)
+    expect(readFileSync(join(appHome, firstVersion.bodyPath), 'utf8')).toBe('# old body')
+    expect(readFileSync(join(appHome, versions[1]!.bodyPath), 'utf8')).toBe(
+      '# new body after upstream rerun',
+    )
+    const operations = await db
+      .select()
+      .from(collaborationGateOperations)
+      .where(eq(collaborationGateOperations.taskId, taskId))
+    expect(operations.map((operation) => operation.gateRef)).toEqual([
+      `review:${firstRun.id}`,
+      `review:${firstRun.id}`,
+    ])
+    expect(operations.map((operation) => operation.resultGateRevision)).toEqual([1, 2])
+    expect(operations.map((operation) => operation.state)).toEqual(['completed', 'completed'])
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      status: 'awaiting_review',
+      lifecycleEventRevision: revisionAfterOpen,
+    })
+  })
+
+  test('refresh projection failure preserves the old pending round and retry commits the prepared operation', async () => {
+    const { taskId, task, definition, reviewNode } = await seed()
+    await seedSrc(taskId, '01A_OLD', 0, '# old body')
+    await seedSrc(taskId, '01B_NEW', 4, '# new body after upstream rerun')
+    const reviewRunId = ulid()
+    await db.insert(nodeRuns).values({
+      id: reviewRunId,
+      taskId,
+      nodeId: 'rev_1',
+      status: 'awaiting_review',
+      retryIndex: 0,
+      iteration: 0,
+      reviewIteration: 0,
+      consumedUpstreamRunsJson: JSON.stringify({ src: '01A_OLD' }),
+      startedAt: Date.now(),
+    })
+    const v1Id = ulid()
+    await db.insert(docVersions).values({
+      id: v1Id,
+      taskId,
+      reviewNodeId: 'rev_1',
+      reviewNodeRunId: reviewRunId,
+      sourceNodeId: 'src',
+      sourcePortName: 'docpath',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: 'doc_versions/v1.md',
+      decision: 'pending',
+      createdAt: Date.now(),
+    })
+    const commentId = ulid()
+    await db.insert(reviewComments).values({
+      id: commentId,
+      docVersionId: v1Id,
+      anchorSectionPath: 'p0',
+      anchorParagraphIdx: 0,
+      anchorOffsetStart: 0,
+      anchorOffsetEnd: 3,
+      selectedText: 'old',
+      contextBefore: '',
+      contextAfter: '',
+      occurrenceIndex: 0,
+      commentText: 'preserve until refresh commits',
+      createdAt: Date.now(),
+    })
+    db.$client.exec(`
+      CREATE TRIGGER rfc333_refresh_projection_down
+      BEFORE INSERT ON doc_versions
+      BEGIN SELECT RAISE(ABORT, 'rfc333-refresh-projection'); END;
+    `)
+
+    await expect(
+      dispatchReviewNode({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    ).rejects.toThrow('rfc333-refresh-projection')
+    expect((await db.select().from(docVersions).where(eq(docVersions.id, v1Id)))[0]).toMatchObject({
+      decision: 'pending',
+      decisionReason: null,
+    })
+    expect(
+      await db.select().from(reviewComments).where(eq(reviewComments.id, commentId)),
+    ).toHaveLength(1)
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]).toMatchObject(
+      {
+        status: 'awaiting_review',
+        consumedUpstreamRunsJson: JSON.stringify({ src: '01A_OLD' }),
+      },
+    )
+    const operation = (
+      await db
+        .select()
+        .from(collaborationGateOperations)
+        .where(eq(collaborationGateOperations.taskId, taskId))
+    )[0]!
+    expect(operation.state).toBe('prepared')
+
+    db.$client.exec('DROP TRIGGER rfc333_refresh_projection_down')
+    const retried = await dispatchReviewNode({
+      db,
+      taskId,
+      scopeRoot: task.worktreePath,
+      appHome,
+      definition,
+      node: reviewNode,
+      iteration: 0,
+    })
+    expect(retried.kind).toBe('awaiting_review')
+    expect(
+      (await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, reviewRunId))).map(
+        (version) => [version.versionIndex, version.decision],
+      ),
+    ).toEqual([
+      [1, 'superseded'],
+      [2, 'pending'],
+    ])
+    expect(
+      (
+        await db
+          .select()
+          .from(collaborationGateOperations)
+          .where(eq(collaborationGateOperations.id, operation.id))
+      )[0],
+    ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
   })
 })

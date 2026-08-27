@@ -1403,6 +1403,7 @@ function createTaskDriveCoordinator(input: {
   readonly appHome: string
   readonly ensureWorkspaceProfiles?: boolean
   readonly admittedContinuation?: RepositoryPreparationStep
+  readonly gateContinuationPreDrive?: taskDriveComposition.GateContinuationPreDriveStep
   readonly repositoryPreparation?: RepositoryPreparationStep
   readonly engineFailureMessage: string
   readonly failureReporter: TaskDriveFailureReporter
@@ -1432,6 +1433,9 @@ function createTaskDriveCoordinator(input: {
     ...(input.admittedContinuation === undefined
       ? {}
       : { admittedContinuation: input.admittedContinuation }),
+    ...(input.gateContinuationPreDrive === undefined
+      ? {}
+      : { gateContinuationPreDrive: input.gateContinuationPreDrive }),
     repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {

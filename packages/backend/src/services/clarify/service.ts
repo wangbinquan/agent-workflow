@@ -68,14 +68,19 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
-import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
-import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
-import { mintNodeRun } from '@/services/nodeRunMint'
+import { prepareClarifyGateOpen } from '@/modules/collaboration/public/commands'
+import {
+  createCollaborationCommandContext,
+  parkPreparedHumanGate,
+} from '@/services/humanGateComposition'
+import { setNodeRunStatus } from '@/services/lifecycle'
+import { currentTaskExecutionContext } from '@/services/taskExecutionParticipants'
 import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import { ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
@@ -236,47 +241,31 @@ export async function createClarifyRound(
   const questions =
     args.kind === 'self'
       ? ClarifyEnvelopeBodySchema.parse({ questions: args.questions }).questions
-      : args.questions
+      : args.questions.map((question) => ClarifyQuestionSchema.parse(question))
 
-  let intermediaryNodeRunId: string
   let iteration: number
   const createdAt = now()
+  let existingRun: typeof nodeRuns.$inferSelect | undefined
 
   if (args.kind === 'self') {
     iteration = args.iteration
-    const existingRun = await findSelfGateRunForShard(
+    existingRun = await findSelfGateRunForShard(
       args.db,
       args.taskId,
       args.intermediaryNodeId,
       args.askingShardKey,
       iteration,
     )
-    if (existingRun) {
-      intermediaryNodeRunId = existingRun.id
-      if (existingRun.status !== 'awaiting_human') {
-        // RFC-053: park-human enforces pending|running → awaiting_human.
-        await transitionNodeRunStatus({
-          db: args.db,
-          nodeRunId: intermediaryNodeRunId,
-          event: { kind: 'park-human' },
-          extra: { startedAt: existingRun.startedAt ?? now() },
-        })
-      }
-    } else {
-      // RFC-074 PR-C: the gate run carries no round counter — freshness is
-      // pure id-order; the round index lives on the clarify_rounds row.
-      intermediaryNodeRunId = await mintNodeRun(args.db, {
-        taskId: args.taskId,
-        nodeId: args.intermediaryNodeId,
-        status: 'awaiting_human',
-        cause: 'clarify-park',
-        iteration: 0,
-        overrides: {
-          parentNodeRunId: args.parentNodeRunId ?? null,
-          shardKey: args.askingShardKey,
-          startedAt: createdAt,
-        },
-      })
+    if (
+      existingRun !== undefined &&
+      existingRun.status !== 'pending' &&
+      existingRun.status !== 'running' &&
+      existingRun.status !== 'awaiting_human'
+    ) {
+      throw new ValidationError(
+        'clarify-node-run-not-parkable',
+        `clarify node run ${existingRun.id} cannot reopen from '${existingRun.status}'`,
+      )
     }
   } else {
     // Derived iteration: max(existing.iteration) + 1 in the same
@@ -295,97 +284,113 @@ export async function createClarifyRound(
       .orderBy(desc(clarifyRounds.iteration))
       .limit(1)
     iteration = prior.length === 0 ? 0 : (prior[0]?.iteration ?? 0) + 1
-
-    // RFC-053: mint parked at awaiting_human directly so the runner doesn't
-    // need a separate pending→awaiting_human leg.
-    intermediaryNodeRunId = await mintNodeRun(args.db, {
-      taskId: args.taskId,
-      nodeId: args.intermediaryNodeId,
-      status: 'awaiting_human',
-      cause: 'cross-clarify-park',
-      iteration: args.loopIter,
-      overrides: { startedAt: createdAt },
-    })
   }
 
-  const roundId = ulid()
   const truncationWarningsJson =
     args.kind === 'self' && args.truncationWarnings && args.truncationWarnings.length > 0
       ? JSON.stringify(args.truncationWarnings)
       : null
+  const taskRow = args.db
+    .select({
+      name: tasks.name,
+      workflowSnapshot: tasks.workflowSnapshot,
+      lifecycleEventRevision: tasks.lifecycleEventRevision,
+    })
+    .from(tasks)
+    .where(eq(tasks.id, args.taskId))
+    .get()
+  if (taskRow === undefined) {
+    throw new ValidationError('clarify-task-not-found', `task ${args.taskId} not found`)
+  }
+  const questionsJson = JSON.stringify(questions)
+  const sourceSnapshotDigest = sha256Hex(
+    JSON.stringify({
+      schemaVersion: 1,
+      taskId: args.taskId,
+      kind: args.kind,
+      askingNodeId: args.askingNodeId,
+      askingNodeRunId: args.askingNodeRunId,
+      askingShardKey: args.kind === 'self' ? args.askingShardKey : null,
+      intermediaryNodeId: args.intermediaryNodeId,
+      targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
+      parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
+      loopIter: args.kind === 'cross' ? args.loopIter : 0,
+      iteration,
+      questionsJson,
+      truncationWarningsJson,
+    }),
+  )
+  const prepared = prepareClarifyGateOpen(createCollaborationCommandContext({ db: args.db }), {
+    taskId: args.taskId,
+    kind: args.kind,
+    askingNodeId: args.askingNodeId,
+    askingNodeRunId: args.askingNodeRunId,
+    askingShardKey: args.kind === 'self' ? args.askingShardKey : null,
+    intermediaryNodeId: args.intermediaryNodeId,
+    targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
+    parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
+    loopIter: args.kind === 'cross' ? args.loopIter : 0,
+    iteration,
+    questionsJson,
+    questions: questions.map((question) => ({ id: question.id, title: question.title })),
+    truncationWarningsJson,
+    sourceSnapshotDigest,
+    idempotencyKey: [
+      'clarify-open:v1',
+      args.taskId,
+      args.askingNodeRunId,
+      args.intermediaryNodeId,
+      sourceSnapshotDigest,
+    ].join(':'),
+    expectedTaskRevision: taskRow.lifecycleEventRevision,
+    ...(existingRun === undefined
+      ? {}
+      : {
+          reuseNodeRun: {
+            id: existingRun.id,
+            status: existingRun.status as 'pending' | 'running' | 'awaiting_human',
+            iteration: existingRun.iteration,
+            parentNodeRunId: existingRun.parentNodeRunId,
+            shardKey: existingRun.shardKey,
+            startedAt: existingRun.startedAt,
+          },
+        }),
+    now: createdAt,
+  })
+  const committedHere = prepared.kind === 'prepared'
+  if (committedHere) {
+    const executionContext = currentTaskExecutionContext(args.taskId)
+    parkPreparedHumanGate({
+      db: args.db,
+      prepared: prepared.prepared,
+      ...(executionContext === undefined ? {} : { executionContext }),
+      now: createdAt,
+    })
+  }
+  const storedRound = args.db
+    .select()
+    .from(clarifyRounds)
+    .where(eq(clarifyRounds.id, prepared.roundId))
+    .get()
+  if (storedRound === undefined) {
+    throw new Error('clarify-open-committed-round-projection-missing')
+  }
+  const round = rowToRound(storedRound)
+  const intermediaryNodeRunId = prepared.nodeRunId
   if (args.kind === 'cross' && args.truncationWarnings && args.truncationWarnings.length > 0) {
     log.warn('cross-clarify envelope truncated to limits', {
-      sessionId: roundId,
-      warnings: args.truncationWarnings.map((w) => w.code),
+      sessionId: round.id,
+      warnings: args.truncationWarnings.map((warning) => warning.code),
     })
   }
 
-  await args.db.insert(clarifyRounds).values({
-    id: roundId,
-    taskId: args.taskId,
-    kind: args.kind,
-    askingNodeId: args.askingNodeId,
-    askingNodeRunId: args.askingNodeRunId,
-    askingShardKey: args.kind === 'self' ? args.askingShardKey : null,
-    intermediaryNodeId: args.intermediaryNodeId,
-    intermediaryNodeRunId,
-    targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
-    loopIter: args.kind === 'cross' ? args.loopIter : 0,
-    iteration,
-    questionsJson: JSON.stringify(questions),
-    answersJson: null,
-    directive: null,
-    status: 'awaiting_human',
-    truncationWarningsJson,
-    designerRunTriggeredAt: null,
-    abandonedAt: null,
-    createdAt,
-    answeredAt: null,
-    answeredBy: null,
-  })
-
-  const round: ClarifyRoundDto = {
-    id: roundId,
-    taskId: args.taskId,
-    kind: args.kind,
-    askingNodeId: args.askingNodeId,
-    askingNodeRunId: args.askingNodeRunId,
-    askingShardKey: args.kind === 'self' ? args.askingShardKey : null,
-    intermediaryNodeId: args.intermediaryNodeId,
-    intermediaryNodeRunId,
-    targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
-    loopIter: args.kind === 'cross' ? args.loopIter : 0,
-    iteration,
-    questions,
-    directive: null,
-    status: 'awaiting_human',
-    designerRunTriggeredAt: null,
-    createdAt,
-    answeredAt: null,
-    answeredBy: null,
-    abandonedAt: null,
-    terminatedAs: null,
-  }
-  if (args.kind === 'self' && args.truncationWarnings && args.truncationWarnings.length > 0) {
-    round.truncationWarnings = args.truncationWarnings
-  }
-
-  if (args.kind === 'self') {
+  if (committedHere && args.kind === 'self') {
     // RFC-037: created-event enrichment — taskName + clarify node title, so
     // WS subscribers don't re-fetch the list to learn them. Missing task
     // (hard-delete race) degrades to ''; missing title stays null.
-    const taskRow = await args.db
-      .select({ name: tasks.name, workflowSnapshot: tasks.workflowSnapshot })
-      .from(tasks)
-      .where(eq(tasks.id, args.taskId))
-      .limit(1)
-    const taskName = taskRow[0]?.name ?? ''
-    const title = resolveNodeTitleFromSnapshot(
-      taskRow[0]?.workflowSnapshot,
-      args.intermediaryNodeId,
-    )
-    broadcastSelfCreated(round, taskName, title)
-  } else {
+    const title = resolveNodeTitleFromSnapshot(taskRow.workflowSnapshot, args.intermediaryNodeId)
+    broadcastSelfCreated(round, taskRow.name, title)
+  } else if (committedHere) {
     broadcastCrossCreated(round)
   }
   return { round, intermediaryNodeRunId }

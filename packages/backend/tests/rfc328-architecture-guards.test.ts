@@ -152,6 +152,7 @@ const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
       'setNodeRunStatusTx',
       'setTaskStatus',
       'transitionNodeRunStatusTx',
+      'writeTaskStatusTx',
     ]),
   ],
   ['packages/backend/src/services/nodeRunMint.ts', new Set(['mintNodeRunTx'])],

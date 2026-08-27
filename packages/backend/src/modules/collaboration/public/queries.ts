@@ -20,3 +20,21 @@ export {
   resolveReviewAnchor,
   sectionPathAt,
 } from '../domain/reviewAnchor'
+
+import { readCommittedReviewArtifactBody as readCommittedReviewArtifactBodyInternal } from '../infrastructure/fsHumanGateArtifactStore'
+import {
+  requireCollaborationAppHome,
+  resolveCollaborationCommandContext,
+} from '../composition/commandContext'
+import type { CollaborationCommandContext } from './types'
+
+export function readCommittedReviewArtifactBody(
+  context: CollaborationCommandContext,
+  finalPath: string,
+): string {
+  return readCommittedReviewArtifactBodyInternal(
+    resolveCollaborationCommandContext(context).db,
+    requireCollaborationAppHome(context),
+    finalPath,
+  )
+}

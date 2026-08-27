@@ -1503,6 +1503,18 @@
       "lines": 338
     },
     {
+      "id": "rfc333-human-gate-source-locks",
+      "file": "packages/backend/tests/rfc333-human-gate-source-locks.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 306
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -1900,7 +1912,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ca399d817f7e01cf3b2e4541aa17f872831ac22e0d8611d8f279ee74310d83ee",
+    "sourceDigest": "sha256:7c994d7c95d8c959b45102d1c424fd473c738157696976aa80f53d9378002d67",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },

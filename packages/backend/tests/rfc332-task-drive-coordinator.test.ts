@@ -8,6 +8,7 @@ import {
 import {
   DefaultTaskDriveCoordinator,
   type AdmittedContinuationStep,
+  type GateContinuationPreDriveStep,
   type RepositoryPreparationStep,
   type TaskDriveFailureReporter,
   type TaskDriverLifecyclePort,
@@ -27,6 +28,7 @@ function deferred<T>() {
 function applicationFixture(input?: {
   readonly attach?: 'attached' | 'not-attached'
   readonly admittedContinuation?: AdmittedContinuationStep
+  readonly gateContinuationPreDrive?: GateContinuationPreDriveStep
   readonly preparation?: RepositoryPreparationStep
   readonly engine?: TaskEngineOrchestrationPort
   readonly reporter?: TaskDriveFailureReporter
@@ -96,6 +98,9 @@ function applicationFixture(input?: {
       ...(input?.admittedContinuation === undefined
         ? {}
         : { admittedContinuation: input.admittedContinuation }),
+      ...(input?.gateContinuationPreDrive === undefined
+        ? {}
+        : { gateContinuationPreDrive: input.gateContinuationPreDrive }),
       repositoryPreparation: preparation,
       engineOrchestrator: engine,
       failureReporter: reporter,
@@ -207,6 +212,83 @@ describe('RFC-332 T9 — TaskDriveCoordinator', () => {
     ])
     engineGate.resolve()
     await fixture.released
+  })
+
+  test('background receipt waits for gate-continuation effects before phase 0 and engine', async () => {
+    const effectGate = deferred<void>()
+    const engineGate = deferred<void>()
+    const fixture = applicationFixture({
+      gateContinuationPreDrive: {
+        async run(context) {
+          fixture.events.push(`gate-effect-start:${context.taskId}`)
+          await effectGate.promise
+          fixture.events.push(`gate-effect-end:${context.taskId}`)
+          return { kind: 'ready' }
+        },
+      },
+      engine: {
+        async drive(context) {
+          fixture.events.push(`engine-start:${context.taskId}`)
+          await engineGate.promise
+        },
+      },
+    })
+    let receiptSettled = false
+    const receipt = fixture.coordinator
+      .submit({
+        taskId: 'task-gate-effect',
+        intentId: 'intent-gate-effect',
+        completionMode: 'background',
+      })
+      .then((value) => {
+        receiptSettled = true
+        return value
+      })
+    await Promise.resolve()
+    expect(receiptSettled).toBe(false)
+    expect(fixture.events).toEqual([
+      'attach:task-gate-effect:intent-gate-effect',
+      'gate-effect-start:task-gate-effect',
+    ])
+
+    effectGate.resolve()
+    await expect(receipt).resolves.toEqual({ kind: 'accepted', taskId: 'task-gate-effect' })
+    expect(fixture.events).toEqual([
+      'attach:task-gate-effect:intent-gate-effect',
+      'gate-effect-start:task-gate-effect',
+      'gate-effect-end:task-gate-effect',
+      'prepare:task-gate-effect',
+      'engine-start:task-gate-effect',
+    ])
+    engineGate.resolve()
+    await fixture.released
+  })
+
+  test('gate-continuation effect failure reports its own phase and never enters engine', async () => {
+    const fixture = applicationFixture({
+      gateContinuationPreDrive: {
+        async run() {
+          throw new Error('gate-effect-boom')
+        },
+      },
+      reporter: {
+        report(request) {
+          fixture.events.push(`error:${request.stage}:${request.taskId}:${String(request.error)}`)
+        },
+      },
+    })
+    await expect(
+      fixture.coordinator.submit({
+        taskId: 'task-gate-effect-failure',
+        intentId: 'intent-gate-effect-failure',
+        completionMode: 'background',
+      }),
+    ).rejects.toThrow('gate-effect-boom')
+    expect(fixture.events).toEqual([
+      'attach:task-gate-effect-failure:intent-gate-effect-failure',
+      'error:gate-continuation-effect:task-gate-effect-failure:Error: gate-effect-boom',
+      'release:task-gate-effect-failure',
+    ])
   })
 
   test('terminal admitted continuation skips phase 0 and releases once', async () => {

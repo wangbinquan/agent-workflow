@@ -2,16 +2,16 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 1023,
-    "backgroundJobs": 215,
-    "crossContextImports": 1049,
-    "facades": 371,
+    "architectureExceptions": 1119,
+    "backgroundJobs": 217,
+    "crossContextImports": 1151,
+    "facades": 372,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 17628,
-    "mutationEntrypoints": 911,
+    "moduleSymbolOwners": 17906,
+    "mutationEntrypoints": 924,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 300,
-    "transactionExternalEffects": 245
+    "publicSurfaces": 332,
+    "transactionExternalEffects": 263
   },
   "metrics": {
     "ambientWiringEntries": 440,
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 865,
+    "backendProductionFiles": 907,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -95,7 +95,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 215,
+    "backgroundEntries": 217,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -119,7 +119,7 @@
     ],
     "directNativeIntervals": 20,
     "directNativeTimers": 61,
-    "inboundBoundaryEdges": 94,
+    "inboundBoundaryEdges": 95,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -128,7 +128,7 @@
       },
       {
         "context": "collaboration",
-        "files": 3
+        "files": 34
       },
       {
         "context": "development-automation",
@@ -168,10 +168,10 @@
       },
       {
         "context": "task-execution",
-        "files": 73
+        "files": 83
       }
     ],
-    "moduleFiles": 349,
+    "moduleFiles": 390,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -227,10 +227,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 371,
+    "serviceFiles": 372,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ca399d817f7e01cf3b2e4541aa17f872831ac22e0d8611d8f279ee74310d83ee"
+  "sourceDigest": "sha256:7c994d7c95d8c959b45102d1c424fd473c738157696976aa80f53d9378002d67"
 }

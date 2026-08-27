@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 911,
+    "entries": 924,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1783,6 +1783,202 @@
     {
       "controls": {
         "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/application/finalizeCommittedHumanGate.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/application/finalizeCommittedHumanGate.ts#CommittedHumanGateFinalizer",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/finalizeCommittedHumanGate.ts#CommittedHumanGateFinalizer",
+      "symbol": "CommittedHumanGateFinalizer",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/application/ports/manualQuestionOpenWriter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/application/ports/manualQuestionOpenWriter.ts#CreatedManualQuestionOpen",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/ports/manualQuestionOpenWriter.ts#CreatedManualQuestionOpen",
+      "symbol": "CreatedManualQuestionOpen",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/application/ports/manualQuestionOpenWriter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/application/ports/manualQuestionOpenWriter.ts#CreateManualQuestionOpenInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/ports/manualQuestionOpenWriter.ts#CreateManualQuestionOpenInput",
+      "symbol": "CreateManualQuestionOpenInput",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/application/prepareClarifyGateOpen.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/application/prepareClarifyGateOpen.ts#CommittedClarifyGateOpen",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/prepareClarifyGateOpen.ts#CommittedClarifyGateOpen",
+      "symbol": "CommittedClarifyGateOpen",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/application/prepareReviewGateOpen.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/application/prepareReviewGateOpen.ts#CommittedReviewGateOpen",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/prepareReviewGateOpen.ts#CommittedReviewGateOpen",
+      "symbol": "CommittedReviewGateOpen",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/composition/commandContext.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/composition/commandContext.ts#createCollaborationCommandContext",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#createCollaborationCommandContext",
+      "symbol": "createCollaborationCommandContext",
+      "targetContext": "collaboration",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts#startHumanGateRecoveryTicker",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts#startHumanGateRecoveryTicker",
+      "symbol": "startHumanGateRecoveryTicker",
+      "targetContext": "collaboration",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/domain/humanGateOperation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/domain/humanGateOperation.ts#TRANSITIONS",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/domain/humanGateOperation.ts#TRANSITIONS",
+      "symbol": "TRANSITIONS",
+      "targetContext": "collaboration",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -1829,6 +2025,56 @@
       "symbol": "SETEXT_UNDERLINE",
       "targetContext": "collaboration",
       "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/fsHumanGateArtifactStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/fsHumanGateArtifactStore.ts#stageReceipt",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/fsHumanGateArtifactStore.ts#stageReceipt",
+      "symbol": "stageReceipt",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/public/commands.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/public/commands.ts#createManualQuestionOpen",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/commands.ts#createManualQuestionOpen",
+      "symbol": "createManualQuestionOpen",
+      "targetContext": "collaboration",
+      "targetLayer": "public"
     },
     {
       "controls": {
@@ -7264,6 +7510,31 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/humanGate.ts#settleManualQuestionParkObligations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#settleManualQuestionParkObligations",
+      "symbol": "settleManualQuestionParkObligations",
+      "targetContext": "task-execution",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": true,
@@ -9422,9 +9693,9 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/services/clarify/service.ts",
@@ -9433,8 +9704,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/clarify/service.ts#createClarifyRound",
@@ -11286,6 +11555,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/humanGateComposition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/humanGateComposition.ts#createCollaborationCommandContext",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#createCollaborationCommandContext",
+      "symbol": "createCollaborationCommandContext",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -12004,6 +12298,27 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#setTaskStatus",
       "symbol": "setTaskStatus",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/services/lifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/lifecycle.ts#transitionHumanGateTaskTx",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#transitionHumanGateTaskTx",
+      "symbol": "transitionHumanGateTaskTx",
       "targetContext": "task-execution",
       "targetLayer": "domain"
     },
@@ -19073,7 +19388,7 @@
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
-        "transaction": true
+        "transaction": false
       },
       "file": "packages/backend/src/services/taskQuestions.ts",
       "finalCriterion": "W3/W4 owner cutover",
@@ -19081,7 +19396,8 @@
       "missingControls": [
         "audit",
         "authority",
-        "event"
+        "event",
+        "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#createManualTaskQuestion",
       "symbol": "createManualTaskQuestion",
@@ -21637,7 +21953,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ca399d817f7e01cf3b2e4541aa17f872831ac22e0d8611d8f279ee74310d83ee",
+  "sourceDigest": "sha256:7c994d7c95d8c959b45102d1c424fd473c738157696976aa80f53d9378002d67",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -21747,11 +22063,59 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 157,
+      "durableWriterSites": 164,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
     "entries": [
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "projectReviewGateOpenTx",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#186:nodeRuns",
+        "line": 186,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#projectReviewGateOpenTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "projectReviewGateOpenTx"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "projectReviewGateOpenTx",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#222:nodeRunEvents",
+        "line": 222,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#projectReviewGateOpenTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "projectReviewGateOpenTx"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "projectClarifyGateOpenTx",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#402:nodeRunEvents",
+        "line": 402,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#projectClarifyGateOpenTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "projectClarifyGateOpenTx"
+      },
       {
         "allowedTables": [
           "tasks"
@@ -21873,8 +22237,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#142:taskExecutionLineageOperationRecords",
-        "line": 142,
+        "id": "task-authority:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#146:taskExecutionLineageOperationRecords",
+        "line": 146,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#submitTaskContinuationTx",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -21914,6 +22278,54 @@
       },
       {
         "allowedTables": [
+          "taskExecutionEffects"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "resolveQuiescedManagedProcesses",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionEffects",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1002:taskExecutionEffects",
+        "line": 1002,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionLineageOperationRecords"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "resolveQuiescedManagedProcesses",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionLineageOperationRecords",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1057:taskExecutionLineageOperationRecords",
+        "line": 1057,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionLineageOperationRecords"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "resolveQuiescedManagedProcesses",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionLineageOperationRecords",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1077:taskExecutionLineageOperationRecords",
+        "line": 1077,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
           "taskExecutionEffectAttempts"
         ],
         "authorityKind": "worker-epoch",
@@ -21921,8 +22333,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectAttempts",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1178:taskExecutionEffectAttempts",
-        "line": 1178,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1265:taskExecutionEffectAttempts",
+        "line": 1265,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -21937,8 +22349,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectFences",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1206:taskExecutionEffectFences",
-        "line": 1206,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1293:taskExecutionEffectFences",
+        "line": 1293,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -21953,8 +22365,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffects",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1222:taskExecutionEffects",
-        "line": 1222,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1309:taskExecutionEffects",
+        "line": 1309,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -21969,8 +22381,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1286:taskExecutionLineageOperationRecords",
-        "line": 1286,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1373:taskExecutionLineageOperationRecords",
+        "line": 1373,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -21985,8 +22397,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1306:taskExecutionLineageOperationRecords",
-        "line": 1306,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1393:taskExecutionLineageOperationRecords",
+        "line": 1393,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22001,71 +22413,7 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectAttempts",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1411:taskExecutionEffectAttempts",
-        "line": 1411,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffectFences"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "closeOutcomeUnknownAndRelease",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffectFences",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1432:taskExecutionEffectFences",
-        "line": 1432,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffects"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "closeOutcomeUnknownAndRelease",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffects",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1442:taskExecutionEffects",
-        "line": 1442,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "closeOutcomeUnknownAndRelease",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1478:taskExecutionLineageOperationRecords",
-        "line": 1478,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "closeOutcomeUnknownAndRelease",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1498:taskExecutionLineageOperationRecords",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1498:taskExecutionEffectAttempts",
         "line": 1498,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
@@ -22074,6 +22422,38 @@
       },
       {
         "allowedTables": [
+          "taskExecutionEffectFences"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "closeOutcomeUnknownAndRelease",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionEffectFences",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1519:taskExecutionEffectFences",
+        "line": 1519,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionEffects"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "closeOutcomeUnknownAndRelease",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionEffects",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1529:taskExecutionEffects",
+        "line": 1529,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
           "taskExecutionLineageOperationRecords"
         ],
         "authorityKind": "worker-epoch",
@@ -22081,8 +22461,40 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1540:taskExecutionLineageOperationRecords",
-        "line": 1540,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1565:taskExecutionLineageOperationRecords",
+        "line": 1565,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionLineageOperationRecords"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "closeOutcomeUnknownAndRelease",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionLineageOperationRecords",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1585:taskExecutionLineageOperationRecords",
+        "line": 1585,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionLineageOperationRecords"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "closeOutcomeUnknownAndRelease",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionLineageOperationRecords",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1627:taskExecutionLineageOperationRecords",
+        "line": 1627,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22097,8 +22509,24 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionOwners",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1574:taskExecutionOwners",
-        "line": 1574,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#1661:taskExecutionOwners",
+        "line": 1661,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
+        "requiredBrandedProof": "OwnershipToken",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "SqliteTaskExecutionEffectStore"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionEffects"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "linkWorkspaceRollbackTx",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionEffects",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#186:taskExecutionEffects",
+        "line": 186,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22113,8 +22541,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffects",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#329:taskExecutionEffects",
-        "line": 329,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#416:taskExecutionEffects",
+        "line": 416,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22129,8 +22557,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#356:taskExecutionLineageOperationRecords",
-        "line": 356,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#443:taskExecutionLineageOperationRecords",
+        "line": 443,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22145,8 +22573,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectAttempts",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#412:taskExecutionEffectAttempts",
-        "line": 412,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#499:taskExecutionEffectAttempts",
+        "line": 499,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22161,8 +22589,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectFences",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#433:taskExecutionEffectFences",
-        "line": 433,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#520:taskExecutionEffectFences",
+        "line": 520,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22177,8 +22605,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectAttempts",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#450:taskExecutionEffectAttempts",
-        "line": 450,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#537:taskExecutionEffectAttempts",
+        "line": 537,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22193,8 +22621,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffects",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#459:taskExecutionEffects",
-        "line": 459,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#546:taskExecutionEffects",
+        "line": 546,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22209,8 +22637,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectAttempts",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#515:taskExecutionEffectAttempts",
-        "line": 515,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#602:taskExecutionEffectAttempts",
+        "line": 602,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22225,8 +22653,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectFences",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#539:taskExecutionEffectFences",
-        "line": 539,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#626:taskExecutionEffectFences",
+        "line": 626,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22241,8 +22669,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectAttempts",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#582:taskExecutionEffectAttempts",
-        "line": 582,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#669:taskExecutionEffectAttempts",
+        "line": 669,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22257,8 +22685,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectFences",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#600:taskExecutionEffectFences",
-        "line": 600,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#687:taskExecutionEffectFences",
+        "line": 687,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22273,8 +22701,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffects",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#616:taskExecutionEffects",
-        "line": 616,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#703:taskExecutionEffects",
+        "line": 703,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22289,8 +22717,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#661:taskExecutionLineageOperationRecords",
-        "line": 661,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#748:taskExecutionLineageOperationRecords",
+        "line": 748,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22305,8 +22733,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#681:taskExecutionLineageOperationRecords",
-        "line": 681,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#768:taskExecutionLineageOperationRecords",
+        "line": 768,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22321,8 +22749,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectAttempts",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#888:taskExecutionEffectAttempts",
-        "line": 888,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#975:taskExecutionEffectAttempts",
+        "line": 975,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22337,56 +22765,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionEffectFences",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#905:taskExecutionEffectFences",
-        "line": 905,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionEffects"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "resolveQuiescedManagedProcesses",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionEffects",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#915:taskExecutionEffects",
-        "line": 915,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "resolveQuiescedManagedProcesses",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#970:taskExecutionLineageOperationRecords",
-        "line": 970,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
-        "requiredBrandedProof": "OwnershipToken",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteTaskExecutionEffectStore"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionLineageOperationRecords"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "resolveQuiescedManagedProcesses",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionLineageOperationRecords",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#990:taskExecutionLineageOperationRecords",
-        "line": 990,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#992:taskExecutionEffectFences",
+        "line": 992,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#SqliteTaskExecutionEffectStore",
         "requiredBrandedProof": "OwnershipToken",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -22881,8 +23261,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/services/lifecycle.ts#1003:nodeRuns",
-        "line": 1003,
+        "id": "task-authority:packages/backend/src/services/lifecycle.ts#1152:nodeRuns",
+        "line": 1152,
         "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#transitionMergeState",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-or-metadata-cas",
@@ -22897,8 +23277,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/services/lifecycle.ts#1115:nodeRuns",
-        "line": 1115,
+        "id": "task-authority:packages/backend/src/services/lifecycle.ts#1264:nodeRuns",
+        "line": 1264,
         "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#abandonSupersededMergeStates",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-or-metadata-cas",
@@ -22913,8 +23293,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/services/lifecycle.ts#213:nodeRuns",
-        "line": 213,
+        "id": "task-authority:packages/backend/src/services/lifecycle.ts#214:nodeRuns",
+        "line": 214,
         "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#transitionNodeRunStatusTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-or-metadata-cas",
@@ -22929,8 +23309,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/services/lifecycle.ts#336:nodeRuns",
-        "line": 336,
+        "id": "task-authority:packages/backend/src/services/lifecycle.ts#337:nodeRuns",
+        "line": 337,
         "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#setNodeRunStatus",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-or-metadata-cas",
@@ -22945,8 +23325,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/services/lifecycle.ts#395:nodeRuns",
-        "line": 395,
+        "id": "task-authority:packages/backend/src/services/lifecycle.ts#396:nodeRuns",
+        "line": 396,
         "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#setNodeRunStatusTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-or-metadata-cas",
@@ -22957,28 +23337,28 @@
           "tasks"
         ],
         "authorityKind": "control-revision",
-        "consumer": "setTaskStatus",
+        "consumer": "writeTaskStatusTx",
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/services/lifecycle.ts#679:tasks",
-        "line": 679,
-        "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#setTaskStatus",
+        "id": "task-authority:packages/backend/src/services/lifecycle.ts#594:tasks",
+        "line": 594,
+        "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#writeTaskStatusTx",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-or-metadata-cas",
-        "symbol": "setTaskStatus"
+        "symbol": "writeTaskStatusTx"
       },
       {
         "allowedTables": [
           "tasks"
         ],
         "authorityKind": "control-revision",
-        "consumer": "writeStatus",
+        "consumer": "setTaskStatus",
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/lifecycle.ts",
-        "id": "task-authority:packages/backend/src/services/lifecycle.ts#726:tasks",
-        "line": 726,
+        "id": "task-authority:packages/backend/src/services/lifecycle.ts#867:tasks",
+        "line": 867,
         "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#setTaskStatus",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-or-metadata-cas",
@@ -23146,22 +23526,6 @@
       },
       {
         "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "submitReviewDecisionUnlocked",
-        "controlSubtype": "gate-control",
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/services/review.ts",
-        "id": "task-authority:packages/backend/src/services/review.ts#2940:nodeRunOutputs",
-        "line": 2940,
-        "ownerEntryId": "owner:packages/backend/src/services/review.ts#submitReviewDecisionUnlocked",
-        "requiredBrandedProof": "GateDecisionTransaction",
-        "revisionPredicate": "task-scoped-decision-transaction-and-row-cas",
-        "symbol": "submitReviewDecisionUnlocked"
-      },
-      {
-        "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
@@ -23169,24 +23533,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/review.ts",
-        "id": "task-authority:packages/backend/src/services/review.ts#770:nodeRuns",
-        "line": 770,
-        "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "dispatchReviewNodeUnlocked"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "dispatchReviewNodeUnlocked",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/services/review.ts",
-        "id": "task-authority:packages/backend/src/services/review.ts#800:nodeRuns",
-        "line": 800,
+        "id": "task-authority:packages/backend/src/services/review.ts#1099:nodeRuns",
+        "line": 1099,
         "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23201,8 +23549,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/review.ts",
-        "id": "task-authority:packages/backend/src/services/review.ts#942:nodeRunOutputs",
-        "line": 942,
+        "id": "task-authority:packages/backend/src/services/review.ts#1241:nodeRunOutputs",
+        "line": 1241,
         "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23217,8 +23565,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/services/review.ts",
-        "id": "task-authority:packages/backend/src/services/review.ts#955:nodeRunOutputs",
-        "line": 955,
+        "id": "task-authority:packages/backend/src/services/review.ts#1254:nodeRunOutputs",
+        "line": 1254,
         "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23233,8 +23581,88 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/services/review.ts",
-        "id": "task-authority:packages/backend/src/services/review.ts#975:nodeRunEvents",
-        "line": 975,
+        "id": "task-authority:packages/backend/src/services/review.ts#1274:nodeRunEvents",
+        "line": 1274,
+        "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "dispatchReviewNodeUnlocked"
+      },
+      {
+        "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "submitReviewDecisionUnlocked",
+        "controlSubtype": "gate-control",
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/services/review.ts",
+        "id": "task-authority:packages/backend/src/services/review.ts#3244:nodeRunOutputs",
+        "line": 3244,
+        "ownerEntryId": "owner:packages/backend/src/services/review.ts#submitReviewDecisionUnlocked",
+        "requiredBrandedProof": "GateDecisionTransaction",
+        "revisionPredicate": "task-scoped-decision-transaction-and-row-cas",
+        "symbol": "submitReviewDecisionUnlocked"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "dispatchReviewNodeUnlocked",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/services/review.ts",
+        "id": "task-authority:packages/backend/src/services/review.ts#903:nodeRuns",
+        "line": 903,
+        "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "dispatchReviewNodeUnlocked"
+      },
+      {
+        "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "dispatchReviewNodeUnlocked",
+        "controlSubtype": null,
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/services/review.ts",
+        "id": "task-authority:packages/backend/src/services/review.ts#927:nodeRunOutputs",
+        "line": 927,
+        "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "dispatchReviewNodeUnlocked"
+      },
+      {
+        "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "dispatchReviewNodeUnlocked",
+        "controlSubtype": null,
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/services/review.ts",
+        "id": "task-authority:packages/backend/src/services/review.ts#940:nodeRunOutputs",
+        "line": 940,
+        "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "dispatchReviewNodeUnlocked"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "dispatchReviewNodeUnlocked",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/services/review.ts",
+        "id": "task-authority:packages/backend/src/services/review.ts#966:nodeRunEvents",
+        "line": 966,
         "ownerEntryId": "owner:packages/backend/src/services/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -23985,8 +24413,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3309:tasks",
-        "line": 3309,
+        "id": "task-authority:packages/backend/src/services/task.ts#3313:tasks",
+        "line": 3313,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -24001,8 +24429,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3434:taskExecutionIntents",
-        "line": 3434,
+        "id": "task-authority:packages/backend/src/services/task.ts#3438:taskExecutionIntents",
+        "line": 3438,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -24017,8 +24445,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3492:tasks",
-        "line": 3492,
+        "id": "task-authority:packages/backend/src/services/task.ts#3496:tasks",
+        "line": 3496,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -24033,8 +24461,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4120:tasks",
-        "line": 4120,
+        "id": "task-authority:packages/backend/src/services/task.ts#4124:tasks",
+        "line": 4124,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -24049,8 +24477,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5608:tasks",
-        "line": 5608,
+        "id": "task-authority:packages/backend/src/services/task.ts#5612:tasks",
+        "line": 5612,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

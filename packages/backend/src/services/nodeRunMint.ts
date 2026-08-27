@@ -146,6 +146,8 @@ export interface MintNodeRunOverrides {
 }
 
 export interface MintNodeRunArgs {
+  /** Preallocated identity for a transaction manifest (RFC-333 review-open). */
+  id?: string
   taskId: string
   nodeId: string
   status: MintableNodeRunStatus
@@ -207,9 +209,7 @@ export async function loadRunEnvelopeNonce(db: DbClient, nodeRunId: string): Pro
   return row?.envelopeNonce ?? ''
 }
 
-export function buildMintNodeRunValues(
-  args: MintNodeRunArgs & { id?: string },
-): typeof nodeRuns.$inferInsert {
+export function buildMintNodeRunValues(args: MintNodeRunArgs): typeof nodeRuns.$inferInsert {
   const id = args.id ?? ulid()
   const now = Date.now()
   const inherit = args.inheritFrom ?? null

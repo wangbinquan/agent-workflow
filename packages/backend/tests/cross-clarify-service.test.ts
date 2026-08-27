@@ -245,6 +245,32 @@ describe('RFC-056 createClarifyRound', () => {
 
     const nr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, crossClarifyNodeRunId)))[0]
     expect(nr?.status).toBe('awaiting_human')
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
+      'awaiting_human',
+    )
+    expect(
+      (await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))).map(
+        (question) => ({
+          questionId: question.questionId,
+          sourceKind: question.sourceKind,
+          roleKind: question.roleKind,
+          defaultTargetNodeId: question.defaultTargetNodeId,
+        }),
+      ),
+    ).toEqual([
+      {
+        questionId: 'q1',
+        sourceKind: 'cross',
+        roleKind: 'questioner',
+        defaultTargetNodeId: 'questioner',
+      },
+      {
+        questionId: 'q2',
+        sourceKind: 'cross',
+        roleKind: 'questioner',
+        defaultTargetNodeId: 'questioner',
+      },
+    ])
 
     expect(received.length).toBe(1)
     expect(received[0]?.type).toBe('cross-clarify.created')

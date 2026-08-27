@@ -135,6 +135,9 @@ describe('RFC 索引状态漂移守卫', () => {
     'RFC-329-mcp-gate-surface-completion': 0,
     // RFC-330：18 条 AC 全部在 plan §3 有证据行，缺口为零（落地 2026-08-26）。
     'RFC-330-digital-employee-authoring-acl': 0,
+    // RFC-333：Draft 阶段已把 proposal AC-1～16 逐条投影到 plan §6；证据状态允许 Pending，
+    // 但缺口必须保持为零，后续新增 AC 不能漏掉计划/证据行。
+    'RFC-333-human-gate-atomic-park-and-continuation': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {

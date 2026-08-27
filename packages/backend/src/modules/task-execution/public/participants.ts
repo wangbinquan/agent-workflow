@@ -24,6 +24,11 @@ import {
 } from '../application/taskExecutionContext'
 import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
 import { submitTaskContinuationTx as submitTaskContinuationTxInternal } from '../application/submitTaskContinuation'
+import type {
+  AcceptHumanGateDecisionInput,
+  AcceptedHumanGateDecision,
+  TaskDecisionParticipantInTx,
+} from '../application/acceptHumanGateDecision'
 import { terminalizeTaskExecutionIntentsTx as terminalizeTaskExecutionIntentsTxInternal } from '../application/terminalizeExecutionIntent'
 import {
   finalizeTaskExecutionRecovery as finalizeTaskExecutionRecoveryInternal,
@@ -55,6 +60,11 @@ import {
   exactOwnerMatches as exactOwnerMatchesInternal,
   ownershipTokenKey as ownershipTokenKeyInternal,
 } from '../domain/ownership'
+import {
+  type HumanGateContinuationLineage,
+  type HumanGateNodeProjectionFence,
+  type HumanGateWorkspaceRollbackRef,
+} from '../domain/humanGateContinuation'
 import type {
   MaintenanceMemberSnapshot,
   TerminalMaintenanceState,
@@ -115,6 +125,8 @@ export interface TerminalMaintenanceClaim {
 }
 
 export type {
+  AcceptHumanGateDecisionInput,
+  AcceptedHumanGateDecision,
   CodeHostProbeOutcome,
   CodeHostRecoveryDescriptor,
   LineageSlot,
@@ -123,6 +135,10 @@ export type {
   TaskExecutionIntentKind,
   TaskExecutionIntentSource,
   TerminalMaintenanceState,
+  TaskDecisionParticipantInTx,
+  HumanGateContinuationLineage,
+  HumanGateNodeProjectionFence,
+  HumanGateWorkspaceRollbackRef,
 }
 
 export type CodeHostSendAttemptHandle = Readonly<{

@@ -20,7 +20,14 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
+import {
+  clarifyRounds,
+  nodeRuns,
+  nodeRunOutputs,
+  taskLifecycleEventOutbox,
+  tasks,
+  workflows,
+} from '../src/db/schema'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import {
   createClarifyRound,
@@ -414,6 +421,11 @@ describe('RFC-058 baseline T2 — task delete clears clarify rounds (FK cascade)
       questions: [makeQuestion()],
     })
     expect(session.status).toBe('awaiting_human')
+    // RFC-333 T7 parks the task and therefore emits a lifecycle fact. The real
+    // delete service explicitly removes this deliberately restrictive outbox
+    // before deleting tasks; clear it here so this narrow test still isolates
+    // clarify_rounds' own ON DELETE CASCADE contract.
+    await db.delete(taskLifecycleEventOutbox).where(eq(taskLifecycleEventOutbox.taskId, taskId))
     await db.delete(tasks).where(eq(tasks.id, taskId))
     const fresh = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     // Deletion (not a transition to canceled) — cancel-on-task-end is RFC-053

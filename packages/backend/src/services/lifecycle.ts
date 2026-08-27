@@ -108,6 +108,7 @@ export type NodeRunStatusUpdateExtra = Partial<
     | 'exitCode'
     | 'pid'
     | 'reviewIteration'
+    | 'consumedUpstreamRunsJson'
     | 'preSnapshot'
     | 'opencodeSessionId'
     | 'tokInput'
@@ -569,6 +570,193 @@ export function registerTerminalWorkspacePruneEffect(
   terminalWorkspacePruneEffect = effect
 }
 
+interface WriteTaskStatusTxInput {
+  readonly tx: DbTxSync
+  readonly taskId: string
+  readonly from: TaskStatus
+  readonly to: TaskStatus
+  readonly allowedFrom: readonly TaskStatus[]
+  readonly extra?: TaskStatusUpdateExtra
+  readonly now: number
+  readonly reason: string
+  readonly isRevival: boolean
+  readonly workspacePruneDecision: TerminalWorkspacePruneDecision
+  readonly onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+}
+
+/**
+ * The one physical tasks.status writer. Standalone lifecycle commands and the
+ * RFC-333 in-transaction human-gate participants both enter here, so adding an
+ * atomic participant does not create a second lifecycle authority.
+ */
+function writeTaskStatusTx(input: WriteTaskStatusTxInput): number {
+  // rfc097-allow-direct-task-status-write -- single allowlisted writer
+  const updated = input.tx
+    .update(tasks)
+    .set({
+      status: input.to,
+      ...(input.to === 'running'
+        ? { runningSince: input.now }
+        : input.from === 'running'
+          ? {
+              runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
+              runningSince: null,
+            }
+          : {}),
+      ...(input.extra ?? {}),
+      ...(input.workspacePruneDecision.prune
+        ? {
+            workspacePruningAt: input.now,
+            workspacePruneCause: input.workspacePruneDecision.cause,
+          }
+        : {}),
+      lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
+    })
+    .where(
+      and(
+        eq(tasks.id, input.taskId),
+        eq(tasks.status, input.from),
+        ...(input.isRevival
+          ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)]
+          : []),
+        ...(input.workspacePruneDecision.prune
+          ? [
+              isNull(tasks.workspacePruningAt),
+              isNull(tasks.workspacePruneCause),
+              isNull(tasks.workspacePrunedAt),
+            ]
+          : []),
+      ),
+    )
+    .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision })
+    .all()
+  if (updated.length === 0) {
+    throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
+  }
+  const revision = updated[0]!.lifecycleEventRevision
+  enqueueTaskLifecycleEventTx(input.tx, {
+    taskId: input.taskId,
+    revision,
+    previousStatus: input.from,
+    status: input.to,
+    occurredAt: input.now,
+  })
+  input.onTransitionTx?.(input.tx, { from: input.from, to: input.to })
+  return revision
+}
+
+export type HumanGateTaskTransition =
+  | 'park-review'
+  | 'park-human'
+  | 'release-review'
+  | 'release-human'
+
+/**
+ * RFC-333 purpose-specific synchronous lifecycle participant. It deliberately
+ * supports only the four human-gate edges and requires the task revision seen
+ * by the operation prepare phase. No terminal revival, workspace policy, hook,
+ * or arbitrary status/extra bag can enter through this surface.
+ */
+export function transitionHumanGateTaskTx(args: {
+  readonly tx: DbTxSync
+  readonly taskId: string
+  readonly expectedTaskRevision: number
+  readonly transition: HumanGateTaskTransition
+  readonly now: number
+}): { readonly from: TaskStatus; readonly to: TaskStatus; readonly taskRevision: number } {
+  const row = args.tx
+    .select({
+      status: tasks.status,
+      lifecycleEventRevision: tasks.lifecycleEventRevision,
+    })
+    .from(tasks)
+    .where(eq(tasks.id, args.taskId))
+    .get()
+  if (row === undefined) {
+    throw new NotFoundError('task-not-found', `task ${args.taskId} not found`)
+  }
+  if (row.lifecycleEventRevision !== args.expectedTaskRevision) {
+    throw new ConcurrentTaskTransition(
+      args.taskId,
+      [row.status],
+      `human-gate revision changed (expected ${args.expectedTaskRevision}, current ${row.lifecycleEventRevision})`,
+    )
+  }
+
+  // Several review branches may park in the same scheduler wave. The first
+  // gate performs running→awaiting_review; later gates join the already-parked
+  // task at the exact same lifecycle revision while committing their own
+  // manifests. This is an exact idempotent target, not a second status writer.
+  if (
+    (args.transition === 'park-review' && row.status === 'awaiting_review') ||
+    (args.transition === 'park-human' && row.status === 'awaiting_human')
+  ) {
+    return {
+      from: row.status,
+      to: row.status,
+      taskRevision: row.lifecycleEventRevision,
+    }
+  }
+
+  const event: TaskTransitionEvent =
+    args.transition === 'park-review'
+      ? { kind: 'park-review' }
+      : args.transition === 'park-human'
+        ? { kind: 'park-human' }
+        : { kind: 'resume' }
+  const expectedFrom: readonly TaskStatus[] =
+    args.transition === 'release-review'
+      ? ['awaiting_review']
+      : args.transition === 'release-human'
+        ? ['awaiting_human']
+        : allowedFromForTaskEvent(event)
+  const from = row.status as TaskStatus
+  if (!expectedFrom.includes(from)) {
+    throw new ConflictError(
+      'illegal-task-transition',
+      `task ${args.taskId} status='${from}' cannot ${args.transition}`,
+    )
+  }
+  const to = targetForTaskEvent(event)
+  const taskRevision = writeTaskStatusTx({
+    tx: args.tx,
+    taskId: args.taskId,
+    from,
+    to,
+    allowedFrom: expectedFrom,
+    ...(args.transition === 'release-review' || args.transition === 'release-human'
+      ? {
+          extra: {
+            finishedAt: null,
+            errorSummary: null,
+            errorMessage: null,
+            failedNodeId: null,
+          },
+        }
+      : {}),
+    now: args.now,
+    reason: `human-gate:${args.transition}`,
+    isRevival: false,
+    workspacePruneDecision: { prune: false },
+  })
+  return { from, to, taskRevision }
+}
+
+/** Post-commit multicast paired with the synchronous RFC-333 park participant. */
+export function notifyHumanGateTaskParkAfterCommit(
+  db: DbClient,
+  taskId: string,
+  status: 'awaiting_review' | 'awaiting_human',
+): void {
+  try {
+    notifyChildBudgetTaskStatus(db, taskId, status)
+  } catch (err) {
+    lifecycleLog.warn(
+      `child-budget notify failed for ${taskId} → ${status}: ${err instanceof Error ? err.message : String(err)}`,
+    )
+  }
+}
+
 /**
  * CAS-strict task status write. `allowedFrom` is the explicit legal-source
  * set for this transition (RFC-097 design §1 matrix); terminal sources are
@@ -721,59 +909,20 @@ export async function setTaskStatus(args: {
       )
     }
   }
-  const writeStatus = (writer: Pick<DbClient, 'update'>) =>
-    // rfc097-allow-direct-task-status-write -- single allowlisted writer
-    writer
-      .update(tasks)
-      .set({
-        status: args.to,
-        // RFC-207 §3.8 — run-time accounting rides the single allowlisted status
-        // writer so every one of the ~25 transition call sites is covered by
-        // construction. Entering `running` opens a stretch; leaving it closes the
-        // stretch into the accumulated total. Time spent parked, awaiting review or
-        // awaiting a human answer therefore costs nothing against maxDurationMs.
-        ...(args.to === 'running'
-          ? { runningSince: now }
-          : from === 'running'
-            ? {
-                runningMs: sql`${tasks.runningMs} + (${now} - COALESCE(${tasks.runningSince}, ${now}))`,
-                runningSince: null,
-              }
-            : {}),
-        ...(args.extra ?? {}),
-        ...(workspacePruneDecision.prune
-          ? { workspacePruningAt: now, workspacePruneCause: workspacePruneDecision.cause }
-          : {}),
-        lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
-      })
-      .where(
-        and(
-          eq(tasks.id, args.taskId),
-          eq(tasks.status, from),
-          ...(isRevival ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)] : []),
-          ...(workspacePruneDecision.prune
-            ? [
-                isNull(tasks.workspacePruningAt),
-                isNull(tasks.workspacePruneCause),
-                isNull(tasks.workspacePrunedAt),
-              ]
-            : []),
-        ),
-      )
-      .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision })
   const commitTransition = (tx: DbTxSync): void => {
-    const updated = writeStatus(tx).all()
-    if (updated.length === 0) {
-      throw new ConcurrentTaskTransition(args.taskId, args.allowedFrom, args.reason)
-    }
-    enqueueTaskLifecycleEventTx(tx, {
+    writeTaskStatusTx({
+      tx,
       taskId: args.taskId,
-      revision: updated[0]!.lifecycleEventRevision,
-      previousStatus: from,
-      status: args.to,
-      occurredAt: now,
+      from,
+      to: args.to,
+      allowedFrom: args.allowedFrom,
+      ...(args.extra === undefined ? {} : { extra: args.extra }),
+      now,
+      reason: args.reason,
+      isRevival,
+      workspacePruneDecision,
+      ...(args.onTransitionTx === undefined ? {} : { onTransitionTx: args.onTransitionTx }),
     })
-    args.onTransitionTx?.(tx, transition)
   }
   const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
   if (executionContext !== undefined) {

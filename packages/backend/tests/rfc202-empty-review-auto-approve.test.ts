@@ -201,6 +201,80 @@ describe('RFC-202 T1 — empty-list review auto-approve', () => {
     expect(outs.get('accepted')).toEqual({ content: '', kind: 'list<markdown>' })
   })
 
+  test('a stale visible review refreshed to an empty list retires the old round and releases the task atomically', async () => {
+    const { taskId, task, definition, reviewNode } = await seed('list<path<md>>')
+    await db.insert(nodeRuns).values({
+      id: '01A_OLD',
+      taskId,
+      nodeId: 'src',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now(),
+      finishedAt: Date.now(),
+    })
+    await db.insert(nodeRunOutputs).values({
+      nodeRunId: '01A_OLD',
+      portName: 'cases',
+      content: 'old.md',
+    })
+    await seedEmptySrc(taskId, '01B_NEW')
+    await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
+    const reviewRunId = ulid()
+    await db.insert(nodeRuns).values({
+      id: reviewRunId,
+      taskId,
+      nodeId: 'rev_1',
+      status: 'awaiting_review',
+      retryIndex: 0,
+      iteration: 0,
+      reviewIteration: 0,
+      consumedUpstreamRunsJson: JSON.stringify({ src: '01A_OLD' }),
+      startedAt: Date.now(),
+    })
+    const oldVersionId = ulid()
+    await db.insert(docVersions).values({
+      id: oldVersionId,
+      taskId,
+      reviewNodeId: 'rev_1',
+      reviewNodeRunId: reviewRunId,
+      sourceNodeId: 'src',
+      sourcePortName: 'cases',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: 'legacy/old.md',
+      itemIndex: 0,
+      selection: 'unselected',
+      roundGeneration: 1,
+      decision: 'pending',
+      createdAt: Date.now(),
+    })
+
+    const result = await dispatchReviewNode({
+      db,
+      taskId,
+      scopeRoot: task.worktreePath,
+      appHome,
+      definition,
+      node: reviewNode,
+      iteration: 0,
+    })
+    expect(result.kind).toBe('ok')
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]).toMatchObject(
+      {
+        status: 'done',
+        consumedUpstreamRunsJson: JSON.stringify({ src: '01B_NEW' }),
+      },
+    )
+    expect(
+      (await db.select().from(docVersions).where(eq(docVersions.id, oldVersionId)))[0],
+    ).toMatchObject({ decision: 'superseded', decisionReason: 'upstream-refreshed' })
+    expect(await db.select().from(docVersions).where(eq(docVersions.decision, 'pending'))).toEqual(
+      [],
+    )
+    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.status).toBe('pending')
+  })
+
   test('wedged legacy row heals: existing awaiting_review round with zero doc_versions auto-approves on re-dispatch', async () => {
     const { taskId, task, definition, reviewNode } = await seed('list<path<md>>')
     await seedEmptySrc(taskId, '01SRC')

@@ -23,7 +23,14 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { clarifyRounds, nodeRuns, tasks, workflows } from '../src/db/schema'
+import {
+  clarifyRounds,
+  collaborationGateOperations,
+  nodeRuns,
+  taskQuestions,
+  tasks,
+  workflows,
+} from '../src/db/schema'
 import { createClarifyRound, sealAnswersServerSide } from '../src/services/clarify/service'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type {
@@ -165,9 +172,79 @@ describe('createClarifyRound', () => {
     const nrRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId))
     expect(nrRows[0]?.status).toBe('awaiting_human')
     expect(nrRows[0]?.nodeId).toBe('clarify1')
+    expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('awaiting_human')
+    expect(
+      db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).get(),
+    ).toMatchObject({
+      originNodeRunId: clarifyNodeRunId,
+      questionId: 'q1',
+      sourceKind: 'self',
+      roleKind: 'self',
+      defaultTargetNodeId: 'designer',
+    })
 
     expect(received.length).toBe(1)
     expect(received[0]?.type).toBe('clarify.created')
+  })
+
+  test('exact re-emit replays one round/question/event; changed content advances the stable gate', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const { taskId } = await seedTask(db)
+    const sourceRunId = 'nr_source_reemit'
+    await db.insert(nodeRuns).values({
+      id: sourceRunId,
+      taskId,
+      nodeId: 'designer',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+    })
+    const received: TaskWsMessage[] = []
+    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (message) => received.push(message))
+    const request = {
+      kind: 'self' as const,
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
+      questions: [makeQuestion()],
+    }
+    const first = await createClarifyRound(request)
+    const replay = await createClarifyRound(request)
+    expect(replay.round.id).toBe(first.round.id)
+    expect(received).toHaveLength(1)
+    expect(
+      db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+    ).toHaveLength(1)
+    expect(
+      db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
+    ).toHaveLength(1)
+
+    const changed = await createClarifyRound({
+      ...request,
+      questions: [makeQuestion({ title: 'Which durable database?' })],
+    })
+    expect(changed.round.id).not.toBe(first.round.id)
+    expect(changed.intermediaryNodeRunId).toBe(first.intermediaryNodeRunId)
+    expect(received).toHaveLength(2)
+    expect(
+      db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
+    ).toHaveLength(2)
+    expect(db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all()).toEqual([
+      expect.objectContaining({ questionId: 'q1', questionTitle: 'Which durable database?' }),
+    ])
+    expect(
+      db
+        .select({ revision: collaborationGateOperations.resultGateRevision })
+        .from(collaborationGateOperations)
+        .where(eq(collaborationGateOperations.taskId, taskId))
+        .all()
+        .map((operation) => operation.revision)
+        .sort((left, right) => (left ?? 0) - (right ?? 0)),
+    ).toEqual([1, 2])
   })
 
   test('passes through sourceShardKey for agent-multi and clarifyIteration on the node_run row', async () => {
@@ -196,6 +273,9 @@ describe('createClarifyRound', () => {
       iteration: 1,
       questions: [makeQuestion()],
       parentNodeRunId: 'parent-multi-run',
+      truncationWarnings: [
+        { code: 'clarify-options-too-many', detail: 'fixture warning survives atomic open' },
+      ],
     })
 
     const nr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId)))[0]
@@ -209,6 +289,11 @@ describe('createClarifyRound', () => {
         .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
     )[0]
     expect(sess?.askingShardKey).toBe('shard-A')
+    expect(sess?.truncationWarningsJson).toBe(
+      JSON.stringify([
+        { code: 'clarify-options-too-many', detail: 'fixture warning survives atomic open' },
+      ]),
+    )
   })
 })
 

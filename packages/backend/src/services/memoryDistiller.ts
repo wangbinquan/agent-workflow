@@ -37,6 +37,8 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { createCollaborationCommandContext } from '@/services/humanGateComposition'
+import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { getRuntimeDriver } from '@/services/runtime'
 import { runAgentProcess } from '@/services/execution/agentProcess'
@@ -378,7 +380,7 @@ export async function loadSourceEvents(
   }
 
   const transcriptsByClarifyId = await loadClarifyTranscripts(db, clarifyRows, budget)
-  const reviewBodiesByDvId = await loadReviewBodies(reviewRows, budget)
+  const reviewBodiesByDvId = await loadReviewBodies(db, reviewRows, budget)
 
   return {
     clarify: clarifyRows.map((r) => {
@@ -528,21 +530,17 @@ async function loadClarifyTranscripts(
  * placeholder line.
  */
 async function loadReviewBodies(
+  db: DbClient,
   reviewRows: Array<{ id: string; bodyPath: string }>,
   budget: SourceContextBudget,
 ): Promise<Map<string, SourceContextResult>> {
   const out = new Map<string, SourceContextResult>()
   if (budget.reviewBodyMaxBytes === 0 || reviewRows.length === 0) return out
   const home = appHome()
+  const collaboration = createCollaborationCommandContext({ db, appHome: home })
   for (const r of reviewRows) {
     try {
-      const abs = join(home, r.bodyPath)
-      const file = Bun.file(abs)
-      if (!(await file.exists())) {
-        out.set(r.id, { md: null, reason: 'reviewed body unreadable: file missing' })
-        continue
-      }
-      const text = await file.text()
+      const text = readCommittedReviewArtifactBody(collaboration, r.bodyPath)
       out.set(r.id, { md: clipHeadTail(text, budget.reviewBodyMaxBytes), reason: null })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

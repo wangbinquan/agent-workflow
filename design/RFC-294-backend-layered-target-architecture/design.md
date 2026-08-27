@@ -7,7 +7,9 @@
 > [RFC-332](../RFC-332-task-engine-decomposition/proposal.md) / W2-B TaskEngine 也已发布并完成 provenance/hosted closeout，
 > canonical value SCC 保持 `4/6`；最终 containing SHA `4dd30d034f1bcb0c6532301cec11bdd288702105` 的
 > CI `33052994260`（35/35）、git-protocols-e2e `33052994263`（1/1）与 integration-opencode
-> `33052994318`（2/2）均为 terminal `success`。下一实施节点是 P0-C residual；W2-C/D 尚未授权。
+> `33052994318`（2/2）均为 terminal `success`。P0-C residual 已由
+> [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md) 承接；D1～D12 与 T2～T12 已于
+> 2026-08-27 获用户批准；T2～T7 已完成，当前进入 T8，W2-C/D 仍未授权。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
 ## 1. 设计原则
@@ -1920,7 +1922,12 @@ interface TaskGateVisibilityQuery {
 interface GateTaskTransitionFence {
   readonly decision: AuthorizedGateDecisionInTx
   readonly expectedTaskRevision: number
-  readonly expectedNodeRevision: number
+  readonly expectedNodeProjection: GateNodeProjectionFence
+}
+
+interface GateNodeProjectionFence {
+  readonly digest: string // canonical exact node-run ids + statuses + source identities
+  readonly memberCount: number
 }
 ```
 
@@ -3202,7 +3209,6 @@ interface SubmitQuestionAnswersHandler extends IdempotentCommandHandler<
 interface GateFence {
   expectedGateRevision: number
   expectedTaskRevision: number
-  expectedNodeRevision: number
 }
 
 type TerminalGateCloserEffectId = SystemEffectId & {
@@ -3219,9 +3225,18 @@ interface TerminalGateConsumer {
 共同机制：authorize、durable decision、park/release、continuation intent、idempotency、terminal sweep。不同 gate 的题目、
 文档、review verdict 仍是各自 domain policy。
 
+RFC-333 的 current source 对账确认 `node_runs` 没有可直接复用的 generic revision；P0-C 不为所有 node run 夹带一列。
+客户端 fence 只提交 gate/task revisions，application 在 prepare 阶段生成 exact node-run id/status/source identity 集合的
+`GateNodeProjectionFence`，task participant 在 final transaction 重算 digest。它是服务端内部 CAS 输入，不进入 REST/MCP wire。
+
 route 不再做“写答案→rollback/mint→resume→把 resumeFailure 填响应”的 saga。durable decision、文档快照、node/task
 transition、continuation intent 必须同事务；FS/output 用 prepare+journal/roll-forward。worker 消费 continuation；重复消费
 由 operation id/epoch 幂等。
+
+RFC-333 对 review rollback 的 current residual 进一步固定为：事务前只做 snapshot check-only 并准备幂等 plan；
+`CollaborationDecisionTx` 通过 task participant 把 plan、唯一 continuation 与现有 RFC-328
+`task_execution_effects(kind='workspace-rollback')` 同时落库；RFC-332 coordinator 在进入 rerun engine 前结算 effect receipt 与
+`rolledBack` projection。这样不在事务中做 Git I/O，也不新造 continuation/effect worker。
 
 Application command result 只返回 `GateDecisionReceipt {gate,revision,status}`；需要保持现有 wire 时，inbound facade 再调用
 actor-filtered query 组装 `HumanGateView`，不暴露 `ContinuationIntent`、worker id 或内部 resume failure。
@@ -3763,7 +3778,8 @@ current 承接路径为：N1/W0-R 已落；RFC-328 已完成 P0-D、`TaskExecuti
 `TaskExecutionContext` 四 kick 线程化与 durable lifecycle outbox。RFC-331 已把
 `SchedulerDriverPort`、ephemeral `TaskStatusPublisher` 与 purpose-specific read model 的 consumer/import topology 切换完成，
 复用已落 authority，未新建 lease/schema/registry/outbox；A1+B1～B4 前五条与 E3 第六条 exact debt 均已从账本删除。
-RFC-331 / W2-A 与 RFC-332 / W2-B 已发布并完成 hosted closeout；当前下一节点是 P0-C residual，之后才能按新 RFC/
+RFC-331 / W2-A 与 RFC-332 / W2-B 已发布并完成 hosted closeout；P0-C residual 已由 RFC-333 重取 current source、
+形成 open/decision 两条原子事务合同与 fault matrix，D1～D12 与 T2～T12 已获用户批准、T2～T7 已完成且当前进入 T8；只有 RFC-333 完成后才能按新 RFC/
 明确批准继续 W2-C/D 与 W3。非可选 abort reason、bootstrap fail-fast、child recovery 与功能保真继续作为后续 oracle。
 W9 只做全局 container/facade 清仓，不回头重做 RFC-328。
 

@@ -4860,11 +4860,11 @@
   "denominator": {
     "ambientWiring": 440,
     "disabled": 7,
-    "entries": 215,
+    "entries": 217,
     "executionLocal": 23,
-    "longRunning": 39,
-    "managed": 7,
-    "periodic": 146
+    "longRunning": 40,
+    "managed": 8,
+    "periodic": 147
   },
   "entries": [
     {
@@ -5110,6 +5110,50 @@
       "phase": "unknown",
       "symbol": "WATCH_POLL_MS",
       "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/collaboration/application/recoverHumanGateOperations.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/collaboration/application/recoverHumanGateOperations.ts#HumanGateOperationRecovery",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/recoverHumanGateOperations.ts#HumanGateOperationRecovery",
+      "phase": "unknown",
+      "symbol": "HumanGateOperationRecovery",
+      "targetContext": "collaboration"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts",
+      "finalCriterion": "managed definition contract",
+      "id": "background:packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts#startHumanGateRecoveryTicker",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": true,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts#startHumanGateRecoveryTicker",
+      "phase": "before-ready",
+      "symbol": "startHumanGateRecoveryTicker",
+      "targetContext": "collaboration"
     },
     {
       "dependencies": [],
@@ -8945,7 +8989,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5381",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5385",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8959,7 +9003,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5381",
+      "symbol": "$setTimeout:5385",
       "targetContext": "task-execution"
     },
     {
@@ -9682,5 +9726,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ca399d817f7e01cf3b2e4541aa17f872831ac22e0d8611d8f279ee74310d83ee"
+  "sourceDigest": "sha256:7c994d7c95d8c959b45102d1c424fd473c738157696976aa80f53d9378002d67"
 }

@@ -51,6 +51,15 @@ export interface AdmittedContinuationStep {
   run(context: TaskDriveContext): Promise<RepositoryPreparationStepOutcome>
 }
 
+/**
+ * RFC-333 linked gate effects run after command-specific admission work and
+ * before the background receipt/engine. Keeping this as a distinct phase makes
+ * the "rollback settled before rerun" ordering observable and testable.
+ */
+export interface GateContinuationPreDriveStep {
+  run(context: TaskDriveContext): Promise<RepositoryPreparationStepOutcome>
+}
+
 export interface TaskEngineOrchestrationPort {
   drive(context: TaskDriveContext): Promise<void>
 }
@@ -60,7 +69,7 @@ export interface TaskDriveFailureReporter {
     readonly taskId: string
     readonly intentId: string
     readonly execution: TaskExecutionContextRef
-    readonly stage: 'admission-continuation' | 'drive'
+    readonly stage: 'admission-continuation' | 'gate-continuation-effect' | 'drive'
     readonly error: unknown
   }): Promise<void> | void
 }
@@ -69,6 +78,7 @@ export interface DefaultTaskDriveCoordinatorOptions {
   readonly runtime: ResolvedTaskDriveConfig
   readonly lifecycle: TaskDriverLifecyclePort
   readonly admittedContinuation?: AdmittedContinuationStep
+  readonly gateContinuationPreDrive?: GateContinuationPreDriveStep
   readonly repositoryPreparation: RepositoryPreparationStep
   readonly engineOrchestrator: TaskEngineOrchestrationPort
   readonly failureReporter: TaskDriveFailureReporter
@@ -114,6 +124,34 @@ export class DefaultTaskDriveCoordinator implements TaskDriveCoordinator {
       } catch (error) {
         try {
           await this.reportFailure(input, attached.attachment, 'admission-continuation', error)
+        } finally {
+          await this.options.lifecycle.releaseAndFinalize({
+            taskId: input.taskId,
+            controller,
+          })
+        }
+        throw error
+      }
+    }
+
+    if (this.options.gateContinuationPreDrive !== undefined) {
+      try {
+        const outcome = await runWithTaskExecutionContext(
+          attached.attachment.execution,
+          async () => await this.options.gateContinuationPreDrive?.run(context),
+        )
+        if (outcome?.kind === 'terminal-won') {
+          await this.options.lifecycle.releaseAndFinalize({
+            taskId: input.taskId,
+            controller,
+          })
+          return input.completionMode === 'background'
+            ? { kind: 'accepted' as const, taskId: input.taskId }
+            : { kind: 'settled' as const, taskId: input.taskId }
+        }
+      } catch (error) {
+        try {
+          await this.reportFailure(input, attached.attachment, 'gate-continuation-effect', error)
         } finally {
           await this.options.lifecycle.releaseAndFinalize({
             taskId: input.taskId,
@@ -176,7 +214,7 @@ export class DefaultTaskDriveCoordinator implements TaskDriveCoordinator {
   private async reportFailure(
     input: TaskDriveSubmission,
     attachment: TaskDriveAttachment,
-    stage: 'admission-continuation' | 'drive',
+    stage: 'admission-continuation' | 'gate-continuation-effect' | 'drive',
     error: unknown,
   ): Promise<void> {
     await this.options.failureReporter.report({

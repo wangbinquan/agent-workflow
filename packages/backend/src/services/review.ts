@@ -22,7 +22,7 @@
 // `resumeTask` is invoked by REST decision handlers to re-enter the
 // scheduler after a decision lands.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
   and,
@@ -97,11 +97,23 @@ import type {
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
+  finalizeCommittedHumanGate,
+  prepareReviewGateOpen,
+} from '@/modules/collaboration/public/commands'
+import {
+  createCollaborationCommandContext,
+  parkPreparedHumanGate,
+} from '@/services/humanGateComposition'
+import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
+  readCommittedReviewArtifactBody,
   resolveReviewAnchor,
 } from '@/modules/collaboration/public/queries'
-import type { ReviewAnchorFailure } from '@/modules/collaboration/public/types'
+import type {
+  ReviewAnchorFailure,
+  ReviewGateOpenDocumentDraft,
+} from '@/modules/collaboration/public/types'
 import {
   agents as agentsTable,
   docVersions,
@@ -120,6 +132,7 @@ import { parseConsumedJson } from '@/services/freshness'
 import {
   assertNodeRunSourceTerminationAdmission,
   setNodeRunStatusTx,
+  transitionHumanGateTaskTx,
   transitionNodeRunStatus,
   transitionNodeRunStatusTx,
 } from '@/services/lifecycle'
@@ -129,6 +142,7 @@ import { nextRetryIndex, mintNodeRun, mintNodeRunTx } from '@/services/nodeRunMi
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import {
+  currentTaskExecutionContext,
   withTaskExecutionMutation,
   withTaskExecutionTransaction,
 } from '@/services/taskExecutionParticipants'
@@ -146,6 +160,7 @@ import {
 import { hasActingMembership, hasActingMembershipTx } from '@/services/taskCollab'
 import { resolveTaskRole } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
+import { sha256Hex } from '@/util/hash'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 /** RFC-145: human-readable supersede breadcrumb prefix (message builder only —
@@ -536,7 +551,14 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // first must make dispatch a zero-write loser; S1 repair legitimately calls
   // this while the task is already parked awaiting_review.
   const taskRow = (
-    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    await db
+      .select({
+        status: tasks.status,
+        lifecycleEventRevision: tasks.lifecycleEventRevision,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
   )[0]
   if (taskRow === undefined) {
     return {
@@ -717,72 +739,349 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     return c === undefined || c === sourceRun.id
   }
 
+  if (latestDone !== undefined && coversSource(latestDone)) {
+    // A prior decision against this exact source remains decisive.
+    return { kind: 'ok', summary: '', message: '' }
+  }
+
+  const reuseDocVersions =
+    reuse?.status === 'pending' || reuse?.status === 'awaiting_review'
+      ? await db
+          .select()
+          .from(docVersions)
+          .where(
+            and(
+              eq(docVersions.reviewNodeRunId, reuse.id),
+              eq(docVersions.sourcePortName, sourcePortName),
+            ),
+          )
+      : []
+  const pendingReuseDocVersions = reuseDocVersions.filter(
+    (document) => document.decision === 'pending',
+  )
+  const nextVersionIndex = (itemIndex: number | null): number =>
+    Math.max(
+      0,
+      ...reuseDocVersions
+        .filter((document) => document.itemIndex === itemIndex)
+        .map((document) => document.versionIndex),
+    ) + 1
+
+  const refreshAwaitingReview = reuse?.status === 'awaiting_review' && !coversSource(reuse)
+  // RFC-333 T6: every new review-open and every source-refresh round is
+  // prepared completely before one TaskParkTx makes the projection visible.
+  // Only already-leaked legacy pending rows and same-source repair/resume stay
+  // on the compatibility path below.
+  if (
+    refreshAwaitingReview ||
+    (reuse?.status !== 'awaiting_review' && pendingReuseDocVersions.length === 0)
+  ) {
+    const reviewIteration = reuse?.reviewIteration ?? 0
+    const drafts: ReviewGateOpenDocumentDraft[] = []
+    if (isMultiDoc) {
+      const prior = await loadPriorRound(db, appHome, {
+        taskId,
+        reviewNodeId: node.id,
+        iteration,
+      })
+      const priorLookup = buildPriorSelectionLookup(prior.members)
+      const itemCount = itemsInline ? inlineBodies.length : itemPaths.length
+      for (let i = 0; i < itemCount; i++) {
+        let body: string
+        let itemPath: string | undefined
+        if (itemsInline) {
+          body = inlineBodies[i]!
+        } else {
+          itemPath = itemPaths[i]!
+          const artItem = artifactRead.items[i]
+          body =
+            artItem !== undefined && artItem.source !== 'missing'
+              ? artItem.body
+              : `> ⚠️ RFC-079: file not found in worktree: \`${itemPath}\``
+        }
+        const inherited = inheritSelection(
+          { itemIndex: i, itemPath: itemPath ?? null, body },
+          priorLookup,
+        )
+        drafts.push({
+          body,
+          sourceNodeId,
+          sourcePortName,
+          versionIndex: nextVersionIndex(i),
+          reviewIteration,
+          ...(itemPath === undefined ? {} : { sourceFilePath: itemPath, itemPath }),
+          itemIndex: i,
+          selection: inherited.selection,
+          selectionStale: inherited.stale,
+          roundGeneration: prior.nextGeneration,
+        })
+      }
+    } else {
+      drafts.push({
+        body: resolvedBody,
+        sourceNodeId,
+        sourcePortName,
+        versionIndex: nextVersionIndex(null),
+        reviewIteration,
+        ...(resolvedSourcePath === undefined ? {} : { sourceFilePath: resolvedSourcePath }),
+      })
+    }
+
+    // RFC-202: zero documents is a successful empty audit. The node is minted
+    // and approved inside one transaction, so no visible human gate exists at
+    // any commit boundary and the task remains running.
+    if (drafts.length === 0) {
+      const decidedAt = Date.now()
+      const acceptedKind = itemsInline ? 'list<markdown>' : 'list<path<md>>'
+      let reviewNodeRunId = reuse?.status === 'pending' || refreshAwaitingReview ? reuse.id : ''
+      const meta = JSON.stringify({
+        decision: 'approved',
+        decidedAt,
+        reviewIteration,
+        sourceNodeId,
+        sourcePortName,
+        itemCount: 0,
+        acceptedCount: 0,
+        acceptedItemIndices: [],
+        auto: 'empty-list',
+      })
+      withTaskExecutionTransaction({
+        db,
+        taskId,
+        now: decidedAt,
+        run: (tx) => {
+          if (refreshAwaitingReview) {
+            const current = tx
+              .select({
+                status: nodeRuns.status,
+                consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
+              })
+              .from(nodeRuns)
+              .where(eq(nodeRuns.id, reuse.id))
+              .get()
+            const expectedPendingIds = pendingReuseDocVersions.map((document) => document.id).sort()
+            const currentPendingIds = tx
+              .select({ id: docVersions.id })
+              .from(docVersions)
+              .where(
+                and(
+                  eq(docVersions.reviewNodeRunId, reuse.id),
+                  eq(docVersions.sourcePortName, sourcePortName),
+                  eq(docVersions.decision, 'pending'),
+                ),
+              )
+              .all()
+              .map((document) => document.id)
+              .sort()
+            if (
+              current?.status !== 'awaiting_review' ||
+              current.consumedUpstreamRunsJson !== reuse.consumedUpstreamRunsJson ||
+              currentPendingIds.length !== expectedPendingIds.length ||
+              currentPendingIds.some(
+                (documentId, index) => documentId !== expectedPendingIds[index],
+              )
+            ) {
+              throw new ConflictError(
+                'review-refresh-stale',
+                `review ${reuse.id} changed before empty-source refresh`,
+              )
+            }
+            if (currentPendingIds.length > 0) {
+              tx.delete(reviewComments)
+                .where(inArray(reviewComments.docVersionId, currentPendingIds))
+                .run()
+              tx.update(docVersions)
+                .set({
+                  decision: 'superseded',
+                  decisionReason: 'upstream-refreshed',
+                  decidedBy: SYSTEM_DECIDER,
+                  decidedAt,
+                })
+                .where(inArray(docVersions.id, currentPendingIds))
+                .run()
+            }
+            tx.update(nodeRuns)
+              .set({ consumedUpstreamRunsJson: consumedJson })
+              .where(eq(nodeRuns.id, reuse.id))
+              .run()
+          } else if (reuse?.status === 'pending') {
+            transitionNodeRunStatusTx({
+              tx,
+              nodeRunId: reuse.id,
+              event: { kind: 'park-review' },
+              extra: {
+                startedAt: reuse.startedAt ?? decidedAt,
+                consumedUpstreamRunsJson: consumedJson,
+              },
+            })
+          } else {
+            reviewNodeRunId = mintNodeRunTx(tx, {
+              taskId,
+              nodeId: node.id,
+              status: 'awaiting_review',
+              cause: 'review-park',
+              iteration,
+              overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
+            })
+          }
+          tx.insert(nodeRunOutputs)
+            .values({
+              nodeRunId: reviewNodeRunId,
+              portName: REVIEW_APPROVED_PORT_MULTI,
+              content: '',
+              kind: acceptedKind,
+              archiveJson: null,
+            })
+            .onConflictDoUpdate({
+              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+              set: { content: '', kind: acceptedKind, archiveJson: null },
+            })
+            .run()
+          tx.insert(nodeRunOutputs)
+            .values({
+              nodeRunId: reviewNodeRunId,
+              portName: REVIEW_APPROVAL_META_PORT,
+              content: meta,
+            })
+            .onConflictDoUpdate({
+              target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+              set: { content: meta },
+            })
+            .run()
+          transitionNodeRunStatusTx({
+            tx,
+            nodeRunId: reviewNodeRunId,
+            event: { kind: 'approve-review' },
+            extra: { finishedAt: decidedAt },
+          })
+          if (refreshAwaitingReview && taskRow.status === 'awaiting_review') {
+            transitionHumanGateTaskTx({
+              tx,
+              taskId,
+              expectedTaskRevision: taskRow.lifecycleEventRevision,
+              transition: 'release-review',
+              now: decidedAt,
+            })
+          }
+          tx.insert(nodeRunEvents)
+            .values({
+              nodeRunId: reviewNodeRunId,
+              ts: decidedAt,
+              kind: 'text',
+              payload: `[rfc202/review-auto-approved] ${JSON.stringify({
+                rfc: 'RFC-202',
+                reason: 'empty-list',
+                itemCount: 0,
+                sourceNodeId,
+                sourcePortName,
+              })}`,
+            })
+            .run()
+        },
+      })
+      return {
+        kind: 'ok',
+        summary: `review node ${node.id} auto-approved (0 documents, empty list)`,
+        message: 'review-auto-approved',
+      }
+    }
+
+    const sourceSnapshotDigest = sha256Hex(
+      JSON.stringify({
+        sourceRunId: sourceRun.id,
+        sourceNodeId,
+        sourcePortName,
+        upstreamKind: upstreamKind ?? null,
+        documents: drafts.map((draft) => ({
+          bodySha256: sha256Hex(draft.body),
+          itemIndex: draft.itemIndex ?? null,
+          itemPath: draft.itemPath ?? null,
+          selection: draft.selection ?? null,
+          selectionStale: draft.selectionStale ?? null,
+          roundGeneration: draft.roundGeneration ?? null,
+        })),
+      }),
+    )
+    const collaboration = createCollaborationCommandContext({ db, appHome })
+    const prepared = prepareReviewGateOpen(collaboration, {
+      taskId,
+      reviewNodeId: node.id,
+      iteration,
+      reviewIteration,
+      consumedUpstreamRunsJson: consumedJson,
+      sourceSnapshotDigest,
+      idempotencyKey: [
+        'review-open:v1',
+        taskId,
+        node.id,
+        String(iteration),
+        String(taskRow.lifecycleEventRevision),
+        sourceSnapshotDigest,
+      ].join(':'),
+      expectedTaskRevision: taskRow.lifecycleEventRevision,
+      ...(reuse?.status === 'pending' ? { reusePendingNodeRunId: reuse.id } : {}),
+      ...(refreshAwaitingReview
+        ? {
+            reuseAwaitingNodeRun: {
+              id: reuse.id,
+              consumedUpstreamRunsJson: reuse.consumedUpstreamRunsJson!,
+            },
+            supersedePendingDocumentIds: pendingReuseDocVersions.map((document) => document.id),
+          }
+        : {}),
+      documents: drafts,
+    })
+    if (prepared.kind === 'prepared') {
+      const executionContext = currentTaskExecutionContext(taskId)
+      parkPreparedHumanGate({
+        db,
+        prepared: prepared.prepared,
+        ...(executionContext === undefined ? {} : { executionContext }),
+      })
+    }
+    try {
+      finalizeCommittedHumanGate(collaboration, {
+        operationId: prepared.operationId,
+      })
+    } catch (error) {
+      // The DB commit is already authoritative; recovery and the read fallback
+      // roll the file forward without hiding the just-committed review.
+      log.warn('review-open artifact finalization deferred to recovery', {
+        taskId,
+        operationId: prepared.operationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    const docs = (
+      await db.select().from(docVersions).where(inArray(docVersions.id, prepared.documentIds))
+    )
+      .map(rowToDocVersion)
+      .sort((left, right) => (left.itemIndex ?? 0) - (right.itemIndex ?? 0))
+    if (docs.length !== prepared.documentIds.length) {
+      throw new Error('review-open-committed-document-projection-missing')
+    }
+    broadcastReviewCreated(taskId, prepared.nodeRunId, node.id, docs[0]!)
+    return {
+      kind: 'awaiting_review',
+      summary: isMultiDoc
+        ? `review node ${node.id} awaiting decision (${docs.length} document${
+            docs.length === 1 ? '' : 's'
+          })`
+        : `review node ${node.id} awaiting decision`,
+      message: 'awaiting_review',
+    }
+  }
+
   let reviewNodeRunId: string
   let reviewIteration: number
   if (reuse !== undefined && reuse.status === 'awaiting_review') {
     // A live awaiting_review row is the open review for this node. Reuse it and
     // fall through to the doc_version find-or-create below, which re-broadcasts
     // the parked version (resume idempotence, B18) or mints one if it is
-    // missing (e.g. the S1 repair "recreate doc_version" path).
+    // missing (e.g. the S1 repair "recreate doc_version" path). A stale-source
+    // refresh has already returned through the atomic RFC-333 branch above.
     reviewNodeRunId = reuse.id
     reviewIteration = reuse.reviewIteration
-    if (!coversSource(reuse)) {
-      // (T-B10 / §7) Awaiting on a STALE source — the user is mid-review and the
-      // upstream produced a fresher run. Refresh in place: retire the pending
-      // doc_version(s), drop their now-meaningless anchored comments, re-stamp
-      // the row's provenance. createDocVersion below makes v(n+1) on new body.
-      // RFC-093: synchronous transaction (dbTxSync) — the previous
-      // `db.transaction(async …)` COMMITted at its first await and left this
-      // three-step retire sequence non-atomic (audit S-10).
-      withTaskExecutionTransaction({
-        db,
-        taskId,
-        run: (tx) => {
-          const stale = tx
-            .select({ id: docVersions.id })
-            .from(docVersions)
-            .where(
-              and(
-                eq(docVersions.reviewNodeRunId, reuse.id),
-                eq(docVersions.sourcePortName, sourcePortName),
-                eq(docVersions.decision, 'pending'),
-              ),
-            )
-            .all()
-          for (const s of stale) {
-            tx.delete(reviewComments).where(eq(reviewComments.docVersionId, s.id)).run()
-          }
-          tx.update(docVersions)
-            .set({
-              decision: 'superseded',
-              decisionReason: 'upstream-refreshed',
-              decidedBy: SYSTEM_DECIDER,
-              decidedAt: Date.now(),
-            })
-            .where(
-              and(
-                eq(docVersions.reviewNodeRunId, reuse.id),
-                eq(docVersions.sourcePortName, sourcePortName),
-                eq(docVersions.decision, 'pending'),
-              ),
-            )
-            .run()
-          tx.update(nodeRuns)
-            .set({ consumedUpstreamRunsJson: consumedJson })
-            .where(eq(nodeRuns.id, reuse.id))
-            .run()
-        },
-      })
-    }
-  } else if (latestDone !== undefined && coversSource(latestDone)) {
-    // A prior decision (approve / reject / iterate) still covers the current
-    // source — nothing to do. This is RFC-052's "any done is decisive", now
-    // scoped to provenance: null/legacy consumed counts as covering (D4), so
-    // pre-RFC-074 approvals AND the terminal-state placeholder-row case (a
-    // higher-retry failed row sitting beside an approved done row) short-circuit
-    // exactly as before. Only a recorded-different consumption falls through to
-    // a US-2 re-review below.
-    return { kind: 'ok', summary: '', message: '' }
   } else if (reuse !== undefined && reuse.status === 'pending') {
     // Defensive (legacy cascade-minted pending row): park it as awaiting_review.
     reviewNodeRunId = reuse.id
@@ -1241,10 +1540,11 @@ async function loadPriorRound(
     if (cur === undefined || r.id > cur.id) byIndex.set(idx, r)
   }
   const members: PriorRoundMember[] = []
+  const collaboration = createCollaborationCommandContext({ db, appHome })
   for (const r of byIndex.values()) {
     let body = ''
     try {
-      body = readFileSync(join(appHome, r.bodyPath), 'utf8')
+      body = readCommittedReviewArtifactBody(collaboration, r.bodyPath)
     } catch {
       // Missing prior body → treat as "" so any real new content compares as
       // changed (conservative: prefer an extra stale flag over a silent carry).
@@ -1261,12 +1561,16 @@ async function loadPriorRound(
   return { members, nextGeneration: maxGen + 1 }
 }
 
-export function readDocVersionBody(appHome: string, docVersion: DocVersion): string {
-  const abs = join(appHome, docVersion.bodyPath)
-  if (!existsSync(abs)) {
+export function readDocVersionBody(db: DbClient, appHome: string, docVersion: DocVersion): string {
+  try {
+    return readCommittedReviewArtifactBody(
+      createCollaborationCommandContext({ db, appHome }),
+      docVersion.bodyPath,
+    )
+  } catch {
+    const abs = join(appHome, docVersion.bodyPath)
     throw new NotFoundError('doc-version-body-missing', `doc_version body file not found: ${abs}`)
   }
-  return readFileSync(abs, 'utf8')
 }
 
 // ---------------------------------------------------------------------------
@@ -1613,7 +1917,7 @@ export async function getReviewDetail(
   // "has doc_version ⟹ renders" invariant.
   let body: string
   try {
-    body = readDocVersionBody(appHome, dv)
+    body = readDocVersionBody(db, appHome, dv)
   } catch {
     body = ''
   }
@@ -1706,7 +2010,7 @@ export async function getDocVersionDetail(
   const dv = await getDocVersion(db, versionId)
   if (dv === null) return null
   if (dv.reviewNodeRunId !== nodeRunId) return null
-  const body = readDocVersionBody(appHome, dv)
+  const body = readDocVersionBody(db, appHome, dv)
   const comments = await commentsForDocVersion(db, dv)
   return { ...dv, body, comments }
 }
@@ -1797,7 +2101,7 @@ async function buildRoundMember(
   const mdv = rowToDocVersion(m)
   let mbody = ''
   try {
-    mbody = readDocVersionBody(appHome, mdv)
+    mbody = readDocVersionBody(db, appHome, mdv)
   } catch {
     mbody = ''
   }
@@ -2116,7 +2420,7 @@ async function addReviewCommentUnlocked(
 ): Promise<AddReviewCommentResult> {
   await assertReviewRoundWritable(args.db, args.nodeRunId)
   const dv = await selectPendingDocVersion(args.db, args.nodeRunId, args.docVersionId)
-  const body = readDocVersionBody(args.appHome, dv)
+  const body = readDocVersionBody(args.db, args.appHome, dv)
   const { anchor: canonical, warnings } = resolveCommentAnchor(body, args)
 
   const id = ulid()
@@ -2656,7 +2960,7 @@ async function submitReviewDecisionUnlocked(
   const readBody = (d: DocVersion): string => {
     let body = bodyCache.get(d.id)
     if (body === undefined) {
-      body = readDocVersionBody(args.appHome, d)
+      body = readDocVersionBody(args.db, args.appHome, d)
       bodyCache.set(d.id, body)
     }
     return body

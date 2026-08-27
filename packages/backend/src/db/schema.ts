@@ -2506,6 +2506,149 @@ export const taskExecutionLineageOperationRecords = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// RFC-333 — collaboration-owned human-gate command and artifact journal.
+//
+// This ledger recovers gate preparation/finalization only. It is not a task
+// execution queue: durable continuation remains exclusively owned by
+// task_execution_intents and TaskDriveCoordinator.
+// -----------------------------------------------------------------------------
+export const collaborationGateOperations = sqliteTable(
+  'collaboration_gate_operations',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    gateKind: text('gate_kind', { enum: ['review', 'clarify', 'questions'] }).notNull(),
+    operationKind: text('operation_kind', {
+      enum: ['open', 'decide', 'manual-question-open', 'legacy-seed'],
+    }).notNull(),
+    gateRef: text('gate_ref').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    actorUserId: text('actor_user_id'),
+    expectedTaskRevision: integer('expected_task_revision').notNull(),
+    expectedGateRevision: integer('expected_gate_revision').notNull(),
+    resultGateRevision: integer('result_gate_revision'),
+    state: text('state', {
+      enum: ['preparing', 'prepared', 'committed', 'cleanup_pending', 'completed', 'failed'],
+    }).notNull(),
+    claimEpoch: integer('claim_epoch').notNull().default(0),
+    claimExpiresAt: integer('claim_expires_at'),
+    schemaVersion: integer('schema_version').notNull().default(1),
+    manifestJson: text('manifest_json').notNull().default('{}'),
+    receiptJson: text('receipt_json'),
+    failureJson: text('failure_json'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    committedAt: integer('committed_at'),
+    completedAt: integer('completed_at'),
+  },
+  (t) => ({
+    idempotencyUq: uniqueIndex('idx_collaboration_gate_operations_idempotency').on(
+      t.taskId,
+      t.gateKind,
+      t.operationKind,
+      t.idempotencyKey,
+    ),
+    revisionUq: uniqueIndex('idx_collaboration_gate_operations_revision')
+      .on(t.gateKind, t.gateRef, t.resultGateRevision)
+      .where(sql`${t.resultGateRevision} IS NOT NULL`),
+    oneActiveUq: uniqueIndex('idx_collaboration_gate_operations_one_active')
+      .on(t.taskId, t.gateKind, t.gateRef, t.operationKind)
+      .where(sql`${t.state} IN ('preparing', 'prepared', 'committed', 'cleanup_pending')`),
+    recoveryIdx: index('idx_collaboration_gate_operations_recovery').on(
+      t.state,
+      t.claimExpiresAt,
+      t.updatedAt,
+    ),
+    taskGateIdx: index('idx_collaboration_gate_operations_task_gate').on(
+      t.taskId,
+      t.gateKind,
+      t.gateRef,
+      t.createdAt,
+    ),
+    taskRevisionNonNegative: check(
+      'collaboration_gate_operations_task_revision_nonnegative',
+      sql`${t.expectedTaskRevision} >= 0`,
+    ),
+    gateRevisionNonNegative: check(
+      'collaboration_gate_operations_gate_revision_nonnegative',
+      sql`${t.expectedGateRevision} >= 0`,
+    ),
+    resultRevisionNext: check(
+      'collaboration_gate_operations_result_revision_next',
+      sql`${t.resultGateRevision} IS NULL OR ${t.resultGateRevision} = ${t.expectedGateRevision} + 1`,
+    ),
+    claimEpochNonNegative: check(
+      'collaboration_gate_operations_claim_epoch_nonnegative',
+      sql`${t.claimEpoch} >= 0`,
+    ),
+    schemaVersionPositive: check(
+      'collaboration_gate_operations_schema_version_positive',
+      sql`${t.schemaVersion} > 0`,
+    ),
+    manifestJsonValid: check(
+      'collaboration_gate_operations_manifest_json_valid',
+      sql`json_valid(${t.manifestJson})`,
+    ),
+    receiptJsonValid: check(
+      'collaboration_gate_operations_receipt_json_valid',
+      sql`${t.receiptJson} IS NULL OR json_valid(${t.receiptJson})`,
+    ),
+    failureJsonValid: check(
+      'collaboration_gate_operations_failure_json_valid',
+      sql`${t.failureJson} IS NULL OR json_valid(${t.failureJson})`,
+    ),
+    committedShape: check(
+      'collaboration_gate_operations_committed_shape',
+      sql`${t.state} <> 'committed' OR (${t.resultGateRevision} IS NOT NULL AND ${t.receiptJson} IS NOT NULL AND ${t.committedAt} IS NOT NULL)`,
+    ),
+    completedShape: check(
+      'collaboration_gate_operations_completed_shape',
+      sql`${t.state} <> 'completed' OR (${t.failureJson} IS NOT NULL OR (${t.resultGateRevision} IS NOT NULL AND ${t.receiptJson} IS NOT NULL AND ${t.committedAt} IS NOT NULL))`,
+    ),
+    failedShape: check(
+      'collaboration_gate_operations_failed_shape',
+      sql`${t.state} <> 'failed' OR ${t.failureJson} IS NOT NULL`,
+    ),
+  }),
+)
+
+export const collaborationGateArtifacts = sqliteTable(
+  'collaboration_gate_artifacts',
+  {
+    operationId: text('operation_id')
+      .notNull()
+      .references(() => collaborationGateOperations.id, { onDelete: 'cascade' }),
+    artifactKey: text('artifact_key').notNull(),
+    artifactKind: text('artifact_kind', { enum: ['review-doc'] }).notNull(),
+    stagedPath: text('staged_path').notNull(),
+    finalPath: text('final_path').notNull(),
+    sha256: text('sha256').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    state: text('state', {
+      enum: ['declared', 'staged', 'consumed', 'finalized', 'cleanup_pending'],
+    }).notNull(),
+    receiptJson: text('receipt_json'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.operationId, t.artifactKey] }),
+    finalPathUq: uniqueIndex('idx_collaboration_gate_artifacts_final_path').on(t.finalPath),
+    stateIdx: index('idx_collaboration_gate_artifacts_state').on(t.state, t.updatedAt),
+    byteSizeNonNegative: check(
+      'collaboration_gate_artifacts_byte_size_nonnegative',
+      sql`${t.byteSize} >= 0`,
+    ),
+    receiptJsonValid: check(
+      'collaboration_gate_artifacts_receipt_json_valid',
+      sql`${t.receiptJson} IS NULL OR json_valid(${t.receiptJson})`,
+    ),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // node_run_outputs — parsed <port name="..."> values from <workflow-output>.
 // -----------------------------------------------------------------------------
 export const nodeRunOutputs = sqliteTable(

@@ -17,6 +17,7 @@ import {
   type TaskExecutionIntentSource,
 } from '../domain/executionIntent'
 import { TaskExecutionError } from './taskExecutionError'
+import type { SubmittedTaskExecutionIntent } from './ports/taskExecutionIntentStore'
 
 export interface SubmitTaskContinuationInput {
   readonly taskId: string
@@ -29,7 +30,10 @@ export interface SubmitTaskContinuationInput {
   readonly advanceOperationGeneration: boolean
 }
 
-export function submitTaskContinuationTx(tx: DbTxSync, input: SubmitTaskContinuationInput): void {
+export function submitTaskContinuationTx(
+  tx: DbTxSync,
+  input: SubmitTaskContinuationInput,
+): SubmittedTaskExecutionIntent {
   const task = tx
     .select({
       lifecycleEventRevision: tasks.lifecycleEventRevision,
@@ -130,7 +134,7 @@ export function submitTaskContinuationTx(tx: DbTxSync, input: SubmitTaskContinua
     },
     payload: input.payload,
   }
-  taskExecutionModule.intents.submitTx({
+  const submitted = taskExecutionModule.intents.submitTx({
     tx,
     request,
     intentId: input.intentId,
@@ -167,6 +171,7 @@ export function submitTaskContinuationTx(tx: DbTxSync, input: SubmitTaskContinua
       )
     }
   }
+  return submitted
 }
 
 export function submitTaskContinuation(db: DbClient, input: SubmitTaskContinuationInput): void {

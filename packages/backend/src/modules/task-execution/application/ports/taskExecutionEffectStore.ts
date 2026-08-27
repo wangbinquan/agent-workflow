@@ -44,6 +44,11 @@ export interface PreparedEffectAttempt {
   readonly resourceKeys: readonly string[]
 }
 
+export interface LinkedWorkspaceRollbackEffect {
+  readonly effectId: string
+  readonly idempotent: boolean
+}
+
 export interface RecoveredManagedProcessResolution {
   readonly resolvedEffectIds: readonly string[]
   readonly unresolvedEffectIds: readonly string[]
@@ -96,6 +101,24 @@ export interface SettleEffectAttemptInput {
 }
 
 export interface TaskExecutionEffectStore {
+  /**
+   * Admission-time link used only by an RFC-333 gate-continuation transaction.
+   * It creates the logical effect before a worker exists; the exact owner epoch
+   * still prepares the first attempt and acquires resource fences pre-drive.
+   */
+  linkWorkspaceRollbackTx(input: {
+    readonly tx: DbTxSync
+    readonly taskId: string
+    readonly intentId: string
+    readonly operationKey: string
+    readonly executionLineageId: string
+    readonly operationFamilyKey: string
+    readonly operationGeneration: number
+    readonly requestHash: string
+    readonly slotPathJson: string
+    readonly slotPathDigest: string
+    readonly now: number
+  }): LinkedWorkspaceRollbackEffect
   /** Reuse an explicitly authorized open generation; otherwise mint N+1. */
   planCodeHostAttempt(input: {
     readonly db: DbClient

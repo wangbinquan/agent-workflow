@@ -1980,7 +1980,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
+    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/sqliteHumanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpenTx|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
       value,
     )
   ) {

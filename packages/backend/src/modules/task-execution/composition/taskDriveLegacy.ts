@@ -7,6 +7,7 @@
 export {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
+  type GateContinuationPreDriveStep,
   type RepositoryPreparationStep,
   type TaskDriveFailureReporter,
 } from '../application/drive/taskDriveCoordinator'

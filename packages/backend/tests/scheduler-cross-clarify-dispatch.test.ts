@@ -623,6 +623,11 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     expect(designerRerun).toBeDefined()
     const designerRunId = designerRerun!.nodeRunId
 
+    // RFC-333 T7: createClarifyRound now parks the task together with the gate.
+    // The production route resumes after dispatch; this direct-service fixture
+    // performs the same scheduler re-entry without starting a second driver.
+    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'plan v2' }) }, () =>
       runTask({
         taskId,
@@ -742,6 +747,11 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // (fresh output) → the downstream questioner rerun consumes it.
     const disp = await reassignThenDispatchDesigner(h.db, taskId, session.intermediaryNodeRunId)
     expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
+
+    // RFC-333 T7: the gate open atomically parked the task. The production
+    // answer route resumes after dispatch; mirror that handoff in this direct
+    // service-to-scheduler fixture.
+    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
 
     // Designer reruns (fresh output) → the questioner rerun consumes it → prompt is built.
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'plan v2' }) }, () =>

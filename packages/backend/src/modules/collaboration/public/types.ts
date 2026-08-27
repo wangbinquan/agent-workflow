@@ -24,3 +24,20 @@ export type {
   ReviewAnchorSuggestion,
   ReviewAnchorWarning,
 } from '../domain/reviewAnchor'
+
+export type {
+  CanonicalHumanGateRequest,
+  ClarifyGateDirective,
+  HumanGateRequestPayload,
+  ReviewGateDecision,
+} from '../domain/canonicalGateRequest'
+export type { GateDecisionReceipt, HumanGateIdentity } from '../domain/gateReceipt'
+export type { HumanGateKind, PreparedHumanGateRef } from '../domain/humanGateOperation'
+export type { ReviewGateOpenDocumentDraft } from '../application/prepareReviewGateOpen'
+
+declare const collaborationCommandContextBrand: unique symbol
+
+/** Opaque composition reference; DB and filesystem dependencies stay private. */
+export type CollaborationCommandContext = Readonly<{
+  [collaborationCommandContextBrand]: 'collaboration-command-context'
+}>

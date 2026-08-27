@@ -12,6 +12,7 @@ import {
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type {
   CodeHostAttemptPlan,
+  LinkedWorkspaceRollbackEffect,
   PrepareEffectAttemptInput,
   PreparedEffectAttempt,
   RecoveredCodeHostMutationInput,
@@ -119,6 +120,92 @@ function recoveredManagedProcessEvidence(input: {
 
 export class SqliteTaskExecutionEffectStore implements TaskExecutionEffectStore {
   constructor(private readonly ownership: TaskOwnershipStore) {}
+
+  linkWorkspaceRollbackTx(input: {
+    tx: DbTxSync
+    taskId: string
+    intentId: string
+    operationKey: string
+    executionLineageId: string
+    operationFamilyKey: string
+    operationGeneration: number
+    requestHash: string
+    slotPathJson: string
+    slotPathDigest: string
+    now: number
+  }): LinkedWorkspaceRollbackEffect {
+    const intent = input.tx
+      .select({
+        taskId: taskExecutionIntents.taskId,
+        kind: taskExecutionIntents.kind,
+        state: taskExecutionIntents.state,
+      })
+      .from(taskExecutionIntents)
+      .where(eq(taskExecutionIntents.id, input.intentId))
+      .get()
+    if (
+      intent === undefined ||
+      intent.taskId !== input.taskId ||
+      intent.kind !== 'gate-continuation' ||
+      intent.state !== 'pending'
+    ) {
+      throw new TaskExecutionError(
+        'task-continuation-stale',
+        `workspace rollback effect requires a pending gate continuation '${input.intentId}'`,
+      )
+    }
+    const existing = input.tx
+      .select()
+      .from(taskExecutionEffects)
+      .where(
+        and(
+          eq(taskExecutionEffects.currentIntentId, input.intentId),
+          eq(taskExecutionEffects.kind, 'workspace-rollback'),
+        ),
+      )
+      .get()
+    if (existing !== undefined) {
+      if (
+        existing.taskId !== input.taskId ||
+        existing.operationKey !== input.operationKey ||
+        existing.executionLineageId !== input.executionLineageId ||
+        existing.operationFamilyKey !== input.operationFamilyKey ||
+        existing.operationGeneration !== input.operationGeneration ||
+        existing.requestHash !== input.requestHash ||
+        existing.slotPathJson !== input.slotPathJson ||
+        existing.slotPathDigest !== input.slotPathDigest
+      ) {
+        throw new TaskExecutionError(
+          'task-continuation-conflict',
+          `gate continuation '${input.intentId}' is already linked to another rollback effect`,
+        )
+      }
+      return { effectId: existing.id, idempotent: true }
+    }
+    const effectId = ulid()
+    input.tx
+      .insert(taskExecutionEffects)
+      .values({
+        id: effectId,
+        taskId: input.taskId,
+        originIntentId: input.intentId,
+        currentIntentId: input.intentId,
+        operationKey: input.operationKey,
+        executionLineageId: input.executionLineageId,
+        operationFamilyKey: input.operationFamilyKey,
+        operationGeneration: input.operationGeneration,
+        kind: 'workspace-rollback',
+        requestHash: input.requestHash,
+        slotPathJson: input.slotPathJson,
+        slotPathDigest: input.slotPathDigest,
+        state: 'open',
+        lastAttemptNo: 0,
+        preparedAt: input.now,
+        updatedAt: input.now,
+      })
+      .run()
+    return { effectId, idempotent: false }
+  }
 
   planCodeHostAttempt(input: {
     db: Parameters<TaskOwnershipStore['read']>[0]

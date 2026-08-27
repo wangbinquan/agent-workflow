@@ -20,6 +20,8 @@
 import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
+import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
+import { createCollaborationCommandContext } from '@/services/humanGateComposition'
 
 import type { DbClient } from '@/db/client'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
@@ -1351,44 +1353,12 @@ export async function createManualTaskQuestion(
       `target node '${target}' has no prior node_run (a manual question reruns its handler, so the handler must have run at least once)`,
     )
   }
-  const id = ulid()
-  const now = Date.now()
-  // (Codex re-gate H2): the terminal pre-check above is a TOCTOU window — the scheduler can
-  // flip the task to done/canceled before this insert. Re-read tasks.status INSIDE the tx and
-  // roll back (no row) if it went terminal, so a manual row is never inserted on a finished task.
-  dbTxSync(db, (tx) => {
-    const cur = tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).all()[0]
-    if (cur === undefined || QUESTION_DISPATCH_CLOSED_TASK_STATUSES.has(cur.status)) {
-      throw new ConflictError(
-        'task-terminal',
-        `task ${taskId} became ${cur?.status ?? 'missing'} before the manual question was inserted; nothing inserted`,
-      )
-    }
-    tx.insert(taskQuestions)
-      .values({
-        id,
-        taskId,
-        // §16 H4: non-null synthetic identity (no real node_run; the read-side branches on
-        // source_kind, not on this resolving to a round).
-        originNodeRunId: ulid(),
-        questionId: ulid(),
-        questionTitle: title,
-        sourceKind: 'manual',
-        roleKind: 'designer',
-        iteration: 0,
-        loopIter: 0,
-        defaultTargetNodeId: null,
-        overrideTargetNodeId: target,
-        manualBody: body,
-        manualCreatedBy: actor.userId,
-        // §15: a handler is required → the row is created staged (待下发) so the park gate
-        // holds the task awaiting_human until the human dispatches it.
-        stagedAt: now,
-        stagedBy: actor.userId,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
+  const created = createManualQuestionOpen(createCollaborationCommandContext({ db }), {
+    taskId,
+    title,
+    body,
+    targetNodeId: target,
+    actorUserId: actor.userId,
   })
-  return { id }
+  return { id: created.questionId }
 }
