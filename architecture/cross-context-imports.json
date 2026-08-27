@@ -2585,6 +2585,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
+      "fromPath": "packages/backend/src/services/humanGateContinuationEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1b5e07c66977a2064440",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "GateWorkspaceRollbackTargetReceipt",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts#$file",
@@ -9723,23 +9740,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentAgentAttempts",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
-      "fromPath": "packages/backend/src/services/humanGateContinuationEffects.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:799ec42a2f64b21578eb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "GateWorkspaceRollbackProjectionFactory",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -16884,6 +16884,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d9ac4f24b77d6e803426",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "nodeRuns",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
       "fromSymbol": "$file",
@@ -18393,23 +18410,6 @@
       "toPath": "packages/backend/src/modules/development-automation/domain/decision.ts",
       "toSymbol": "nextDecisionSchema",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/gateWorkspaceRollback.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/application/ports/gateWorkspaceRollback.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:eddb42320febc0afc778",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "DbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -21813,6 +21813,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/humanGateContinuationEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
+      "id": "import:1b5e07c66977a2064440",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "GateWorkspaceRollbackTargetReceipt",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -28869,22 +28885,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentAgentAttempts"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/humanGateContinuationEffects.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
-      "id": "import:799ec42a2f64b21578eb",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "GateWorkspaceRollbackProjectionFactory",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -36057,6 +36057,22 @@
     {
       "edgeKind": "value",
       "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts#$file",
+      "id": "import:d9ac4f24b77d6e803426",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "nodeRuns",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#$file",
       "id": "import:d9b28934b8524fc006b9",
@@ -37541,22 +37557,6 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/domain/decision.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/domain/decision.ts#nextDecisionSchema"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/application/ports/gateWorkspaceRollback.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/gateWorkspaceRollback.ts#$file",
-      "id": "import:eddb42320febc0afc778",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "DbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
       "edgeKind": "value",
@@ -39281,7 +39281,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e",
+  "sourceDigest": "sha256:af8b21811d925808dd2da34b1e8309faa1fefd7538a5acb618a404268bdfe551",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

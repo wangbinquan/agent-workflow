@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 224,
+    "consumers": 225,
     "exactEntrypointFiles": 35,
     "governedFieldSurfaces": 5,
-    "methods": 168,
+    "methods": 167,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1495,
-    "symbols": 353
+    "recursiveFields": 1509,
+    "symbols": 354
   },
   "entries": [
     {
@@ -18515,8 +18515,29 @@
           "consumerEdgeIds": [
             "import:b8288b60d247ee059059"
           ],
-          "fieldPath": "receipt",
-          "type": "Record<string, unknown>"
+          "fieldPath": "receipt.failureCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b8288b60d247ee059059"
+          ],
+          "fieldPath": "receipt.successfulSourceNodeRunIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b8288b60d247ee059059"
+          ],
+          "fieldPath": "receipt.targetCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b8288b60d247ee059059"
+          ],
+          "fieldPath": "receipt.targets",
+          "type": "readonly GateWorkspaceRollbackTargetReceipt[]"
         },
         {
           "consumerEdgeIds": [
@@ -18551,9 +18572,7 @@
       "status": "target-context-current-surface",
       "symbol": "GateWorkspaceRollbackOutcome",
       "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Record"
-      ],
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -18639,26 +18658,38 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24",
-        "import:799ec42a2f64b21578eb"
+        "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
       "dataClass": "confidential",
       "direction": "offered",
       "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "id": "public:task-execution:participants:GateWorkspaceRollbackProjectionFactory",
-      "members": [],
-      "methods": [
+      "fields": [
         {
-          "consumerEdgeIds": [
-            "import:799ec42a2f64b21578eb"
-          ],
-          "name": "bind",
-          "signatureDigest": "sha256:1fb48d1514b16b17360d7549001854cd98465889d6db3142aab8733935992ef3"
+          "consumerEdgeIds": [],
+          "fieldPath": "failureCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "successfulSourceNodeRunIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targets",
+          "type": "readonly GateWorkspaceRollbackTargetReceipt[]"
         }
       ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateWorkspaceRollbackReceipt",
+      "members": [],
+      "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
       "productionConsumers": [
         {
@@ -18666,19 +18697,13 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:799ec42a2f64b21578eb",
-          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
         }
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:650497d518d23d42a2092e7b788a3e0c371afe2713c9b77e3257b66764afd238",
+      "signatureDigest": "sha256:644f08c29ad5842189a2335fd3ab8af9a9385d83d5ac8ed1e7e00f764e583709",
       "status": "target-context-current-surface",
-      "symbol": "GateWorkspaceRollbackProjectionFactory",
+      "symbol": "GateWorkspaceRollbackReceipt",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -18746,6 +18771,94 @@
       "signatureDigest": "sha256:2828c9e29c15dfa0b716307a97beb51d7123469126d5e236e93b8b5e291ad21a",
       "status": "target-context-current-surface",
       "symbol": "GateWorkspaceRollbackRef",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:1b5e07c66977a2064440"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:1b5e07c66977a2064440"
+          ],
+          "fieldPath": "code",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1b5e07c66977a2064440"
+          ],
+          "fieldPath": "message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1b5e07c66977a2064440"
+          ],
+          "fieldPath": "ok",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1b5e07c66977a2064440"
+          ],
+          "fieldPath": "snapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1b5e07c66977a2064440"
+          ],
+          "fieldPath": "sourceNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1b5e07c66977a2064440"
+          ],
+          "fieldPath": "worktreeDirName",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:GateWorkspaceRollbackTargetReceipt",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:1b5e07c66977a2064440",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:8503470ff518f30f26613513cdd8605c308baa4d58500a52a6c6a8537e7e1995",
+      "status": "target-context-current-surface",
+      "symbol": "GateWorkspaceRollbackTargetReceipt",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -21543,21 +21656,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "kind.$variant:1",
-          "type": "'failed'"
+          "type": "'handoff'"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "kind.$variant:2",
-          "type": "'canceled'"
+          "type": "'failed'"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "kind.$variant:3",
-          "type": "'awaiting_review'"
+          "type": "'canceled'"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "kind.$variant:4",
+          "type": "'awaiting_review'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:5",
           "type": "'awaiting_human'"
         },
         {
@@ -22024,7 +22142,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e",
+  "sourceDigest": "sha256:af8b21811d925808dd2da34b1e8309faa1fefd7538a5acb618a404268bdfe551",
   "targetContexts": [
     "collaboration",
     "development-automation",

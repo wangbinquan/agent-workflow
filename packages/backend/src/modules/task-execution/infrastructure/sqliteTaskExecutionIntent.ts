@@ -30,6 +30,23 @@ function encodedIntentPayload(request: CanonicalContinuationRequest): string {
 }
 
 export class SqliteTaskExecutionIntentStore implements TaskExecutionIntentStore {
+  hasPendingGateSuccessor(input: { db: DbClient; taskId: string }): boolean {
+    return (
+      input.db
+        .select({ id: taskExecutionIntents.id })
+        .from(taskExecutionIntents)
+        .where(
+          and(
+            eq(taskExecutionIntents.taskId, input.taskId),
+            eq(taskExecutionIntents.kind, 'gate-continuation'),
+            eq(taskExecutionIntents.state, 'pending'),
+          ),
+        )
+        .limit(1)
+        .get() !== undefined
+    )
+  }
+
   submit(input: {
     db: DbClient
     request: CanonicalContinuationRequest

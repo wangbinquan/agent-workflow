@@ -1979,7 +1979,11 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'CanonicalControlTransaction',
     }
   }
-  if (/services\/humanGateContinuationEffects\.ts#projectWorkspaceRollbackTx/.test(value)) {
+  if (
+    /services\/humanGateContinuationEffects\.ts#projectWorkspaceRollbackTx|modules\/task-execution\/application\/drive\/gateContinuationEffectStep\.ts#run/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'worker-epoch',
       controlSubtype: null,

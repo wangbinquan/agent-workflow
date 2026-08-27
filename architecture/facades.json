@@ -1904,9 +1904,9 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:1b5e07c66977a2064440",
         "import:3c606fd7f430b388674c",
         "import:4d8b06536c625c830493",
-        "import:799ec42a2f64b21578eb",
         "import:a565d89a85dadec282d6",
         "import:ad9e685c2854e741e976",
         "import:b8288b60d247ee059059",
@@ -1914,7 +1914,6 @@
       ],
       "exportedSymbols": [
         "SqliteGateWorkspaceRollbackExecutor",
-        "SqliteGateWorkspaceRollbackProjectionFactory",
         "createGateContinuationPreDriveStep"
       ],
       "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
@@ -7558,5 +7557,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e"
+  "sourceDigest": "sha256:af8b21811d925808dd2da34b1e8309faa1fefd7538a5acb618a404268bdfe551"
 }

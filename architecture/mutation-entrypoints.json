@@ -7494,7 +7494,7 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts",
@@ -7505,7 +7505,6 @@
         "authority",
         "authorization",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#SubmitTaskContinuationInput",
@@ -22169,7 +22168,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6a93a56f29fb9864005278b714a7b1a8fd2793a77bb4c9be24e1e935b905f6e",
+  "sourceDigest": "sha256:af8b21811d925808dd2da34b1e8309faa1fefd7538a5acb618a404268bdfe551",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -22398,6 +22397,22 @@
       },
       {
         "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "run",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts#244:nodeRuns",
+        "line": 244,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts#GateContinuationEffectStep",
+        "requiredBrandedProof": "OwnershipToken+TaskExecutionEffectReceipt",
+        "revisionPredicate": "exact-owned-intent-and-succeeded-effect-receipt",
+        "symbol": "GateContinuationEffectStep"
+      },
+      {
+        "allowedTables": [
           "taskExecutionEffectAttempts"
         ],
         "authorityKind": "worker-epoch",
@@ -22453,8 +22468,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#146:taskExecutionLineageOperationRecords",
-        "line": 146,
+        "id": "task-authority:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#148:taskExecutionLineageOperationRecords",
+        "line": 148,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts#submitTaskContinuationTx",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -22997,8 +23012,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#155:taskExecutionIntents",
-        "line": 155,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#185:taskExecutionIntents",
+        "line": 185,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionIntent.ts#SqliteTaskExecutionIntentStore",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -23435,22 +23450,6 @@
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
         "symbol": "runIsoWorktreeGc"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "projectWorkspaceRollbackTx",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
-        "id": "task-authority:packages/backend/src/services/humanGateContinuationEffects.ts#174:nodeRuns",
-        "line": 174,
-        "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#SqliteGateWorkspaceRollbackProjectionFactory",
-        "requiredBrandedProof": "OwnershipToken+TaskExecutionEffectReceipt",
-        "revisionPredicate": "exact-owned-intent-and-succeeded-effect-receipt",
-        "symbol": "SqliteGateWorkspaceRollbackProjectionFactory"
       },
       {
         "allowedTables": [
@@ -24645,8 +24644,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3313:tasks",
-        "line": 3313,
+        "id": "task-authority:packages/backend/src/services/task.ts#3314:tasks",
+        "line": 3314,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -24661,8 +24660,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3438:taskExecutionIntents",
-        "line": 3438,
+        "id": "task-authority:packages/backend/src/services/task.ts#3439:taskExecutionIntents",
+        "line": 3439,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -24677,8 +24676,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3496:tasks",
-        "line": 3496,
+        "id": "task-authority:packages/backend/src/services/task.ts#3497:tasks",
+        "line": 3497,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -24693,8 +24692,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4124:tasks",
-        "line": 4124,
+        "id": "task-authority:packages/backend/src/services/task.ts#4125:tasks",
+        "line": 4125,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -24709,8 +24708,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5645:tasks",
-        "line": 5645,
+        "id": "task-authority:packages/backend/src/services/task.ts#5674:tasks",
+        "line": 5674,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

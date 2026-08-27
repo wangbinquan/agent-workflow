@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, nodeRuns, taskExecutionIntents } from '@/db/schema'
+import { and, eq } from 'drizzle-orm'
+import { clarifyRounds, nodeRuns } from '@/db/schema'
 import { autoDispatchDeferredQuestions } from '@/services/clarifyAutoDispatch'
 import { decideScopeOutcome } from '@/services/dispatchFrontier'
 import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
@@ -13,6 +13,7 @@ import type {
   LegacyTaskMechanicsState,
   TaskScopeArgs,
 } from '@/services/execution/taskMechanicsState'
+import { taskExecutionModule } from '../composition'
 
 export async function runScope(
   state: LegacyTaskMechanicsState,
@@ -128,18 +129,7 @@ export async function runScope(
 
     const handoffRequested =
       opts.executionContext !== undefined &&
-      db
-        .select({ id: taskExecutionIntents.id })
-        .from(taskExecutionIntents)
-        .where(
-          and(
-            eq(taskExecutionIntents.taskId, taskId),
-            eq(taskExecutionIntents.kind, 'gate-continuation'),
-            eq(taskExecutionIntents.state, 'pending'),
-          ),
-        )
-        .limit(1)
-        .get() !== undefined
+      taskExecutionModule.intents.hasPendingGateSuccessor({ db, taskId })
 
     let f: ReturnType<typeof deriveFrontier> | undefined
     if (!handoffRequested) {

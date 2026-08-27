@@ -13,6 +13,7 @@ export interface SubmittedTaskExecutionIntent {
 }
 
 export interface TaskExecutionIntentStore {
+  hasPendingGateSuccessor(input: { db: DbClient; taskId: string }): boolean
   submit(input: {
     db: DbClient
     request: CanonicalContinuationRequest
