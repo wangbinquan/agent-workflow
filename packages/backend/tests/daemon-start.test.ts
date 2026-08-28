@@ -298,6 +298,9 @@ printf '%s\\n' 'stub-opencode custom-build'
     }
   })
 
+  // The readiness helper intentionally allows a loaded daemon boot ten
+  // seconds. Bun's five-second default must not preempt that contract before
+  // the second process can exercise the already-held lock.
   test('a second daemon start is rejected while the first holds the lock', async () => {
     const first = spawnDaemon(env)
     try {
@@ -313,7 +316,7 @@ printf '%s\\n' 'stub-opencode custom-build'
       first.kill('SIGTERM')
       await first.exited
     }
-  })
+  }, 20_000)
 
   test('a dev watcher start cannot replace a regular daemon', async () => {
     const first = spawnDaemon(env)
