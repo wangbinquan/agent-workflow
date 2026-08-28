@@ -100,12 +100,6 @@
         "removeWhen": "RFC-294 W4-E9"
       },
       {
-        "file": "packages/backend/src/modules/digital-employee/public/types.ts",
-        "literals": ["merged"],
-        "why": "RFC-337 的只读 Case 详情 projection 公开 source-control delivery 的闭合状态，供共享 route 消费；该类型不携带 development 类型 ID 或工作项分支。",
-        "removeWhen": "RFC-294 W4-E9"
-      },
-      {
         "file": "packages/frontend/src/routes/employee-cases.$caseId.tsx",
         "literals": ["merged"],
         "why": "Case 详情页按 terminalKind === 'merged' 决定是否渲染「MR 已合入」文案。同上，随 T44 一并收口。",
