@@ -14,10 +14,7 @@
       "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
       "symbol": "ALLOWLIST",
       "baseline": 16,
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表",
-      "allowGrowth": {
-        "why": "RFC-338 新增唯一 maintenance Worker supervisor；其四处命中属于同一个长驻 Worker 内核并已由 restart/watchdog/terminate/drain 治理。"
-      }
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
     },
     {
       "id": "rfc328-capability-factory-call-sites",
@@ -304,10 +301,7 @@
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
       "baseline": 377,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。",
-      "allowGrowth": {
-        "why": "RFC-338 新增只读 maintenance status 系统面，RFC-340 新增 session-only reviewer 配置 GET/PUT；三条均按真实 route metadata 精确登记，不扩宽前缀。"
-      }
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
     },
     {
       "id": "rfc294-mutation-entrypoints",
