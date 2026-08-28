@@ -336,20 +336,14 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 263,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-338 adds the Worker-local fatal-event boundary and its deferred restart notification to the complete background-job census."
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 445,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-338 registers the Worker-local error boundary explicitly so an uncaught maintenance failure remains observable and restartable."
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
@@ -412,10 +406,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18551,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-338 adds one platform-owned Worker error-boundary module and its exact top-level symbol ownership records."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -432,8 +423,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8d95dcf77096009083a91888e6e3c439718765b0",
-    "contentDigest": "sha256:cf2cf0c193425c474cf5712c99e3c6a0d5617125f160701c293da0d849501856",
+    "currentSnapshotSha": "4b141b04526d672d1d6ffb1783c25f24fffa1036",
+    "contentDigest": "sha256:13becdcc8e5d37d84c99ecea5c23fb910976543dbe5aa3e4750d4f4ba5c00df4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
