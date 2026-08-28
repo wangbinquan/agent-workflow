@@ -10916,7 +10916,7 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
+        "event": true,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -10927,7 +10927,6 @@
         "audit",
         "authority",
         "authorization",
-        "event",
         "fenceOrOcc",
         "transaction"
       ],
@@ -22633,7 +22632,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:14b1c9bc4f6b634044135575cb3aab2b2db14c2ddf765f3b3e02688a18896576",
+  "sourceDigest": "sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -24037,8 +24036,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/commitPushRunner.ts",
-        "id": "task-authority:packages/backend/src/services/commitPushRunner.ts#281:nodeRuns",
-        "line": 281,
+        "id": "task-authority:packages/backend/src/services/commitPushRunner.ts#279:nodeRuns",
+        "line": 279,
         "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#runCommitPush",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -24053,8 +24052,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/commitPushRunner.ts",
-        "id": "task-authority:packages/backend/src/services/commitPushRunner.ts#292:nodeRuns",
-        "line": 292,
+        "id": "task-authority:packages/backend/src/services/commitPushRunner.ts#290:nodeRuns",
+        "line": 290,
         "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#runCommitPush",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

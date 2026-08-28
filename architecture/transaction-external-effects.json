@@ -3268,7 +3268,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:14b1c9bc4f6b634044135575cb3aab2b2db14c2ddf765f3b3e02688a18896576",
+  "sourceDigest": "sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4273,9 +4273,9 @@
         "effectKind": "repository",
         "file": "packages/backend/src/services/commitPushRunner.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/commitPushRunner.ts#193:repository",
+        "id": "task-effect:packages/backend/src/services/commitPushRunner.ts#191:repository",
         "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 193,
+        "line": 191,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#runCommitPush",
         "recoveryClass": "local-probe-or-actor",
