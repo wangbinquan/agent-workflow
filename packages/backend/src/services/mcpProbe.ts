@@ -494,6 +494,7 @@ export const defaultOpenClient: OpenClientFn = async (mcp, signal, handshakeTime
   async function connectWithTimeout(transport: AnyTransport): Promise<void> {
     activeTransport = transport
     let timer: ReturnType<typeof setTimeout> | null = null
+    let onAbort: (() => void) | null = null
     const timeoutP = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(
         () => reject(new Error(`initialize timed out after ${handshakeTimeoutMs}ms`)),
@@ -501,10 +502,25 @@ export const defaultOpenClient: OpenClientFn = async (mcp, signal, handshakeTime
       )
       ;(timer as unknown as { unref?: () => void }).unref?.()
     })
+    const abortP = new Promise<never>((_resolve, reject) => {
+      const rejectAbort = (): void => reject(new Error('probe-total-timeout'))
+      if (signal.aborted) {
+        rejectAbort()
+        return
+      }
+      onAbort = rejectAbort
+      signal.addEventListener('abort', rejectAbort, { once: true })
+    })
     try {
-      await Promise.race([client.connect(transport), timeoutP])
+      // The SDK's handshake timer can intentionally be longer than the probe's
+      // hard ceiling. Closing a stdio transport is only best-effort and does not
+      // guarantee that a pending Client.connect settles, so the AbortSignal must
+      // be a first-class participant in this race (including already-aborted
+      // signals after the lazy SDK imports above).
+      await Promise.race([client.connect(transport), timeoutP, abortP])
     } finally {
       if (timer !== null) clearTimeout(timer)
+      if (onAbort !== null) signal.removeEventListener('abort', onAbort)
     }
   }
 

@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     # 全量档比 PR 档多跑 P2/P3，且开了 debug 日志。留出比 PR 腿(20) 更宽的余量，
     # 但仍远小于 Actions 的六小时默认值——挂死必须以超时收场，不能占着 runner。
-    timeout-minutes: 40
+    timeout-minutes: 60
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
     steps:
@@ -72,7 +72,12 @@ jobs:
           CI: 'true'
           AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/route-hits
         shell: bash
-        run: bun run e2e -- --shard=${{ matrix.shard }}/4
+        # Four Playwright workers launch enough compiled daemons for the hourly
+        # maintenance phase to exhaust an Ubuntu hosted runner: two independent
+        # full/WebKit runs then lost daemon listeners mid-shard. Keep every
+        # shard, case, retry, trace and coverage assertion; only cap per-runner
+        # process pressure and widen the existing watchdog for the longer run.
+        run: bun run e2e -- --shard=${{ matrix.shard }}/4 --workers=2
 
       - name: Upload route-hit journal
         # `always()`：分片红了它的 journal 仍然有价值（跑过的部分是真命中）。

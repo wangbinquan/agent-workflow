@@ -987,7 +987,7 @@ test('RFC-319 DE-29: 案例页的事件队列按待处理 / 优先级 / 时间�
   // 链接必须指向**被委托的子案例**。指到自己或指到父案例，用户就再也进不去那份工作。
   await expect(childLink).toHaveAttribute('href', `/tasks/employee-cases/${childCaseId}`)
   await childLink.click()
-  await page.waitForURL(`**/tasks/employee-cases/${childCaseId}`)
+  await page.waitForURL((url) => url.pathname === `/tasks/employee-cases/${childCaseId}`)
   await expect(
     page.getByRole('heading', { name: `Delegated child ${RUN_TAG}`, exact: true }),
   ).toBeVisible()

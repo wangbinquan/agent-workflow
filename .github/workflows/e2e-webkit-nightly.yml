@@ -74,11 +74,10 @@ jobs:
           CI: 'true'
           PLAYWRIGHT_WEBKIT: '1'
         shell: bash
-        # Four concurrent compiled daemons saturate the 3-core macOS runner and
-        # have delayed ordinary daemon startup / task dispatch past their hard
-        # health fences. Coverage and shard topology stay identical; only local
-        # process pressure is calibrated per runner size.
-        run: bun run e2e -- --project=webkit --shard=${{ matrix.shard }}/4 --workers=${{ matrix.os == 'macos-latest' && 2 || 4 }}
+        # Four concurrent compiled daemons also exhaust Ubuntu during the hourly
+        # maintenance phase; macOS was already capped at two. Coverage, platform
+        # matrix, shard topology, retries and traces stay identical.
+        run: bun run e2e -- --project=webkit --shard=${{ matrix.shard }}/4 --workers=2
 
       - name: Upload Playwright trace on failure
         if: failure()

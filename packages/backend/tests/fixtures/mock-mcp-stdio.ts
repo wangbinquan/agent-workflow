@@ -4,6 +4,7 @@
 // Modes (selected via process.argv[2]):
 //   "ok"           — registers 4 tools, 1 resource, 1 prompt and serves them
 //   "crash"        — exits 1 immediately (probe sees connect-failed-ish)
+//   "hang"         — never starts the protocol handshake
 //   "no-resources" — like "ok" but listResources throws MethodNotFound
 //
 // Kept intentionally tiny: no zod schemas on tools, no external deps. The
@@ -18,6 +19,10 @@ const mode = process.argv[2] ?? 'ok'
 if (mode === 'crash') {
   process.stderr.write('mock-mcp-stdio: crash mode requested\n')
   process.exit(1)
+}
+
+if (mode === 'hang') {
+  await new Promise<never>(() => {})
 }
 
 const server = new McpServer(

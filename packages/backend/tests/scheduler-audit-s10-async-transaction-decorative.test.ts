@@ -169,14 +169,13 @@ describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', (
  * 于是「谁在绕过它直接调 drizzle 的 db.transaction」必须是**可枚举的**——新增一处要么
  * 改用 dbTxSync，要么在这张表里登记并说清为什么。
  *
- * 现存 39 处全部在 store / infrastructure 层：那里的对象**拥有**自己的事务边界，
+ * 现存 37 处全部在 store / infrastructure 层：那里的对象**拥有**自己的事务边界，
  * 回调体是同步的 drizzle 执行面（上面那条零容忍断言持续证明它们不含 async 体）。
  * 这张表不是「豁免」，是**可见性**：它让「又多了一个绕过内核的事务点」变成 diff 里
  * 必然出现的一行数字变化，而不是淹没在几百行 store 代码里的一次静默新增。
  */
 const RAW_TRANSACTION_SITES: Record<string, number> = {
   'modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts': 1,
-  'modules/development-automation/infrastructure/sqliteConfigResourceStore.ts': 2,
   'modules/development-automation/infrastructure/sqliteMissionStore.ts': 7,
   'modules/development-automation/infrastructure/sqliteUploadSessionStore.ts': 1,
   'modules/digital-employee/composition/writerCutover.ts': 2,

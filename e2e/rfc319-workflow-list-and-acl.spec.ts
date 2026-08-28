@@ -1800,10 +1800,14 @@ test('WF-53 内置工作流 aw-skill-fusion：列表隐藏、改 / 删 / 复制 
       await metaChips(page, BUILTIN_FUSION_WORKFLOW_NAME),
       '列表里那张同名卡片不是用户自己那一行 ⇒ 隐藏与显示挑错了对象',
     ).toEqual(['1 node', 'v1'])
-    expect(
-      await badgeChips(page, BUILTIN_FUSION_WORKFLOW_NAME),
-      '用户自建行没有归属徽章 ⇒ 它被当成了框架资源',
-    ).toEqual(['Private', owner.username])
+    // 卡片先用稳定 user id 占位，再由 owner lookup 异步换成用户名；断最终产品态，
+    // 不能把查询尚未收敛的合法中间帧误报成 builtin 判别回归。
+    await expect
+      .poll(() => badgeChips(page, BUILTIN_FUSION_WORKFLOW_NAME), {
+        timeout: 30_000,
+        message: '用户自建行没有归属徽章 ⇒ 它被当成了框架资源',
+      })
+      .toEqual(['Private', owner.username])
     expect(
       (await listWorkflows(owner.token)).map((w) => w.id),
       '服务端集合里出现的不是用户自己那一行 ⇒ 名字与内建标记仍然纠缠在一起',

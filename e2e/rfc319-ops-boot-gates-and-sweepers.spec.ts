@@ -1219,7 +1219,11 @@ function plantBackup(dir: string, name: string, ageMs: number, sizeBytes = 64): 
 
 test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族各自轮换，且到点自动产出一份新备份 @nightly', async () => {
   test.setTimeout(OPS_TEST_TIMEOUT_MS)
-  const home = await readyHome('backups')
+  // `readyHome` 的初始化 daemon 也会跑 durable boot catch-up。让它占用 daily slot，
+  // 后面真正被测的默认 hourly daemon 就不会因初始化进程在高负载下延迟退出而被同槽去重。
+  const home = await readyHome('backups', {
+    maintenanceSchedule: { kind: 'daily', at: '00:00', timezone: 'UTC' },
+  })
   const dir = backupsDir(home)
   try {
     // ── ① 份数 + 天数 + 受保护家族。RFC-338 把 boot prune 改为 ready 后 30s 的
@@ -1273,7 +1277,9 @@ test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族
     // ── ② 总体积上限：份数与天数都放宽到不生效，只让体积说话。
     // RFC-338 的 durable ledger 会把同一个 hourly job/slot 精确去重；这是一条
     // 独立策略腿，不能复用①已经完成的 slot 再期待它以新 payload 重跑。
-    const cappingHome = await readyHome('backups-cap')
+    const cappingHome = await readyHome('backups-cap', {
+      maintenanceSchedule: { kind: 'daily', at: '00:00', timezone: 'UTC' },
+    })
     const cappingDir = backupsDir(cappingHome)
     rmSync(cappingDir, { recursive: true, force: true })
     plantBackup(cappingDir, 'scheduled-size-1.tar.gz', 60_000, 1_000)

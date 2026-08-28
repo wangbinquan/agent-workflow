@@ -32,7 +32,7 @@ if (!existsSync(FIXTURE)) {
 // real-git-clone suites — both are external-IO integration tests.)
 const RUN_GIT_NETWORK = process.env.RUN_GIT_NETWORK === '1'
 
-function makeStdioMcp(mode: 'ok' | 'crash' | 'no-resources'): Mcp {
+function makeStdioMcp(mode: 'ok' | 'crash' | 'hang' | 'no-resources'): Mcp {
   return {
     id: 'm_fixture',
     name: `mock-${mode}`,
@@ -75,6 +75,17 @@ describe.skipIf(!RUN_GIT_NETWORK)('probe against real stdio MCP fixture', () => 
       r.errorCode as string,
     )
   }, 30_000)
+
+  test('hang mode: the probe hard ceiling interrupts a longer SDK handshake', async () => {
+    // Regression: the 60s route ceiling used to close the transport but leave
+    // Client.connect racing only its longer per-MCP timeout. Under load the
+    // route therefore outlived its advertised hard deadline.
+    const startedAt = Date.now()
+    const r = await probeMcp(makeStdioMcp('hang'), { totalTimeoutMs: 100 })
+    expect(r.status).toBe('error')
+    expect(r.errorCode).toBe('timeout')
+    expect(Date.now() - startedAt).toBeLessThan(5_000)
+  }, 10_000)
 })
 
 // Always-on gate self-test (runs even in the default skipped mode).
