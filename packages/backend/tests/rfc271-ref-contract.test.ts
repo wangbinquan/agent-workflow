@@ -51,6 +51,10 @@ const stripComments = (src: string): string =>
     .filter((l) => !l.trimStart().startsWith('//'))
     .join('\n')
 const scheduler = readFileSync(SRC('services', 'scheduler.ts'), 'utf8')
+const nodeMechanics = readFileSync(
+  SRC('modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+  'utf8',
+)
 
 /** 递归收集一棵源码树里的 `.ts`。 */
 function collectTs(dir: string, out: string[] = []): string[] {
@@ -114,20 +118,20 @@ describe('调用级三属性 —— 每条 policy 都必须真的被某个调用
     expect(DISPATCH_CALL_POLICY.failureOwner).toBe('node')
     expect(FANOUT_HYDRATE_CALL_POLICY.onMissing).toBe('skip')
     expect(FANOUT_HYDRATE_CALL_POLICY.failureOwner).toBe('wrapper')
-    // 且两条确实分别落在 scheduler 的两个位点上（下面的 describe 逐条核对映射）。
-    expect(scheduler).toContain('DISPATCH_CALL_POLICY')
+    // RFC-334 后两条分别落在 node mechanics 与 W2-D scheduler wrapper 位点上。
+    expect(nodeMechanics).toContain('DISPATCH_CALL_POLICY')
     expect(scheduler).toContain('FANOUT_HYDRATE_CALL_POLICY')
   })
 })
 
 describe('四处失败归属：调用点各用各的策略，且映射逐条不变', () => {
   test('① 主派发用 DISPATCH，两个错误码分开（missing ≠ 查不到行）', () => {
-    expect(scheduler).toContain('resolveNodeAgentRef(db, node, DISPATCH_CALL_POLICY)')
+    expect(nodeMechanics).toContain('resolveNodeAgentRef(db, node, DISPATCH_CALL_POLICY)')
     // 两个分支必须都在，且 `missing` 那支先判——合并会让两个码塌成一个。
-    expect(scheduler).toMatch(
+    expect(nodeMechanics).toMatch(
       /resolvedAgent\.reason === 'missing'[\s\S]{0,200}agent-identity-missing/,
     )
-    expect(scheduler).toContain("message: 'agent-not-found'")
+    expect(nodeMechanics).toContain("message: 'agent-not-found'")
   })
 
   test('② fanout inner 水合用 FANOUT_HYDRATE，且解析失败**不产生任何失败返回**', () => {
@@ -160,8 +164,10 @@ describe('四处失败归属：调用点各用各的策略，且映射逐条不�
 })
 
 describe('收口证据：agentId 只有一个读取点', () => {
-  test('scheduler 不再自己 getAgentById(节点字段)', () => {
-    expect(scheduler).not.toMatch(/await getAgentById\(db, (aid|agentIdRef)\b/)
+  test('node execution owners 不再自己 getAgentById(节点字段)', () => {
+    expect(`${scheduler}\n${nodeMechanics}`).not.toMatch(
+      /await getAgentById\(db, (aid|agentIdRef)\b/,
+    )
   })
 
   test('fanout 的 dedup key 与主派发共用同一条判据', () => {

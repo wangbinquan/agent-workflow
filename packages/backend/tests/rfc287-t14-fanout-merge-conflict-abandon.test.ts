@@ -24,6 +24,18 @@ const SCHED = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const NODE_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf8',
+)
 
 /** 截出一段 `disposition: {` 声明块——按缩进配平，避免跨到兄弟线上去。 */
 function dispositionAfter(anchor: string): string {
@@ -80,12 +92,12 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
   // 三条线（工作组 + fanout 两条）现在用的是同一套处置，理由 slug 各自不同以便审计
   // 能区分是哪条线丢的。少任何一条都说明有线又退回「留状态不留树」。
   test('三条 keep:false 的线都各有自己的 abandon 理由 slug', () => {
-    for (const reason of [
-      'wg-merge-conflict-unresolved',
-      'fanout-shard-merge-conflict-unresolved',
-      'fanout-agg-merge-conflict-unresolved',
-    ]) {
-      expect(SCHED, reason).toContain(reason)
+    for (const [reason, owner] of [
+      ['wg-merge-conflict-unresolved', NODE_MECHANICS],
+      ['fanout-shard-merge-conflict-unresolved', SCHED],
+      ['fanout-agg-merge-conflict-unresolved', SCHED],
+    ] as const) {
+      expect(owner, reason).toContain(reason)
     }
   })
 })

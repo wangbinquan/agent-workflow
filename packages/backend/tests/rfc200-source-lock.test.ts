@@ -54,10 +54,13 @@ describe('RFC-200 source wiring locks', () => {
 
   test('specialized prompt producers thread the current run nonce before rendering', () => {
     const scheduler = read('packages/backend/src/services/scheduler.ts')
+    const nodeMechanics = read(
+      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    )
     expect(scheduler).toContain('inputs: aggInputs')
-    expect(scheduler).toContain("values.join('\\n\\n---\\n\\n')")
+    expect(nodeMechanics).toContain("values.join('\\n\\n---\\n\\n')")
     expect(scheduler).toContain('composePriorOutputBlock(')
-    expect(scheduler).toContain('loadRunEnvelopeNonce(db, nodeRunId)')
+    expect(nodeMechanics).toContain('loadRunEnvelopeNonce(db, nodeRunId)')
 
     const memory = read('packages/backend/src/services/memoryInject.ts')
     // RFC-317 T39（CC-13）—— 围栏的 nonce 现在来自**必传的判别式**而不是默认参数：
@@ -91,8 +94,11 @@ describe('RFC-200 source wiring locks', () => {
     )
 
     const scheduler = read('packages/backend/src/services/scheduler.ts')
+    const nodeMechanics = read(
+      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    )
     expect(scheduler).toContain('aggInputs[edge.target.portName] = blocks.join')
-    expect(scheduler).toContain('inputs[name] = values.length === 1')
+    expect(nodeMechanics).toContain('inputs[name] = values.length === 1')
     // Both maps are ultimately passed as runNode.inputs and therefore fenced
     // by renderUserPrompt's generic input substitution/auto-append paths.
     expect(scheduler).toContain('inputs: aggInputs')

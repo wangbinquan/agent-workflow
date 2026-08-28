@@ -14,8 +14,19 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getNodePoolSemaphore, resizeAllNodePools } from '../src/services/processNodeConcurrency'
 
-const schedulerSrc = (): string =>
-  readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8')
+const nodeMechanicsSrc = (): string =>
+  readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    ),
+    'utf8',
+  )
 const taskEngineApplicationSrc = (): string =>
   readFileSync(
     resolve(
@@ -151,12 +162,12 @@ describe('process node concurrency', () => {
   // RFC-266 T-L —— 首次给「脚本节点取哪把闸」上锁。在此之前**没有任何测试**
   // 锁定它，所以 RFC-253 把脚本接在 agent 池上跑了整个生命周期都没人发现。
   test('the script branch acquires the script pool, never the agent pool', () => {
-    const scheduler = schedulerSrc()
-    const start = scheduler.indexOf('async function runScriptNode(')
-    const end = scheduler.indexOf('async function runOneScriptAttempt(')
+    const nodeMechanics = nodeMechanicsSrc()
+    const start = nodeMechanics.indexOf('async function runScriptNode(')
+    const end = nodeMechanics.indexOf('async function runOneScriptAttempt(')
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
-    const body = scheduler.slice(start, end)
+    const body = nodeMechanics.slice(start, end)
     // RFC-287 T6：许可的取/放已收进装配骨架，各线改为在 spec 上**声明**用哪个池。
     // 断言随之从「函数体里调了谁的 acquire」改成「声明的池列表是什么」——比原来
     // 更强：原来只查了「含 A、不含 B」，现在把整张池清单钉死（多挂一个池也红）。

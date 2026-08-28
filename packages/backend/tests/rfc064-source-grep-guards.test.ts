@@ -94,9 +94,12 @@ describe('RFC-064 C3 — cross-clarify counter absent from live source code', ()
 // `rfc070-aging-stamp-grep-guards.test.ts` C-group locks the new contract.
 
 describe('RFC-064 C9 / RFC-132 PR-C — applyLatestDirective plumbing removed (directive = per-node state)', () => {
-  test('scheduler.ts no longer carries the per-round applyLatestDirective local', () => {
+  test('nodeMechanics.ts no longer carries the per-round applyLatestDirective local', () => {
     const src = readFileSync(
-      resolve(REPO_ROOT, 'packages/backend/src/services/scheduler.ts'),
+      resolve(
+        REPO_ROOT,
+        'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+      ),
       'utf8',
     )
     // RFC-132 (PR-C §7): the round-grouped injectors + their per-round directive plumbing are gone.

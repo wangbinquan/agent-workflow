@@ -69,12 +69,20 @@ describe('RFC-187 §4 — source locks', () => {
     // called before BOTH `return { kind: 'ok' }` sites (autonomous done + gate-approved done).
     const calls = runner.split('await warnIfZeroDeltaDone(args, state)').length - 1
     expect(calls).toBeGreaterThanOrEqual(2)
-    // the canonical-diff hook is provided by scheduler, not the engine.
-    const scheduler = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    // The canonical-diff hook is provided by task-execution node mechanics, not the engine.
+    const nodeMechanics = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
-    expect(scheduler).toContain('getCanonicalFilesChanged')
+    expect(nodeMechanics).toContain('getCanonicalFilesChanged')
   })
 
   // Codex impl-gate P1 — the hook used to diff `task.worktreePath`, which for a MULTI-REPO
@@ -82,19 +90,27 @@ describe('RFC-187 §4 — source locks', () => {
   // the warning silently never fired for multi-repo tasks at all. It must diff EVERY repo
   // at its own worktree/base.
   test('the hook sums the delta per-repo (not the non-git multi-repo parent container)', () => {
-    const scheduler = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    const nodeMechanics = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     // per-repo worktree+base, not the task-level parent.
-    expect(scheduler).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
-    expect(scheduler).not.toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')
+    expect(nodeMechanics).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
+    expect(nodeMechanics).not.toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')
     // and SchedulerState.repos carries the per-repo base that makes it possible.
     const mechanicsState = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'taskMechanicsState.ts'),
       'utf8',
     )
     expect(mechanicsState).toContain('readonly baseCommit: string | null')
-    expect(scheduler).toContain('state.repos.filter((r) => r.baseCommit !== null)')
+    expect(nodeMechanics).toContain('state.repos.filter((r) => r.baseCommit !== null)')
   })
 })

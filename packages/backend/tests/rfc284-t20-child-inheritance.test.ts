@@ -159,7 +159,15 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
 
   test('源码锁：child runtime 只经单一 picker 构造、deps 整体透传且旧逐字段展开归零', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     const start = src.indexOf('function buildChildRuntime')

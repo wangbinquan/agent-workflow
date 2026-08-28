@@ -315,8 +315,16 @@ describe('RFC-183 E: 穷举分类器与注入⟺接受同源锁', () => {
     }
   })
 
-  const schedulerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  const nodeMechanicsSrc = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    ),
     'utf8',
   )
   const runnerSrc = readFileSync(
@@ -330,10 +338,10 @@ describe('RFC-183 E: 穷举分类器与注入⟺接受同源锁', () => {
   const norm = (s: string) => s.replace(/\s+/g, ' ')
 
   test("host 派发不得回退 directive:'suppressed'（AC7）", () => {
-    expect(norm(schedulerSrc)).toContain(
+    expect(norm(nodeMechanicsSrc)).toContain(
       "clarifyChannel: { kind: 'self', directive: 'delegated', injectStopNotice: false }",
     )
-    expect(norm(schedulerSrc)).not.toContain(
+    expect(norm(nodeMechanicsSrc)).not.toContain(
       "clarifyChannel: { kind: 'self', directive: 'suppressed'",
     )
   })
@@ -350,7 +358,7 @@ describe('RFC-183 E: 穷举分类器与注入⟺接受同源锁', () => {
   })
 
   test('oracle 吃血统判定而非裸 cause（P2#1/P2#4 防回退）', () => {
-    expect(norm(schedulerSrc)).toContain('isClarifyRerun: clarifyLineageContinues')
-    expect(norm(schedulerSrc)).toContain('continuesClarifyLineage(lineageCauses)')
+    expect(norm(nodeMechanicsSrc)).toContain('isClarifyRerun: clarifyLineageContinues')
+    expect(norm(nodeMechanicsSrc)).toContain('continuesClarifyLineage(lineageCauses)')
   })
 })
