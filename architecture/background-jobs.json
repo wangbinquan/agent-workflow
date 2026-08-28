@@ -8956,7 +8956,7 @@
       ],
       "file": "packages/backend/src/services/mcpProbe.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/mcpProbe.ts#$setTimeout:498",
+      "id": "background:packages/backend/src/services/mcpProbe.ts#$setTimeout:499",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8970,7 +8970,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/mcpProbe.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:498",
+      "symbol": "$setTimeout:499",
       "targetContext": "resource-catalog"
     },
     {
@@ -10793,5 +10793,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:93540d300622d454f3319366316b3741739006c57287234a6d56ce887a40362b"
+  "sourceDigest": "sha256:33d4423752d42b531842be20d943550d20229c06d8c44d6c8a626cec1e288b8a"
 }

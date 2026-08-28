@@ -15726,6 +15726,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a57822be11f8a8a5b7b5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "development-automation",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "dbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -23751,9 +23768,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1397,
+    "architectureExceptions": 1398,
     "implementationSccs": 0,
-    "observedEdges": 1434,
+    "observedEdges": 1435,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -38674,6 +38691,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#GateContinuationEffectStep"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#$file",
+      "id": "import:a57822be11f8a8a5b7b5",
+      "owner": "development-automation",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "dbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts",
@@ -47116,7 +47149,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:93540d300622d454f3319366316b3741739006c57287234a6d56ce887a40362b",
+  "sourceDigest": "sha256:33d4423752d42b531842be20d943550d20229c06d8c44d6c8a626cec1e288b8a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
