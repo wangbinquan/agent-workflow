@@ -77,10 +77,7 @@
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "GOD_SURFACE_ALLOWLIST",
       "baseline": 1,
-      "why": "RFC-294 public god-surface ceiling 的逐符号精确例外；每一项都必须保持超限且写明清偿波次，形状降到预算内时 stale 检查会要求删账。",
-      "allowGrowth": {
-        "why": "RFC-339 明确保留 child resume 的 20 字段 flat explicit inheritance contract；逐字段契约比删除功能配置或退回 Partial/Pick 更可审计。"
-      }
+      "why": "RFC-294 public god-surface ceiling 的逐符号精确例外；每一项都必须保持超限且写明清偿波次，形状降到预算内时 stale 检查会要求删账。"
     },
     {
       "id": "rfc317-no-corpus-floor",
@@ -409,10 +406,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18528,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-339/RFC-340 新增 5 个具名闭合合同符号：review actor projection、loop-exit candidate、script-interpreter map 与日志字段值类型；它们替换开放或 legacy 类型边，而非未归属代码。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
