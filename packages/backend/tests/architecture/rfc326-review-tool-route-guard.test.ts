@@ -20,6 +20,7 @@ import { Hono } from 'hono'
 import { ALL_TOOLS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountReviewRoutes } from '@/routes/reviews'
+import { mountTaskRoutes } from '@/routes/tasks'
 import type { AppDeps } from '@/server'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
@@ -134,6 +135,21 @@ function mountedReviewRoutes(): string[] {
 }
 
 describe('RFC-326 AC-31 — /api/reviews* routes ⟷ MCP gate tools, both directions', () => {
+  test('route composition fails explicitly when required read/context owners are absent', async () => {
+    expect(() =>
+      mountTaskRoutes(new Hono(), { db: {} as AppDeps['db'], configPath: '' } as AppDeps),
+    ).toThrow('task-execution-read-models-not-composed')
+
+    resetRouteMetaRegistry()
+    const app = new Hono()
+    app.onError((error, c) => c.text(error.message, 500))
+    mountReviewRoutes(app, { db: {} as AppDeps['db'], configPath: '' } as AppDeps)
+    const response = await app.request('/api/reviews')
+    expect(response.status).toBe(500)
+    expect(await response.text()).toBe('collaboration-context-not-composed')
+    resetRouteMetaRegistry()
+  })
+
   test('corpus: the review route table and the tool table are both non-trivial', async () => {
     const routes = mountedReviewRoutes()
     const byTool = await reviewPathsDispatchedByTools()

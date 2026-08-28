@@ -1,5 +1,3 @@
-import type { DbClient } from '@/db/client'
-import { createEmployeeInputUploadStore } from '../infrastructure/inputUploadStore'
 import type {
   DigitalEmployeeResourceReceipt,
   EmployeeCaseLaunchInput,
@@ -8,9 +6,9 @@ import type {
   ExactResourceRef,
 } from './types'
 
-/** Platform maintenance command; keeps the SQLite adapter behind this context's public edge. */
-export function sweepExpiredEmployeeInputUploads(db: DbClient, now: number, limit: number): number {
-  return createEmployeeInputUploadStore(db).sweepExpired(now, limit)
+/** Context-owned maintenance command port, composed once by the Worker bootstrap. */
+export interface DigitalEmployeeMaintenanceCommands {
+  sweepExpiredInputUploads(now: number, limit: number): number
 }
 
 export type DigitalEmployeeAuthoringCommand =

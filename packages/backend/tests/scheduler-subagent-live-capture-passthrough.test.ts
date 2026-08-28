@@ -28,6 +28,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
   test('scheduler forwards opts.subagentLiveCapture into runNode (every call site)', () => {
     const src =
       read('packages/backend/src/services/scheduler.ts') +
+      read('packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts') +
       read('packages/backend/src/modules/task-execution/composition/nodeMechanics.ts')
     const topology = read(
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionTopology.ts',
@@ -71,7 +72,9 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // tasks.ts carries it on every launch path: JSON via buildStartTaskDeps; multipart
     // (fallback + success) + resume + retry via the imported resolveSubagentLiveCapture.
     const src = read('packages/backend/src/routes/tasks.ts')
-    expect(src).toMatch(/buildStartTaskDeps\(\s*deps\.db,\s*deps\.configPath,/)
+    expect(src).toMatch(
+      /buildStartTaskDeps\(\s*deps\.db,\s*requireSchedulerDriver\(deps\.schedulerDriver\),\s*deps\.configPath,/,
+    )
     const callCount = (src.match(/resolveSubagentLiveCapture\(deps\.configPath\)/g) ?? []).length
     expect(callCount).toBeGreaterThanOrEqual(3)
   })

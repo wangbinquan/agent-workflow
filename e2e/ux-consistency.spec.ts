@@ -334,6 +334,97 @@ test.describe('RFC-198 global UX browser matrix', () => {
     expect(page.viewportSize()).toEqual({ width: 1280, height: 800 })
   })
 
+  test('RFC-340 reviewer deep link loads, assigns an active user, and saves on a narrow screen', async ({
+    page,
+  }) => {
+    const taskId = 'ux-reviewer-task'
+    const reviewer = {
+      id: 'ux-reviewer-user',
+      username: 'ux-reviewer',
+      displayName: 'UX Reviewer',
+      role: 'user',
+      status: 'active',
+    }
+    let savedBody: unknown = null
+    await page.route(`**/api/tasks/${taskId}/reviewers`, async (route) => {
+      if (route.request().method() === 'PUT') {
+        savedBody = route.request().postDataJSON()
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            taskId,
+            canManage: true,
+            nodes: [
+              {
+                reviewNodeId: 'review-node',
+                title: 'Architecture review',
+                description: 'Review the frozen architecture document',
+                reviewers: [reviewer],
+              },
+            ],
+          }),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          taskId,
+          canManage: true,
+          nodes: [
+            {
+              reviewNodeId: 'review-node',
+              title: 'Architecture review',
+              description: 'Review the frozen architecture document',
+              reviewers: [],
+            },
+          ],
+        }),
+      })
+    })
+    await page.route(`**/api/tasks/${taskId}/members`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          taskId,
+          ownerUserId: 'owner',
+          owner: null,
+          members: [],
+          canManage: true,
+          canOperate: true,
+        }),
+      }),
+    )
+    await page.route(/\/api\/users\/search(?:\?.*)?$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([reviewer]),
+      }),
+    )
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await primeAuth(page)
+    await page.goto(`${daemon.baseUrl}/tasks/${taskId}/reviewers`)
+    await expect(page.getByTestId('task-reviewers-page')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Architecture review' })).toBeVisible()
+
+    const picker = page.getByTestId('reviewers-review-node-input')
+    await picker.click()
+    await picker.fill('ux-reviewer')
+    await page.getByTestId('reviewers-review-node-option-ux-reviewer').click()
+    await page.locator('.task-reviewers__actions').getByRole('button', { name: 'Save' }).click()
+
+    await expect
+      .poll(() => savedBody)
+      .toEqual({ nodes: [{ reviewNodeId: 'review-node', reviewerUserIds: [reviewer.id] }] })
+    await expect(page.getByTestId('reviewers-review-node-remove-ux-reviewer')).toBeVisible()
+    await expectNoPageOverflow(page)
+  })
+
   test('all settings sections expose their semantic cards without page overflow', async ({
     page,
   }) => {

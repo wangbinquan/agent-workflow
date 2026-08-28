@@ -3016,8 +3016,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/services/taskArchive.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/services/taskArchive.ts#dbTxSync:658",
-      "line": 658,
+      "id": "tx:packages/backend/src/services/taskArchive.ts#dbTxSync:666",
+      "line": 666,
       "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#deleteTreeRows",
       "status": "clear",
       "symbol": "deleteTreeRows",
@@ -3328,7 +3328,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b046206abb6805dba60737e407027462aa4eacd076d4418135ea84c6d8f4bfa8",
+  "sourceDigest": "sha256:d7f3286eb1fe85f8c22db93717c11bf9d5f08fbf95092fd12ff4a52022f23261",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

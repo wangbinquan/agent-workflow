@@ -169,15 +169,23 @@ current-source：`5128efad55ba55fc95205c6dfd9b148916a181d1`
 
 ## 3. AC → 测试追踪（实施时填写）
 
-| AC           | 自动化证据                                                     | 状态    |
-| ------------ | -------------------------------------------------------------- | ------- |
-| AC-1～AC-2   | shared 4 + backend config HTTP / no-membership / cascade       | Passed  |
-| AC-3～AC-4   | assigned-vs-sibling list/count + current/history access        | Passed  |
-| AC-5～AC-7   | reviewer add/role/own-edit/delete/selection/decision HTTP      | Passed  |
-| AC-8～AC-10  | frontend capability/config/revocation DOM；hosted browser 待跑 | Partial |
-| AC-11～AC-13 | owner-only config + remove/re-add + exhaustive role union      | Passed  |
-| AC-14        | RFC-317 本 RFC R2 边已清零；全门待并发候选收口                 | Partial |
-| AC-15        | exact-SHA hosted CI                                            | Pending |
+| AC    | 自动化证据                                                           | 状态    |
+| ----- | -------------------------------------------------------------------- | ------- |
+| AC-1  | shared reviewer config schema + backend full-replace HTTP            | Passed  |
+| AC-2  | no-membership + task-delete cascade                                  | Passed  |
+| AC-3  | assigned-vs-sibling list / pending-count                             | Passed  |
+| AC-4  | current + historical node access                                     | Passed  |
+| AC-5  | reviewer add-comment + author-role HTTP                              | Passed  |
+| AC-6  | own-edit / other-edit / delete refusal HTTP                          | Passed  |
+| AC-7  | selection / decision refusal HTTP                                    | Passed  |
+| AC-8  | frontend capability-driven single/multi-doc DOM；hosted browser 待跑 | Partial |
+| AC-9  | dedicated config page DOM / keyboard / 390px contracts               | Partial |
+| AC-10 | revocation-safe query/cache behavior                                 | Partial |
+| AC-11 | owner/admin-only config + invalid relationship cases                 | Passed  |
+| AC-12 | remove / re-add access lifecycle                                     | Passed  |
+| AC-13 | exhaustive owner/collaborator/observer/reviewer/admin union          | Passed  |
+| AC-14 | RFC-317 本 RFC R2 边已清零；全门待并发候选收口                       | Partial |
+| AC-15 | exact-SHA hosted CI                                                  | Pending |
 
 ## 4. 当前停点
 

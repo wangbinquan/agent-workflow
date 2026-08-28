@@ -27,6 +27,7 @@ import {
 import { createAgent } from '../src/services/agent'
 import { cancelExecution } from '../src/services/execution/executor'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
@@ -196,6 +197,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       db,
       configPath,
       secretBox: box,
+      schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,
       getDefaultRuntime: async () => RUNTIME,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })

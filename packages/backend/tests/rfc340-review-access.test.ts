@@ -400,6 +400,27 @@ describe('RFC-340 review access matrix', () => {
       body: JSON.stringify({ selection: 'accepted' }),
     })
     expect(selection.status).toBe(403)
+
+    await db.insert(taskCollaborators).values({
+      taskId: 'task',
+      userId: 'other',
+      role: 'observer',
+      addedBy: 'owner',
+      addedAt: 3,
+    })
+    const observerToken = (await createSession({ db, userId: 'other' })).token
+    const observerComment = await app.fetch(
+      new Request('http://localhost/api/reviews/run/comments', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${observerToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ commentText: 'observer must stay read-only' }),
+      }),
+    )
+    expect(observerComment.status).toBe(403)
+    expect(await observerComment.json()).toMatchObject({ code: 'review-comment-not-allowed' })
   })
 
   test('HTTP configuration is owner-only, full-replace, and never creates task membership', async () => {
@@ -438,6 +459,13 @@ describe('RFC-340 review access matrix', () => {
     expect(initialBody.canManage).toBe(true)
     expect(initialBody.nodes.map((node) => node.reviewNodeId)).toEqual(['review-a', 'review-b'])
     expect(initialBody.nodes.every((node) => node.reviewers.length === 0)).toBe(true)
+
+    const invalid = await request(ownerToken, {
+      method: 'PUT',
+      body: JSON.stringify({ nodes: 'not-an-array' }),
+    })
+    expect(invalid.status).toBe(422)
+    expect(await invalid.json()).toMatchObject({ code: 'review-reviewers-invalid' })
 
     const replaced = await request(ownerToken, {
       method: 'PUT',

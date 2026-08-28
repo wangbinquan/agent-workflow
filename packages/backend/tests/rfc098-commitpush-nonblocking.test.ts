@@ -128,6 +128,10 @@ if (agent === 'commit') {
   }
   text = outputOpen + '<port name="out">done-' + agent + '</port></workflow-output>'
 }
+const commitCompletionMarker = process.env.CP_COMMIT_COMPLETION_MARKER ?? ''
+if (agent === 'commit' && n === 0 && commitCompletionMarker !== '') {
+  writeFileSync(join(stateDir, commitCompletionMarker), String(Date.now()))
+}
 process.stdout.write(
   JSON.stringify({ type: 'text', timestamp: Date.now(), part: { type: 'text', text } }) + '\\n',
 )
@@ -299,17 +303,20 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     // handshake rather than a scheduler-speed assumption. With the old
     // synchronous await, n2 can never create that marker before the commit's
     // 10s deadline and this test deterministically fails. n2's completion
-    // triggers a SECOND commit session (callIndex 1) — keep that one delayed
-    // so the first session commits+pushes first and the second finds nothing
-    // left to commit (its outcome is not asserted; commit failures never
-    // break task execution).
+    // triggers a SECOND commit session (callIndex 1). n2 writes its start
+    // marker first, then waits for commit0's completion marker: commit0 can
+    // prove the dispatch loop stayed live and still settles the canonical
+    // index before n2 completes and queues the next publisher.
     await withEnv(
       {
         CP_STATE_DIR: h.stateDir,
         CP_WRITE_FILE_FOR_n1: 'change.txt',
         CP_COMMIT_WAIT_FOR_AGENT: 'n2',
+        CP_COMMIT_COMPLETION_MARKER: 'completed-commit-0',
+        CP_WAIT_FOR_RELEASE_FOR_n2: 'completed-commit-0',
         CP_COMMIT_WAIT_TIMEOUT_MS: '10000',
-        CP_COMMIT_DELAYS: JSON.stringify([0, 1500]),
+        CP_AGENT_WAIT_TIMEOUT_MS: '10000',
+        CP_COMMIT_DELAYS: JSON.stringify([0, 0]),
       },
       () =>
         runTask({

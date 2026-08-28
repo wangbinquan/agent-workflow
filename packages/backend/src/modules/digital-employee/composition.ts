@@ -68,6 +68,7 @@ import type {
 } from './public/types'
 import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/types'
 import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
+import type { DigitalEmployeeMaintenanceCommands } from './public/commands'
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
@@ -78,6 +79,16 @@ export {
   refreshDigitalEmployeeWriterState,
 } from './composition/writerCutover'
 export { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
+
+/** Worker-bootstrap composition for the context-owned temporary-input cleanup. */
+export function composeDigitalEmployeeMaintenanceCommands(
+  db: DbClient,
+): DigitalEmployeeMaintenanceCommands {
+  const uploads = createEmployeeInputUploadStore(db)
+  return {
+    sweepExpiredInputUploads: (now, limit) => uploads.sweepExpired(now, limit),
+  }
+}
 
 /** Bootstrap projection owned by Digital Employee; consumers never read its tables directly. */
 export function readPersistedDigitalEmployeeTypePackageDescriptorJsons(

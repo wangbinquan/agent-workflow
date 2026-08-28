@@ -29,6 +29,19 @@ import { pruneTokenAuditSlice } from '@/services/tokenAudit'
 import { gcDeliveriesSlice } from '@/services/webhook/deliveryStore'
 import { MIGRATIONS } from './migration-freeze'
 
+const UNUSED_OWNER_COMMANDS = {
+  developmentAutomation: {
+    sweepExpiredUploads: () => 0,
+    sweepRetention: async () => ({
+      missionsScanned: 0,
+      prunedAttempts: 0,
+      markedBundleRefs: 0,
+      expiredBundleRefsPending: 0,
+    }),
+  },
+  digitalEmployee: { sweepExpiredInputUploads: () => 0 },
+} as const
+
 describe('RFC-338 bounded maintenance owner slices', () => {
   test('event archive counts a large id space in durable primary-key windows', async () => {
     const db = createInMemoryDb(MIGRATIONS)
@@ -81,6 +94,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       const first = await runMaintenanceJob({
         db,
         appHome,
+        ownerCommands: UNUSED_OWNER_COMMANDS,
         job: 'eventsArchive',
         payload,
       })
@@ -100,6 +114,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       const second = await runMaintenanceJob({
         db,
         appHome,
+        ownerCommands: UNUSED_OWNER_COMMANDS,
         job: 'eventsArchive',
         payload,
         cursor: first.continuation!.cursor,

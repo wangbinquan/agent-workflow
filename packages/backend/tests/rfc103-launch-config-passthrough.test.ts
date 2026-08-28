@@ -164,7 +164,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // JSON 入口的运行时配置由 buildStartTaskDeps 携带（数据路径不变）。
     const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')
     expect(depsSrc).toContain('resolveLaunchRuntimeConfig(configPath)')
-    expect(routesSrc).toMatch(/buildStartTaskDeps\(\s*deps\.db,\s*deps\.configPath,/)
+    expect(routesSrc).toMatch(
+      /buildStartTaskDeps\(\s*deps\.db,\s*requireSchedulerDriver\(deps\.schedulerDriver\),\s*deps\.configPath,/,
+    )
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {

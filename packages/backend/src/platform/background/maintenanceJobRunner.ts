@@ -4,11 +4,8 @@ import { join } from 'node:path'
 
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents } from '@/db/schema'
-import {
-  sweepDevelopmentAutomationRetention,
-  sweepExpiredDevelopmentUploads,
-} from '@/modules/development-automation/public/commands'
-import { sweepExpiredEmployeeInputUploads } from '@/modules/digital-employee/public/commands'
+import type { DevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/public/commands'
+import type { DigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/public/commands'
 import { checkpointWal, pruneBackups } from '@/services/backupScheduler'
 import { convergeResourceBundleApplies } from '@/services/bundle/apply'
 import { archiveEvents } from '@/services/eventsArchive'
@@ -170,11 +167,15 @@ function assertVersionOneCursor(value: unknown, code: string): void {
 export async function runMaintenanceJob(input: {
   db: DbClient
   appHome: string
+  ownerCommands: {
+    readonly developmentAutomation: DevelopmentAutomationMaintenanceCommands
+    readonly digitalEmployee: DigitalEmployeeMaintenanceCommands
+  }
   job: MaintenanceJobKey
   payload: unknown
   cursor?: unknown
 }): Promise<MaintenanceJobExecutionResult> {
-  const { db, appHome, job } = input
+  const { db, appHome, job, ownerCommands } = input
 
   switch (job) {
     case 'worktreeGc': {
@@ -350,7 +351,10 @@ export async function runMaintenanceJob(input: {
     case 'developmentUploadGc': {
       parseMaintenanceJobPayload(job, input.payload)
       assertVersionOneCursor(input.cursor, 'maintenance-development-upload-cursor-invalid')
-      const swept = sweepExpiredDevelopmentUploads(db, Date.now(), DB_WRITE_SLICE_ROWS)
+      const swept = ownerCommands.developmentAutomation.sweepExpiredUploads(
+        Date.now(),
+        DB_WRITE_SLICE_ROWS,
+      )
       return {
         counters: { swept },
         delta: NONE,
@@ -361,13 +365,16 @@ export async function runMaintenanceJob(input: {
     }
     case 'developmentRetentionSweep': {
       parseMaintenanceJobPayload(job, input.payload)
-      const result = await sweepDevelopmentAutomationRetention(db, Date.now())
+      const result = await ownerCommands.developmentAutomation.sweepRetention(Date.now())
       return { counters: { ...result }, delta: NONE }
     }
     case 'employeeInputGc': {
       parseMaintenanceJobPayload(job, input.payload)
       assertVersionOneCursor(input.cursor, 'maintenance-employee-input-cursor-invalid')
-      const swept = sweepExpiredEmployeeInputUploads(db, Date.now(), DB_WRITE_SLICE_ROWS)
+      const swept = ownerCommands.digitalEmployee.sweepExpiredInputUploads(
+        Date.now(),
+        DB_WRITE_SLICE_ROWS,
+      )
       return {
         counters: { swept },
         delta: NONE,

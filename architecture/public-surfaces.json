@@ -1,11 +1,11 @@
 {
   "denominator": {
-    "consumers": 273,
+    "consumers": 272,
     "exactEntrypointFiles": 36,
     "governedFieldSurfaces": 5,
     "methods": 208,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1743,
+    "recursiveFields": 1747,
     "symbols": 392
   },
   "entries": [
@@ -5436,7 +5436,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:5053f35f292c0f528cd4"
+        "import:c1e08567f5551b4885c2"
       ],
       "context": "development-automation",
       "dataClass": "metadata",
@@ -5444,29 +5444,41 @@
       "entrypoint": "commands",
       "fields": [],
       "file": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "id": "public:development-automation:commands:sweepDevelopmentAutomationRetention",
-      "members": [],
+      "id": "public:development-automation:commands:DevelopmentAutomationMaintenanceCommands",
+      "members": [
+        "sweepExpiredUploads",
+        "sweepRetention"
+      ],
       "methods": [
         {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:b2b2eebc65fd8fd7fce600ea38df4587df20498d0cbaef90a16d6be888352473"
+          "consumerEdgeIds": [
+            "import:c1e08567f5551b4885c2"
+          ],
+          "name": "sweepExpiredUploads",
+          "signatureDigest": "sha256:8d687f8baba593fc005884ef187bcd1ad0bc502724fdf3117d3415d480202cce"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c1e08567f5551b4885c2"
+          ],
+          "name": "sweepRetention",
+          "signatureDigest": "sha256:67d632ce15763e46a019266c22924bfcac3ba77ab727357b188dd841802b1796"
         }
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#sweepDevelopmentAutomationRetention",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#DevelopmentAutomationMaintenanceCommands",
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:5053f35f292c0f528cd4",
+          "edgeId": "import:c1e08567f5551b4885c2",
           "file": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file"
         }
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:b2b2eebc65fd8fd7fce600ea38df4587df20498d0cbaef90a16d6be888352473",
+      "signatureDigest": "sha256:773e67ebf5c3c068e88c64d0055c62478d986bdb1b900ebd64729ef0c0bc60ea",
       "status": "target-context-current-surface",
-      "symbol": "sweepDevelopmentAutomationRetention",
+      "symbol": "DevelopmentAutomationMaintenanceCommands",
       "transaction": "own-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -5479,38 +5491,49 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:93be8734615b5f727bcf"
-      ],
+      "consumerEdgeIds": [],
       "context": "development-automation",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "commands",
-      "fields": [],
-      "file": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "id": "public:development-automation:commands:sweepExpiredDevelopmentUploads",
-      "members": [],
-      "methods": [
+      "fields": [
         {
           "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:8284fb1f5b3c3626e3c65bd4949439644f08b79dc65ff25e644f5eba8cce96f6"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#sweepExpiredDevelopmentUploads",
-      "productionConsumers": [
+          "fieldPath": "expiredBundleRefsPending",
+          "type": "number"
+        },
         {
-          "context": "legacy",
-          "edgeId": "import:93be8734615b5f727bcf",
-          "file": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file"
+          "consumerEdgeIds": [],
+          "fieldPath": "markedBundleRefs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "missionsScanned",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "prunedAttempts",
+          "type": "number"
         }
       ],
+      "file": "packages/backend/src/modules/development-automation/public/commands.ts",
+      "id": "public:development-automation:commands:DevelopmentRetentionSweepResult",
+      "members": [
+        "expiredBundleRefsPending",
+        "markedBundleRefs",
+        "missionsScanned",
+        "prunedAttempts"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#DevelopmentRetentionSweepResult",
+      "productionConsumers": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:8284fb1f5b3c3626e3c65bd4949439644f08b79dc65ff25e644f5eba8cce96f6",
+      "signatureDigest": "sha256:1a38d070d9fea9267d664cad0a14d1a5e533a80b0213ffcaf65a60d82e0138e7",
       "status": "target-context-current-surface",
-      "symbol": "sweepExpiredDevelopmentUploads",
+      "symbol": "DevelopmentRetentionSweepResult",
       "transaction": "own-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -6224,6 +6247,54 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:5a757bfa16b49615491b"
+      ],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [],
+      "file": "packages/backend/src/modules/digital-employee/public/commands.ts",
+      "id": "public:digital-employee:commands:DigitalEmployeeMaintenanceCommands",
+      "members": [
+        "sweepExpiredInputUploads"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:5a757bfa16b49615491b"
+          ],
+          "name": "sweepExpiredInputUploads",
+          "signatureDigest": "sha256:11233dbdc9a68cb6d06d9cb2153f1d3e0bdc9285b34b5a40bbd7746e64365372"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#DigitalEmployeeMaintenanceCommands",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:5a757bfa16b49615491b",
+          "file": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:e1d564bd9b5eedc699f067847330972afc78b1c3d8d2652a5607c02dc9ec45f9",
+      "status": "target-context-current-surface",
+      "symbol": "DigitalEmployeeMaintenanceCommands",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "digital-employee",
       "dataClass": "metadata",
@@ -6267,50 +6338,6 @@
       "signatureDigest": "sha256:e683cc1f4c9744451d436ed368a0d32084ca28e3059d4bd86c1dcf8907e20dd5",
       "status": "target-context-current-surface",
       "symbol": "EmployeeCaseCommandPort",
-      "transaction": "own-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:d02c2fac2ef817b1e325"
-      ],
-      "context": "digital-employee",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "commands",
-      "fields": [],
-      "file": "packages/backend/src/modules/digital-employee/public/commands.ts",
-      "id": "public:digital-employee:commands:sweepExpiredEmployeeInputUploads",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:146c26797c439ed9921bebb4eb4f4069e6a6d79997739a821a9cf757942e902d"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#sweepExpiredEmployeeInputUploads",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:d02c2fac2ef817b1e325",
-          "file": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file"
-        }
-      ],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:146c26797c439ed9921bebb4eb4f4069e6a6d79997739a821a9cf757942e902d",
-      "status": "target-context-current-surface",
-      "symbol": "sweepExpiredEmployeeInputUploads",
       "transaction": "own-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -25202,7 +25229,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b046206abb6805dba60737e407027462aa4eacd076d4418135ea84c6d8f4bfa8",
+  "sourceDigest": "sha256:d7f3286eb1fe85f8c22db93717c11bf9d5f08fbf95092fd12ff4a52022f23261",
   "targetContexts": [
     "collaboration",
     "development-automation",

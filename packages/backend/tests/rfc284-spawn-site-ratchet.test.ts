@@ -80,6 +80,14 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       'RFC-328 预激活 launcher 的唯一 target spawn；launcher 已是 detached 组长，' +
       'target 显式留在同一进程组，使既有 TERM→KILL 树杀覆盖整棵运行时进程树。',
   },
+  'platform/background/maintenanceWorkerSupervisor.ts': {
+    governance: 'kernel',
+    count: 4,
+    why:
+      'RFC-338 的唯一长驻 maintenance Worker supervisor：一处本地 spawn 包装与三处' +
+      '启动/重启调用共同拥有 watchdog、terminate、drain 与有界重启，后台重任务不再散落' +
+      '到 HTTP 主事件循环。',
+  },
   'util/git.ts': {
     governance: 'process-group',
     count: 1,

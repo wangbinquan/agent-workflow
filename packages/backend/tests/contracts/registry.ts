@@ -742,6 +742,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   // membership is the answer-rights boundary. Members panel replaces it.
   { method: 'GET', path: '/api/tasks/:id/members' },
   { method: 'PUT', path: '/api/tasks/:id/members' },
+  // RFC-340 — owner/admin full-replace configuration for opinion-only reviewers.
+  { method: 'GET', path: '/api/tasks/:id/reviewers' },
+  { method: 'PUT', path: '/api/tasks/:id/reviewers' },
   // RFC-065: task detail page "工作目录" tab — list + read worktree files.
   { method: 'GET', path: '/api/tasks/:id/worktree-tree' },
   { method: 'GET', path: '/api/tasks/:id/worktree-file' },

@@ -99,10 +99,17 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
     // 只有定义、没有调用点的收敛器等于不存在：一次崩在 pre-stage 与 big tx 之间的
     // daemon 会永久留下插件 generation / 暂存技能目录，且那个 importId 每次重放都答
     // `bundle-apply-unsettled`。
-    const start = read('src/cli/start.ts')
-    expect(start).toContain('convergeResourceBundleApplies')
-    // 两处：boot 一次 + 小时 tick 一次。
-    expect(start.match(/convergeResourceBundleApplies\(/g)?.length).toBeGreaterThanOrEqual(2)
+    const runner = read('src/platform/background/maintenanceJobRunner.ts')
+    const catalog = read('src/platform/background/maintenanceCatalog.ts')
+    expect(runner).toContain("case 'intentRecovery'")
+    expect(runner).toContain('await convergeResourceBundleApplies(')
+    // 同一 durable job 由 catalog 明确注册 boot + hourly 两种 admission。
+    const intentRecovery = catalog.slice(
+      catalog.indexOf("key: 'intentRecovery'"),
+      catalog.indexOf("key: 'lifecycleInvariants'"),
+    )
+    expect(intentRecovery).toContain('intervalMs: HOUR_MS')
+    expect(intentRecovery).toContain('bootDelayMs: 0')
   })
 
   test('committed 分支重放幂等尾，不是只 +1', () => {

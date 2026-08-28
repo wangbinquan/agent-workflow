@@ -41,6 +41,10 @@ import { join, relative, resolve } from 'node:path'
 const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
 const SCHEDULER_SRC = readFileSync(join(SRC_ROOT, 'services', 'scheduler.ts'), 'utf-8')
+const NODE_MECHANICS_SRC = readFileSync(
+  join(SRC_ROOT, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+  'utf-8',
+)
 const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')
 const REPAIR_HELPERS_SRC = readFileSync(
   join(SRC_ROOT, 'services', 'lifecycleRepair', 'helpers.ts'),
@@ -117,10 +121,10 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // scheduler discards the failed iso and re-branches a fresh one. The old
     // `await rollbackNodeRunWorktrees(...)` + in-process `lastFreshSnapshot` retry
     // machinery is GONE from the scheduler.
-    expect(SCHEDULER_SRC.includes('discardNodeIso(')).toBe(true)
-    expect(SCHEDULER_SRC.includes('createIsoUnderLock(')).toBe(true)
-    expect(SCHEDULER_SRC.includes('createNodeIso(')).toBe(false)
-    expect(SCHEDULER_SRC.includes('lastFreshSnapshot')).toBe(false)
+    expect(NODE_MECHANICS_SRC.includes('discardNodeIso(')).toBe(true)
+    expect(NODE_MECHANICS_SRC.includes('createIsoUnderLock(')).toBe(true)
+    expect(NODE_MECHANICS_SRC.includes('createNodeIso(')).toBe(false)
+    expect(NODE_MECHANICS_SRC.includes('lastFreshSnapshot')).toBe(false)
     // The shared rollback authority is RETAINED for the RESUME path (D10
     // defense-in-depth) — it still consumes the per-repo map + empty-sha reset
     // switch, and never picks rows by retryIndex.

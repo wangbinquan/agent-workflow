@@ -363,6 +363,19 @@ describe('RFC-013-T2 GET /api/reviews/:nodeRunId/versions/:versionId route', () 
       reviewIteration: 0,
       status: 'awaiting_review',
     })
+    await s.db.insert(docVersions).values({
+      id: 'dv_other',
+      taskId: s.taskId,
+      reviewNodeId: 'rev_other',
+      reviewNodeRunId: 'run_other',
+      sourceNodeId: 'designer',
+      sourcePortName: 'design',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
+      decision: 'pending',
+      createdAt: 1,
+    })
     const res = await app().fetch(
       new Request(`http://localhost/api/reviews/run_other/versions/dv_v1`, {
         headers: { Authorization: 'Bearer tok' },

@@ -7,6 +7,8 @@ import { ulid } from 'ulid'
 
 import { openDb, type DbClient } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
+import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
+import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/composition'
 import {
   createMaintenanceRunStore,
   type ClaimedMaintenanceRun,
@@ -29,6 +31,12 @@ const MAX_BUSY_BACKOFF_MS = 30_000
 const CLEANUP_COOLDOWN_MS = 25
 
 let db: DbClient | null = null
+let developmentAutomationMaintenance: ReturnType<
+  typeof composeDevelopmentAutomationMaintenanceCommands
+> | null = null
+let digitalEmployeeMaintenance: ReturnType<
+  typeof composeDigitalEmployeeMaintenanceCommands
+> | null = null
 let appHome = ''
 let processing = false
 let draining = false
@@ -170,6 +178,8 @@ function closeConnection(): void {
   heartbeatTimer = null
   const current = db
   db = null
+  developmentAutomationMaintenance = null
+  digitalEmployeeMaintenance = null
   ;(current as unknown as { $client?: { close(): void } } | null)?.$client?.close()
 }
 
@@ -185,7 +195,15 @@ async function drainIfReady(): Promise<void> {
 
 async function processQueue(): Promise<void> {
   const currentDb = db
-  if (currentDb === null || processing || draining) {
+  const currentDevelopmentAutomationMaintenance = developmentAutomationMaintenance
+  const currentDigitalEmployeeMaintenance = digitalEmployeeMaintenance
+  if (
+    currentDb === null ||
+    currentDevelopmentAutomationMaintenance === null ||
+    currentDigitalEmployeeMaintenance === null ||
+    processing ||
+    draining
+  ) {
     await drainIfReady()
     return
   }
@@ -218,6 +236,10 @@ async function processQueue(): Promise<void> {
         const result = await runMaintenanceJob({
           db: currentDb,
           appHome,
+          ownerCommands: {
+            developmentAutomation: currentDevelopmentAutomationMaintenance,
+            digitalEmployee: currentDigitalEmployeeMaintenance,
+          },
           job,
           payload,
           ...(cursor === undefined ? {} : { cursor }),
@@ -342,6 +364,8 @@ function initialise(value: unknown): void {
     observeStatementMs: (ms) => recordTiming(statementTimings, ms),
     observeTransactionMs: (ms) => recordTiming(transactionTimings, ms),
   })
+  developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(db)
+  digitalEmployeeMaintenance = composeDigitalEmployeeMaintenanceCommands(db)
   createMaintenanceRunStore(db).recoverRunning(Date.now())
   pollTimer = setInterval(() => void processQueue(), IDLE_POLL_MS)
   pollTimer.unref?.()

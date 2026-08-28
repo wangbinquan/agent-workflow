@@ -4219,6 +4219,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:253c0dd98649162e8ee4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#composeDigitalEmployeeMaintenanceCommands",
+      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toSymbol": "composeDigitalEmployeeMaintenanceCommands",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file",
       "fromPath": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
       "fromSymbol": "$file",
@@ -6104,23 +6121,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#$file",
-      "fromPath": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3894345082488ee0c1bf",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "development-automation",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/wrapperRunLifecycle.ts#$file",
@@ -7993,23 +7993,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "fromPath": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:5053f35f292c0f528cd4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#sweepDevelopmentAutomationRetention",
-      "toPath": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "toSymbol": "sweepDevelopmentAutomationRetention",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/readinessFacts.ts#$file",
       "fromPath": "packages/backend/src/modules/code-capability/application/readinessFacts.ts",
       "fromSymbol": "$file",
@@ -8430,23 +8413,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#snapshotNodeIsoFinal",
       "toPath": "packages/backend/src/services/nodeIsolation.ts",
       "toSymbol": "snapshotNodeIsoFinal",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#$file",
-      "fromPath": "packages/backend/src/modules/digital-employee/public/commands.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:54b1ebdd092f47357438",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "digital-employee",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -8957,6 +8923,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectOperationContextFactory",
       "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
       "toSymbol": "DirectOperationContextFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5a757bfa16b49615491b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#DigitalEmployeeMaintenanceCommands",
+      "toPath": "packages/backend/src/modules/digital-employee/public/commands.ts",
+      "toSymbol": "DigitalEmployeeMaintenanceCommands",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -14145,23 +14128,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "fromPath": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:93be8734615b5f727bcf",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#sweepExpiredDevelopmentUploads",
-      "toPath": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "toSymbol": "sweepExpiredDevelopmentUploads",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/humanGateTaskLifecycle.ts#$file",
@@ -16969,6 +16935,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b3263e46604427e3eb92",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomationMaintenanceCommands",
+      "toPath": "packages/backend/src/modules/development-automation/composition.ts",
+      "toSymbol": "composeDevelopmentAutomationMaintenanceCommands",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#$file",
       "fromPath": "packages/backend/src/modules/source-control/composition.ts",
       "fromSymbol": "$file",
@@ -18123,6 +18106,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c1e08567f5551b4885c2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#DevelopmentAutomationMaintenanceCommands",
+      "toPath": "packages/backend/src/modules/development-automation/public/commands.ts",
+      "toSymbol": "DevelopmentAutomationMaintenanceCommands",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/fsHumanGateArtifactStore.ts#$file",
@@ -19242,23 +19242,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#readWrapperRevivalIteration",
       "toPath": "packages/backend/src/modules/task-execution/public/queries.ts",
       "toSymbol": "readWrapperRevivalIteration",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "fromPath": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d02c2fac2ef817b1e325",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#sweepExpiredEmployeeInputUploads",
-      "toPath": "packages/backend/src/modules/digital-employee/public/commands.ts",
-      "toSymbol": "sweepExpiredEmployeeInputUploads",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -23853,9 +23836,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1403,
+    "architectureExceptions": 1402,
     "implementationSccs": 0,
-    "observedEdges": 1440,
+    "observedEdges": 1439,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -27481,6 +27464,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "id": "import:253c0dd98649162e8ee4",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition",
+      "syntax": "static-import",
+      "targetSymbol": "composeDigitalEmployeeMaintenanceCommands",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#composeDigitalEmployeeMaintenanceCommands"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "digital-employee",
       "fromFile": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file",
@@ -29270,22 +29269,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/scriptDepsEnv.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/scriptDepsEnv.ts#ScriptDepsInstallError"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "development-automation",
-      "fromFile": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#$file",
-      "id": "import:3894345082488ee0c1bf",
-      "owner": "development-automation",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -31097,22 +31080,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "id": "import:5053f35f292c0f528cd4",
-      "owner": "platform",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/development-automation/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "sweepDevelopmentAutomationRetention",
-      "toContext": "development-automation",
-      "toFile": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#sweepDevelopmentAutomationRetention"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/application/readinessFacts.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/readinessFacts.ts#$file",
@@ -31542,22 +31509,6 @@
       "toContext": "execution-contract",
       "toFile": "packages/backend/src/modules/execution-contract/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/public/types.ts#$file"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "digital-employee",
-      "fromFile": "packages/backend/src/modules/digital-employee/public/commands.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#$file",
-      "id": "import:54b1ebdd092f47357438",
-      "owner": "digital-employee",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -32070,6 +32021,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectOperationContextFactory"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
+      "id": "import:5a757bfa16b49615491b",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "DigitalEmployeeMaintenanceCommands",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#DigitalEmployeeMaintenanceCommands"
     },
     {
       "edgeKind": "value",
@@ -37208,22 +37175,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "id": "import:93be8734615b5f727bcf",
-      "owner": "platform",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/development-automation/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "sweepExpiredDevelopmentUploads",
-      "toContext": "development-automation",
-      "toFile": "packages/backend/src/modules/development-automation/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#sweepExpiredDevelopmentUploads"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/application/ports/humanGateTaskLifecycle.ts",
@@ -40105,6 +40056,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "id": "import:b3263e46604427e3eb92",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition",
+      "syntax": "static-import",
+      "targetSymbol": "composeDevelopmentAutomationMaintenanceCommands",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomationMaintenanceCommands"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/composition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#$file",
@@ -41272,6 +41239,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadPlanStore.ts#insertUploadPlan"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
+      "id": "import:c1e08567f5551b4885c2",
+      "owner": "platform",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "DevelopmentAutomationMaintenanceCommands",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/commands.ts#DevelopmentAutomationMaintenanceCommands"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/fsHumanGateArtifactStore.ts",
@@ -42406,22 +42389,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#readWrapperRevivalIteration"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "id": "import:d02c2fac2ef817b1e325",
-      "owner": "platform",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "sweepExpiredEmployeeInputUploads",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/commands.ts#sweepExpiredEmployeeInputUploads"
     },
     {
       "edgeKind": "value",
@@ -47314,7 +47281,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b046206abb6805dba60737e407027462aa4eacd076d4418135ea84c6d8f4bfa8",
+  "sourceDigest": "sha256:d7f3286eb1fe85f8c22db93717c11bf9d5f08fbf95092fd12ff4a52022f23261",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

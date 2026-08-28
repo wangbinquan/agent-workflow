@@ -148,6 +148,7 @@ describe('RFC-282 B2 — all six TaskExecution entries go through the one resolv
     const text = [
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
+      readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
     ].join('\n')
     expect(text.split('await resolveInjection(').length - 1).toBe(6)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
@@ -161,10 +162,7 @@ describe('RFC-282 B2 — all six TaskExecution entries go through the one resolv
   test('the writeSem call sites (commit/merge) thread the scope signal (§9-5)', () => {
     const sites = [
       {
-        text: readFileSync(
-          resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'),
-          'utf8',
-        ),
+        text: readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
         marker: 'commit-push injection resolve failed',
       },
       {

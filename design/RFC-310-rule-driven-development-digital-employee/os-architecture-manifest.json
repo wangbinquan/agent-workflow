@@ -23,6 +23,8 @@
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
         "modules/task-execution/composition/required-ports.ts -> public/types",
         "modules/task-execution/public/participants.ts -> public/types",
+        "platform/background/maintenanceJobRunner.ts -> public/commands",
+        "platform/background/maintenanceWorker.ts -> composition",
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
         "server.ts -> public/events",

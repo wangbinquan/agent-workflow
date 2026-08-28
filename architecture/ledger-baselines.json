@@ -13,8 +13,11 @@
       "id": "spawn-site-allowlist",
       "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
       "symbol": "ALLOWLIST",
-      "baseline": 15,
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
+      "baseline": 16,
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表",
+      "allowGrowth": {
+        "why": "RFC-338 新增唯一 maintenance Worker supervisor；其四处命中属于同一个长驻 Worker 内核并已由 restart/watchdog/terminate/drain 治理。"
+      }
     },
     {
       "id": "rfc328-capability-factory-call-sites",
@@ -69,8 +72,8 @@
       "id": "rfc294-public-surface-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
-      "baseline": 5,
-      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-331 DEV-1 临时增加 task-execution topology/config 与 DB-bound query constructor 的五条 exact 偏离，分别在 W2-B/W2-D consumer 迁完后删除。"
+      "baseline": 2,
+      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离，剩余两条继续按后续 consumer cutover 删除。"
     },
     {
       "id": "rfc317-no-corpus-floor",
@@ -300,8 +303,11 @@
       "id": "rfc329-mcp-surface-exemptions",
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
-      "baseline": 374,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
+      "baseline": 377,
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。",
+      "allowGrowth": {
+        "why": "RFC-338 新增只读 maintenance status 系统面，RFC-340 新增 session-only reviewer 配置 GET/PUT；三条均按真实 route metadata 精确登记，不扩宽前缀。"
+      }
     },
     {
       "id": "rfc294-mutation-entrypoints",
@@ -328,7 +334,7 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 263,
+      "baseline": 260,
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
@@ -342,7 +348,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1440,
+      "baseline": 1439,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -363,7 +369,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1403,
+      "baseline": 1402,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -398,12 +404,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 18519,
+      "baseline": 18523,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b046206abb6805dba60737e407027462aa4eacd076d4418135ea84c6d8f4bfa8",
+    "sourceDigest": "sha256:d7f3286eb1fe85f8c22db93717c11bf9d5f08fbf95092fd12ff4a52022f23261",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

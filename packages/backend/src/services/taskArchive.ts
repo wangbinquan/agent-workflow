@@ -43,6 +43,7 @@ import {
   nodeRuns,
   recoveryEvents,
   reviewComments,
+  reviewNodeReviewers,
   taskArchiveAudit,
   taskCollaborators,
   taskExecutionEffectAttempts,
@@ -142,6 +143,13 @@ const TASK_SCOPED: readonly ExportSpec[] = [
     load: (db, ids) =>
       chunkedAll(ids, (c) =>
         db.select().from(taskCollaborators).where(inArray(taskCollaborators.taskId, c)),
+      ),
+  },
+  {
+    name: 'review_node_reviewers',
+    load: (db, ids) =>
+      chunkedAll(ids, (c) =>
+        db.select().from(reviewNodeReviewers).where(inArray(reviewNodeReviewers.taskId, c)),
       ),
   },
   {

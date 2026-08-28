@@ -37,6 +37,7 @@ import { applyIntentChangeset } from '../src/services/intent/applyChangeset'
 import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
 import { createIntentSession } from '../src/services/intent/session'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
@@ -230,6 +231,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       db,
       configPath,
       secretBox: box,
+      schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,
       getDefaultRuntime: async () => null,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })
@@ -412,6 +414,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       db,
       configPath,
       secretBox: box,
+      schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,
       getDefaultRuntime: async () => INTENT_RUNTIME,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })

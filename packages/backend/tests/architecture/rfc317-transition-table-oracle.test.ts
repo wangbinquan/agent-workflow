@@ -299,12 +299,12 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
     why: 'call child adoption 复用既有 node_run：从 shutdown/cancel 终态重新认领为 running；pending 来源本身符合 mark-running 表。',
   },
   {
-    site: 'services/scheduler.ts:running',
+    site: 'modules/task-execution/composition/wrapperRunLifecycle.ts:running',
     offTable: ['awaiting_human', 'awaiting_review', 'canceled', 'interrupted'],
     why: '重新认领（四处）：daemon 重启或 wrapper 复活后把 run 拉回 running。表里 `mark-running` 只允许从 pending 出发。',
   },
   {
-    site: 'services/scheduler.ts:pending',
+    site: 'modules/task-execution/composition/wrapperMechanics.ts:pending',
     offTable: ['canceled', 'failed', 'interrupted', 'pending', 'running'],
     why: '重跑注入（两处）：把任意状态的 run 重置回 pending 以便调度器重新派发。',
   },

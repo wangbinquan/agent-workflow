@@ -47,6 +47,7 @@ const PUBLIC_ALLOWED = new Set([
 /** 消费者账本：import 这两个入口的仓内生产文件（相对 backend/src）。 */
 const COMPOSITION_CONSUMERS: string[] = [
   'cli/start.ts',
+  'platform/background/maintenanceWorker.ts',
   'routes/developmentMissions.ts',
   'server.ts',
 ]

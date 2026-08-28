@@ -73,6 +73,7 @@ import {
   sweepDevelopmentRetention,
   type RetentionSweepResult,
 } from './infrastructure/retentionSweeper'
+import type { DevelopmentAutomationMaintenanceCommands } from './public/commands'
 import { createSqlitePlaybookSagaStore } from './infrastructure/sqlitePlaybookSagaStore'
 import { createChildMissionParticipant } from './infrastructure/childMissionParticipant'
 import {
@@ -101,6 +102,25 @@ const PIPELINE_IMPORT_BUDGET = {
   maxFileBytes: 8 * 1024 * 1024 * 1024,
   maxTotalBytes: 16 * 1024 * 1024 * 1024,
 } as const
+
+/** Worker-bootstrap composition for the context-owned maintenance slice. */
+export function composeDevelopmentAutomationMaintenanceCommands(
+  db: DbClient,
+): DevelopmentAutomationMaintenanceCommands {
+  const uploads = createSqliteUploadSessionStore(db)
+  const lookup = createSqliteAdmissionLookup(db)
+  return {
+    sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
+    sweepRetention: (now) =>
+      sweepDevelopmentRetention(
+        db,
+        {
+          getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
+        },
+        now,
+      ),
+  }
+}
 
 export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer

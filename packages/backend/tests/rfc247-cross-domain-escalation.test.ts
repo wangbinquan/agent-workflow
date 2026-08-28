@@ -47,7 +47,11 @@ import { mountAgentRoutes } from '@/routes/agents'
 // thrower silently skip every mount after it — the routes would simply be absent
 // and the tests would fail with "did the route move?", pointing at the wrong
 // thing. Routes registered before a throw are kept, which is all this file needs.
-const deps = {} as Parameters<typeof mountFusionRoutes>[1]
+const deps = {
+  // Metadata-only harness: handlers never execute, but RFC-339 makes the
+  // scheduler driver an explicit mount-time composition boundary.
+  schedulerDriver: {},
+} as unknown as Parameters<typeof mountFusionRoutes>[1]
 
 function mountAll(): void {
   const sink = new Hono()

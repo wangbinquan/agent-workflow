@@ -107,14 +107,15 @@ define 固定为 `false`，所以同名进程变量不会暂停正式服务。
 
 ## 同形非 env（TS 符号 / 构建期注入 / 模板哨兵——**不是**环境变量）
 
-| token                             | 位置                                                                              | 实为                                               |
-| --------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `AW_E2E_BUILD`                    | `scripts/build-binary.ts` → `backend/src/services/humanGateDecisionE2eBarrier.ts` | 构建期 test-only binary 布尔开关                   |
-| `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/util/version.ts`（`declare const`）      | 构建期 define 注入的全局常量                       |
-| `AW_INTERNAL_GIT_IDENTITY`        | `backend/src/util/git.ts`                                                         | 导出的 TS 常量名（内部 git spawn 的身份 env 集合） |
-| `AW_MANAGED_PROCESS_LAUNCH_ERROR` | `backend/src/services/execution/managedProcessLauncher.ts`                        | launcher stderr 失败控制帧前缀（不是环境变量）     |
-| `AW_MANAGED_PROCESS_LAUNCH_READY` | `backend/src/services/execution/managedProcessLauncher.ts`                        | launcher stderr 就绪控制帧前缀（不是环境变量）     |
-| `__AW_CODEHOST_VAR_`              | `packages/shared/src/codeHost/template.ts`                                        | code-host 模板变量哨兵前缀                         |
+| token                             | 位置                                                                                                                           | 实为                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `AW_E2E_BUILD`                    | `scripts/build-binary.ts` → `backend/src/services/humanGateDecisionE2eBarrier.ts`                                              | 构建期 test-only binary 布尔开关                                             |
+| `AW_COMPILED_BUILD`               | `scripts/build-binary.ts` → `backend/src/platform/background/maintenanceWorkerSupervisor.ts`、`backend/src/services/backup.ts` | 构建期 define 注入的布尔常量，用于选择 bundled Worker 入口与编译产物备份实现 |
+| `AW_BUILD_VERSION`                | `scripts/build-binary.ts` → `backend/src/util/version.ts`（`declare const`）                                                   | 构建期 define 注入的全局常量                                                 |
+| `AW_INTERNAL_GIT_IDENTITY`        | `backend/src/util/git.ts`                                                                                                      | 导出的 TS 常量名（内部 git spawn 的身份 env 集合）                           |
+| `AW_MANAGED_PROCESS_LAUNCH_ERROR` | `backend/src/services/execution/managedProcessLauncher.ts`                                                                     | launcher stderr 失败控制帧前缀（不是环境变量）                               |
+| `AW_MANAGED_PROCESS_LAUNCH_READY` | `backend/src/services/execution/managedProcessLauncher.ts`                                                                     | launcher stderr 就绪控制帧前缀（不是环境变量）                               |
+| `__AW_CODEHOST_VAR_`              | `packages/shared/src/codeHost/template.ts`                                                                                     | code-host 模板变量哨兵前缀                                                   |
 
 ## 已删除
 

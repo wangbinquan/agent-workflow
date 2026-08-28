@@ -251,9 +251,8 @@ describe('CLI subcommands (P-1-05)', () => {
     mkdirSync(scratch)
     writeFileSync(join(scratch, 'ephemeral.txt'), 'delete me')
     const seeded = new Database(join(tmp, 'db.sqlite'))
-    seeded
-      .query(
-        `INSERT INTO tasks (
+    seeded.run(
+      `INSERT INTO tasks (
            id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
            base_branch, branch, status, inputs, started_at, finished_at,
            webhook_trigger_id, space_kind, workspace_pruning_at,
@@ -263,8 +262,11 @@ describe('CLI subcommands (P-1-05)', () => {
            ?, ?, 'main', 'agent-workflow/rfc300-boot', 'done', '{}', 1, 2,
            'deleted-trigger', 'scratch', 123, 'webhook-terminal'
          )`,
-      )
-      .run(scratch, scratch)
+      [scratch, scratch],
+    )
+    // Hand the child a fully quiescent file, not an open/cached statement plus
+    // WAL checkpoint race that only appears under full-suite process pressure.
+    seeded.exec('PRAGMA wal_checkpoint(TRUNCATE);')
     seeded.close()
 
     const child = Bun.spawn({

@@ -204,6 +204,13 @@ describe('RFC-311 T19 — task archive', () => {
     })
     await addRunWithEvents(db, 'root', 'run-root', 3)
     await addRunWithEvents(db, 'child', 'run-child', 2)
+    await db.insert(schema.reviewNodeReviewers).values({
+      taskId: 'root',
+      reviewNodeId: 'review-node',
+      reviewerUserId: 'u1',
+      assignedByUserId: 'u1',
+      assignedAt: NOW - 250 * DAY,
+    })
     for (const id of ['root', 'child']) {
       mkdirSync(join(dirs.runsDir, id), { recursive: true })
       writeFileSync(join(dirs.runsDir, id, 'prompt.md'), `prompt of ${id}`, 'utf-8')
@@ -238,6 +245,7 @@ describe('RFC-311 T19 — task archive', () => {
     expect(manifest.rows.node_runs).toBe(2)
     expect(manifest.rows.node_run_events).toBe(5)
     expect(manifest.rows.task_repos).toBe(2)
+    expect(manifest.rows.review_node_reviewers).toBe(1)
     expect(manifest.rows.task_execution_owners).toBe(0)
     expect(manifest.rows.task_execution_intents).toBe(0)
     expect(manifest.rows.task_execution_effects).toBe(0)
@@ -268,6 +276,9 @@ describe('RFC-311 T19 — task archive', () => {
       .trim()
       .split('\n')
     expect(eventLines).toHaveLength(5)
+    expect(
+      JSON.parse(readFileSync(join(dir, 'db', 'review_node_reviewers.jsonl'), 'utf-8').trim()),
+    ).toMatchObject({ taskId: 'root', reviewNodeId: 'review-node', reviewerUserId: 'u1' })
 
     // runs/logs 是**挪移**:归档目录里有、原地没有。
     expect(readFileSync(join(dir, 'runs', 'root', 'prompt.md'), 'utf-8')).toBe('prompt of root')
