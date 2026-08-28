@@ -1,33 +1,21 @@
-// RFC-319 —— 慢时钟维护拍的用户面验收
+// RFC-319/RFC-338 —— 后台维护节奏的用户面验收
 // （EVENT-28 / EVENT-X4 / OPS-X9 / OPS-X3 / OPS-X5）。
 //
-// 这五条能力此前被判「做不了」，理由是「要等一个小时」。按源码对账后结论相反：
-// **它们全都在一次 `startDaemon` 的十几分钟里就会发生**，代价只是墙钟长——
+// RFC-338 把 DB/FS 重维护迁到独立 Worker。hourly 模式仍保留既有错峰周期，但 daemon
+// 重启后会在 30s 退让窗口结束时，把停机期间错过的 slot 合并成一次 durable catch-up。
+// 因而投递 GC / 保留清扫的端到端判据现在是：ready 后先保持明确静默窗口，随后两项都
+// 经 Worker 补跑，并继续保护 in-flight 投递与未终态宿主。具体相位、slot 去重、missed
+// slot 合并由 maintenanceSchedule 的单元门锁定，本文件锁真实数据效果。
 //
-//   * 投递保留 GC 的首拍不在 T0+1h，而在 **T0+8min**：装配点
-//     `cli/start.ts:929` 的 `startWebhookDeliveryGc(db, getConfig)` 只给两个参数，
-//     于是相位取 `services/daemonCadence.ts:96` 的 `webhookDeliveryGc = 8 * MINUTE_MS`；
-//     `services/maintenanceTicker.ts:158-167` 让**首个周期拍落在 `T0 + phaseOffsetMs`**
-//     而不是 `T0 + intervalMs`。
-//   * 保留期清扫同理落在 **T0+16min**（`cli/start.ts:933-940` 不传 intervalMs /
-//     phaseOffsetMs ⇒ `services/maintenanceRetention.ts:191-193` 取
-//     `daemonCadence.ts:100` 的 `retentionSweep = 16 * MINUTE_MS`）。
-//   * 两个自愈闭环（autoKill / autoRepair）的唯一触发器是各自的裸 `setInterval`
-//     （`services/autoKill.ts:210`、`services/autoRepair.ts:191`），周期取
-//     `daemonCadence.ts:31/:37` 的 `5 * MINUTE_MS`，**没有 boot 首拍、没有 env 覆盖、
-//     没有手动端点**，所以只能等到 **T0+5min**。
-//
-// 因为「没有 boot 首拍」正是这几条的形态，本文件里每条用例都必须先证明
-// **到点之前它确实没发生**，再证明到点之后发生了。少了前半段，一个
-// 「启动就把表清空」的实现照样能把后半段跑绿——而那种实现会在生产上删掉
-// 运维刚要去看的那批投递。所以两条腿缺一不可，慢也得慢着测。
+// 两个自愈闭环（autoKill / autoRepair）仍是各自的 5 分钟进程内周期，没有 boot 首拍，
+// 所以后半文件继续先证明 T0+5min 前没有动作，再证明到点后的真实修复结果。
 //
 // 判据全部取自源码单一事实源（纯文本引用，禁 GitHub 外链，见 CLAUDE.md）：
 //
-//   * 相位与首拍语义：packages/backend/src/services/maintenanceTicker.ts:158-176
-//     （`phaseMs = min(phaseOffsetMs, intervalMs)`；`bootDelayMs` 未给 ⇒ 无 boot 拍）、
-//     packages/backend/src/services/daemonCadence.ts:96/:100（8min / 16min 相位）、
-//     :31/:37（autoKill / autoRepair 各 5min 周期）。
+//   * 重维护调度：packages/backend/src/platform/background/maintenanceSchedule.ts
+//     （hourly 错峰、30s catch-up、slot 合并）与 maintenanceJobRunner.ts（Worker body）。
+//   * 自愈节奏：packages/backend/src/services/daemonCadence.ts:31/:37
+//     （autoKill / autoRepair 各 5min 周期）。
 //   * 投递保留 GC 的三段判据：packages/backend/src/services/webhook/deliveryStore.ts:176-218
 //     （body 段 `received_at < bodyCutoff AND body_json IS NOT NULL AND status NOT IN
 //     ('received','processing')`；行段 `received_at < rowCutoff` + 同一状态白名单 +
@@ -59,8 +47,8 @@
 //     **周期孤儿对账**那一拍（60s 下限 + PUT /api/config 热生效）。本文件不碰它，
 //     并且把 `periodicOrphanReconcileMs` 显式关成 0——否则「run 被收掉了」这件事
 //     可以被那条循环解释，归因就没了。
-//   * e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts 锁的是 **boot 一次性闸门**与
-//     终态任务工作区 GC。本文件锁的恰恰是它证明不了的那半：**没有 boot 拍**的循环。
+//   * e2e/rfc319-ops-boot-gates-and-sweepers.spec.ts 锁一次性闸门、备份 catch-up 与
+//     终态任务工作区 GC；本文件锁投递/事件保留 owner 的真实效果与自愈周期。
 //   * e2e/crash-recovery.spec.ts 只借用它起「真子进程」的姿势（slow stub + 真任务），
 //     断言的对象（心跳停滞自动杀）与它的 SIGKILL 恢复语义无交集。
 
@@ -73,7 +61,7 @@ import { expect, test } from '@playwright/test'
 import { initGitRepo, querySqlite, repoRemoteUrl, runSqlite } from './command'
 import { startDaemon, type DaemonHandle, type SpawnOptions } from './harness'
 
-// 文件级预算按最慢那条给（投递 GC 8min + 保留清扫 16min + 余量）。
+// 文件级预算按仍需等待 5 分钟真实周期的自愈用例与 hosted 余量给。
 // 单条另有更紧的 `test.setTimeout()`，见各用例首行。`describe.configure` 与
 // `test.setTimeout()` 都写是刻意的：仓内已有文件实测过文件级 `test.setTimeout()`
 // 不生效（见 e2e/rfc319-ops-settings-panels.spec.ts 的同名注释），两者同写时
@@ -327,10 +315,8 @@ const RETENTION_UNTOUCHED =
 const RETENTION_AFTER_SWEEP =
   'fireOrphan:gone fireLiveTask:kept fireFresh:kept evExpired:gone evLiveHost:kept evFresh:kept'
 
-test('RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到第 8 分钟才置空 body 与删过期行、保留期清扫到第 16 分钟才删 fire 与事件流水，到点前一行不动，在飞投递与未终态宿主永不被删 @nightly', async () => {
-  // 墙钟预算：夹具 ~10s + 第 7 分钟的静默腿 + 第 8 分钟的投递 GC 拍
-  // + 第 16 分钟的保留清扫拍 + 余量。典型 ~17min，最坏 ~21min。
-  test.setTimeout(1_500_000)
+test('RFC-319 EVENT-28/EVENT-X4/OPS-X9: boot catch-up 合并补跑投递与保留清扫，且在飞投递与未终态宿主永不被删 @nightly', async () => {
+  test.setTimeout(300_000)
 
   // 保留期全部收到「天」的下限附近，好让 36h / 72h 的夹具行同时落在两侧：
   // body 1 天、整行 2 天（`routes/config.ts` 的保存门要求 body ≤ row，这里也遵守）；
@@ -349,9 +335,8 @@ test('RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到�
   const now = Date.now()
   const db = databasePath(daemon)
 
-  // 夹具在 daemon **起来之后**才种：这几个 ticker 都没有 boot 拍，种在启动前也一样，
-  // 但「重启修复投递」（deliveryStore.ts:120-147，boot 时把 received/processing 行
-  // 收尾）会把 in-flight 那条改写掉，那条腿就没了。
+  // 夹具在 daemon **起来之后**、RFC-338 的 30s boot catch-up 之前种；种在启动前会被
+  // 「重启修复投递」（deliveryStore.ts:120-147）先把 received/processing 行收尾。
   runSqlite(
     db,
     [
@@ -388,49 +373,36 @@ test('RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到�
     RETENTION_UNTOUCHED,
   )
 
-  // --- 尺子腿：到第 7 分钟为止，两拍都还没到 ⇒ 一行都不许动 ------------------
-  // 这条腿是本用例存在的理由。少了它，「boot 时把过期行一次性清空」的实现
-  // 也能把下面两条腿跑绿——而那正是 RFC-311 明确拒绝的形态（体积封顶类维护
-  // 任务被刻意排到开机风暴之后，见 daemonCadence.ts:60-70 的 bootDelay 注释）。
-  await holdUntilUptime(daemon, 420, async () => {
+  // RFC-338 在 30s 后把 daemon 停机期间错过的多个 slot 合并为一次 durable catch-up。
+  // 它不能退化成 ready 前的同步开机风暴，所以先锁住一个明确的静默窗口。
+  await holdUntilUptime(daemon, 15, async () => {
     expect(
       await deliverySnapshot(daemon),
-      '投递保留 GC 的首拍相位是 8 分钟（daemonCadence.ts:96），第 8 分钟之前谁也不该动过期投递 ⇒ ' +
-        '要么有人偷偷加了 boot 首拍、要么相位被改小了：运维刚收到告警去翻投递详情，body 已经没了',
+      'boot catch-up 在约定的 30s 退让窗口之前就改了投递 ⇒ 清理重新挤进开机风暴',
     ).toBe(DELIVERIES_UNTOUCHED)
-    expect(
-      retentionSnapshot(daemon),
-      '保留期清扫的首拍相位是 16 分钟（daemonCadence.ts:100），第 16 分钟之前 fire 与事件流水都不该少一行',
-    ).toBe(RETENTION_UNTOUCHED)
+    expect(retentionSnapshot(daemon), 'boot catch-up 在约定的 30s 退让窗口之前就删了事件流水').toBe(
+      RETENTION_UNTOUCHED,
+    )
   })
 
-  // --- EVENT-28：第 8 分钟的投递保留 GC ---------------------------------------
+  // 同一次合并补跑仍逐 job 走 Worker；两个 owner 都必须完成自己的效果和保护判据。
   await expect
     .poll(async () => deliverySnapshot(daemon), {
-      timeout: 180_000,
-      intervals: [5_000],
+      timeout: 120_000,
+      intervals: [1_000],
       message:
-        '投递保留 GC 的首拍（T0+8min）没有把 36h 的 body 置空 / 72h 的整行删掉，或者把不该动的动了：' +
+        'boot catch-up 没有把 36h 的 body 置空 / 72h 的整行删掉，或者把不该动的动了：' +
         `期望 "${DELIVERIES_AFTER_GC}"。in-flight 那条（status=received）被清了 body 就是 ` +
         'deliveryStore.ts:187 的状态白名单坏了——正在处理的投递被抽掉原文之后无法重放',
     })
     .toBe(DELIVERIES_AFTER_GC)
 
-  // 此刻投递 GC 已经**确凿地跑过**，而保留期清扫（16 分钟）还没到。
-  // 这是 EVENT-X4/OPS-X9 那条腿最硬的尺子：同一进程、同一时刻，一个动了、一个没动。
-  expect(
-    retentionSnapshot(daemon),
-    '投递 GC 已经跑完（第 8 分钟）而保留期清扫（第 16 分钟）此刻不该跑过 ⇒ ' +
-      '两个维护任务共用了同一个相位/首拍，daemonCadence.ts 的错峰表就失效了',
-  ).toBe(RETENTION_UNTOUCHED)
-
-  // --- EVENT-X4 / OPS-X9：第 16 分钟的保留期清扫 ------------------------------
   await expect
     .poll(() => retentionSnapshot(daemon), {
-      timeout: 600_000,
-      intervals: [5_000],
+      timeout: 120_000,
+      intervals: [1_000],
       message:
-        '保留期清扫的首拍（T0+16min）没有删掉过期的 fire / 事件流水，或者删了不该删的：' +
+        'boot catch-up 没有删掉过期的 fire / 事件流水，或者删了不该删的：' +
         `期望 "${RETENTION_AFTER_SWEEP}"。fireLiveTask 变成 gone 就是 ` +
         'maintenanceRetention.ts:141-158 的「未终态任务不许删」失守——supersede 的唯一' +
         '事实源被吃掉之后，同一条 MR 上的下一次触发不再取消旧任务，两个活任务同分支互踩；' +

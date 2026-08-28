@@ -15,6 +15,14 @@ import { sha256Hex } from '@/util/hash'
 /** 7 days by default — matches design.md §R4. */
 export const SESSION_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
+/**
+ * `last_used_at` is an activity projection, not the credential validity
+ * fence. Writing it for every HTTP request turns one busy browser/session into
+ * a SQLite writer on every read. Keep the persisted projection within one
+ * second of observed activity while collapsing the hot-path write storm.
+ */
+export const SESSION_LAST_USED_WRITE_INTERVAL_MS = 1_000
+
 export interface SessionRecord {
   id: string
   userId: string
@@ -146,9 +154,10 @@ export async function lookupActiveSessionByHash(
   const user = userRows[0]
   if (!user || user.status !== 'active') return null
 
-  // Rolling renewal: bump last_used_at on every successful lookup — except on
-  // the read-only revalidation path (RFC-212), see the doc comment above.
-  if (touch) {
+  // Keep the activity projection current without turning every authenticated
+  // read into a writer. The returned request-local record still reports the
+  // exact observation time; only the durable projection is coalesced.
+  if (touch && now - session.lastUsedAt >= SESSION_LAST_USED_WRITE_INTERVAL_MS) {
     await db.update(userSessions).set({ lastUsedAt: now }).where(eq(userSessions.id, session.id))
   }
   return {

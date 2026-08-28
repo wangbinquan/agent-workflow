@@ -600,10 +600,9 @@ test('RFC-319 DE-23: 向导用需求 / 问题 ID 发起任务，外部编号随 
   ).toBeVisible()
   // 案例的工作上下文里必须真的存着这个编号——它是后续「准备输入材料」唯一的输入。
   // 只断言请求体的话，「服务端收下了但没写进上下文」这一类失败照样绿。
-  const externalIdFact = page
-    .locator('.employee-case-context-facts > div')
-    .filter({ has: page.getByText('External ID', { exact: true }) })
-  await expect(externalIdFact.locator('dd')).toHaveText(externalId)
+  const frozenInput = page.getByTestId('employee-case-overview-input')
+  await expect(frozenInput.getByText('External ID', { exact: true })).toBeVisible()
+  await expect(frozenInput.getByText(externalId, { exact: true })).toBeVisible()
 
   await forceQuietCase(caseId, 'blocked')
 })
@@ -846,7 +845,7 @@ test('RFC-319 DE-29: 案例页的事件队列按待处理 / 优先级 / 时间�
   expect(emptied[0]).toEqual({ inbox: 0, attention: 0, channels: 0 })
 
   await primeAuth(page)
-  await page.goto(`${daemon.baseUrl}/tasks/employee-cases/${caseId}`)
+  await page.goto(`${daemon.baseUrl}/tasks/employee-cases/${caseId}?tab=activity`)
   // 三个空态先各说各的话。混用一句「暂无数据」时，用户分不清是「没人委托」还是
   // 「没有事件」。
   await expect(page.getByText('The event queue is empty.', { exact: true })).toBeVisible()

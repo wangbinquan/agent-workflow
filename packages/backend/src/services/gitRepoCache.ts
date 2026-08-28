@@ -67,6 +67,7 @@ import {
 } from '@/services/repoCredentials'
 import { sha1Hex } from '@/util/hash'
 import { raceWithFallback } from '@/util/process'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 
 const log = createLogger('git-repo-cache')
 
@@ -1235,6 +1236,28 @@ export interface CachedRepoPageOptions {
 const REPO_PAGE_DEFAULT_LIMIT = 50
 const REPO_PAGE_MAX_LIMIT = 200
 
+const repoPageFlights = new WeakMap<object, InFlightCoalescer<string, CachedRepoPage>>()
+
+function repoPageFlight(db: DbClient): InFlightCoalescer<string, CachedRepoPage> {
+  const owner = db as unknown as object
+  const existing = repoPageFlights.get(owner)
+  if (existing !== undefined) return existing
+  const created = createInFlightCoalescer<string, CachedRepoPage>()
+  repoPageFlights.set(owner, created)
+  return created
+}
+
+function repoPageFlightKey(options: CachedRepoPageOptions): string {
+  return JSON.stringify([
+    options.q?.trim() ?? '',
+    options.view ?? 'all',
+    options.submodules ?? 'all',
+    options.autoRefresh ?? 'all',
+    options.cursor ?? null,
+    Math.max(1, Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT)),
+  ])
+}
+
 function decodeRepoCursor(raw: string): { lastFetchedAt: number; id: string } {
   const dot = raw.indexOf('.')
   const ts = dot > 0 ? Number(raw.slice(0, dot)) : Number.NaN
@@ -1321,6 +1344,13 @@ const attentionCondition = sql`(${cachedRepos.hasSubmodules} = 1 and ${cachedRep
 export async function listCachedReposPage(
   db: DbClient,
   options: CachedRepoPageOptions = {},
+): Promise<CachedRepoPage> {
+  return repoPageFlight(db)(repoPageFlightKey(options), () => listCachedReposPageFresh(db, options))
+}
+
+async function listCachedReposPageFresh(
+  db: DbClient,
+  options: CachedRepoPageOptions,
 ): Promise<CachedRepoPage> {
   const limit = Math.max(1, Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT))
   const cacheKey = db as unknown as object

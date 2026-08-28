@@ -14,7 +14,7 @@ import {
   revokeSession,
   SESSION_DEFAULT_TTL_MS,
 } from '../src/auth/sessionStore'
-import { users } from '../src/db/schema'
+import { users, userSessions } from '../src/db/schema'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -95,13 +95,17 @@ describe('sessionStore', () => {
     expect(await lookupActiveSession(db, token)).toBe(null)
   })
 
-  test('lookupActiveSession bumps last_used_at on each hit', async () => {
+  test('lookupActiveSession advances last_used_at while coalescing a hot request burst', async () => {
     const id = await seedActiveUser(db)
     const { token } = await createSession({ db, userId: id, now: 1_000 })
     const first = await lookupActiveSession(db, token, 5_000)
     expect(first?.session.lastUsedAt).toBe(5_000)
+    const burst = await lookupActiveSession(db, token, 5_500)
+    expect(burst?.session.lastUsedAt).toBe(5_500)
+    expect((await db.select().from(userSessions).limit(1))[0]?.lastUsedAt).toBe(5_000)
     const second = await lookupActiveSession(db, token, 7_500)
     expect(second?.session.lastUsedAt).toBe(7_500)
+    expect((await db.select().from(userSessions).limit(1))[0]?.lastUsedAt).toBe(7_500)
   })
 
   test('expired session returns null', async () => {

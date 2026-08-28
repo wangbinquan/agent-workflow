@@ -17,6 +17,7 @@ import { isDbSnapshotInProgress } from '@/services/backup'
 import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { activeIntentApplyJournalIds } from '@/services/intent/applyChangeset'
+import { listIntentTurnIdsForBootRecovery } from '@/services/intent/maintenance'
 import { startMaintenanceTicker, type MaintenanceTickerHandle } from '@/services/maintenanceTicker'
 import { activeTaskIdsSnapshot } from '@/services/task'
 import { createLogger } from '@/util/log'
@@ -228,6 +229,10 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     slowQueryMs: 0,
   })
   const store = createMaintenanceRunStore(admissionDb)
+  // Snapshot before startMaintenanceService returns and before HTTP can accept
+  // a new intent turn. The Worker may execute later, so a live scan there would
+  // misclassify this daemon's fresh work as an orphan from the previous boot.
+  const bootIntentTurnIds = listIntentTurnIdsForBootRecovery(admissionDb)
 
   const consumeDelta = (
     _runId: string,
@@ -325,6 +330,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
         return {
           activeIntentApplyJournalIds: activeIntentApplyJournalIds(),
           activeBundleApplyIds: activeResourceBundleApplyIds(),
+          recoverTurnIds: [],
           recoverTurns: false,
         }
       case 'lifecycleInvariants':
@@ -377,7 +383,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
               ? {
                   payload: {
                     ...(payloadFor(spec.key) as Record<string, unknown>),
-                    recoverTurns: true,
+                    recoverTurnIds: bootIntentTurnIds,
                   },
                 }
               : {}),

@@ -234,6 +234,7 @@ describe('CLI subcommands (P-1-05)', () => {
       expect(stopResult.status).toBe('stopped')
       expect(stopResult.pid).toBe(child.pid ?? -1)
       expect(existsSync(join(tmp, '.daemon.lock'))).toBe(false)
+      expect(existsSync(join(tmp, '.daemon.control'))).toBe(false)
     } finally {
       // Defensive: kill the child if not already exited.
       try {

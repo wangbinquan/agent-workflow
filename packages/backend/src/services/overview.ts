@@ -39,8 +39,30 @@ import { countCachedRepos } from '@/services/gitRepoCache'
 import { filterMemoriesByScopeVisibility, listMemories } from '@/services/memory'
 import { visibleRowsCondition, type AclColumnRef } from '@/services/resourceAcl'
 import { taskVisibilityCondition } from '@/services/task'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 
 const WINDOW_7D_MS = 7 * 86_400_000
+
+const overviewFlights = new WeakMap<object, InFlightCoalescer<string, OverviewResponse>>()
+
+function overviewFlight(db: DbClient): InFlightCoalescer<string, OverviewResponse> {
+  const owner = db as unknown as object
+  const existing = overviewFlights.get(owner)
+  if (existing !== undefined) return existing
+  const created = createInFlightCoalescer<string, OverviewResponse>()
+  overviewFlights.set(owner, created)
+  return created
+}
+
+function overviewFlightKey(actor: Actor): string {
+  return JSON.stringify([
+    actor.user.id,
+    actor.user.role,
+    actor.source,
+    actor.authorityRevision ?? 0,
+    [...actor.permissions].sort(),
+  ])
+}
 
 /** null when the actor lacks the coarse read permission (D2); lazy load otherwise. */
 async function gatedCount(
@@ -113,7 +135,7 @@ async function buildTaskStats(
  * Pure read; `now` is injectable so the 7d cutoff and generatedAt come from
  * one clock capture and boundary tests are deterministic (D10).
  */
-export async function buildOverview(
+async function buildOverviewFresh(
   db: DbClient,
   actor: Actor,
   now: () => number = Date.now,
@@ -203,4 +225,16 @@ export async function buildOverview(
     tasks: taskStats,
     generatedAt: new Date(t).toISOString(),
   }
+}
+
+export function buildOverview(
+  db: DbClient,
+  actor: Actor,
+  now: () => number = Date.now,
+): Promise<OverviewResponse> {
+  // An injected clock defines an independent observation and is used by
+  // boundary tests; never merge it with another caller's clock. Production
+  // requests use Date.now and can safely share only their overlapping read.
+  if (now !== Date.now) return buildOverviewFresh(db, actor, now)
+  return overviewFlight(db)(overviewFlightKey(actor), () => buildOverviewFresh(db, actor, now))
 }

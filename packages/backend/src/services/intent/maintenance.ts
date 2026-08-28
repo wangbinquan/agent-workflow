@@ -3,25 +3,42 @@
 
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { eq, isNotNull } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { intentSessions, intentTurns } from '@/db/schema'
 import { createLogger, type Logger } from '@/util/log'
 import { INTENT_SCRATCH_DIRNAME } from './turnEngine'
 
-/** Daemon boot: any session still holding an in-flight turn belongs to a dead
- *  process — settle the turn as a daemon-restart error and free the slot. The
- *  scratch dir (if any) is left for the GC sweep below. */
+/** Capture the exact in-flight generation before this daemon accepts work. */
+export function listIntentTurnIdsForBootRecovery(db: DbClient): string[] {
+  return db
+    .select({ turnId: intentSessions.inFlightTurnId })
+    .from(intentSessions)
+    .where(isNotNull(intentSessions.inFlightTurnId))
+    .all()
+    .flatMap(({ turnId }) => (turnId === null ? [] : [turnId]))
+}
+
+/** Daemon boot: settle only the captured previous-generation turns as a
+ *  daemon-restart error and free their slots. The scratch dir (if any) is left
+ *  for the GC sweep below. */
 export function recoverIntentTurnsOnBoot(
   db: DbClient,
   log: Logger = createLogger('intent'),
+  turnIds: readonly string[] = listIntentTurnIdsForBootRecovery(db),
 ): number {
+  if (turnIds.length === 0) return 0
   return dbTxSync(db, (tx) => {
     const orphaned = tx
       .select()
       .from(intentSessions)
-      .where(isNotNull(intentSessions.inFlightTurnId))
+      .where(
+        and(
+          isNotNull(intentSessions.inFlightTurnId),
+          inArray(intentSessions.inFlightTurnId, [...turnIds]),
+        ),
+      )
       .all()
     for (const session of orphaned) {
       const turnId = session.inFlightTurnId as string
@@ -49,7 +66,7 @@ export function recoverIntentTurnsOnBoot(
         .run()
       tx.update(intentSessions)
         .set({ inFlightTurnId: null, updatedAt: Date.now() })
-        .where(eq(intentSessions.id, session.id))
+        .where(and(eq(intentSessions.id, session.id), eq(intentSessions.inFlightTurnId, turnId)))
         .run()
       log.warn('intent-orphan-turn-recovered', { sessionId: session.id, turnId })
     }

@@ -36,7 +36,11 @@ import {
   settleReservedIntentTurnStartFailure,
   type IntentTurnConfig,
 } from '../src/services/intent/turnEngine'
-import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '../src/services/intent/maintenance'
+import {
+  listIntentTurnIdsForBootRecovery,
+  recoverIntentTurnsOnBoot,
+  sweepIntentScratch,
+} from '../src/services/intent/maintenance'
 import { sha256Hex } from '../src/util/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '../src/modules/intent/domain/workflowCreateLayout'
 import {
@@ -993,6 +997,47 @@ describe('maintenance', () => {
       (await db.select().from(intentSessions).where(eq(intentSessions.id, session.id)))[0]
         ?.inFlightTurnId,
     ).toBeNull()
+  })
+
+  test('boot recovery snapshot never settles a turn admitted by the new daemon', async () => {
+    const reserveRunningTurn = async (
+      message: string,
+    ): Promise<{ sessionId: string; turnId: string }> => {
+      const { session } = await createIntentSession(db, actor, { message })
+      const turnId = ulid()
+      await db.insert(intentTurns).values({
+        id: turnId,
+        sessionId: session.id,
+        seq: 2,
+        role: 'agent',
+        kind: 'running',
+        contentJson: '{}',
+        contextRevision: 0,
+        captureState: 'live',
+        createdAt: Date.now(),
+      } as typeof intentTurns.$inferInsert)
+      await db
+        .update(intentSessions)
+        .set({ inFlightTurnId: turnId, turnSeq: 2 })
+        .where(eq(intentSessions.id, session.id))
+      return { sessionId: session.id, turnId }
+    }
+
+    const orphaned = await reserveRunningTurn('previous generation')
+    const bootSnapshot = listIntentTurnIdsForBootRecovery(db)
+    const current = await reserveRunningTurn('current generation')
+
+    expect(recoverIntentTurnsOnBoot(db, undefined, bootSnapshot)).toBe(1)
+    expect(
+      (await db.select().from(intentTurns).where(eq(intentTurns.id, orphaned.turnId)))[0]?.kind,
+    ).toBe('error')
+    expect(
+      (await db.select().from(intentTurns).where(eq(intentTurns.id, current.turnId)))[0]?.kind,
+    ).toBe('running')
+    expect(
+      (await db.select().from(intentSessions).where(eq(intentSessions.id, current.sessionId)))[0]
+        ?.inFlightTurnId,
+    ).toBe(current.turnId)
   })
 
   test('boot recovery preserves an already-settled capture state', async () => {

@@ -399,7 +399,7 @@ export async function runMaintenanceJob(input: {
     }
     case 'intentRecovery': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const orphanedTurns = payload.recoverTurns ? recoverIntentTurnsOnBoot(db) : 0
+      const orphanedTurns = recoverIntentTurnsOnBoot(db, log, payload.recoverTurnIds)
       const intent = await convergeIntentApplyJournal(db, appHome, log, {
         activeJournalIds: payload.activeIntentApplyJournalIds,
       })

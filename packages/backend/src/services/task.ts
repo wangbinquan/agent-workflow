@@ -183,6 +183,7 @@ import {
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { Paths } from '@/util/paths'
 import { createLogger, type Logger } from '@/util/log'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import { parseInjectedSnapshotJson } from './memoryInject'
 import { parsePortValidationFailuresJson } from './envelope'
@@ -6324,6 +6325,32 @@ export interface ListTasksFilters {
   }
 }
 
+const taskListFlights = new WeakMap<object, InFlightCoalescer<string, TaskSummary[]>>()
+
+function taskListFlight(db: DbClient): InFlightCoalescer<string, TaskSummary[]> {
+  const owner = db as unknown as object
+  const existing = taskListFlights.get(owner)
+  if (existing !== undefined) return existing
+  const created = createInFlightCoalescer<string, TaskSummary[]>()
+  taskListFlights.set(owner, created)
+  return created
+}
+
+function taskListFlightKey(filters: ListTasksFilters): string {
+  return JSON.stringify([
+    filters.status ?? null,
+    filters.workflowId ?? null,
+    filters.repoPath ?? null,
+    filters.catalogVisibility ?? null,
+    filters.scheduledTaskId ?? null,
+    filters.topLevelOnly === true,
+    filters.parentTaskId ?? null,
+    filters.limit ?? 100,
+    filters.visibility?.actorUserId ?? null,
+    filters.visibility?.scope ?? null,
+  ])
+}
+
 /**
  * The member-visibility predicate: owner OR task_collaborators membership
  * ('mine'), or strictly shared-with-me-but-not-mine ('shared'). Single source
@@ -6445,7 +6472,9 @@ export async function listTasks(
   db: DbClient,
   filters: ListTasksFilters = {},
 ): Promise<TaskSummary[]> {
-  return (await listTaskSummaryRows(db, filters)).map((row) => row.summary)
+  return taskListFlight(db)(taskListFlightKey(filters), async () =>
+    (await listTaskSummaryRows(db, filters)).map((row) => row.summary),
+  )
 }
 
 /**

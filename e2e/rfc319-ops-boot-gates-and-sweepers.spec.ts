@@ -1222,9 +1222,8 @@ test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族
   const home = await readyHome('backups')
   const dir = backupsDir(home)
   try {
-    // ── ① 份数 + 天数 + 受保护家族。
-    //     修剪在 daemon 打印 ready 之前就同步跑完了（backupScheduler.ts 的 boot prune），
-    //     所以这一档一拍都不用等。
+    // ── ① 份数 + 天数 + 受保护家族。RFC-338 把 boot prune 改为 ready 后 30s 的
+    //     durable catch-up；等待真实产物收敛，不能在 ready 时读取旧目录。
     rmSync(dir, { recursive: true, force: true })
     plantBackup(dir, 'scheduled-newest.tar.gz', 10 * 60_000)
     plantBackup(dir, 'scheduled-second.tar.gz', 20 * 60_000)
@@ -1247,23 +1246,29 @@ test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族
         backupOnMigration: false,
       },
     })
-    await pruning.stop()
-
-    const survivors = tarballsIn(dir)
-    expect(
-      survivors,
-      '开机修剪的结果与保留策略对不上。这一条同时锁四件事：①最新的 N 份留下；' +
-        '②超过 N 份但仍在保留天数内的也留下；③两条都不满足的才删；' +
-        '④手动 / pre-* 这些受保护家族**不受份数与天数约束**，只按各自家族的份数轮换 —— ' +
-        '把最后一条弄丢的后果是用户唯一那份手动备份被一次例行修剪悄悄删掉',
-    ).toEqual([
-      'agent-workflow-manual-1.tar.gz',
-      'agent-workflow-manual-2.tar.gz',
-      'pre-restore-fs-old.tar.gz',
-      'pre-restore-old.tar.gz',
-      'scheduled-newest.tar.gz',
-      'scheduled-second.tar.gz',
-    ])
+    try {
+      const countAndAgeSurvivors = [
+        'agent-workflow-manual-1.tar.gz',
+        'agent-workflow-manual-2.tar.gz',
+        'pre-restore-fs-old.tar.gz',
+        'pre-restore-old.tar.gz',
+        'scheduled-newest.tar.gz',
+        'scheduled-second.tar.gz',
+      ]
+      await expect
+        .poll(() => tarballsIn(dir), {
+          timeout: 120_000,
+          intervals: [1_000],
+          message:
+            'boot catch-up 的修剪结果与保留策略对不上。这一条同时锁四件事：①最新的 N 份留下；' +
+            '②超过 N 份但仍在保留天数内的也留下；③两条都不满足的才删；' +
+            '④手动 / pre-* 这些受保护家族**不受份数与天数约束**，只按各自家族的份数轮换 —— ' +
+            '把最后一条弄丢的后果是用户唯一那份手动备份被一次例行修剪悄悄删掉',
+        })
+        .toEqual(countAndAgeSurvivors)
+    } finally {
+      await pruning.stop()
+    }
 
     // ── ② 总体积上限：份数与天数都放宽到不生效，只让体积说话。
     rmSync(dir, { recursive: true, force: true })
@@ -1284,14 +1289,24 @@ test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族
         backupOnMigration: false,
       },
     })
-    await capping.stop()
-
-    expect(
-      tarballsIn(dir),
-      '总体积上限没有生效（或把受保护的那份也算进去了）⇒ 一个大库的定时备份集会在两次' +
-        '份数/天数修剪之间把磁盘吃满，而这正是 maxTotalBytes 存在的理由；' +
-        '反过来把手动备份算进配额并删掉它，等于用一个体积旋钮销毁用户显式留下的副本',
-    ).toEqual(['agent-workflow-big.tar.gz', 'scheduled-size-1.tar.gz', 'scheduled-size-2.tar.gz'])
+    try {
+      await expect
+        .poll(() => tarballsIn(dir), {
+          timeout: 120_000,
+          intervals: [1_000],
+          message:
+            '总体积上限没有生效（或把受保护的那份也算进去了）⇒ 一个大库的定时备份集会在两次' +
+            '份数/天数修剪之间把磁盘吃满，而这正是 maxTotalBytes 存在的理由；' +
+            '反过来把手动备份算进配额并删掉它，等于用一个体积旋钮销毁用户显式留下的副本',
+        })
+        .toEqual([
+          'agent-workflow-big.tar.gz',
+          'scheduled-size-1.tar.gz',
+          'scheduled-size-2.tar.gz',
+        ])
+    } finally {
+      await capping.stop()
+    }
 
     // ── ③ 调度本身：到点必须真的产出一份新备份，而不只是「有个定时器在转」。
     rmSync(dir, { recursive: true, force: true })

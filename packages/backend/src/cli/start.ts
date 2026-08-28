@@ -1577,6 +1577,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    // `stop` treats lock disappearance as the terminal acknowledgement. Retract
+    // the loopback control endpoint first, otherwise the caller can observe a
+    // successful stop while the previous process's control file still exists.
+    controlListener.close()
     lock.release()
     process.exit(0)
   }

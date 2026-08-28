@@ -55,6 +55,9 @@ export const MAINTENANCE_JOB_PAYLOAD_SCHEMAS = {
     .object({
       activeIntentApplyJournalIds: z.array(z.string()).max(100_000).default([]),
       activeBundleApplyIds: z.array(z.string()).max(100_000).default([]),
+      recoverTurnIds: z.array(z.string()).max(100_000).default([]),
+      // Compatibility only for durable payloads admitted by the first RFC-338
+      // cutover. The Worker no longer performs an unbounded live scan from it.
       recoverTurns: z.boolean().default(false),
     })
     .strict(),

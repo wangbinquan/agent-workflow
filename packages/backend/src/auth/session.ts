@@ -12,6 +12,7 @@ import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
 import { getAuthLoginPolicy, isBootstrapRequired } from '@/auth/loginPolicy'
 import { ForbiddenError } from '@/util/errors'
 import { UnauthorizedError } from '@/util/errors'
+import { createInFlightCoalescer } from '@/util/inFlight'
 import { buildCurrentActor, SYSTEM_USER_ID, type Actor } from './actor'
 import { hashToken as hashPatToken, lookupActivePat, lookupActivePatByHash } from './patStore'
 import {
@@ -51,6 +52,14 @@ function isBootstrapDaemonPath(method: string, path: string): boolean {
 
 export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
   const daemonBuf = Buffer.from(deps.daemonToken, 'utf-8')
+  // A browser commonly releases a burst of REST requests after one query
+  // invalidation. Resolve one credential snapshot for that overlapping burst;
+  // settled results are never cached, so the next request re-reads revocation,
+  // status, grants and authority revision exactly as before.
+  const resolveInFlight = createInFlightCoalescer<
+    string,
+    { actor: Actor | null; bootstrapRequired: boolean }
+  >()
   return async (c, next) => {
     if (isPublicAuthPath(c.req.path)) {
       await next()
@@ -59,12 +68,19 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
     const raw = extractBearerToken(c)
     if (!raw) throw new UnauthorizedError()
     const now = deps.now ? deps.now() : Date.now()
-    const actor = await resolveActor(deps.db, raw, daemonBuf, now)
+    const resolved = await resolveInFlight(hashSessionToken(raw), async () => {
+      const actor = await resolveActor(deps.db, raw, daemonBuf, now)
+      return {
+        actor,
+        bootstrapRequired: actor?.source === 'daemon' && isBootstrapRequired(deps.db),
+      }
+    })
+    const { actor } = resolved
     if (!actor) throw new UnauthorizedError()
     c.set('actor', actor)
     if (
       actor.source === 'daemon' &&
-      isBootstrapRequired(deps.db) &&
+      resolved.bootstrapRequired &&
       !isBootstrapDaemonPath(c.req.method, c.req.path)
     ) {
       throw new ForbiddenError(
