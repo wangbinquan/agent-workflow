@@ -56,12 +56,18 @@ function backendTypeScriptFiles(): string[] {
   return files.sort()
 }
 
-function directFunctionCalls(functionName: string): readonly {
+interface DirectFunctionCall {
   readonly file: string
   readonly line: number
   readonly argumentCount: number
-}[] {
-  const calls: { file: string; line: number; argumentCount: number }[] = []
+}
+
+function directFunctionCalls(
+  functionNames: readonly string[],
+): ReadonlyMap<string, readonly DirectFunctionCall[]> {
+  const callsByFunction = new Map<string, DirectFunctionCall[]>(
+    functionNames.map((functionName) => [functionName, []]),
+  )
   for (const file of backendTypeScriptFiles()) {
     const parsed = ts.createSourceFile(
       file,
@@ -71,22 +77,21 @@ function directFunctionCalls(functionName: string): readonly {
       ts.ScriptKind.TS,
     )
     const visit = (node: ts.Node): void => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === functionName
-      ) {
-        calls.push({
-          file,
-          line: parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
-          argumentCount: node.arguments.length,
-        })
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const calls = callsByFunction.get(node.expression.text)
+        if (calls) {
+          calls.push({
+            file,
+            line: parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
+            argumentCount: node.arguments.length,
+          })
+        }
       }
       ts.forEachChild(node, visit)
     }
     visit(parsed)
   }
-  return calls
+  return callsByFunction
 }
 
 export function gitNetworkCommandsInSource(file: string, source: string): GitNetworkCommand[] {
@@ -382,8 +387,12 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
     expect(cli.match(/repositoryPublicationTransport,/g)?.length).toBeGreaterThanOrEqual(7)
 
-    const topologyCalls = directFunctionCalls('createLegacyTaskExecutionTopology')
-    const startDepsCalls = directFunctionCalls('buildStartTaskDeps')
+    const callsByFunction = directFunctionCalls([
+      'createLegacyTaskExecutionTopology',
+      'buildStartTaskDeps',
+    ])
+    const topologyCalls = callsByFunction.get('createLegacyTaskExecutionTopology') ?? []
+    const startDepsCalls = callsByFunction.get('buildStartTaskDeps') ?? []
     expect(topologyCalls.length).toBeGreaterThan(0)
     expect(startDepsCalls.length).toBeGreaterThan(0)
     expect(topologyCalls.filter((call) => call.argumentCount < 2)).toEqual([])
