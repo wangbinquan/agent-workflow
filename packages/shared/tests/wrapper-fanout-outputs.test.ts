@@ -16,7 +16,9 @@ import {
   FANOUT_DONE_PORT_NAME,
   countFanoutAggregators,
   deriveWrapperFanoutOutputs,
+  deriveWrapperFanoutOutputsInScope,
   findFanoutAggregator,
+  findFanoutAggregatorInScope,
 } from '../src/wrapperFanout'
 
 function baseAgent(name: string, fields: Partial<Agent> = {}): Agent {
@@ -187,6 +189,30 @@ describe('findFanoutAggregator', () => {
     const found = findFanoutAggregator(def, 'w', new Map([[agg.id, agg]]))
     expect(found?.node.id).toBe('agg')
     expect(found?.agent.name).toBe('merger')
+  })
+
+  test('runtime variants trust admitted scope membership instead of raw wrapper membership', () => {
+    const stale = baseAgent('stale', { role: 'aggregator', outputs: ['stale'] })
+    const admitted = baseAgent('admitted', { role: 'aggregator', outputs: ['current'] })
+    const def = defWith([
+      { id: 'w', kind: 'wrapper-fanout', nodeIds: ['stale'] },
+      { id: 'stale', kind: 'agent-single', agentId: stale.id, agentName: 'stale' },
+      {
+        id: 'admitted',
+        kind: 'agent-single',
+        agentId: admitted.id,
+        agentName: 'admitted',
+      },
+    ])
+    const agents = new Map([
+      [stale.id, stale],
+      [admitted.id, admitted],
+    ])
+
+    expect(findFanoutAggregatorInScope(def, ['admitted'], agents)?.node.id).toBe('admitted')
+    expect(deriveWrapperFanoutOutputsInScope(def, ['admitted'], agents)).toEqual([
+      { name: 'current', kind: 'string' },
+    ])
   })
 })
 

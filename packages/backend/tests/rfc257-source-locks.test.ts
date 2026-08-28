@@ -27,13 +27,13 @@ describe('RFC-257 · source locks', () => {
     }
   })
 
-  test('webhookDispatch forwards its SecretBox and publication transport into the real task launch', () => {
-    // RFC-321 后 buildStartTaskDeps 为
-    // (db, configPath, userId, secretBox, repositoryPublicationTransport)：两项
-    // bootstrap 能力都必须实传，不得在 Webhook 启动时退化。
+  test('webhookDispatch forwards its SecretBox and daemon-scoped execution driver', () => {
+    // RFC-339 后 publication transport 已在 bootstrap 组装进同一个 driver；
+    // Webhook 必须显式传入该 driver 与 SecretBox，不得在启动时另组 topology
+    // 或丢失密封凭据能力。
     const text = readFileSync(resolve(SRC, 'services/webhook/webhookDispatch.ts'), 'utf8')
     expect(text.replace(/\s+/g, '')).toContain(
-      'buildStartTaskDeps(deps.db,deps.configPath,actor.user.id,deps.secretBox,deps.repositoryPublicationTransport,)',
+      'buildStartTaskDeps(deps.db,requireSchedulerDriver(deps.schedulerDriver),deps.configPath,actor.user.id,deps.secretBox,)',
     )
     expect(text).not.toContain('actor.user.id, undefined)')
   })

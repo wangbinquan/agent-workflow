@@ -29,7 +29,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { retryNode } from '../src/services/task'
-import { decodeWrapperProgress } from '../src/services/wrapperProgress'
+import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import {
   createTaskExecutionTestTopology,

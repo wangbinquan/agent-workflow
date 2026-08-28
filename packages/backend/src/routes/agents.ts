@@ -62,6 +62,7 @@ import {
 } from '@/services/launchMultipart'
 import type { UploadLimits } from '@/services/upload'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
@@ -410,10 +411,10 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         },
         buildStartTaskDeps(
           deps.db,
+          requireSchedulerDriver(deps.schedulerDriver),
           deps.configPath,
           actor.user.id,
           deps.secretBox,
-          deps.repositoryPublicationTransport,
         ),
       )
       return c.json(task, 201)

@@ -77,25 +77,34 @@ describe('RFC-334 node-executor owner boundary', () => {
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
     const scheduler = read('packages/backend/src/services/scheduler.ts')
-    expect(application.match(/buildNodeExecutionWorkgroupHooks\(state\)/g)).toHaveLength(4)
+    expect(
+      application.match(
+        /buildNodeExecutionWorkgroupHooks\(\s*state,\s*runtimeComponents\.wrapperRuntimeFactory/g,
+      ),
+    ).toHaveLength(4)
     expect(application).not.toContain('buildWorkgroupHooks')
     expect(scheduler).not.toMatch(/export function buildWorkgroupHooks\b/)
     expect(scheduler).not.toMatch(/\bfunction runHostNode\b/)
   })
 
-  test('composition has only the explicit W2-D wrapper bridge back to legacy scheduler', () => {
+  test('composition owns the closed W2-D runtime and has no legacy scheduler bridge', () => {
     const composition = read(
       'packages/backend/src/modules/task-execution/composition/nodeExecution.ts',
     )
-    const legacyImport = composition.match(
-      /import\s*\{([^}]*)\}\s*from '@\/services\/scheduler'/,
+    const wrapperComposition = read(
+      'packages/backend/src/modules/task-execution/composition/wrapperRuntime.ts',
     )
-    expect(legacyImport).not.toBeNull()
-    const names = (legacyImport?.[1] ?? '')
-      .split(',')
-      .map((name) => name.trim())
-      .filter(Boolean)
-      .sort()
-    expect(names).toEqual(['runWrapperFanoutNode', 'runWrapperGitNode', 'runWrapperLoopNode'])
+    const runtime = read(
+      'packages/backend/src/modules/task-execution/engine/wrapper/wrapperRuntime.ts',
+    )
+    expect(composition).not.toContain('@/services/scheduler')
+    expect(composition).toContain('wrapperRuntimeFactory(state)')
+    expect(composition).not.toContain('composeWrapperRuntime')
+    expect(wrapperComposition).toContain('new WrapperRuntime')
+    expect(wrapperComposition).toContain("'wrapper-loop': new LoopStrategy")
+    expect(wrapperComposition).toContain("'wrapper-git': new GitStrategy")
+    expect(wrapperComposition).toContain("'wrapper-fanout': new FanoutStrategy")
+    expect(runtime).toContain('for (const kind of WRAPPER_NODE_KINDS)')
+    expect(runtime).not.toMatch(/\bdefault\s*:/)
   })
 })

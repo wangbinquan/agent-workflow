@@ -1,7 +1,6 @@
 // RFC-040 — wrapper-loop / wrapper-git progress persistence.
 //
-// The W2-D compatibility adapter uses this pure codec to encode/decode the
-// JSON payload stored in
+// WrapperRuntime uses this pure codec to encode/decode the JSON payload stored in
 // `node_runs.wrapper_progress_json`. The payload is the minimum scheduler
 // state needed to resume a wrapper after it bubbled awaiting_human /
 // awaiting_review up from its inner scope:
@@ -35,7 +34,7 @@
 // lets runScope drive the rest.
 //
 // Pure functions. Single dependency on zod; no DB / Bun / Node IO. The
-// scheduler owns the persistence side (writing the encoded string into
+// the runtime's ledger port owns the persistence side (writing the encoded string into
 // `node_runs.wrapper_progress_json` via drizzle).
 
 import { z } from 'zod'
@@ -74,7 +73,7 @@ export const WrapperProgressSchema = z
      * EMPTY set (= the pre-fix cumulative behavior: over-report, never
      * drop real changes) and NEVER re-captures (the inner scope's own writes
      * are already in the worktree by then). Capped at capture time (4096
-     * entries / 256KB JSON → degrade to empty set, see scheduler.ts
+     * entries / 256KB JSON → degrade to empty set, see wrapperMechanics.ts
      * captureGitPreDirty).
      */
     preDirty: z.record(z.string(), z.string()).optional(),

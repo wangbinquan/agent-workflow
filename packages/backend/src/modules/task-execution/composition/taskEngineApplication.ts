@@ -1,13 +1,18 @@
 import {
   NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
-  analyzeWorkflowScopeTree,
   exclusionPlanFor,
   isWorkgroupTask,
   migrateWorkflowDefinitionToLatest,
   parseTriggerContextJson,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
+import {
+  createExecutionScopeIndex,
+  InvalidExecutionScopeError,
+  type ExecutionScopeIndex,
+} from '../domain/executionScope'
+import type { WrapperNodeKind } from '../domain/wrapperExecution'
 import { and, asc, eq } from 'drizzle-orm'
 import { taskRepos, tasks } from '@/db/schema'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
@@ -21,16 +26,10 @@ import {
   resolveTaskEngineSelection,
 } from '../engine/task/taskEngineRegistry'
 import { WorkgroupTaskEngine } from '../engine/task/workgroupTaskEngine'
-import {
-  cancelTaskRow,
-  emitStatus,
-  failTask,
-  inspectReadonlyRepos,
-  replayConflictHumanResolutions,
-  replayPendingMerges,
-} from '@/services/scheduler'
+import { cancelTaskRow, emitStatus, failTask, inspectReadonlyRepos } from '@/services/scheduler'
 import { runScope } from './taskDagScope'
 import { buildNodeExecutionWorkgroupHooks } from './nodeExecution'
+import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
 import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
 import type { LegacyTaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
@@ -51,7 +50,7 @@ import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/topology'
+import type { SchedulerRuntimeTopology } from '../public/types'
 import type { HumanGateOpenParticipant } from '../application/ports/humanGateOpenParticipant'
 import {
   ManualQuestionParkRequired,
@@ -63,6 +62,7 @@ export async function driveTaskEngineApplication(
   opts: RunTaskOptions,
   topology: SchedulerRuntimeTopology,
   humanGates: HumanGateOpenParticipant,
+  runtimeComponents: TaskExecutionRuntimeComponents,
 ): Promise<void> {
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
@@ -72,10 +72,10 @@ export async function driveTaskEngineApplication(
   // shard concurrency), so it is reclaimed in this one place too.
   try {
     if (opts.executionContext === undefined) {
-      await runTaskEngineOrchestratorInner(opts, topology, humanGates)
+      await runTaskEngineOrchestratorInner(opts, topology, humanGates, runtimeComponents)
     } else {
       await runWithTaskExecutionContext(opts.executionContext, () =>
-        runTaskEngineOrchestratorInner(opts, topology, humanGates),
+        runTaskEngineOrchestratorInner(opts, topology, humanGates, runtimeComponents),
       )
     }
   } finally {
@@ -88,6 +88,7 @@ async function runTaskEngineOrchestratorInner(
   opts: RunTaskOptions,
   topology: SchedulerRuntimeTopology,
   humanGates: HumanGateOpenParticipant,
+  runtimeComponents: TaskExecutionRuntimeComponents,
 ): Promise<void> {
   const log = opts.log ?? createLogger('scheduler')
   const { db, taskId } = opts
@@ -317,9 +318,12 @@ async function runTaskEngineOrchestratorInner(
   // snapshots and direct DB callers can bypass it. Never execute against the
   // deterministic diagnostic fallback map when membership is ambiguous:
   // two wrappers could otherwise dispatch the same child concurrently.
-  const scopeTree = analyzeWorkflowScopeTree(definition)
-  const containmentIssue = scopeTree.issues[0]
-  if (containmentIssue !== undefined) {
+  let scopeIndex: ExecutionScopeIndex
+  try {
+    scopeIndex = createExecutionScopeIndex(definition)
+  } catch (error) {
+    if (!(error instanceof InvalidExecutionScopeError)) throw error
+    const containmentIssue = error.issue
     const failedNodeId =
       containmentIssue.code === 'wrapper-containment-cycle'
         ? containmentIssue.cycle[0]
@@ -340,16 +344,13 @@ async function runTaskEngineOrchestratorInner(
 
   // RFC-248 D9: 多仓 + wrapper-git 的禁令**已解除**。RFC-066 当年禁它是因为
   // 包裹器只会对单一 worktree 取快照；现在它逐仓快照、逐仓 diff，并把每个仓的
-  // 路径用挂载路径前缀化后合并成一个 `list<path>`（见 runGitWrapperNode）。
+  // 路径用挂载路径前缀化后合并成一个 `list<path>`（见 GitStrategy）。
   // 这里原本有一条 `multi-repo-wrapper-git-unsupported` 的纵深防御门，随禁令
   // 一并删除——留着它会让组任务永远跑不了平台的 Code → Audit → Fix 主链路。
 
   // 5. Direct child → wrapper map. Chained entries retain nested scope ancestry.
-  const containerOf = scopeTree.parents
-  const topLevelIds = new Set<string>()
-  for (const n of definition.nodes) {
-    if (!containerOf.has(n.id)) topLevelIds.add(n.id)
-  }
+  const containerOf = new Map(scopeIndex.parentOf)
+  const topLevelIds = new Set(scopeIndex.rootNodeIds)
 
   // 6. Pre-validate the same projected graph the runtime frontier will use.
   //    Raw-edge filtering misses cycles that cross a wrapper boundary.
@@ -415,7 +416,11 @@ async function runTaskEngineOrchestratorInner(
     subprocessSem: getTaskFanoutSem(taskId, opts.multiProcessSubprocessConcurrency ?? 4),
     containerOf,
     topLevelIds,
-    driveScope: runScope,
+    wrapperScopes: Object.freeze({
+      find: (wrapperId: string, kind: WrapperNodeKind) => scopeIndex.wrapper(wrapperId, kind),
+    }),
+    driveScope: (nestedState, args) =>
+      runScope(nestedState, args, runtimeComponents.wrapperRuntimeFactory),
     // RFC-066: thread per-repo metadata through every inner dispatch.
     repos,
     // RFC-193 D9: top-level scope canonical = the task worktree container.
@@ -434,11 +439,7 @@ async function runTaskEngineOrchestratorInner(
     // RFC-130 T3c2: recover any 'pending-merge' rows from a crash between
     // agent-success and merge-back BEFORE the scope runs (so the frontier only
     // sees merged rows). A no-op on a fresh run / non-isolated task.
-    await replayPendingMerges(state, log)
-    // RFC-130 §6.3 resume: complete any conflict-human node whose human resolved
-    // its conflict in the preserved resolve-iso (flips 'merged' + releases
-    // downstream; still-unresolved stays parked). No-op on a fresh run.
-    await replayConflictHumanResolutions(state, log)
+    await runtimeComponents.mergeRecoveryFactory(state, log).recoverBeforeScope()
     // RFC-164: workgroup tasks are driven by the round engine, NEVER by the
     // DAG frontier (design §4). The host snapshot's nodes exist only as mint
     // anchors + clarify wiring; runScope/deriveFrontier must not see them.
@@ -475,12 +476,16 @@ async function runTaskEngineOrchestratorInner(
       dag: new DagTaskEngine({
         driveTopLevel: async () =>
           taskEngineOutcomeFromScope(
-            await runScope(state, {
-              scopeId: null,
-              scopeIds: topLevelIds,
-              iteration: 0,
-              log,
-            }),
+            await runScope(
+              state,
+              {
+                scopeId: null,
+                scopeIds: topLevelIds,
+                iteration: 0,
+                log,
+              },
+              runtimeComponents.wrapperRuntimeFactory,
+            ),
           ),
       }),
       'workgroup-turns': new WorkgroupTaskEngine({
@@ -491,7 +496,10 @@ async function runTaskEngineOrchestratorInner(
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildNodeExecutionWorkgroupHooks(state),
+              hooks: buildNodeExecutionWorkgroupHooks(
+                state,
+                runtimeComponents.wrapperRuntimeFactory,
+              ),
             }),
           ),
       }),
@@ -503,7 +511,10 @@ async function runTaskEngineOrchestratorInner(
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildNodeExecutionWorkgroupHooks(state),
+              hooks: buildNodeExecutionWorkgroupHooks(
+                state,
+                runtimeComponents.wrapperRuntimeFactory,
+              ),
             }),
           ),
       }),
@@ -518,7 +529,10 @@ async function runTaskEngineOrchestratorInner(
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildNodeExecutionWorkgroupHooks(state),
+              hooks: buildNodeExecutionWorkgroupHooks(
+                state,
+                runtimeComponents.wrapperRuntimeFactory,
+              ),
             })
           : engine === 'workgroup-turns'
             ? await runWorkgroupEngine({
@@ -526,14 +540,21 @@ async function runTaskEngineOrchestratorInner(
                 taskId,
                 log,
                 ...(opts.signal ? { signal: opts.signal } : {}),
-                hooks: buildNodeExecutionWorkgroupHooks(state),
+                hooks: buildNodeExecutionWorkgroupHooks(
+                  state,
+                  runtimeComponents.wrapperRuntimeFactory,
+                ),
               })
-            : await runScope(state, {
-                scopeId: null,
-                scopeIds: topLevelIds,
-                iteration: 0,
-                log,
-              })
+            : await runScope(
+                state,
+                {
+                  scopeId: null,
+                  scopeIds: topLevelIds,
+                  iteration: 0,
+                  log,
+                },
+                runtimeComponents.wrapperRuntimeFactory,
+              )
     } else {
       const {
         taskId: _taskId,

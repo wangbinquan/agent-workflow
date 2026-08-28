@@ -31,6 +31,7 @@ import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 
 export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
   function fusionDeps(): FusionDeps {
@@ -42,6 +43,7 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
     return {
       db: deps.db,
       appHome: Paths.root,
+      schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
       configPath: deps.configPath,
       ...(deps.repositoryPublicationTransport === undefined
         ? {}

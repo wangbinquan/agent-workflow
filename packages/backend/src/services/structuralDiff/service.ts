@@ -21,7 +21,7 @@ import { isGitWorkTree } from '@/util/git'
 import { computeSummary, type StructuralDiff, type StructuralScope } from '@agent-workflow/shared'
 import { getTask } from '@/services/task'
 import { canonicalRepoKeys } from '@/services/repoLabels'
-import { WrapperProgressSchema } from '@/services/wrapperProgress'
+import { readWrapperGitBaseline } from '@/modules/task-execution/public/queries'
 import { computeFromWorktree, computeBetweenRefs } from './gitBackend'
 import { computeContentDigest } from './digest'
 import { mergeStructuralDiffs } from './assemble'
@@ -385,15 +385,7 @@ function emptyNodeDiff(
 /** wrapper-git baseline commit (the HEAD captured before the inner scope), or
  *  null when the node isn't a git wrapper / has no recorded baseline. */
 export function parseWrapperGitBaseline(json: string | null): string | null {
-  if (json === null || json === '') return null
-  try {
-    const parsed = WrapperProgressSchema.safeParse(JSON.parse(json))
-    if (!parsed.success || parsed.data.kind !== 'git') return null
-    const baseline = parsed.data.baseline
-    return baseline !== undefined && baseline !== '' ? baseline : null
-  } catch {
-    return null
-  }
+  return readWrapperGitBaseline(json)
 }
 
 /** Per-wrapper structural diff: what did a git-wrapper's inner scope change?

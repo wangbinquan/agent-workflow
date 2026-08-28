@@ -390,7 +390,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
 describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单份）', () => {
   it('resolveOpencodeCmd 零份 → RFC-284 T19 终态：全 src 零引用，config 头在 mint 冻结单点读', () => {
     // RFC-282 C1-2 已把 15 个入口的 per-entry 解析收拢进 mint 冻结链
-    // （task-execution nodeMechanics.freezeBinaryConfig 是 canonical definition）；生产消费方归零后
+    // （execution/runtimeConfigFreeze.freezeBinaryConfig 是 canonical definition）；生产消费方归零后
     // RFC-284 T19 删除了 resolveOpencodeCmd 本体与 re-export。本锁射程如实
     // （T29 路 1 校准）：五个历史路由文件 + util.ts 导出面 + index.ts 再导出
     // ——新址重实现同名函数不在射程内，兜底只剩「对已删导出的 import 必炸
@@ -404,8 +404,14 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
       'export function resolveOpencodeCmd',
     )
     expect(SRC('services/runtime/index.ts')).not.toContain('resolveOpencodeCmd,')
-    expect(SRC('modules/task-execution/composition/nodeMechanics.ts')).toContain(
+    expect(SRC('services/execution/runtimeConfigFreeze.ts')).toContain(
       'export function freezeBinaryConfig',
+    )
+    expect(SRC('modules/task-execution/composition/nodeMechanics.ts')).toContain(
+      "from '@/services/execution/runtimeConfigFreeze'",
+    )
+    expect(SRC('modules/task-execution/composition/wrapperMechanics.ts')).toContain(
+      "from '@/services/execution/runtimeConfigFreeze'",
     )
     expect(SRC('services/scheduler.ts')).not.toContain('function freezeBinaryConfig')
     expect(SRC('services/nodeRunMint.ts')).toContain('configBackedBinary')

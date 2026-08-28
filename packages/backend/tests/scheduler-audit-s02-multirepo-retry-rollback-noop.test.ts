@@ -321,8 +321,16 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
       resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
       'utf-8',
     )
-    const schedulerSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    const mechanicsSrc = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf-8',
     )
     const rollbackSrc = readFileSync(
@@ -342,9 +350,9 @@ describe('S-2 multi-repo in-process retry rollback rolls each sub-repo back (RFC
     // path uses discardNodeIso + createIsoUnderLock, NOT
     // rollbackNodeRunWorktrees. The resume path (task.ts) keeps the rollback
     // authority as defense-in-depth (D10).
-    expect(schedulerSrc.includes('discardNodeIso(')).toBe(true)
-    expect(schedulerSrc.includes('createIsoUnderLock(')).toBe(true)
-    expect(schedulerSrc.includes('createNodeIso(')).toBe(false)
-    expect(schedulerSrc.includes('await readSnapshotForLatestRun(')).toBe(false)
+    expect(mechanicsSrc.includes('discardNodeIso(')).toBe(true)
+    expect(mechanicsSrc.includes('createIsoUnderLock(')).toBe(true)
+    expect(mechanicsSrc.includes('createNodeIso(')).toBe(false)
+    expect(mechanicsSrc.includes('await readSnapshotForLatestRun(')).toBe(false)
   })
 })

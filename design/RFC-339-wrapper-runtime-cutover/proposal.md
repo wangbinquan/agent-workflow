@@ -170,7 +170,8 @@ workspace port，但不会成为第四个 wrapper kind，也不会挂到 registr
 ### D7 — bootstrap 注入，不做 public/internal 换皮
 
 `server.ts`、`cli/start.ts` 与 test composition 构造 runtime/driver；`buildStartTaskDeps` 接收已构造 driver。不得通过
-`public/commands.ts` 简单 re-export internal `driveTaskEngineApplication` 来伪造边界，也不得新增进程全局 setter。
+`public/commands.ts` 简单 re-export internal `driveTaskEngineApplication` 来伪造边界，也不得新增进程全局 setter。REST/MCP route mount
+只接受同一 bootstrap runtime 形成的必填 driver/read-model dependency；direct dispatcher test 也必须显式走 test composition。
 
 ### D8 — per-kind 原子 cutover
 

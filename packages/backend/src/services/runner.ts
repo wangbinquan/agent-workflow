@@ -356,8 +356,8 @@ export interface RunNodeOptions {
    * `assertNoPromptSignalRefs` against `promptTemplate` before render and
    * fails the run with errCode `signal-port-in-prompt` when any `{{port}}`
    * reference resolves to a `signal` kind. When unset, the check is skipped
-   * (legacy callers retain current behavior). Scheduler's wrapper-fanout
-   * dispatch in services/scheduler.ts populates this for inner shard dispatches.
+   * (legacy callers retain current behavior). Task-execution's fanout attempt
+   * adapter populates this for inner shard dispatches.
    */
   inputPortKinds?: Record<string, string>
   /** Wall-clock timeout in ms. Undefined = no limit. */
@@ -2092,8 +2092,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // run with NO clarify channel used to parse into a clarifyResult with
         // status='done' and EMPTY outputs. The main dispatch path caught that
         // afterwards in the scheduler (clarify-no-channel), but direct callers
-        // that only check result.status — fanout shard children
-        // (scheduler.ts dispatchFanoutShard) and aggregators — treated the
+        // that only check result.status — task-execution fanout shard children
+        // and aggregators — treated the
         // empty envelope as success and merged worktrees. Front-stop it here.
         // No failureCode on purpose: parity with the scheduler-level rejection
         // (not a followup-able failure); the attempt loop retries, then the

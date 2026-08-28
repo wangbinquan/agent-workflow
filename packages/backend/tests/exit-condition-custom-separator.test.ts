@@ -31,7 +31,7 @@ import {
   evaluateExitCondition,
   parseExitCondition,
   type ExitCondition,
-} from '../src/services/exitCondition'
+} from '../src/modules/task-execution/domain/loopExitCondition'
 
 describe('evaluateExitCondition — port-count-lt custom separator + empty-token filtering', () => {
   test('consecutive/trailing separators are filtered out (sep ",", "a,,b," counts as 2)', () => {

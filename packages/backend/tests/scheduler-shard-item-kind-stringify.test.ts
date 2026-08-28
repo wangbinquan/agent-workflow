@@ -14,20 +14,28 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { stringifyKind, tryParseKind } from '@agent-workflow/shared'
 
-const SCHEDULER_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+const WRAPPER_MECHANICS_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
   'utf8',
 )
 
 describe('shard-source inner port kind — canonical stringify (no fork)', () => {
-  test('scheduler derives the shard item kind via stringifyKind(lk.item)', () => {
-    expect(SCHEDULER_SRC).toContain('stringifyKind(lk.item)')
+  test('wrapper mechanics derives the shard item kind via stringifyKind(lk.item)', () => {
+    expect(WRAPPER_MECHANICS_SRC).toContain('stringifyKind(lk.item)')
   })
 
-  test('scheduler does not hand-roll a path<ext> stringify (must use stringifyKind)', () => {
+  test('wrapper mechanics does not hand-roll a path<ext> stringify (must use stringifyKind)', () => {
     // The old fork re-implemented stringifyKind's path branch as a template
     // literal. Its presence means someone reintroduced the drift-prone switch.
-    expect(SCHEDULER_SRC).not.toContain('path<${')
+    expect(WRAPPER_MECHANICS_SRC).not.toContain('path<${')
   })
 
   // The behavioral pay-off: stringifyKind(parseKind(K).item) is the value the

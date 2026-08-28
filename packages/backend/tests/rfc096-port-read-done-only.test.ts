@@ -1,7 +1,7 @@
 // LOCKS: RFC-096 (audit S-13 / 附录 C #5, design §3.3) — wrapper port reads
 // select the newest visible DONE row only.
 //
-// readPortAtIteration (scheduler.ts, not exported) is the single read point
+// WrapperDataPort.readPort (task-execution composition, not exported) is the single read point
 // for wrapper-loop exit-condition evaluation AND wrapper outputBindings.
 // Before RFC-096 it picked the freshest TOP-LEVEL row of (node, iteration) by
 // pure id with NO status filter (verified against HEAD): a freshly minted
@@ -20,7 +20,7 @@
 // outputs, so skipping them can only surface the newest REAL content.
 //
 // Test shape (behavioral — the helper is private, so we drive the real chain
-// runTask → runLoopWrapperNode → readPortAtIteration → evaluateExitCondition
+// TaskEngine → WrapperRuntime → LoopStrategy → WrapperDataPort.readPort → evaluateExitCondition
 // against a real in-memory DB):
 //   The pathological row pair (done row WITH output + younger pending row
 //   WITHOUT) is seeded on a cond-source node id that appears in NO dispatch

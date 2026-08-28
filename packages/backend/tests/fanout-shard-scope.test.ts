@@ -16,7 +16,11 @@ import {
   computeShardScope,
   estimateShardTotal,
   findBoundaryEdgesToInner,
-} from '../src/services/fanout'
+} from '../src/modules/task-execution/domain/fanoutScope'
+import {
+  createExecutionScopeIndex,
+  type WrapperScopeDescriptor,
+} from '../src/modules/task-execution/domain/executionScope'
 
 function baseAgent(name: string, fields: Partial<Agent> = {}): Agent {
   return {
@@ -57,6 +61,13 @@ function defWith(
   }
 }
 
+function fanoutScope(
+  definition: WorkflowDefinition,
+  wrapperId: string,
+): WrapperScopeDescriptor<'wrapper-fanout'> {
+  return createExecutionScopeIndex(definition).wrapper(wrapperId, 'wrapper-fanout')
+}
+
 describe('computeShardScope — basic reachable BFS', () => {
   test('one inner agent connected to shardSource → perShard only', () => {
     const def = defWith(
@@ -79,7 +90,7 @@ describe('computeShardScope — basic reachable BFS', () => {
       ],
     )
     const scope = computeShardScope({
-      wrapperId: 'w',
+      scope: fanoutScope(def, 'w'),
       defn: def,
       agents: new Map([['reporter', baseAgent('reporter')]]),
     })
@@ -114,7 +125,7 @@ describe('computeShardScope — basic reachable BFS', () => {
       ],
     )
     const scope = computeShardScope({
-      wrapperId: 'w',
+      scope: fanoutScope(def, 'w'),
       defn: def,
       agents: new Map([['reporter', baseAgent('reporter')]]),
     })
@@ -149,7 +160,7 @@ describe('computeShardScope — basic reachable BFS', () => {
       ],
     )
     const scope = computeShardScope({
-      wrapperId: 'w',
+      scope: fanoutScope(def, 'w'),
       defn: def,
       agents: new Map([
         ['reporter', baseAgent('reporter')],
@@ -189,7 +200,7 @@ describe('computeShardScope — basic reachable BFS', () => {
       ],
     )
     const scope = computeShardScope({
-      wrapperId: 'w',
+      scope: fanoutScope(def, 'w'),
       defn: def,
       agents: new Map([
         ['merger', baseAgent('merger', { role: 'aggregator' })],
@@ -215,7 +226,7 @@ describe('computeShardScope — basic reachable BFS', () => {
       [],
     )
     const scope = computeShardScope({
-      wrapperId: 'w',
+      scope: fanoutScope(def, 'w'),
       defn: def,
       agents: new Map([['reporter', baseAgent('reporter')]]),
     })
@@ -265,7 +276,10 @@ describe('applyAutoPromote — cross-set propagation', () => {
       ['reporter', baseAgent('reporter')],
       ['sink', baseAgent('sink')],
     ])
-    const scope = applyAutoPromote(computeShardScope({ wrapperId: 'w', defn: def, agents }), def)
+    const scope = applyAutoPromote(
+      computeShardScope({ scope: fanoutScope(def, 'w'), defn: def, agents }),
+      def,
+    )
     expect(scope.perShard.has('a')).toBe(true)
     expect(scope.perShard.has('b')).toBe(true)
     expect(scope.shared.has('b')).toBe(false)
@@ -324,7 +338,10 @@ describe('applyAutoPromote — cross-set propagation', () => {
       ['sink_b', baseAgent('sink_b')],
       ['sink_c', baseAgent('sink_c')],
     ])
-    const scope = applyAutoPromote(computeShardScope({ wrapperId: 'w', defn: def, agents }), def)
+    const scope = applyAutoPromote(
+      computeShardScope({ scope: fanoutScope(def, 'w'), defn: def, agents }),
+      def,
+    )
     expect(scope.perShard.has('a')).toBe(true)
     expect(scope.perShard.has('b')).toBe(true)
     expect(scope.perShard.has('c')).toBe(true)
@@ -362,7 +379,10 @@ describe('applyAutoPromote — cross-set propagation', () => {
       ['reporter', baseAgent('reporter')],
       ['merger', baseAgent('merger', { role: 'aggregator' })],
     ])
-    const scope = applyAutoPromote(computeShardScope({ wrapperId: 'w', defn: def, agents }), def)
+    const scope = applyAutoPromote(
+      computeShardScope({ scope: fanoutScope(def, 'w'), defn: def, agents }),
+      def,
+    )
     expect(scope.perShard.has('a')).toBe(true)
     expect(scope.perShard.has('agg')).toBe(false) // aggregator stays out
     expect(scope.shared.has('agg')).toBe(false)
@@ -381,7 +401,7 @@ describe('estimateShardTotal', () => {
       },
       { id: 'a', kind: 'agent-single', agentName: 'r' },
     ])
-    expect(estimateShardTotal(def, 'w', 8)).toBe(8)
+    expect(estimateShardTotal(def, fanoutScope(def, 'w'), 8)).toBe(8)
   })
 
   test('nested fanout with declared expectedShardCount multiplies', () => {
@@ -400,7 +420,7 @@ describe('estimateShardTotal', () => {
         expectedShardCount: 4,
       },
     ])
-    expect(estimateShardTotal(def, 'outer', 8)).toBe(32) // 8 × 4
+    expect(estimateShardTotal(def, fanoutScope(def, 'outer'), 8)).toBe(32) // 8 × 4
   })
 
   test('nested fanout without declared count → uses default 16', () => {
@@ -418,7 +438,7 @@ describe('estimateShardTotal', () => {
         inputs: [{ name: 'items', kind: 'list<string>', isShardSource: true }],
       },
     ])
-    expect(estimateShardTotal(def, 'outer', 8)).toBe(8 * 16)
+    expect(estimateShardTotal(def, fanoutScope(def, 'outer'), 8)).toBe(8 * 16)
   })
 })
 

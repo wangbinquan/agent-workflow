@@ -1,10 +1,8 @@
 import type { DbClient } from '../../src/db/client'
 import { composeTaskExecutionHumanGateAdapter } from '../../src/modules/collaboration/application/adapters/task-execution-human-gate-adapter'
-import type {
-  SchedulerDriverPort,
-  SchedulerRuntimeTopology,
-} from '../../src/modules/task-execution/public/topology'
-import { createLegacyTaskExecutionTopology } from '../../src/services/startTaskDeps'
+import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
+import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/types'
+import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 
@@ -80,7 +78,7 @@ export function createTaskExecutionTestTopology(input: {
   readonly db: DbClient
   readonly driver: 'real' | 'noop' | 'poison' | SchedulerDriverPort
 }): SchedulerRuntimeTopology {
-  const topology = createLegacyTaskExecutionTopology(input.db)
+  const topology = composeTaskExecutionRuntime({ db: input.db }).topology
   const schedulerDriver =
     input.driver === 'real'
       ? topology.schedulerDriver
@@ -94,9 +92,11 @@ export function createTaskExecutionTestTopology(input: {
 
 /** Direct scheduler fixtures explicitly select the real instance topology. */
 export function runTaskWithRealTestTopology(options: RunTaskOptions): Promise<void> {
+  const runtime = composeTaskExecutionRuntime({ db: options.db })
   return driveTaskEngineApplication(
     options,
-    createTaskExecutionTestTopology({ db: options.db, driver: 'real' }),
+    runtime.topology,
     composeTaskExecutionHumanGateAdapter(),
+    runtime,
   )
 }

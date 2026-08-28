@@ -37,7 +37,7 @@ import {
   type CanonRepo,
 } from '../src/services/nodeIsolation'
 import { mintNodeRun } from '../src/services/nodeRunMint'
-import { createOrRebuildWrapperIso } from '../src/services/scheduler'
+import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { transitionMergeState } from '../src/services/lifecycle'
 import { retryNode } from '../src/services/task'
@@ -467,7 +467,10 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
   }, 30000)
 
   test('源码顺序锁：merged 再入的 reenter CAS（夺权）先于任何销毁性清理', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'services', 'scheduler.ts'), 'utf-8')
+    const src = readFileSync(
+      join(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
+      'utf-8',
+    )
     const fnStart = src.indexOf('export async function createOrRebuildWrapperIso(')
     const fnEnd = src.indexOf('async function mergeBackWrapperIso(', fnStart)
     const body = src.slice(fnStart, fnEnd)

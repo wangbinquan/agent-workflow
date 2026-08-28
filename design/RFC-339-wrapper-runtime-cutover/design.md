@@ -179,20 +179,24 @@ packages/backend/src/modules/task-execution/
 ├── engine/
 │   ├── wrapper/
 │   │   ├── wrapperRuntime.ts
-│   │   ├── wrapperStrategy.ts
+│   │   ├── strategySupport.ts
 │   │   ├── loopStrategy.ts
 │   │   ├── gitStrategy.ts
 │   │   └── fanoutStrategy.ts
 │   └── node/                         # RFC-334，保持
 ├── infrastructure/
-│   ├── sqliteWrapperRunLedger.ts
-│   └── executionMergeRecoveryAdapter.ts
+│   └── sqliteTaskExecutionReadModels.ts
 └── composition/
-    ├── wrapperRuntime.ts             # concrete adapters only
+    ├── wrapperRunLifecycle.ts        # DB lifecycle + committed-status publisher adapters
+    ├── wrapperMechanics.ts           # scope/workspace/data/fanout concrete adapters
+    ├── executionMergeRecovery.ts     # persisted merge replay adapter
+    ├── taskExecutionComponents.ts    # state-bound runtime/recovery factories
+    ├── wrapperRuntime.ts             # strategy registry composition
     └── taskExecutionRuntime.ts       # bootstrap-facing composition
 ```
 
-最终实际文件可按实现发现做小幅合并；禁止把职责重新塞回 `scheduler.ts`，也禁止为了目录对称拆成无行为的空壳文件。
+实现发现表明 ledger 与 workspace/fanout mechanics 都依赖同一份 task-bound legacy state；因此它们作为 composition adapter
+集中落位，而不是为了目录对称制造只转发的 infrastructure 空壳。禁止把职责重新塞回 `scheduler.ts`。
 
 ## 4. scope/container 合同
 
@@ -238,6 +242,11 @@ export interface ExecutionScopeIndex {
 `NodeExecutionGateway` 为 wrapper request 从 index 取 descriptor；strategy 不再 `pickStringArray(node,'nodeIds')`。Nested scope drive
 只接 descriptor 的 direct membership 与 iteration，fanout boundary 与 provenance 也使用同一个 parent/path。
 
+`ExecutionScopeIndex` 仍是 task-execution domain 内部的完整 owner，不通过 public surface 暴露其 `ReadonlyMap`、root set 或泛型
+descriptor。尚在 legacy `services/` 的 node mechanics 只持有 purpose-specific `WrapperExecutionScopeReadModel`：唯一方法
+`find(wrapperId, kind)` 返回冻结的 wrapper scope DTO；composition 把该读模型绑定到同一个 index。这样 legacy caller 只依赖 exact
+`public/types`，而 runtime membership/path 仍只有一份事实源，也不会为清 R1 边界账本复制第二张 containment map。
+
 ## 5. WrapperRuntime 合同
 
 ### 5.1 request 与 settlement
@@ -251,37 +260,41 @@ export interface WrapperExecutionRequest<K extends WrapperNodeKind> {
   readonly execution: { readonly signal?: AbortSignal }
 }
 
-export type WrapperSettlement =
-  | {
-      readonly kind: 'terminal'
-      readonly rowStatus: 'done' | 'failed' | 'canceled' | 'exhausted'
-      readonly outcome: NodeStepOutcome
-    }
-  | {
-      readonly kind: 'park'
-      readonly rowStatus: 'awaiting_human' | 'awaiting_review'
-      readonly outcome: NodeStepOutcome
-    }
-  | { readonly kind: 'superseded'; readonly outcome: NodeStepOutcome }
+export interface WrapperSettlement {
+  readonly rowStatus:
+    | 'done'
+    | 'failed'
+    | 'canceled'
+    | 'exhausted'
+    | 'awaiting_human'
+    | 'awaiting_review'
+  readonly outcome: NodeStepOutcome
+  readonly errorMessage?: string
+}
 ```
 
 `rowStatus` 与 outward `outcome.kind` 分开：例如 loop `exhausted` row 对外仍按 current `failed` scope outcome；不能为了类型漂亮
-改用户结果。
+改用户结果。合法 external canceled/interrupted winner 不伪装成 strategy settlement，而由 ledger 抛出 typed
+`WrapperSupersededSignal`，只在 runtime 边界收敛为既有 outcome。
 
 ### 5.2 strategy
 
 ```ts
 export interface WrapperStrategy<K extends WrapperNodeKind> {
   readonly kind: K
-  execute(
-    context: OpenWrapperGeneration<K>,
-    request: WrapperExecutionRequest<K>,
-  ): Promise<WrapperSettlement>
+  prepare(request: WrapperExecutionRequest<K>): Promise<
+    | { readonly kind: 'rejected'; readonly outcome: NodeStepOutcome }
+    | {
+        readonly kind: 'ready'
+        execute(context: OpenWrapperGeneration<K>): Promise<WrapperSettlement>
+      }
+  >
 }
 ```
 
-Strategy 不能自己 mint/resume wrapper row、不能直接广播 wrapper status、不能吞 `WrapperSuperseded`。它可以通过具名 port 写
-progress/output、drive scope、操作 workspace 或执行 fanout child。
+`prepare` 只做无需 durable generation 的 validation/hydration；拒绝时保持 legacy “不铸 row、不广播”语义。Strategy 不能自己
+mint/resume wrapper row、不能直接广播 wrapper status、不能吞 `WrapperSupersededSignal`。它可以通过具名 port 写 progress/output、
+drive scope、操作 workspace 或执行 fanout child。
 
 ### 5.3 closed registry
 
@@ -305,17 +318,17 @@ export class WrapperRuntime implements WrapperNodeExecutionPort {
 
 ```text
 execute(kind, request)
-  1. assert registry key/self-kind
-  2. ledger.openGeneration(request)
+  1. constructor/runtime assert registry key/self-kind
+  2. strategy.prepare(request)
+       - rejected → return existing failure outcome, no row/status
+  3. ledger.openGeneration(request)
        - exact resumable selection
-       - progress decode
-       - fresh consumed provenance + mint
-  3. ledger.enterRunning(...)
-  4. publisher.afterCommittedStatus(running)
-  5. strategy.execute(...)
-  6. settle wrapper row from strategy settlement
-  7. publisher.afterCommittedStatus(settled)
-  8. clear fanout reuse gate only at current terminal points
+       - fresh consumed provenance + mint/enter-running
+  4. publisher.publish(running) only when ledger entered running
+  5. prepared.execute(generation)
+  6. ledger.settle(generation, settlement)
+  7. publisher.publish(settled)
+  8. ledger clears fanout reuse gate only at current terminal points
   catch legal external canceled/interrupted CAS loss
        → read exact winner → superseded outcome
 ```
@@ -331,12 +344,11 @@ DB transition 始终先于 publish。`WrapperSuperseded` 只收敛当前允许�
 
 - exact resumable lookup（task/node/outer iteration）；
 - fresh generation consumed provenance；
-- mint/transition/terminal/superseded read；
-- progress codec persistence；
-- wrapper output upsert；
-- fanout child/aggregator row 所需的 purpose-specific ledger 方法。
+- mint/enter-running/park/terminal/superseded read；
+- terminal 时按既有规则清理 fanout reuse gate。
 
 Port 返回 domain DTO，不泄漏 Drizzle row/table/query builder。Transaction/fence 继续复用现有 task-execution mutation participant。
+progress/output 归 `WrapperDataPort`，fanout child/aggregator row 归 `FanoutAttemptPort`；不把这些能力再堆回 ledger bag。
 
 ### 6.2 WrapperScopeDriverPort
 
@@ -436,7 +448,9 @@ GitStrategy 不自己跑 Git CLI，所有物理操作经 WrapperWorkspacePort。
 - shard/aggregator merge conflict current abandon/failed disposition；
 - aggregator output rename 与 wrapper output provenance。
 
-`services/fanout.ts` 的 pure logic 迁 `domain/fanoutScope.ts`；不改函数结果。Strategy 通过 FanoutAttemptPort 使用现有 assembly。
+`services/fanout.ts` 的 pure logic 迁 `domain/fanoutScope.ts`；不改函数结果。Runtime 调共享 aggregator/output oracle 时必须走
+`findFanoutAggregatorInScope` / `deriveWrapperFanoutOutputsInScope`，只消费 `WrapperScopeDescriptor.directNodeIds`；原 shared raw-definition
+入口仅供编辑器/validator 等非 runtime consumer。Strategy 通过 FanoutAttemptPort 使用现有 assembly。
 
 ## 8. ExecutionMergeRecovery
 
@@ -444,12 +458,12 @@ GitStrategy 不自己跑 Git CLI，所有物理操作经 WrapperWorkspacePort。
 
 ```ts
 interface ExecutionMergeRecovery {
-  recoverBeforeScope(input: {
-    readonly taskId: string
-    readonly signal?: AbortSignal
-  }): Promise<void>
+  recoverBeforeScope(): Promise<void>
 }
 ```
+
+Composition 以 `(state, log) => ExecutionMergeRecovery` factory 绑定当前 task/runtime state；TaskEngine application 只持有该 factory
+与 application interface，不直接 import replay 实现或 scheduler。
 
 内部顺序固定：
 
@@ -479,15 +493,26 @@ TaskEngine application 只依赖 `ExecutionMergeRecovery` interface，不 import
 interface TaskExecutionRuntime {
   readonly schedulerDriver: SchedulerDriverPort
   readonly topology: SchedulerRuntimeTopology
+  readonly readModels: TaskExecutionReadModels
   readonly wrapperRuntimeFactory: WrapperRuntimeFactory
-  readonly mergeRecovery: ExecutionMergeRecovery
+  readonly mergeRecoveryFactory: ExecutionMergeRecoveryFactory
 }
 
 function composeTaskExecutionRuntime(input: BootstrapTaskExecutionDeps): TaskExecutionRuntime
 ```
 
-只有 `server.ts` / `cli/start.ts` / test composition 调用 concrete factory。`buildStartTaskDeps` 改为接收已构造
+只有 `server.ts` / `cli/start.ts` / test composition 调用 concrete runtime factory。runtime 一次性构造并冻结 driver、topology、
+read models 与两个 state-bound factory；`buildStartTaskDeps` 改为接收已构造
 `SchedulerDriverPort`，不再从 DB 构造 topology。
+
+`public/commands.ts` 暴露的 `InheritableRunConfig` 使用 explicit field interface，并与 `INHERITABLE_RUN_CONFIG_KEYS` 双向 type gate；
+不能用 opaque `Pick` 隐藏字段矩阵。`SchedulerRuntimeTopology` 物理定义在 public types，application ports 不反向 import public surface。
+Legacy frontier、structural diff 与 workflow validator 只通过 public query 读取 wrapper revival iteration、git baseline 与 exit-condition
+validity；legacy mechanics state 只从 public types 读取 immutable execution-scope contract，不新增 service → domain 内部边。
+
+REST 与 MCP 的两套路由表都只接收 `ComposedAppDeps`：`schedulerDriver` 与 `taskExecutionReadModels` 在该 mount boundary 为必填，
+并且来自同一份 bootstrap runtime。`createApp` 负责生产 composition；直接构造 MCP dispatcher 的测试必须在 test bootstrap 显式
+构造 runtime 后注入两项，不能等到首次 tool call 才暴露漏接，也不能在 `mountApiRoutes` 内临时补装配。
 
 ### 9.2 caller migration
 
@@ -604,7 +629,11 @@ exceptions，不改 denominator/KNOWN 来迎合预期。
 flowchart TB
   Bootstrap[server / cli bootstrap] -. constructs .-> Runtime[TaskExecutionRuntime]
   Runtime --> Driver[SchedulerDriverPort]
-  App[TaskEngine application] --> Recovery[ExecutionMergeRecovery]
+  Runtime --> Reads[TaskExecutionReadModels]
+  Runtime --> Components[TaskExecutionRuntimeComponents]
+  Components -. state-bound factory .-> Recovery[ExecutionMergeRecovery]
+  Components -. state-bound factory .-> WR[WrapperRuntime]
+  App[TaskEngine application] --> Recovery
   App --> Scope[TaskEngine / taskDagScope]
   Scope --> Gateway[NodeExecutionGateway]
   Gateway --> WR[WrapperRuntime]

@@ -33,7 +33,7 @@
 //
 // PURE module: only types + freshness primitives (isNodeRunFresh /
 // isFresherNodeRun / buildFreshestSettledPerNode, freshness.ts) +
-// decodeWrapperProgress (wrapperProgress.ts, itself pure). No DB / scheduler
+// readWrapperRevivalIteration (task-execution public query). No DB / scheduler
 // import. The frontier ORCHESTRATION (read rows → latestPerNode → freshestSettled
 // → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
 // Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
@@ -46,7 +46,7 @@ import {
 } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildFreshestSettledPerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
-import { decodeWrapperProgress } from './wrapperProgress'
+import { readWrapperRevivalIteration } from '@/modules/task-execution/public/queries'
 
 // RFC-311：收窄到 freshness 的调度列合同（本文件消费 id/nodeId/status/iteration/
 // supersededByReview/wrapperProgressJson，全部 ⊂ 合同），使 tick 投影行可直达。
@@ -109,7 +109,7 @@ export function wrapperInnerDescendants(
  * RFC-098 B3 (audit S-7) — the EXTERNAL upstream source set of a loop/git
  * wrapper: every node OUTSIDE the wrapper that feeds data into the wrapper's
  * inner scope (or into the wrapper row itself). This is the key set
- * `computeWrapperConsumed` (scheduler.ts) stamps onto the wrapper's
+ * the task-execution wrapper ledger stamps onto the wrapper's
  * `consumed_upstream_runs_json` at fresh-mint, so an upstream rerun (clarify
  * answer, review iterate, …) demotes the wrapper's done row to stale and the
  * frontier re-dispatches it — the same provenance contract wrapper-fanout has
@@ -124,8 +124,8 @@ export function wrapperInnerDescendants(
  *     validator rejects them but the scheduler honors them — see
  *     scheduler-audit-s04's wg1→wg2 sequencing edge).
  *
- * Edge filtering is the SAME registry projection buildScopeUpstreams
- * (scheduler.ts) uses — `channelEdgeDataflowSkip` (RFC-147), including the
+ * Edge filtering is the SAME registry projection taskDagGraph.buildScopeUpstreams
+ * uses — `channelEdgeDataflowSkip` (RFC-147), including the
  * carve-out that `questioner.__clarify__ → clarify-cross-agent` is a REAL
  * dataflow dep (kept) — plus review/output implicit dependencies.
  *
@@ -250,8 +250,7 @@ export function wrapperRevivalEvidence(
   const kind = node?.kind
   let innerIter: number
   if (kind === 'wrapper-loop') {
-    const progress = decodeWrapperProgress(wrapperRow.wrapperProgressJson, () => {})
-    innerIter = progress?.iteration ?? 0
+    innerIter = readWrapperRevivalIteration(wrapperRow.wrapperProgressJson)
   } else {
     // wrapper-git (and any non-loop wrapper): inner shares the wrapper iteration.
     innerIter = wrapperRow.iteration

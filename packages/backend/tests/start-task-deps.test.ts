@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path'
 import { loadConfig } from '../src/config'
 import { createInMemoryDb } from '../src/db/client'
 import { buildStartTaskDeps } from '../src/services/startTaskDeps'
+import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -28,12 +29,13 @@ describe('buildStartTaskDeps (RFC-159 T2)', () => {
     const cfgPath = join(dir, 'config.json')
     configWith(cfgPath, { pollMs: 999, consecutiveFailureLimit: 7 })
 
-    const withCmd = buildStartTaskDeps(db, cfgPath, 'alice')
+    const driver = createNoopSchedulerDriver()
+    const withCmd = buildStartTaskDeps(db, driver, cfgPath, 'alice')
     expect(withCmd.db).toBe(db)
     expect(withCmd.actorUserId).toBe('alice')
     expect(withCmd.configPath).toBe(cfgPath)
 
-    const noCmd = buildStartTaskDeps(db, cfgPath, 'bob')
+    const noCmd = buildStartTaskDeps(db, driver, cfgPath, 'bob')
     expect(noCmd.actorUserId).toBe('bob')
     expect('opencodeCmd' in noCmd).toBe(false) // conditional spread: absent when omitted
   })
@@ -44,14 +46,15 @@ describe('buildStartTaskDeps (RFC-159 T2)', () => {
     const cfgPath = join(dir, 'config.json')
 
     configWith(cfgPath, { pollMs: 999, consecutiveFailureLimit: 7 })
-    expect(buildStartTaskDeps(db, cfgPath, 'alice').subagentLiveCapture).toEqual({
+    const driver = createNoopSchedulerDriver()
+    expect(buildStartTaskDeps(db, driver, cfgPath, 'alice').subagentLiveCapture).toEqual({
       pollMs: 999,
       consecutiveFailureLimit: 7,
     })
 
     // Edit the config → the very next build reflects it (no boot-time freeze).
     configWith(cfgPath, { pollMs: 111, consecutiveFailureLimit: 2 })
-    expect(buildStartTaskDeps(db, cfgPath, 'alice').subagentLiveCapture).toEqual({
+    expect(buildStartTaskDeps(db, driver, cfgPath, 'alice').subagentLiveCapture).toEqual({
       pollMs: 111,
       consecutiveFailureLimit: 2,
     })

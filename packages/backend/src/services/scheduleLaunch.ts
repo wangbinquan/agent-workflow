@@ -17,11 +17,9 @@
 // attribution (previously a hand-spread deps field).
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
-import {
-  buildStartTaskDeps,
-  type TaskRepositoryPublicationTransport,
-} from '@/services/startTaskDeps'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { startExecution } from '@/services/execution/executor'
 import type {
   ScheduledAgentPayload,
@@ -36,12 +34,12 @@ import type {
  */
 export function buildScheduleLaunch(
   db: DbClient,
+  schedulerDriver: SchedulerDriverPort,
   configPath: string,
-  repositoryPublicationTransport?: TaskRepositoryPublicationTransport,
 ): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
     const deps = {
-      ...buildStartTaskDeps(db, configPath, ownerUserId, undefined, repositoryPublicationTransport),
+      ...buildStartTaskDeps(db, schedulerDriver, configPath, ownerUserId, undefined),
       // RFC-243 实现门 P0-1: scheduled fires resolve call-node closures inside
       // the rebuilt owner actor's visibility (same fence as a manual launch).
       launchActor: actor,

@@ -15,6 +15,7 @@ import {
 import type { Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { startExecution } from '@/services/execution/executor'
 import {
   bufferUploadParts,
@@ -24,11 +25,7 @@ import {
   resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import {
-  createLegacyTaskExecutionTopology,
-  resolveSubagentLiveCapture,
-  type TaskRepositoryPublicationTransport,
-} from '@/services/startTaskDeps'
+import { resolveSubagentLiveCapture } from '@/services/startTaskDeps'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import {
@@ -47,7 +44,7 @@ export interface MultipartLaunchDeps {
   db: DbClient
   secretBox?: SecretBox
   configPath: string
-  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
+  schedulerDriver: SchedulerDriverPort
 }
 
 export async function handleMultipartTaskStart(
@@ -131,8 +128,7 @@ export async function handleMultipartTaskStart(
 
   const routeLaunchDeps = {
     db: deps.db,
-    schedulerDriver: createLegacyTaskExecutionTopology(deps.db, deps.repositoryPublicationTransport)
-      .schedulerDriver,
+    schedulerDriver: deps.schedulerDriver,
     actorUserId: actor.user.id,
     ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
     configPath: deps.configPath,

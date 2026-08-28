@@ -1,7 +1,7 @@
 import type { WorkflowNode } from '@agent-workflow/shared'
 import type { LegacyTaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { createClarifyRound } from '@/services/clarify/service'
-import { runWrapperFanoutNode, runWrapperGitNode, runWrapperLoopNode } from '@/services/scheduler'
+import type { WrapperRuntimeFactory } from './taskExecutionComponents'
 import {
   buildWorkgroupEngineSupport,
   executeWorkgroupHostMechanics,
@@ -18,7 +18,6 @@ import {
 } from './nodeMechanics'
 import type { WorkgroupEngineHooks } from '@/services/workgroup/hooks'
 import type { CollaborationNodeGatePort } from '../application/ports/collaborationNodeGate'
-import type { WrapperNodeExecutionPort } from '../application/ports/wrapperNodeExecution'
 import type {
   WorkgroupHostExecutionPort,
   WorkgroupHostExecutionRequest,
@@ -45,7 +44,10 @@ import { createWrapperDelegatingNodeExecutors } from '../engine/node/wrapperDele
 
 const gateways = new WeakMap<LegacyTaskMechanicsState, NodeExecutionGateway>()
 
-function legacyArgs(state: LegacyTaskMechanicsState, request: NodeStepRequest): OneNodeArgs {
+function legacyArgs(
+  state: LegacyTaskMechanicsState,
+  request: Pick<NodeStepRequest, 'node' | 'iteration'>,
+): OneNodeArgs {
   return { node: request.node as WorkflowNode, iteration: request.iteration, log: state.log }
 }
 
@@ -106,17 +108,13 @@ function collaborationPort(state: LegacyTaskMechanicsState): CollaborationNodeGa
   }
 }
 
-function buildGateway(state: LegacyTaskMechanicsState): NodeExecutionGateway {
+function buildGateway(
+  state: LegacyTaskMechanicsState,
+  wrapperRuntimeFactory: WrapperRuntimeFactory,
+): NodeExecutionGateway {
   const collaboration = collaborationPort(state)
-  const wrapperPort: WrapperNodeExecutionPort = {
-    execute(kind, request) {
-      const args = legacyArgs(state, request)
-      if (kind === 'wrapper-git') return runWrapperGitNode(state, args)
-      if (kind === 'wrapper-loop') return runWrapperLoopNode(state, args)
-      return runWrapperFanoutNode(state, args)
-    },
-  }
-  const wrappers = createWrapperDelegatingNodeExecutors(wrapperPort)
+  const wrapperRuntime = wrapperRuntimeFactory(state)
+  const wrappers = createWrapperDelegatingNodeExecutors(wrapperRuntime, state.wrapperScopes)
   const virtualIo = {
     executeInput: (request: NodeStepRequest<'input'>) =>
       runInputNode(state, legacyArgs(state, request)),
@@ -162,10 +160,13 @@ function buildGateway(state: LegacyTaskMechanicsState): NodeExecutionGateway {
   })
 }
 
-function gatewayFor(state: LegacyTaskMechanicsState): NodeExecutionGateway {
+function gatewayFor(
+  state: LegacyTaskMechanicsState,
+  wrapperRuntimeFactory: WrapperRuntimeFactory,
+): NodeExecutionGateway {
   const existing = gateways.get(state)
   if (existing !== undefined) return existing
-  const created = buildGateway(state)
+  const created = buildGateway(state, wrapperRuntimeFactory)
   gateways.set(state, created)
   return created
 }
@@ -174,8 +175,9 @@ function gatewayFor(state: LegacyTaskMechanicsState): NodeExecutionGateway {
 export function executeNode(
   state: LegacyTaskMechanicsState,
   args: OneNodeArgs,
+  wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): ReturnType<NodeExecutionGateway['executeNode']> {
-  return gatewayFor(state).executeNode({
+  return gatewayFor(state, wrapperRuntimeFactory).executeNode({
     node: args.node,
     task: { taskId: state.taskId },
     scope: { scopeId: state.containerOf.get(args.node.id) ?? null },
@@ -188,24 +190,30 @@ export function executeNode(
 export function executeWorkgroupHost(
   state: LegacyTaskMechanicsState,
   request: WorkgroupHostExecutionRequest,
+  wrapperRuntimeFactory: WrapperRuntimeFactory,
 ) {
-  return gatewayFor(state).executeHost(request)
+  return gatewayFor(state, wrapperRuntimeFactory).executeHost(request)
 }
 
 /** Workgroup engines keep their hook shape while the host body resolves through the registry. */
 export function buildNodeExecutionWorkgroupHooks(
   state: LegacyTaskMechanicsState,
+  wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): WorkgroupEngineHooks {
   return {
     ...buildWorkgroupEngineSupport(state),
     runHostNode: (host) =>
-      executeWorkgroupHost(state, {
-        lane: 'workgroup-host',
-        task: { taskId: state.taskId },
-        host,
-        execution: {
-          ...(state.opts.signal === undefined ? {} : { signal: state.opts.signal }),
+      executeWorkgroupHost(
+        state,
+        {
+          lane: 'workgroup-host',
+          task: { taskId: state.taskId },
+          host,
+          execution: {
+            ...(state.opts.signal === undefined ? {} : { signal: state.opts.signal }),
+          },
         },
-      }),
+        wrapperRuntimeFactory,
+      ),
   }
 }

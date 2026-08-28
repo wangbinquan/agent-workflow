@@ -87,17 +87,38 @@ describe('RFC-074 §8 / D3 — fan-out wrapper provenance is atomic (B5)', () =>
   })
 
   // Source-level lock for the recording half (the genuinely uncovered branch):
-  // the scheduler stamps consumed on the WRAPPER run id, and inner shard inserts
+  // wrapper mechanics stamps consumed on the WRAPPER run id, and inner shard inserts
   // do not. Keeps the D3 convention from silently drifting to per-shard
   // provenance, which would make freshness demote individual shards.
-  test('scheduler records consumed on the wrapper run id, provenance-atomic (D3)', () => {
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  test('wrapper mechanics records consumed on the wrapper run id, provenance-atomic (D3)', () => {
+    const adapter = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'wrapperMechanics.ts',
+      ),
       'utf-8',
     )
-    expect(src).toContain('JSON.stringify(wrapperConsumed)')
-    expect(src).toContain('.where(eq(nodeRuns.id, wrapperRunId))')
-    expect(src).toContain('fan-out wrapper is provenance-atomic')
+    const strategy = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'wrapper',
+        'fanoutStrategy.ts',
+      ),
+      'utf-8',
+    )
+    expect(strategy).toContain('this.data.recordConsumed(wrapperRunId, wrapperConsumed)')
+    expect(adapter).toContain('consumedUpstreamRunsJson: JSON.stringify(consumed)')
+    expect(adapter).toContain('.where(eq(nodeRuns.id, runId))')
   })
 })
 

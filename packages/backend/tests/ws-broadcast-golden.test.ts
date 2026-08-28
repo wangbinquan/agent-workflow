@@ -33,7 +33,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { emitTaskStatus } from '../src/services/task'
-import { createTaskStatusPublisher } from '../src/modules/task-execution/public/topology'
+import { createWebSocketTaskStatusPublisher } from '../src/modules/task-execution/infrastructure/webSocketTaskStatusPublisher'
 import {
   resetBroadcastersForTests,
   TASK_CHANNEL,
@@ -203,7 +203,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
   test('RFC-331 publisher adapter preserves terminal and canceled-node ordering', () => {
     const taskId = `task_${ulid()}`
     const { received, unsubscribe } = subscribeBoth(taskId)
-    createTaskStatusPublisher().publish({
+    createWebSocketTaskStatusPublisher().publish({
       taskId,
       status: 'canceled',
       errorSummary: null,

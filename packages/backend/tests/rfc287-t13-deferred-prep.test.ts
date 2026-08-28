@@ -968,7 +968,16 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const row = (await getScheduledTaskRow(db2, created.id))!
 
     // ① 不再抛：接线前，准备在落行之前跑，克隆一失败 fireSchedule 就整个抛出去。
-    const { taskId } = await fireSchedule(db2, row, buildScheduleLaunch(db2, cfgPath), Date.now())
+    const { taskId } = await fireSchedule(
+      db2,
+      row,
+      buildScheduleLaunch(
+        db2,
+        createTaskExecutionTestTopology({ db: db2, driver: 'real' }).schedulerDriver,
+        cfgPath,
+      ),
+      Date.now(),
+    )
     expect(taskId).toBeTruthy()
 
     await settle(db2, taskId)

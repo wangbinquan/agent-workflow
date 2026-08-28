@@ -120,12 +120,23 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
     }
   })
 
-  // Source guard: the scheduler must (a) gate the undo on EXACTLY ONE done+merged
+  // Source guard: wrapper mechanics must (a) gate the undo on EXACTLY ONE done+merged
   // candidate (single-level), and (b) apply it to the iso BEFORE the agent runs (a
   // failed rerun must not have touched canon). If a refactor moves the undo to canon
   // or after the run, failure-safety / identical-output correctness silently regress.
-  test('source guard: scheduler gates single-level + undoes in the iso pre-run', async () => {
-    const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8')
+  test('source guard: wrapper mechanics gates single-level + undoes in the iso pre-run', async () => {
+    const src = readFileSync(
+      join(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'wrapperMechanics.ts',
+      ),
+      'utf8',
+    )
     expect(src).toContain('undoPriorShardDeltaInIso')
     expect(src).toContain('doneMergedCandidates')
     expect(src).toMatch(/doneMergedCandidates\.length === 1/)

@@ -21,10 +21,21 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
     expect(DEFAULT_PROTOCOL_RETRY_BUDGET).toBe(3)
   })
 
-  test('scheduler：defaultNodeRetries 兜底走共享常量', () => {
-    const s = SRC('services/scheduler.ts')
-    expect(s).toContain('opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET')
-    expect(s).not.toContain('defaultNodeRetries ?? 3')
+  test('task-execution mechanics：defaultNodeRetries 兜底走共享常量', () => {
+    const sources = [
+      SRC('modules/task-execution/composition/nodeMechanics.ts'),
+      SRC('modules/task-execution/composition/wrapperMechanics.ts'),
+    ]
+    expect(
+      sources.reduce(
+        (count, source) =>
+          count +
+          source.split('opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET').length -
+          1,
+        0,
+      ),
+    ).toBe(4)
+    for (const source of sources) expect(source).not.toContain('defaultNodeRetries ?? 3')
   })
 
   test('workgroup 引擎：协议重试 + fc 重开预算走共享常量（RFC-217 拆分后锚点）', () => {

@@ -1,10 +1,10 @@
-// RFC-066 PR-B — source-layer guards locking the scheduler / runner / diff /
+// RFC-066 PR-B — source-layer guards locking wrapper mechanics / runner / diff /
 // rollback wiring against silent regressions. Targets:
 //
-//   PB-G1: services/scheduler.ts retains the multi-repo wrapper-git defense-
+//   PB-G1: wrapperMechanics.ts retains the multi-repo wrapper-git defense-
 //          in-depth gate keyed by `multi-repo-wrapper-git-unsupported` so a
 //          future runTask refactor cannot quietly remove it.
-//   PB-G2: services/scheduler.ts threads `state.repos` (NOT a free-floating
+//   PB-G2: wrapperMechanics.ts threads `state.repos` (NOT a free-floating
 //          `repos` variable) into every templateMeta dispatch — anchors the
 //          per-repo metadata wiring on SchedulerState as the single source
 //          of truth.
@@ -24,8 +24,16 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-const SCHEDULER_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+const WRAPPER_MECHANICS_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
   'utf-8',
 )
 const NODE_MECHANICS_SRC = readFileSync(
@@ -52,13 +60,13 @@ describe('RFC-066 PR-B — source guards', () => {
     // 只看第一个仓。RFC-248 D9 让它逐仓快照、逐仓 diff、按挂载路径前缀化合并，
     // 禁令随之解除——门留着就等于仓库组永远跑不了 Code → Audit → Fix 主链路。
     // 断言翻成「码彻底消失」：留一个就意味着某条路径上禁令还在。
-    expect(SCHEDULER_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)
+    expect(WRAPPER_MECHANICS_SRC.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)
     // 正向锚：finalize 确实在逐仓做。
-    expect(SCHEDULER_SRC.includes('for (const r of diffableRepos)')).toBe(true)
+    expect(WRAPPER_MECHANICS_SRC.includes('for (const repo of diffableRepos(scene))')).toBe(true)
   })
 
   test('PB-G2 scheduler threads `state.repos` into every dispatch (via RFC-130 iso creation)', () => {
-    const executionSource = `${SCHEDULER_SRC}\n${NODE_MECHANICS_SRC}`
+    const executionSource = `${WRAPPER_MECHANICS_SRC}\n${NODE_MECHANICS_SRC}`
     // RFC-130: the 3 dispatch sites (single-agent, fanout shard, fanout aggregator)
     // no longer pass `state.repos` DIRECTLY into templateMeta — each first builds an
     // ISOLATED worktree from the SchedulerState-owned snapshot

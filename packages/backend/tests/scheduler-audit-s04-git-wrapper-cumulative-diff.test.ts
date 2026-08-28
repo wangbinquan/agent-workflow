@@ -1,7 +1,7 @@
 // REGRESSION GUARD — audit S-4 修复锁（RFC-098 B3 / WP-6c；原 CURRENT-BEHAVIOR
 // LOCK 已按头注指引翻转）。
 //
-// 锁定的修复语义（scheduler.ts runGitWrapperNode + captureGitPreDirty）：
+// 锁定的修复语义（task-execution GitStrategy + captureGitPreDirty adapter）：
 //   wrapper-git fresh-mint 在写锁窗口内抓 baseline + pre 脏集
 //   `{path: blobSha|'deleted'}` 存入 wrapperProgress.preDirty；finalize 做差集
 //   「post ∈ pre ∧ hash 相等才扣」。两个历史病面由同一机制修复：
@@ -31,7 +31,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { decodeWrapperProgress } from '../src/services/wrapperProgress'
+import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 

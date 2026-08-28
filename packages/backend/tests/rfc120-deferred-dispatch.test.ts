@@ -1322,7 +1322,18 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     // lock at the source so a revert that re-adds the RFC-120 §18 gate goes red.
     // RFC-141 (user ruling): an override target sees its own prior output as background — the
     // reassigned Q&A rides `## Clarify Q&A`, and the directive's "feedback above" points at it.
-    const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8')
+    const src = readFileSync(
+      join(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
+      'utf8',
+    )
     expect(src).not.toContain('clarifyQueue?.suppressPriorOutput')
     expect(src).not.toContain('!suppressPriorOutput')
   })
@@ -2523,7 +2534,18 @@ describe('RFC-120 §18 → RFC-141 — prior output on override handoffs (deferr
   })
 
   test('source lock: the scheduler no longer gates prior-output on ANY ownership signal (RFC-141)', () => {
-    const src = readFileSync(join(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8')
+    const src = readFileSync(
+      join(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
+      'utf8',
+    )
     // RFC-132 (PR-C) replaced the cross-clarify graphOwned attach gate with the flat queue's
     // suppressPriorOutput; RFC-141 removed that too. Negative locks so neither gate re-grows.
     expect(src).not.toContain('crossClarifyContext?.graphOwned')

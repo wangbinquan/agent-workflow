@@ -1,8 +1,11 @@
 import type { TriggerContext, WorkflowDefinition } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { tasks } from '@/db/schema'
-import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/topology'
-import type { TaskScopeOutcome } from '@/modules/task-execution/public/types'
+import type {
+  SchedulerRuntimeTopology,
+  TaskScopeOutcome,
+  WrapperExecutionScopeReadModel,
+} from '@/modules/task-execution/public/types'
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/util/semaphore'
 import type { RunTaskOptions } from './taskEngineRuntimeOptions'
@@ -23,9 +26,10 @@ export interface LegacyNodeResult {
 }
 
 /**
- * W2-C/D compatibility state shared with the legacy node/wrapper mechanics.
- * It is internal to task-execution and never appears in an application port or
- * public submission contract. Later waves delete fields as mechanics migrate.
+ * Post-W2-D compatibility state retained by the remaining node, lifecycle and
+ * commit-push mechanics. Composition adapts it into purpose-specific ports; it
+ * never appears in an application port or public submission contract. Later
+ * waves delete fields as those remaining mechanics migrate.
  */
 export interface LegacyTaskMechanicsState {
   readonly db: DbClient
@@ -44,6 +48,7 @@ export interface LegacyTaskMechanicsState {
   readonly subprocessSem: Semaphore
   readonly containerOf: Map<string, string>
   readonly topLevelIds: Set<string>
+  readonly wrapperScopes: WrapperExecutionScopeReadModel
   readonly driveScope: (
     state: LegacyTaskMechanicsState,
     args: TaskScopeArgs,

@@ -322,12 +322,33 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
   // **加强**了：既然只剩一个读取点，就可以断言 scheduler.ts 里**没有任何**直接的
   // `getAgentById(db, <节点字段>)` 调用——这比原来的三条文本锚更难绕过。
   test('agent-single + wrapper-fanout hydrate only via canonical agentId', () => {
-    const scheduler = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    const wrapperMechanics = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'wrapperMechanics.ts',
+      ),
       'utf8',
     )
     const runtimeRef = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'ref', 'runtimeRef.ts'),
+      'utf8',
+    )
+    const fanoutStrategy = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'wrapper',
+        'fanoutStrategy.ts',
+      ),
       'utf8',
     )
 
@@ -336,11 +357,12 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
     expect(runtimeRef).toContain('getAgentById(db,')
     // ② 绝不回退 name-only —— 两个文件都不许出现按名字查 agent。
     expect(runtimeRef).not.toContain('agentName')
-    expect(scheduler).not.toContain('await getAgent(db, agentName)')
-    // ③ scheduler 不再自己查 agent 行（比原三条文本锚更强的收口断言）。
-    expect(scheduler).not.toMatch(/await getAgentById\(db, (aid|agentIdRef)\b/)
+    expect(wrapperMechanics).not.toContain('await getAgent(db, agentName)')
+    // ③ wrapper mechanics 不再自己查 agent 行（比原三条文本锚更强的收口断言）。
+    expect(wrapperMechanics).not.toMatch(/await getAgentById\(db, (aid|agentIdRef)\b/)
     // ④ RFC-223 (PR-3a impl-gate H2)：inner-agent map 仍按 CANONICAL identity
     //    去重，不按可变的 name —— 两个同名不同 id 的 inner 节点绝不塌成一个。
-    expect(scheduler).toContain('const dedupKey = fanoutInnerAgentKey(rec)')
+    expect(fanoutStrategy).toContain('const key = this.data.fanoutAgentKey(inner)')
+    expect(fanoutStrategy).toContain('agentsMap.has(key)')
   })
 })

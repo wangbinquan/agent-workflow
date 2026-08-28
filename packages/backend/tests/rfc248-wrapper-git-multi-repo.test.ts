@@ -15,9 +15,9 @@
 // scheduler 的既有 wrapper 测试覆盖（它们跑单仓，保 baseline）。
 
 import { describe, expect, test } from 'bun:test'
-import { WrapperProgressSchema } from '@/services/wrapperProgress'
+import { WrapperProgressSchema } from '@/modules/task-execution/domain/wrapperProgress'
 
-/** 复刻 runGitWrapperNode 的合并规则，锁语义（实现里是同一段逻辑）。 */
+/** 复刻 GitStrategy/WrapperWorkspace adapter 的合并规则，锁语义。 */
 function mergePrefixed(
   perRepo: Array<{ mountPath: string; readonly?: boolean; paths: string[] }>,
 ): string[] {

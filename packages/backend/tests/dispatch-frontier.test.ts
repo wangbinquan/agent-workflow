@@ -21,7 +21,7 @@ import {
   wrapperInnerDescendants,
   wrapperRevivalEvidence,
 } from '../src/services/dispatchFrontier'
-import { encodeWrapperProgress } from '../src/services/wrapperProgress'
+import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
 type Row = typeof nodeRuns.$inferSelect
 

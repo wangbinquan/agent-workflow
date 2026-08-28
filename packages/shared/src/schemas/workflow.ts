@@ -858,7 +858,7 @@ export const WrapperFanoutNodeSchema = z
      * can't yet know the inner's shard count (depends on a port value
      * produced at run time); the author can pre-declare a conservative
      * upper bound here for static estimation. Falls back to a default
-     * estimate in `services/fanout.ts` (PR-D).
+     * estimate in `task-execution/domain/fanoutScope.ts` (PR-D / RFC-339).
      */
     expectedShardCount: z.number().int().positive().max(10_000).optional(),
   })

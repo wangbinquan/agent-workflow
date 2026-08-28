@@ -42,7 +42,15 @@ const ulid = monotonicFactory()
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
-const SCHEDULER_SRC = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
+const WRAPPER_MECHANICS_SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'composition',
+  'wrapperMechanics.ts',
+)
 
 interface Harness {
   db: DbClient
@@ -323,7 +331,7 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
   //    原地重跑挡路，见文件头说明），故按调研分工指引保留源码文本断言。
   // ---------------------------------------------------------------------------
   test('source-text lock: dispatchFanoutAggregator picks inner rows via pickReusableShardRun (done-only + freshest) and reuses its own prior row', () => {
-    const src = readFileSync(SCHEDULER_SRC, 'utf-8')
+    const src = readFileSync(WRAPPER_MECHANICS_SRC, 'utf-8')
     // The outer dispatcher now owns the process-retry loop; the attempt helper
     // owns row selection/idempotency and remains the source-text lock target.
     const start = src.indexOf('async function dispatchFanoutAggregatorAttempt')

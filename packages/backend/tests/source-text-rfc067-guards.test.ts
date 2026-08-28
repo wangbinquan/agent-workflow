@@ -36,6 +36,30 @@ const SCHEDULER_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf-8',
 )
+const NODE_MECHANICS_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf-8',
+)
+const WRAPPER_MECHANICS_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
+  'utf-8',
+)
 
 describe('RFC-067 source-text guards', () => {
   test('spawn.ts injects all four GIT_AUTHOR_* / GIT_COMMITTER_* env keys', () => {
@@ -82,12 +106,13 @@ describe('RFC-067 source-text guards', () => {
     )
   })
 
-  test('scheduler.ts threads task.gitUserName / Email through every runNode call', () => {
+  test('task-execution mechanics thread task.gitUserName / Email through every runNode call', () => {
     // Three call sites today: agent-single dispatch + fanout shard +
     // fanout aggregator. All three must spread the per-task identity.
-    const matches = SCHEDULER_SRC.match(/gitUserName:\s*task\.gitUserName/g) ?? []
+    const executionSource = `${SCHEDULER_SRC}\n${NODE_MECHANICS_SRC}\n${WRAPPER_MECHANICS_SRC}`
+    const matches = executionSource.match(/gitUserName:\s*task\.gitUserName/g) ?? []
     expect(matches.length).toBeGreaterThanOrEqual(3)
-    const emailMatches = SCHEDULER_SRC.match(/gitUserEmail:\s*task\.gitUserEmail/g) ?? []
+    const emailMatches = executionSource.match(/gitUserEmail:\s*task\.gitUserEmail/g) ?? []
     expect(emailMatches.length).toBeGreaterThanOrEqual(3)
   })
 

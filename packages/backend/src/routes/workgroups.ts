@@ -47,6 +47,7 @@ import {
 // route must not call startWorkgroupTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 import { WORKGROUPS_CHANNEL, workgroupsBroadcaster } from '@/ws/broadcaster'
@@ -324,10 +325,10 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
         },
         buildStartTaskDeps(
           deps.db,
+          requireSchedulerDriver(deps.schedulerDriver),
           deps.configPath,
           actor.user.id,
           undefined,
-          deps.repositoryPublicationTransport,
         ),
       )
       return c.json(task, 201)

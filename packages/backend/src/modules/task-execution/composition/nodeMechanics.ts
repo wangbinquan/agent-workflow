@@ -1,8 +1,8 @@
 // RFC-334 W2-C — production node and workgroup-host mechanics.
-// Per-kind selection lives in the closed registry; wrapper bodies remain behind W2-D.
+// Per-kind selection lives in the closed registry; wrapper bodies are owned by
+// the RFC-339 WrapperRuntime and consume this file only through typed ports.
 
 import { buildInheritedActor } from '@/auth/actor'
-import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns, taskCollaborators, tasks } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
@@ -19,7 +19,7 @@ import {
   collectImplicitInboundRefs,
   nodeKindIndex,
 } from '@/modules/task-execution/domain/inboundEdges'
-import { pickInheritableRunConfig } from '@/modules/task-execution/public/topology'
+import { pickInheritableRunConfig } from '@/modules/task-execution/public/commands'
 import { retryAttemptCap } from '@/platform/contracts/retryAttemptCap'
 import {
   dispatchCrossClarifyNode,
@@ -55,6 +55,7 @@ import type {
   LegacyNodeResult,
   LegacyTaskMechanicsState,
 } from '@/services/execution/taskMechanicsState'
+import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
 import { pickFreshestRun, pickUpstreamSourceRun } from '@/services/freshness'
 import {
   createIsoUnderLock,
@@ -219,22 +220,10 @@ export type SchedulerState = LegacyTaskMechanicsState
 /** RFC-282 C1-2 — config binary fallbacks for the mint-time freeze. Read at
  *  freeze time (same read-current family as the old per-entry resolution),
  *  then immutable on the node_run row. */
-export function freezeBinaryConfig(
-  configPath: string | undefined,
-): { opencodePath?: string | null; claudeCodePath?: string | null } | undefined {
-  if (configPath === undefined || configPath === '') return undefined
-  try {
-    const cfg = loadConfig(configPath)
-    return { opencodePath: cfg.opencodePath ?? null, claudeCodePath: cfg.claudeCodePath ?? null }
-  } catch {
-    return undefined
-  }
-}
-
 /** Required production entrypoint: callers must provide the complete topology. */
 // RFC-332 W2-B: task-level hydrate/claim/engine-selection/settle moved to
-// composition/taskEngineApplication.ts. This file now retains only the
-// W2-C/D scheduler mechanics consumed through explicit compatibility exports.
+// composition/taskEngineApplication.ts. This file owns the concrete non-wrapper
+// node mechanics reached through the closed RFC-334 executor registry.
 // -----------------------------------------------------------------------------
 // RFC-164 — workgroup engine integration. The engine (workgroupRunner.ts) owns
 // orchestration; this hook owns the MECHANICS of one host-node run, copied

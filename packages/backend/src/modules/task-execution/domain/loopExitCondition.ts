@@ -30,9 +30,8 @@ export type ExitCondition =
 
 /**
  * Parse an unknown wrapper-loop exitCondition shape into a typed union. Returns
- * null when the input is malformed; the scheduler treats null as a hard error —
- * runLoopWrapperNode fails the wrapper with `wrapper-loop-exit-condition`
- * (scheduler.ts, search that literal) rather than looping or exiting early.
+ * null when the input is malformed; LoopStrategy treats null as a hard error
+ * (`wrapper-loop-exit-condition`) rather than looping or exiting early.
  * The validator forbids missing/malformed exit conditions, so the runtime
  * branch is a defense-in-depth backstop, not a reachable product path.
  * (2026-08-12 审计对账：此注释原先写反成 "always exit / terminates after

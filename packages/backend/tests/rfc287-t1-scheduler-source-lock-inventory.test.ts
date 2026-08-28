@@ -39,36 +39,15 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'agent-output-kinds-scheduler-load.test.ts',
   'clarify-prompt-wire-up.test.ts',
   'depcheck-gate.test.ts',
-  'envelope-followup-source-grep.test.ts',
-  'freshness.test.ts',
-  'retry-budget-single-source.test.ts',
-  'review-dispatch-prefers-clarify-rerun.test.ts',
   'rfc098-commitpush-nonblocking.test.ts',
-  'rfc098-git-wrapper-diff-fail.test.ts',
-  'rfc103-fanout-kind-aware-split.test.ts',
-  'rfc120-deferred-dispatch.test.ts',
-  'rfc130-shard-rerun-undo.test.ts',
   'rfc143-runtime-driver-capability.test.ts',
-  'rfc144-stale-replay-regression.test.ts',
-  'rfc188-isolated-agent-run.test.ts',
-  'rfc193-wrapper-review.test.ts',
   'rfc200-source-lock.test.ts',
   'rfc202-source-locks.test.ts',
-  'rfc208-unbounded-git-and-permits.test.ts',
-  'rfc210-publish-failure-hard-fails.test.ts',
-  'rfc223-pr2-refs.test.ts',
-  'rfc230-wrapper-finalize-superseded.test.ts',
-  'rfc271-ref-contract.test.ts',
-  'rfc282-b2-resolve-injection.test.ts',
-  'rfc285-b3-inherited-actor.test.ts',
   'rfc287-t1-broadcast-sequence.test.ts',
   'rfc287-t1-discard-failure-paths.test.ts',
   'rfc287-t1-line-throw-disposition.test.ts',
   'rfc287-t1-merge-disposition-matrix.test.ts',
   'rfc287-t1-release-before-discard.test.ts',
-  // T14 新增（字符串序里 `t14` 在 `t5` 之前：第 9 位 '1' < '5'）：
-  // fanout 两条线撞冲突落 abandon（既存缺陷，用户拍板本 RFC 内补）。
-  'rfc287-t14-fanout-merge-conflict-abandon.test.ts',
   'rfc287-t5-script-merge-throw.test.ts',
   // T8 新增：取行前奏收编后的「单一实现 + 四线×五项差异矩阵」锁。
   'rfc287-t8-run-row-prelude-single-source.test.ts',
@@ -81,24 +60,19 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc331-task-execution-topology.test.ts',
   // RFC-332：旧 body 灭绝断言仍显式读取 scheduler facade。
   'rfc332-task-engine-contracts.test.ts',
+  // RFC-339 terminal extinction guard deliberately reads the legacy owner.
+  'rfc339-wrapper-runtime-cutover.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',
   'runner-resume-session-flag.test.ts',
-  'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts',
-  'scheduler-audit-s05-fanout-inner-chain.test.ts',
   'scheduler-audit-s13-freshest-fork-source-guards.test.ts',
   'scheduler-audit-s17-readonly-starved-by-writer-queue.test.ts',
-  'scheduler-audit-s21-fanout-aggregator-idempotency.test.ts',
   'scheduler-boundary-resume-retryindex-vs-id.test.ts',
   'scheduler-node-overrides.test.ts',
-  'scheduler-shard-item-kind-stringify.test.ts',
   'scheduler-subagent-live-capture-passthrough.test.ts',
-  'scheduler-wrapper-fanout-routing.test.ts',
   'source-text-rfc066-guards.test.ts',
-  'source-text-rfc066-pr-b-guards.test.ts',
   'source-text-rfc067-guards.test.ts',
-  'wrapper-git-list-path.test.ts',
 ]
 
 /**
@@ -132,8 +106,10 @@ describe('RFC-287 T1① — scheduler.ts 源码文本锁清单', () => {
       const source = readFileSync(resolve(TESTS_DIR, f), 'utf8')
       expect(source.length).toBeGreaterThan(0)
     }
-    expect(SCHEDULER_SOURCE_LOCK_FILES).toContain('rfc208-unbounded-git-and-permits.test.ts')
-    expect(SCHEDULER_SOURCE_LOCK_FILES).toContain('rfc210-publish-failure-hard-fails.test.ts')
+    // RFC-339 moved both execution owners; their behavior fixtures remain,
+    // while neither is a scheduler.ts text lock any longer.
+    expect(SCHEDULER_SOURCE_LOCK_FILES).not.toContain('rfc208-unbounded-git-and-permits.test.ts')
+    expect(SCHEDULER_SOURCE_LOCK_FILES).not.toContain('rfc210-publish-failure-hard-fails.test.ts')
     expect(
       SCHEDULER_SOURCE_LOCK_FILES.every((file) => file !== 'process-node-concurrency.test.ts'),
     ).toBe(true)

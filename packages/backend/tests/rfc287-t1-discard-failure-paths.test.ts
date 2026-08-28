@@ -30,6 +30,18 @@ const NODE_MECHANICS = readFileSync(
   ),
   'utf8',
 )
+const WRAPPER_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
+  'utf8',
+)
 
 // RFC-287 T7：五条线全部迁入骨架后，「逐函数看 finally 里那次 discard 的保护形态」
 // 这个探针没有消费者了（scheduler.ts 里已无 finally-discard）——连同它的 Guard 类型
@@ -40,7 +52,7 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // ——那个集合到此**归零**，所以断言翻面：scheduler.ts 里不得再有任何「在
     // finally 里清理 iso」的站点，清理与其失败处置单点收敛在骨架。
     // 反向锁（比原来的正向枚举更强）：新写一条线若自己起 finally 清 iso，这里立刻红。
-    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}`
+    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}\n${WRAPPER_MECHANICS}`
     const finallyBlocks = [...mechanics.matchAll(/\bfinally\s*\{/g)].map((m) =>
       mechanics.slice(m.index ?? 0, (m.index ?? 0) + 900),
     )

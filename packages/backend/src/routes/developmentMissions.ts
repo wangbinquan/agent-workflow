@@ -60,6 +60,7 @@ import { composeScriptActionExecution } from '@/modules/task-execution/compositi
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentMrFactsDeps,
@@ -173,10 +174,10 @@ export function mountDevelopmentMissionRoutes(
       db: deps.db,
       startDeps: buildStartTaskDeps(
         deps.db,
+        requireSchedulerDriver(deps.schedulerDriver),
         deps.configPath,
         SYSTEM_USER_ID,
         deps.secretBox,
-        routeDeps.repositoryPublicationTransport,
       ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(deps.db, executionRef)
@@ -195,10 +196,10 @@ export function mountDevelopmentMissionRoutes(
       db: deps.db,
       startDeps: buildStartTaskDeps(
         deps.db,
+        requireSchedulerDriver(deps.schedulerDriver),
         deps.configPath,
         SYSTEM_USER_ID,
         deps.secretBox,
-        routeDeps.repositoryPublicationTransport,
       ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(deps.db, executionRef)

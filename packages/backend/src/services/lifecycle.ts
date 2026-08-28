@@ -59,7 +59,7 @@ import {
   taskExecutionModule,
   withTaskExecutionMutation,
 } from '@/services/taskExecutionParticipants'
-import type { TaskExecutionContextRef } from '@/modules/task-execution/public/topology'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 
 const lifecycleLog = createLogger('lifecycle')
 

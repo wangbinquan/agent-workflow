@@ -18,11 +18,8 @@ import { selectAutoApplyOption, type RepairOption } from '@agent-workflow/shared
 
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import {
-  createLegacyTaskExecutionTopology,
-  type TaskRepositoryPublicationTransport,
-} from '@/services/startTaskDeps'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -137,7 +134,7 @@ export function startAutoRepairLoop(opts: {
   db: DbClient
   appHome: string
   configPath: string
-  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
+  schedulerDriver: SchedulerDriverPort
   onAlert?: (
     row: { taskId: string; rule: string; severity: 'warning' | 'error' },
     transition: 'new' | 'promoted',
@@ -156,10 +153,7 @@ export function startAutoRepairLoop(opts: {
       if (!Object.values(autoRepair).some((v) => v === true)) return // default: nothing enabled
       const deps = {
         db: opts.db,
-        schedulerDriver: createLegacyTaskExecutionTopology(
-          opts.db,
-          opts.repositoryPublicationTransport,
-        ).schedulerDriver,
+        schedulerDriver: opts.schedulerDriver,
         configPath: opts.configPath,
         ...(cfg.subagentLiveCapture !== undefined
           ? { subagentLiveCapture: cfg.subagentLiveCapture }

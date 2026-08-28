@@ -318,6 +318,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const deps: FusionDeps = {
       db,
       appHome,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       binaryOverride: makeClarifyStub(root),
       awaitScheduler: true,
     }

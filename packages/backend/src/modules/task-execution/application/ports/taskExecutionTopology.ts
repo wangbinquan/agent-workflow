@@ -1,6 +1,5 @@
 import type { Language, ScriptLanguage, TaskStatus, TriggerContext } from '@agent-workflow/shared'
 import type { OwnershipToken } from '../../domain/ownership'
-import type { TaskStatusProjectionReadModel } from '../queries/taskExecutionReadModels'
 
 /**
  * Cross-boundary identity view of RFC-328's exact execution context.
@@ -93,23 +92,58 @@ export const INHERITABLE_RUN_CONFIG_KEYS = [
   'commitPushExcludePatterns',
   'scriptInterpreters',
   'scriptDepsInstallTimeoutMs',
-] as const satisfies ReadonlyArray<keyof TaskDriveRuntimeOptions>
+] as const satisfies ReadonlyArray<keyof InheritableRunConfig>
 
-export type InheritableRunConfig = Pick<
-  TaskDriveRuntimeOptions,
+/** Explicit public resume shape; keep it in lockstep with the key catalog above. */
+export interface InheritableRunConfig {
+  readonly daemonGeneration?: string
+  readonly binaryOverride?: readonly string[]
+  readonly configPath?: string
+  readonly appHome: string
+  readonly defaultPerNodeTimeoutMs?: number
+  readonly defaultNodeRetries?: number
+  readonly sessionRestartBudget?: number
+  readonly defaultRuntime?: string
+  readonly maxConcurrentNodes?: number
+  readonly maxConcurrentScriptNodes?: number
+  readonly maxConcurrentCodeHostCalls?: number
+  readonly codeHostRequestTimeoutMs?: number
+  readonly codeHostResponseMaxBytes?: number
+  readonly multiProcessSubprocessConcurrency?: number
+  readonly maxActiveChildTasks?: number
+  readonly maxInvocationDepth?: number
+  readonly subagentLiveCapture?: {
+    readonly pollMs: number
+    readonly consecutiveFailureLimit: number
+  }
+  readonly commitPushExcludePatterns?: readonly string[]
+  readonly scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
+  readonly scriptDepsInstallTimeoutMs?: number
+}
+
+type MutableInheritableRunConfig = {
+  -readonly [K in keyof InheritableRunConfig]: InheritableRunConfig[K]
+}
+
+const inheritableRunConfigKeysAreExhaustive: Exclude<
+  keyof InheritableRunConfig,
   (typeof INHERITABLE_RUN_CONFIG_KEYS)[number]
->
+> extends never
+  ? true
+  : never = true
+void inheritableRunConfigKeysAreExhaustive
 
 /** Preserve exact-optional semantics: absent values stay absent. */
 export function pickInheritableRunConfig<T extends TaskDriveRuntimeOptions>(
   options: T,
 ): InheritableRunConfig {
-  const selected: Record<string, unknown> = {}
+  const selected: Partial<MutableInheritableRunConfig> &
+    Pick<MutableInheritableRunConfig, 'appHome'> = { appHome: options.appHome }
   for (const key of INHERITABLE_RUN_CONFIG_KEYS) {
     const value = options[key]
-    if (value !== undefined) selected[key] = value
+    if (value !== undefined) Object.assign(selected, { [key]: value })
   }
-  return selected as InheritableRunConfig
+  return selected
 }
 
 export interface ChildResumeRuntime {
@@ -141,11 +175,4 @@ export interface TaskStatusProjection {
 
 export interface TaskStatusPublisher {
   publish(event: TaskStatusProjection): void
-}
-
-/** Required by the scheduler runtime; production construction has no fallback. */
-export interface SchedulerRuntimeTopology {
-  readonly schedulerDriver: SchedulerDriverPort
-  readonly taskStatusReadModel: TaskStatusProjectionReadModel
-  readonly taskStatusPublisher: TaskStatusPublisher
 }

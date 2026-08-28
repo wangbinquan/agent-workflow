@@ -1,8 +1,12 @@
-import type { NodeStepOutcome, NodeStepRequest } from '../../domain/nodeExecution'
+import type { NodeStepOutcome } from '../../domain/nodeExecution'
+import type { WrapperExecutionRequest, WrapperNodeKind } from '../../domain/wrapperExecution'
 
-export type WrapperNodeKind = 'wrapper-git' | 'wrapper-loop' | 'wrapper-fanout'
+export type { WrapperNodeKind } from '../../domain/wrapperExecution'
 
-/** W2-C delegation seam; the implementation remains owned by W2-D. */
+/** Closed W2-C delegation seam implemented by the W2-D WrapperRuntime. */
 export interface WrapperNodeExecutionPort {
-  execute<K extends WrapperNodeKind>(kind: K, request: NodeStepRequest<K>): Promise<NodeStepOutcome>
+  execute<K extends WrapperNodeKind>(
+    kind: K,
+    request: WrapperExecutionRequest<K>,
+  ): Promise<NodeStepOutcome>
 }

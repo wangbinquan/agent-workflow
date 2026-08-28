@@ -1,7 +1,7 @@
 // 2026-05-24 regression lock — markBoundaryWrapperInput stamps the
 // `boundary: 'wrapper-input'` flag on edges the user drag-creates from a
-// wrapper-fanout input port into an inner node. The runtime fanout
-// dispatcher (packages/backend/src/services/fanout.ts) iterates only over
+// wrapper-fanout input port into an inner node. The task-execution fanout
+// strategy/domain projection iterates only over
 // `edges.filter(e => e.boundary === 'wrapper-input')`; without this tag a
 // drag-authored edge renders on the canvas but is silently ignored at
 // runtime — which is exactly the bug a user just hit:

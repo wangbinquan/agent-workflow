@@ -123,7 +123,7 @@ describe('dispatchReviewNode upstream selection — clarify rerun must beat stal
 
     // Fresh row: clarify-driven continuation rerun at retryIndex=0,
     // clarifyIteration=1 (the clarify-answer rerun mint + isFresherNodeRun in
-    // packages/backend/src/services/scheduler.ts). Emitted docpath.
+    // packages/backend/src/modules/task-execution/composition/nodeMechanics.ts). Emitted docpath.
     const clarifyRunId = '01B_CLARIFY'
     await db.insert(nodeRuns).values({
       id: clarifyRunId,

@@ -75,16 +75,6 @@ export interface LegacyWorkgroupHostExecutionPort {
   execute(input: WorkgroupHostExecutionRequest): Promise<WorkgroupHostExecutionOutcome>
 }
 
-export interface TaskReplayRequest {
-  readonly taskId: string
-  readonly execution: TaskExecutionContextRef
-}
-
-export interface TaskPreDriveReplayPort {
-  replayPendingMerges(input: TaskReplayRequest): Promise<void>
-  replayConflictHumanResolutions(input: TaskReplayRequest): Promise<void>
-}
-
 export interface TaskCompletionRequest {
   readonly taskId: string
   readonly execution: TaskExecutionContextRef

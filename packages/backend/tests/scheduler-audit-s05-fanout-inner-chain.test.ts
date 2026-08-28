@@ -8,7 +8,7 @@
 //     （审计缺口 ⑥-9：这种边的 source 是 wrapper 本体，由规则 4 精确校验）。
 //
 // 【层 1 / 层 3 = CURRENT-BEHAVIOR LOCK，仍锁缺陷现状（WP-6b 根治时翻转）】
-//   1. resolveUpstreamInputs (services/scheduler.ts) 用 `parentNodeRunId ===
+//   1. resolveUpstreamInputs (task-execution wrapperMechanics.ts) 用 `parentNodeRunId ===
 //      null` 过滤候选行 —— fanout 内 per-shard 节点 A 的全部产出都挂在 shard
 //      child 行上，A→B 链的 B 在解析上游时一行都拿不到：目标端口键整体缺失，
 //      consumed 也为空。
@@ -133,7 +133,7 @@ describe('S-5 layer 1 — resolveUpstreamInputs excludes shard child rows wholes
       parentNodeRunId: null,
     })
     // A（audit）的产出只存在于 shard child 行上 —— fanout 内 per-shard 节点的
-    // 真实落库形态（见 scheduler.ts dispatchFanoutShard 的 insert：
+    // 真实落库形态（见 wrapperMechanics.ts dispatchFanoutShard 的 insert：
     // parentNodeRunId = wrapperRunId）。
     await seedRunWithOutput(
       db,
@@ -510,7 +510,7 @@ describe('S-5 layer 3 — runtime: per-shard chain B runs green on empty input',
 
     // [FLIP] 修复（拓扑序派发）后：无论 nodeIds 数组序如何，audit 都应先于
     // fix 派发 —— 此处前两条 spawn 应变为 auditor。
-    // 当前缺陷行为：scheduler.ts:2517 的 for-of 按 nodeIds[] 原样迭代且逐个
+    // 当前缺陷行为：wrapperMechanics.ts 的 for-of 按 directNodeIds 原样迭代且逐个
     // await Promise.all，数组序 = 派发序。nodeIds 逆序时 fix 的两个 shard
     // 在 audit 任何一行存在之前就已 spawn —— 即使未来修掉 child-row 过滤，
     // 非拓扑派发也会让 B 读不到 A（capture 文件按 append 序记录 spawn 序）。

@@ -416,28 +416,7 @@ function isRfc332CompatibilityEdge(edge: Pick<ObservedContextEdge, 'fromFile' | 
     RFC_332_COMPATIBILITY_BRIDGE_FILES.has(edge.fromFile) ||
     (edge.fromFile === 'packages/backend/src/services/task.ts' &&
       edge.toFile ===
-        'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts') ||
-    (edge.fromFile === 'packages/backend/src/services/startTaskDeps.ts' &&
-      edge.toFile ===
-        'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts')
-  )
-}
-
-function isRfc334CompatibilityEdge(
-  edge: Pick<ObservedContextEdge, 'fromFile' | 'toFile' | 'targetSymbol'>,
-): boolean {
-  const scheduler = 'packages/backend/src/services/scheduler.ts'
-  const composition =
-    'packages/backend/src/modules/task-execution/composition/nodeExecution.ts'
-  const mechanics =
-    'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts'
-  return (
-    (edge.fromFile === composition &&
-      edge.toFile === scheduler &&
-      ['runWrapperFanoutNode', 'runWrapperGitNode', 'runWrapperLoopNode'].includes(
-        edge.targetSymbol,
-      )) ||
-    (edge.fromFile === scheduler && edge.toFile === mechanics)
+        'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts')
   )
 }
 
@@ -759,20 +738,10 @@ function observedContextEdges(
       if (fromLocation === null) {
         role = 'legacy-inbound'
         removeAfterWave =
-          isRfc334CompatibilityEdge({
-            fromFile: unit.path,
-            toFile: item.toFile,
-            targetSymbol: item.importedName,
-          })
-            ? 'W2-D'
-            : unit.path === 'packages/backend/src/services/task.ts' &&
+          unit.path === 'packages/backend/src/services/task.ts' &&
           item.toFile ===
             'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts'
             ? 'W4'
-            : unit.path === 'packages/backend/src/services/startTaskDeps.ts' &&
-                item.toFile ===
-                  'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts'
-            ? 'W2-D'
             : 'W4/W9'
       } else if (toLocation === null) {
         role = 'legacy-outbound'
@@ -1232,12 +1201,6 @@ function publicSurfaceLifecycle(location: {
   context: string
   entrypoint: string
 }): Pick<PublicSurfaceEntry, 'status' | 'removeAfterWave'> {
-  const rfc331CompatibilitySurface =
-    location.context === 'task-execution' &&
-    (location.entrypoint === 'queries' || location.entrypoint === 'topology')
-  if (rfc331CompatibilitySurface) {
-    return { status: 'legacy-context-debt', removeAfterWave: 'W2-B/W2-D' }
-  }
   const target = (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
   return {
     status: target ? 'target-context-current-surface' : 'legacy-context-debt',
@@ -2017,7 +1980,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/nodeMechanics\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/sqliteHumanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpenTx|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
+    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/sqliteHumanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpenTx|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
       value,
     )
   ) {
@@ -2686,11 +2649,7 @@ function buildFacades(
           .map((entry) => entry.name)
           .sort(),
         removeAfterWave:
-          unit.path === `${BACKEND_PREFIX}services/startTaskDeps.ts`
-            ? 'W2-B/W2-D'
-            : targetContextFor(unit.path) === 'source-control'
-              ? 'W5'
-              : 'W4/W9',
+          targetContextFor(unit.path) === 'source-control' ? 'W5' : 'W4/W9',
       }
     })
     .sort((left, right) => left.id.localeCompare(right.id))
@@ -2736,20 +2695,16 @@ function buildArchitectureExceptions(
       edgeKind: edge.edgeKind,
       owner: edge.owner,
       why:
-        isRfc334CompatibilityEdge(edge)
-          ? 'RFC-334 leaves only the purpose-specific wrapper bridge until the separately authorized W2-D cutover.'
-          : isRfc332CompatibilityEdge(edge)
+        isRfc332CompatibilityEdge(edge)
           ? 'RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover.'
           : edge.role === 'legacy-inbound'
           ? 'Legacy inbound caller reaches a module boundary before its W4 public use-case cutover.'
           : edge.role === 'legacy-outbound'
             ? 'A module still reaches a legacy implementation before its owner adapter cutover.'
             : 'Current module edge reaches a non-public internal entrypoint and must not become precedent.',
-      introducedByRFC: isRfc334CompatibilityEdge(edge)
-        ? 'RFC-334'
-        : isRfc332CompatibilityEdge(edge)
-          ? 'RFC-332'
-          : 'pre-RFC-294-current-debt',
+      introducedByRFC: isRfc332CompatibilityEdge(edge)
+        ? 'RFC-332'
+        : 'pre-RFC-294-current-debt',
       removeAfterWave: edge.removeAfterWave!,
       expiresOn: '2027-12-31',
       mutationTest: 'rfc294-canonical-manifests: exact exception stale/unknown mutation',

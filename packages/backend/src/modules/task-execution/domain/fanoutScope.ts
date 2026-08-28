@@ -5,7 +5,8 @@
 // per the returned scope.
 
 import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
-import { findFanoutAggregator } from '@agent-workflow/shared'
+import { findFanoutAggregatorInScope } from '@agent-workflow/shared'
+import type { WrapperScopeDescriptor } from './executionScope'
 
 export interface ShardScope {
   /** Inner nodes that run once per shard (N node_run rows minted). */
@@ -20,19 +21,10 @@ export interface ShardScope {
 }
 
 export interface ShardScopeInput {
-  wrapperId: string
+  scope: WrapperScopeDescriptor<'wrapper-fanout'>
   defn: WorkflowDefinition
   /** Agents indexed by name; used to resolve aggregator inner nodes. */
   agents: ReadonlyMap<string, Agent> | Readonly<Record<string, Agent | undefined>>
-}
-
-function getInnerIds(defn: WorkflowDefinition, wrapperId: string): string[] {
-  const node = defn.nodes.find((n) => n.id === wrapperId)
-  if (node === undefined || node.kind !== 'wrapper-fanout') return []
-  const rec = node as Record<string, unknown>
-  return Array.isArray(rec.nodeIds)
-    ? (rec.nodeIds as unknown[]).filter((x): x is string => typeof x === 'string')
-    : []
 }
 
 function getShardSourcePort(defn: WorkflowDefinition, wrapperId: string): string | null {
@@ -59,9 +51,10 @@ function getShardSourcePort(defn: WorkflowDefinition, wrapperId: string): string
  * separated into two passes so tests can exercise each independently.
  */
 export function computeShardScope(input: ShardScopeInput): ShardScope {
-  const { wrapperId, defn, agents } = input
-  const innerIds = new Set(getInnerIds(defn, wrapperId))
-  const aggregator = findFanoutAggregator(defn, wrapperId, agents)
+  const { scope, defn, agents } = input
+  const { wrapperId } = scope
+  const innerIds = new Set(scope.directNodeIds)
+  const aggregator = findFanoutAggregatorInScope(defn, scope.directNodeIds, agents)
   const aggregatorId = aggregator?.node.id ?? null
   const shardSourceName = getShardSourcePort(defn, wrapperId)
 
@@ -140,12 +133,12 @@ export function applyAutoPromote(scope: ShardScope, defn: WorkflowDefinition): S
  * Estimate the total shard count an outer wrapper-fanout will produce
  * by multiplying through nested wrapper-fanout `expectedShardCount`
  * hints (design §11.2). Used by the runtime cartesian guard (D.T6) in
- * `scheduler.ts` before minting per-shard node_runs.
+ * `FanoutStrategy` before minting per-shard node_runs.
  *
  * Inputs:
  *  - `outerShardCount`: actual number of items in the shardSource list
  *    at run time (the outer dimension).
- *  - `defn` + `wrapperId`: walk down the inner subgraph for any nested
+ *  - `defn` + `scope`: walk the index-owned direct membership for any nested
  *    wrapper-fanout, multiplying their `expectedShardCount` (default 16
  *    when not declared).
  *
@@ -154,15 +147,12 @@ export function applyAutoPromote(scope: ShardScope, defn: WorkflowDefinition): S
  */
 export function estimateShardTotal(
   defn: WorkflowDefinition,
-  wrapperId: string,
+  scope: WrapperScopeDescriptor<'wrapper-fanout'>,
   outerShardCount: number,
   defaultExpectedShardCount: number = 16,
 ): number {
-  const node = defn.nodes.find((n) => n.id === wrapperId)
-  if (node === undefined || node.kind !== 'wrapper-fanout') return outerShardCount
-  const innerIds = getInnerIds(defn, wrapperId)
   let nestedFactor = 1
-  for (const innerId of innerIds) {
+  for (const innerId of scope.directNodeIds) {
     const inner = defn.nodes.find((n) => n.id === innerId)
     if (inner === undefined || inner.kind !== 'wrapper-fanout') continue
     const declared = (inner as Record<string, unknown>).expectedShardCount

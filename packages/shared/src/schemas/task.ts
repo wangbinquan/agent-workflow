@@ -1079,9 +1079,9 @@ export const RERUN_CAUSES = [
   'retry-node',
   /** Downstream cascade placeholder minted by retryNode (task.ts). */
   'retry-node-cascade',
-  /** Fanout shard child row (scheduler dispatchFanoutShard). */
+  /** Fanout shard child row (task-execution fanout attempt). */
   'fanout-shard',
-  /** Fanout aggregator row (scheduler). */
+  /** Fanout aggregator row (task-execution fanout attempt). */
   'fanout-aggregator',
   /** Wrapper (loop / fanout / git) container fresh-mint. */
   'wrapper-init',

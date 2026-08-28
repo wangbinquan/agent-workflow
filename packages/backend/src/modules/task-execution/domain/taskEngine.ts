@@ -21,7 +21,7 @@ export type TaskEngineOutcome =
   | Readonly<{ kind: 'awaiting_review'; detail?: TaskFailureDetail }>
   | Readonly<{ kind: 'awaiting_human'; detail?: TaskFailureDetail }>
 
-/** Temporary W2-C/D mechanics result retained for nested wrapper parity. */
+/** Scope-level result shared by root and nested wrapper drives. */
 export interface TaskScopeOutcome {
   readonly kind: 'ok' | 'handoff' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
   readonly detail?: TaskFailureDetail

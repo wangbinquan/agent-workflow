@@ -104,7 +104,7 @@ import { listAgents } from '@/services/agent'
 import { listPlugins } from '@/services/plugin'
 import { listSkills } from '@/services/skill'
 import { getWorkflow } from '@/services/workflow'
-import { parseExitCondition } from '@/services/exitCondition'
+import { isValidLoopExitCondition } from '@/modules/task-execution/public/queries'
 import { NotFoundError } from '@/util/errors'
 import { PLUGIN_DISABLED_ERROR_CODE } from '@/services/execution/resourcePolicy'
 import { sha256Hex } from '@/util/hash'
@@ -852,7 +852,7 @@ export function validateWorkflowDef(
           pointer: node.id,
           target: target.nodeField(node.id, 'loop-exit-condition'),
         })
-      } else if (parseExitCondition(exitCond) === null) {
+      } else if (!isValidLoopExitCondition(exitCond)) {
         issues.push({
           code: 'wrapper-loop-exit-condition',
           message: `wrapper-loop '${node.id}' has an invalid exitCondition`,

@@ -20,7 +20,7 @@ import {
   splitRepoRef,
   invalidateCallGraphIndex,
 } from '../src/services/structuralDiff/callGraph/expandService'
-import { createTaskExecutionReadModels } from '../src/modules/task-execution/public/queries'
+import { createSqliteTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
 import { startTask } from '../src/services/task'
 import { workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -132,7 +132,7 @@ describe('getCallTargets — multi-repo (RFC-089 P4)', () => {
     )
     invalidateCallGraphIndex(wtA)
 
-    const readModel = createTaskExecutionReadModels(h.db).callGraphWorkspace
+    const readModel = createSqliteTaskExecutionReadModels(h.db).callGraphWorkspace
     const out = await getCallTargets(readModel, task.id, `${dirA}/src/A.java#A.run`)
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
@@ -147,7 +147,7 @@ describe('getCallTargets — multi-repo (RFC-089 P4)', () => {
   test('a ref with no matching repo prefix → call-target-repo-unresolved', async () => {
     h = await buildHarness()
     const task = await twoRepoTask(h)
-    const readModel = createTaskExecutionReadModels(h.db).callGraphWorkspace
+    const readModel = createSqliteTaskExecutionReadModels(h.db).callGraphWorkspace
     await expect(getCallTargets(readModel, task.id, 'nope/src/A.java#A.run')).rejects.toThrow(
       /does not match any repo/,
     )

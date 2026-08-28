@@ -262,15 +262,25 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
 
   test('source guard: the finalize catch marks the wrapper failed with the git-diff-failed short-code (no silent paths=[] degrade)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'wrapper',
+        'gitStrategy.ts',
+      ),
       'utf-8',
     )
     // The typed short-code is minted in the finalize catch…
-    expect(src).toContain('`git-diff-failed:${msg}`')
+    expect(src).toContain('`git-diff-failed:${message}`')
     // …and the wrapper-git-list-path text anchor (git_diff port receives
     // paths.join via the RFC-144 multi-generation upsert) still holds —
     // locked in wrapper-git-list-path.test.ts; the companion assertion here
     // ties the two contracts to the same block.
-    expect(src).toMatch(/upsertWrapperOutput\(db, wrapperRunId, 'git_diff', paths\.join\('\\n'\)\)/)
+    expect(src).toContain("portName: 'git_diff'")
+    expect(src).toContain("content: paths.join('\\n')")
   })
 })

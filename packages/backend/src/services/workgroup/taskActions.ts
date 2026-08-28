@@ -11,6 +11,7 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 import { type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { WorkflowNameSchema } from '@agent-workflow/shared'
 import { nodeRuns, tasks, workgroupAssignments, workgroupMessages } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
@@ -19,10 +20,6 @@ import { setNodeRunStatusTx } from '@/services/lifecycle'
 import { resumeTask, resumeTaskWithAtomicSideEffects } from '@/services/task'
 import { canViewTask } from '@/services/taskCollab'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import {
-  createLegacyTaskExecutionTopology,
-  type TaskRepositoryPublicationTransport,
-} from '@/services/startTaskDeps'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -103,17 +100,14 @@ export const ConfirmSchema = z
 export interface WorkgroupTaskActionDeps {
   db: DbClient
   configPath: string
-  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
+  schedulerDriver: SchedulerDriverPort
 }
 
 export function buildWorkgroupTaskActions(deps: WorkgroupTaskActionDeps) {
   function buildResumeDeps(): Parameters<typeof resumeTask>[2] {
     return {
       db: deps.db,
-      schedulerDriver: createLegacyTaskExecutionTopology(
-        deps.db,
-        deps.repositoryPublicationTransport,
-      ).schedulerDriver,
+      schedulerDriver: deps.schedulerDriver,
       appHome: Paths.root,
       configPath: deps.configPath,
       ...resolveLaunchRuntimeConfig(deps.configPath),

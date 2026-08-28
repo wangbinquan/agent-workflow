@@ -27,7 +27,15 @@ import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionT
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
-const SCHEDULER_SRC = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
+const WRAPPER_LIFECYCLE_SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'composition',
+  'wrapperRunLifecycle.ts',
+)
 
 interface Harness {
   db: DbClient
@@ -241,18 +249,18 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
   })
 
   test('源码层兜底：只有 canceled / interrupted 会被收敛，其余非法转移仍原样抛出', () => {
-    const src = readFileSync(SCHEDULER_SRC, 'utf8')
+    const src = readFileSync(WRAPPER_LIFECYCLE_SRC, 'utf8')
     const fn = src.slice(
       src.indexOf('async function supersedingWrapperOutcome'),
-      src.indexOf('async function markWrapperTerminal'),
+      src.indexOf('async function clearWrapperReuseDisabled'),
     )
     expect(fn.length).toBeGreaterThan(0)
     // 收敛集恰为两员。多一个成员（尤其 done / failed）就会把真正的数据不一致
     // 变成静默通过 —— 那是本 RFC 明确拒绝的方向。
-    const statuses = [...fn.matchAll(/cur\.status === '([a-z_]+)'/g)].map((m) => m[1])
+    const statuses = [...fn.matchAll(/current\?\.status === '([a-z_]+)'/g)].map((m) => m[1])
     expect(statuses.sort()).toEqual(['canceled', 'interrupted'])
     // 收敛路径必须原样抛出非收敛错误。
     expect(fn.includes('return null')).toBe(true)
-    expect(src.includes('if (outcome === null) throw err')).toBe(true)
+    expect(src.includes('if (outcome === null) throw error')).toBe(true)
   })
 })

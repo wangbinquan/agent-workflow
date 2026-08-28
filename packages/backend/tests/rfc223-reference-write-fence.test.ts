@@ -46,6 +46,7 @@ import {
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
+import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -608,6 +609,7 @@ describe('RFC-223 ordinary reference final-transaction fences', () => {
     const core = buildWorkgroupTaskActions({
       db,
       configPath: '/tmp/rfc223-ref-fence-config.json',
+      schedulerDriver: createNoopSchedulerDriver(),
     })
     const actions = buildConfigActions(
       {

@@ -1,6 +1,6 @@
-// RFC-060 PR-D — wrapper-fanout scheduler routing locks.
+// RFC-060 PR-D — wrapper-fanout runtime routing locks.
 //
-// Source-text guards for the scheduler dispatch contract:
+// Source-text guards for the WrapperRuntime dispatch contract:
 //
 //   D.T2 — wrapper-fanout passes the node-kind whitelist, the dispatch
 //          switch in runOneNode has a `wrapper-fanout` case, and
@@ -11,8 +11,8 @@
 //          short-circuits to `wrapper-fanout-cartesian-exceeds-max`.
 //   D.T7 — the runner consumes inputPortKinds and the scheduler builds
 //          one for boundary-input edges (signal kind passthrough).
-//   D.T8 — markWrapperTerminal is the finalize path; lifecycle
-//          allowedFrom = pending | running | awaiting_review | awaiting_human.
+//   D.T8 — WrapperRuntime owns the common lifecycle; concrete mechanics only
+//          return settlements through the ledger/publisher ports.
 //
 // All assertions are file-text patterns. Pure-function helpers
 // (computeShardScope / applyAutoPromote / estimateShardTotal) are
@@ -22,8 +22,16 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-const schedulerSrc = readFileSync(
-  resolve(import.meta.dirname, '..', 'src', 'services', 'scheduler.ts'),
+const wrapperMechanicsSrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
   'utf8',
 )
 const runnerSrc = readFileSync(
@@ -58,6 +66,43 @@ const nodeExecutionCompositionSrc = readFileSync(
   ),
   'utf8',
 )
+const wrapperRuntimeCompositionSrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperRuntime.ts',
+  ),
+  'utf8',
+)
+const wrapperLifecycleSrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperRunLifecycle.ts',
+  ),
+  'utf8',
+)
+const fanoutStrategySrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'engine',
+    'wrapper',
+    'fanoutStrategy.ts',
+  ),
+  'utf8',
+)
 const nodeExecutorRegistrySrc = readFileSync(
   resolve(
     import.meta.dirname,
@@ -68,6 +113,18 @@ const nodeExecutorRegistrySrc = readFileSync(
     'engine',
     'node',
     'nodeExecutorRegistry.ts',
+  ),
+  'utf8',
+)
+const scopeIndexSrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'domain',
+    'executionScope.ts',
   ),
   'utf8',
 )
@@ -85,23 +142,28 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
 
   test("closed registry dispatches 'wrapper-fanout' through the W2-D delegation port", () => {
     expect(nodeExecutorRegistrySrc).toContain("'wrapper-fanout': Object.freeze")
-    expect(nodeExecutionCompositionSrc).toContain('return runWrapperFanoutNode(state, args)')
+    expect(nodeExecutionCompositionSrc).toContain('wrapperRuntimeFactory(state)')
+    expect(nodeExecutionCompositionSrc).not.toContain('composeWrapperRuntime')
+    expect(wrapperRuntimeCompositionSrc).toContain("'wrapper-fanout': new FanoutStrategy")
+    expect(wrapperRuntimeCompositionSrc).toContain(
+      'new FanoutStrategy(ports.data, ports.fanoutAttempts)',
+    )
     expect(nodeExecutionCompositionSrc).toContain('createWrapperDelegatingNodeExecutors')
   })
 
-  test('runFanoutWrapperNode function is defined', () => {
-    expect(schedulerSrc).toContain('async function runFanoutWrapperNode(')
+  test('FanoutStrategy owns the outer fanout orchestration', () => {
+    expect(fanoutStrategySrc).toContain('export class FanoutStrategy')
+    expect(fanoutStrategySrc).toContain('private async executePrepared(')
   })
 
-  test('buildContainerMap walks wrapper-fanout (so inner nodeIds get containment)', () => {
+  test('ExecutionScopeIndex walks wrapper-fanout (so inner nodeIds get containment)', () => {
     // Scope containment is now owned by the shared workflow-scope oracle, so
     // scheduler readiness, source promotion, and frontend layout cannot drift
     // into three different wrapper-membership implementations.
-    const containerMapFn = schedulerSrc.slice(
-      schedulerSrc.indexOf('function buildContainerMap'),
-      schedulerSrc.indexOf('function buildContainerMap') + 2_000,
-    )
-    expect(containerMapFn).toContain('buildWorkflowScopeParentMap(def)')
+    expect(scopeIndexSrc).toContain('analyzeWorkflowScopeTree(definition)')
+    expect(scopeIndexSrc).toContain('directNodeIds: Object.freeze([')
+    expect(scopeIndexSrc).toContain('...directNodeIdsOf(')
+    expect(wrapperMechanicsSrc).not.toContain("pickStringArray(node, 'nodeIds')")
   })
 
   test('opts.fanoutMaxShardTotal field exists on RunTaskOptions', () => {
@@ -111,7 +173,7 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
 
 describe('D.T3 — aggregator dispatch helper exists + collects per-shard raw lists', () => {
   test('dispatchFanoutAggregator function defined', () => {
-    expect(schedulerSrc).toContain('async function dispatchFanoutAggregator(')
+    expect(wrapperMechanicsSrc).toContain('async function dispatchFanoutAggregator(')
   })
 
   test('aggregator collects inner runs anchored on non-null parent + iteration (RFC-098 B3 relaxed anchor)', () => {
@@ -121,44 +183,49 @@ describe('D.T3 — aggregator dispatch helper exists + collects per-shard raw li
     // generation's replayed done children; per-row picking moved to the shared
     // done-only picker (pickReusableShardRun). The child rows stay
     // frontier-invisible because parent is still non-null.
-    expect(schedulerSrc).toMatch(/isNotNull\(nodeRuns\.parentNodeRunId\)/)
-    expect(schedulerSrc).toMatch(/eq\(nodeRuns\.iteration, iteration\)/)
-    expect(schedulerSrc).toMatch(/pickReusableShardRun\(innerRows, \{/)
+    expect(wrapperMechanicsSrc).toMatch(/isNotNull\(nodeRuns\.parentNodeRunId\)/)
+    expect(wrapperMechanicsSrc).toMatch(/eq\(nodeRuns\.iteration, iteration\)/)
+    expect(wrapperMechanicsSrc).toMatch(/pickReusableShardRun\(innerRows, \{/)
   })
 
   test('aggregator iterates shards in shardKey dictionary order', () => {
-    expect(schedulerSrc).toMatch(/sortedShards = \[\.\.\.shards\]\.sort/)
-    expect(schedulerSrc).toMatch(/\.localeCompare\(/)
+    expect(wrapperMechanicsSrc).toMatch(/sortedShards = \[\.\.\.shards\]\.sort/)
+    expect(wrapperMechanicsSrc).toMatch(/\.localeCompare\(/)
   })
 
   test('aggregator emits raw lists as `### <shardKey>` delimited blocks', () => {
     // The PR-D minimum format documented in dispatchFanoutAggregator's
     // doc-comment: each per-shard output is prefixed with `### shardKey`.
-    expect(schedulerSrc).toMatch(/### \$\{s\.shardKey\}/)
+    expect(wrapperMechanicsSrc).toMatch(/### \$\{s\.shardKey\}/)
   })
 
   test('aggregator renames outputs via outputWrapperPortNames into wrapper outlets', () => {
-    expect(schedulerSrc).toContain('outputWrapperPortNames')
-    expect(schedulerSrc).toMatch(/renames\[port\] \?\? port/)
+    expect(fanoutStrategySrc).toContain('outputWrapperPortNames')
+    expect(fanoutStrategySrc).toMatch(/renames\[port\] \?\? port/)
   })
 
   test('no-aggregator case emits FANOUT_DONE_PORT_NAME signal outlet', () => {
-    expect(schedulerSrc).toContain('FANOUT_DONE_PORT_NAME')
+    expect(fanoutStrategySrc).toContain('FANOUT_DONE_PORT_NAME')
   })
 })
 
 describe('D.T6 — runtime cartesian guard', () => {
   test('estimateShardTotal is imported and called for the projected total', () => {
-    expect(schedulerSrc).toMatch(/import\s*\{[^}]*estimateShardTotal/s)
-    expect(schedulerSrc).toContain('estimateShardTotal(definition, node.id, items.length)')
+    expect(fanoutStrategySrc).toMatch(/import\s*\{[^}]*estimateShardTotal/s)
+    expect(fanoutStrategySrc).toContain(
+      'estimateShardTotal(definition, request.scope, items.length)',
+    )
   })
 
   test('guard short-circuits with wrapper-fanout-cartesian-exceeds-max error message', () => {
-    expect(schedulerSrc).toContain('wrapper-fanout-cartesian-exceeds-max')
+    expect(fanoutStrategySrc).toContain('wrapper-fanout-cartesian-exceeds-max')
   })
 
   test('default fanoutMaxShardTotal = 256 when opts unset', () => {
-    expect(schedulerSrc).toMatch(/opts\.fanoutMaxShardTotal\s*\?\?\s*256/)
+    expect(wrapperMechanicsSrc).toContain(
+      'fanoutMaxShardTotal: state.opts.fanoutMaxShardTotal ?? 256',
+    )
+    expect(fanoutStrategySrc).toContain('this.data.fanoutMaxShardTotal')
   })
 })
 
@@ -179,21 +246,25 @@ describe('D.T7 — signal port in prompt runtime check', () => {
     expect(runnerSrc).toMatch(/signal-port-in-prompt/)
   })
 
-  test('scheduler dispatchFanoutShard builds inputPortKinds from boundaryEdges', () => {
-    expect(schedulerSrc).toContain('const inputPortKinds: Record<string, string> = {}')
-    expect(schedulerSrc).toMatch(/inputPortKinds\[e\.target\.portName\]/)
+  test('wrapper dispatchFanoutShard builds inputPortKinds from boundaryEdges', () => {
+    expect(wrapperMechanicsSrc).toContain('const inputPortKinds: Record<string, string> = {}')
+    expect(wrapperMechanicsSrc).toMatch(/inputPortKinds\[e\.target\.portName\]/)
   })
 })
 
 describe('D.T8 — RFC-053 wrapper lifecycle compatibility', () => {
-  test('runFanoutWrapperNode reuses markWrapperTerminal (the shared finalize path)', () => {
-    expect(schedulerSrc).toMatch(/markWrapperTerminal\(db, wrapperRunId, 'done'\)/)
-    expect(schedulerSrc).toMatch(/markWrapperTerminal\(\s*db,\s*wrapperRunId,\s*'failed'/)
+  test('fanout mechanics returns settlements to the common runtime lifecycle', () => {
+    expect(fanoutStrategySrc).toContain("return wrapperSettlement('done'")
+    expect(fanoutStrategySrc).toMatch(/wrapperSettlement\(\s*'failed'/)
+    expect(wrapperLifecycleSrc).toContain("reason: 'wrapper-finalize'")
+    expect(wrapperRuntimeCompositionSrc).toContain('createWrapperRunLedger(state)')
   })
 
-  test('runFanoutWrapperNode handles resume via findResumableWrapperRun', () => {
-    expect(schedulerSrc).toContain('findResumableWrapperRun(db, taskId, node.id, iteration)')
-    expect(schedulerSrc).toMatch(/setNodeRunStatus\([\s\S]*?'wrapper-fanout-resume'/)
+  test('wrapper lifecycle handles resumable fanout generations', () => {
+    expect(wrapperLifecycleSrc).toContain(
+      'findResumableWrapperRun(state, request.node.id, request.iteration)',
+    )
+    expect(wrapperLifecycleSrc).toContain("'wrapper-fanout-resume'")
   })
 
   // RFC-317 T43 —— 这里原有一条 `wrapper-fanout joins isProcessNodeKind` 的测试，

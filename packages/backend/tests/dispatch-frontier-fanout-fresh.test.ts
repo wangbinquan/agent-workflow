@@ -22,7 +22,7 @@ import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import type { nodeRuns } from '../src/db/schema'
 import { isDispatchable, wrapperHasFreshInnerWork } from '../src/services/dispatchFrontier'
-import { encodeWrapperProgress } from '../src/services/wrapperProgress'
+import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
 type Row = typeof nodeRuns.$inferSelect
 

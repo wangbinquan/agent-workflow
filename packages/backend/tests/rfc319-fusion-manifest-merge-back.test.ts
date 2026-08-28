@@ -38,6 +38,7 @@ import { createFusion, type FusionDeps } from '../src/services/fusion'
 import { forcedPortPathsForTask } from '../src/services/portArtifacts'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc319-test-opencode'
@@ -98,6 +99,7 @@ async function build(): Promise<Harness> {
     deps: {
       db,
       appHome,
+      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       binaryOverride: makeClarifyStub(tmp),
       awaitScheduler: true,
       defaultRuntime: VALID_OPENCODE_RUNTIME,

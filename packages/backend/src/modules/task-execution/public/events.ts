@@ -2,6 +2,11 @@ import type { TaskStatus } from '@agent-workflow/shared'
 
 import type { EventObservationInput } from '@/modules/event-center/public/types'
 
+export type {
+  TaskStatusProjection,
+  TaskStatusPublisher,
+} from '../application/ports/taskExecutionTopology'
+
 export const TASK_LIFECYCLE_SOURCE_REF = {
   id: 'platform.task-lifecycle',
   revision: 1,

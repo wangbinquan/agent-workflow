@@ -311,6 +311,6 @@ describe("RFC-113: the agent's RUNTIME drives the model; node param overrides ar
   // RFC-060 PR-E: agent-multi removed; the per-shard-child overrides test is
   // no longer applicable. wrapper-fanout inner agents receive overrides
   // through the same agent-single path (covered by the agent-single override
-  // test above) — see services/scheduler.ts:dispatchFanoutShard, which
+  // test above) — see task-execution/composition/wrapperMechanics.ts:dispatchFanoutShard, which
   // forwards `pickOverrides(innerNode)` into `runNode(...)`.
 })

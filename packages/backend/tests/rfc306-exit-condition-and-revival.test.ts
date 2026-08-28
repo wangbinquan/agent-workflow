@@ -15,7 +15,10 @@
 //      new task can escape.
 
 import { describe, expect, test } from 'bun:test'
-import { evaluateExitCondition, parseExitCondition } from '../src/services/exitCondition'
+import {
+  evaluateExitCondition,
+  parseExitCondition,
+} from '../src/modules/task-execution/domain/loopExitCondition'
 import { isDispatchable } from '../src/services/dispatchFrontier'
 import type { nodeRuns } from '../src/db/schema'
 import type { WorkflowDefinition } from '@agent-workflow/shared'

@@ -50,7 +50,14 @@ const stripComments = (src: string): string =>
     .split('\n')
     .filter((l) => !l.trimStart().startsWith('//'))
     .join('\n')
-const scheduler = readFileSync(SRC('services', 'scheduler.ts'), 'utf8')
+const wrapperMechanics = readFileSync(
+  SRC('modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
+  'utf8',
+)
+const fanoutStrategy = readFileSync(
+  SRC('modules', 'task-execution', 'engine', 'wrapper', 'fanoutStrategy.ts'),
+  'utf8',
+)
 const nodeMechanics = readFileSync(
   SRC('modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
   'utf8',
@@ -118,9 +125,9 @@ describe('调用级三属性 —— 每条 policy 都必须真的被某个调用
     expect(DISPATCH_CALL_POLICY.failureOwner).toBe('node')
     expect(FANOUT_HYDRATE_CALL_POLICY.onMissing).toBe('skip')
     expect(FANOUT_HYDRATE_CALL_POLICY.failureOwner).toBe('wrapper')
-    // RFC-334 后两条分别落在 node mechanics 与 W2-D scheduler wrapper 位点上。
+    // RFC-339 后两条分别落在 node mechanics 与 task-execution wrapper 位点上。
     expect(nodeMechanics).toContain('DISPATCH_CALL_POLICY')
-    expect(scheduler).toContain('FANOUT_HYDRATE_CALL_POLICY')
+    expect(wrapperMechanics).toContain('FANOUT_HYDRATE_CALL_POLICY')
   })
 })
 
@@ -135,22 +142,20 @@ describe('四处失败归属：调用点各用各的策略，且映射逐条不�
   })
 
   test('② fanout inner 水合用 FANOUT_HYDRATE，且解析失败**不产生任何失败返回**', () => {
-    const idx = scheduler.indexOf('resolveNodeAgentRef(db, rec, FANOUT_HYDRATE_CALL_POLICY)')
+    const idx = wrapperMechanics.indexOf('resolveNodeAgentRef(')
     expect(idx).toBeGreaterThan(0)
-    // 紧随其后只有「成功才写进 map」，没有 return failed / throw。
-    const after = scheduler.slice(idx, idx + 240)
-    expect(after).toContain('if (resolved.ok)')
+    const after = wrapperMechanics.slice(idx, idx + 320)
+    expect(after).toContain('FANOUT_HYDRATE_CALL_POLICY')
+    expect(after).toContain('return resolved.ok ? resolved.value : null')
     expect(after).not.toContain("kind: 'failed'")
     expect(after).not.toContain('throw ')
   })
 
   test('③④ wrapper 归属：source 为空仍成功、非空失败才标 failed', () => {
     // 空 source 走 ok 分支（`wrapper-fanout-empty` 不是错误码，是成功摘要）。
-    expect(scheduler).toContain(
-      "return { kind: 'ok', summary: '', message: 'wrapper-fanout-empty' }",
-    )
+    expect(fanoutStrategy).toContain("message: 'wrapper-fanout-empty'")
     // 非空路径上确有 wrapper 级 failed（与 node 级失败是两种归属）。
-    expect(scheduler).toContain('markWrapperTerminal(')
+    expect(fanoutStrategy).toMatch(/wrapperSettlement\(\s*'failed'/)
   })
 
   test('resolver **绝不 throw** —— 直接抛会被 runScope 冒泡成任务级 scheduler error', () => {
@@ -165,12 +170,12 @@ describe('四处失败归属：调用点各用各的策略，且映射逐条不�
 
 describe('收口证据：agentId 只有一个读取点', () => {
   test('node execution owners 不再自己 getAgentById(节点字段)', () => {
-    expect(`${scheduler}\n${nodeMechanics}`).not.toMatch(
+    expect(`${wrapperMechanics}\n${nodeMechanics}`).not.toMatch(
       /await getAgentById\(db, (aid|agentIdRef)\b/,
     )
   })
 
   test('fanout 的 dedup key 与主派发共用同一条判据', () => {
-    expect(scheduler).toContain('fanoutInnerAgentRefKey(node)')
+    expect(wrapperMechanics).toContain('fanoutInnerAgentRefKey(node)')
   })
 })

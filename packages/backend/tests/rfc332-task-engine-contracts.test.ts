@@ -16,7 +16,7 @@ import {
   ClosedTaskEngineRegistry,
   resolveTaskEngineSelection,
 } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
-import type { TaskDriveRuntimeOptions } from '../src/modules/task-execution/public/topology'
+import type { TaskDriveRuntimeOptions } from '../src/modules/task-execution/public/commands'
 import {
   buildCanonicalArtifacts,
   hasScheduleTargetToken,
@@ -289,15 +289,9 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
     expect(bridge(scope, 'runOneNode')).toBeUndefined()
     expect(bridge(application, 'buildWorkgroupHooks')).toBeUndefined()
     for (const symbol of ['runWrapperFanoutNode', 'runWrapperGitNode', 'runWrapperLoopNode']) {
-      expect(bridge(nodeExecution, symbol)).toMatchObject({
-        introducedByRFC: 'RFC-334',
-        removeAfterWave: 'W2-D',
-      })
+      expect(bridge(nodeExecution, symbol)).toBeUndefined()
     }
-    expect(bridge(application, 'replayPendingMerges')).toMatchObject({
-      introducedByRFC: 'RFC-332',
-      removeAfterWave: 'W2-D',
-    })
+    expect(bridge(application, 'replayPendingMerges')).toBeUndefined()
     expect(bridge(application, 'emitStatus')).toMatchObject({
       introducedByRFC: 'RFC-332',
       removeAfterWave: 'W3',
@@ -308,7 +302,7 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
     })
     expect(
       bridge('packages/backend/src/services/startTaskDeps.ts', 'driveTaskEngineApplication'),
-    ).toMatchObject({ introducedByRFC: 'RFC-332', removeAfterWave: 'W2-D' })
+    ).toBeUndefined()
     expect(
       exceptions.find(
         (entry) =>

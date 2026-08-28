@@ -22,6 +22,7 @@ import { buildDwActions } from '@/services/workgroup/dwActions'
 import { buildRoomReads } from '@/services/workgroup/room'
 import { buildWorkgroupTaskActions } from '@/services/workgroup/taskActions'
 import { safeJsonOrEmpty } from '@/util/http'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 
 export { isWorkgroupKickResumable, resolveMentions } from '@/services/workgroup/taskActions'
 
@@ -43,9 +44,7 @@ export function mountWorkgroupTaskRoutes(app: Hono, deps: AppDeps): void {
   const core = buildWorkgroupTaskActions({
     db: deps.db,
     configPath: deps.configPath,
-    ...(deps.repositoryPublicationTransport === undefined
-      ? {}
-      : { repositoryPublicationTransport: deps.repositoryPublicationTransport }),
+    schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
   })
   const actions = {
     ...core,

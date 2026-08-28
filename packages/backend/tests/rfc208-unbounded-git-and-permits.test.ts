@@ -31,8 +31,16 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runGit } from '../src/util/git'
 
-const schedulerSource = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+const wrapperMechanicsSource = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
   'utf8',
 )
 const nodeMechanicsSource = readFileSync(
@@ -51,7 +59,7 @@ const assemblySource = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
   'utf8',
 )
-const executionSource = `${schedulerSource}\n${nodeMechanicsSource}`
+const executionSource = `${wrapperMechanicsSource}\n${nodeMechanicsSource}`
 
 /** A git invocation that hangs deterministically, locally, with no network:
  *  a `!`-prefixed alias runs through the shell, so the child spawns a

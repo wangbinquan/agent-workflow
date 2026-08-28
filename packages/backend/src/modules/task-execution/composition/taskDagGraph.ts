@@ -6,7 +6,7 @@ import {
   projectWorkflowDependency,
   resolveWorkflowSourceRef,
 } from '@agent-workflow/shared'
-import { parseExitCondition } from '@/services/exitCondition'
+import { parseExitCondition } from '../domain/loopExitCondition'
 
 interface Binding {
   readonly name: string

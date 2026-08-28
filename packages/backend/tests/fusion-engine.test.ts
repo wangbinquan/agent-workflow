@@ -58,6 +58,7 @@ import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
 import { getSkillVersionContent } from '../src/services/skillVersion'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
@@ -167,6 +168,7 @@ async function build(): Promise<H> {
   const deps: FusionDeps = {
     db,
     appHome,
+    schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
     binaryOverride: makeClarifyStub(tmp),
     awaitScheduler: true,
     defaultRuntime: VALID_OPENCODE_RUNTIME,

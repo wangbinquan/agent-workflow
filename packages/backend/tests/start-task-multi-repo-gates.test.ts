@@ -88,7 +88,7 @@ describe('RFC-066 PR-A T6 — multi-repo gates', () => {
   // RFC-066 当年在 startTask 里拦掉「多仓 + wrapper-git」与「多仓 + 上传」，理由是
   // 包裹器只对单一 worktree 取快照、上传物不知道该落到哪个仓。两条禁令都已解除：
   //   - wrapper-git 现在逐仓快照、逐仓 diff，路径按挂载路径前缀化后合并成
-  //     `list<path>`（scheduler.ts runGitWrapperNode / diffableRepos）。不解除的话
+  //     `list<path>`（task-execution GitStrategy / diffableRepos）。不解除的话
   //     仓库组永远用不了平台的 Code → Audit → Fix 主链路——那正是本 RFC 的目的。
   //   - 上传物落到任务根下的 `.agent-workflow/inputs/`，不属于任何成员仓
   //     （applyUploadsToWorktree 的 inputsSubdir）。

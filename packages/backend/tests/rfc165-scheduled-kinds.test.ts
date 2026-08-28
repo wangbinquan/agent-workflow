@@ -42,6 +42,7 @@ import {
 import { createUser } from '../src/services/users'
 import { createWorkflow } from '../src/services/workflow'
 import { createWorkgroup } from '../src/services/workgroups'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -54,6 +55,14 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
+
+function buildRealScheduleLaunch(db: DbClient, configPath: string) {
+  return buildScheduleLaunch(
+    db,
+    createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
+    configPath,
+  )
+}
 
 const AGENT_FIELDS = {
   description: '',
@@ -439,7 +448,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
     const { taskId } = await fireSchedule(
       db,
       row,
-      buildScheduleLaunch(db, join(appHome, 'config.json')),
+      buildRealScheduleLaunch(db, join(appHome, 'config.json')),
       Date.now(),
     )
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -485,7 +494,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       fireSchedule(
         db,
         (await getScheduledTaskRow(db, created.id))!,
-        buildScheduleLaunch(db, join(appHome, 'config.json')),
+        buildRealScheduleLaunch(db, join(appHome, 'config.json')),
         Date.now(),
       ),
     ).rejects.toMatchObject({ code: 'schedule-payload-invalid' })
@@ -534,7 +543,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
     const { taskId } = await fireSchedule(
       db,
       row,
-      buildScheduleLaunch(db, join(appHome, 'config.json')),
+      buildRealScheduleLaunch(db, join(appHome, 'config.json')),
       Date.now(),
     )
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!

@@ -38,6 +38,7 @@ import { canEditAccess, canGovernAccess } from '@/services/resourceAcl'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { loadConfig } from '@/config'
 import { safeJsonOrThrowInvalid } from '@/util/http'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 
 /**
  * RFC-324 —— 排期写权：owner / `write` 授权 / ACL bypass。
@@ -283,7 +284,7 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       await requireScheduleEdit(deps, actor, existing)
       const launch =
         deps.buildScheduleLaunch ??
-        buildScheduleLaunch(deps.db, deps.configPath, deps.repositoryPublicationTransport)
+        buildScheduleLaunch(deps.db, requireSchedulerDriver(deps.schedulerDriver), deps.configPath)
       const result = await runScheduleNow(
         deps.db,
         existing.id,

@@ -182,7 +182,7 @@ export function isFresherNodeRun<R extends { id: string }>(
 /**
  * RFC-098 B3 (audit S-7,「freshest-run 抽一次别 fork」第二缝) — the ONE
  * sanctioned iteration-window source picker, extracted verbatim from
- * resolveUpstreamInputs (scheduler.ts) so wrapper-consumed computation uses
+ * resolveUpstreamInputs (task-execution node mechanics) so wrapper-consumed computation uses
  * the EXACT same口径 as the agent input read-point. Among top-level DONE rows
  * whose iteration ≤ `iterationWindow`, pick the highest iteration
  * (cross-boundary "latest visible", e.g. git-wrapper / loop carry) and,

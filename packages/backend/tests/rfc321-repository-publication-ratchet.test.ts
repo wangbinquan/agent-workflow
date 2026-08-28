@@ -364,39 +364,38 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const scheduleLaunch = read('packages/backend/src/services/scheduleLaunch.ts')
     const webhookDispatch = read('packages/backend/src/services/webhook/webhookDispatch.ts')
 
-    expect(startTaskDeps).toContain(
-      'createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)',
-    )
-    expect(startTaskDeps).toContain(
-      'repositoryPublicationTransport?: TaskRepositoryPublicationTransport',
-    )
+    expect(startTaskDeps).toContain('schedulerDriver: SchedulerDriverPort')
+    expect(startTaskDeps).not.toContain('createLegacyTaskExecutionTopology')
     expect(server).toContain(
       'repositoryPublicationTransport?: ReturnType<typeof createRepositoryPublicationTransport>',
     )
     expect(server).toContain('deps.repositoryPublicationTransport ??')
-    expect(server).toContain(
-      'const routeDeps: AppDeps = { ...deps, repositoryPublicationTransport }',
+    expect(server).toMatch(
+      /const routeDeps: AppDeps = \{[\s\S]{0,160}repositoryPublicationTransport,[\s\S]{0,80}schedulerDriver/,
     )
-    expect(taskRoutes).toContain('deps.repositoryPublicationTransport')
-    expect(scheduleLaunch).toContain(
-      'repositoryPublicationTransport?: TaskRepositoryPublicationTransport',
-    )
-    expect(webhookDispatch).toContain(
-      'repositoryPublicationTransport?: TaskRepositoryPublicationTransport',
-    )
+    expect(taskRoutes).toContain('requireSchedulerDriver(deps.schedulerDriver)')
+    expect(scheduleLaunch).toContain('schedulerDriver: SchedulerDriverPort')
+    expect(scheduleLaunch).not.toContain('TaskRepositoryPublicationTransport')
+    expect(webhookDispatch).toContain('schedulerDriver?: SchedulerDriverPort')
+    expect(webhookDispatch).not.toContain('TaskRepositoryPublicationTransport')
     expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
-    expect(cli.match(/repositoryPublicationTransport,/g)?.length).toBeGreaterThanOrEqual(7)
+    expect(cli).toMatch(
+      /composeTaskExecutionRuntime\(\{\s*db,\s*repositoryPublicationTransport,?\s*\}\)/,
+    )
 
     const callsByFunction = directFunctionCalls([
-      'createLegacyTaskExecutionTopology',
+      'composeTaskExecutionRuntime',
       'buildStartTaskDeps',
     ])
-    const topologyCalls = callsByFunction.get('createLegacyTaskExecutionTopology') ?? []
+    const topologyCalls = callsByFunction.get('composeTaskExecutionRuntime') ?? []
     const startDepsCalls = callsByFunction.get('buildStartTaskDeps') ?? []
-    expect(topologyCalls.length).toBeGreaterThan(0)
+    expect(topologyCalls.map((call) => call.file).sort()).toEqual([
+      'packages/backend/src/cli/start.ts',
+      'packages/backend/src/server.ts',
+    ])
     expect(startDepsCalls.length).toBeGreaterThan(0)
-    expect(topologyCalls.filter((call) => call.argumentCount < 2)).toEqual([])
-    expect(startDepsCalls.filter((call) => call.argumentCount < 5)).toEqual([])
+    expect(topologyCalls.filter((call) => call.argumentCount !== 1)).toEqual([])
+    expect(startDepsCalls.filter((call) => call.argumentCount < 4)).toEqual([])
   })
 
   test('personal credentials stay inside Git publication and their explicit identity probe', () => {

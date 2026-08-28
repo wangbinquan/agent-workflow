@@ -37,7 +37,19 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
-const MECHANICS_SOURCES = [NODE_MECHANICS, SCHEDULER] as const
+const WRAPPER_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
+  'utf8',
+)
+const MECHANICS_SOURCES = [NODE_MECHANICS, SCHEDULER, WRAPPER_MECHANICS] as const
 
 function bodyOf(signature: string): string {
   const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))

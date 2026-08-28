@@ -1,7 +1,7 @@
 // RFC-042 §5.7 — source-code-text grep guards.
 //
 // Locks in:
-//   1. scheduler.ts must NOT regress to `?? 0` for the retries fallback
+//   1. wrapper mechanics must NOT regress to `?? 0` for the retries fallback
 //      (RFC-042 §A4 default 3). RFC-115 moved the budget from a per-node
 //      `retries` override to the global `opts.defaultNodeRetries ?? 3`; this
 //      guards that fallback (and that the per-node lookup stays removed).
@@ -15,9 +15,17 @@ import { resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 describe('RFC-042 source-code-text guards', () => {
-  test('scheduler.ts retries default rides DEFAULT_PROTOCOL_RETRY_BUDGET (=3), not `?? 0`', () => {
+  test('wrapper mechanics retries default rides DEFAULT_PROTOCOL_RETRY_BUDGET (=3), not `?? 0`', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'wrapperMechanics.ts',
+      ),
       'utf8',
     )
     // RFC-115: the per-node `retries` override was removed; the budget is now

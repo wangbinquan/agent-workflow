@@ -88,9 +88,30 @@ describe('RFC-060 PR-E — gitChangedFiles helper', () => {
   })
 })
 
-describe('RFC-060 PR-E — scheduler finalize uses gitChangedFiles, not gitDiffSnapshot', () => {
-  const SCHEDULER_PATH = resolve(import.meta.dirname, '..', 'src', 'services', 'scheduler.ts')
-  const src = readFileSync(SCHEDULER_PATH, 'utf-8')
+describe('RFC-060 PR-E — wrapper finalize uses gitChangedFiles, not gitDiffSnapshot', () => {
+  const WRAPPER_MECHANICS_PATH = resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  )
+  const src = readFileSync(WRAPPER_MECHANICS_PATH, 'utf-8')
+  const strategy = readFileSync(
+    resolve(
+      import.meta.dirname,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'engine',
+      'wrapper',
+      'gitStrategy.ts',
+    ),
+    'utf-8',
+  )
 
   test('finalize block calls gitChangedFiles（RFC-248：逐仓）', () => {
     // RFC-060 PR-E 锁的核心不变：finalize 用 `gitChangedFiles`（路径列表）而**不是**
@@ -100,8 +121,8 @@ describe('RFC-060 PR-E — scheduler finalize uses gitChangedFiles, not gitDiffS
     // 根）做，这正是 RFC-066 当年必须禁掉多仓 wrapper-git 的根因（只看得见第一个
     // 仓）。现在遍历 `diffableRepos`（已滤掉只读成员）逐仓做，路径按挂载路径前缀化
     // 后合并。`wrapperCanonPath` 这个变量随之删除。
-    expect(src).toContain('gitChangedFiles(r.path')
-    expect(src).toContain('for (const r of diffableRepos)')
+    expect(src).toContain('gitChangedFiles(repo.path')
+    expect(src).toContain('for (const repo of diffableRepos(scene))')
     // 反向锁：不得退回完整 patch。
     expect(src).not.toContain('gitDiffSnapshot(wrapperCanonPath')
     // 反向锁：不得退回只看第一个仓。
@@ -114,10 +135,11 @@ describe('RFC-060 PR-E — scheduler finalize uses gitChangedFiles, not gitDiffS
     // generation REPLACES the prior generation's git_diff row instead of
     // violating the (node_run_id, port_name) PK. Same contract: the joined
     // changed-path list lands on the wrapper's git_diff port.
-    expect(src).toMatch(/upsertWrapperOutput\(db, wrapperRunId, 'git_diff', paths\.join\('\\n'\)\)/)
+    expect(strategy).toContain("portName: 'git_diff'")
+    expect(strategy).toContain("content: paths.join('\\n')")
   })
 
-  test('scheduler no longer imports gitDiffSnapshot (gitChangedFiles replaces it)', () => {
+  test('wrapper mechanics no longer imports gitDiffSnapshot (gitChangedFiles replaces it)', () => {
     expect(src).not.toContain('import { gitDiffSnapshot')
     expect(src).not.toContain('gitDiffSnapshot,')
   })

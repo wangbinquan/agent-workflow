@@ -45,6 +45,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import {
   bindWorkspaceExcludeParticipant,
@@ -60,10 +61,6 @@ import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
 import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
-import {
-  createLegacyTaskExecutionTopology,
-  type TaskRepositoryPublicationTransport,
-} from '@/services/startTaskDeps'
 import { createWorkflow } from '@/services/workflow'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { gitDiffSnapshot, runGit } from '@/util/git'
@@ -90,7 +87,7 @@ type FusionRow = typeof fusions.$inferSelect
 export interface FusionDeps {
   db: DbClient
   appHome: string
-  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
+  schedulerDriver: SchedulerDriverPort
   /** TEST-ONLY runtime-neutral command-head override; production passes configPath. */
   binaryOverride?: readonly string[]
   /** Daemon config path — threaded to the scheduler's single resolution point. */
@@ -635,8 +632,7 @@ export async function createFusion(
     const taskId = ulid()
     const startDeps: StartTaskDeps = {
       db,
-      schedulerDriver: createLegacyTaskExecutionTopology(db, deps.repositoryPublicationTransport)
-        .schedulerDriver,
+      schedulerDriver: deps.schedulerDriver,
       appHome,
       actorUserId: actor.user.id,
       launchProvenance: { kind: 'fusion', initiator: launchInitiator },
@@ -1607,8 +1603,7 @@ export async function rejectFusion(
       const taskId = ulid()
       const startDeps: StartTaskDeps = {
         db,
-        schedulerDriver: createLegacyTaskExecutionTopology(db, deps.repositoryPublicationTransport)
-          .schedulerDriver,
+        schedulerDriver: deps.schedulerDriver,
         appHome,
         actorUserId: actor.user.id,
         launchProvenance: { kind: 'fusion', initiator: launchInitiator },

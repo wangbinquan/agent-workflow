@@ -113,11 +113,8 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
     readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
   test('伪造 actor cast 归零；两条新启臂都判 call-owner-inactive', () => {
-    const scheduler = src('services/scheduler.ts')
     const nodeMechanics = src('modules/task-execution/composition/nodeMechanics.ts')
-    expect(
-      `${scheduler}\n${nodeMechanics}`.includes('as unknown as Parameters<typeof startExecution>'),
-    ).toBe(false)
+    expect(nodeMechanics.includes('as unknown as Parameters<typeof startExecution>')).toBe(false)
     // 臂 1（call-workflow）+ 臂 2（call-workgroup preflight）各一次判定 + 抛码。
     expect((nodeMechanics.match(/buildInheritedActor\(/g) ?? []).length).toBe(2)
     expect(nodeMechanics).toContain("'call-workflow'")

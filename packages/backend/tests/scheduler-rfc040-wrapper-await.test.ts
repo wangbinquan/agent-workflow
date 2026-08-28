@@ -35,7 +35,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { clarifyRounds, agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { decodeWrapperProgress } from '../src/services/wrapperProgress'
+import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 

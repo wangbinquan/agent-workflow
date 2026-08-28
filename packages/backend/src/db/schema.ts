@@ -1953,13 +1953,12 @@ export const nodeRuns = sqliteTable(
      */
     startupVerificationJson: text('startup_verification_json'),
     /**
-     * RFC-040: serialized `WrapperProgress` (services/wrapperProgress.ts)
-     * used by wrapper-loop / wrapper-git to resume from the iteration /
-     * baseline where they parked when an inner node entered awaiting_human
-     * / awaiting_review. NULL for non-wrapper runs and for wrapper runs
-     * that never parked (single-shot init → done in one call). Read by
-     * `runLoopWrapperNode` / `runGitWrapperNode` on resume, never read by
-     * the frontend.
+     * RFC-040/RFC-339: serialized `WrapperProgress`
+     * (`task-execution/domain/wrapperProgress.ts`) used by LoopStrategy /
+     * GitStrategy to resume from the iteration / baseline where they parked
+     * when an inner node entered awaiting_human / awaiting_review. NULL for
+     * non-wrapper runs and for wrapper runs that never parked (single-shot
+     * init → done in one call). Never read by the frontend.
      */
     wrapperProgressJson: text('wrapper_progress_json'),
     /**

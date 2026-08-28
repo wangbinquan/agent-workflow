@@ -38,7 +38,19 @@ const NODE_MECHANICS = readFileSync(
   ),
   'utf8',
 )
-const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS] as const
+const WRAPPER_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
+  'utf8',
+)
+const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS, WRAPPER_MECHANICS] as const
 
 /** 取某个函数体（自签名起到下一个顶层 `async function` 前）。 */
 function bodyOf(signature: string): string {

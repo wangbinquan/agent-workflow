@@ -108,7 +108,20 @@ export function findFanoutAggregator(
 ): { node: WorkflowNode; agent: Agent } | null {
   const wrapper = readWrapperFanout(defn, wrapperId)
   if (wrapper === null) return null
-  for (const innerId of wrapper.nodeIds) {
+  return findFanoutAggregatorInScope(defn, wrapper.nodeIds, agents)
+}
+
+/**
+ * Runtime-facing variant whose membership has already been admitted by the
+ * canonical execution-scope index. It deliberately never re-reads the
+ * wrapper's raw `nodeIds` field.
+ */
+export function findFanoutAggregatorInScope(
+  defn: WorkflowDefinition,
+  directNodeIds: readonly string[],
+  agents: AgentLookup,
+): { node: WorkflowNode; agent: Agent } | null {
+  for (const innerId of directNodeIds) {
     const inner = defn.nodes.find((n) => n.id === innerId)
     if (inner === undefined) continue
     const agg = isAggregatorAgentNode(inner, agents)
@@ -154,6 +167,22 @@ export function deriveWrapperFanoutOutputs(
   agents: AgentLookup,
 ): DerivedWrapperFanoutOutput[] {
   const found = findFanoutAggregator(defn, wrapperId, agents)
+  return deriveWrapperFanoutOutputsFromAggregator(found)
+}
+
+/** Scope-index counterpart of `deriveWrapperFanoutOutputs` for runtime use. */
+export function deriveWrapperFanoutOutputsInScope(
+  defn: WorkflowDefinition,
+  directNodeIds: readonly string[],
+  agents: AgentLookup,
+): DerivedWrapperFanoutOutput[] {
+  const found = findFanoutAggregatorInScope(defn, directNodeIds, agents)
+  return deriveWrapperFanoutOutputsFromAggregator(found)
+}
+
+function deriveWrapperFanoutOutputsFromAggregator(
+  found: { node: WorkflowNode; agent: Agent } | null,
+): DerivedWrapperFanoutOutput[] {
   if (found === null) {
     return [{ name: FANOUT_DONE_PORT_NAME, kind: 'signal' }]
   }

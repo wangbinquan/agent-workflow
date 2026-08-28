@@ -23,7 +23,15 @@ const NODE_MECHANICS = readFileSync(
   resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
   'utf8',
 )
-const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS] as const
+const WRAPPER_MECHANICS = readFileSync(
+  resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
+  'utf8',
+)
+const EXECUTION_MERGE_RECOVERY = readFileSync(
+  resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'executionMergeRecovery.ts'),
+  'utf8',
+)
+const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS, WRAPPER_MECHANICS] as const
 
 /** 取某函数体（到下一个顶格 `}` 为止）。 */
 function bodyOf(signature: string): string {
@@ -153,9 +161,9 @@ describe('RFC-287 T9 ② — 装配散写的终局灭绝锁（三处显式挖洞
       'createIsoUnderLock(',
     )
     // ③ 恢复 replay 段：它复原的是**别人已落库的** node_tree，不铸行也不进窗口。
-    const replay = SCHEDULER.slice(
-      SCHEDULER.indexOf('pending-merge replay'),
-      SCHEDULER.indexOf('conflict-human resume: human resolution merged back'),
+    const replay = EXECUTION_MERGE_RECOVERY.slice(
+      EXECUTION_MERGE_RECOVERY.indexOf('pending-merge replay'),
+      EXECUTION_MERGE_RECOVERY.indexOf('conflict-human resume: human resolution merged back'),
     )
     expect(replay.length).toBeGreaterThan(0)
     expect(replay).toContain('discardNodeIso(')

@@ -36,7 +36,10 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { decodeWrapperProgress, encodeWrapperProgress } from '../src/services/wrapperProgress'
+import {
+  decodeWrapperProgress,
+  encodeWrapperProgress,
+} from '../src/modules/task-execution/domain/wrapperProgress'
 
 // Same-ms ULID ordering guard (precedent: scheduler-clarify-dispatch.test.ts).
 const ulid = monotonicFactory()

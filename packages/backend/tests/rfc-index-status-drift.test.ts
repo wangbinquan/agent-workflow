@@ -141,6 +141,8 @@ describe('RFC 索引状态漂移守卫', () => {
     // RFC-334：Draft 阶段已把 proposal AC-1～18 逐条投影到 plan §6；production 尚未批准，
     // 但计划证据行必须先保持完整，后续新增 AC 不能只改 proposal。
     'RFC-334-node-executor-registry': 0,
+    // RFC-339：18 条 AC 已逐条投影到 plan §6；实施与 hosted 证据更新状态，不能删掉行。
+    'RFC-339-wrapper-runtime-cutover': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {

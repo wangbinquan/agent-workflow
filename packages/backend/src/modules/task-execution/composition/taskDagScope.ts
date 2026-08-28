@@ -15,10 +15,12 @@ import type {
 } from '@/services/execution/taskMechanicsState'
 import { taskExecutionModule } from '../composition'
 import { executeNode } from './nodeExecution'
+import type { WrapperRuntimeFactory } from './taskExecutionComponents'
 
 export async function runScope(
   state: LegacyTaskMechanicsState,
   args: TaskScopeArgs,
+  wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): Promise<TaskScopeOutcome> {
   const { db, taskId, definition, opts } = state
   const { scopeId, scopeIds, iteration, log } = args
@@ -200,7 +202,10 @@ export async function runScope(
         if (anchor !== undefined) dispatchedPendingRowIds.add(anchor)
         inFlight.set(
           nodeId,
-          executeNode(state, { node, iteration, log }).then((result) => ({ nodeId, result })),
+          executeNode(state, { node, iteration, log }, wrapperRuntimeFactory).then((result) => ({
+            nodeId,
+            result,
+          })),
         )
       }
     }

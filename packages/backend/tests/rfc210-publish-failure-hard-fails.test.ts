@@ -177,7 +177,7 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
   const ASSEMBLY_KEEP_ON_THROW =
     /keep = true\n\s*if \(spec\.markMergeFailed === undefined\)[\s\S]{0,320}await spec\.markMergeFailed\(/
 
-  test('EVERY scheduler site keeps the iso when merge-back throws (source-level lock)', () => {
+  test('EVERY task-execution site keeps the iso when merge-back throws (source-level lock)', () => {
     // The full scheduler loop is too heavy to spin here; lock the disposition
     // at the source level instead (repo policy: minimum one source-text
     // assertion when the runtime shape is impractical to integrate). Each
@@ -185,10 +185,31 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // only copy of the node's product when the snapshot phase itself failed.
     // Codex review round 2 (P1): the mainline alone is not enough; the
     // workgroup hook, fanout shard and aggregator discard in `finally` too.
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    const wrapperMechanics = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'wrapperMechanics.ts',
+      ),
       'utf8',
     )
+    const recovery = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'executionMergeRecovery.ts',
+      ),
+      'utf8',
+    )
+    const src = `${wrapperMechanics}\n${recovery}`
     const nodeMechanics = readFileSync(
       resolve(
         import.meta.dir,
@@ -284,7 +305,7 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     expect(singleLine.length).toBeGreaterThanOrEqual(8)
     for (const call of singleLine) {
       // 骨架内的调用是 `spec.discardIso(handle)`——写锁由各线 spec 的实参携带，
-      // 由 rfc287-t1-release-before-discard 的结构锁保证顺序，此处只查 scheduler
+      // 由 rfc287-t1-release-before-discard 的结构锁保证顺序，此处只查 execution
       // 侧的直调仍带锁。
       if (call.startsWith('discardNodeIso(')) expect(call).toContain('writeSem')
     }

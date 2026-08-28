@@ -13,7 +13,7 @@ import {
   evaluateExitCondition,
   parseExitCondition,
   type ExitCondition,
-} from '../src/services/exitCondition'
+} from '../src/modules/task-execution/domain/loopExitCondition'
 
 describe('parseExitCondition', () => {
   test('parses port-empty with nodeId + portName', () => {

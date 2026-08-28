@@ -37,10 +37,7 @@ import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAd
 import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
 import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
-import {
-  buildStartTaskDeps,
-  type TaskRepositoryPublicationTransport,
-} from '@/services/startTaskDeps'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
   evaluateCircuit,
@@ -96,6 +93,10 @@ import type {
   WorkStartTarget,
 } from '@/modules/integration/public/participants'
 import type { EventResponseTarget } from '@/modules/event-center/public/types'
+import {
+  requireSchedulerDriver,
+  type SchedulerDriverPort,
+} from '@/modules/task-execution/public/commands'
 
 const log = createLogger('webhook-dispatch')
 
@@ -103,7 +104,7 @@ export type WebhookDispatchDeps = {
   db: DbClient
   configPath: string
   secretBox: SecretBox
-  repositoryPublicationTransport?: TaskRepositoryPublicationTransport
+  schedulerDriver?: SchedulerDriverPort
   /** per-dispatch 读取（对齐 scheduledTaskScheduler 的 per-tick cfg.defaultRuntime）。 */
   getDefaultRuntime: () => Promise<string | null | undefined>
   /**
@@ -633,10 +634,10 @@ async function launchViaExecutor(
   const launchDeps = {
     ...buildStartTaskDeps(
       deps.db,
+      requireSchedulerDriver(deps.schedulerDriver),
       deps.configPath,
       actor.user.id,
       deps.secretBox,
-      deps.repositoryPublicationTransport,
     ),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,

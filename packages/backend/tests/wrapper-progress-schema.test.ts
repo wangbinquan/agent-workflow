@@ -1,4 +1,4 @@
-// RFC-040 — locks the contract for services/wrapperProgress.ts.
+// RFC-040/RFC-339 — locks the contract for task-execution/domain/wrapperProgress.ts.
 //
 // The scheduler's wrapper resume path depends on `decodeWrapperProgress`
 // returning a typed `WrapperProgress` on round-trip and returning null
@@ -11,7 +11,7 @@ import {
   decodeWrapperProgress,
   encodeWrapperProgress,
   type WrapperProgress,
-} from '../src/services/wrapperProgress'
+} from '../src/modules/task-execution/domain/wrapperProgress'
 
 function warnSink(): { calls: string[]; warn: (msg: string) => void } {
   const calls: string[] = []

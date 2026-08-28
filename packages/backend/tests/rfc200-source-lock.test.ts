@@ -53,13 +53,15 @@ describe('RFC-200 source wiring locks', () => {
   })
 
   test('specialized prompt producers thread the current run nonce before rendering', () => {
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    const wrapperMechanics = read(
+      'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
+    )
     const nodeMechanics = read(
       'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
     )
-    expect(scheduler).toContain('inputs: aggInputs')
+    expect(wrapperMechanics).toContain('inputs: aggInputs')
     expect(nodeMechanics).toContain("values.join('\\n\\n---\\n\\n')")
-    expect(scheduler).toContain('composePriorOutputBlock(')
+    expect(wrapperMechanics).toContain('composePriorOutputBlock(')
     expect(nodeMechanics).toContain('loadRunEnvelopeNonce(db, nodeRunId)')
 
     const memory = read('packages/backend/src/services/memoryInject.ts')
@@ -93,16 +95,18 @@ describe('RFC-200 source wiring locks', () => {
       'inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) }',
     )
 
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    const wrapperMechanics = read(
+      'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
+    )
     const nodeMechanics = read(
       'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
     )
-    expect(scheduler).toContain('aggInputs[edge.target.portName] = blocks.join')
+    expect(wrapperMechanics).toContain('aggInputs[edge.target.portName] = blocks.join')
     expect(nodeMechanics).toContain('inputs[name] = values.length === 1')
     // Both maps are ultimately passed as runNode.inputs and therefore fenced
     // by renderUserPrompt's generic input substitution/auto-append paths.
-    expect(scheduler).toContain('inputs: aggInputs')
-    expect(scheduler).toContain('inputs,')
+    expect(wrapperMechanics).toContain('inputs: aggInputs')
+    expect(wrapperMechanics).toContain('inputs,')
   })
 
   test('internal commit and distiller agents have no bare-envelope bypass', () => {

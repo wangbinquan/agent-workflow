@@ -1,6 +1,6 @@
 # RFC-339 实施计划 — WrapperRuntime 归位与 wrapper/replay mechanics cutover
 
-状态：In Progress；T0～T1 已完成，先发布设计批次，再启动 T2～T11。
+状态：In Progress；设计批次已发布，T2～T9 candidate implementation 已完成；T10 canonical replay 与 T11 hosted/scheduled closeout 待完成。
 
 source pin：`251b5d725ef731d15c17a01656fdc827f925e7c7`
 
@@ -68,99 +68,104 @@ T2 开始前必须重新 fetch/sync `origin/main`，记录：
 - [x] 用户批准 T2～T11 生产实施；
 - [x] 明确本 RFC 只关闭 W2-D，不自动授权 W3 以后 wave。
 
-### T2 — characterization、source-lock 与 red architecture gates（Pending）
+### T2 — characterization、source-lock 与 architecture gates（Candidate complete）
 
-- [ ] 重采 §2.2 全部 baseline；
-- [ ] 增 `rfc339-wrapper-runtime-source-lock`，固定 3 kind / 10 symbol / bridge/reverse family；
-- [ ] 增 closed registry missing/extra/wrong-kind mutation；
-- [ ] 增 scheduler legacy symbol/import extinction red gates；
-- [ ] 增 scope path/direct membership invalid-tree mutation；
-- [ ] 增 lifecycle phase-order、replay-before-frontier red gates；
-- [ ] 锁现有 capability/park/status/error matrix，不以新限制替代 characterization。
+- [x] 重采 §2.2 全部 baseline；
+- [x] 增 `rfc339-wrapper-runtime-cutover` source-lock，固定 3 kind / 10 symbol / bridge/reverse family；
+- [x] 增 closed registry missing/extra/wrong-kind mutation；
+- [x] 增 scheduler legacy symbol/import extinction gates；
+- [x] 增 scope path/direct membership invalid-tree mutation；
+- [x] 增 lifecycle phase-order、replay-before-frontier gates；
+- [x] 锁现有 capability/park/status/error matrix，不以新限制替代 characterization。
 
 退出：测试在 current production 上只因“新 owner 尚未切换”的预期项为 red；现有功能 characterization 全绿。
 
-### T3 — execution scope、progress 与 pure fanout owner cut（Pending）
+### T3 — execution scope、progress 与 pure fanout owner cut（Candidate complete）
 
-- [ ] 建 immutable `ExecutionScopeIndex` / `WrapperScopeDescriptor` / outer→inner path；
-- [ ] TaskEngine snapshot admission 后只构造一次 index；
-- [ ] 迁 `wrapperProgress` codec 到 task-execution domain，old payload golden 全绿；
-- [ ] 迁 `services/fanout.ts` pure scope/split helpers 到 domain；
-- [ ] 所有 consumer 改到新 owner，同批删除 legacy pure files/转发；
-- [ ] 不写 W7 schema，不改变 workflow definition wire。
+- [x] 建 immutable `ExecutionScopeIndex` / `WrapperScopeDescriptor` / outer→inner path；
+- [x] TaskEngine snapshot admission 后只构造一次 index；
+- [x] fanout runtime 改用 scope-aware shared helper；除 index 构造点外不再直接或间接重读 raw `nodeIds`；
+- [x] 迁 `wrapperProgress` codec 到 task-execution domain，保留 old payload golden；
+- [x] 迁 `services/fanout.ts` pure scope/split helpers 到 domain；
+- [x] 所有 consumer 改到新 owner，同批删除 legacy pure files/转发；
+- [x] 不写 W7 schema，不改变 workflow definition wire。
 
 退出：scope membership/path 单源；pure logic legacy owner=0；无 production wrapper routing 变化。
 
-### T4 — ports、common lifecycle template 与 composition skeleton（Pending）
+### T4 — ports、common lifecycle template 与 composition skeleton（Candidate complete）
 
-- [ ] 建 WrapperRunLedger/ScopeDriver/Workspace/Data/FanoutAttempt/StatusPublisher ports；
-- [ ] 建 WrapperRuntime closed registry 与 common lifecycle template；
-- [ ] 建 sqlite/workspace/current-kernel adapters；
-- [ ] common fresh/resume/running/park/terminal/superseded unit matrix；
-- [ ] engine/domain 禁 infrastructure bag/import gate；
-- [ ] skeleton 无 production caller。
+- [x] 建 WrapperRunLedger/ScopeDriver/Workspace/Data/FanoutAttempt/StatusPublisher ports；
+- [x] 建 WrapperRuntime closed registry 与 common lifecycle template；
+- [x] 建 DB/workspace/current-kernel composition adapters；
+- [x] 编写 common fresh/resume/running/park/terminal/superseded unit matrix；
+- [x] 建 engine/domain 禁 infrastructure bag/import gate；
+- [x] skeleton 通过 factory 注入后成为唯一 production path，无 dual dispatch。
 
 退出：template/strategies 可独立测试；production 仍只走旧 path，未形成 dual dispatch。
 
-### T5 — LoopStrategy 原子 cutover（Pending）
+### T5 — LoopStrategy 原子 cutover（Candidate complete）
 
-- [ ] 迁 loop validation、progress iteration、nested scope、exit/output/max policy；
-- [ ] wrapper-loop registry entry 同批切新 strategy；
-- [ ] 删除 scheduler loop entry/body，仅保留仍被 Git/Fanout 共用的 helpers；
+- [x] 迁 loop validation、progress iteration、nested scope、exit/output/max policy；
+- [x] wrapper-loop registry entry 同批切新 strategy；
+- [x] 删除 scheduler loop entry/body，仅保留 W3/W5 mechanics；
 - [ ] loop park/revival/nesting/cycle/output/exhausted corpus 全绿；
-- [ ] exact source guard 确认 loop 不存在 fallback。
+- [x] exact source guard 确认 loop 不存在 fallback。
 
 退出：`wrapper-loop` 只有 WrapperRuntime 一个生产 entry，current row/outcome/WS 逐项相等。
 
-### T6 — GitStrategy 原子 cutover（Pending）
+### T6 — GitStrategy 原子 cutover（Candidate complete）
 
-- [ ] 迁 wrapper-private canonical create/rebuild；
-- [ ] 迁 per-repo baseline/preDirty old-payload compatibility；
-- [ ] 迁 nested scope、diff/output、merge/park/fail/discard；
-- [ ] wrapper-git registry entry 同批切新 strategy并删除 scheduler body；
+- [x] 迁 wrapper-private canonical create/rebuild；
+- [x] 迁 per-repo baseline/preDirty old-payload compatibility；
+- [x] 迁 nested scope、diff/output、merge/park/fail/discard；
+- [x] wrapper-git registry entry 同批切新 strategy并删除 scheduler body；
 - [ ] single/multi-repo、readonly、dirty subtraction、malformed/resume/re-entry、conflict-human corpus 全绿；
-- [ ] 保持 `git_diff` wire 与 exact error/status。
+- [x] 保持 `git_diff` wire 与 exact error/status。
 
 退出：`wrapper-git` 只有 WrapperRuntime 一个生产 entry；旧/在途 row 可原位续跑。
 
-### T7 — FanoutStrategy outer-shell 原子 cutover（Pending）
+### T7 — FanoutStrategy outer-shell 原子 cutover（Candidate complete）
 
-- [ ] 迁 input hydration、consumed/reuse gate、empty/cartesian/scope/key；
-- [ ] 迁 current shard/aggregator attempts、pool/retry/salvage/merge/output；
-- [ ] wrapper-fanout registry entry 同批切新 strategy并删除 scheduler body；
+- [x] 迁 input hydration、consumed/reuse gate、empty/cartesian/scope/key；
+- [x] 迁 current shard/aggregator attempts、pool/retry/salvage/merge/output；
+- [x] wrapper-fanout registry entry 同批切新 strategy并删除 scheduler body；
 - [ ] fanout empty/shard/aggregator/broadcast/concurrency/resume/collision/failure corpus 全绿；
-- [ ] source/behavior guard确认 inner-chain 与非 agent-single current限制既不扩也不缩；
-- [ ] common helper 最后 consumer 消失后删除，不复制两份。
+- [x] source/behavior guard确认 inner-chain 与非 agent-single current限制既不扩也不缩；
+- [x] common helper 最后 consumer 消失后删除，不复制两份。
 
 退出：`wrapper-fanout` 只有 WrapperRuntime 一个生产 entry；W8 未启动。
 
-### T8 — ExecutionMergeRecovery cutover（Pending）
+### T8 — ExecutionMergeRecovery cutover（Candidate complete）
 
-- [ ] 迁 pending-merge replay；
-- [ ] 迁 conflict-human completion；
-- [ ] TaskEngine application 注入 recovery，并保持两 replay → root scope 顺序；
-- [ ] 删除 taskEngineApplication → scheduler 两条 replay import/export；
+- [x] 迁 pending-merge replay；
+- [x] 迁 conflict-human completion；
+- [x] TaskEngine application 注入 recovery，并保持两 replay → root scope 顺序；
+- [x] 删除 taskEngineApplication → scheduler 两条 replay import/export；
 - [ ] pending tree/submodule/physical iso/merge-agent/human-resolve/crash corpus 全绿。
 
 退出：replay 只有 task-execution recovery 一个 owner；不成为 wrapper kind。
 
-### T9 — bootstrap driver/topology cut（Pending）
+### T9 — bootstrap driver/topology cut（Candidate complete）
 
-- [ ] `composeTaskExecutionRuntime` 只在 server/CLI/test bootstrap 调用；
-- [ ] `buildStartTaskDeps` 接显式 SchedulerDriverPort；
-- [ ] 迁完 route/schedule/webhook/workgroup/fusion/development/digital-employee/CLI 全 caller；
-- [ ] 删除 `createLegacyTaskExecutionTopology` 与 startTaskDeps internal import；
-- [ ] scheduler 的 source-termination dependency 改走 existing public vocabulary；
-- [ ] 不新增 global singleton/setter、public internal re-export 或 optional fallback。
+- [x] `composeTaskExecutionRuntime` 只在 server/CLI/test bootstrap 调用；
+- [x] `buildStartTaskDeps` 接显式 SchedulerDriverPort；
+- [x] 迁完 route/schedule/webhook/workgroup/fusion/development/digital-employee/CLI 全 caller；
+- [x] 删除 `createLegacyTaskExecutionTopology` 与 startTaskDeps internal import；
+- [x] scheduler 的 source-termination dependency 改走 existing public vocabulary；
+- [x] public resume config 展开为 explicit field contract；application port 不反向 import public query/type；
+- [x] frontier/structural-diff/validator/mechanics-state 的 wrapper/scope 读取改走 exact public query/type，不新增 R1 内部边；
+- [x] REST/MCP route mount 改接必填 `ComposedAppDeps`，全部 direct dispatcher test bootstrap 显式注入同一 runtime 的 driver/read models；
+- [x] 不新增 global singleton/setter、public internal re-export 或 optional fallback。
 
 退出：bootstrap 之外没有 concrete task-execution composition；所有 caller 功能保持。
 
 ### T10 — legacy extinction 与 canonical artifacts（Pending）
 
-- [ ] scheduler 10 个 W2-D symbols=0；
-- [ ] scheduler→nodeMechanics reverse imports=0；scheduler→task internal imports=0；
-- [ ] nodeExecution→scheduler wrapper imports=0；
-- [ ] legacy wrapperProgress/fanout files/facade=0；
+- [x] scheduler 10 个 W2-D symbols=0；
+- [x] scheduler→nodeMechanics reverse imports=0；scheduler→task internal imports=0；
+- [x] nodeExecution→scheduler wrapper imports=0；
+- [x] legacy wrapperProgress/fanout files/facade=0；
+- [x] read-only candidate：moved wrapper durable writers 保持 `worker-epoch` 分类，authority unknown=0；
 - [ ] 重放 canonical manifests/report；只删除真实消失的 exact exceptions；
 - [ ] task-execution-containing SCC=0，global backend/repo SCC ≤ `4/6`，KNOWN ≤31；
 - [ ] 不改 W3/W5 symbol owner，不倒签后续 wave。
@@ -233,20 +238,26 @@ owned exact allowlist 提交并完整保留共享文件里的他人输出。
 
 ## 6. AC 证据账本
 
-| AC        | 主要任务             | 状态    |
-| --------- | -------------------- | ------- |
-| AC-1～2   | T2                   | Pending |
-| AC-3～4   | T4～T7/T10           | Pending |
-| AC-5      | T5                   | Pending |
-| AC-6      | T6                   | Pending |
-| AC-7      | T7                   | Pending |
-| AC-8      | T3                   | Pending |
-| AC-9      | T8                   | Pending |
-| AC-10     | T4/T10               | Pending |
-| AC-11～12 | T9/T10               | Pending |
-| AC-13～15 | T10                  | Pending |
-| AC-16～17 | all production tasks | Pending |
-| AC-18     | T11                  | Pending |
+| AC    | 主要任务             | 状态              |
+| ----- | -------------------- | ----------------- |
+| AC-1  | T2                   | Candidate         |
+| AC-2  | T2                   | Candidate         |
+| AC-3  | T4～T7/T10           | Candidate         |
+| AC-4  | T4～T7/T10           | Candidate         |
+| AC-5  | T5                   | Candidate         |
+| AC-6  | T6                   | Candidate         |
+| AC-7  | T7                   | Candidate         |
+| AC-8  | T3                   | Candidate         |
+| AC-9  | T8                   | Candidate         |
+| AC-10 | T4/T10               | Candidate         |
+| AC-11 | T9/T10               | Candidate         |
+| AC-12 | T9/T10               | Candidate         |
+| AC-13 | T10                  | Pending canonical |
+| AC-14 | T10                  | Pending canonical |
+| AC-15 | T10                  | Candidate         |
+| AC-16 | all production tasks | Candidate         |
+| AC-17 | all production tasks | Candidate         |
+| AC-18 | T11                  | Pending           |
 
 ## 7. 停止门与回滚
 

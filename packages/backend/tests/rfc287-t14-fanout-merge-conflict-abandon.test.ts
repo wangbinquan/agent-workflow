@@ -20,8 +20,16 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { allowedFromForMergeEvent, targetForMergeEvent } from '@agent-workflow/shared'
 
-const SCHED = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+const WRAPPER_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'wrapperMechanics.ts',
+  ),
   'utf8',
 )
 const NODE_MECHANICS = readFileSync(
@@ -39,12 +47,12 @@ const NODE_MECHANICS = readFileSync(
 
 /** 截出一段 `disposition: {` 声明块——按缩进配平，避免跨到兄弟线上去。 */
 function dispositionAfter(anchor: string): string {
-  const at = SCHED.indexOf(anchor)
+  const at = WRAPPER_MECHANICS.indexOf(anchor)
   expect(at).toBeGreaterThan(0)
-  const declAt = SCHED.indexOf('disposition: {', at)
+  const declAt = WRAPPER_MECHANICS.indexOf('disposition: {', at)
   expect(declAt).toBeGreaterThan(at)
   // 到下一个同级 `},\n` 收尾即可——射程给足但不跨函数。
-  return SCHED.slice(declAt, declAt + 2400)
+  return WRAPPER_MECHANICS.slice(declAt, declAt + 2400)
 }
 
 describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用户拍板本 RFC 内补）', () => {
@@ -94,8 +102,8 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
   test('三条 keep:false 的线都各有自己的 abandon 理由 slug', () => {
     for (const [reason, owner] of [
       ['wg-merge-conflict-unresolved', NODE_MECHANICS],
-      ['fanout-shard-merge-conflict-unresolved', SCHED],
-      ['fanout-agg-merge-conflict-unresolved', SCHED],
+      ['fanout-shard-merge-conflict-unresolved', WRAPPER_MECHANICS],
+      ['fanout-agg-merge-conflict-unresolved', WRAPPER_MECHANICS],
     ] as const) {
       expect(owner, reason).toContain(reason)
     }

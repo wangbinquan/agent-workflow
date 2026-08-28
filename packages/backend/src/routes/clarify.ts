@@ -38,7 +38,7 @@ import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
 import { wakeHumanGateContinuation } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -397,10 +397,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
           wake: async (taskId, continuationRef) => {
             await wakeHumanGateContinuation(taskId, continuationRef, {
               db: deps.db,
-              schedulerDriver: createLegacyTaskExecutionTopology(
-                deps.db,
-                deps.repositoryPublicationTransport,
-              ).schedulerDriver,
+              schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
               appHome: Paths.root,
               configPath: deps.configPath,
               ...resolveLaunchRuntimeConfig(deps.configPath),

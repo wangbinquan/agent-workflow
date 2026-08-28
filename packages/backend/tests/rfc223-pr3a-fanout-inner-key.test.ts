@@ -12,7 +12,7 @@
 // If this reds, same-name different-id fanout inner nodes fold onto one agent.
 
 import { describe, expect, test } from 'bun:test'
-import { fanoutInnerAgentKey } from '../src/services/scheduler'
+import { fanoutInnerAgentKey } from '../src/modules/task-execution/composition/wrapperMechanics'
 
 describe('fanoutInnerAgentKey — id-canonical fanout inner identity (H2)', () => {
   test('stamped node → its agentId (not the name)', () => {
