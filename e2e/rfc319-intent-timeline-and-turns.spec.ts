@@ -1063,9 +1063,18 @@ test('RFC-319 INTENT-21: 每轮的执行详情面板——live/complete/incomple
     execDaemon = await startDaemon({ stubMode: 'intent', home: execHome })
     await authPage(page, execDaemon)
 
+    // RFC-338 把 boot recovery 的 DB/FS 工作移进 durable Worker；daemon ready
+    // 只说明服务面已打开，不再意味着这条恢复已经同步结算。等待同一个真实投影收敛，
+    // 仍然要求它在 boot 后自行完成，不能靠页面动作或手工重试触发。
+    await expect
+      .poll(async () => lastAgentTurn(await detailOf(execDaemon, crashedSessionId))?.content.code, {
+        timeout: 30_000,
+        intervals: [250],
+        message: '重启后的 maintenance Worker 没把孤儿轮次结算掉',
+      })
+      .toBe('intent-run-daemon-restart')
     const recovered = await detailOf(execDaemon, crashedSessionId)
     const recoveredTurn = lastAgentTurn(recovered)!
-    expect(recoveredTurn.content.code, '重启后没把孤儿轮次结算掉').toBe('intent-run-daemon-restart')
     expect(
       recoveredTurn.execution?.captureState,
       '进程崩在半路，捕获却仍被当成完整的 ⇒ 用户会拿一份残缺事件流去判因',

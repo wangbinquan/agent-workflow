@@ -1271,15 +1271,19 @@ test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族
     }
 
     // ── ② 总体积上限：份数与天数都放宽到不生效，只让体积说话。
-    rmSync(dir, { recursive: true, force: true })
-    plantBackup(dir, 'scheduled-size-1.tar.gz', 60_000, 1_000)
-    plantBackup(dir, 'scheduled-size-2.tar.gz', 2 * 60_000, 1_000)
-    plantBackup(dir, 'scheduled-size-3.tar.gz', 3 * 60_000, 1_000)
-    plantBackup(dir, 'scheduled-size-4.tar.gz', 4 * 60_000, 1_000)
-    plantBackup(dir, 'agent-workflow-big.tar.gz', 5 * 60_000, 9_000)
+    // RFC-338 的 durable ledger 会把同一个 hourly job/slot 精确去重；这是一条
+    // 独立策略腿，不能复用①已经完成的 slot 再期待它以新 payload 重跑。
+    const cappingHome = await readyHome('backups-cap')
+    const cappingDir = backupsDir(cappingHome)
+    rmSync(cappingDir, { recursive: true, force: true })
+    plantBackup(cappingDir, 'scheduled-size-1.tar.gz', 60_000, 1_000)
+    plantBackup(cappingDir, 'scheduled-size-2.tar.gz', 2 * 60_000, 1_000)
+    plantBackup(cappingDir, 'scheduled-size-3.tar.gz', 3 * 60_000, 1_000)
+    plantBackup(cappingDir, 'scheduled-size-4.tar.gz', 4 * 60_000, 1_000)
+    plantBackup(cappingDir, 'agent-workflow-big.tar.gz', 5 * 60_000, 9_000)
 
     const capping = await startDaemon({
-      home,
+      home: cappingHome,
       configOverrides: {
         backupIntervalMs: 0,
         backupRetentionCount: 50,
@@ -1291,7 +1295,7 @@ test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族
     })
     try {
       await expect
-        .poll(() => tarballsIn(dir), {
+        .poll(() => tarballsIn(cappingDir), {
           timeout: 120_000,
           intervals: [1_000],
           message:
@@ -1306,6 +1310,7 @@ test('RFC-319 OPS-043: 备份按份数与天数裁剪、受保护家族按家族
         ])
     } finally {
       await capping.stop()
+      bestEffortRemove(cappingHome)
     }
 
     // ── ③ 调度本身：到点必须真的产出一份新备份，而不只是「有个定时器在转」。
