@@ -118,6 +118,10 @@ if (attempt < 3) {
 const port = process.argv.at(-1)
 process.stdout.write('agent-workflow ready — open this URL in your browser:\\n')
 process.stdout.write('  http://127.0.0.1:' + port + '/?token=ABC123\\n')
+setTimeout(() => {
+  process.stdout.write('post-ready stdout evidence\\n')
+  process.stderr.write('post-ready stderr evidence\\n')
+}, 100)
 process.on('SIGTERM', () => process.exit(0))
 setInterval(() => {}, 1_000)
 `)
@@ -139,7 +143,17 @@ setInterval(() => {}, 1_000)
       expect(JSON.parse(readFileSync(join(handle.home, 'config.json'), 'utf8'))).not.toHaveProperty(
         'sandboxMode',
       )
+      await new Promise<void>((resolve) => setTimeout(resolve, 200))
+      const running = handle.diagnostics()
+      expect(running.pid).toBe(handle.pid)
+      expect(running.exitCode).toBeNull()
+      expect(running.signalCode).toBeNull()
+      expect(running.stdoutTail).toContain('post-ready stdout evidence')
+      expect(running.stdoutTail).not.toContain('ABC123')
+      expect(running.stderrTail).toContain('post-ready stderr evidence')
       await handle.stop()
+      const stopped = handle.diagnostics()
+      expect(stopped.exitCode !== null || stopped.signalCode !== null).toBe(true)
       expect(existsSync(handle.home)).toBe(false)
       handle = undefined
     } finally {

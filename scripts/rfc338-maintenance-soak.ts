@@ -7,7 +7,15 @@
 
 import { Database } from 'bun:sqlite'
 import { randomUUID } from 'node:crypto'
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 
@@ -22,7 +30,12 @@ import {
   type MaintenanceJobKey,
   type MaintenanceStatus,
 } from '../packages/shared/src/index'
-import { defaultBinaryPath, startDaemon, type DaemonHandle } from '../e2e/harness'
+import {
+  defaultBinaryPath,
+  startDaemon,
+  type DaemonHandle,
+  type DaemonProcessDiagnostics,
+} from '../e2e/harness'
 
 interface Args {
   readonly clients: number
@@ -63,6 +76,7 @@ interface PhaseReport {
   readonly api: LatencyStats
   readonly reads: LatencyStats
   readonly foregroundWrites: LatencyStats
+  readonly routes: Readonly<Record<string, LatencyStats>>
   readonly httpErrors: number
   readonly timeouts: number
   readonly firstErrors: readonly string[]
@@ -73,6 +87,12 @@ interface PhaseReport {
     readonly maxGapMs: number
   }
   readonly eventLoop: MaintenanceStatus['eventLoop'] | null
+  readonly processMemory: {
+    readonly samples: number
+    readonly lastRssMib: number | null
+    readonly maxRssMib: number | null
+  }
+  readonly daemon: DaemonProcessDiagnostics
 }
 
 interface TimingSummary {
@@ -162,6 +182,17 @@ function stats(samples: readonly number[]): LatencyStats {
     p50Ms: percentile(samples, 0.5),
     p95Ms: percentile(samples, 0.95),
     maxMs: samples.length === 0 ? 0 : Math.max(...samples),
+  }
+}
+
+function processRssMib(pid: number): number | null {
+  if (process.platform !== 'linux') return null
+  try {
+    const status = readFileSync(`/proc/${pid}/status`, 'utf-8')
+    const match = status.match(/^VmRSS:\s+(\d+)\s+kB$/mu)
+    return match === null ? null : Number(match[1]) / 1024
+  } catch {
+    return null
   }
 }
 
@@ -391,6 +422,8 @@ async function runPhase(input: {
   const apiSamples: number[] = []
   const readSamples: number[] = []
   const writeSamples: number[] = []
+  const routeSamples = new Map<string, number[]>()
+  const rssSamples: number[] = []
   const firstErrors: string[] = []
   let httpErrors = 0
   let timeouts = 0
@@ -404,6 +437,12 @@ async function runPhase(input: {
     '/api/cached-repos?limit=50',
     '/api/overview',
   ] as const
+  const sampleRss = (): void => {
+    const rss = processRssMib(input.daemon.pid)
+    if (rss !== null) rssSamples.push(rss)
+  }
+  sampleRss()
+  const rssTimer = setInterval(sampleRss, 1_000)
 
   const request = async (
     path: string,
@@ -412,6 +451,7 @@ async function runPhase(input: {
     body?: string,
   ): Promise<void> => {
     const beganAt = performance.now()
+    const routeKey = `${method} ${path.replace(/\/perftask\d{7}(?=\/|$)/u, '/:taskId')}`
     try {
       const response = await fetch(`${input.daemon.baseUrl}${path}`, {
         method,
@@ -423,6 +463,9 @@ async function runPhase(input: {
       const elapsed = performance.now() - beganAt
       apiSamples.push(elapsed)
       ;(write ? writeSamples : readSamples).push(elapsed)
+      const samples = routeSamples.get(routeKey) ?? []
+      samples.push(elapsed)
+      routeSamples.set(routeKey, samples)
       if (response.status !== 200) {
         httpErrors += 1
         if (firstErrors.length < 10) {
@@ -436,6 +479,9 @@ async function runPhase(input: {
       const elapsed = performance.now() - beganAt
       apiSamples.push(elapsed)
       ;(write ? writeSamples : readSamples).push(elapsed)
+      const samples = routeSamples.get(routeKey) ?? []
+      samples.push(elapsed)
+      routeSamples.set(routeKey, samples)
       httpErrors += 1
       if (error instanceof DOMException && error.name === 'TimeoutError') timeouts += 1
       if (firstErrors.length < 10) {
@@ -471,6 +517,7 @@ async function runPhase(input: {
     }),
   )
 
+  clearInterval(rssTimer)
   const endedAt = performance.now()
   const statusObservation = await observeMaintenanceStatus(input.daemon)
   httpErrors += statusObservation.errors.length
@@ -490,6 +537,11 @@ async function runPhase(input: {
     api: stats(apiSamples),
     reads: stats(readSamples),
     foregroundWrites: stats(writeSamples),
+    routes: Object.fromEntries(
+      [...routeSamples.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([route, samples]) => [route, stats(samples)]),
+    ),
     httpErrors,
     timeouts,
     firstErrors,
@@ -500,6 +552,12 @@ async function runPhase(input: {
       maxGapMs: sockets.reduce((maximum, probe) => Math.max(maximum, probe.maxGapMs), 0),
     },
     eventLoop: statusObservation.status?.eventLoop ?? null,
+    processMemory: {
+      samples: rssSamples.length,
+      lastRssMib: rssSamples.at(-1) ?? null,
+      maxRssMib: rssSamples.length === 0 ? null : Math.max(...rssSamples),
+    },
+    daemon: input.daemon.diagnostics(),
   }
   console.log(
     `[maintenance-soak] ${input.label}: api p95=${report.api.p95Ms.toFixed(1)}ms ` +
@@ -652,6 +710,11 @@ function summarizeTiming(
 
 function phaseFailures(phase: PhaseReport): string[] {
   const failures: string[] = []
+  if (phase.daemon.exitCode !== null || phase.daemon.signalCode !== null) {
+    failures.push(
+      `${phase.label}: daemon exited code=${phase.daemon.exitCode ?? 'null'} signal=${phase.daemon.signalCode ?? 'null'}`,
+    )
+  }
   if (phase.httpErrors !== 0) failures.push(`${phase.label}: HTTP errors=${phase.httpErrors}`)
   if (phase.timeouts !== 0) failures.push(`${phase.label}: timeouts=${phase.timeouts}`)
   if (phase.websocket.errors !== 0) {
@@ -704,6 +767,8 @@ function markdown(report: {
     `- Dataset: ${report.before.tasks} tasks / ${report.before.nodeRuns} node runs / ${report.before.events} events / ${report.before.webhookDeliveries} webhook deliveries / ${report.before.cachedRepos} repos\n` +
     `- Fixture prep: ${report.preparation.tasksTerminalized} synthetic tasks + ${report.preparation.nodeRunsTerminalized} synthetic node runs terminalized offline in ${report.preparation.elapsedMs.toFixed(1)}ms\n` +
     `- Cold start to authenticated ready: ${report.coldStartMs.toFixed(1)}ms\n` +
+    `- Daemon RSS: control max=${report.control.processMemory.maxRssMib?.toFixed(1) ?? 'n/a'} MiB; maintenance max=${report.maintenance.processMemory.maxRssMib?.toFixed(1) ?? 'n/a'} MiB\n` +
+    `- Daemon terminal state: code=${report.maintenance.daemon.exitCode ?? 'running'}, signal=${report.maintenance.daemon.signalCode ?? 'none'}\n` +
     `- Verdict: **${report.failures.length === 0 ? 'PASS' : 'FAIL'}**\n\n` +
     `| phase | API p50 ms | API p95 ms | API max ms | write max ms | WS max gap ms | event-loop max gap ms | errors |\n` +
     `| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n` +

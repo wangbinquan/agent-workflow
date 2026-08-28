@@ -49,6 +49,14 @@ export interface DaemonHandle {
   home: string
   /** Resolved path to the stub-opencode shim. */
   stubOpencode: string
+  /** OS process id of the separately compiled daemon. */
+  pid: number
+  /**
+   * Non-mutating child-process diagnostics for long-running hosted gates.
+   * Output tails start after authenticated readiness, so the one-time bootstrap
+   * credential printed by a fresh daemon is never retained in an artifact.
+   */
+  diagnostics: () => DaemonProcessDiagnostics
   /** Stop the daemon and (unless `keepHome=true`) remove the temp home. */
   stop: () => Promise<void>
   /**
@@ -73,6 +81,14 @@ export interface DaemonHandle {
   requestGracefulShutdown: (timeoutMs?: number) => Promise<void>
   /** True if the home dir was provided externally (don't wipe on stop). */
   keepHome: boolean
+}
+
+export interface DaemonProcessDiagnostics {
+  readonly pid: number
+  readonly exitCode: number | null
+  readonly signalCode: NodeJS.Signals | null
+  readonly stdoutTail: string
+  readonly stderrTail: string
 }
 
 export interface SpawnOptions {
@@ -249,6 +265,11 @@ const OUTPUT_TAIL_BYTES = 32 * 1024
 
 type DaemonChild = ChildProcessByStdio<null, Readable, Readable>
 
+interface DaemonOutputTail {
+  stdout: string
+  stderr: string
+}
+
 function appendOutputTail(current: string, chunk: string): string {
   const next = current + chunk
   return next.length <= OUTPUT_TAIL_BYTES ? next : next.slice(-OUTPUT_TAIL_BYTES)
@@ -380,14 +401,13 @@ interface ReadyDaemon {
 async function waitForDaemonReady(
   child: DaemonChild,
   readyTimeoutMs = READY_TIMEOUT_MS,
+  outputTail: DaemonOutputTail = { stdout: '', stderr: '' },
 ): Promise<ReadyDaemon> {
   child.stderr.setEncoding('utf-8')
   child.stdout.setEncoding('utf-8')
 
-  let stdoutTail = ''
-  let stderrTail = ''
   const onStderr = (chunk: string): void => {
-    stderrTail = appendOutputTail(stderrTail, chunk)
+    outputTail.stderr = appendOutputTail(outputTail.stderr, chunk)
     if (process.env.E2E_VERBOSE) process.stderr.write(`[daemon stderr] ${chunk}`)
   }
   child.stderr.on('data', onStderr)
@@ -401,15 +421,15 @@ async function waitForDaemonReady(
       rejectReady(
         new Error(
           `e2e/harness: timed out after ${readyTimeoutMs / 1_000}s waiting for daemon ready line\n` +
-            `  stdout so far:\n${stdoutTail}\n  stderr so far:\n${stderrTail}`,
+            `  stdout so far:\n${outputTail.stdout}\n  stderr so far:\n${outputTail.stderr}`,
         ),
       )
     }, readyTimeoutMs)
 
     const onData = (chunk: string): void => {
       if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
-      stdoutTail = appendOutputTail(stdoutTail, chunk)
-      const match = stdoutTail.match(
+      outputTail.stdout = appendOutputTail(outputTail.stdout, chunk)
+      const match = outputTail.stdout.match(
         /agent-workflow ready[^\n]*\n\s+(https?:\/\/[^\s?]+)(?:\?token=([A-Za-z0-9]+))?\r?\n/,
       )
       if (match === null) return
@@ -426,7 +446,7 @@ async function waitForDaemonReady(
       rejectReady(
         new Error(
           `e2e/harness: daemon closed with code ${code ?? 'null'} signal ${signal ?? 'null'} before printing ready line\n` +
-            `  stdout: ${stdoutTail}\n  stderr: ${stderrTail}`,
+            `  stdout: ${outputTail.stdout}\n  stderr: ${outputTail.stderr}`,
         ),
       )
     }
@@ -582,6 +602,7 @@ async function startDaemonWithPortAllocator(
 
     for (let attempt = 1; attempt <= DAEMON_START_ATTEMPTS; attempt += 1) {
       const bindPort = await portAllocator()
+      const outputTail: DaemonOutputTail = { stdout: '', stderr: '' }
 
       // Pre-seed config.json so the daemon picks the stub binary on its
       // version-probe path — no PATH gymnastics required. Re-write it on each
@@ -643,7 +664,7 @@ async function startDaemonWithPortAllocator(
       child = attemptChild
 
       try {
-        const ready = await waitForDaemonReady(attemptChild, opts.readyTimeoutMs)
+        const ready = await waitForDaemonReady(attemptChild, opts.readyTimeoutMs, outputTail)
 
         const token =
           opts.authMode === 'bootstrap'
@@ -664,8 +685,13 @@ async function startDaemonWithPortAllocator(
           }
         }
 
+        // The ready banner of a new home contains its one-time bootstrap token.
+        // Hosted soak artifacts need post-ready crash evidence, never that token.
+        outputTail.stdout = ''
+
         // Keep draining stdout so the child never blocks on a full pipe.
         attemptChild.stdout.on('data', (chunk: string) => {
+          outputTail.stdout = appendOutputTail(outputTail.stdout, chunk)
           if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
         })
 
@@ -707,6 +733,15 @@ async function startDaemonWithPortAllocator(
           signal: NodeJS.Signals = 'SIGKILL',
           fallbackTimeoutMs: number = 5_000,
         ): Promise<void> => signalChildAndWait(startedChild, signal, fallbackTimeoutMs)
+        const pid = startedChild.pid
+        if (pid === undefined) throw new Error('e2e/harness: spawned daemon has no process id')
+        const diagnostics = (): DaemonProcessDiagnostics => ({
+          pid,
+          exitCode: startedChild.exitCode,
+          signalCode: startedChild.signalCode,
+          stdoutTail: outputTail.stdout,
+          stderrTail: outputTail.stderr,
+        })
 
         return {
           baseUrl: ready.baseUrl,
@@ -714,6 +749,8 @@ async function startDaemonWithPortAllocator(
           bootstrapToken: ready.bootstrapToken,
           home,
           stubOpencode,
+          pid,
+          diagnostics,
           stop,
           killChild,
           requestGracefulShutdown,
