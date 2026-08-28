@@ -6,11 +6,13 @@ import { join, resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import {
   employeeAttentionBindings,
+  employeeCaseMembers,
   employeeCases,
   employeeOsOutbox,
   employeeReactionRounds,
   employeeToolRegistrationRevisions,
   eventSubscriptions,
+  users,
 } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
 import {
@@ -18,7 +20,10 @@ import {
   developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
+import { createDevelopmentEmployeeCaseWorkspaceDetailReader } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
+import { createSqliteRuntimeStore } from '@/modules/digital-employee/infrastructure/sqliteRuntimeStore'
 import {
   DigitalEmployeeRuntimeService,
   projectFrozenExecutionOptions,
@@ -45,6 +50,43 @@ afterEach(() => {
 })
 
 describe('RFC-310 stateful employee Case runtime', () => {
+  test('Case metering receipts increment usage exactly once', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    db.insert(employeeCases)
+      .values({
+        id: 'case-metering',
+        name: 'Case metering',
+        employeeId: 'employee-metering',
+        employeeRevision: 1,
+        typeId: 'development',
+        typeRevision: 10,
+        primaryContextId: 'context-metering',
+        executionPolicyRevision: 1,
+        state: 'active',
+        currentWorkItemRef: 'analyze-implement',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run()
+    const store = createSqliteRuntimeStore(db)
+    const receipt = {
+      sourceRef: 'task:execution-metering',
+      caseId: 'case-metering',
+      roundId: 'round-metering',
+      durationMs: 321,
+      totalTokens: 654,
+      now: 2,
+    }
+    expect(store.recordMetering(receipt)).toMatchObject({
+      applied: true,
+      caseRecord: { consumedDurationMs: 321, consumedTotalTokens: 654, revision: 2 },
+    })
+    expect(store.recordMetering({ ...receipt, now: 3 })).toMatchObject({
+      applied: false,
+      caseRecord: { consumedDurationMs: 321, consumedTotalTokens: 654, revision: 2 },
+    })
+  })
+
   // User regression 2026-08-23: task details must project the Case-pinned
   // active capability set instead of rendering every authoring option.
   test('projects frozen generic execution options without employee-type special cases', () => {
@@ -107,6 +149,17 @@ describe('RFC-310 stateful employee Case runtime', () => {
         settleRound(input: SettleRoundInput) {
           settled.push(input.roundId)
         },
+        recordMetering() {
+          return {
+            applied: true,
+            caseRecord: {
+              maxDurationMs: null,
+              consumedDurationMs: 0,
+              maxTotalTokens: null,
+              consumedTotalTokens: 0,
+            },
+          }
+        },
       },
       authoringStore: {
         getExecutionPolicyRevision() {
@@ -141,6 +194,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
             errorClass: 'semantic',
             errorCode: 'fixture-failure',
             errorDetail: 'terminal fixture execution',
+            metering: { sourceRef: executionRef, durationMs: 0, totalTokens: 0 },
           }
         },
       },
@@ -152,6 +206,74 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(await runtime.inspectOneExecution()).toBe('failed')
     expect(inspected).toEqual(['execution-pending', 'execution-failed'])
     expect(settled).toEqual(['round-failed'])
+  })
+
+  test('a terminal execution receipt ends the Case when a user limit is reached', async () => {
+    type RuntimeDependencies = ConstructorParameters<typeof DigitalEmployeeRuntimeService>[0]
+    type RunningRound = ReturnType<RuntimeDependencies['store']['listRunningRounds']>[number]
+    type SettleRoundInput = Parameters<RuntimeDependencies['store']['settleRound']>[0]
+    const round = {
+      id: 'round-user-limit',
+      caseId: 'case-user-limit',
+      caseRevision: 1,
+      inboxId: null,
+      employeeRef: { id: 'employee-1', revision: 1 },
+      ruleId: 'fixture-rule',
+      workItemRef: 'fixture-work',
+      workContractRef: { contractId: 'fixture.contract', version: 1 },
+      toolRef: { id: 'fixture-tool', revision: 1 },
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: '{}',
+      state: 'running',
+      executionRef: 'execution-user-limit',
+      outputJson: null,
+      attemptOrdinal: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      settledAt: null,
+    } satisfies RunningRound
+    let settlement: SettleRoundInput | null = null
+    const runtime = new DigitalEmployeeRuntimeService({
+      store: {
+        listRunningRounds: () => [round],
+        recordMetering: () => ({
+          applied: true,
+          caseRecord: {
+            maxDurationMs: null,
+            consumedDurationMs: 0,
+            maxTotalTokens: 100,
+            consumedTotalTokens: 100,
+          },
+        }),
+        settleRound(input: SettleRoundInput) {
+          settlement = input
+        },
+      },
+      execution: {
+        async inspect(executionRef: string) {
+          return {
+            kind: 'failed' as const,
+            executionRef,
+            errorClass: 'semantic' as const,
+            errorCode: 'fixture-failure',
+            errorDetail: 'the attempt reached its remaining token cap',
+            metering: { sourceRef: executionRef, durationMs: 10, totalTokens: 100 },
+          }
+        },
+      },
+      runtimeCodecs: [],
+      currentTypeRefs: [],
+      now: () => 2,
+    } as unknown as RuntimeDependencies)
+
+    expect(await runtime.inspectOneExecution()).toBe('failed')
+    expect(settlement).toMatchObject({
+      roundId: 'round-user-limit',
+      state: 'failed',
+      nextCaseState: 'terminal',
+      terminalKind: 'case-token-limit-exceeded',
+    })
   })
 
   test('cross-employee guard treats revisions as one identity and closes depth and child budgets', () => {
@@ -616,6 +738,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       runtime: {
         eventCenter: eventCenter.participant,
         codecs: [developmentEmployeeRuntimeCodec],
+        detailProjectionParticipants: [
+          composeDevelopmentEmployeeCaseDetailProjection(
+            createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
+          ),
+        ],
         platformWorkItems: {
           async execute(plan) {
             const inputEnvelope = JSON.parse(plan.inputEnvelopeJson) as { contextsJson: string }
@@ -893,6 +1020,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
                   ? { ...outputForRound, unexpectedEnvelopeField: true }
                   : outputForRound,
               ),
+              metering: { sourceRef: executionRef, durationMs: 0, totalTokens: 0 },
             }
           },
           async cancel() {},
@@ -2284,6 +2412,14 @@ describe('RFC-310 stateful employee Case runtime', () => {
       }),
     ).toThrow('manual digital employee work requires a task name')
 
+    await db.insert(users).values({
+      id: 'case-collaborator',
+      username: 'case-collaborator',
+      displayName: 'Case Collaborator',
+      passwordHash: 'fixture',
+      createdAt: now,
+      updatedAt: now,
+    })
     const manualLaunch = runtime.commands.launchWork({
       employeeId: employee.id,
       intake: {
@@ -2293,6 +2429,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
         body: '由当前用户手工启动数字员工任务',
         externalId: null,
         uploads: [],
+        advanced: {
+          collaboratorUserIds: ['case-collaborator', 'catalog-user', 'case-collaborator'],
+          maxDurationMs: 120_000,
+          maxTotalTokens: 8_000,
+          typeOptions: { 'working-branch': 'feature/rfc336-advanced-options' },
+        },
         idempotencyKey: 'manual-work:catalog-user',
       },
       actorUserId: 'catalog-user',
@@ -2301,7 +2443,48 @@ describe('RFC-310 stateful employee Case runtime', () => {
       name: '修复目录任务命名链',
       ownerUserId: 'catalog-user',
       launchOrigin: 'manual',
+      maxDurationMs: 120_000,
+      consumedDurationMs: 0,
+      maxTotalTokens: 8_000,
+      consumedTotalTokens: 0,
     })
+    expect(
+      db
+        .select({ userId: employeeCaseMembers.userId, role: employeeCaseMembers.role })
+        .from(employeeCaseMembers)
+        .where(eq(employeeCaseMembers.caseId, manualLaunch.caseRef.id))
+        .all(),
+    ).toEqual([{ userId: 'case-collaborator', role: 'collaborator' }])
+    const manualProjection = JSON.parse(manualLaunch.projectionJson) as {
+      contexts: Array<{ id: string; state: { request?: { workingBranch?: string | null } } }>
+      detail: { input: { advancedOptions: Record<string, string> } }
+    }
+    expect(manualProjection.contexts[0]?.state.request?.workingBranch).toBe(
+      'feature/rfc336-advanced-options',
+    )
+    expect(manualProjection.detail.input.advancedOptions).toEqual({
+      'working-branch': 'feature/rfc336-advanced-options',
+    })
+    expect(() =>
+      runtime.commands.launchWork({
+        employeeId: employee.id,
+        intake: {
+          name: '不得接受自动提交开关',
+          kind: 'body',
+          target: { repositoryId: 'repo-1' },
+          body: '数字员工固定自动交付，不接受开关',
+          externalId: null,
+          uploads: [],
+          advanced: {
+            collaboratorUserIds: [],
+            typeOptions: {},
+            autoCommitPush: false,
+          },
+          idempotencyKey: 'manual-work:auto-commit-switch-forbidden',
+        },
+        actorUserId: 'catalog-user',
+      }),
+    ).toThrow()
     const mine = JSON.parse(
       runtime.queries.listCasePage({ ownerUserId: 'catalog-user', launchOrigin: 'manual' }),
     ) as { items: Array<{ id: string; taskName: string }> }

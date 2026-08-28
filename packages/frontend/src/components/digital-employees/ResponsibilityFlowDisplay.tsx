@@ -22,6 +22,22 @@ export interface ResponsibilityCardPresentation {
   next: string
 }
 
+export interface ResponsibilityExternalResourceAction {
+  href: string
+  label: string
+  title?: string
+}
+
+export interface ResponsibilityIngressPresentation {
+  kindLabel: string
+  label: string
+  description: string
+  actionLabel: string
+  detail: string
+  state: 'configured' | 'missing' | 'neutral' | 'running' | 'failed' | 'completed' | 'waiting'
+  selected?: boolean
+}
+
 export interface ResponsibilityFlowConnectorProps {
   kind: 'axis' | 'ingress-target' | 'sequence'
   className?: string
@@ -76,6 +92,7 @@ export interface ResponsibilityFlowCardProps extends Omit<
   detailTitle?: string
   nextText?: string
   incoming?: boolean
+  externalAction?: ResponsibilityExternalResourceAction
 }
 
 /** Shared visual card used by ingress, tool, platform, review and dispatch nodes. */
@@ -87,10 +104,11 @@ export function ResponsibilityFlowCard(props: ResponsibilityFlowCardProps): Reac
     detailTitle,
     nextText,
     incoming = false,
+    externalAction,
     className,
     ...buttonProps
   } = props
-  return (
+  const card = (
     <button
       {...buttonProps}
       className={`employee-toolbox-card${className === undefined ? '' : ` ${className}`}`}
@@ -101,6 +119,22 @@ export function ResponsibilityFlowCard(props: ResponsibilityFlowCardProps): Reac
       {detailText === undefined ? null : <small title={detailTitle}>{detailText}</small>}
       {nextText === undefined ? null : <span className="sr-only">{nextText}</span>}
     </button>
+  )
+  if (externalAction === undefined) return card
+  return (
+    <span className="employee-toolbox-card-with-action">
+      {card}
+      <a
+        className="employee-toolbox-card__external-action"
+        href={externalAction.href}
+        target="_blank"
+        rel="noreferrer"
+        title={externalAction.title}
+      >
+        {externalAction.label}
+        <span aria-hidden="true">↗</span>
+      </a>
+    </span>
   )
 }
 
@@ -113,11 +147,12 @@ export interface ResponsibilityIngressCardProps {
   nextLabel: string
   readOnly?: boolean
   onConfigure?: (ingress: WorkIngress) => void
+  presentation?: ResponsibilityIngressPresentation
 }
 
 export function ResponsibilityIngressCard(props: ResponsibilityIngressCardProps): ReactElement {
   const zh = props.language.startsWith('zh')
-  const action =
+  const defaultAction =
     props.ingress.configurationSurface === 'task-creation'
       ? zh
         ? '去新建任务'
@@ -125,6 +160,12 @@ export function ResponsibilityIngressCard(props: ResponsibilityIngressCardProps)
       : zh
         ? '去 Webhook 配置'
         : 'Configure Webhook'
+  const action = props.presentation?.actionLabel ?? defaultAction
+  const label = props.presentation?.label ?? localized(props.ingress.label, props.language)
+  const kindLabel =
+    props.presentation?.kindLabel ?? localized(props.ingress.valueLabel, props.language)
+  const description =
+    props.presentation?.description ?? localized(props.ingress.description, props.language)
   const auxiliaryStyle =
     props.sourceNode === true
       ? undefined
@@ -141,19 +182,29 @@ export function ResponsibilityIngressCard(props: ResponsibilityIngressCardProps)
       data-next-work-item-ref={props.ingress.nextWorkItemRef}
       data-ingress-route={props.ingress.routeKind}
       type="button"
-      className={`employee-toolbox-card--ingress ${
+      className={`employee-toolbox-card--ingress${
+        props.presentation === undefined
+          ? ''
+          : ` employee-toolbox-card--${props.presentation.state}`
+      }${props.presentation?.selected === true ? ' employee-toolbox-card--active' : ''} ${
         props.sourceNode === true
           ? 'employee-toolbox-card--source-node'
           : 'employee-toolbox-card--auxiliary'
       }`}
       style={auxiliaryStyle}
-      aria-label={`${localized(props.ingress.label, props.language)} · ${localized(props.ingress.valueLabel, props.language)} · ${action} · ${zh ? '下一步' : 'Next'}：${props.nextLabel}`}
-      title={localized(props.ingress.description, props.language)}
+      aria-pressed={
+        props.presentation === undefined ? undefined : props.presentation.selected === true
+      }
+      aria-label={`${label} · ${kindLabel} · ${action} · ${zh ? '下一步' : 'Next'}：${props.nextLabel}`}
+      title={description}
       disabled={props.readOnly === true}
       onClick={() => props.onConfigure?.(props.ingress.sourceIngress)}
-      kindLabel={localized(props.ingress.valueLabel, props.language)}
-      label={localized(props.ingress.label, props.language)}
-      detailText={props.sourceNode === true ? undefined : `→ ${props.nextLabel}`}
+      kindLabel={kindLabel}
+      label={label}
+      detailText={
+        props.presentation?.detail ??
+        (props.sourceNode === true ? undefined : `→ ${props.nextLabel}`)
+      }
       detailTitle={action}
     />
   )
@@ -268,6 +319,10 @@ export interface ResponsibilityIngressBranchProps {
   onSelect: () => void
   onConfigureIngress?: (ingress: WorkIngress) => void
   nextLabelFor: (ingress: ResponsibilityProjectedIngress) => string
+  ingressPresentation?: (
+    ingress: ResponsibilityProjectedIngress,
+  ) => ResponsibilityIngressPresentation | undefined
+  externalAction?: ResponsibilityExternalResourceAction
 }
 
 export function ResponsibilityIngressBranch(props: ResponsibilityIngressBranchProps): ReactElement {
@@ -296,6 +351,7 @@ export function ResponsibilityIngressBranch(props: ResponsibilityIngressBranchPr
             nextLabel={props.nextLabelFor(ingress)}
             readOnly={props.readOnly}
             onConfigure={props.onConfigureIngress}
+            presentation={props.ingressPresentation?.(ingress)}
           />
         ))}
       </div>
@@ -321,6 +377,7 @@ export function ResponsibilityIngressBranch(props: ResponsibilityIngressBranchPr
         detailText={compactDetail}
         detailTitle={detail}
         nextText={next}
+        externalAction={props.externalAction}
       />
     </div>
   )
@@ -379,6 +436,7 @@ export interface ResponsibilityReviewBranchProps {
   onSelectPlanning: () => void
   onSelectItem: () => void
   onSelectGate: () => void
+  externalAction?: ResponsibilityExternalResourceAction
 }
 
 export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProps): ReactElement {
@@ -481,6 +539,7 @@ export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProp
           detailText={compactDetail}
           detailTitle={detail}
           nextText={next}
+          externalAction={props.externalAction}
         />
       </div>
     </div>

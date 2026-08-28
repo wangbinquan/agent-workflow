@@ -353,6 +353,29 @@
   font-size: 12px;
 }
 
+.employee-toolbox-region__external-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 28px;
+  margin-left: auto;
+  padding: 3px 8px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: 999px;
+  background: var(--panel);
+}
+
+.employee-toolbox-region__external-action:hover,
+.employee-toolbox-region__external-action:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
 .employee-toolbox-region__lanes {
   --employee-lane-label-width: 100px;
 
@@ -605,6 +628,45 @@
 .employee-toolbox-card:hover {
   --employee-card-border: color-mix(in srgb, var(--accent) 64%, var(--border));
   --employee-card-background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
+
+.employee-toolbox-card-with-action {
+  position: relative;
+  display: block;
+  width: var(--employee-tool-card-width);
+  min-width: 0;
+  height: var(--employee-tool-card-height);
+}
+
+.employee-toolbox-card-with-action > .employee-toolbox-card {
+  padding-right: 42px;
+}
+
+.employee-toolbox-card__external-action {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 20px;
+  padding: 2px 5px;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--accent));
+}
+
+.employee-toolbox-card__external-action:hover,
+.employee-toolbox-card__external-action:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .employee-toolbox-card__kind {
@@ -1876,6 +1938,100 @@
   align-items: start;
 }
 
+.employee-case-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.employee-case-fact-grid > * {
+  min-width: 0;
+}
+
+.employee-case-fact-grid .card__body {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.employee-case-fact-grid strong,
+.employee-case-fact-grid p,
+.employee-case-fact-grid small,
+.employee-case-fact-grid code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.employee-case-fact-grid p,
+.employee-case-fact-grid small,
+.employee-case-input-block p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.employee-case-input-inspector {
+  scroll-margin-top: var(--space-4);
+}
+
+.employee-case-input-block {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.employee-case-input-block > pre {
+  max-height: 24rem;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 68%, var(--panel));
+}
+
+.employee-case-path-list,
+.employee-case-artifact-sources {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.employee-case-path-list--bounded {
+  max-height: 24rem;
+  overflow: auto;
+}
+
+.employee-case-path-list li,
+.employee-case-artifact-sources li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.employee-case-path-list code,
+.employee-case-artifact-sources code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.employee-card-list--detail-contexts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .employee-case-upload-list,
 .employee-case-artifacts {
   display: grid;
@@ -2753,6 +2909,8 @@
   .execution-contract-field,
   .employee-dialog-form__row,
   .employee-case-detail-grid,
+  .employee-case-fact-grid,
+  .employee-card-list--detail-contexts,
   .employee-execution-timeline-layout,
   .employee-execution-io-grid,
   .event-center-summary,

@@ -1,5 +1,6 @@
 import {
   canonicalJson,
+  isLooseValidBranchName,
   PLATFORM_WORKSPACE_DIR,
   type TaskLaunchOrigin,
 } from '@agent-workflow/shared'
@@ -76,6 +77,17 @@ export const employeeWorkIntakeSchema = z
       )
       .max(500),
     executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
+    advanced: z
+      .object({
+        collaboratorUserIds: z.array(z.string().min(1).max(200)).max(64).default([]),
+        maxDurationMs: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+        maxTotalTokens: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+        typeOptions: z
+          .record(z.string().min(1).max(160), z.string().trim().min(1).max(1_000))
+          .default({}),
+      })
+      .strict()
+      .default({ collaboratorUserIds: [], typeOptions: {} }),
     idempotencyKey: z.string().min(1).max(500),
   })
   .strict()
@@ -161,6 +173,10 @@ export interface EmployeeCaseRecord {
   readonly typeRef: { readonly typeId: string; readonly revision: number }
   readonly primaryContextId: string
   readonly executionPolicyRevision: number
+  readonly maxDurationMs: number | null
+  readonly consumedDurationMs: number
+  readonly maxTotalTokens: number | null
+  readonly consumedTotalTokens: number
   readonly ownerUserId: string | null
   readonly launchOrigin: TaskLaunchOrigin
   readonly state: 'active' | 'waiting' | 'blocked' | 'terminal'
@@ -346,6 +362,7 @@ export const reactionExecutionPlanSchema = z
     semanticValidatorId: z.string().min(1),
     executionPolicyRevision: z.number().int().positive(),
     roundBudgetMs: z.number().int().positive(),
+    maxTotalTokens: z.number().int().positive().nullable().default(null),
     externalWaitDeadlineMs: z.number().int().positive(),
     allowedEffectKinds: z.array(z.string().min(1)).max(100),
     workspacePolicy: z
@@ -361,6 +378,10 @@ export const reactionExecutionPlanSchema = z
   .strict()
 
 export type ReactionExecutionPlan = z.infer<typeof reactionExecutionPlanSchema>
+
+export function validateRepositoryBranchOption(value: string): boolean {
+  return value.length <= 255 && isLooseValidBranchName(value)
+}
 
 export function runtimeDigest(value: object): string {
   return sha256Hex(canonicalJson(value))

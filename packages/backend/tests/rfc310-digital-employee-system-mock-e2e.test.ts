@@ -658,9 +658,15 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
             errorClass: validation.errorClass,
             errorCode: validation.errorCode,
             errorDetail: validation.errorDetail,
+            metering: { sourceRef: executionRef, durationMs: 0, totalTokens: 0 },
           }
         }
-        return { kind: 'completed' as const, executionRef, outputJson: done.outputJson }
+        return {
+          kind: 'completed' as const,
+          executionRef,
+          outputJson: done.outputJson,
+          metering: { sourceRef: executionRef, durationMs: 0, totalTokens: 0 },
+        }
       },
       async cancel() {},
     }

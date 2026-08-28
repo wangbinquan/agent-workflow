@@ -232,8 +232,32 @@ export async function fetchEmployeeWorkspaceRemoteHead(input: {
 export async function resolveEmployeeWorkspaceBaseline(input: {
   readonly baselineRepoPath: string
   readonly preferredBranch: string | null
-}): Promise<{ readonly baselineSha: string; readonly targetBranch: string }> {
+  readonly sourceBranch: string | null
+}): Promise<{
+  readonly baselineSha: string
+  readonly targetBranch: string
+  readonly remoteHeadSha: string | null
+}> {
   const targetBranch = input.preferredBranch ?? 'main'
+  if (input.sourceBranch !== null) {
+    const valid = await runGit(input.baselineRepoPath, [
+      'check-ref-format',
+      '--branch',
+      input.sourceBranch,
+    ])
+    if (valid.exitCode !== 0) {
+      throw new Error(`employee workspace source branch is invalid: ${input.sourceBranch}`)
+    }
+    const remoteSource = await runGit(input.baselineRepoPath, [
+      'rev-parse',
+      '--verify',
+      `refs/remotes/origin/${input.sourceBranch}^{commit}`,
+    ])
+    const remoteHeadSha = remoteSource.stdout.trim()
+    if (remoteSource.exitCode === 0 && /^[0-9a-f]{40}$/.test(remoteHeadSha)) {
+      return { baselineSha: remoteHeadSha, targetBranch, remoteHeadSha }
+    }
+  }
   const candidates = [
     ...(input.preferredBranch === null
       ? []
@@ -252,7 +276,7 @@ export async function resolveEmployeeWorkspaceBaseline(input: {
     ])
     const baselineSha = resolved.stdout.trim()
     if (resolved.exitCode === 0 && /^[0-9a-f]{40}$/.test(baselineSha)) {
-      return { baselineSha, targetBranch }
+      return { baselineSha, targetBranch, remoteHeadSha: null }
     }
   }
   throw new Error(`cannot resolve repository baseline for ${targetBranch}`)

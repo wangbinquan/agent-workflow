@@ -91,6 +91,7 @@ import {
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
   readDigitalEmployeeWriterState,
 } from '@/modules/digital-employee/composition'
+import type { EmployeeCaseDetailProjectionParticipant } from '@/modules/digital-employee/public/types'
 import {
   developmentExecutionContractRegistrations,
   developmentEmployeeRuntimeCodec,
@@ -104,8 +105,12 @@ import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/app
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import {
+  composeDevelopmentEmployeeWorkspace,
+  createDevelopmentEmployeeCaseWorkspaceDetailReader,
+} from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { createDevelopmentMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import {
   buildDevelopmentDeliveryDeps,
@@ -230,6 +235,11 @@ export interface AppDeps {
    * Route tests may omit it and use the local DB-backed composition below.
    */
   digitalEmployeeEventCenter?: EventCenterModule
+  /**
+   * Type-owned Case-detail projection, composed once at bootstrap so the REST
+   * and MCP route tables share the same participant.
+   */
+  digitalEmployeeCaseDetailProjection?: EmployeeCaseDetailProjectionParticipant
   /** Bun-dev only: serve the current type-package draft without rewriting its frozen DB row. */
   digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
   /** Bootstrap-local late binding that makes orchestration and Employee Case peer work targets. */
@@ -346,6 +356,11 @@ export function createApp(deps: AppDeps): Hono {
       (deps.secretBox === undefined
         ? null
         : composeRepositoryTransportCredentials(deps.db, deps.secretBox)),
+    digitalEmployeeCaseDetailProjection:
+      deps.digitalEmployeeCaseDetailProjection ??
+      composeDevelopmentEmployeeCaseDetailProjection(
+        createDevelopmentEmployeeCaseWorkspaceDetailReader(deps.db),
+      ),
   }
 
   app.use('*', async (c, next) => {
@@ -603,6 +618,10 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
     runtime: {
       eventCenter: eventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],
+      detailProjectionParticipants:
+        deps.digitalEmployeeCaseDetailProjection === undefined
+          ? []
+          : [deps.digitalEmployeeCaseDetailProjection],
       execution: createReactionExecutionAdapter(
         composeDigitalEmployeeExecution({
           db: deps.db,

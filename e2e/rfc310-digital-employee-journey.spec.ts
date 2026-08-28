@@ -1050,8 +1050,8 @@ test('body and repository-bound files enter a stateful employee case and the uni
     uploads: [{ targetPath: 'docs/acceptance.md' }],
   })
 
-  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
-  const caseId = page.url().split('/').at(-1)!
+  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+(?:\?tab=overview)?$/)
+  const caseId = new URL(page.url()).pathname.split('/').at(-1)!
   launchedCaseId = caseId
   const runtimeCase = await requestJson<{
     capabilityActivation: {
@@ -1062,7 +1062,21 @@ test('body and repository-bound files enter a stateful employee case and the uni
         adapterRef: ExactRef
       }>
     }
+    detail: {
+      input: {
+        kind: string
+        ingressRef: string | null
+        body: string | null
+        uploads: Array<{ originalName: string; targetPath: string | null }>
+      }
+    }
   }>(`/api/employee-cases/${encodeURIComponent(caseId)}`)
+  expect(runtimeCase.detail.input).toMatchObject({
+    kind: 'body-and-files',
+    ingressRef: 'ui-input:direct',
+    body: 'Implement the requested change and keep the supplied acceptance document in Git.',
+    uploads: [{ originalName: 'acceptance.md', targetPath: 'docs/acceptance.md' }],
+  })
   await expect(page.getByRole('heading', { name: taskName, exact: true })).toBeVisible()
   await expect(
     page.getByText(`Development employee · ${employeeName}`, { exact: true }),
@@ -1104,9 +1118,18 @@ test('body and repository-bound files enter a stateful employee case and the uni
   expect(renderedRuntimeWorkItemRefs).toEqual(
     [...runtimeCase.capabilityActivation.activeWorkItemRefs].sort(),
   )
-  await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input:direct"]')).toHaveCount(1)
-  await expect(runtimeMap.locator('[data-work-ingress-ref="ui-input:external-id"]')).toHaveCount(1)
-  await expect(runtimeMap.locator('[data-work-ingress-ref="issue"]')).toHaveCount(1)
+  const frozenInput = runtimeMap.locator('[data-work-ingress-ref="ui-input:direct"]')
+  await expect(runtimeMap.locator('[data-work-ingress-ref]')).toHaveCount(1)
+  await expect(frozenInput).toHaveCount(1)
+  await expect(frozenInput).toHaveClass(/employee-toolbox-card--completed/)
+  await expect(frozenInput).toContainText('Received')
+  await frozenInput.click()
+  const inputInspector = page.getByTestId('employee-case-input-inspector')
+  await expect(inputInspector).toBeVisible()
+  await expect(inputInspector).toContainText(
+    'Implement the requested change and keep the supplied acceptance document in Git.',
+  )
+  await expect(inputInspector).toContainText('acceptance.md')
   const overlappingCapabilityTools = await runtimeMap
     .locator('.employee-toolbox-card')
     .evaluateAll((cards) => {
@@ -1142,10 +1165,17 @@ test('body and repository-bound files enter a stateful employee case and the uni
   await expect(runtimeReviewGate).toHaveCount(0)
   await expect(runtimeMap.locator('[data-work-item-ref="analyze-implement"]')).toHaveCount(1)
   await expect(runtimeMap).not.toContainText('Human plan review')
-  await expect(page.getByText('Work context', { exact: true })).toBeVisible()
   await expect(
     page.getByText('Active digital employee capability map', { exact: true }),
   ).toBeVisible()
+
+  await page.locator('[data-employee-case-section-link="details"]').click()
+  await expect(page).toHaveURL(new RegExp(`/tasks/employee-cases/${caseId}\\?tab=details$`))
+  await expect(page.getByText('Work context', { exact: true })).toBeVisible()
+  await expect(page.getByText('Repository and workspace', { exact: true })).toBeVisible()
+
+  await page.locator('[data-employee-case-section-link="execution"]').click()
+  await expect(page).toHaveURL(new RegExp(`/tasks/employee-cases/${caseId}\\?tab=execution$`))
   const timeline = page.getByTestId('employee-work-timeline')
   await expect(timeline).toBeVisible()
   await expect(timeline.locator('.employee-execution-timeline__step').first()).toBeVisible({
@@ -1203,11 +1233,64 @@ test('body and repository-bound files enter a stateful employee case and the uni
   // 空 MR。
   const prepareChangeRound = await settledRound(caseId, 'prepare-change')
   expect(prepareChangeRound.state).toBe('completed')
+  for (const workItemRef of ['publish-mr', 'observe-mr', 'evaluate-ready']) {
+    expect((await settledRound(caseId, workItemRef)).state).toBe('completed')
+  }
+
+  await page.goto(`${daemon.baseUrl}/tasks/employee-cases/${caseId}?tab=overview`)
+  const mrHeaderLink = page.getByTestId('employee-case-header-mr-link')
+  await expect(mrHeaderLink).toBeVisible()
+  const mrHref = await mrHeaderLink.getAttribute('href')
+  expect(mrHref).toMatch(/\/merge_requests\/\d+$/)
+  await expect(page.getByTestId('employee-case-overview-mr').getByRole('link')).toHaveAttribute(
+    'href',
+    mrHref!,
+  )
+  await expect(
+    page.locator('[data-capability-phase-id="care"] > header').getByRole('link'),
+  ).toHaveAttribute('href', mrHref!)
+  for (const workItemRef of ['publish-mr', 'observe-mr', 'evaluate-ready']) {
+    await expect(
+      page.locator(
+        `[data-work-item-ref="${workItemRef}"] + .employee-toolbox-card__external-action`,
+      ),
+    ).toHaveAttribute('href', mrHref!)
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload()
+  const compactDetailNav = page.getByTestId('employee-case-detail-compact-select')
+  await expect(compactDetailNav).toBeVisible()
+  await compactDetailNav.click()
+  await page.getByRole('option', { name: /^Details\b/ }).click()
+  await expect(page).toHaveURL(new RegExp(`/tasks/employee-cases/${caseId}\\?tab=details$`))
+  await expect(page.getByText('Repository and workspace', { exact: true })).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL(new RegExp(`/tasks/employee-cases/${caseId}\\?tab=overview$`))
+  await expect(page.getByTestId('employee-case-header-mr-link')).toBeVisible()
+  const factCards = page.locator('.employee-case-fact-grid > *')
+  await expect(factCards).toHaveCount(4)
+  const factCardLayout = await factCards.evaluateAll((cards) =>
+    cards.map((card) => {
+      const rect = card.getBoundingClientRect()
+      return { left: Math.round(rect.left), top: Math.round(rect.top), right: rect.right }
+    }),
+  )
+  expect(new Set(factCardLayout.map((card) => card.left)).size).toBe(1)
+  expect(
+    factCardLayout.every((card, index) => index === 0 || card.top > factCardLayout[index - 1]!.top),
+  ).toBe(true)
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(1)
 
   // 同一个事实必须在用户看得见的地方成立。时间轴上这一格显示 Failed 或停在
   // Preparing，用户才会知道员工卡住了；显示 `Attempt 1` 则是「没有反复重试」的
   // 唯一可见证据。
-  await page.reload()
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(`${daemon.baseUrl}/tasks/employee-cases/${caseId}?tab=execution`)
   const implementStep = timeline
     .locator('.employee-execution-timeline__step')
     .filter({ hasText: 'Implement change' })

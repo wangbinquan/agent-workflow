@@ -12,7 +12,10 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
-import type { DigitalEmployeeExecutionParticipant } from '../public/participants'
+import type {
+  DigitalEmployeeExecutionMetering,
+  DigitalEmployeeExecutionParticipant,
+} from '../public/participants'
 import {
   executionContractAgentImplementationSchema,
   executionContractImplementationSchema,
@@ -25,6 +28,7 @@ import {
 import { getAgentById } from '@/services/agent'
 import { getExecutionOutcome } from '@/services/execution/executor'
 import { cancelTask, startTask, type StartTaskDeps } from '@/services/task'
+import { readTaskResourceUsage } from '@/services/limits'
 import { sha256Hex } from '@/util/hash'
 import {
   DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
@@ -75,6 +79,7 @@ const planSchema = z
     semanticValidatorId: z.string().min(1),
     allowedEffectKinds: z.array(z.string().min(1).max(200)).max(100),
     roundBudgetMs: z.number().int().positive(),
+    maxTotalTokens: z.number().int().positive().nullable().default(null),
   })
   .passthrough()
 
@@ -134,6 +139,7 @@ function resultFailure(
   errorClass: WorkspaceFailureClass,
   errorCode: string,
   errorDetail: string,
+  metering: DigitalEmployeeExecutionMetering,
 ) {
   return {
     kind: 'failed' as const,
@@ -141,6 +147,7 @@ function resultFailure(
     errorClass,
     errorCode,
     errorDetail: errorDetail.slice(0, 2_000),
+    metering,
   }
 }
 
@@ -364,6 +371,7 @@ export function composeDigitalEmployeeExecution(deps: {
                 }
               : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
         maxDurationMs: plan.roundBudgetMs,
+        ...(plan.maxTotalTokens === null ? {} : { maxTotalTokens: plan.maxTotalTokens }),
         ...sourceFields,
       }
       let snapshotJson: string
@@ -519,6 +527,7 @@ export function composeDigitalEmployeeExecution(deps: {
           'infrastructure',
           'execution-not-found',
           'TaskEngine execution is missing',
+          { sourceRef: `task:${executionRef}`, durationMs: 0, totalTokens: 0 },
         )
       }
       // A daemon restart is a recoverable TaskEngine transport interruption,
@@ -535,6 +544,15 @@ export function composeDigitalEmployeeExecution(deps: {
         return { kind: 'pending', executionRef }
       }
       if (!isTerminalTaskStatus(task.status)) return { kind: 'pending', executionRef }
+      const usage = (await readTaskResourceUsage(deps.db, executionRef)) ?? {
+        effectiveRunningMs: 0,
+        totalTokens: 0,
+      }
+      const metering: DigitalEmployeeExecutionMetering = {
+        sourceRef: `task:${executionRef}`,
+        durationMs: usage.effectiveRunningMs,
+        totalTokens: usage.totalTokens,
+      }
       const outcome = await getExecutionOutcome(deps.db, executionRef)
       const output = outcome.outputs[DIGITAL_EMPLOYEE_RESULT_PORT]?.content ?? null
       // Contract/output validation is meaningful only after a successful
@@ -547,6 +565,7 @@ export function composeDigitalEmployeeExecution(deps: {
           'infrastructure',
           `execution-${task.status}`,
           outcome.error?.message ?? outcome.error?.summary ?? `task ended as ${task.status}`,
+          metering,
         )
       }
       const parsedInputs = z
@@ -595,6 +614,7 @@ export function composeDigitalEmployeeExecution(deps: {
             'semantic',
             'implementation-plan-path-mismatch',
             `analysis-plan must publish the exact platform path ${expectedPath ?? '<missing>'}`,
+            metering,
           )
         }
       }
@@ -610,6 +630,7 @@ export function composeDigitalEmployeeExecution(deps: {
             validation.errorClass,
             validation.errorCode,
             validation.errorDetail,
+            metering,
           )
         }
       }
@@ -619,9 +640,10 @@ export function composeDigitalEmployeeExecution(deps: {
           'semantic',
           'execution-output-missing',
           `task did not publish ${DIGITAL_EMPLOYEE_RESULT_PORT}`,
+          metering,
         )
       }
-      return { kind: 'completed', executionRef, outputJson: output }
+      return { kind: 'completed', executionRef, outputJson: output, metering }
     },
 
     inspectHumanReview(executionRef) {

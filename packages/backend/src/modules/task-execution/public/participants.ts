@@ -306,7 +306,12 @@ export interface TaskWorkspaceCommitParticipant {
 
 export type DigitalEmployeeExecutionResult =
   | { readonly kind: 'pending'; readonly executionRef: string }
-  | { readonly kind: 'completed'; readonly executionRef: string; readonly outputJson: string }
+  | {
+      readonly kind: 'completed'
+      readonly executionRef: string
+      readonly outputJson: string
+      readonly metering: DigitalEmployeeExecutionMetering
+    }
   | {
       readonly kind: 'failed'
       readonly executionRef: string
@@ -314,7 +319,14 @@ export type DigitalEmployeeExecutionResult =
       readonly errorClass: WorkspaceFailureClass
       readonly errorCode: string
       readonly errorDetail: string
+      readonly metering: DigitalEmployeeExecutionMetering
     }
+
+export interface DigitalEmployeeExecutionMetering {
+  readonly sourceRef: string
+  readonly durationMs: number
+  readonly totalTokens: number
+}
 
 export type DigitalEmployeeHumanReviewState = 'planning' | 'waiting' | 'approved' | 'failed'
 

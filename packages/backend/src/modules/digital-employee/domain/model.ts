@@ -460,6 +460,19 @@ const workIntakeAuthoringManifestSchema = z
       )
       .max(20)
       .default([]),
+    advancedOptions: z
+      .array(
+        z
+          .object({
+            optionRef: machineIdSchema,
+            control: z.literal('repository-branch'),
+            label: localizedTextSchema,
+            description: localizedTextSchema,
+          })
+          .strict(),
+      )
+      .max(20)
+      .default([]),
     body: z
       .object({
         label: localizedTextSchema,
@@ -1218,6 +1231,14 @@ export function validateTypePackage(
   addDuplicates(
     'workIntakeAuthoring.executionOptions',
     descriptor.workIntakeAuthoring.executionOptions.map((option) => option.optionRef),
+  )
+  addDuplicates(
+    'workIntakeAuthoring.advancedOptions',
+    descriptor.workIntakeAuthoring.advancedOptions.map((option) => option.optionRef),
+  )
+  addDuplicates(
+    'workIntakeAuthoring.advancedOptions.control',
+    descriptor.workIntakeAuthoring.advancedOptions.map((option) => option.control),
   )
 
   const regionIds = new Set(

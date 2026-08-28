@@ -47,15 +47,21 @@ import { api, ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
-import { Field, NumberInput, Switch, TextArea, TextInput } from '@/components/Form'
+import { Field, Switch, TextArea, TextInput } from '@/components/Form'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { ScheduleDialog, type ScheduleCreateRequest } from '@/components/ScheduleDialog'
 import { ChoiceCards } from '@/components/ChoiceCards'
 import { TaskCreationContractFrame } from '@/components/task-creation/TaskCreationContractFrame'
+import {
+  TaskCreationAdvancedSettings,
+  buildTaskCreationAdvancedSummary,
+  validateTaskCreationAdvancedValues,
+  type TaskCreationAdvancedCapabilities,
+  type TaskCreationAdvancedValues,
+} from '@/components/task-creation/TaskCreationAdvancedSettings'
 import { TaskCreationSubjectDescriptorContract } from '@/components/task-creation/TaskCreationSubjectDescriptorContract'
 import { TaskCreationResourcePicker } from '@/components/task-creation/TaskCreationResourcePicker'
-import { UserPicker } from '@/components/UserPicker'
 import { DynamicInput } from '@/components/launch/DynamicInput'
 import { RepoSourceList } from '@/components/launch/RepoSourceList'
 import { QueryState } from '@/components/QueryState'
@@ -1139,20 +1145,27 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
   const requiresCurrentGitIdentity = !isEdit && actor.data?.source !== 'daemon'
   const immediateGitIdentityReady = !requiresCurrentGitIdentity || gitCommitIdentity !== null
   const admissionGitIdentityReady = resolvesIdentityAtScheduleFire || immediateGitIdentityReady
-  const workingBranchTrim = workingBranch.trim()
-  const workingBranchError =
-    space.kind === 'remote' &&
-    workingBranchTrim !== '' &&
-    !isLooseValidBranchName(workingBranchTrim)
-  // Codex P2: NumberInput's native min/step don't gate button-driven submits —
-  // zero/negative limits would be silently dropped off the wire and a
-  // fractional token cap would 422 against the integer schema.
-  const durationInvalid = maxDurationMin !== undefined && maxDurationMin <= 0
-  const tokensInvalid =
-    maxTotalTokens !== undefined && (maxTotalTokens <= 0 || !Number.isInteger(maxTotalTokens))
-  const limitsOk = !durationInvalid && !tokensInvalid
+  const advancedValues: TaskCreationAdvancedValues = {
+    collaborators,
+    workingBranch,
+    autoCommitPush,
+    maxDurationMin,
+    maxTotalTokens,
+  }
+  const advancedCapabilities: TaskCreationAdvancedCapabilities = {
+    collaborators: true,
+    workingBranch: space.kind === 'remote',
+    autoCommitPush: space.kind === 'remote',
+    limits: true,
+  }
+  const advancedValidation = validateTaskCreationAdvancedValues(
+    advancedValues,
+    advancedCapabilities,
+    isLooseValidBranchName,
+  )
+  const workingBranchTrim = advancedValidation.workingBranchTrim
   const stepContentReady =
-    nameReady && contentReady && admissionGitIdentityReady && !workingBranchError && limitsOk
+    nameReady && contentReady && admissionGitIdentityReady && advancedValidation.valid
   // RFC-159 P2: editing a schedule with collaborators must wait for the id →
   // UserPublic lookup, else Save rebuilds the body with an empty set.
   const collabReady = !isEdit || seedCollabIds.current.length === 0 || collabLookup.isSuccess
@@ -2557,91 +2570,24 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                   </Field>
                 ))}
 
-              <details className="launch-collapsible" data-testid="wizard-advanced">
-                <summary>{t('taskWizard.advanced')}</summary>
-                <div className="launch-collapsible__body">
-                  {canSearchUsers &&
-                    actor.data !== null &&
-                    actor.data !== undefined &&
-                    actor.data.source !== 'daemon' && (
-                      <Field label={t('members.users')} hint={t('members.hint')}>
-                        <UserPicker
-                          value={collaborators}
-                          onChange={setCollaborators}
-                          excludeIds={[actor.data.user.id]}
-                          testidPrefix="wizard-collaborators"
-                        />
-                      </Field>
-                    )}
-                  {space.kind === 'remote' && (
-                    <>
-                      <Field
-                        label={t('launch.workingBranch.label')}
-                        hint={
-                          workingBranchError
-                            ? t('launch.workingBranch.invalid')
-                            : t('launch.workingBranch.hint')
-                        }
-                      >
-                        <TextInput
-                          value={workingBranch}
-                          onChange={setWorkingBranch}
-                          maxLength={255}
-                          placeholder={t('launch.workingBranch.placeholder')}
-                          data-testid="wizard-working-branch"
-                        />
-                      </Field>
-                      {workingBranchError && (
-                        <ErrorBanner
-                          error={null}
-                          message={t('launch.workingBranch.invalid')}
-                          testid="wizard-branch-error"
-                        />
-                      )}
-                      <Switch
-                        checked={autoCommitPush}
-                        onChange={(v) => {
-                          setAutoCommitPush(v)
-                          saveAutoCommitPushPref(v)
-                        }}
-                        label={t('launch.autoCommitPush.label')}
-                        hint={t('launch.autoCommitPush.hint')}
-                      />
-                    </>
-                  )}
-                  <Field
-                    label={t('taskWizard.maxDurationMin')}
-                    hint={t('taskWizard.maxDurationMinHint')}
-                  >
-                    <NumberInput
-                      value={maxDurationMin}
-                      onChange={setMaxDurationMin}
-                      min={1}
-                      step={1}
-                      data-testid="wizard-max-duration"
-                    />
-                  </Field>
-                  <Field
-                    label={t('taskWizard.maxTotalTokens')}
-                    hint={t('taskWizard.maxTotalTokensHint')}
-                  >
-                    <NumberInput
-                      value={maxTotalTokens}
-                      onChange={setMaxTotalTokens}
-                      min={1}
-                      step={1}
-                      data-testid="wizard-max-tokens"
-                    />
-                  </Field>
-                  {(durationInvalid || tokensInvalid) && (
-                    <ErrorBanner
-                      error={null}
-                      message={t('taskWizard.limitInvalid')}
-                      testid="wizard-limits-error"
-                    />
-                  )}
-                </div>
-              </details>
+              <TaskCreationAdvancedSettings
+                values={advancedValues}
+                capabilities={advancedCapabilities}
+                validation={advancedValidation}
+                actorUserId={
+                  canSearchUsers && actor.data?.source !== 'daemon'
+                    ? actor.data?.user.id
+                    : undefined
+                }
+                onCollaboratorsChange={setCollaborators}
+                onWorkingBranchChange={setWorkingBranch}
+                onAutoCommitPushChange={(value) => {
+                  setAutoCommitPush(value)
+                  saveAutoCommitPushPref(value)
+                }}
+                onMaxDurationMinChange={setMaxDurationMin}
+                onMaxTotalTokensChange={setMaxTotalTokens}
+              />
             </div>
           )}
 
@@ -2725,33 +2671,21 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                         : t('taskWizard.gitCommitIdentityMissing')}
                 </dd>
               </div>
-              {(collaborators.length > 0 ||
-                (space.kind === 'remote' && workingBranchTrim !== '') ||
-                (space.kind === 'remote' && autoCommitPush) ||
-                maxDurationMin !== undefined ||
-                maxTotalTokens !== undefined ||
+              {(buildTaskCreationAdvancedSummary({
+                values: advancedValues,
+                capabilities: advancedCapabilities,
+                t,
+              }).length > 0 ||
                 (kind === 'agent' && allowClarify)) && (
                 <div className="wizard-summary__row">
                   <dt>{t('taskWizard.advanced')}</dt>
                   <dd data-testid="wizard-summary-advanced">
                     {[
-                      collaborators.length > 0
-                        ? t('taskWizard.summaryCollaborators', {
-                            count: collaborators.length,
-                          })
-                        : null,
-                      space.kind === 'remote' && workingBranchTrim !== ''
-                        ? workingBranchTrim
-                        : null,
-                      space.kind === 'remote' && autoCommitPush
-                        ? t('launch.autoCommitPush.label')
-                        : null,
-                      maxDurationMin !== undefined
-                        ? `${t('taskWizard.maxDurationMin')}: ${maxDurationMin}`
-                        : null,
-                      maxTotalTokens !== undefined
-                        ? `${t('taskWizard.maxTotalTokens')}: ${maxTotalTokens}`
-                        : null,
+                      ...buildTaskCreationAdvancedSummary({
+                        values: advancedValues,
+                        capabilities: advancedCapabilities,
+                        t,
+                      }),
                       kind === 'agent' && allowClarify ? t('taskWizard.clarifyOn') : null,
                     ]
                       .filter((s): s is string => s !== null)

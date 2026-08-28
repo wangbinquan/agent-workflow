@@ -242,6 +242,63 @@ describe('ResponsibilitySwimlaneMap auxiliary cards', () => {
     expect(container.querySelector('[data-review-option-ref="review-plan"]')).toBeNull()
   })
 
+  test('runtime mode renders one completed frozen input and independent external-resource links', () => {
+    const onSelectIngress = vi.fn()
+    const onSelectWorkItem = vi.fn()
+    const { container } = render(
+      <ResponsibilitySwimlaneMap
+        type={fixtureType()}
+        selectedWorkItemRef={null}
+        language="zh-CN"
+        onSelect={onSelectWorkItem}
+        runtimeIngress={{
+          ingressRef: 'ui-input:external-id',
+          presentation: {
+            kindLabel: '输入',
+            label: '外部编号 ISSUE-42',
+            description: '任务冻结输入 ISSUE-42',
+            actionLabel: '查看实际输入',
+            detail: '已接收',
+            state: 'completed',
+            selected: true,
+          },
+        }}
+        onSelectIngress={onSelectIngress}
+        externalResourceAction={(target) =>
+          (target.kind === 'region' && target.ref === 'delivery') ||
+          (target.kind === 'work-item' && target.ref === 'prepare')
+            ? {
+                href: 'https://code.example/merge-requests/42',
+                label: '当前 MR',
+              }
+            : undefined
+        }
+      />,
+    )
+
+    const inputs = container.querySelectorAll<HTMLButtonElement>('[data-work-ingress-ref]')
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0]?.getAttribute('data-work-ingress-ref')).toBe('ui-input:external-id')
+    expect(inputs[0]?.classList.contains('employee-toolbox-card--completed')).toBe(true)
+    expect(inputs[0]?.classList.contains('employee-toolbox-card--active')).toBe(true)
+    expect(inputs[0]?.textContent).toContain('外部编号 ISSUE-42')
+    expect(inputs[0]?.textContent).toContain('已接收')
+
+    fireEvent.click(inputs[0]!)
+    expect(onSelectIngress).toHaveBeenCalledWith(
+      expect.objectContaining({ ingressRef: 'ui-input', nextWorkItemRef: 'prepare' }),
+    )
+
+    const mrLinks = container.querySelectorAll<HTMLAnchorElement>(
+      'a[href="https://code.example/merge-requests/42"]',
+    )
+    expect(mrLinks).toHaveLength(2)
+    expect(Array.from(mrLinks).every((link) => link.target === '_blank')).toBe(true)
+    mrLinks[1]!.addEventListener('click', (event) => event.preventDefault())
+    fireEvent.click(mrLinks[1]!)
+    expect(onSelectWorkItem).not.toHaveBeenCalled()
+  })
+
   test('renders generic ingress and human-review projections outside executable work items', () => {
     const onSelect = vi.fn()
     const onConfigureIngress = vi.fn()

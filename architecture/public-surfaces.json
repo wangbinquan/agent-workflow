@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 224,
+    "consumers": 230,
     "exactEntrypointFiles": 35,
     "governedFieldSurfaces": 5,
-    "methods": 167,
+    "methods": 168,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1513,
-    "symbols": 354
+    "recursiveFields": 1760,
+    "symbols": 364
   },
   "entries": [
     {
@@ -6877,6 +6877,1099 @@
       },
       "consumerEdgeIds": [],
       "context": "digital-employee",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.kind",
+          "type": "'input'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.contextId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.kind",
+          "type": "'context'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.executionRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.executionRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.kind",
+          "type": "'round'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.roundId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseArtifactSource",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseArtifactSource",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:15e5e882c4bafa4ba1dbaccb8fed60fafd221e4c5d5c5bb1ab383f9ff64abf74",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseArtifactSource",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "baselineSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "candidateRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changedPaths",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "commitSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "commitSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status.$variant:0",
+          "type": "'prepared'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status.$variant:1",
+          "type": "'committed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status.$variant:2",
+          "type": "'published'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status.$variant:3",
+          "type": "'obsolete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "summary",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "treeOid",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseChangeCandidateDetailProjection",
+      "members": [
+        "baselineSha",
+        "candidateRef",
+        "changedPaths",
+        "commitSha",
+        "status",
+        "summary",
+        "treeOid"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseChangeCandidateDetailProjection",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:8ff8c68de1a47cd0974d0b551bbef4104465f22ef4f48650b1a13da3622e661c",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseChangeCandidateDetailProjection",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 18,
+        "maxTransitiveLeafFields": 30,
+        "maxUnionVariants": 22
+      },
+      "consumerEdgeIds": [],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "approvalHold.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "approvalHold.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "draft",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind",
+          "type": "'merge-request'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mergeableState.$variant:0",
+          "type": "'mergeable'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mergeableState.$variant:1",
+          "type": "'conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mergeableState.$variant:2",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mergedCommitSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mergedCommitSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "providerRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "providerRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "readyToMerge",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "ref",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "relatedRegionRefs",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "relatedWorkItemRefs",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositoryRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositoryRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sourceBranch.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sourceBranch.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status.$variant:1",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status.$variant:2",
+          "type": "'closed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetBranch.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetBranch.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "unresolvedReviewCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "webUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "webUrl.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseDeliveryDetailProjection",
+      "members": [
+        "approvalHold",
+        "draft",
+        "headSha",
+        "kind",
+        "mergeableState",
+        "mergedCommitSha",
+        "providerRef",
+        "readyToMerge",
+        "ref",
+        "relatedRegionRefs",
+        "relatedWorkItemRefs",
+        "repositoryRef",
+        "sourceBranch",
+        "status",
+        "targetBranch",
+        "targetSha",
+        "unresolvedReviewCount",
+        "webUrl"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDeliveryDetailProjection",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:2c50d2cad5c9ee060ecc830c3448c0a2a8dfebc593ffa4ce8fd5f42fed51aee9",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseDeliveryDetailProjection",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 16
+      },
+      "consumerEdgeIds": [
+        "import:ada2060529b5d6f987e6"
+      ],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:ada2060529b5d6f987e6"
+          ],
+          "fieldPath": "advancedOptions",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "body.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "body.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ada2060529b5d6f987e6"
+          ],
+          "fieldPath": "executionOptions",
+          "type": "Record<string, boolean>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "externalId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "externalId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "ingressRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "ingressRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:0",
+          "type": "'body'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:1",
+          "type": "'files'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:2",
+          "type": "'body-and-files'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:3",
+          "type": "'external-id'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:4",
+          "type": "'event'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:5",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositoryRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositoryRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ada2060529b5d6f987e6"
+          ],
+          "fieldPath": "source",
+          "type": "z.infer<typeof TaskLaunchOriginSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "subjectRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "subjectRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ada2060529b5d6f987e6"
+          ],
+          "fieldPath": "uploads",
+          "type": "readonly {\n    readonly artifactRef: string\n    readonly originalName: string\n    readonly placement: 'repository' | 'temporary'\n    readonly targetPath: string | null\n  }[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseDetailInputProjection",
+      "members": [
+        "advancedOptions",
+        "body",
+        "executionOptions",
+        "externalId",
+        "ingressRef",
+        "kind",
+        "repositoryRef",
+        "source",
+        "subjectRef",
+        "uploads"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailInputProjection",
+      "productionConsumers": [
+        {
+          "context": "development-automation",
+          "edgeId": "import:ada2060529b5d6f987e6",
+          "file": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:2cba13323b9412b8cafcffb52b6371d8d7784f7e76ff64e6a8e1931c27d8c9b5",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseDetailInputProjection",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Record",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:8ad80886d37f08a8b375"
+      ],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:8ad80886d37f08a8b375"
+          ],
+          "fieldPath": "case.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8ad80886d37f08a8b375"
+          ],
+          "fieldPath": "case.launchOrigin",
+          "type": "z.infer<typeof TaskLaunchOriginSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "case.primaryContextId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "case.typeRef.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8ad80886d37f08a8b375"
+          ],
+          "fieldPath": "case.typeRef.typeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8ad80886d37f08a8b375"
+          ],
+          "fieldPath": "contexts",
+          "type": "readonly {\n    readonly id: string\n    readonly typeId: string\n    readonly schemaVersion: number\n    readonly stateJson: string\n    readonly artifactRefs: readonly string[]\n    readonly updatedAt: number\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "rounds",
+          "type": "readonly {\n    readonly id: string\n    readonly executionRef: string | null\n    readonly outputJson: string | null\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8ad80886d37f08a8b375"
+          ],
+          "fieldPath": "schemaVersion",
+          "type": "1"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseDetailProjectionInputV1",
+      "members": [
+        "case",
+        "contexts",
+        "rounds",
+        "schemaVersion"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionInputV1",
+      "productionConsumers": [
+        {
+          "context": "development-automation",
+          "edgeId": "import:8ad80886d37f08a8b375",
+          "file": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:1d4ca8adc1e787f9319c406858da34255744e65fdffac31d11af576b2487af30",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseDetailProjectionInputV1",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:a5bd68d1b0415072fbad",
+        "import:cec600477e64f442968e"
+      ],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:cec600477e64f442968e"
+          ],
+          "fieldPath": "typeId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseDetailProjectionParticipant",
+      "members": [
+        "projectJson",
+        "typeId"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:cec600477e64f442968e"
+          ],
+          "name": "projectJson",
+          "signatureDigest": "sha256:c9aa4db67689a03dc2309e1a1fa70ccaa3825a1d57aad9d07b0dda32f318f6ee"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionParticipant",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a5bd68d1b0415072fbad",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "development-automation",
+          "edgeId": "import:cec600477e64f442968e",
+          "file": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b2b37ae3b026b58a5bc1a262e1afb5f74d722b7c51b5fd91624d398c2dbb30a7",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseDetailProjectionParticipant",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 76,
+        "maxUnionVariants": 55
+      },
+      "consumerEdgeIds": [],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "artifacts",
+          "type": "readonly {\n    readonly ref: string\n    readonly sources: readonly EmployeeCaseArtifactSource[]\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.baselineSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.candidateRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.changedPaths",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.commitSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.commitSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:0",
+          "type": "'prepared'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:1",
+          "type": "'committed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:2",
+          "type": "'published'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:3",
+          "type": "'obsolete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.summary",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.treeOid",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.approvalHold.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.approvalHold.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.draft",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.kind",
+          "type": "'merge-request'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergeableState.$variant:0",
+          "type": "'mergeable'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergeableState.$variant:1",
+          "type": "'conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergeableState.$variant:2",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergedCommitSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergedCommitSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.providerRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.providerRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.readyToMerge",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.ref",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.relatedRegionRefs",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.relatedWorkItemRefs",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.repositoryRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.repositoryRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.sourceBranch.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.sourceBranch.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.status.$variant:1",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.status.$variant:2",
+          "type": "'closed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetBranch.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetBranch.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.unresolvedReviewCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.webUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.webUrl.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.advancedOptions",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.body.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.body.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.executionOptions",
+          "type": "Record<string, boolean>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.externalId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.externalId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.ingressRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.ingressRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:0",
+          "type": "'body'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:1",
+          "type": "'files'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:2",
+          "type": "'body-and-files'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:3",
+          "type": "'external-id'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:4",
+          "type": "'event'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:5",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.repositoryRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.repositoryRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.source",
+          "type": "z.infer<typeof TaskLaunchOriginSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.subjectRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.subjectRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.uploads",
+          "type": "readonly {\n    readonly artifactRef: string\n    readonly originalName: string\n    readonly placement: 'repository' | 'temporary'\n    readonly targetPath: string | null\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "schemaVersion",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.baselineSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.cachedRepositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.remoteHeadSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.remoteHeadSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.sourceBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.state.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.state.$variant:1",
+          "type": "'published'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.state.$variant:2",
+          "type": "'released'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.targetBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseDetailProjectionV1",
+      "members": [
+        "artifacts"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionV1",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:807cdaa952e068356ff21b84f9e05cd80741d0a59155c843093cf3f8e477bf74",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseDetailProjectionV1",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Record",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "digital-employee",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
@@ -7120,6 +8213,563 @@
       "signatureDigest": "sha256:e45c28d8bb00734dad0be0f8586b6b02911b79a23211a930566bd15fe6e00f6e",
       "status": "target-context-current-surface",
       "symbol": "EmployeeCaseTerminalKind",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 75,
+        "maxUnionVariants": 55
+      },
+      "consumerEdgeIds": [
+        "import:b833b85a20d76c2387a9"
+      ],
+      "context": "digital-employee",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "changeCandidate.$variant:0.baselineSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "changeCandidate.$variant:0.candidateRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "changeCandidate.$variant:0.changedPaths",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.commitSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.commitSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:0",
+          "type": "'prepared'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:1",
+          "type": "'committed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:2",
+          "type": "'published'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:0.status.$variant:3",
+          "type": "'obsolete'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "changeCandidate.$variant:0.summary",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "changeCandidate.$variant:0.treeOid",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "changeCandidate.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.approvalHold.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.approvalHold.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.draft",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.kind",
+          "type": "'merge-request'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergeableState.$variant:0",
+          "type": "'mergeable'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergeableState.$variant:1",
+          "type": "'conflict'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergeableState.$variant:2",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergedCommitSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.mergedCommitSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.providerRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.providerRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.readyToMerge",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.ref",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.relatedRegionRefs",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.relatedWorkItemRefs",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.repositoryRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.repositoryRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.sourceBranch.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.sourceBranch.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.status.$variant:1",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.status.$variant:2",
+          "type": "'closed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetBranch.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetBranch.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.targetSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "delivery.$variant:0.unresolvedReviewCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.webUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:0.webUrl.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "delivery.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "input.advancedOptions",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.body.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.body.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "input.executionOptions",
+          "type": "Record<string, boolean>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.externalId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.externalId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.ingressRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.ingressRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:0",
+          "type": "'body'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:1",
+          "type": "'files'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:2",
+          "type": "'body-and-files'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:3",
+          "type": "'external-id'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:4",
+          "type": "'event'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.kind.$variant:5",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.repositoryRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.repositoryRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "input.source",
+          "type": "z.infer<typeof TaskLaunchOriginSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.subjectRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "input.subjectRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "input.uploads",
+          "type": "readonly {\n    readonly artifactRef: string\n    readonly originalName: string\n    readonly placement: 'repository' | 'temporary'\n    readonly targetPath: string | null\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "schemaVersion",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "workspace.$variant:0.baselineSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "workspace.$variant:0.cachedRepositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.remoteHeadSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.remoteHeadSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "workspace.$variant:0.repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "workspace.$variant:0.sourceBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.state.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.state.$variant:1",
+          "type": "'published'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:0.state.$variant:2",
+          "type": "'released'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b833b85a20d76c2387a9"
+          ],
+          "fieldPath": "workspace.$variant:0.targetBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseTypeDetailProjectionV1",
+      "members": [
+        "changeCandidate",
+        "delivery",
+        "input",
+        "schemaVersion",
+        "workspace"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseTypeDetailProjectionV1",
+      "productionConsumers": [
+        {
+          "context": "development-automation",
+          "edgeId": "import:b833b85a20d76c2387a9",
+          "file": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:fd1dfa4d8a17d0d8182226dd34d84b0cc1c9ea9c7a37c74ad5015a10ef8020e7",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseTypeDetailProjectionV1",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Record",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "digital-employee",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "baselineSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "cachedRepositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "remoteHeadSha.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "remoteHeadSha.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sourceBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "state.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "state.$variant:1",
+          "type": "'published'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "state.$variant:2",
+          "type": "'released'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetBranch",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "id": "public:digital-employee:types:EmployeeCaseWorkspaceDetailProjection",
+      "members": [
+        "baselineSha",
+        "cachedRepositoryRef",
+        "remoteHeadSha",
+        "repositoryRef",
+        "sourceBranch",
+        "state",
+        "targetBranch"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseWorkspaceDetailProjection",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:c52808d220f778b8eec5f77e2bec75d82d8630721229dc5738635d4e51c81e1b",
+      "status": "target-context-current-surface",
+      "symbol": "EmployeeCaseWorkspaceDetailProjection",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -18069,6 +19719,64 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durationMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sourceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "totalTokens",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:DigitalEmployeeExecutionMetering",
+      "members": [
+        "durationMs",
+        "sourceRef",
+        "totalTokens"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#DigitalEmployeeExecutionMetering",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:6aa7174bac3e7ae85a5c18b9b408ac854b1e334f885990fce6c25c609a4613d8",
+      "status": "target-context-current-surface",
+      "symbol": "DigitalEmployeeExecutionMetering",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
         "import:736914bdcaf3097b1c16"
       ],
@@ -18177,6 +19885,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.metering.durationMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.metering.sourceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.metering.totalTokens",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.outputJson",
           "type": "string"
         },
@@ -18204,6 +19927,21 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:2.kind",
           "type": "'failed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.metering.durationMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.metering.sourceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.metering.totalTokens",
+          "type": "number"
         }
       ],
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
@@ -18221,7 +19959,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:7fa25e2c35460a92e3c4c2c0b7265710c943dada71fce17c2899c9b30ef2ef26",
+      "signatureDigest": "sha256:e5893fe18f1750d2f2d1c777114238995ef94a8f0ec3360db1a02407a0e457de",
       "status": "target-context-current-surface",
       "symbol": "DigitalEmployeeExecutionResult",
       "transaction": "caller-tx",
@@ -22155,7 +23893,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e",
+  "sourceDigest": "sha256:2c5cee9f1accbdf4de94b9f266b19d87a48bfdaf52dd5c3ca3f9de668f89ea56",
   "targetContexts": [
     "collaboration",
     "development-automation",

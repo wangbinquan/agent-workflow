@@ -94,7 +94,12 @@ export interface EmployeeInputArtifactPort {
 
 export type ReactionExecutionSnapshot =
   | { readonly kind: 'pending'; readonly executionRef: string }
-  | { readonly kind: 'completed'; readonly executionRef: string; readonly outputJson: string }
+  | {
+      readonly kind: 'completed'
+      readonly executionRef: string
+      readonly outputJson: string
+      readonly metering: ReactionExecutionMetering
+    }
   | {
       readonly kind: 'failed'
       readonly executionRef: string
@@ -102,7 +107,14 @@ export type ReactionExecutionSnapshot =
       readonly errorClass: WorkspaceFailureClass
       readonly errorCode: string
       readonly errorDetail: string
+      readonly metering: ReactionExecutionMetering
     }
+
+export interface ReactionExecutionMetering {
+  readonly sourceRef: string
+  readonly durationMs: number
+  readonly totalTokens: number
+}
 
 export interface ReactionExecutionPort {
   launch(

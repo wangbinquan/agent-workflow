@@ -156,6 +156,12 @@ export interface EmployeeTypePackage {
       requiredSlotRef: string | null
       requiredExecutorKind: 'agent' | 'workflow' | 'program' | null
     }>
+    advancedOptions?: Array<{
+      optionRef: string
+      control: 'repository-branch'
+      label: LocalizedText
+      description: LocalizedText
+    }>
     body: {
       label: LocalizedText
       description: LocalizedText

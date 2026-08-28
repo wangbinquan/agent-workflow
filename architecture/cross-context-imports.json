@@ -649,6 +649,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0367c35e6d5bd05097e2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#composeDevelopmentEmployeeCaseDetailProjection",
+      "toPath": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "toSymbol": "composeDevelopmentEmployeeCaseDetailProjection",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/accountRepositoryTransportCredentials.ts#$file",
       "fromPath": "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "fromSymbol": "$file",
@@ -5354,6 +5371,23 @@
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:34905d67c822fab31456",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "toPath": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
+      "toSymbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -11597,6 +11631,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:847257f29d78483958db",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseMeteringReceipts",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "employeeCaseMeteringReceipts",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#$file",
       "fromPath": "packages/backend/src/modules/identity-access/composition.ts",
       "fromSymbol": "$file",
@@ -12970,6 +13021,23 @@
       "toPath": "packages/backend/src/db/txSync.ts",
       "toSymbol": "DbTxSync",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:93f62d063b925925612e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#composeDevelopmentEmployeeCaseDetailProjection",
+      "toPath": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "toSymbol": "composeDevelopmentEmployeeCaseDetailProjection",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -14567,6 +14635,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#GateContinuationEffectStep",
       "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toSymbol": "GateContinuationEffectStep",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a5bd68d1b0415072fbad",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionParticipant",
+      "toPath": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toSymbol": "EmployeeCaseDetailProjectionParticipant",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -19842,6 +19927,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e64f8e86a7b151958f26",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "toPath": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
+      "toSymbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/digest.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/domain/digest.ts",
       "fromSymbol": "$file",
@@ -20875,6 +20977,23 @@
       "toPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "toSymbol": "composePriorOutputBlock",
       "why": "RFC-334 leaves only the purpose-specific wrapper bridge until the separately authorized W2-D cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f1c74b0262fb13f527c8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/limits.ts#readTaskResourceUsage",
+      "toPath": "packages/backend/src/services/limits.ts",
+      "toSymbol": "readTaskResourceUsage",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -22051,9 +22170,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1297,
+    "architectureExceptions": 1304,
     "implementationSccs": 0,
-    "observedEdges": 1329,
+    "observedEdges": 1340,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -22172,6 +22291,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/schedulerAssembly.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/schedulerAssembly.ts#IsoLike"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:0367c35e6d5bd05097e2",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/employeeCaseDetailProjection",
+      "syntax": "static-import",
+      "targetSymbol": "composeDevelopmentEmployeeCaseDetailProjection",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#composeDevelopmentEmployeeCaseDetailProjection"
     },
     {
       "edgeKind": "value",
@@ -26764,6 +26899,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:34905d67c822fab31456",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/digitalEmployeeWorkspace",
+      "syntax": "static-import",
+      "targetSymbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader"
     },
     {
       "edgeKind": "value",
@@ -32959,6 +33110,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#$file",
+      "id": "import:847257f29d78483958db",
+      "owner": "digital-employee",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "employeeCaseMeteringReceipts",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseMeteringReceipts"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "identity-access",
       "fromFile": "packages/backend/src/modules/identity-access/composition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#$file",
@@ -33548,6 +33715,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/runtimeRegistry.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#resolveInternalAgentRuntime"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file",
+      "id": "import:8ad80886d37f08a8b375",
+      "owner": "development-automation",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/digital-employee/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "EmployeeCaseDetailProjectionInputV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionInputV1"
     },
     {
       "edgeKind": "type",
@@ -34268,6 +34451,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:93f62d063b925925612e",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/employeeCaseDetailProjection",
+      "syntax": "static-import",
+      "targetSymbol": "composeDevelopmentEmployeeCaseDetailProjection",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#composeDevelopmentEmployeeCaseDetailProjection"
     },
     {
       "edgeKind": "type",
@@ -35870,6 +36069,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:a5bd68d1b0415072fbad",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "EmployeeCaseDetailProjectionParticipant",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionParticipant"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
@@ -36524,6 +36739,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file",
+      "id": "import:ada2060529b5d6f987e6",
+      "owner": "development-automation",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/digital-employee/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "EmployeeCaseDetailInputProjection",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailInputProjection"
     },
     {
       "edgeKind": "value",
@@ -37308,6 +37539,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file",
+      "id": "import:b833b85a20d76c2387a9",
+      "owner": "development-automation",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/digital-employee/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "EmployeeCaseTypeDetailProjectionV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseTypeDetailProjectionV1"
     },
     {
       "edgeKind": "value",
@@ -38972,6 +39219,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#bindTaskDecisionParticipantInTx"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file",
+      "id": "import:cec600477e64f442968e",
+      "owner": "development-automation",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/digital-employee/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "EmployeeCaseDetailProjectionParticipant",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionParticipant"
     },
     {
       "edgeKind": "value",
@@ -41183,6 +41446,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:e64f8e86a7b151958f26",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/digitalEmployeeWorkspace",
+      "syntax": "static-import",
+      "targetSymbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/domain/digest.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/digest.ts#$file",
@@ -42172,6 +42451,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#composePriorOutputBlock"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
+      "id": "import:f1c74b0262fb13f527c8",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-outbound",
+      "specifier": "@/services/limits",
+      "syntax": "static-import",
+      "targetSymbol": "readTaskResourceUsage",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/limits.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/limits.ts#readTaskResourceUsage"
     },
     {
       "edgeKind": "value",
@@ -43736,7 +44031,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e",
+  "sourceDigest": "sha256:2c5cee9f1accbdf4de94b9f266b19d87a48bfdaf52dd5c3ca3f9de668f89ea56",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

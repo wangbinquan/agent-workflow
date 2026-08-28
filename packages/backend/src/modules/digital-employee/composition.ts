@@ -58,6 +58,7 @@ import type {
   ToolValidationReceipt,
 } from './domain/model'
 import type {
+  EmployeeCaseDetailProjectionParticipant,
   EmployeeCaseLaunchInput,
   EmployeeCaseProjectionDocument,
   EmployeeTypePackageRegistration,
@@ -344,6 +345,7 @@ export interface ComposeDigitalEmployeeOptions {
     readonly execution: ReactionExecutionPort
     readonly platformWorkItems?: PlatformWorkItemExecutionPort
     readonly codecs: readonly EmployeeTypeRuntimeCodec[]
+    readonly detailProjectionParticipants?: readonly EmployeeCaseDetailProjectionParticipant[]
     readonly workerId?: string
   }
   readonly now?: () => number
@@ -640,6 +642,7 @@ export function composeDigitalEmployee(
             },
           },
           runtimeCodecs: options.runtime.codecs,
+          detailProjectionParticipants: options.runtime.detailProjectionParticipants ?? [],
           currentTypeRefs: runtimePackages.map((runtime) => runtime.descriptor.typeRef),
           executionContracts: options.executionContracts,
           platformTools,

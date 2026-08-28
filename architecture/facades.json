@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "boundaryFacades": 88,
+    "boundaryFacades": 89,
     "serviceFiles": 379
   },
   "entries": [
@@ -2681,18 +2681,21 @@
       "targetLayer": "domain"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:f1c74b0262fb13f527c8"
+      ],
       "exportedSymbols": [
         "EnforceLimitsResult",
         "enforceLimits",
         "parseCallHumanWait",
+        "readTaskResourceUsage",
         "startLimitsTicker"
       ],
       "file": "packages/backend/src/services/limits.ts",
       "id": "facade:packages/backend/src/services/limits.ts",
       "ownerEntryId": "owner:packages/backend/src/services/limits.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -7685,5 +7688,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e"
+  "sourceDigest": "sha256:2c5cee9f1accbdf4de94b9f266b19d87a48bfdaf52dd5c3ca3f9de668f89ea56"
 }

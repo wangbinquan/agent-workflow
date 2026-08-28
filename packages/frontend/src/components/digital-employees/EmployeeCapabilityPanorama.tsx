@@ -9,6 +9,8 @@ import {
   ResponsibilityLaneAxis,
   ResponsibilityReviewBranch,
   type ResponsibilityCardPresentation,
+  type ResponsibilityExternalResourceAction,
+  type ResponsibilityIngressPresentation,
   type ResponsibilityProjectedIngress,
 } from './ResponsibilityFlowDisplay'
 import type {
@@ -124,6 +126,17 @@ export interface EmployeeCapabilityPanoramaProps {
   /** @deprecated Use reviewToolState. */
   reviewGateState?: (gate: ResponsibilityReviewGate) => ResponsibilityCardState
   onConfigureIngress?: (ingress: WorkIngress) => void
+  /** Runtime pages may collapse authoring ingress choices to the one frozen input. */
+  runtimeIngress?: {
+    ingressRef: string | null
+    presentation: ResponsibilityIngressPresentation
+  }
+  onSelectIngress?: (ingress: WorkIngress) => void
+  /** Optional sibling links for regions and work-item cards; the map stays resource-agnostic. */
+  externalResourceAction?: (target: {
+    kind: 'region' | 'work-item'
+    ref: string
+  }) => ResponsibilityExternalResourceAction | undefined
   onSelectReviewGate?: (gate: ResponsibilityReviewGate) => void
   selectedReviewOptionRef?: string | null
   selectedToolSlotTarget?: ResponsibilityToolSlotTarget | null
@@ -290,9 +303,22 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
     (item) => capabilityToolState(item)?.active !== false,
   )
   const workItemsByRef = new Map(activeWorkItems.map((item) => [item.workItemRef, item]))
-  const activeIngresses = projectWorkIngresses(props.type, workItemsByRef).filter((ingress) =>
+  const projectedIngresses = projectWorkIngresses(props.type, workItemsByRef).filter((ingress) =>
     workItemsByRef.has(ingress.nextWorkItemRef),
   )
+  const activeIngresses =
+    props.runtimeIngress === undefined
+      ? projectedIngresses
+      : [
+          projectedIngresses.find(
+            (ingress) =>
+              ingress.ingressRef === props.runtimeIngress?.ingressRef ||
+              ingress.sourceIngress.ingressRef === props.runtimeIngress?.ingressRef,
+          ) ?? projectedIngresses[0],
+        ].filter((ingress): ingress is ResponsibilityProjectedIngress => ingress !== undefined)
+  const selectIngress = props.onSelectIngress ?? props.onConfigureIngress
+  const ingressPresentation = (_ingress: ResponsibilityProjectedIngress) =>
+    props.runtimeIngress === undefined ? undefined : props.runtimeIngress.presentation
   const reactionLaneIds = new Set(
     props.type.reactionRules.flatMap((rule) => {
       const item = workItemsByRef.get(rule.capabilityWorkItemRef ?? rule.workItemRef)
@@ -608,6 +634,23 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                   <strong>{localized(region.label, props.language)}</strong>
                   <p>{localized(region.description, props.language)}</p>
                 </div>
+                {(() => {
+                  const action = props.externalResourceAction?.({
+                    kind: 'region',
+                    ref: region.regionId,
+                  })
+                  return action === undefined ? null : (
+                    <a
+                      className="employee-toolbox-region__external-action"
+                      href={action.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={action.title}
+                    >
+                      {action.label} <span aria-hidden="true">↗</span>
+                    </a>
+                  )
+                })()}
               </header>
               <div className="employee-toolbox-region__lanes">
                 {lanes.map((lane) => {
@@ -1062,7 +1105,8 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 auxiliary={auxiliary}
                                 nextLabel={nextLabelForIngress(entry.ingress)}
                                 readOnly={props.workItemsReadOnly}
-                                onConfigure={props.onConfigureIngress}
+                                onConfigure={selectIngress}
+                                presentation={ingressPresentation(entry.ingress)}
                               />
                             )
                           }
@@ -1093,8 +1137,13 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 rowStart={rowStart}
                                 readOnly={props.workItemsReadOnly}
                                 onSelect={() => props.onSelect(item.workItemRef)}
-                                onConfigureIngress={props.onConfigureIngress}
+                                onConfigureIngress={selectIngress}
                                 nextLabelFor={nextLabelForIngress}
+                                ingressPresentation={ingressPresentation}
+                                externalAction={props.externalResourceAction?.({
+                                  kind: 'work-item',
+                                  ref: item.workItemRef,
+                                })}
                               />
                             )
                           }
@@ -1212,6 +1261,10 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                     props.onSelectReviewGate(gate)
                                   }
                                 }}
+                                externalAction={props.externalResourceAction?.({
+                                  kind: 'work-item',
+                                  ref: item.workItemRef,
+                                })}
                               />
                             )
                           }
@@ -1286,6 +1339,10 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                               detailText={compactDetail}
                               detailTitle={detail}
                               nextText={next}
+                              externalAction={props.externalResourceAction?.({
+                                kind: 'work-item',
+                                ref: item.workItemRef,
+                              })}
                             />
                           )
                         })}

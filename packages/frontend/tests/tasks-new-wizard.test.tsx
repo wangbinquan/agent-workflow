@@ -171,6 +171,17 @@ const DIGITAL_EMPLOYEE_TYPE = {
     acceptedKinds: ['body'],
     kindRequirements: [],
     executionOptions: [],
+    advancedOptions: [
+      {
+        optionRef: 'working-branch',
+        control: 'repository-branch',
+        label: { 'zh-CN': '工作分支', 'en-US': 'Working branch' },
+        description: {
+          'zh-CN': '留空时自动生成',
+          'en-US': 'Leave blank to generate a branch',
+        },
+      },
+    ],
     targetFields: [
       {
         fieldRef: 'repositoryId',
@@ -347,6 +358,16 @@ function installFetch(): FetchCall[] {
         return json({ id: 'sched-new' }, 201)
       if (url.includes('/api/tasks/relaunch-task/members')) return json(RELAUNCH_MEMBERS)
       if (url.includes('/api/tasks/relaunch-task')) return json(RELAUNCH_TASK)
+      if (url.includes('/api/users/search'))
+        return json([
+          {
+            id: 'collaborator-1',
+            username: 'collaborator',
+            displayName: 'Collaborator One',
+            role: 'user',
+            status: 'active',
+          },
+        ])
       if (url.includes('/api/users/lookup')) return json([])
       if (url.includes('/api/digital-employees/launchable'))
         return json({ items: [DIGITAL_EMPLOYEE, TASK_SCOPED_DIGITAL_EMPLOYEE] })
@@ -594,6 +615,62 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
           call.url.includes('/api/digital-employees/employee-fixed-repository/cases'),
       )?.body,
     ).toMatchObject({ name: '修复登录失败' })
+  })
+
+  test('digital employee submits four advanced options without an auto-commit switch', async () => {
+    const calls = installFetch()
+    await renderWizard('/tasks/new?kind=digital-employee')
+
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Digital employee' }))
+    fireEvent.mouseDown(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: /Fixed repository employee/,
+      }),
+    )
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    await screen.findByTestId('repo-source-recent-urls-0')
+    next()
+
+    fireEvent.change(await screen.findByTestId('wizard-task-name'), {
+      target: { value: 'Advanced employee task' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Describe the request'), {
+      target: { value: 'Implement the approved advanced options.' },
+    })
+    fireEvent.change(screen.getByTestId('wizard-working-branch'), {
+      target: { value: 'feature/rfc336-options' },
+    })
+    fireEvent.change(screen.getByTestId('wizard-max-duration'), { target: { value: '15' } })
+    fireEvent.change(screen.getByTestId('wizard-max-tokens'), { target: { value: '12345' } })
+    fireEvent.mouseDown(screen.getByTestId('wizard-collaborators-input'))
+    fireEvent.click(await screen.findByTestId('wizard-collaborators-option-collaborator'))
+
+    expect(screen.queryByRole('checkbox', { name: /commit.*push/i })).toBeNull()
+    await waitFor(() =>
+      expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
+    )
+    next()
+    expect(screen.getByTestId('wizard-summary-advanced').textContent).toContain(
+      'feature/rfc336-options',
+    )
+    fireEvent.click(screen.getByTestId('wizard-launch'))
+    await screen.findByTestId('employee-case-page')
+
+    const body = calls.find(
+      (call) =>
+        call.method === 'POST' &&
+        call.url.includes('/api/digital-employees/employee-fixed-repository/cases'),
+    )?.body as { advanced?: Record<string, unknown> }
+    expect(body.advanced).toEqual({
+      collaboratorUserIds: ['collaborator-1'],
+      maxDurationMs: 900_000,
+      maxTotalTokens: 12_345,
+      typeOptions: { 'working-branch': 'feature/rfc336-options' },
+    })
+    expect(body.advanced).not.toHaveProperty('autoCommitPush')
   })
 
   test('a task-scoped employee loads repository choices without waiting for a disabled group query', async () => {
@@ -1308,6 +1385,15 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByTestId('wizard-max-tokens'), { target: { value: '2000' } })
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.change(screen.getByTestId('wizard-max-tokens'), {
+      target: { value: String(Number.MAX_SAFE_INTEGER + 1) },
+    })
+    expect(screen.getByTestId('wizard-limits-error')).toBeTruthy()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByTestId('wizard-max-tokens'), { target: { value: '2000' } })
+    fireEvent.change(screen.getByTestId('wizard-max-duration'), { target: { value: '0.000001' } })
+    expect(screen.getByTestId('wizard-limits-error')).toBeTruthy()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
   })
 
   test('W12: defaults — agent kind pre-selected, scratch space, clarify switch outside the advanced fold (用户 2026-07-11)', async () => {

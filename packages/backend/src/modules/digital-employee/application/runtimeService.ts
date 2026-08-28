@@ -5,7 +5,11 @@ import {
 } from '@/modules/digital-employee/public/types'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { z } from 'zod'
-import { PLATFORM_WORKSPACE_DIR, type TaskLaunchOrigin } from '@agent-workflow/shared'
+import {
+  PLATFORM_WORKSPACE_DIR,
+  TaskLaunchOriginSchema,
+  type TaskLaunchOrigin,
+} from '@agent-workflow/shared'
 import { retryAttemptCap } from '@/platform/contracts/retryAttemptCap'
 
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
@@ -14,6 +18,10 @@ import type { ExecutionContractParticipant } from '@/modules/execution-contract/
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { stableIdentityComponent } from '@/util/gitRef'
 import type {
+  EmployeeCaseDetailProjectionInputV1,
+  EmployeeCaseDetailProjectionParticipant,
+  EmployeeCaseDetailProjectionV1,
+  EmployeeCaseTypeDetailProjectionV1,
   EmployeeTypeCollaborationCodec,
   EmployeeTypeContextCodec,
   EmployeeTypeReactionCodec,
@@ -37,6 +45,7 @@ import type {
 import type {
   EmployeeInputArtifactPort,
   PlatformWorkItemExecutionPort,
+  ReactionExecutionMetering,
   ReactionExecutionPort,
 } from '../composition/required-ports'
 import type { EmployeeInputUploadStore } from '../infrastructure/inputUploadStore'
@@ -62,6 +71,7 @@ import {
   MAX_EMPLOYEE_INVOCATION_DEPTH,
   reactionExecutionPlanSchema,
   runtimeDigest,
+  validateRepositoryBranchOption,
   type EmployeeCaseRecord,
   type EmployeeContextRecord,
   type ReactionExecutionPlan,
@@ -126,6 +136,195 @@ const reactionSettlementSchema = z
   })
   .strict()
 
+const employeeCaseDetailInputProjectionSchema = z
+  .object({
+    source: TaskLaunchOriginSchema,
+    ingressRef: z.string().min(1).max(200).nullable(),
+    kind: z.enum(['body', 'files', 'body-and-files', 'external-id', 'event', 'unknown']),
+    subjectRef: z.string().min(1).max(1_000).nullable(),
+    repositoryRef: z.string().min(1).max(500).nullable(),
+    body: z
+      .string()
+      .max(2 * 1024 * 1024)
+      .nullable(),
+    externalId: z.string().min(1).max(500).nullable(),
+    uploads: z
+      .array(
+        z
+          .object({
+            artifactRef: z.string().min(1).max(1_000),
+            originalName: z.string().min(1).max(1_000),
+            placement: z.enum(['repository', 'temporary']),
+            targetPath: z.string().min(1).max(1_000).nullable(),
+          })
+          .strict(),
+      )
+      .max(500),
+    executionOptions: z.record(z.string().min(1).max(160), z.boolean()),
+    advancedOptions: z.record(z.string().min(1).max(160), z.string().max(1_000)).default({}),
+  })
+  .strict()
+
+const employeeCaseTypeDetailProjectionSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    input: employeeCaseDetailInputProjectionSchema,
+    workspace: z
+      .object({
+        repositoryRef: z.string().min(1).max(500),
+        cachedRepositoryRef: z.string().min(1).max(500),
+        baselineSha: z.string().min(1).max(128),
+        targetBranch: z.string().min(1).max(500),
+        sourceBranch: z.string().min(1).max(500),
+        remoteHeadSha: z.string().min(1).max(128).nullable(),
+        state: z.enum(['active', 'published', 'released']),
+      })
+      .strict()
+      .nullable(),
+    changeCandidate: z
+      .object({
+        status: z.enum(['prepared', 'committed', 'published', 'obsolete']),
+        candidateRef: z.string().min(1).max(128),
+        baselineSha: z.string().min(1).max(128),
+        treeOid: z.string().min(1).max(128),
+        summary: z.string().min(1).max(5_000),
+        changedPaths: z.array(z.string().min(1).max(1_000)).max(5_000),
+        commitSha: z.string().min(1).max(128).nullable(),
+      })
+      .strict()
+      .nullable(),
+    delivery: z
+      .object({
+        kind: z.literal('merge-request'),
+        status: z.enum(['active', 'merged', 'closed']),
+        ref: z.string().min(1).max(1_000),
+        providerRef: z.string().min(1).max(500).nullable(),
+        webUrl: z.string().url().nullable(),
+        repositoryRef: z.string().min(1).max(500).nullable(),
+        sourceBranch: z.string().min(1).max(500).nullable(),
+        targetBranch: z.string().min(1).max(500).nullable(),
+        headSha: z.string().min(1).max(128),
+        targetSha: z.string().min(1).max(128).nullable(),
+        mergedCommitSha: z.string().min(1).max(128).nullable(),
+        draft: z.boolean(),
+        mergeableState: z.enum(['mergeable', 'conflict', 'unknown']),
+        readyToMerge: z.boolean(),
+        approvalHold: z.boolean().nullable(),
+        unresolvedReviewCount: z.number().int().nonnegative(),
+        relatedRegionRefs: z.array(z.string().min(1).max(160)).max(100),
+        relatedWorkItemRefs: z.array(z.string().min(1).max(160)).max(500),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict()
+
+const employeeCaseArtifactSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('input') }).strict(),
+  z.object({ kind: z.literal('context'), contextId: z.string().min(1).max(500) }).strict(),
+  z
+    .object({
+      kind: z.literal('round'),
+      roundId: z.string().min(1).max(500),
+      executionRef: z.string().min(1).max(500).nullable(),
+    })
+    .strict(),
+])
+
+const employeeCaseDetailProjectionSchema = employeeCaseTypeDetailProjectionSchema.extend({
+  artifacts: z
+    .array(
+      z
+        .object({
+          ref: z.string().min(1).max(1_000),
+          sources: z.array(employeeCaseArtifactSourceSchema).min(1).max(1_000),
+        })
+        .strict(),
+    )
+    .max(10_000),
+})
+
+function artifactRefsFromRoundOutput(outputJson: string | null): string[] {
+  if (outputJson === null) return []
+  try {
+    const output = JSON.parse(outputJson) as unknown
+    if (output === null || typeof output !== 'object' || Array.isArray(output)) return []
+    const artifactRefs = (output as Record<string, unknown>).artifactRefs
+    return Array.isArray(artifactRefs)
+      ? artifactRefs.filter((ref): ref is string => typeof ref === 'string' && ref.length > 0)
+      : []
+  } catch {
+    return []
+  }
+}
+
+export function projectEmployeeCaseArtifacts(input: {
+  readonly detailInput: EmployeeCaseDetailProjectionV1['input']
+  readonly contexts: readonly Pick<EmployeeContextRecord, 'id' | 'artifactRefs'>[]
+  readonly rounds: readonly Pick<ReactionRoundRecord, 'id' | 'executionRef' | 'outputJson'>[]
+}): EmployeeCaseDetailProjectionV1['artifacts'] {
+  const byRef = new Map<
+    string,
+    {
+      ref: string
+      sources: Array<z.infer<typeof employeeCaseArtifactSourceSchema>>
+      sourceKeys: Set<string>
+    }
+  >()
+  const add = (
+    ref: string,
+    source: z.infer<typeof employeeCaseArtifactSourceSchema>,
+    sourceKey: string,
+  ) => {
+    const item = byRef.get(ref) ?? { ref, sources: [], sourceKeys: new Set<string>() }
+    if (!item.sourceKeys.has(sourceKey)) {
+      item.sourceKeys.add(sourceKey)
+      item.sources.push(source)
+    }
+    byRef.set(ref, item)
+  }
+  for (const upload of input.detailInput.uploads)
+    add(upload.artifactRef, { kind: 'input' }, 'input')
+  for (const context of input.contexts) {
+    for (const ref of context.artifactRefs) {
+      add(ref, { kind: 'context', contextId: context.id }, `context:${context.id}`)
+    }
+  }
+  for (const round of input.rounds) {
+    for (const ref of artifactRefsFromRoundOutput(round.outputJson)) {
+      add(
+        ref,
+        { kind: 'round', roundId: round.id, executionRef: round.executionRef },
+        `round:${round.id}`,
+      )
+    }
+  }
+  return [...byRef.values()].map(({ ref, sources }) => ({ ref, sources }))
+}
+
+function fallbackEmployeeCaseTypeDetail(
+  caseRecord: EmployeeCaseRecord,
+): EmployeeCaseTypeDetailProjectionV1 {
+  return {
+    schemaVersion: 1,
+    input: {
+      source: caseRecord.launchOrigin,
+      ingressRef: null,
+      kind: 'unknown',
+      subjectRef: null,
+      repositoryRef: null,
+      body: null,
+      externalId: null,
+      uploads: [],
+      executionOptions: {},
+      advancedOptions: {},
+    },
+    workspace: null,
+    changeCandidate: null,
+    delivery: null,
+  }
+}
+
 export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly store: RuntimeCaseStorePort
   readonly authoringStore: DigitalEmployeeAuthoringStore
@@ -135,6 +334,7 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly inputUploads: EmployeeInputUploadStore
   readonly inputArtifacts: EmployeeInputArtifactPort
   readonly runtimeCodecs: readonly EmployeeTypeRuntimeCodec[]
+  readonly detailProjectionParticipants?: readonly EmployeeCaseDetailProjectionParticipant[]
   /** Latest installed revision for each programmable employee type. */
   readonly currentTypeRefs: readonly EmployeeTypeRef[]
   readonly executionContracts: ExecutionContractParticipant
@@ -303,6 +503,10 @@ export class DigitalEmployeeRuntimeService {
   readonly #platformTools: DigitalEmployeePlatformToolCatalog
   readonly #resolveExecutionPolicy: () => ExecutionPolicyRevisionRecord
   readonly #codecs = new Map<string, EmployeeTypeRuntimeCodec>()
+  readonly #detailProjectionParticipants = new Map<
+    string,
+    EmployeeCaseDetailProjectionParticipant
+  >()
   readonly #currentTypeRevisions = new Map<string, number>()
   readonly #now: () => number
   readonly #id: () => string
@@ -335,6 +539,14 @@ export class DigitalEmployeeRuntimeService {
         throw new Error(`duplicate employee runtime codec: ${codec.typeId}`)
       }
       this.#codecs.set(codec.typeId, codec)
+    }
+    for (const participant of deps.detailProjectionParticipants ?? []) {
+      if (this.#detailProjectionParticipants.has(participant.typeId)) {
+        throw new Error(
+          `duplicate employee case detail projection participant: ${participant.typeId}`,
+        )
+      }
+      this.#detailProjectionParticipants.set(participant.typeId, participant)
     }
     for (const ref of deps.currentTypeRefs) {
       const current = this.#currentTypeRevisions.get(ref.typeId) ?? 0
@@ -372,6 +584,50 @@ export class DigitalEmployeeRuntimeService {
       )
     }
     return record.descriptor
+  }
+
+  #projectCaseDetail(
+    caseRecord: EmployeeCaseRecord,
+    contexts: readonly EmployeeContextRecord[],
+    rounds: readonly ReactionRoundRecord[],
+  ): EmployeeCaseDetailProjectionV1 {
+    const participant = this.#detailProjectionParticipants.get(caseRecord.typeRef.typeId)
+    const request: EmployeeCaseDetailProjectionInputV1 = {
+      schemaVersion: 1,
+      case: {
+        id: caseRecord.id,
+        typeRef: caseRecord.typeRef,
+        launchOrigin: caseRecord.launchOrigin,
+        primaryContextId: caseRecord.primaryContextId,
+      },
+      contexts: contexts.map((context) => ({
+        id: context.id,
+        typeId: context.typeId,
+        schemaVersion: context.schemaVersion,
+        stateJson: context.stateJson,
+        artifactRefs: context.artifactRefs,
+        updatedAt: context.updatedAt,
+      })),
+      rounds: rounds.map((round) => ({
+        id: round.id,
+        executionRef: round.executionRef,
+        outputJson: round.outputJson,
+      })),
+    }
+    const typeDetail =
+      participant === undefined
+        ? fallbackEmployeeCaseTypeDetail(caseRecord)
+        : employeeCaseTypeDetailProjectionSchema.parse(
+            JSON.parse(participant.projectJson(JSON.stringify(request))) as unknown,
+          )
+    return employeeCaseDetailProjectionSchema.parse({
+      ...typeDetail,
+      artifacts: projectEmployeeCaseArtifacts({
+        detailInput: typeDetail.input,
+        contexts,
+        rounds,
+      }),
+    })
   }
 
   #toolRevision(ref: ExactResourceRef) {
@@ -473,8 +729,48 @@ export class DigitalEmployeeRuntimeService {
         parsedIntake.executionOptions[option.optionRef] ?? option.defaultValue,
       ]),
     )
-    const intake = employeeWorkIntakeSchema.parse({ ...parsedIntake, executionOptions })
-    const { name: providedTaskName, ...workIntake } = intake
+    const advancedOptionDefinitions = admittedType.descriptor.workIntakeAuthoring.advancedOptions
+    const advancedOptionByRef = new Map(
+      advancedOptionDefinitions.map((option) => [option.optionRef, option]),
+    )
+    const unknownAdvancedOption = Object.keys(parsedIntake.advanced.typeOptions).find(
+      (optionRef) => !advancedOptionByRef.has(optionRef),
+    )
+    if (unknownAdvancedOption !== undefined) {
+      throw new ValidationError(
+        'employee-intake-advanced-option-unknown',
+        `unknown employee intake advanced option: ${unknownAdvancedOption}`,
+      )
+    }
+    for (const [optionRef, value] of Object.entries(parsedIntake.advanced.typeOptions)) {
+      const definition = advancedOptionByRef.get(optionRef)!
+      if (definition.control === 'repository-branch' && !validateRepositoryBranchOption(value)) {
+        throw new ValidationError(
+          'employee-intake-working-branch-invalid',
+          `invalid repository branch for employee intake option: ${optionRef}`,
+        )
+      }
+    }
+    const intake = employeeWorkIntakeSchema.parse({
+      ...parsedIntake,
+      executionOptions,
+      advanced: {
+        ...parsedIntake.advanced,
+        typeOptions: Object.fromEntries(
+          advancedOptionDefinitions.flatMap((option) => {
+            const value = parsedIntake.advanced.typeOptions[option.optionRef]
+            return value === undefined ? [] : [[option.optionRef, value]]
+          }),
+        ),
+      },
+    })
+    const { name: providedTaskName, advanced, ...workIntake } = intake
+    if (input.actorUserId === null && advanced.collaboratorUserIds.length > 0) {
+      throw new ValidationError(
+        'employee-intake-collaborator-actor-required',
+        'digital employee collaborators require a user-owned launch',
+      )
+    }
     if (input.eventOrigin === undefined && providedTaskName === undefined) {
       throw new ValidationError(
         'employee-task-name-required',
@@ -560,7 +856,11 @@ export class DigitalEmployeeRuntimeService {
             employeeRef,
             workScopeJson: JSON.stringify(scope.encodedScope),
             receivedAt: now,
-            intake: { ...workIntake, uploads: resolvedUploads },
+            intake: {
+              ...workIntake,
+              uploads: resolvedUploads,
+              typeOptions: advanced.typeOptions,
+            },
           }),
         ),
       ) as unknown,
@@ -578,6 +878,19 @@ export class DigitalEmployeeRuntimeService {
       ownerUserId: input.actorUserId,
       launchOrigin: input.eventOrigin === undefined ? 'manual' : 'event',
       eventOrigin: input.eventOrigin ?? null,
+      maxDurationMs: advanced.maxDurationMs ?? null,
+      maxTotalTokens: advanced.maxTotalTokens ?? null,
+      initialMembers:
+        input.actorUserId === null
+          ? []
+          : [...new Set(advanced.collaboratorUserIds)]
+              .filter((userId) => userId !== input.actorUserId)
+              .map((userId) => ({
+                userId,
+                role: 'collaborator' as const,
+                addedBy: input.actorUserId!,
+                addedAt: now,
+              })),
       uploadClaims: uploads.map((upload) => ({
         uploadRef: upload.id,
         actorUserId: input.actorUserId,
@@ -599,6 +912,14 @@ export class DigitalEmployeeRuntimeService {
         readonly eventSubscriptionId: string
         readonly eventDeliveryId: string
       } | null
+      readonly maxDurationMs?: number | null
+      readonly maxTotalTokens?: number | null
+      readonly initialMembers?: readonly {
+        readonly userId: string
+        readonly role: 'collaborator'
+        readonly addedBy: string
+        readonly addedAt: number
+      }[]
       readonly uploadClaims: readonly {
         readonly uploadRef: string
         readonly actorUserId: string | null
@@ -673,6 +994,10 @@ export class DigitalEmployeeRuntimeService {
       typeRef: employee.content.typeRef,
       primaryContextId: contextId,
       executionPolicyRevision: policy.revision,
+      maxDurationMs: admission?.maxDurationMs ?? null,
+      consumedDurationMs: 0,
+      maxTotalTokens: admission?.maxTotalTokens ?? null,
+      consumedTotalTokens: 0,
       ownerUserId: admission?.ownerUserId ?? null,
       launchOrigin: admission?.launchOrigin ?? 'api',
       state: 'active',
@@ -708,6 +1033,7 @@ export class DigitalEmployeeRuntimeService {
       externalSubject: launch.workSubject,
       eventOrigin: admission?.eventOrigin ?? null,
       uploadClaims: admission?.uploadClaims ?? [],
+      initialMembers: admission?.initialMembers ?? [],
     })
     return caseRecord
   }
@@ -905,6 +1231,7 @@ export class DigitalEmployeeRuntimeService {
     const attention = this.#store.listAttention(caseId)
     const inbox = this.#store.listInbox(caseId)
     const rounds = this.#store.listRounds(caseId)
+    const detail = this.#projectCaseDetail(caseRecord, contexts, rounds)
     const activeRound = rounds.find((round) =>
       ['planned', 'running', 'settling'].includes(round.state),
     )
@@ -976,6 +1303,7 @@ export class DigitalEmployeeRuntimeService {
         description: descriptor.description,
       },
       capabilityActivation,
+      detail,
       contexts: contexts.map((context) => ({
         ...context,
         state: JSON.parse(context.stateJson) as unknown,
@@ -1039,7 +1367,54 @@ export class DigitalEmployeeRuntimeService {
     }
   }
 
-  #settleCompletedRound(round: ReactionRoundRecord, validatedOutputJson: string): void {
+  #caseLimitTerminalKind(caseRecord: EmployeeCaseRecord): string | null {
+    if (
+      caseRecord.maxDurationMs !== null &&
+      caseRecord.consumedDurationMs >= caseRecord.maxDurationMs
+    ) {
+      return 'case-duration-limit-exceeded'
+    }
+    if (
+      caseRecord.maxTotalTokens !== null &&
+      caseRecord.consumedTotalTokens >= caseRecord.maxTotalTokens
+    ) {
+      return 'case-token-limit-exceeded'
+    }
+    return null
+  }
+
+  #recordReactionMetering(
+    round: ReactionRoundRecord,
+    metering: ReactionExecutionMetering,
+  ): string | null {
+    if (
+      !Number.isSafeInteger(metering.durationMs) ||
+      metering.durationMs < 0 ||
+      !Number.isSafeInteger(metering.totalTokens) ||
+      metering.totalTokens < 0
+    ) {
+      throw new ValidationError(
+        'employee-case-metering-invalid',
+        'reaction execution metering must contain nonnegative safe integers',
+      )
+    }
+    return this.#caseLimitTerminalKind(
+      this.#store.recordMetering({
+        sourceRef: metering.sourceRef,
+        caseId: round.caseId,
+        roundId: round.id,
+        durationMs: metering.durationMs,
+        totalTokens: metering.totalTokens,
+        now: this.#now(),
+      }).caseRecord,
+    )
+  }
+
+  #settleCompletedRound(
+    round: ReactionRoundRecord,
+    validatedOutputJson: string,
+    limitTerminalKind: string | null = null,
+  ): void {
     const caseRecord = this.getCase(round.caseId)
     const descriptor = this.#descriptor(caseRecord)
     const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
@@ -1054,7 +1429,7 @@ export class DigitalEmployeeRuntimeService {
     if (item === null) throw new Error(`reaction work item disappeared: ${round.workItemRef}`)
     const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
     const beforeContexts = this.#store.listContexts(caseRecord.id)
-    const settlement = reactionSettlementSchema.parse(
+    const resolvedSettlement = reactionSettlementSchema.parse(
       JSON.parse(
         this.#codec(caseRecord.typeRef.typeId).resolveReactionSettlementJson(
           JSON.stringify({
@@ -1071,6 +1446,16 @@ export class DigitalEmployeeRuntimeService {
         ),
       ) as unknown,
     )
+    const settlement =
+      limitTerminalKind === null
+        ? resolvedSettlement
+        : {
+            ...resolvedSettlement,
+            caseState: 'terminal' as const,
+            terminalKind: limitTerminalKind,
+            blockReason: null,
+            nextWorkItemRef: null,
+          }
     if (
       settlement.nextWorkItemRef !== null &&
       !item.nextWorkItemRefs.includes(settlement.nextWorkItemRef)
@@ -2075,6 +2460,7 @@ export class DigitalEmployeeRuntimeService {
       leaseMs: this.#outboxLeaseMs,
     })
     if (outbox === null) return 'idle'
+    let platformAttempt: { readonly roundId: string; readonly startedAt: number } | null = null
     try {
       const ownedCase = outbox.caseId === null ? null : this.#store.getCase(outbox.caseId)
       if (
@@ -2152,14 +2538,21 @@ export class DigitalEmployeeRuntimeService {
         if (ownedCase === null) {
           throw new Error(`platform work item case missing: ${outbox.caseId ?? 'null'}`)
         }
+        platformAttempt = { roundId: round.id, startedAt: this.#now() }
         const output = await this.#platformWorkItems.execute(payload.plan, {
           publicationSubject:
             ownedCase.ownerUserId === null
               ? { kind: 'system' }
               : { kind: 'user', userId: ownedCase.ownerUserId },
         })
+        const limitTerminalKind = this.#recordReactionMetering(round, {
+          sourceRef: `platform:${outbox.id}:${outbox.attemptCount}`,
+          durationMs: Math.max(0, this.#now() - platformAttempt.startedAt),
+          totalTokens: 0,
+        })
         const validated = this.#validateRoundOutput(round, output)
-        this.#settleCompletedRound(round, validated)
+        this.#settleCompletedRound(round, validated, limitTerminalKind)
+        platformAttempt = null
       } else if (outbox.kind === 'invocation-create') {
         const payload = z
           .object({ roundId: z.string().min(1), plan: reactionExecutionPlanSchema })
@@ -2177,6 +2570,20 @@ export class DigitalEmployeeRuntimeService {
       return 'completed'
     } catch (error) {
       const caseRecord = outbox.caseId === null ? null : this.#store.getCase(outbox.caseId)
+      const platformRound =
+        platformAttempt === null || outbox.caseId === null
+          ? undefined
+          : this.#store
+              .listRounds(outbox.caseId)
+              .find((round) => round.id === platformAttempt?.roundId)
+      const limitTerminalKind =
+        platformAttempt === null || platformRound === undefined || caseRecord?.state === 'terminal'
+          ? null
+          : this.#recordReactionMetering(platformRound, {
+              sourceRef: `platform:${outbox.id}:${outbox.attemptCount}`,
+              durationMs: Math.max(0, this.#now() - platformAttempt.startedAt),
+              totalTokens: 0,
+            })
       const policy =
         caseRecord === null
           ? this.#authoringStore.getCurrentExecutionPolicy()
@@ -2185,7 +2592,7 @@ export class DigitalEmployeeRuntimeService {
         policy?.content.sameSceneAttempts ?? 1,
         policy?.content.freshSceneAttempts ?? 1,
       )
-      const terminal = outbox.attemptCount >= Math.max(1, maxAttempts)
+      const terminal = limitTerminalKind !== null || outbox.attemptCount >= Math.max(1, maxAttempts)
       const initial = policy?.content.initialBackoffMs ?? 1_000
       const maximum = policy?.content.maxBackoffMs ?? 60_000
       const backoff = Math.min(maximum, initial * 2 ** Math.max(0, outbox.attemptCount - 1))
@@ -2220,12 +2627,21 @@ export class DigitalEmployeeRuntimeService {
               errorCode,
               detail: detail.slice(0, 4_000),
             }),
-            nextCaseState: policy?.content.handoffOnExhausted === false ? 'terminal' : undefined,
+            nextCaseState:
+              limitTerminalKind !== null || policy?.content.handoffOnExhausted === false
+                ? 'terminal'
+                : undefined,
             terminalKind:
-              policy?.content.handoffOnExhausted === false ? 'platform-dispatch-failed' : undefined,
-            blockReason: `${outbox.kind}: ${detail}`.slice(0, 2_000),
+              limitTerminalKind ??
+              (policy?.content.handoffOnExhausted === false
+                ? 'platform-dispatch-failed'
+                : undefined),
+            blockReason:
+              limitTerminalKind === null ? `${outbox.kind}: ${detail}`.slice(0, 2_000) : null,
             now: this.#now(),
           })
+        } else if (limitTerminalKind !== null) {
+          this.#store.terminateCase(outbox.caseId, limitTerminalKind, this.#now())
         } else if (policy?.content.handoffOnExhausted === false) {
           this.#store.terminateCase(outbox.caseId, 'platform-dispatch-failed', this.#now())
         } else {
@@ -2291,6 +2707,23 @@ export class DigitalEmployeeRuntimeService {
           caseRecord.executionPolicyRevision,
         )
         if (policy === null) throw new Error('pinned execution policy disappeared')
+        const exhaustedUserLimit = this.#caseLimitTerminalKind(caseRecord)
+        if (exhaustedUserLimit !== null) {
+          this.#store.terminateCase(caseRecord.id, exhaustedUserLimit, this.#now())
+          continue
+        }
+        const remainingDurationMs =
+          caseRecord.maxDurationMs === null
+            ? null
+            : caseRecord.maxDurationMs - caseRecord.consumedDurationMs
+        const remainingTotalTokens =
+          caseRecord.maxTotalTokens === null
+            ? null
+            : caseRecord.maxTotalTokens - caseRecord.consumedTotalTokens
+        const roundBudgetMs =
+          remainingDurationMs === null
+            ? policy.content.roundBudgetMs
+            : Math.min(policy.content.roundBudgetMs, remainingDurationMs)
         if (caseRecord.createdAt + policy.content.caseBudgetMs <= this.#now()) {
           if (policy.content.handoffOnExhausted) {
             this.#store.blockCase(caseRecord.id, 'case-budget-exhausted', this.#now())
@@ -2499,6 +2932,8 @@ export class DigitalEmployeeRuntimeService {
           exactWorkItemTools,
           orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
           executionPolicyRevision: caseRecord.executionPolicyRevision,
+          roundBudgetMs,
+          maxTotalTokens: remainingTotalTokens,
         })
         const assembledInputEnvelopeJson = this.#codec(
           caseRecord.typeRef.typeId,
@@ -2582,7 +3017,8 @@ export class DigitalEmployeeRuntimeService {
           outputSchemaId: contract.outputSchemaId,
           semanticValidatorId: contract.semanticValidatorId,
           executionPolicyRevision: caseRecord.executionPolicyRevision,
-          roundBudgetMs: policy.content.roundBudgetMs,
+          roundBudgetMs,
+          maxTotalTokens: remainingTotalTokens,
           externalWaitDeadlineMs: policy.content.externalWaitDeadlineMs,
           allowedEffectKinds: rule?.allowedEffectKinds ?? contract.allowedEffectKinds,
           workspacePolicy: contract.workspacePolicy,
@@ -2688,7 +3124,24 @@ export class DigitalEmployeeRuntimeService {
       errorDetail: errorDetail.slice(0, 4_000),
     })
     if (nextOrdinal <= retryBudget) {
-      const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
+      const frozenPlan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
+      const caseRecord = this.getCase(round.caseId)
+      const remainingDurationMs =
+        caseRecord.maxDurationMs === null
+          ? null
+          : caseRecord.maxDurationMs - caseRecord.consumedDurationMs
+      const remainingTotalTokens =
+        caseRecord.maxTotalTokens === null
+          ? null
+          : caseRecord.maxTotalTokens - caseRecord.consumedTotalTokens
+      const plan = reactionExecutionPlanSchema.parse({
+        ...frozenPlan,
+        roundBudgetMs:
+          remainingDurationMs === null
+            ? frozenPlan.roundBudgetMs
+            : Math.min(frozenPlan.roundBudgetMs, Math.max(1, remainingDurationMs)),
+        maxTotalTokens: remainingTotalTokens === null ? null : Math.max(1, remainingTotalTokens),
+      })
       const mode = nextOrdinal % attemptsPerScene === 0 ? 'fresh-scene' : 'same-scene'
       const now = this.#now()
       const retryDelay = Math.min(
@@ -2733,6 +3186,19 @@ export class DigitalEmployeeRuntimeService {
     return 'failed'
   }
 
+  #failRoundForUserLimit(round: ReactionRoundRecord, terminalKind: string): 'failed' {
+    this.#store.settleRound({
+      roundId: round.id,
+      state: 'failed',
+      outputJson: JSON.stringify({ kind: 'failed', terminalKind }),
+      nextCaseState: 'terminal',
+      terminalKind,
+      blockReason: null,
+      now: this.#now(),
+    })
+    return 'failed'
+  }
+
   async inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'> {
     const rounds = this.#store.listRunningRounds()
     if (rounds.length === 0) return 'idle'
@@ -2744,7 +3210,11 @@ export class DigitalEmployeeRuntimeService {
         hasPendingExecution = true
         continue
       }
+      const limitTerminalKind = this.#recordReactionMetering(round, snapshot.metering)
       if (snapshot.kind === 'failed') {
+        if (limitTerminalKind !== null) {
+          return this.#failRoundForUserLimit(round, limitTerminalKind)
+        }
         return this.#retryOrFailExecution(
           round,
           snapshot.errorClass,
@@ -2754,9 +3224,12 @@ export class DigitalEmployeeRuntimeService {
       }
       try {
         const validated = this.#validateRoundOutput(round, snapshot.outputJson)
-        this.#settleCompletedRound(round, validated)
+        this.#settleCompletedRound(round, validated, limitTerminalKind)
         return 'completed'
       } catch (error) {
+        if (limitTerminalKind !== null) {
+          return this.#failRoundForUserLimit(round, limitTerminalKind)
+        }
         return this.#retryOrFailExecution(
           round,
           // agent 交回来的信封不合契约：与工作区边界无关，按同场景重试（行为同改造前）。

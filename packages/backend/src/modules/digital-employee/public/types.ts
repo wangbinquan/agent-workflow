@@ -5,6 +5,8 @@
 // surface cannot become a second, structurally open copy of every type-package
 // schema. HTTP inbound adapters still expose the decoded business projection.
 
+import type { TaskLaunchOrigin } from '@agent-workflow/shared'
+
 import { dispatchRouteDefinitionsSchema } from '../domain/model'
 
 export function normalizeDispatchRouteDefinitionsJson(inputJson: string): string | null {
@@ -113,6 +115,124 @@ export interface EmployeeTypeCollaborationCodec {
   buildInvokedCaseJson(requestJson: string): string
   buildInvocationStartedOutputJson(requestJson: string): string
   buildInvocationResultOutputJson(requestJson: string): string
+}
+
+/**
+ * RFC-337 — normalized, read-only detail projection for one durable Employee Case.
+ *
+ * The common Digital Employee owner validates this shape before returning it to
+ * HTTP. Type providers may interpret their own Context schemas and read their
+ * own projections, but they never receive a runtime store or a writer.
+ */
+export interface EmployeeCaseDetailInputProjection {
+  readonly source: TaskLaunchOrigin
+  readonly ingressRef: string | null
+  readonly kind: 'body' | 'files' | 'body-and-files' | 'external-id' | 'event' | 'unknown'
+  readonly subjectRef: string | null
+  readonly repositoryRef: string | null
+  readonly body: string | null
+  readonly externalId: string | null
+  readonly uploads: readonly {
+    readonly artifactRef: string
+    readonly originalName: string
+    readonly placement: 'repository' | 'temporary'
+    readonly targetPath: string | null
+  }[]
+  readonly executionOptions: Readonly<Record<string, boolean>>
+  readonly advancedOptions: Readonly<Record<string, string>>
+}
+
+export interface EmployeeCaseWorkspaceDetailProjection {
+  readonly repositoryRef: string
+  readonly cachedRepositoryRef: string
+  readonly baselineSha: string
+  readonly targetBranch: string
+  readonly sourceBranch: string
+  readonly remoteHeadSha: string | null
+  readonly state: 'active' | 'published' | 'released'
+}
+
+export interface EmployeeCaseChangeCandidateDetailProjection {
+  readonly status: 'prepared' | 'committed' | 'published' | 'obsolete'
+  readonly candidateRef: string
+  readonly baselineSha: string
+  readonly treeOid: string
+  readonly summary: string
+  readonly changedPaths: readonly string[]
+  readonly commitSha: string | null
+}
+
+export interface EmployeeCaseDeliveryDetailProjection {
+  readonly kind: 'merge-request'
+  readonly status: 'active' | 'merged' | 'closed'
+  readonly ref: string
+  readonly providerRef: string | null
+  readonly webUrl: string | null
+  readonly repositoryRef: string | null
+  readonly sourceBranch: string | null
+  readonly targetBranch: string | null
+  readonly headSha: string
+  readonly targetSha: string | null
+  readonly mergedCommitSha: string | null
+  readonly draft: boolean
+  readonly mergeableState: 'mergeable' | 'conflict' | 'unknown'
+  readonly readyToMerge: boolean
+  readonly approvalHold: boolean | null
+  readonly unresolvedReviewCount: number
+  readonly relatedRegionRefs: readonly string[]
+  readonly relatedWorkItemRefs: readonly string[]
+}
+
+export interface EmployeeCaseTypeDetailProjectionV1 {
+  readonly schemaVersion: 1
+  readonly input: EmployeeCaseDetailInputProjection
+  readonly workspace: EmployeeCaseWorkspaceDetailProjection | null
+  readonly changeCandidate: EmployeeCaseChangeCandidateDetailProjection | null
+  readonly delivery: EmployeeCaseDeliveryDetailProjection | null
+}
+
+export type EmployeeCaseArtifactSource =
+  | { readonly kind: 'input' }
+  | { readonly kind: 'context'; readonly contextId: string }
+  | {
+      readonly kind: 'round'
+      readonly roundId: string
+      readonly executionRef: string | null
+    }
+
+export interface EmployeeCaseDetailProjectionV1 extends EmployeeCaseTypeDetailProjectionV1 {
+  readonly artifacts: readonly {
+    readonly ref: string
+    readonly sources: readonly EmployeeCaseArtifactSource[]
+  }[]
+}
+
+export interface EmployeeCaseDetailProjectionInputV1 {
+  readonly schemaVersion: 1
+  readonly case: {
+    readonly id: string
+    readonly typeRef: EmployeeTypeRef
+    readonly launchOrigin: TaskLaunchOrigin
+    readonly primaryContextId: string
+  }
+  readonly contexts: readonly {
+    readonly id: string
+    readonly typeId: string
+    readonly schemaVersion: number
+    readonly stateJson: string
+    readonly artifactRefs: readonly string[]
+    readonly updatedAt: number
+  }[]
+  readonly rounds: readonly {
+    readonly id: string
+    readonly executionRef: string | null
+    readonly outputJson: string | null
+  }[]
+}
+
+export interface EmployeeCaseDetailProjectionParticipant {
+  readonly typeId: string
+  projectJson(inputJson: string): string
 }
 
 export interface EmployeeCaseRef {

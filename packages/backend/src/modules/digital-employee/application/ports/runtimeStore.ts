@@ -134,11 +134,25 @@ export interface RuntimeCaseStorePort {
       readonly sha256: string
       readonly blobRef: string
     }[]
+    readonly initialMembers: readonly {
+      readonly userId: string
+      readonly role: 'collaborator'
+      readonly addedBy: string
+      readonly addedAt: number
+    }[]
   }): void
   getCase(id: string): EmployeeCaseRecord | null
   /** RFC-330 D19 —— 案例成员行（owner 不在其中，见 employee_cases.owner_user_id）。 */
   listCaseMembers(caseId: string): readonly EmployeeCaseMemberRecord[]
   getCaseMemberRole(caseId: string, userId: string): EmployeeCaseMemberRecord['role'] | null
+  recordMetering(input: {
+    readonly sourceRef: string
+    readonly caseId: string
+    readonly roundId: string
+    readonly durationMs: number
+    readonly totalTokens: number
+    readonly now: number
+  }): { readonly applied: boolean; readonly caseRecord: EmployeeCaseRecord }
   /**
    * RFC-330 D19/D20 —— 一个事务内改 owner（可选）并全量替换成员行。返回变更前的
    * owner 与成员 id，供调用方冻结「before ∪ after」的广播受众。调用方已完成

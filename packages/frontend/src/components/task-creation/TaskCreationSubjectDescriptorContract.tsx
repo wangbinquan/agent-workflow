@@ -3,7 +3,9 @@ import type {
   RepoGroupLayoutResponse,
   TaskCreationKind,
   TaskSourceRegistration,
+  UserPublic,
 } from '@agent-workflow/shared'
+import { isLooseValidBranchName } from '@agent-workflow/shared'
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
@@ -26,8 +28,16 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { Segmented } from '@/components/Segmented'
 import { TaskCreationContractFields } from '@/components/task-creation/TaskCreationContractFields'
 import { TaskCreationContractFrame } from '@/components/task-creation/TaskCreationContractFrame'
+import {
+  TaskCreationAdvancedSettings,
+  buildTaskCreationAdvancedSummary,
+  validateTaskCreationAdvancedValues,
+  type TaskCreationAdvancedCapabilities,
+  type TaskCreationAdvancedValues,
+} from '@/components/task-creation/TaskCreationAdvancedSettings'
 import { TaskCreationRepositorySpace } from '@/components/task-creation/TaskCreationRepositorySpace'
 import { TaskCreationResourcePicker } from '@/components/task-creation/TaskCreationResourcePicker'
+import { useActor, usePermission } from '@/hooks/useActor'
 
 type IntakeKind = 'body' | 'files' | 'body-and-files' | 'external-id'
 
@@ -68,6 +78,12 @@ export function TaskCreationSubjectDescriptorContract(
   const [externalId, setExternalId] = useState('')
   const [files, setFiles] = useState<UploadDraft[]>([])
   const [executionOptions, setExecutionOptions] = useState<Record<string, boolean>>({})
+  const [collaborators, setCollaborators] = useState<UserPublic[]>([])
+  const [workingBranch, setWorkingBranch] = useState('')
+  const [maxDurationMin, setMaxDurationMin] = useState<number | undefined>(undefined)
+  const [maxTotalTokens, setMaxTotalTokens] = useState<number | undefined>(undefined)
+  const actor = useActor()
+  const canSearchUsers = usePermission('users:search')
 
   const employees = useQuery<{ items: DigitalEmployeeDefinition[] }>({
     queryKey: ['digital-employees', 'launch'],
@@ -87,6 +103,9 @@ export function TaskCreationSubjectDescriptorContract(
       ),
   })
   const descriptor = typeQuery.data
+  const repositoryBranchOption = descriptor?.workIntakeAuthoring.advancedOptions?.find(
+    (option) => option.control === 'repository-branch',
+  )
   const employeeScope =
     employee?.workScope !== null && typeof employee?.workScope === 'object'
       ? (employee.workScope as Record<string, unknown>)
@@ -220,6 +239,10 @@ export function TaskCreationSubjectDescriptorContract(
     )
   }, [descriptor, optionAvailabilityKey])
 
+  useEffect(() => {
+    if (repositoryBranchOption === undefined) setWorkingBranch('')
+  }, [repositoryBranchOption])
+
   const needsRepositories =
     descriptor?.workIntakeAuthoring.targetFields.some(
       (field) => field.inputKind === 'repository-picker',
@@ -349,12 +372,29 @@ export function TaskCreationSubjectDescriptorContract(
     (!needsFiles || filesValid) &&
     (kind !== 'external-id' || externalId.trim() !== '')
   const taskNameComplete = taskName.trim().length > 0
+  const advancedValues: TaskCreationAdvancedValues = {
+    collaborators,
+    workingBranch,
+    maxDurationMin,
+    maxTotalTokens,
+  }
+  const advancedCapabilities: TaskCreationAdvancedCapabilities = {
+    collaborators: true,
+    workingBranch: repositoryBranchOption !== undefined,
+    limits: true,
+  }
+  const advancedValidation = validateTaskCreationAdvancedValues(
+    advancedValues,
+    advancedCapabilities,
+    isLooseValidBranchName,
+  )
   const ready =
     employee !== null &&
     descriptor !== undefined &&
     targetComplete &&
     taskNameComplete &&
-    contentComplete
+    contentComplete &&
+    advancedValidation.valid
 
   const launch = useMutation({
     mutationFn: async () => {
@@ -392,6 +432,23 @@ export function TaskCreationSubjectDescriptorContract(
             externalId: kind === 'external-id' ? externalId.trim() : null,
             uploads: completed,
             executionOptions,
+            advanced: {
+              ...(collaborators.length === 0
+                ? {}
+                : { collaboratorUserIds: collaborators.map((user) => user.id) }),
+              ...(maxDurationMin === undefined
+                ? {}
+                : { maxDurationMs: Math.round(maxDurationMin * 60_000) }),
+              ...(maxTotalTokens === undefined ? {} : { maxTotalTokens }),
+              ...(repositoryBranchOption === undefined ||
+              advancedValidation.workingBranchTrim === ''
+                ? {}
+                : {
+                    typeOptions: {
+                      [repositoryBranchOption.optionRef]: advancedValidation.workingBranchTrim,
+                    },
+                  }),
+            },
             idempotencyKey: `ui-case-${crypto.randomUUID()}`,
           },
         )
@@ -524,6 +581,7 @@ export function TaskCreationSubjectDescriptorContract(
                 onChange={(value) => {
                   setEmployeeId(value)
                   setTarget({})
+                  setWorkingBranch('')
                   setMaxVisited(0)
                 }}
                 options={availableEmployees.map((candidate) => ({
@@ -896,6 +954,21 @@ export function TaskCreationSubjectDescriptorContract(
                       </Field>
                     )
                   })}
+                  <TaskCreationAdvancedSettings
+                    values={advancedValues}
+                    capabilities={advancedCapabilities}
+                    validation={advancedValidation}
+                    actorUserId={
+                      canSearchUsers && actor.data?.source !== 'daemon'
+                        ? actor.data?.user.id
+                        : undefined
+                    }
+                    disabled={launch.isPending}
+                    onCollaboratorsChange={setCollaborators}
+                    onWorkingBranchChange={setWorkingBranch}
+                    onMaxDurationMinChange={setMaxDurationMin}
+                    onMaxTotalTokensChange={setMaxTotalTokens}
+                  />
                 </>
               ) : null}
             </div>
@@ -985,6 +1058,23 @@ export function TaskCreationSubjectDescriptorContract(
                   {summaryEdit(2)}
                 </dd>
               </div>
+              {buildTaskCreationAdvancedSummary({
+                values: advancedValues,
+                capabilities: advancedCapabilities,
+                t,
+              }).length > 0 ? (
+                <div className="wizard-summary__row">
+                  <dt>{t('taskWizard.advanced')}</dt>
+                  <dd data-testid="wizard-summary-advanced">
+                    {buildTaskCreationAdvancedSummary({
+                      values: advancedValues,
+                      capabilities: advancedCapabilities,
+                      t,
+                    }).join(' · ')}
+                    {summaryEdit(2)}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           ) : null}
         </>

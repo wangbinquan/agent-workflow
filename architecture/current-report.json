@@ -2,16 +2,16 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 440,
-    "architectureExceptions": 1297,
+    "architectureExceptions": 1304,
     "backgroundJobs": 218,
-    "crossContextImports": 1329,
+    "crossContextImports": 1340,
     "facades": 379,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18139,
-    "mutationEntrypoints": 951,
+    "moduleSymbolOwners": 18190,
+    "mutationEntrypoints": 952,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 354,
-    "transactionExternalEffects": 263
+    "publicSurfaces": 364,
+    "transactionExternalEffects": 264
   },
   "metrics": {
     "ambientWiringEntries": 440,
@@ -71,7 +71,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 939,
+    "backendProductionFiles": 940,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -132,7 +132,7 @@
       },
       {
         "context": "development-automation",
-        "files": 113
+        "files": 114
       },
       {
         "context": "digital-employee",
@@ -171,7 +171,7 @@
         "files": 101
       }
     ],
-    "moduleFiles": 414,
+    "moduleFiles": 415,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -232,5 +232,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e"
+  "sourceDigest": "sha256:2c5cee9f1accbdf4de94b9f266b19d87a48bfdaf52dd5c3ca3f9de668f89ea56"
 }

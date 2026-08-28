@@ -70,6 +70,7 @@ const issueContextSchema = z
       .object({
         body: z.string().nullable(),
         externalId: z.string().nullable(),
+        workingBranch: z.string().min(1).max(255).nullable().default(null),
         uploads: z.array(
           z
             .object({
@@ -492,6 +493,49 @@ interface RepositoryPreparationPort {
   }>
 }
 
+export interface DevelopmentEmployeeCaseWorkspaceDetailRow {
+  readonly repositoryId: string
+  readonly cachedRepoId: string
+  readonly baselineSha: string
+  readonly targetBranch: string
+  readonly sourceBranch: string
+  readonly remoteHeadSha: string | null
+  readonly state: 'active' | 'published' | 'released'
+}
+
+export interface DevelopmentEmployeeCaseWorkspaceDetailReader {
+  getByCaseId(caseId: string): DevelopmentEmployeeCaseWorkspaceDetailRow | null
+}
+
+/**
+ * Type-owned read projection for the Case detail presenter. Keeping the table
+ * read beside the existing workspace owner avoids teaching a second
+ * development-automation file the Digital Employee persistence layout.
+ */
+export function createDevelopmentEmployeeCaseWorkspaceDetailReader(
+  db: DbClient,
+): DevelopmentEmployeeCaseWorkspaceDetailReader {
+  return {
+    getByCaseId(caseId) {
+      return (
+        db
+          .select({
+            repositoryId: employeeCaseWorkspaces.repositoryId,
+            cachedRepoId: employeeCaseWorkspaces.cachedRepoId,
+            baselineSha: employeeCaseWorkspaces.baselineSha,
+            targetBranch: employeeCaseWorkspaces.targetBranch,
+            sourceBranch: employeeCaseWorkspaces.sourceBranch,
+            remoteHeadSha: employeeCaseWorkspaces.remoteHeadSha,
+            state: employeeCaseWorkspaces.state,
+          })
+          .from(employeeCaseWorkspaces)
+          .where(eq(employeeCaseWorkspaces.caseId, caseId))
+          .get() ?? null
+      )
+    },
+  }
+}
+
 export function composeDevelopmentEmployeeWorkspace(input: {
   readonly db: DbClient
   readonly appHome: string
@@ -509,7 +553,12 @@ export function composeDevelopmentEmployeeWorkspace(input: {
     resolveBaseline(request: {
       readonly baselineRepoPath: string
       readonly preferredBranch: string | null
-    }): Promise<{ readonly baselineSha: string; readonly targetBranch: string }>
+      readonly sourceBranch: string | null
+    }): Promise<{
+      readonly baselineSha: string
+      readonly targetBranch: string
+      readonly remoteHeadSha: string | null
+    }>
     materialize(request: {
       readonly caseRoot: string
       readonly baselineRepoPath: string
@@ -685,6 +734,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         const baseline = await sourceControl.resolveBaseline({
           baselineRepoPath: repository.localPath,
           preferredBranch: repository.defaultBranch,
+          sourceBranch: issue.request.workingBranch,
         })
         await sourceControl.materialize({
           caseRoot: sceneRoot(plan.caseRef.id),
@@ -722,6 +772,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
               schemaVersion: 1,
               body: issue.request.body,
               externalId: issue.request.externalId,
+              workingBranch: issue.request.workingBranch,
               uploads: issue.request.uploads,
             },
             null,
@@ -735,8 +786,10 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           cachedRepoId: repository.id,
           baselineSha: baseline.baselineSha,
           targetBranch: baseline.targetBranch,
-          sourceBranch: `agent-workflow/employee/${stableGitRefComponent(plan.caseRef.id)}`,
-          remoteHeadSha: null,
+          sourceBranch:
+            issue.request.workingBranch ??
+            `agent-workflow/employee/${stableGitRefComponent(plan.caseRef.id)}`,
+          remoteHeadSha: baseline.remoteHeadSha,
           state: 'active',
           createdAt: timestamp,
           updatedAt: timestamp,

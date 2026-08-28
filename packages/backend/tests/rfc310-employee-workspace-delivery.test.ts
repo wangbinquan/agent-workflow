@@ -76,6 +76,7 @@ function plan(input: {
     semanticValidatorId: 'development.validator',
     executionPolicyRevision: 1,
     roundBudgetMs: 60_000,
+    maxTotalTokens: null,
     externalWaitDeadlineMs: 86_400_000,
     allowedEffectKinds: [...(input.allowedEffectKinds ?? [])],
     workspacePolicy: input.workspacePolicy ?? {
@@ -95,6 +96,73 @@ function plan(input: {
 }
 
 describe('RFC-310 Digital Employee OS shared workspace and platform delivery', () => {
+  test('explicit employee source branches reuse an exact remote head or start from target head', async () => {
+    const baselineRepo = join(root, 'rfc336-branch-baseline')
+    const remoteRepo = join(root, 'rfc336-branch-remote.git')
+    mkdirSync(baselineRepo, { recursive: true })
+    git(baselineRepo, 'init', '-q', '-b', 'main')
+    writeFileSync(join(baselineRepo, 'README.md'), '# main\n')
+    git(baselineRepo, 'add', 'README.md')
+    git(
+      baselineRepo,
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'user.name=test',
+      'commit',
+      '-q',
+      '-m',
+      'main',
+    )
+    const mainSha = git(baselineRepo, 'rev-parse', 'HEAD')
+    mkdirSync(remoteRepo, { recursive: true })
+    git(remoteRepo, 'init', '-q', '--bare')
+    git(baselineRepo, 'remote', 'add', 'origin', remoteRepo)
+    git(baselineRepo, 'push', '-q', 'origin', 'main')
+    git(baselineRepo, 'checkout', '-q', '-b', 'feature/rfc336-existing')
+    writeFileSync(join(baselineRepo, 'branch.txt'), 'existing source branch\n')
+    git(baselineRepo, 'add', 'branch.txt')
+    git(
+      baselineRepo,
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'user.name=test',
+      'commit',
+      '-q',
+      '-m',
+      'source',
+    )
+    const sourceSha = git(baselineRepo, 'rev-parse', 'HEAD')
+    git(baselineRepo, 'push', '-q', 'origin', 'feature/rfc336-existing')
+    git(baselineRepo, 'checkout', '-q', 'main')
+    git(baselineRepo, 'fetch', '-q', 'origin')
+
+    const sourceControl = bindEmployeeCaseWorkspaceParticipant()
+    await expect(
+      sourceControl.resolveBaseline({
+        baselineRepoPath: baselineRepo,
+        preferredBranch: 'main',
+        sourceBranch: 'feature/rfc336-existing',
+      }),
+    ).resolves.toEqual({
+      baselineSha: sourceSha,
+      targetBranch: 'main',
+      remoteHeadSha: sourceSha,
+    })
+    await expect(
+      sourceControl.resolveBaseline({
+        baselineRepoPath: baselineRepo,
+        preferredBranch: 'main',
+        sourceBranch: 'feature/rfc336-new',
+      }),
+    ).resolves.toEqual({
+      baselineSha: mainSha,
+      targetBranch: 'main',
+      remoteHeadSha: null,
+    })
+  })
+
   test('upload target and Agent edits survive the Case, fresh retry restores the round scene, and only platform code publishes MR', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const baselineRepo = join(root, 'baseline')
@@ -179,6 +247,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
         kind: 'body-and-files',
         body: 'Implement deterministic delivery',
         externalId: null,
+        workingBranch: 'feature/rfc336-delivery',
         uploads: [
           {
             artifactRef: `employee-input:${artifact.blobRef}`,
@@ -930,7 +999,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       checks: [],
       failureTypes: [],
     })
-    const branch = 'agent-workflow/employee/case-1'
+    const branch = 'feature/rfc336-delivery'
     const publishedSha = git(remoteRepo, 'rev-parse', `refs/heads/${branch}`)
     expect(publishedSha).toMatch(/^[a-f0-9]{40}$/)
     expect(mrState.headSha).toBe(publishedSha)

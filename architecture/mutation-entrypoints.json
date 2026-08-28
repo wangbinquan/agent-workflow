@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 951,
+    "entries": 952,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -3528,6 +3528,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#createDevelopmentMissionCodeHostEventContinuation",
       "symbol": "createDevelopmentMissionCodeHostEventContinuation",
+      "targetContext": "development-automation",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
+      "symbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
       "targetContext": "development-automation",
       "targetLayer": "composition"
     },
@@ -9297,7 +9322,7 @@
       },
       "file": "packages/backend/src/routes/digitalEmployees.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:262",
+      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:263",
       "missingControls": [
         "audit",
         "authority",
@@ -9307,7 +9332,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
-      "symbol": "$http:delete:262",
+      "symbol": "$http:delete:263",
       "targetContext": "source-control",
       "targetLayer": "inbound"
     },
@@ -22608,7 +22633,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e",
+  "sourceDigest": "sha256:2c5cee9f1accbdf4de94b9f266b19d87a48bfdaf52dd5c3ca3f9de668f89ea56",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

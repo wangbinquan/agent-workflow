@@ -6058,6 +6058,11 @@ export const employeeCases = sqliteTable(
     typeRevision: integer('type_revision').notNull(),
     primaryContextId: text('primary_context_id').notNull(),
     executionPolicyRevision: integer('execution_policy_revision').notNull(),
+    /** Optional user-authored Case limits; NULL preserves legacy policy-only behavior. */
+    maxDurationMs: integer('max_duration_ms'),
+    consumedDurationMs: integer('consumed_duration_ms').notNull().default(0),
+    maxTotalTokens: integer('max_total_tokens'),
+    consumedTotalTokens: integer('consumed_total_tokens').notNull().default(0),
     /** Unified task-catalog ownership and launch provenance. */
     ownerUserId: text('owner_user_id'),
     launchOrigin: text('launch_origin', { enum: TASK_LAUNCH_ORIGINS }).notNull().default('api'),
@@ -6119,6 +6124,22 @@ export const employeeCaseMembers = sqliteTable(
     pk: primaryKey({ columns: [t.caseId, t.userId] }),
     userIdx: index('idx_employee_case_members_user').on(t.userId, t.caseId),
   }),
+)
+
+/** Exact-once usage receipts returned by Reaction execution participants. */
+export const employeeCaseMeteringReceipts = sqliteTable(
+  'employee_case_metering_receipts',
+  {
+    sourceRef: text('source_ref').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => employeeCases.id, { onDelete: 'cascade' }),
+    roundId: text('round_id').notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    totalTokens: integer('total_tokens').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({ caseIdx: index('idx_employee_case_metering_case').on(t.caseId, t.createdAt) }),
 )
 
 export const employeeCaseEventOrigins = sqliteTable(

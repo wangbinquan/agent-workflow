@@ -203,6 +203,31 @@ async function sumTaskTokens(db: DbClient, taskId: string): Promise<number> {
 }
 
 /**
+ * Terminal TaskExecution usage projection consumed by Digital Employee.
+ * It intentionally reuses the same accumulated-running and durable human-wait
+ * accounting as the live limit enforcer instead of deriving wall-clock time.
+ */
+export async function readTaskResourceUsage(
+  db: DbClient,
+  taskId: string,
+  now: number = Date.now(),
+): Promise<{ readonly effectiveRunningMs: number; readonly totalTokens: number } | null> {
+  const task = await db
+    .select({ runningMs: tasks.runningMs, runningSince: tasks.runningSince })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .get()
+  if (task === undefined) return null
+  const elapsed =
+    task.runningMs + (task.runningSince === null ? 0 : Math.max(0, now - task.runningSince))
+  const wait = await callRowHumanWait(db, taskId, now)
+  return {
+    effectiveRunningMs: Math.max(0, elapsed - wait.waitMs),
+    totalTokens: await sumTaskTokens(db, taskId),
+  }
+}
+
+/**
  * Convenience: start a 1Hz interval running enforceLimits against the given
  * db, returning a stopper. The daemon wires this in main.ts; tests call
  * enforceLimits directly.

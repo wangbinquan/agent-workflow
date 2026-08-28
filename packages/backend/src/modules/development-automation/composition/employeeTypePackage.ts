@@ -1957,6 +1957,17 @@ const runtimePackage = {
           requiredExecutorKind: 'agent',
         },
       ],
+      advancedOptions: [
+        {
+          optionRef: 'working-branch',
+          control: 'repository-branch',
+          label: text('工作分支', 'Working branch'),
+          description: text(
+            '留空时由平台为本次数字员工任务生成隔离分支',
+            'Leave blank to let the platform generate an isolated branch for this employee task',
+          ),
+        },
+      ],
       body: {
         label: text('需求或问题正文', 'Requirement or problem body'),
         description: text(
@@ -3155,6 +3166,7 @@ export const issueHandlingContextSchema = z
         externalId: z.string().min(1).max(500).nullable(),
         uploads: z.array(uploadSeedSchema).max(200),
         executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
+        workingBranch: z.string().min(1).max(255).nullable().default(null),
       })
       .strict(),
     materialArtifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
@@ -3253,7 +3265,7 @@ export const mergeRequestContextSchema = z
     }
   })
 
-const changeCandidateContextSchema = z
+export const changeCandidateContextSchema = z
   .object({
     status: z.enum(['prepared', 'committed', 'published', 'obsolete']),
     candidateRef: z.string().regex(/^[a-f0-9]{64}$/),
@@ -3614,6 +3626,7 @@ const initialCaseRequestSchema = z
         externalId: z.string().min(1).nullable(),
         idempotencyKey: z.string().min(1).max(500),
         executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
+        typeOptions: z.record(z.string().min(1).max(160), z.string().max(1_000)).default({}),
         uploads: z.array(
           z
             .object({
@@ -3753,6 +3766,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         body: request.intake.body,
         externalId: request.intake.externalId,
         executionOptions: request.intake.executionOptions,
+        workingBranch: request.intake.typeOptions['working-branch'] ?? null,
         uploads: request.intake.uploads.map((upload) => ({
           artifactRef: `employee-input:${upload.blobRef}`,
           placement: upload.placement,

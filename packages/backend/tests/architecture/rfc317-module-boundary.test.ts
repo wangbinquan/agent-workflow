@@ -376,6 +376,14 @@ interface OpenRecordSite {
  */
 const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
   {
+    site: 'modules/digital-employee/public/types.ts: Record<string, boolean>',
+    why: 'Employee Case 的 executionOptions 键由已发布员工类型声明，通用详情合同无法把所有类型的选项闭合成同一个联合。',
+  },
+  {
+    site: 'modules/digital-employee/public/types.ts: Record<string, string>',
+    why: 'Employee Case 的 advancedOptions 键由已发布员工类型声明并按描述符校验，通用详情合同不能预先穷尽类型专属控件。',
+  },
+  {
     site: 'modules/event-center/public/types.ts: Record<string, string>',
     why: 'triggerParameters —— 用户在触发器上自定义的参数袋，键集合按定义就是开放的。',
   },

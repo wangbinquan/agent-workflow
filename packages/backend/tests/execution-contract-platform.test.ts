@@ -362,6 +362,7 @@ describe('platform execution contracts', () => {
         externalId: 'ISSUE-1234',
         uploads: [],
         executionOptions: {},
+        workingBranch: null,
       },
       repositoryRef: 'repo',
       materialTargetDirectory: '.agent-workflow/inputs/requirements/case-1/external',
@@ -691,6 +692,7 @@ describe('platform execution contracts', () => {
       errorClass: 'infrastructure',
       errorCode: 'execution-failed',
       errorDetail: 'invalid prompt template ref: malformed-local-ref',
+      metering: { sourceRef: `task:${taskId}`, durationMs: 0, totalTokens: 0 },
     })
   })
 
@@ -738,6 +740,7 @@ describe('platform execution contracts', () => {
       errorClass: 'infrastructure',
       errorCode: 'execution-interrupted',
       errorDetail: 'daemon restarted while this task was running; please resume',
+      metering: { sourceRef: `task:${taskId}`, durationMs: 0, totalTokens: 0 },
     })
   })
 

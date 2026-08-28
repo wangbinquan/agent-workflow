@@ -24,6 +24,7 @@ import {
   employeeCaseEventOrigins,
   employeeCaseInbox,
   employeeCaseMembers,
+  employeeCaseMeteringReceipts,
   employeeCases,
   employeeChannelResults,
   employeeChannels,
@@ -95,6 +96,10 @@ function caseRecord(row: typeof employeeCases.$inferSelect): EmployeeCaseRecord 
     typeRef: { typeId: row.typeId, revision: row.typeRevision },
     primaryContextId: row.primaryContextId,
     executionPolicyRevision: row.executionPolicyRevision,
+    maxDurationMs: row.maxDurationMs,
+    consumedDurationMs: row.consumedDurationMs,
+    maxTotalTokens: row.maxTotalTokens,
+    consumedTotalTokens: row.consumedTotalTokens,
     ownerUserId: row.ownerUserId,
     launchOrigin: row.launchOrigin,
     state: row.state,
@@ -310,6 +315,10 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             typeRevision: input.caseRecord.typeRef.revision,
             primaryContextId: input.caseRecord.primaryContextId,
             executionPolicyRevision: input.caseRecord.executionPolicyRevision,
+            maxDurationMs: input.caseRecord.maxDurationMs,
+            consumedDurationMs: input.caseRecord.consumedDurationMs,
+            maxTotalTokens: input.caseRecord.maxTotalTokens,
+            consumedTotalTokens: input.caseRecord.consumedTotalTokens,
             ownerUserId: input.caseRecord.ownerUserId,
             launchOrigin: input.caseRecord.launchOrigin,
             state: input.caseRecord.state,
@@ -324,6 +333,19 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
             terminalAt: input.caseRecord.terminalAt,
           })
           .run()
+        if (input.initialMembers.length > 0) {
+          tx.insert(employeeCaseMembers)
+            .values(
+              input.initialMembers.map((member) => ({
+                caseId: input.caseRecord.id,
+                userId: member.userId,
+                role: member.role,
+                addedBy: member.addedBy,
+                addedAt: member.addedAt,
+              })),
+            )
+            .run()
+        }
         if (input.eventOrigin !== null) {
           tx.insert(employeeCaseEventOrigins)
             .values({
@@ -407,6 +429,75 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
         .where(and(eq(employeeCaseMembers.caseId, caseId), eq(employeeCaseMembers.userId, userId)))
         .get()
       return row === undefined ? null : row.role
+    },
+
+    recordMetering(input) {
+      return db.transaction((tx) => {
+        if (
+          !Number.isSafeInteger(input.durationMs) ||
+          input.durationMs < 0 ||
+          !Number.isSafeInteger(input.totalTokens) ||
+          input.totalTokens < 0
+        ) {
+          throw new ConflictError(
+            'employee-case-metering-invalid',
+            'employee case metering must contain nonnegative safe integers',
+          )
+        }
+        const current = tx
+          .select()
+          .from(employeeCases)
+          .where(eq(employeeCases.id, input.caseId))
+          .get()
+        if (current === undefined) {
+          throw new NotFoundError(
+            'employee-case-not-found',
+            `employee case not found: ${input.caseId}`,
+          )
+        }
+        const inserted = tx
+          .insert(employeeCaseMeteringReceipts)
+          .values({
+            sourceRef: input.sourceRef,
+            caseId: input.caseId,
+            roundId: input.roundId,
+            durationMs: input.durationMs,
+            totalTokens: input.totalTokens,
+            createdAt: input.now,
+          })
+          .onConflictDoNothing({ target: employeeCaseMeteringReceipts.sourceRef })
+          .run()
+        const applied = changes(inserted) === 1
+        if (applied) {
+          const consumedDurationMs = current.consumedDurationMs + input.durationMs
+          const consumedTotalTokens = current.consumedTotalTokens + input.totalTokens
+          if (
+            !Number.isSafeInteger(consumedDurationMs) ||
+            !Number.isSafeInteger(consumedTotalTokens)
+          ) {
+            throw new ConflictError(
+              'employee-case-metering-overflow',
+              'employee case metering totals exceed safe integer range',
+            )
+          }
+          tx.update(employeeCases)
+            .set({
+              consumedDurationMs,
+              consumedTotalTokens,
+              revision: current.revision + 1,
+              updatedAt: input.now,
+            })
+            .where(eq(employeeCases.id, input.caseId))
+            .run()
+        }
+        const updated = tx
+          .select()
+          .from(employeeCases)
+          .where(eq(employeeCases.id, input.caseId))
+          .get()
+        if (updated === undefined) throw new Error('employee case disappeared while metering')
+        return { applied, caseRecord: caseRecord(updated) }
+      })
     },
 
     replaceCaseMembers(input) {

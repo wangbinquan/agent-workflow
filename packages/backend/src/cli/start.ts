@@ -143,8 +143,12 @@ import {
   developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
-import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import {
+  composeDevelopmentEmployeeWorkspace,
+  createDevelopmentEmployeeCaseWorkspaceDetailReader,
+} from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentApprovalEventObserver,
   composeDevelopmentCodeHostEventObserver,
@@ -924,6 +928,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       },
     },
   })
+  const employeeCaseDetailProjection = composeDevelopmentEmployeeCaseDetailProjection(
+    createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
+  )
 
   // 7. HTTP server.
   const app = createApp({
@@ -941,6 +948,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     webhookDispatcher,
     webhookTerminalControl,
     digitalEmployeeEventCenter: employeeHttpEventCenter,
+    digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
     digitalEmployeeWorkStart,
     digitalEmployeeTypePackageDriftPolicy,
   })
@@ -1379,6 +1387,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     runtime: {
       eventCenter: employeeEventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],
+      detailProjectionParticipants: [employeeCaseDetailProjection],
       execution: createReactionExecutionAdapter(
         composeDigitalEmployeeExecution({
           db,

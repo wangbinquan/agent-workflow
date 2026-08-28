@@ -27,6 +27,7 @@ import {
   resourceAclAudienceAuthority,
 } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
+import { assertMembersUsersActive } from '@/services/taskCollab'
 import { NotFoundError } from '@/util/errors'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -359,9 +360,26 @@ export function mountDigitalEmployeeRoutes(
         summary: 'Give body, files or an external work item to a digital employee',
       },
       async (c) => {
+        const intake = await safeJsonOrEmpty(c.req.raw)
+        const collaboratorProjection = z
+          .object({
+            advanced: z
+              .object({ collaboratorUserIds: z.array(z.string()).default([]) })
+              .passthrough()
+              .optional(),
+          })
+          .passthrough()
+          .safeParse(intake)
+        if (collaboratorProjection.success) {
+          await assertMembersUsersActive(deps.db, {
+            members: (collaboratorProjection.data.advanced?.collaboratorUserIds ?? []).map(
+              (userId) => ({ userId }),
+            ),
+          })
+        }
         const document = runtime.commands.launchWork({
           employeeId: c.req.param('id'),
-          intake: await safeJsonOrEmpty(c.req.raw),
+          intake,
           actorUserId: actorId(c),
         })
         return jsonDocumentResponse(document.projectionJson, 201)
