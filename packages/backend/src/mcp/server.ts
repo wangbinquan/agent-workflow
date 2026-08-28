@@ -26,7 +26,7 @@ import { McpCallError, toolsFor, type McpToolContext } from '@/mcp/tools'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
 import { recordTokenCall, type TokenCallRecord } from '@/services/tokenAudit'
 import { redactErrorText } from '@/services/tokenRedaction'
-import type { AppDeps } from '@/server'
+import type { ComposedAppDeps } from '@/server'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 /** Advertised to clients on initialize. */
@@ -151,7 +151,7 @@ function toolError(err: unknown): {
   return { isError: true, content: [{ type: 'text', text: redactErrorText(text) }] }
 }
 
-export function mountMcpTransport(app: Hono, deps: AppDeps): void {
+export function mountMcpTransport(app: Hono, deps: ComposedAppDeps): void {
   // Built once, on FIRST USE. The dispatcher mounts the whole /api route table
   // into a second Hono app — real work, and pointless for a daemon (or a test)
   // that never receives an MCP request. Deferring it keeps `createApp` the same

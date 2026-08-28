@@ -25,7 +25,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Hono, type MiddlewareHandler } from 'hono'
 import type { Actor } from '@/auth/actor'
-import { type AppDeps, mountApiRoutes } from '@/server'
+import { type ComposedAppDeps, mountApiRoutes } from '@/server'
 import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { errorHandler } from '@/util/errors'
 
@@ -65,7 +65,7 @@ export type Dispatcher = (req: DispatchRequest, actor: Actor) => Promise<Dispatc
  * Build the dispatcher once per daemon. Mounting ~250 routes is not something
  * to redo per tool call, and Hono compiles its router on first request.
  */
-export function createDispatcher(deps: AppDeps): Dispatcher {
+export function createDispatcher(deps: ComposedAppDeps): Dispatcher {
   const app = new Hono()
   const injectActor: MiddlewareHandler = async (c, next) => {
     const scope = scopeStore.getStore()
