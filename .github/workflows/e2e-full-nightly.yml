@@ -72,12 +72,12 @@ jobs:
           CI: 'true'
           AW_E2E_ROUTE_JOURNAL: ${{ github.workspace }}/route-hits
         shell: bash
-        # Four Playwright workers launch enough compiled daemons for the hourly
-        # maintenance phase to exhaust an Ubuntu hosted runner: two independent
-        # full/WebKit runs then lost daemon listeners mid-shard. Keep every
-        # shard, case, retry, trace and coverage assertion; only cap per-runner
-        # process pressure and widen the existing watchdog for the longer run.
-        run: bun run e2e -- --shard=${{ matrix.shard }}/4 --workers=2
+        # Concurrent compiled daemons still overload the two-core Ubuntu runner:
+        # the same shard lost one listener, missed the boot-resume window and
+        # delayed maintenance sweeps even at two workers. Keep every shard,
+        # case, retry, trace and coverage assertion; serialize within each
+        # already-parallel matrix runner instead of weakening those contracts.
+        run: bun run e2e -- --shard=${{ matrix.shard }}/4 --workers=1
 
       - name: Upload route-hit journal
         # `always()`：分片红了它的 journal 仍然有价值（跑过的部分是真命中）。
