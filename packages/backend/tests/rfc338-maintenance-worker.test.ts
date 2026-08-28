@@ -279,13 +279,18 @@ describe('RFC-338 maintenance Worker', () => {
     })
 
     let resolveReady!: () => void
+    let resolvePostWakeHeartbeat!: () => void
     let resolveCompleted!: (counters: Readonly<Record<string, number>>) => void
     const ready = new Promise<void>((resolve) => {
       resolveReady = resolve
     })
+    const postWakeHeartbeat = new Promise<void>((resolve) => {
+      resolvePostWakeHeartbeat = resolve
+    })
     const completed = new Promise<Readonly<Record<string, number>>>((resolve) => {
       resolveCompleted = resolve
     })
+    let waitingForPostWakeHeartbeat = false
     const degraded: string[] = []
     const supervisor = startMaintenanceWorkerSupervisor({
       dbPath,
@@ -294,6 +299,9 @@ describe('RFC-338 maintenance Worker', () => {
       sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
       onEvent: (event) => {
         if (event.type === 'ready') resolveReady()
+        if (event.type === 'heartbeat' && waitingForPostWakeHeartbeat) {
+          resolvePostWakeHeartbeat()
+        }
         if (
           event.type === 'completed' &&
           event.runId === 'claim-busy-run' &&
@@ -312,14 +320,26 @@ describe('RFC-338 maintenance Worker', () => {
       sqlite.exec('BEGIN IMMEDIATE;')
       inTransaction = true
       sqlite.exec("UPDATE maintenance_runs SET scheduled_at = 0 WHERE id = 'claim-busy-run';")
+      waitingForPostWakeHeartbeat = true
       supervisor.wake()
-      await Bun.sleep(200)
+      // `wake` is posted well before the Worker's first 5s heartbeat. Its
+      // handler calls claimNext synchronously before yielding into the BUSY
+      // backoff, so observing that heartbeat proves the locked claim path ran.
+      // A fixed sleep races a loaded hosted runner and can release the lock
+      // before the Worker has handled `wake`.
+      const heartbeatTimeout = new Promise<'timeout'>((resolve) => {
+        const handle = setTimeout(() => resolve('timeout'), 8_000)
+        handle.unref?.()
+      })
+      expect(
+        await Promise.race([postWakeHeartbeat.then(() => 'heartbeat' as const), heartbeatTimeout]),
+      ).toBe('heartbeat')
       expect(degraded).toEqual([])
       sqlite.exec('COMMIT;')
       inTransaction = false
 
       const timeout = new Promise<Readonly<Record<string, number>>>((resolve) => {
-        const handle = setTimeout(() => resolve({ timeout: 1 }), 10_000)
+        const handle = setTimeout(() => resolve({ timeout: 1 }), 15_000)
         handle.unref?.()
       })
       const counters = await Promise.race([completed, timeout])
@@ -331,5 +351,5 @@ describe('RFC-338 maintenance Worker', () => {
       await supervisor.drain()
       sqlite.close()
     }
-  }, 15_000)
+  }, 25_000)
 })
