@@ -315,9 +315,6 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 966,
-      "allowGrowth": {
-        "why": "RFC-338 hosted responsiveness adds one process-local in-flight coalescer state transition; it owns only transient Map admission and cleanup and does not add a durable business writer."
-      },
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -339,9 +336,6 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 261,
-      "allowGrowth": {
-        "why": "RFC-338 snapshots pre-existing intent turns once during bootstrap so Worker recovery cannot misclassify work admitted by the new daemon generation; this is a one-time recovery scan, not a new periodic timer."
-      },
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
@@ -412,9 +406,6 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18545,
-      "allowGrowth": {
-        "why": "RFC-338 hosted closeout adds 17 explicit top-level owners for boot recovery snapshotting, request coalescing, bounded session activity, and credential revalidation; these are named implementation contracts and helpers rather than unowned code."
-      },
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
@@ -432,8 +423,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9afb1f5fa1f6652a8d339b23c921ac46a055c11e",
-    "contentDigest": "sha256:b98fb65590b8809b2ca215bfcc1d4b325305505b678c52d5ebc36e7ff0ec1ff6",
+    "currentSnapshotSha": "b82deca4eb2fa548c745a89fdb07df2e0fa8190f",
+    "contentDigest": "sha256:db55b85749b99715575fb66a8b3da76e2770faec75273d9ffece2ee8edab3613",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
