@@ -153,9 +153,15 @@ let repoHead: string
 let stateDir: string
 let taskSequence = 0
 const workflows = new Map<WorkflowFile, WorkflowRow>()
+// Hosted Windows reached this two-generation nested wrapper scenario in 56.6s on the
+// previous green baseline, leaving less than four seconds of scheduling headroom. Keep
+// every behavioral assertion, but give the slower platform enough time under four-worker
+// CI pressure to produce the durable review state instead of failing while still running.
+const TASK_STATE_TIMEOUT_MS = process.platform === 'win32' ? 120_000 : 60_000
+const BUSINESS_SCENARIO_TIMEOUT_MS = process.platform === 'win32' ? 300_000 : 180_000
 
 test.describe.configure({ mode: 'serial' })
-test.setTimeout(180_000)
+test.setTimeout(BUSINESS_SCENARIO_TIMEOUT_MS)
 
 test.beforeAll(async () => {
   stateDir = mkdtempSync(join(tmpdir(), 'aw-business-workflow-state-'))
@@ -301,7 +307,7 @@ async function launch(file: WorkflowFile, inputs: Record<string, string>): Promi
 async function waitForTask(
   taskId: string,
   predicate: (task: TaskRow) => boolean,
-  timeoutMs = 60_000,
+  timeoutMs = TASK_STATE_TIMEOUT_MS,
 ): Promise<TaskRow> {
   const deadline = Date.now() + timeoutMs
   let last: TaskRow = { id: taskId, status: 'pending' }

@@ -142,6 +142,15 @@ interface ReviewRound {
   members: unknown[]
 }
 
+interface ReviewerConfig {
+  taskId: string
+  canManage: boolean
+  nodes: Array<{
+    reviewNodeId: string
+    reviewers: Array<{ id: string }>
+  }>
+}
+
 async function waitForReview(taskId: string, minIteration = 0): Promise<ReviewSummaryRow> {
   let last: ReviewSummaryRow[] = []
   await expect
@@ -243,6 +252,26 @@ test.beforeAll(async () => {
   expect(firstReview.isMultiDoc, 'doc-batch 工作流的 review 必须是多文档轮').toBe(true)
   const firstDocs = await documents(multiDocNodeRunId)
   expect(firstDocs.map((d) => d.title)).toEqual(['Customer notice v1', 'Compliance checklist v1'])
+
+  // RFC-340：用真实 owner 会话走 reviewer 配置的 GET + full-replace PUT，既验证
+  // 冻结 review node 的配置面，又让 RFC-319 全量端点账本收到两条真实命中。
+  const initialReviewerConfig = await api<ReviewerConfig>(`/api/tasks/${task.id}/reviewers`)
+  expect(initialReviewerConfig).toMatchObject({
+    taskId: task.id,
+    canManage: true,
+    nodes: [{ reviewNodeId: 'publication_review', reviewers: [] }],
+  })
+  const replacedReviewerConfig = await api<ReviewerConfig>(`/api/tasks/${task.id}/reviewers`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      nodes: initialReviewerConfig.nodes.map((node) => ({
+        reviewNodeId: node.reviewNodeId,
+        reviewerUserIds: node.reviewers.map((reviewer) => reviewer.id),
+      })),
+    }),
+  })
+  expect(replacedReviewerConfig).toMatchObject(initialReviewerConfig)
+
   await api(`/api/reviews/${multiDocNodeRunId}/documents/${firstDocs[0]!.docVersionId}/selection`, {
     method: 'PATCH',
     body: JSON.stringify({ selection: 'accepted' }),

@@ -73,11 +73,12 @@ jobs:
         env:
           CI: 'true'
           PLAYWRIGHT_WEBKIT: '1'
+          E2E_WORKERS: ${{ matrix.os == 'ubuntu-latest' && '1' || '2' }}
         shell: bash
-        # Four concurrent compiled daemons also exhaust Ubuntu during the hourly
-        # maintenance phase; macOS was already capped at two. Coverage, platform
-        # matrix, shard topology, retries and traces stay identical.
-        run: bun run e2e -- --project=webkit --shard=${{ matrix.shard }}/4 --workers=2
+        # Hosted Ubuntu lost independent compiled daemons at two workers in multiple
+        # shards; run that runner serially while keeping macOS at two. Coverage,
+        # platform matrix, shard topology, retries and traces stay identical.
+        run: bun run e2e -- --project=webkit --shard=${{ matrix.shard }}/4 --workers="$E2E_WORKERS"
 
       - name: Upload Playwright trace on failure
         if: failure()
