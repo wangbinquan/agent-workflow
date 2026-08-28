@@ -901,6 +901,12 @@ test('WF-24 空画布引导：「添加第一个节点」落下第一步，「�
   const starter = page.getByTestId('workflow-starter-dialog')
   await expect(starter, '「从模板开始」必须交出模板选择框').toBeVisible()
   await page.getByTestId('workflow-starter-audit-only').click()
+  // 推荐项取决于当前 agent 目录顺序；显式选本文件的 fixture，才能稳定锁住它的 `answer` 端口。
+  await pickSelectOption(
+    page,
+    page.getByTestId('workflow-starter-role-auditor'),
+    'rfc319-edit-alpha',
+  )
   await expect(
     page.getByTestId('workflow-starter-preview'),
     '模板必须先说清它会造出多少节点和连线，否则用户是在盲点「应用」',
