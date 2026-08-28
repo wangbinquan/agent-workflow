@@ -38,6 +38,7 @@ on:
       - 'packages/backend/src/services/execution/managedProcess.ts'
       - 'packages/backend/src/services/execution/managedProcessLauncher.ts'
       - 'packages/backend/tests/rfc254-*.test.ts'
+      - 'packages/backend/tests/rfc328-process-preactivation.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
       - 'packages/backend/src/util/windowsJobObject.ts'
@@ -61,6 +62,7 @@ on:
       - 'packages/backend/src/services/execution/managedProcess.ts'
       - 'packages/backend/src/services/execution/managedProcessLauncher.ts'
       - 'packages/backend/tests/rfc254-*.test.ts'
+      - 'packages/backend/tests/rfc328-process-preactivation.test.ts'
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
       - 'packages/backend/src/util/windowsJobObject.ts'
@@ -242,6 +244,18 @@ jobs:
             echo "unknown mode should have failed" >&2
             exit 1
           fi
+
+      # A direct compiled-stub invocation is not enough: Bun 1.4 on Windows
+      # previously returned empty stdout only through the production chain
+      # compiled daemon -> compiled launcher -> compiled runtime. Exercise that
+      # exact nested hop after the artifact exists.
+      - name: RFC-328 compiled runtime output through the launcher
+        shell: pwsh
+        run: |
+          $stub = Get-ChildItem -Path dist -Filter 'stub-opencode-windows-*' -File | Select-Object -First 1
+          if ($null -eq $stub) { throw 'compiled stub-opencode artifact is missing' }
+          $env:AW_RFC328_COMPILED_TARGET = $stub.FullName
+          bun test --isolate packages/backend/tests/rfc328-process-preactivation.test.ts --test-name-pattern 'compiled Bun target'
 
       - name: The compiled system mock tool answers on Windows
         shell: bash

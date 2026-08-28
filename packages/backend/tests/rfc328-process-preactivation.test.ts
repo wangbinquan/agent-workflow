@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { runManagedProcess } from '../src/services/execution/managedProcess'
 
 const roots: string[] = []
+const compiledTarget = process.env.AW_RFC328_COMPILED_TARGET ?? ''
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -141,6 +142,44 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
     expect(result.stderrTail).toContain(stderrLine)
     expect(result.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
   })
+
+  test.skipIf(process.platform !== 'win32' || compiledTarget.length === 0)(
+    'compiled Bun target stdout and stderr survive the Windows launcher',
+    async () => {
+      const root = fixtureRoot()
+      const baseEnv = Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        }),
+      )
+      const stdoutResult = await runManagedProcess({
+        argv: [compiledTarget, '--version'],
+        cwd: root,
+        env: { ...baseEnv, AW_STUB_MODE: 'basic' },
+        requireSpawnReceipt: true,
+        captureRawStdout: true,
+        onSpawned: () => {},
+      })
+
+      expect(stdoutResult.outcome).toBe('exited')
+      expect(stdoutResult.exitCode).toBe(0)
+      expect(stdoutResult.rawStdout).toContain('stub-opencode custom-build')
+      expect(stdoutResult.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
+
+      const stderrResult = await runManagedProcess({
+        argv: [compiledTarget, '--version'],
+        cwd: root,
+        env: { ...baseEnv, AW_STUB_MODE: '__rfc328_missing__' },
+        requireSpawnReceipt: true,
+        onSpawned: () => {},
+      })
+
+      expect(stderrResult.outcome).toBe('exited')
+      expect(stderrResult.exitCode).toBe(2)
+      expect(stderrResult.stderrTail).toContain('unknown AW_STUB_MODE')
+      expect(stderrResult.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
+    },
+  )
 
   test('missing target is surfaced as spawn-failed, not a business nonzero exit', async () => {
     const root = fixtureRoot()

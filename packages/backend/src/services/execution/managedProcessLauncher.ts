@@ -7,7 +7,9 @@
 
 import { IS_EMBEDDED } from '@/embed'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { writeSync } from 'node:fs'
+import { closeSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
 export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
@@ -122,21 +124,110 @@ function writeTextToFd(fd: 1 | 2, text: string): void {
   writeAllToFd(fd, new TextEncoder().encode(text))
 }
 
-async function relayStreamToFd(
-  stream: ReadableStream<Uint8Array> | undefined,
-  fd: 1 | 2,
-): Promise<void> {
-  if (stream === undefined) return
-  const reader = stream.getReader()
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) return
-      if (value !== undefined && value.byteLength > 0) writeAllToFd(fd, value)
-    }
-  } finally {
-    reader.releaseLock()
+interface WindowsOutputSpool {
+  readonly root: string
+  readonly stdoutPath: string
+  readonly stderrPath: string
+  stdoutWriteFd: number | undefined
+  stderrWriteFd: number | undefined
+  stdoutReadFd: number | undefined
+  stderrReadFd: number | undefined
+}
+
+type WindowsOutputSpoolFd = 'stdoutWriteFd' | 'stderrWriteFd' | 'stdoutReadFd' | 'stderrReadFd'
+
+function closeSpoolFd(spool: WindowsOutputSpool, key: WindowsOutputSpoolFd): void {
+  const value = spool[key]
+  if (typeof value !== 'number') return
+  closeSync(value)
+  spool[key] = undefined
+}
+
+function createWindowsOutputSpool(): WindowsOutputSpool {
+  const root = mkdtempSync(join(tmpdir(), 'aw-managed-process-output-'))
+  const spool: WindowsOutputSpool = {
+    root,
+    stdoutPath: join(root, 'stdout'),
+    stderrPath: join(root, 'stderr'),
+    stdoutWriteFd: undefined,
+    stderrWriteFd: undefined,
+    stdoutReadFd: undefined,
+    stderrReadFd: undefined,
   }
+  try {
+    spool.stdoutWriteFd = openSync(spool.stdoutPath, 'w')
+    spool.stderrWriteFd = openSync(spool.stderrPath, 'w')
+    // Separate read handles keep the launcher's tail position independent from
+    // the inherited target handles while the files are still growing.
+    spool.stdoutReadFd = openSync(spool.stdoutPath, 'r')
+    spool.stderrReadFd = openSync(spool.stderrPath, 'r')
+    return spool
+  } catch (error) {
+    cleanupWindowsOutputSpool(spool)
+    throw error
+  }
+}
+
+function closeWindowsOutputSpoolWriters(spool: WindowsOutputSpool): void {
+  closeSpoolFd(spool, 'stdoutWriteFd')
+  closeSpoolFd(spool, 'stderrWriteFd')
+}
+
+function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void {
+  if (spool === undefined) return
+  for (const key of ['stdoutWriteFd', 'stderrWriteFd', 'stdoutReadFd', 'stderrReadFd'] as const) {
+    try {
+      closeSpoolFd(spool, key)
+    } catch {
+      // Best effort during launcher teardown; the process is already terminal.
+    }
+  }
+  try {
+    rmSync(spool.root, { recursive: true, force: true })
+  } catch {
+    // Windows can briefly retain a just-closed child handle. The OS temp root
+    // is the fallback owner when immediate removal is unavailable.
+  }
+}
+
+function drainSpoolFd(readFd: number, targetFd: 1 | 2, startOffset: number): number {
+  const buffer = new Uint8Array(64 * 1024)
+  let offset = startOffset
+  for (;;) {
+    const count = readSync(readFd, buffer, 0, buffer.byteLength, offset)
+    if (count === 0) return offset
+    writeAllToFd(targetFd, buffer.subarray(0, count))
+    offset += count
+  }
+}
+
+async function relaySpoolFileToFd(
+  readFd: number,
+  fd: 1 | 2,
+  childExited: Promise<number>,
+): Promise<void> {
+  let childIsExited = false
+  const observedExit = childExited.then(
+    () => {
+      childIsExited = true
+    },
+    () => {
+      childIsExited = true
+    },
+  )
+  let offset = 0
+  while (!childIsExited) {
+    offset = drainSpoolFd(readFd, fd, offset)
+    await Promise.race([
+      observedExit,
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 10)
+      }),
+    ])
+  }
+  // Process exit closes and flushes the inherited file handles. One final
+  // drain therefore includes every byte without guessing a post-exit delay.
+  drainSpoolFd(readFd, fd, offset)
 }
 
 /** Hidden CLI entry. Never logs ordinary daemon output or reads product state. */
@@ -166,13 +257,15 @@ export async function runManagedProcessLauncher(
   }
 
   let child: Bun.Subprocess
-  // Bun 1.4's Windows process backend can lose a grandchild's output when the
-  // launcher inherits a stdout/stderr handle that is itself a pipe. Read the
-  // target pipes explicitly there, synchronously forward every byte to the
-  // launcher's parent pipe, and do not return until both streams reach EOF.
-  // POSIX keeps direct inheritance and its existing zero-copy behavior.
-  const relayTargetOutput = process.platform === 'win32'
+  let outputSpool: WindowsOutputSpool | undefined
+  // Hosted Windows proved that Bun 1.4 can return an empty target pipe when a
+  // compiled Bun daemon launches this compiled launcher, which then launches a
+  // second compiled Bun executable. A direct Bun -e target does not reproduce
+  // it. Use regular files for that one inner hop and tail them into the
+  // launcher's parent pipes while the target runs. POSIX retains direct
+  // inheritance and its existing zero-copy behaviour.
   try {
+    outputSpool = process.platform === 'win32' ? createWindowsOutputSpool() : undefined
     child = Bun.spawn({
       cmd: [...request.targetArgv],
       ...platformSpawnOptionsForHost(),
@@ -182,55 +275,72 @@ export async function runManagedProcessLauncher(
           return typeof entry[1] === 'string'
         }),
       ),
-      stdout: relayTargetOutput ? 'pipe' : 'inherit',
-      stderr: relayTargetOutput ? 'pipe' : 'inherit',
+      stdout: outputSpool?.stdoutWriteFd ?? 'inherit',
+      stderr: outputSpool?.stderrWriteFd ?? 'inherit',
       stdin: frame.stdin.mode === 'pipe' ? 'pipe' : 'ignore',
       // The launcher is already the detached process-group leader. The target
       // deliberately stays in that group so TERM→KILL reaches the whole tree.
       detached: false,
     })
   } catch (error) {
+    cleanupWindowsOutputSpool(outputSpool)
     reportLaunchError(request.launchNonce, error)
     return 127
   }
 
-  if (frame.stdin.mode === 'pipe') {
+  try {
+    if (outputSpool !== undefined) closeWindowsOutputSpoolWriters(outputSpool)
+  } catch (error) {
+    cleanupWindowsOutputSpool(outputSpool)
+    reportLaunchError(request.launchNonce, error)
     try {
+      child.kill(15)
+    } catch {
+      // The child may already have exited.
+    }
+    await child.exited.catch(() => {})
+    return 126
+  }
+  const childExited = child.exited
+  const outputRelay =
+    outputSpool === undefined
+      ? Promise.resolve()
+      : Promise.all([
+          relaySpoolFileToFd(outputSpool.stdoutReadFd as number, 1, childExited),
+          relaySpoolFileToFd(outputSpool.stderrReadFd as number, 2, childExited),
+        ]).then(() => {})
+  // The relay can observe a broken parent pipe before the target exits. Attach
+  // a handler immediately; the same promise is awaited and reported below.
+  void outputRelay.catch(() => {})
+
+  try {
+    if (frame.stdin.mode === 'pipe') {
       const sink = child.stdin as { write: (data: string) => void; end: () => void }
       sink.write(frame.stdin.data)
       sink.end()
-    } catch (error) {
-      reportLaunchError(request.launchNonce, error)
-      try {
-        child.kill(15)
-      } catch {
-        // The child may already have exited.
-      }
-      await child.exited.catch(() => {})
-      return 126
     }
-  }
 
-  const outputRelays = relayTargetOutput
-    ? [
-        relayStreamToFd(child.stdout as ReadableStream<Uint8Array> | undefined, 1),
-        relayStreamToFd(child.stderr as ReadableStream<Uint8Array> | undefined, 2),
-      ]
-    : []
-
-  // This is a timing boundary, not a new admission policy: the target exists
-  // and its stdin has been delivered, so only now may its business timeout
-  // begin.  The parent consumes this private record instead of surfacing it as
-  // runtime stderr.
-  writeTextToFd(2, `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`)
-  const exitCode = await child.exited
-  try {
-    await Promise.all(outputRelays)
+    // This is a timing boundary, not a new admission policy: the target exists
+    // and its stdin has been delivered, so only now may its business timeout
+    // begin.  The parent consumes this private record instead of surfacing it as
+    // runtime stderr.
+    writeTextToFd(2, `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`)
+    const exitCode = await childExited
+    await outputRelay
+    return exitCode
   } catch (error) {
     reportLaunchError(request.launchNonce, error)
+    try {
+      child.kill(15)
+    } catch {
+      // The child may already have exited.
+    }
+    await childExited.catch(() => {})
+    await outputRelay.catch(() => {})
     return 126
+  } finally {
+    cleanupWindowsOutputSpool(outputSpool)
   }
-  return exitCode
 }
 
 if (import.meta.main) {
