@@ -87,6 +87,14 @@ function deferred() {
   return { promise, resolve }
 }
 
+async function waitForStart(predicate: () => boolean, label: string): Promise<void> {
+  const deadline = Date.now() + 10_000
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for ${label}`)
+    await new Promise<void>((resolve) => setTimeout(resolve, 1))
+  }
+}
+
 afterEach(() => __setProbeOptionsForTesting(undefined))
 
 describe('RFC-201 MCP exact operation wire', () => {
@@ -158,7 +166,7 @@ describe('RFC-201 MCP exact operation wire', () => {
     })
     const a = postProbe(app, created.id, created.operationConfigHash)
     const b = postProbe(app, created.id, created.operationConfigHash)
-    while (opens === 0) await Promise.resolve()
+    await waitForStart(() => opens > 0, 'joined probe transport')
     expect(opens).toBe(1)
     gate.resolve()
     const [ar, br] = await Promise.all([a, b])
@@ -190,7 +198,7 @@ describe('RFC-201 MCP exact operation wire', () => {
     __setProbeOptionsForTesting({ openClient: opener })
 
     const oldResponseP = postProbe(app, h1.id, h1.operationConfigHash)
-    while (!oldOpened) await Promise.resolve()
+    await waitForStart(() => oldOpened, 'stale probe transport')
     const put = await req(app, `/api/mcps/${h1.id}`, {
       method: 'PUT',
       body: JSON.stringify({ description: 'v2', expectedConfigHash: h1.operationConfigHash }),
@@ -222,7 +230,7 @@ describe('RFC-201 MCP exact operation wire', () => {
         },
       })
       const responseP = postProbe(app, created.id, created.operationConfigHash)
-      while (!opened) await Promise.resolve()
+      await waitForStart(() => opened, `${mutation} probe transport`)
       const changed =
         mutation === 'rename'
           ? await req(app, `/api/mcps/${created.id}/rename`, {
