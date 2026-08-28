@@ -143,6 +143,31 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
     expect(result.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
   })
 
+  test('launcher observes output written after an initial empty spool read', async () => {
+    const root = fixtureRoot()
+    const delayed = 'launcher-delayed-after-empty-read'
+    const result = await runManagedProcess({
+      argv: [
+        process.execPath,
+        '-e',
+        `const { writeSync } = require('node:fs'); await Bun.sleep(75); writeSync(1, '${delayed}\\n')`,
+      ],
+      cwd: root,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        }),
+      ),
+      requireSpawnReceipt: true,
+      captureRawStdout: true,
+      onSpawned: () => {},
+    })
+
+    expect(result.outcome).toBe('exited')
+    expect(result.exitCode).toBe(0)
+    expect(result.rawStdout).toBe(`${delayed}\n`)
+  })
+
   test.skipIf(process.platform !== 'win32' || compiledTarget.length === 0)(
     'compiled Bun target stdout and stderr survive the Windows launcher',
     async () => {

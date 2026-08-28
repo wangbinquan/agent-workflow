@@ -857,6 +857,7 @@ async function main(): Promise<void> {
       migrationsFolder: MIGRATIONS,
       skipMigrations: true,
       skipIntegrityCheck: true,
+      journalMode: 'preserve',
       busyTimeoutMs: 5_000,
       slowQueryMs: 0,
     })

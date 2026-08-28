@@ -130,11 +130,9 @@ interface WindowsOutputSpool {
   readonly stderrPath: string
   stdoutWriteFd: number | undefined
   stderrWriteFd: number | undefined
-  stdoutReadFd: number | undefined
-  stderrReadFd: number | undefined
 }
 
-type WindowsOutputSpoolFd = 'stdoutWriteFd' | 'stderrWriteFd' | 'stdoutReadFd' | 'stderrReadFd'
+type WindowsOutputSpoolFd = 'stdoutWriteFd' | 'stderrWriteFd'
 
 function closeSpoolFd(spool: WindowsOutputSpool, key: WindowsOutputSpoolFd): void {
   const value = spool[key]
@@ -151,16 +149,10 @@ function createWindowsOutputSpool(): WindowsOutputSpool {
     stderrPath: join(root, 'stderr'),
     stdoutWriteFd: undefined,
     stderrWriteFd: undefined,
-    stdoutReadFd: undefined,
-    stderrReadFd: undefined,
   }
   try {
     spool.stdoutWriteFd = openSync(spool.stdoutPath, 'w')
     spool.stderrWriteFd = openSync(spool.stderrPath, 'w')
-    // Separate read handles keep the launcher's tail position independent from
-    // the inherited target handles while the files are still growing.
-    spool.stdoutReadFd = openSync(spool.stdoutPath, 'r')
-    spool.stderrReadFd = openSync(spool.stderrPath, 'r')
     return spool
   } catch (error) {
     cleanupWindowsOutputSpool(spool)
@@ -175,7 +167,7 @@ function closeWindowsOutputSpoolWriters(spool: WindowsOutputSpool): void {
 
 function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void {
   if (spool === undefined) return
-  for (const key of ['stdoutWriteFd', 'stderrWriteFd', 'stdoutReadFd', 'stderrReadFd'] as const) {
+  for (const key of ['stdoutWriteFd', 'stderrWriteFd'] as const) {
     try {
       closeSpoolFd(spool, key)
     } catch {
@@ -190,18 +182,27 @@ function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void 
   }
 }
 
-function drainSpoolFd(
-  readFd: number,
+function drainSpoolPath(
+  path: string,
   targetFd: 1 | 2,
   startOffset: number,
   buffer: Uint8Array,
 ): number {
   let offset = startOffset
-  for (;;) {
-    const count = readSync(readFd, buffer, 0, buffer.byteLength, offset)
-    if (count === 0) return offset
-    writeAllToFd(targetFd, buffer.subarray(0, count))
-    offset += count
+  // Bun 1.4 on Windows can leave a regular-file descriptor at a sticky EOF
+  // while another process later extends that file. Reopen on every poll so a
+  // pre-output read cannot hide the target's eventual bytes. The explicit
+  // offset keeps delivery byte-exact and prevents duplicates.
+  const readFd = openSync(path, 'r')
+  try {
+    for (;;) {
+      const count = readSync(readFd, buffer, 0, buffer.byteLength, offset)
+      if (count === 0) return offset
+      writeAllToFd(targetFd, buffer.subarray(0, count))
+      offset += count
+    }
+  } finally {
+    closeSync(readFd)
   }
 }
 
@@ -209,9 +210,6 @@ async function relayWindowsOutputSpool(
   spool: WindowsOutputSpool,
   childExited: Promise<number>,
 ): Promise<void> {
-  if (spool.stdoutReadFd === undefined || spool.stderrReadFd === undefined) {
-    throw new Error('managed process output spool is not readable')
-  }
   let childIsExited = false
   const observedExit = childExited.then(
     () => {
@@ -226,14 +224,14 @@ async function relayWindowsOutputSpool(
   let stdoutOffset = 0
   let stderrOffset = 0
   while (!childIsExited) {
-    stdoutOffset = drainSpoolFd(spool.stdoutReadFd, 1, stdoutOffset, stdoutBuffer)
-    stderrOffset = drainSpoolFd(spool.stderrReadFd, 2, stderrOffset, stderrBuffer)
+    stdoutOffset = drainSpoolPath(spool.stdoutPath, 1, stdoutOffset, stdoutBuffer)
+    stderrOffset = drainSpoolPath(spool.stderrPath, 2, stderrOffset, stderrBuffer)
     await Promise.race([observedExit, Bun.sleep(10)])
   }
   // Process exit closes and flushes the inherited file handles. One final
   // drain therefore includes every byte without guessing a post-exit delay.
-  drainSpoolFd(spool.stdoutReadFd, 1, stdoutOffset, stdoutBuffer)
-  drainSpoolFd(spool.stderrReadFd, 2, stderrOffset, stderrBuffer)
+  drainSpoolPath(spool.stdoutPath, 1, stdoutOffset, stdoutBuffer)
+  drainSpoolPath(spool.stderrPath, 2, stderrOffset, stderrBuffer)
 }
 
 /** Hidden CLI entry. Never logs ordinary daemon output or reads product state. */

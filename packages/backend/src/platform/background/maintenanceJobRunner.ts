@@ -37,7 +37,7 @@ const log = createLogger('maintenance-worker')
 const DB_WRITE_SLICE_ROWS = 1_000
 const EVENT_ARCHIVE_SLICE_ROWS = 5_000
 /** One short primary-key range COUNT per Worker slice at large event scale. */
-const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 1_000_000
+const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000
 
 interface EventArchiveCountCursorV1 {
   readonly version: 1

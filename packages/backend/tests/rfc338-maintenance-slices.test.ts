@@ -76,7 +76,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       await db.insert(nodeRunEvents).values([
         { id: 1, nodeRunId: 'event-count-run', ts: 1, kind: 'text', payload: 'first' },
         {
-          id: 1_000_001,
+          id: 250_001,
           nodeRunId: 'event-count-run',
           ts: 2,
           kind: 'text',
@@ -105,8 +105,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
           cursor: {
             version: 1,
             phase: 'count',
-            maxId: 1_000_001,
-            scanFrom: 1_000_000,
+            maxId: 250_001,
+            scanFrom: 250_000,
             totalRows: 1,
           },
         },
@@ -162,6 +162,40 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       expect(transactions[0]).toBeGreaterThanOrEqual(0)
     } finally {
       ;(db as unknown as { $client: { close(): void } }).$client.close()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test('secondary maintenance connections open while a WAL writer is active', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc338-secondary-open-'))
+    const dbPath = join(root, 'db.sqlite')
+    const primary = openDb({
+      path: dbPath,
+      migrationsFolder: MIGRATIONS,
+      skipIntegrityCheck: true,
+      slowQueryMs: 0,
+    })
+    const sqlite = (primary as unknown as { $client: { exec(sql: string): void; close(): void } })
+      .$client
+    let secondary: ReturnType<typeof openDb> | undefined
+    let inTransaction = false
+    try {
+      sqlite.exec('BEGIN IMMEDIATE')
+      inTransaction = true
+      secondary = openDb({
+        path: dbPath,
+        migrationsFolder: MIGRATIONS,
+        skipMigrations: true,
+        skipIntegrityCheck: true,
+        journalMode: 'preserve',
+        busyTimeoutMs: 0,
+        slowQueryMs: 0,
+      })
+      expect(secondary.select().from(tokenAudit).all()).toEqual([])
+    } finally {
+      if (inTransaction) sqlite.exec('ROLLBACK')
+      ;(secondary as unknown as { $client?: { close(): void } } | undefined)?.$client?.close()
+      sqlite.close()
       rmSync(root, { recursive: true, force: true })
     }
   })

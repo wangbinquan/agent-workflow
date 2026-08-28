@@ -42,6 +42,9 @@ describe('RFC-338 maintenance architecture', () => {
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")
     expect(start).toContain('await maintenanceService.stop()')
     expect(start).toContain('startBatchImportGc(')
+    expect(start).toMatch(
+      /const developmentWakeTimer = setInterval\(\(\) => \{[\s\S]*?try \{[\s\S]*?refreshDigitalEmployeeWriterState\([\s\S]*?catch \(err\) \{[\s\S]*?development writer refresh failed[\s\S]*?return/u,
+    )
 
     for (const forbidden of [
       'startWorktreeGc(',
@@ -70,11 +73,13 @@ describe('RFC-338 maintenance architecture', () => {
 
     expect(worker).toContain('await runMaintenanceJob(')
     expect(worker).toContain('busyTimeoutMs: parsed.sqlite.busyTimeoutMs')
+    expect(worker).toContain("journalMode: 'preserve'")
     expect(worker).toContain('observeStatementMs: (ms) => recordTiming(statementTimings, ms)')
     expect(worker).toContain('observeTransactionMs: (ms) => recordTiming(transactionTimings, ms)')
     expect(worker).toContain('sqliteBusyDeferrals: 1')
     expect(service).not.toContain('runMaintenanceJob(')
     expect(service).toContain('listIntentTurnIdsForBootRecovery(admissionDb)')
+    expect(service).toContain("journalMode: 'preserve'")
     expect(service).toContain('recoverTurnIds: bootIntentTurnIds')
     expect(service).not.toContain('recoverTurns: true')
     expect(supervisor).not.toContain('runMaintenanceJob(')

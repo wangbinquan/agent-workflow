@@ -1289,7 +1289,19 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   }
   const developmentWakeTimer = setInterval(() => {
-    const writer = refreshDigitalEmployeeWriterState(db, legacyMissionDrain)
+    let writer: ReturnType<typeof refreshDigitalEmployeeWriterState>
+    try {
+      writer = refreshDigitalEmployeeWriterState(db, legacyMissionDrain)
+    } catch (err) {
+      // This correctness sweep shares the foreground connection with HTTP.
+      // A bounded maintenance write may own SQLite briefly; keep the daemon
+      // alive and retry on the next cadence instead of leaking BUSY from the
+      // timer callback as an uncaught process-level exception.
+      log.warn('development writer refresh failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+      return
+    }
     if (writer.mode === 'os-active' && !writer.legacyAdmissionsEnabled) return
     void developmentAutomation.sweepWakes().catch((err: unknown) => {
       log.warn('development wake sweep failed', {

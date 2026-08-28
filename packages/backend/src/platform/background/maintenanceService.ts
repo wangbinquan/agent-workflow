@@ -219,6 +219,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     migrationsFolder: options.migrationsFolder,
     skipMigrations: true,
     skipIntegrityCheck: true,
+    journalMode: 'preserve',
     synchronous: currentConfig.sqliteSynchronous,
     pageCacheMib: Math.min(16, currentConfig.sqlitePageCacheMib),
     mmapMib: currentConfig.sqliteMmapMib,

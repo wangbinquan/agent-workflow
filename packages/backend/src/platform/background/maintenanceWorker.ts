@@ -369,6 +369,7 @@ function initialise(value: unknown): void {
     migrationsFolder: parsed.migrationsFolder,
     skipMigrations: true,
     skipIntegrityCheck: true,
+    journalMode: 'preserve',
     synchronous: parsed.sqlite.synchronous,
     pageCacheMib: parsed.sqlite.pageCacheMib,
     mmapMib: parsed.sqlite.mmapMib,

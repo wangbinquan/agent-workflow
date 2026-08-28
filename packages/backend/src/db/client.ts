@@ -55,6 +55,10 @@ export interface OpenDbOptions {
    * maintenance Worker connections use a short value and defer instead of
    * making foreground writes wait behind a maintenance retry loop. */
   busyTimeoutMs?: number
+  /** RFC-338: only the primary connection establishes the persistent WAL
+   * mode. Secondary maintenance/probe connections preserve that mode so
+   * opening them cannot contend with an active writer for a journal switch. */
+  journalMode?: 'configure' | 'preserve'
   /** RFC-311: warn-log any statement slower than this many ms (default 50,
    *  0 disables). Every statement here runs synchronously on the daemon's
    *  event loop, so a slow one freezes ALL HTTP/WS — surface them. */
@@ -176,12 +180,14 @@ export function openDb(opts: OpenDbOptions): DbClient {
     } catch {
       /* read-only fs / exotic mounts — never block open */
     }
-    // Per design.md §11.0: WAL + synchronous + 5s busy timeout. journal_mode=WAL
-    // is where a malformed header typically throws.
-    sqlite.exec('PRAGMA journal_mode = WAL;')
-    sqlite.exec(`PRAGMA synchronous = ${opts.synchronous === 'FULL' ? 'FULL' : 'NORMAL'};`)
+    // Install the connection-local wait before any operation which might need
+    // a database lock. The primary establishes persistent WAL mode once;
+    // secondary maintenance/probe connections preserve it instead of
+    // reissuing a journal transition while a foreground writer is active.
     const busyTimeoutMs = Math.max(0, Math.floor(opts.busyTimeoutMs ?? 5_000))
     sqlite.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`)
+    if (opts.journalMode !== 'preserve') sqlite.exec('PRAGMA journal_mode = WAL;')
+    sqlite.exec(`PRAGMA synchronous = ${opts.synchronous === 'FULL' ? 'FULL' : 'NORMAL'};`)
     // RFC-311 — capacity pragmas for a single long-lived connection over a
     // multi-GB file. Negative cache_size = KiB budget. mmap_size is a request:
     // unsupported filesystems answer 0 and reads fall back to the page cache.

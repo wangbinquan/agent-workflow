@@ -17,6 +17,7 @@ self.onmessage = async (
       migrationsFolder: event.data.migrationsFolder,
       skipMigrations: true,
       skipIntegrityCheck: true,
+      journalMode: 'preserve',
       busyTimeoutMs: 50,
       slowQueryMs: 0,
     })
