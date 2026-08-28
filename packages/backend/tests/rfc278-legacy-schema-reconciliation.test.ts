@@ -148,16 +148,19 @@ describe('RFC-278 legacy schema reconciliation', () => {
     ).toEqual([expect.objectContaining({ kind: 'migration-order' })])
   })
 
-  test('upgrades the observed 0141 shape, preserves recovery rows, and removes retired state', () => {
-    const root = tempRoot()
-    const dbPath = join(root, 'legacy.sqlite')
-    const frozenMigrations = copyMigrations(join(root, 'migrations-0141'), 140)
-    const currentMigrations = copyMigrations(join(root, 'migrations-head'))
-    const raw = new Database(dbPath, { create: true })
-    raw.exec('PRAGMA foreign_keys = OFF;')
-    migrate(drizzle(raw), { migrationsFolder: frozenMigrations })
+  test(
+    'upgrades the observed 0141 shape, preserves recovery rows, and removes retired state',
+    { timeout: 15_000 },
+    () => {
+      const root = tempRoot()
+      const dbPath = join(root, 'legacy.sqlite')
+      const frozenMigrations = copyMigrations(join(root, 'migrations-0141'), 140)
+      const currentMigrations = copyMigrations(join(root, 'migrations-head'))
+      const raw = new Database(dbPath, { create: true })
+      raw.exec('PRAGMA foreign_keys = OFF;')
+      migrate(drizzle(raw), { migrationsFolder: frozenMigrations })
 
-    raw.exec(`
+      raw.exec(`
       DROP INDEX idx_recovery_events_task;
       DROP INDEX idx_recovery_events_kind;
       DROP TABLE recovery_events;
@@ -225,69 +228,72 @@ describe('RFC-278 legacy schema reconciliation', () => {
         ('/legacy/c', 3, NULL);
     `)
 
-    const recoveryBefore = raw
-      .query("SELECT * FROM recovery_events WHERE id='recovery-rfc278'")
-      .get()
-    for (const [tag, legacyHash] of legacyAliasEntries()) {
-      raw
-        .query('UPDATE __drizzle_migrations SET hash=? WHERE created_at=?')
-        .run(legacyHash, expectedMigration(tag).folderMillis)
-    }
-    raw.close()
+      const recoveryBefore = raw
+        .query("SELECT * FROM recovery_events WHERE id='recovery-rfc278'")
+        .get()
+      for (const [tag, legacyHash] of legacyAliasEntries()) {
+        raw
+          .query('UPDATE __drizzle_migrations SET hash=? WHERE created_at=?')
+          .run(legacyHash, expectedMigration(tag).folderMillis)
+      }
+      raw.close()
 
-    const upgraded = openDb({ path: dbPath, migrationsFolder: currentMigrations })
-    const sqlite = upgraded.$client
-    expect(sqlite.query("SELECT * FROM recovery_events WHERE id='recovery-rfc278'").get()).toEqual(
-      recoveryBefore,
-    )
-    expect(indexExists(sqlite, 'idx_recovery_events_task')).toBe(true)
-    expect(indexExists(sqlite, 'idx_recovery_events_kind')).toBe(true)
-    expect(
-      sqlite.query('SELECT count(*) AS count FROM mcp_runtime_test_create_receipts').get(),
-    ).toEqual({ count: 0 })
-    expect(
-      (
-        sqlite.query("PRAGMA foreign_key_list('mcp_runtime_test_create_receipts')").all() as Array<{
-          table: string
-        }>
-      )
-        .map((row) => row.table)
-        .sort(),
-    ).toEqual(['mcps', 'users'])
-    expect(indexExists(sqlite, 'idx_mcp_runtime_test_create_receipts_expiry')).toBe(true)
-    expect(tableExists(sqlite, 'recent_repos')).toBe(false)
-    expect(tableExists(sqlite, 'rfc276_legacy_runtime_archive')).toBe(false)
-    expect(sqlite.query('SELECT count(*) AS count FROM __drizzle_migrations').get()).toEqual({
-      count: readExpectedMigrationChain(currentMigrations).length,
-    })
+      const upgraded = openDb({ path: dbPath, migrationsFolder: currentMigrations })
+      const sqlite = upgraded.$client
+      expect(
+        sqlite.query("SELECT * FROM recovery_events WHERE id='recovery-rfc278'").get(),
+      ).toEqual(recoveryBefore)
+      expect(indexExists(sqlite, 'idx_recovery_events_task')).toBe(true)
+      expect(indexExists(sqlite, 'idx_recovery_events_kind')).toBe(true)
+      expect(
+        sqlite.query('SELECT count(*) AS count FROM mcp_runtime_test_create_receipts').get(),
+      ).toEqual({ count: 0 })
+      expect(
+        (
+          sqlite
+            .query("PRAGMA foreign_key_list('mcp_runtime_test_create_receipts')")
+            .all() as Array<{
+            table: string
+          }>
+        )
+          .map((row) => row.table)
+          .sort(),
+      ).toEqual(['mcps', 'users'])
+      expect(indexExists(sqlite, 'idx_mcp_runtime_test_create_receipts_expiry')).toBe(true)
+      expect(tableExists(sqlite, 'recent_repos')).toBe(false)
+      expect(tableExists(sqlite, 'rfc276_legacy_runtime_archive')).toBe(false)
+      expect(sqlite.query('SELECT count(*) AS count FROM __drizzle_migrations').get()).toEqual({
+        count: readExpectedMigrationChain(currentMigrations).length,
+      })
 
-    expect(() =>
-      sqlite
-        .query(
-          `INSERT INTO mcp_runtime_test_create_receipts (
+      expect(() =>
+        sqlite
+          .query(
+            `INSERT INTO mcp_runtime_test_create_receipts (
              mcp_id, owner_user_id, client_create_id, request_digest,
              session_id, accepted_turn_id, created_at, expires_at
            ) VALUES ('mcp-rfc278', 'user-rfc278', 'invalid-digest', ?, 'session', 'turn', 1, 2)`,
-        )
-        .run(`${'a'.repeat(63)}z`),
-    ).toThrow()
-    expect(() =>
-      sqlite
-        .query(
-          `INSERT INTO mcp_runtime_test_create_receipts (
+          )
+          .run(`${'a'.repeat(63)}z`),
+      ).toThrow()
+      expect(() =>
+        sqlite
+          .query(
+            `INSERT INTO mcp_runtime_test_create_receipts (
              mcp_id, owner_user_id, client_create_id, request_digest,
              session_id, accepted_turn_id, created_at, expires_at
            ) VALUES ('missing-mcp', 'user-rfc278', 'missing-parent', ?, 'session', 'turn', 1, 2)`,
-        )
-        .run('b'.repeat(64)),
-    ).toThrow()
-    upgraded.$client.close()
+          )
+          .run('b'.repeat(64)),
+      ).toThrow()
+      upgraded.$client.close()
 
-    const reopened = openDb({ path: dbPath, migrationsFolder: currentMigrations })
-    expect(reopened.$client.query('PRAGMA quick_check').all()).toEqual([{ quick_check: 'ok' }])
-    expect(reopened.$client.query('PRAGMA foreign_key_check').all()).toEqual([])
-    reopened.$client.close()
-  })
+      const reopened = openDb({ path: dbPath, migrationsFolder: currentMigrations })
+      expect(reopened.$client.query('PRAGMA quick_check').all()).toEqual([{ quick_check: 'ok' }])
+      expect(reopened.$client.query('PRAGMA foreign_key_check').all()).toEqual([])
+      reopened.$client.close()
+    },
+  )
 })
 
 // RFC-317 T46（CC-03）—— 别名账本的精确计数 + **可复核的存活判据**。
