@@ -214,15 +214,30 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
     ): Promise<TaskRow> {
       const deadline = Date.now() + timeoutMs
       let last: TaskRow = { id: taskId, status: 'pending' }
+      let lastReadError: string | null = null
       while (Date.now() < deadline) {
-        const response = await apiFetch(`/api/tasks/${taskId}`)
+        let response: Response
+        try {
+          response = await apiFetch(`/api/tasks/${taskId}`)
+          lastReadError = null
+        } catch (error) {
+          // Windows runners can reset an otherwise healthy loopback keep-alive
+          // connection while several isolated daemons are active. This is an
+          // idempotent status poll, so keep it inside the existing deadline;
+          // writes still surface an indeterminate outcome immediately.
+          lastReadError = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          continue
+        }
         if (response.ok) {
           last = (await response.json()) as TaskRow
           if (predicate(last)) return last
         }
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
-      throw new Error(`task ${taskId} timed out; last=${JSON.stringify(last)}`)
+      throw new Error(
+        `task ${taskId} timed out; last=${JSON.stringify(last)}; lastReadError=${lastReadError ?? 'none'}`,
+      )
     }
 
     function waitForTerminal(taskId: string): Promise<TaskRow> {

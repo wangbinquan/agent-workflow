@@ -183,12 +183,26 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
     ): Promise<T> {
       const deadline = Date.now() + timeoutMs
       let last: T | undefined
+      let lastReadError: string | null = null
       while (Date.now() < deadline) {
-        last = await read()
+        try {
+          last = await read()
+          lastReadError = null
+        } catch (error) {
+          // Hosted runners can briefly reset an otherwise healthy loopback
+          // connection while isolated daemons are active. Every caller supplies
+          // an observation-only read, so retry it within the existing deadline;
+          // webhook delivery and retry writes still fail immediately.
+          lastReadError = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+          await new Promise((resolveWait) => setTimeout(resolveWait, 100))
+          continue
+        }
         if (predicate(last)) return last
         await new Promise((resolveWait) => setTimeout(resolveWait, 100))
       }
-      throw new Error(`${label} timed out; last=${JSON.stringify(last)}`)
+      throw new Error(
+        `${label} timed out; last=${JSON.stringify(last)}; lastReadError=${lastReadError ?? 'none'}`,
+      )
     }
 
     async function createFixture(endpointId: string, scenario: Scenario): Promise<void> {
