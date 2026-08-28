@@ -6,8 +6,9 @@
   RFC-329/330 分别提供 W4-A route/tool inventory 与 DE/ACL 纵切，但没有完成 W4；RFC-288/289 已关闭且未实现；
   RFC-294 N1a/N1b 治理基线已落，RFC-331 / W2-A topology cut 与
   [RFC-332](../RFC-332-task-engine-decomposition/proposal.md) / W2-B TaskEngine 均已发布并完成 hosted closeout；
-  [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md) 已关闭 P0-C residual；下一节点为另立新 RFC
-  开始 W2-C current-source 调研/设计，W2-C/D 生产实现尚未授权）
+  [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md) 已关闭 P0-C residual；
+  [RFC-334](../RFC-334-node-executor-registry/proposal.md) 已完成 W2-C current-source 调研并形成 Draft 三件套，
+  W2-C/D 生产实现尚未授权）
 - 性质：目标架构总纲 + 迁移治理合同；已落 wave/slice 按 exact evidence 记账，未完成 wave 不因局部模块或账本存在而倒签 Done
 - `3bfd5be87ba98e329e49432d2e59bff918a878ec` 只保留为历史 measurement seed。current shape 统一由
   `architecture/current-report.json` 与七份 canonical manifests 重放。RFC-331 前的历史 source pin 为
@@ -396,7 +397,7 @@ W7 之前继续保留 `fanout-inner-chain-unsupported` 挡板。该能力属于�
 
 RFC-287 已落地，旧的 P0-A/B/C/D→W1 箭头改记 prerequisite deviation，不伪造历史顺序。P0-A/B/C 分别重新绑定
 W4-E2、W6、W2-C/W3；N1/W0-R、P0-D、RFC-331 W2-A 与 RFC-332 W2-B 已落，RFC-333 已把 P0-C residual 关闭。
-W2-C 的前置已解除并成为下一设计节点；W2-C/D 与后续 wave 的生产实现仍须新 RFC 与明确批准。W7 identity/provenance 完成后才允许新号
+W2-C 的前置已解除；RFC-334 已承接 current-source 调研与设计，生产实现仍须明确批准。W2-D 与后续 wave 仍须新 RFC 与明确批准。W7 identity/provenance 完成后才允许新号
 fanout 能力 RFC；未获批时跳过 W8。最新 partial order 以 `plan.md` §3.1 为准。
 
 ## 7. 非目标

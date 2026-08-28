@@ -2,8 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🧭 **下一架构节点（待另立 RFC，2026-08-28）：RFC-294 W2-C NodeExecutorRegistry current-source 调研与设计。**
-> RFC-333 已关闭 P0-C 前置；W2-C 可开始盘点和起草，但生产实现仍须新 RFC 与明确批准，不能把 RFC-333 的批准外溢到 W2-C。
+> 🧭 **当前架构节点（Draft，2026-08-28）：[RFC-334 NodeExecutorRegistry（RFC-294 W2-C）](design/RFC-334-node-executor-registry/proposal.md)。**
+> source pin `0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34` 上的 current-source 调研与 proposal/design/plan 已完成：closed catalog
+> 恰为 14 个 `NodeKind`（13 个 user-authored live + `code-round` synthesized-only/retired），DAG 仍经 RFC-332 W2-C bridge
+> 调 `scheduler.runOneNode`，workgroup/dw host 仍经 `buildWorkgroupHooks/runHostNode` 旁路；RFC-313 neutral cap 的生产
+> consumer 恰为 TaskExecution/DigitalEmployee。目标为公共 prelude + 14-key closed registry + per-kind executor，workgroup host
+> 走 `agent-single` typed lane，wrapper 只委托 W2-D，review/clarify policy 继续归 collaboration。
+> **当前只完成 RFC 起草/发布，D1～D12 与 T2～T12 生产实现等待用户明确批准**；不引入安全策略或功能收缩。
 
 > ✅ **已完成 RFC（Done，2026-08-28）：[RFC-333 人工门原子停驻与持久续跑（RFC-294 P0-C）](design/RFC-333-human-gate-atomic-park-and-continuation/proposal.md)**
 > —— review/clarify/questions open 已以 purpose-specific journal + `TaskParkTx` 同事务提交 gate/node/task，三类 decision 已以

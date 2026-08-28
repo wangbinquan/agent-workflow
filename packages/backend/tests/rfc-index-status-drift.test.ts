@@ -138,6 +138,9 @@ describe('RFC 索引状态漂移守卫', () => {
     // RFC-333：Draft 阶段已把 proposal AC-1～16 逐条投影到 plan §6；证据状态允许 Pending，
     // 但缺口必须保持为零，后续新增 AC 不能漏掉计划/证据行。
     'RFC-333-human-gate-atomic-park-and-continuation': 0,
+    // RFC-334：Draft 阶段已把 proposal AC-1～18 逐条投影到 plan §6；production 尚未批准，
+    // 但计划证据行必须先保持完整，后续新增 AC 不能只改 proposal。
+    'RFC-334-node-executor-registry': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {
