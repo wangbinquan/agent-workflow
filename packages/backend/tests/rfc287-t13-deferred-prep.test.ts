@@ -90,6 +90,7 @@ async function seed(db: DbClient): Promise<{ workflowId: string; userId: string 
     username: userId,
     email: `${userId}@example.test`,
     displayName: 'tester',
+    gitName: 'tester',
     role: 'admin',
     createdAt: Date.now(),
     updatedAt: Date.now(),

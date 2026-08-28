@@ -208,7 +208,10 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   // 尤其是脚本池 —— 它是 daemon 级单例且 resize-on-read，漏传会让**每一次子任务
   // 启动都把管理员配置的脚本上限静默改回默认 4**（影响整个 daemon，不只是子任务）。
   test('RFC-266: buildChildDeps 透传三个并发键（漏传脚本池 = 全 daemon 被改回默认）', () => {
-    const schedulerSrc = readFileSync(join(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
+    const nodeMechanicsSrc = readFileSync(
+      join(import.meta.dir, '../src/modules/task-execution/composition/nodeMechanics.ts'),
+      'utf8',
+    )
     const topologySrc = readFileSync(
       join(
         import.meta.dir,
@@ -216,15 +219,15 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       ),
       'utf8',
     )
-    const runtimeStart = schedulerSrc.indexOf('function buildChildRuntime(')
+    const runtimeStart = nodeMechanicsSrc.indexOf('function buildChildRuntime(')
     expect(runtimeStart).toBeGreaterThan(-1)
-    const runtimeBody = schedulerSrc.slice(
+    const runtimeBody = nodeMechanicsSrc.slice(
       runtimeStart,
-      schedulerSrc.indexOf('\n}\n', runtimeStart),
+      nodeMechanicsSrc.indexOf('\n}\n', runtimeStart),
     )
-    const depsStart = schedulerSrc.indexOf('function buildChildDeps(')
+    const depsStart = nodeMechanicsSrc.indexOf('function buildChildDeps(')
     expect(depsStart).toBeGreaterThan(-1)
-    const depsBody = schedulerSrc.slice(depsStart, schedulerSrc.indexOf('\n}\n', depsStart))
+    const depsBody = nodeMechanicsSrc.slice(depsStart, nodeMechanicsSrc.indexOf('\n}\n', depsStart))
     // RFC-331 后继形状：端口 runtime 仍由唯一注册表拾取，legacy child deps
     // 只展开这份已拾取结果；两段任一断开都会让子任务静默丢配置。
     expect(runtimeBody).toContain('runConfig: pickInheritableRunConfig(state.opts)')
@@ -243,7 +246,10 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   // call-workflow / call-workgroup 子任务里 binaryPath=NULL 的 runtime 冻不进
   // config.opencodePath / claudeCodePath —— 子调度器 spawn 裸协议命令。
   test('RFC-282: buildChildDeps 透传 configPath（漏传 = 子任务丢 config 二进制头）', () => {
-    const schedulerSrc = readFileSync(join(import.meta.dir, '../src/services/scheduler.ts'), 'utf8')
+    const nodeMechanicsSrc = readFileSync(
+      join(import.meta.dir, '../src/modules/task-execution/composition/nodeMechanics.ts'),
+      'utf8',
+    )
     const topologySrc = readFileSync(
       join(
         import.meta.dir,
@@ -251,15 +257,15 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       ),
       'utf8',
     )
-    const runtimeStart = schedulerSrc.indexOf('function buildChildRuntime(')
+    const runtimeStart = nodeMechanicsSrc.indexOf('function buildChildRuntime(')
     expect(runtimeStart).toBeGreaterThan(-1)
-    const runtimeBody = schedulerSrc.slice(
+    const runtimeBody = nodeMechanicsSrc.slice(
       runtimeStart,
-      schedulerSrc.indexOf('\n}\n', runtimeStart),
+      nodeMechanicsSrc.indexOf('\n}\n', runtimeStart),
     )
-    const depsStart = schedulerSrc.indexOf('function buildChildDeps(')
+    const depsStart = nodeMechanicsSrc.indexOf('function buildChildDeps(')
     expect(depsStart).toBeGreaterThan(-1)
-    const depsBody = schedulerSrc.slice(depsStart, schedulerSrc.indexOf('\n}\n', depsStart))
+    const depsBody = nodeMechanicsSrc.slice(depsStart, nodeMechanicsSrc.indexOf('\n}\n', depsStart))
     // RFC-331：configPath 先进入 child runtime port，再由 legacy adapter
     // 展开回 StartTaskDeps；两段都要锁，不能只看注册表里“名字在场”。
     expect(runtimeBody).toContain('runConfig: pickInheritableRunConfig(state.opts)')

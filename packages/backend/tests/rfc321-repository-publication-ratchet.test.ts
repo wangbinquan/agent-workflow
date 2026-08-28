@@ -407,7 +407,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
     )
     const server = read('packages/backend/src/server.ts')
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    const nodeMechanics = read(
+      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    )
     const developmentRest = read('packages/backend/src/services/developmentDeliveryDeps.ts')
     const integrationRest = read(
       'packages/backend/src/modules/integration/composition/codeHostEffects.ts',
@@ -429,11 +431,13 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'headers: headersFor(connection.provider, connection.token)',
     )
     expect(endpointDiscovery).not.toContain('RepositoryCredentialSubject')
-    expect(scheduler).toContain('resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)')
+    expect(nodeMechanics).toContain(
+      'resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)',
+    )
     expect(developmentRest).toContain('resolveCodeHostConnectionsFromKeyFile(')
     expect(integrationRest).not.toContain('RepositoryCredentialSubject')
     expect(reconcilerPorts).not.toContain('RepositoryCredentialSubject')
-    expect(scheduler).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
+    expect(nodeMechanics).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
     expect(developmentRest).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
   })
 

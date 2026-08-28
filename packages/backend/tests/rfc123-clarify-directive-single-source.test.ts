@@ -358,8 +358,16 @@ describe('RFC-123 C: questioner node 级 directive 决定 cross 节点短路（R
 // D. 源码 wiring 守卫 — 锁定单一事实源接线，防 refactor 漂移
 // ---------------------------------------------------------------------------
 describe('RFC-123 D: 源码 wiring 守卫', () => {
-  const schedulerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  const nodeMechanicsSrc = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    ),
     'utf8',
   )
   const sealSrc = readFileSync(
@@ -373,24 +381,24 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     'utf8',
   )
 
-  test('scheduler：directive 收敛为 per-node clarify 状态（nodeDirective 喂 oracle，非 per-round override）', () => {
+  test('node mechanics：directive 收敛为 per-node clarify 状态（nodeDirective 喂 oracle，非 per-round override）', () => {
     const norm = (s: string) => s.replace(/\s+/g, ' ')
-    // RFC-132 (PR-C §7): 站定 directive = per-node clarify 状态。scheduler 读 nodeDirective 并喂进
+    // RFC-132 (PR-C §7): 站定 directive = per-node clarify 状态。node mechanics 读 nodeDirective 并喂进
     // resolveEffectiveClarifyChannel；'continue' toggle 因 nodeStopOverride 翻 false 而重开通道。
     // per-round 注入器 override plumbing（directiveOverride/directiveOverrideAt/applyLatestDirective）
     // 随平铺注入器一起删除。
-    expect(schedulerSrc).toContain('const nodeDirective = nodeDirectiveRow?.directive')
-    expect(norm(schedulerSrc)).toContain('contextDirective: nodeDirective')
-    expect(schedulerSrc).not.toContain('directiveOverride')
-    expect(schedulerSrc).not.toContain('applyLatestDirective')
+    expect(nodeMechanicsSrc).toContain('const nodeDirective = nodeDirectiveRow?.directive')
+    expect(norm(nodeMechanicsSrc)).toContain('contextDirective: nodeDirective')
+    expect(nodeMechanicsSrc).not.toContain('directiveOverride')
+    expect(nodeMechanicsSrc).not.toContain('applyLatestDirective')
   })
 
-  test('scheduler + crossClarify：cross 短路经 resolveCrossNodeStopped（questioner node 级 directive 单一事实源）', () => {
+  test('node mechanics + crossClarify：cross 短路经 resolveCrossNodeStopped（questioner node 级 directive 单一事实源）', () => {
     const norm = (s: string) => s.replace(/\s+/g, ' ')
-    // RFC-132 T7: scheduler 传 questioner 节点（reenableQuestionerNodeId），非 cross node.id；
+    // RFC-132 T7: node mechanics 传 questioner 节点（reenableQuestionerNodeId），非 cross node.id；
     // resolveCrossNodeStopped 收敛为只读 questioner 节点的 node 级 directive（node last-write-wins
     // 天然等价 RFC-123 recency gate）。旧 recency 闸（latestPersistentStopAt + stopAt 比较）已删。
-    expect(norm(schedulerSrc)).toContain(
+    expect(norm(nodeMechanicsSrc)).toContain(
       'resolveCrossNodeStopped(db, taskId, reenableQuestionerNodeId',
     )
     expect(crossSrc).toContain('export async function resolveCrossNodeStopped')

@@ -163,7 +163,15 @@ describe('RFC-042 default retries fallback = 3', () => {
 
   test('a pre-spawn exception catch terminalizes its node_run before retry dispatch', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     const thrownResult = source.indexOf('const errorMessage = `node ${node.id} threw: ${msg}`')

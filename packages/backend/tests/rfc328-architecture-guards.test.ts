@@ -118,7 +118,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/services/scheduler.ts',
+    'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
     [
       {
         callable: 'runCodeHostCallNode',

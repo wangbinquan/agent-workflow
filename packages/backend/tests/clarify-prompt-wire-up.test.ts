@@ -1,13 +1,13 @@
-// RFC-023 PR-B T12 — locks the scheduler ↔ runner wiring for clarify prompt
-// context.
+// RFC-023 PR-B T12 — locks the TaskExecution ↔ runner wiring for clarify
+// prompt context.
 //
-// RFC-058 T13 update: scheduler now calls the unified
+// RFC-058 T13 update: TaskExecution node mechanics now calls the unified
 // `buildPromptContext` from `services/clarifyRounds.ts` (consumerKind dispatch)
 // instead of `buildClarifyPromptContext` / `buildQuestionerCrossClarifyContext`.
 //
 // Source-level guards (no runtime needed) keep the wire-up from rotting:
-//   1. scheduler.ts MUST call buildPromptContext at the agent-single
-//      AND agent-multi shard sites.
+//   1. nodeMechanics.ts MUST call the flat clarify queue injector at the
+//      agent-single and agent-multi shard sites.
 //   2. runner.ts MUST thread the `clarifyChannel` ADT (RFC-148; historical
 //      hasClarifyChannel) into renderUserPrompt and
 //      call detectEnvelopeKind / extractClarifyEnvelopeBody on stdout —
@@ -30,27 +30,45 @@ import { join } from 'node:path'
 
 const BACKEND_SRC = join(__dirname, '..', 'src', 'services')
 const SHARED_SRC = join(__dirname, '..', '..', 'shared', 'src')
+const NODE_MECHANICS_SRC = join(
+  __dirname,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'composition',
+  'nodeMechanics.ts',
+)
+const NODE_EXECUTION_SRC = join(
+  __dirname,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'composition',
+  'nodeExecution.ts',
+)
 
-describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
-  test('scheduler.ts wires the unified buildClarifyQueueContext injector (RFC-132 PR-C)', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
+describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
+  test('nodeMechanics.ts wires the unified buildClarifyQueueContext injector (RFC-132 PR-C)', () => {
+    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
     // RFC-132 (PR-C): one flat injector replaces the former self/questioner + designer split.
     // selectAgentQueue queries every role in one shot, so there is no per-role consumerKind SELECT
-    // fork and no round-grouped buildPromptContext call in the scheduler anymore.
+    // fork and no round-grouped buildPromptContext call in node mechanics anymore.
     expect(src).toContain('await buildClarifyQueueContext(')
     expect(src).not.toContain('await buildPromptContext(')
     expect(src).not.toContain("consumerKind: 'self'")
     expect(src).not.toContain("consumerKind: 'cross-questioner'")
   })
 
-  test('scheduler.ts wires findClarifyNodeForAgent + agentHasClarifyChannel', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
+  test('nodeMechanics.ts wires findClarifyNodeForAgent + agentHasClarifyChannel', () => {
+    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
     expect(src).toContain('findClarifyNodeForAgent')
     expect(src).toContain('agentHasClarifyChannel')
   })
 
-  test('scheduler.ts wires createClarifyRound into the agent-single path', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
+  test('nodeExecution.ts wires createClarifyRound into the agent execution path', () => {
+    const src = readFileSync(NODE_EXECUTION_SRC, 'utf8')
     expect(src).toContain('createClarifyRound')
   })
 
@@ -103,10 +121,10 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
   // (the user explicitly asked for it not to appear), so this grep guard is
   // the cheapest way to lock the contract without spinning up a full
   // scheduler integration test.
-  test('scheduler.ts gates effectiveHasClarifyChannel on the per-node clarify state (RFC-132 PR-C)', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
+  test('nodeMechanics.ts gates effectiveHasClarifyChannel on the per-node clarify state (RFC-132 PR-C)', () => {
+    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
     // RFC-132 (PR-C §7): the standing continue/stop directive is the per-node clarify state — the
-    // scheduler feeds `nodeDirective` into resolveEffectiveClarifyChannel (the flat context carries
+    // node mechanics feeds `nodeDirective` into resolveEffectiveClarifyChannel (the flat context carries
     // no directive). Assert the wiring here AND the gate itself in the oracle.
     expect(src).toContain('contextDirective: nodeDirective')
     expect(src).not.toContain('clarifyContext?.directive')
@@ -127,8 +145,8 @@ describe('scheduler ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
   // ask-back). Only a review-iterate rerun (reviewContext set) strips the
   // directive while addressing fresh reviewer comments. See
   // clarify-stop-directive-scoped-to-clarify-rerun.test.ts.
-  test('scheduler.ts reads the standing directive from the per-node clarify state (RFC-132 PR-C)', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
+  test('nodeMechanics.ts reads the standing directive from the per-node clarify state (RFC-132 PR-C)', () => {
+    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
     // RFC-132 (PR-C §7): the per-round directive plumbing (applyLatestDirective) is gone; the
     // directive is nodeDirective (getNodeClarifyDirectiveRow) + nodeStopOverride.
     expect(src).not.toContain('applyLatestDirective')

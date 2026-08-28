@@ -216,8 +216,16 @@ describe('RFC-123 B/C: runner rejects disobedient clarify only when explicitly s
 // --- D. source wiring guards ------------------------------------------------
 
 describe('RFC-123 D: stop-enforcement wiring guards', () => {
-  const schedulerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  const nodeMechanicsSrc = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    ),
     'utf8',
   )
   const runnerSrc = readFileSync(
@@ -226,12 +234,12 @@ describe('RFC-123 D: stop-enforcement wiring guards', () => {
   )
   const norm = (s: string) => s.replace(/\s+/g, ' ')
 
-  test('scheduler computes clarifyStopped from EXPLICIT stop only + folds it into the channel directive', () => {
+  test('node mechanics computes clarifyStopped from EXPLICIT stop only + folds it into the channel directive', () => {
     // RFC-132 (PR-C §7): a 'stop' answer writes the per-node clarify state (setNodeClarifyDirective),
     // so nodeStopOverride ALONE captures both the canvas toggle AND a latest answered 'stop' — the
     // former `|| clarifyContext?.directive === 'stop'` disjunct is gone (the flat context carries no
     // directive).
-    expect(norm(schedulerSrc)).toContain(
+    expect(norm(nodeMechanicsSrc)).toContain(
       'const clarifyStopped = hasClarifyChannel && nodeStopOverride',
     )
     // RFC-148: the threading is no longer a scattered `clarifyStopped: true`
@@ -239,7 +247,7 @@ describe('RFC-123 D: stop-enforcement wiring guards', () => {
     // directive. RFC-165 (F12) slotted 'optional' between stopped and the
     // mandatory/suppressed pair (precedence stopped > optional >
     // mandatory/suppressed) — the lock follows the new ladder.
-    expect(norm(schedulerSrc)).toContain(
+    expect(norm(nodeMechanicsSrc)).toContain(
       "directive: clarifyStopped ? ('stopped' as const) : clarifyOptional ? ('optional' as const) : effectiveHasClarifyChannel ? ('mandatory' as const) : ('suppressed' as const)",
     )
   })

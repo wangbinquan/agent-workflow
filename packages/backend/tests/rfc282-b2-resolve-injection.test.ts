@@ -143,25 +143,38 @@ describe('RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 
   })
 })
 
-describe('RFC-282 B2 — all six scheduler entries go through the one resolver', () => {
-  test('scheduler has six resolveInjection call sites and zero hand-written empty-array bypasses', () => {
-    const text = readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8')
+describe('RFC-282 B2 — all six TaskExecution entries go through the one resolver', () => {
+  test('TaskExecution has six resolveInjection call sites and zero hand-written empty-array bypasses', () => {
+    const text = [
+      readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
+      readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
+    ].join('\n')
     expect(text.split('await resolveInjection(').length - 1).toBe(6)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')
     expect(text).not.toContain('skills: [],\n      dependents: [],')
-    // the resolver itself no longer lives in scheduler.ts
+    // the resolver itself no longer lives in either execution composition file
     expect(text).not.toContain('function prepareNodeRunInjection')
     expect(text).not.toContain('async function resolveSkills')
   })
 
   test('the writeSem call sites (commit/merge) thread the scope signal (§9-5)', () => {
-    const text = readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8')
-    const commitIdx = text.indexOf('commit-push injection resolve failed')
-    const mergeIdx = text.indexOf('merge injection resolve failed')
-    expect(commitIdx).toBeGreaterThan(0)
-    expect(mergeIdx).toBeGreaterThan(0)
-    for (const idx of [commitIdx, mergeIdx]) {
+    const sites = [
+      {
+        text: readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
+        marker: 'commit-push injection resolve failed',
+      },
+      {
+        text: readFileSync(
+          resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'),
+          'utf8',
+        ),
+        marker: 'merge injection resolve failed',
+      },
+    ]
+    for (const { text, marker } of sites) {
+      const idx = text.indexOf(marker)
+      expect(idx).toBeGreaterThan(0)
       const before = text.slice(Math.max(0, idx - 700), idx)
       expect(before).toContain('signal: state.opts.signal')
     }

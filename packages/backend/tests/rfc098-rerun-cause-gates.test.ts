@@ -1,7 +1,7 @@
 // RFC-098 WP-10 T-c (audit S-25) — (consumerKind × cause) injection gate
 // truth table.
 //
-// The scheduler's clarify/cross-clarify injection gate region used PROXY
+// TaskExecution's clarify/cross-clarify injection gate region used PROXY
 // signals to infer why the dispatched row exists. WP-10 records the cause on
 // the row itself (node_runs.rerun_cause, migration 0044, written by the mint
 // factory) and switches gate-2 onto it. This file pins, per 对抗检视修订 #11:
@@ -39,8 +39,16 @@ import { resolve } from 'node:path'
 import { RERUN_CAUSES, type RerunCause } from '@agent-workflow/shared'
 import { isClarifyRerunCause } from '../src/services/nodeRunMint'
 
-const SCHEDULER_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+const NODE_MECHANICS_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
   'utf8',
 )
 
@@ -109,14 +117,14 @@ describe('RFC-098 WP-10 — gate-2 (isClarifyRerun) × cause truth table', () =>
 // Gate wiring — source-level pins (consumerKind side of the matrix).
 // ---------------------------------------------------------------------------
 
-describe('RFC-098 WP-10 — scheduler gate wiring', () => {
+describe('RFC-098 WP-10 — TaskExecution gate wiring', () => {
   test('gate-2 reads the dispatched row cause (NOT the retryIndex proxy)', () => {
-    expect(SCHEDULER_SRC).toContain(
+    expect(NODE_MECHANICS_SRC).toContain(
       'const isClarifyRerun = isClarifyRerunCause(currentRunRow?.rerunCause)',
     )
-    // The old proxy expression must be gone from scheduler.ts entirely —
+    // The old proxy expression must be gone from nodeMechanics.ts entirely —
     // comments included (a comment re-teaching the proxy is how it comes back).
-    expect(SCHEDULER_SRC).not.toContain('(currentRunRow?.retryIndex ?? 0) === 0')
+    expect(NODE_MECHANICS_SRC).not.toContain('(currentRunRow?.retryIndex ?? 0) === 0')
   })
 
   // RFC-132 (PR-C) superseded gate-3/4/5. The round-grouped injectors + their per-round
@@ -128,22 +136,22 @@ describe('RFC-098 WP-10 — scheduler gate wiring', () => {
     // The cross-clarify-specific update-mode gate is gone; a designer surfaces its draft via the same
     // freshestPriorRunWithOutput path every rerun uses. RFC-141 then removed the RFC-120 §18
     // suppressPriorOutput gate from that path too (negative lock below).
-    expect(SCHEDULER_SRC).not.toContain('isCrossClarifyTriggeredRerun')
-    expect(SCHEDULER_SRC).toContain('freshestPriorRunWithOutput')
-    expect(SCHEDULER_SRC).not.toContain('!suppressPriorOutput')
+    expect(NODE_MECHANICS_SRC).not.toContain('isCrossClarifyTriggeredRerun')
+    expect(NODE_MECHANICS_SRC).toContain('freshestPriorRunWithOutput')
+    expect(NODE_MECHANICS_SRC).not.toContain('!suppressPriorOutput')
   })
 
   test('gate-4 (clarify injection) → one unified query, no per-role SELECT fork (RFC-132 PR-C)', () => {
     // "consumerKind 消失": buildClarifyQueueContext selects self/questioner/designer together.
-    expect(SCHEDULER_SRC).not.toContain('isQuestionerCrossClarifyRerun')
-    expect(SCHEDULER_SRC).toContain('await buildClarifyQueueContext(')
+    expect(NODE_MECHANICS_SRC).not.toContain('isQuestionerCrossClarifyRerun')
+    expect(NODE_MECHANICS_SRC).toContain('await buildClarifyQueueContext(')
   })
 
   test('gate-5 (stop scoping) → per-node clarify state, no per-round applyLatestDirective (RFC-132 PR-C)', () => {
     // The standing continue/stop directive is the per-node clarify state (design §7); the flat context
     // carries none, so the per-round directive-override plumbing (applyLatestDirective) is gone.
-    expect(SCHEDULER_SRC).not.toContain('applyLatestDirective')
-    expect(SCHEDULER_SRC).toContain('const nodeStopOverride = nodeDirective === ')
+    expect(NODE_MECHANICS_SRC).not.toContain('applyLatestDirective')
+    expect(NODE_MECHANICS_SRC).toContain('const nodeStopOverride = nodeDirective === ')
   })
 })
 

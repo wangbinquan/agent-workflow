@@ -430,7 +430,15 @@ describe('RFC-243 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1�
     expect(parseCallHumanWait(null, Date.now())).toBe(0)
     // 源码锁：新 mint 的行不得继承被取代行的台账（否则同段等待计两次）。
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('adoptedChildTaskId !== null')

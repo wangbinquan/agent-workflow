@@ -7,7 +7,7 @@
 // parks awaiting_human. The workgroup host hook keeps no such promise: it returns `failed`
 // for the turn and its `finally` discards the iso unconditionally. So the promise was left
 // with its iso deleted and refs unpinned/GC'd — and `replayConflictHumanResolutions` runs
-// for EVERY task at runTask entry (scheduler.ts, before the workgroup branch), so the next
+// for EVERY task at task-engine entry, before the workgroup branch, so the next
 // resume hunted commits that no longer exist, threw, and failTask'd the WHOLE task.
 //
 // Fix: the workgroup path explicitly ABANDONS the merge state (legal: `abandon` accepts
@@ -39,19 +39,29 @@ describe('RFC-187 T8 — conflict-human → abandoned is a legal, terminal settl
 })
 
 describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)', () => {
-  const SCHED = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  const NODE_MECHANICS = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    ),
     'utf8',
   )
 
   test('the workgroup conflict-human branch abandons the merge state before failing', () => {
-    expect(SCHED).toContain("event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' }")
+    expect(NODE_MECHANICS).toContain(
+      "event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' }",
+    )
     // it must sit in the wg hook's conflict-human branch, i.e. right before the
     // merge-back-conflict failure it returns.
     // RFC-287 T6 改锚：该处置已从「函数体里的 conflict-human 分支」变成 spec 上的
     // `disposition.onConflictHuman` 声明。语义逐字不变——abandon 紧接着 failed，
     // 且错误信息仍是 merge-back-conflict。
-    expect(SCHED).toMatch(
+    expect(NODE_MECHANICS).toMatch(
       /onConflictHuman:[\s\S]{0,900}wg-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
     )
   })
@@ -75,17 +85,21 @@ describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)
     // **语义差别**逐条仍锁如下，与上面那段注释一一对应：
     //
     // ① 撞冲突：keep=false —— 本线许不起「留着给人解」的承诺，abandon 且照常清理。
-    expect(SCHED).toMatch(/onConflictHuman:[\s\S]{0,200}keep: false/)
+    expect(NODE_MECHANICS).toMatch(/onConflictHuman:[\s\S]{0,200}keep: false/)
     // ② 合并抛出：keep=true + **重抛** —— merge_state 留 'pending-merge' 交 entry
     //    replay，且被保留的 iso 撑着它（不打 markMergeFailed，与 DAG 各线相反）。
-    expect(SCHED).toMatch(/onThrow: \(\) => \(\{ keep: true, then: 'rethrow' as const \}\)/)
+    expect(NODE_MECHANICS).toMatch(
+      /onThrow: \(\) => \(\{ keep: true, then: 'rethrow' as const \}\)/,
+    )
     // ③ 未回收的 child：仍是保留 iso 的那一维（§10.11 第五维，与合并处置正交）。
-    expect(SCHED).toMatch(/keepFromOutcome: \(s\) =>[\s\S]{0,120}processUnreaped === true/)
+    expect(NODE_MECHANICS).toMatch(/keepFromOutcome: \(s\) =>[\s\S]{0,120}processUnreaped === true/)
     // 反向：撞冲突那条路径上**绝不**出现保留声明（abandon 块必须保持清理）。
     // 射程只取 onConflictHuman 声明自身（到它的 produce 收尾为止）——迁移后
     // onThrow 的 `keep: true` 就紧挨在它后面，用宽窗口会把兄弟声明误判成违规。
-    const conflictDecl = /onConflictHuman: \(detail\) => \(\{[\s\S]*?\n {12}\}\),/.exec(SCHED)
-    expect(conflictDecl).not.toBeNull()
-    expect(conflictDecl?.[0] ?? '').not.toMatch(/keep: true/)
+    const conflictStart = NODE_MECHANICS.indexOf('onConflictHuman: (detail) => ({')
+    const conflictEnd = NODE_MECHANICS.indexOf('\n          onThrow:', conflictStart)
+    expect(conflictStart).toBeGreaterThan(-1)
+    expect(conflictEnd).toBeGreaterThan(conflictStart)
+    expect(NODE_MECHANICS.slice(conflictStart, conflictEnd)).not.toMatch(/keep: true/)
   })
 })
