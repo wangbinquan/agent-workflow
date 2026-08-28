@@ -131,6 +131,44 @@ afterEach(() => {
   resetConnectionsForTest()
 })
 
+describe('RFC-338 revalidation load containment', () => {
+  test('one pass resolves a shared credential once while refreshing every connection', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const actor = buildActor({
+      user: {
+        id: '__system__',
+        username: '__system__',
+        displayName: 'System',
+        role: 'admin',
+        status: 'active',
+      },
+      source: 'daemon',
+    })
+    const first = fakeConn(actor, { kind: 'daemon' }, { kind: 'tasks-list' })
+    const second = fakeConn(actor, { kind: 'daemon' }, { kind: 'tasks-list' })
+    trackConnection(first.ws)
+    trackConnection(second.ws)
+    let resolutions = 0
+
+    const stats = await revalidateAllConnections(
+      {
+        db,
+        log,
+        resolveActor: async () => {
+          resolutions += 1
+          return actor
+        },
+      },
+      'task-members-changed',
+    )
+
+    expect(resolutions).toBe(1)
+    expect(stats).toEqual({ scanned: 2, closedAuth: 0, closedGate: 0, refreshed: 2 })
+    expect(first.ws.data.actor).toBe(actor)
+    expect(second.ws.data.actor).toBe(actor)
+  })
+})
+
 describe('RFC-212 AC-1 — task member removal closes the task socket', () => {
   test('member sees the task before removal, socket closes 4403 after (positive control included)', async () => {
     const db = createInMemoryDb(MIGRATIONS)

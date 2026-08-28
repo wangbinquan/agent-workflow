@@ -24,6 +24,7 @@
 import type { ServerWebSocket } from 'bun'
 import type { WsControlMessage } from '@agent-workflow/shared'
 import { reresolveActor } from '@/auth/session'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { createLogger, type Logger } from '@/util/log'
 import {
@@ -32,6 +33,7 @@ import {
   erasedSpecOf,
   setExpiredCredentialHandler,
   type WsConnectionData,
+  type WsCredential,
 } from './registry'
 
 const live = new Set<ServerWebSocket<WsConnectionData>>()
@@ -61,6 +63,8 @@ export type { RevocationReason }
 export interface RevalidateDeps {
   db: DbClient
   log: Logger
+  /** Test seam for proving one credential is resolved only once per pass. */
+  resolveActor?: typeof reresolveActor
 }
 
 export interface RevalidateStats {
@@ -68,6 +72,10 @@ export interface RevalidateStats {
   closedAuth: number
   closedGate: number
   refreshed: number
+}
+
+function credentialRevalidationKey(credential: WsCredential): string {
+  return credential.kind === 'daemon' ? 'daemon' : `${credential.kind}\u0000${credential.hash}`
 }
 
 /** Called from `handleOpen`, before the channel subscribes. */
@@ -153,6 +161,12 @@ export async function revalidateAllConnections(
   target?: RevalidationTarget,
 ): Promise<RevalidateStats> {
   const stats: RevalidateStats = { scanned: 0, closedAuth: 0, closedGate: 0, refreshed: 0 }
+  // One pass observes one committed DB snapshot at one `now`. Connections
+  // carrying the same credential therefore have the same actor verdict.
+  // Resolve that credential once while still running every socket's cache
+  // clear, upgrade gate, notification and close decision below.
+  const actorByCredential = new Map<string, Promise<Actor | null>>()
+  const resolveActor = deps.resolveActor ?? reresolveActor
   // Snapshot: closeConnection mutates `live` while we iterate.
   for (const ws of liveConnections()) {
     if (ws.data.closing) continue
@@ -160,7 +174,13 @@ export async function revalidateAllConnections(
     stats.scanned += 1
     let freshActor
     try {
-      freshActor = await reresolveActor(deps.db, ws.data.credential, now)
+      const credentialKey = credentialRevalidationKey(ws.data.credential)
+      let resolution = actorByCredential.get(credentialKey)
+      if (resolution === undefined) {
+        resolution = resolveActor(deps.db, ws.data.credential, now)
+        actorByCredential.set(credentialKey, resolution)
+      }
+      freshActor = await resolution
     } catch (err) {
       deps.log.warn('ws-revalidate-resolve-threw', {
         reason,
