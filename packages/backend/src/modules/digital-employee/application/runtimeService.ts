@@ -18,10 +18,9 @@ import type { ExecutionContractParticipant } from '@/modules/execution-contract/
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { stableIdentityComponent } from '@/util/gitRef'
 import type {
+  EmployeeCaseDetailInputProjection,
   EmployeeCaseDetailProjectionInputV1,
   EmployeeCaseDetailProjectionParticipant,
-  EmployeeCaseDetailProjectionV1,
-  EmployeeCaseTypeDetailProjectionV1,
   EmployeeTypeCollaborationCodec,
   EmployeeTypeContextCodec,
   EmployeeTypeReactionCodec,
@@ -244,6 +243,9 @@ const employeeCaseDetailProjectionSchema = employeeCaseTypeDetailProjectionSchem
     .max(10_000),
 })
 
+type EmployeeCaseTypeDetailProjectionV1 = z.infer<typeof employeeCaseTypeDetailProjectionSchema>
+type EmployeeCaseDetailProjectionV1 = z.infer<typeof employeeCaseDetailProjectionSchema>
+
 function artifactRefsFromRoundOutput(outputJson: string | null): string[] {
   if (outputJson === null) return []
   try {
@@ -259,7 +261,7 @@ function artifactRefsFromRoundOutput(outputJson: string | null): string[] {
 }
 
 export function projectEmployeeCaseArtifacts(input: {
-  readonly detailInput: EmployeeCaseDetailProjectionV1['input']
+  readonly detailInput: EmployeeCaseDetailInputProjection
   readonly contexts: readonly Pick<EmployeeContextRecord, 'id' | 'artifactRefs'>[]
   readonly rounds: readonly Pick<ReactionRoundRecord, 'id' | 'executionRef' | 'outputJson'>[]
 }): EmployeeCaseDetailProjectionV1['artifacts'] {

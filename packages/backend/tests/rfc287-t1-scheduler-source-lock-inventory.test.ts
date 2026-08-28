@@ -134,7 +134,9 @@ describe('RFC-287 T1① — scheduler.ts 源码文本锁清单', () => {
     }
     expect(SCHEDULER_SOURCE_LOCK_FILES).toContain('rfc208-unbounded-git-and-permits.test.ts')
     expect(SCHEDULER_SOURCE_LOCK_FILES).toContain('rfc210-publish-failure-hard-fails.test.ts')
-    expect(SCHEDULER_SOURCE_LOCK_FILES).not.toContain('process-node-concurrency.test.ts')
+    expect(
+      SCHEDULER_SOURCE_LOCK_FILES.every((file) => file !== 'process-node-concurrency.test.ts'),
+    ).toBe(true)
     const processFixture = readFileSync(
       resolve(TESTS_DIR, 'process-node-concurrency.test.ts'),
       'utf8',

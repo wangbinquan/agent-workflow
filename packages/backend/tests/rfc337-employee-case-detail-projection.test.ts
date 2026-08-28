@@ -3,8 +3,8 @@ import { describe, expect, test } from 'bun:test'
 import { projectDevelopmentEmployeeCaseDetail } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { projectEmployeeCaseArtifacts } from '@/modules/digital-employee/application/runtimeService'
 import type {
+  EmployeeCaseDetailInputProjection,
   EmployeeCaseDetailProjectionInputV1,
-  EmployeeCaseDetailProjectionV1,
 } from '@/modules/digital-employee/public/types'
 
 const SHA = 'a'.repeat(40)
@@ -240,7 +240,7 @@ describe('RFC-337 digital employee Case detail projection', () => {
   })
 
   test('deduplicates artifact refs while preserving every context, round, and Session source', () => {
-    const detailInput: EmployeeCaseDetailProjectionV1['input'] = {
+    const detailInput: EmployeeCaseDetailInputProjection = {
       source: 'manual',
       ingressRef: 'ui-input:direct',
       kind: 'files',

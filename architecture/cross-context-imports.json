@@ -22172,7 +22172,7 @@
   "denominator": {
     "architectureExceptions": 1304,
     "implementationSccs": 0,
-    "observedEdges": 1340,
+    "observedEdges": 1339,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -37541,22 +37541,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "development-automation",
-      "fromFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#$file",
-      "id": "import:b833b85a20d76c2387a9",
-      "owner": "development-automation",
-      "removeAfterWave": null,
-      "role": "offered-consumption",
-      "specifier": "@/modules/digital-employee/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "EmployeeCaseTypeDetailProjectionV1",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseTypeDetailProjectionV1"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/composition/digitalEmployeeEventObserver.ts",
@@ -44031,7 +44015,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2c5cee9f1accbdf4de94b9f266b19d87a48bfdaf52dd5c3ca3f9de668f89ea56",
+  "sourceDigest": "sha256:14b1c9bc4f6b634044135575cb3aab2b2db14c2ddf765f3b3e02688a18896576",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -2,7 +2,6 @@ import type {
   EmployeeCaseDetailProjectionInputV1,
   EmployeeCaseDetailProjectionParticipant,
   EmployeeCaseDetailInputProjection,
-  EmployeeCaseTypeDetailProjectionV1,
 } from '@/modules/digital-employee/public/types'
 
 import type {
@@ -61,7 +60,7 @@ function unknownInput(
 export function projectDevelopmentEmployeeCaseDetail(input: {
   readonly snapshot: EmployeeCaseDetailProjectionInputV1
   readonly workspace: DevelopmentEmployeeCaseWorkspaceDetailRow | null
-}): EmployeeCaseTypeDetailProjectionV1 {
+}) {
   const issueContext = latestContext(input.snapshot.contexts, 'development.issue-handling')
   const issue = parseVersionOneContext(issueContext, (value) =>
     issueHandlingContextSchema.parse(value),
@@ -101,7 +100,7 @@ export function projectDevelopmentEmployeeCaseDetail(input: {
         }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 1 as const,
     input: detailInput,
     workspace:
       input.workspace === null
