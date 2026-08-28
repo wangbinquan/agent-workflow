@@ -791,6 +791,25 @@ test('RFC-319 OPS-026: autoResumeOnBoot 开着才自动续跑上一代 interrupt
     const taskId = (JSON.parse(launchBody) as { id: string }).id
 
     await expect.poll(() => taskStatus(crashed, taskId), { timeout: 30_000 }).toBe('running')
+    // task.status 会在 isolation-create 外部副作用结算前先变成 running；若此时 SIGKILL，
+    // boot 恢复必须把 outcome-unknown 留给人确认，根本不属于 auto-resume 的安全窗口。
+    // 等真实 runtime 子进程与 PID 都已落库，才是在测 daemon 崩溃后的自动续跑。
+    await expect
+      .poll(
+        async () => {
+          const body = await apiJson<{
+            runs: Array<{ nodeId: string; status: string; pid: number | null }>
+          }>(crashed, `/api/tasks/${taskId}/node-runs`)
+          return body.runs.some(
+            (run) => run.nodeId === 'agent_1' && run.status === 'running' && run.pid !== null,
+          )
+        },
+        {
+          timeout: 30_000,
+          message: '前提不成立：agent runtime 子进程没有进入带 PID 的 running 状态',
+        },
+      )
+      .toBe(true)
     await crashed.killChild('SIGKILL')
 
     // ── ① autoResumeOnBoot 关着（产品默认）：boot 回收把它标成 interrupted，然后就该
