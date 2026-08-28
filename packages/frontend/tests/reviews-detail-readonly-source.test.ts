@@ -9,11 +9,10 @@
 //
 // RFC-149 rewrite: the old `readonly` + `isAwaiting` boolean pair became the
 // three-state `mode: ReviewPaneMode` ('awaiting' | 'decided' | 'historical').
-// Guards now read `mode !== 'historical'` (render gate) and
-// `mode !== 'awaiting'` (disable gate — the 'decided' state renders write
-// affordances greyed out instead of hiding them). If a future change drops
-// one of the `mode !== 'historical' &&` guards (or reverts to scattered
-// booleans), the corresponding assertion below fails.
+// RFC-340 then made actor-specific write affordances capability-driven:
+// current reviewers can comment and edit their own pending comments without
+// gaining decision or deletion controls. The assertions below therefore lock
+// both axes: the viewed round's mode and the server-projected capabilities.
 
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -68,56 +67,63 @@ describe('RFC-013/RFC-149 reviews.detail.tsx — readonly historical view', () =
     expect(s).toMatch(/decidedBy=\{viewed\.decidedBy\}/)
   })
 
-  test('keyboard handler short-circuits when historical', () => {
+  test('decision keyboard short-circuits when historical or canDecide is absent', () => {
     const s = src()
-    // Effect body opens with the mode short-circuit before touching
-    // popover / editingId / activeElement / diffMode.
+    // The route owns A/R/I. Historical views and actors without the projected
+    // decision capability both bail before pane capture or shortcut handling.
     expect(s).toMatch(
-      /onKey\s*=\s*\(e:[^)]*\)\s*=>\s*\{[\s\S]*?if\s*\(\s*mode\s*===\s*'historical'\s*\)\s*return/,
+      /onKey\s*=\s*\(e:[^)]*\)\s*=>\s*\{\s*if\s*\(mode\s*===\s*'historical'\)\s*return\s*if\s*\(detail\.data\?\.capabilities\.canDecide\s*!==\s*true\)\s*return/,
     )
     // RFC-082: right after the historical bail, the route keyboard also bails
-    // when the pane is capturing keystrokes (popover open / inline-editing),
-    // so A/R/I never fire mid-comment.
+    // when the pane is capturing keystrokes (popover open / inline-editing).
     expect(s).toMatch(
-      /if\s*\(\s*mode\s*===\s*'historical'\s*\)\s*return[\s\S]{0,80}if\s*\(\s*paneCapturing\s*\)\s*return/,
+      /capabilities\.canDecide\s*!==\s*true\)\s*return\s*if\s*\(paneCapturing\)\s*return/,
     )
-    // `mode` sits in the effect deps alongside paneCapturing.
-    expect(s).toMatch(/paneCapturing[\s\S]{0,200}mode\s*\]/m)
+    // Mode and capability payload are both dependencies of the handler.
+    expect(s).toMatch(
+      /\[paneCapturing,\s*onApprove,\s*onReject,\s*onIterate,\s*diffMode,\s*mode,\s*detail\.data\]/,
+    )
   })
 
-  test('decision buttons + dialog are gated behind mode (route); popover gated in pane', () => {
+  test('decision controls and comment popover combine mode with projected capabilities', () => {
     const s = src()
     // The three decision buttons live in a header-actions cluster wrapped by
-    // `{mode !== 'historical' && (<div className="review-detail__decision-actions" ...>)}`
-    // — rendered on BOTH current states ('awaiting' AND 'decided')…
+    // both the current-view gate and `canDecide`, so assigned reviewers never
+    // receive approve / iterate / reject controls.
     expect(s).toMatch(
-      /\{\s*mode !== 'historical'\s*&&\s*\(\s*<div\s+className="review-detail__decision-actions"/,
+      /\{\s*mode !== 'historical'\s*&&\s*data\.capabilities\.canDecide\s*&&\s*\(\s*<div\s+className="review-detail__decision-actions"/,
     )
-    // …and disabled unless the round is actually awaiting a decision.
+    // Owners/admins keep the decided-state controls visible but disabled.
     const disabledDecisions = s.match(
       /disabled=\{mode !== 'awaiting' \|\| submitDecision\.isPending\}/g,
     )
     expect(disabledDecisions?.length).toBe(3)
-    // The styled in-app decision dialog is also gated.
-    expect(s).toMatch(/\{\s*mode !== 'historical'\s*&&\s*decisionDialog\s*!==\s*null\s*&&/)
-    // RFC-082: the selection→comment popover moved to <ReviewDocPane>; its
-    // historical gate lives there now.
-    // RFC-149 impl-gate: NEW comment creation is awaiting-only (a decided
-    // round would only get a server-side rejection).
-    expect(pane()).toMatch(/\{\s*mode === 'awaiting'\s*&&\s*popover\s*!==\s*null\s*&&/)
+    // The styled in-app decision dialog carries the same two gates.
+    expect(s).toMatch(
+      /\{\s*mode !== 'historical'\s*&&\s*data\.capabilities\.canDecide\s*&&\s*decisionDialog\s*!==\s*null\s*&&/,
+    )
+    // Comment creation is independently projected. It remains awaiting-only,
+    // but assigned reviewers with canAddComment receive the popover.
+    const p = pane()
+    expect(p).toMatch(
+      /const canAddComment\s*=\s*mode\s*===\s*'awaiting'\s*&&\s*capabilities\.canAddComment/,
+    )
+    expect(p).toMatch(/\{canAddComment\s*&&\s*popover\s*!==\s*null\s*&&\s*\(/)
   })
 
-  test('comment-bubble write actions render unless historical; edit/delete disabled unless awaiting (pane)', () => {
+  test('comment-bubble writes follow projected own/manage capabilities (pane)', () => {
     const p = pane()
-    // RFC-082: the bubble write actions moved to <ReviewDocPane>.
-    expect(p).toMatch(/\{\s*mode !== 'historical'\s*&&\s*!isEditing\s*&&\s*\(/)
-    // RFC-149 'decided' contract: edit (✎) + delete (×) stay visible but
-    // disabled on a current-but-decided round.
-    const disabledWrites = p.match(/disabled=\{mode !== 'awaiting'\}/g)
-    expect(disabledWrites?.length).toBe(1)
-    expect(p).toMatch(/disabled=\{mode !== 'awaiting' \|\| deleteComment\.isPending\}/)
+    // Edit and delete are separate decisions: a reviewer can edit only their
+    // own pending comment, while delete stays absent unless its own capability
+    // is projected. Copy remains available inside the shared actions cluster.
+    expect(p).toContain('(capabilities.canEditOwnComments && actorUserId === comment.author)')
+    expect(p).toContain('(capabilities.canDeleteOwnComments && actorUserId === comment.author)')
+    expect(p).toMatch(/\{canEditComment\(c\)\s*&&\s*\(\s*<button/)
+    expect(p).toMatch(/\{canDeleteComment\(c\)\s*&&\s*\(\s*<button/)
+    expect(p).toMatch(/disabled=\{deleteComment\.isPending\}/)
     // The pane takes the single three-state prop, not the retired boolean pair.
     expect(p).toMatch(/mode:\s*ReviewPaneMode/)
+    expect(p).toMatch(/capabilities:\s*ReviewCapabilities/)
     expect(p).not.toMatch(/readonly:\s*boolean/)
     expect(p).not.toMatch(/awaiting:\s*boolean/)
   })
@@ -130,11 +136,15 @@ describe('RFC-013/RFC-149 reviews.detail.tsx — readonly historical view', () =
     )
   })
 
-  test('onMouseUpInDoc bails out unless awaiting (pane)', () => {
-    // RFC-082: onMouseUpInDoc moved into <ReviewDocPane>. RFC-149 impl-gate:
-    // the bail widened from historical-only to non-awaiting (decided rounds
-    // must not open the add-comment popover either).
-    expect(pane()).toMatch(/if\s*\(\s*mode\s*!==\s*'awaiting'\s*\)\s*return/)
+  test('onMouseUpInDoc requires awaiting mode plus canAddComment (pane)', () => {
+    const p = pane()
+    expect(p).toMatch(
+      /const canAddComment\s*=\s*mode\s*===\s*'awaiting'\s*&&\s*capabilities\.canAddComment/,
+    )
+    expect(p).toMatch(/if\s*\(!canAddComment\)\s*return/)
+    expect(p).toMatch(
+      /onMouseUp=\{canAddComment\s*\?\s*\(\)\s*=>\s*void onMouseUpInDoc\(\)\s*:\s*undefined\}/,
+    )
   })
 
   test('historical body / comments come from a separate query keyed by vid', () => {

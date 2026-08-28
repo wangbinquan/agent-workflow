@@ -528,6 +528,16 @@ export const ROUTE_UX_INVENTORY = {
     classification: 'specialized',
     owners: [rendered('task-markdown-preview-route.test.tsx')],
   },
+  '@/routes/tasks.reviewers#Route': {
+    surface: '/tasks/$taskId/reviewers',
+    classification: 'standard',
+    owners: [rendered('rfc340-task-reviewers-page.test.tsx')],
+    header: {
+      mode: 'direct',
+      sourceFile: 'routes/tasks.reviewers.tsx',
+      primitive: 'PageHeader',
+    },
+  },
   '@/routes/tasks.detail#Route': {
     surface: '/tasks/$id',
     classification: 'specialized',
