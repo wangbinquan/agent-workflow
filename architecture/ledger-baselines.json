@@ -308,10 +308,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 965,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-338、RFC-339 与 RFC-340 新增显式 maintenance、WrapperRuntime 与 reviewer command 入口，完整纳入 mutation 分母。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -325,40 +322,28 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 269,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-338、RFC-339 与 RFC-340 把 maintenance、WrapperRuntime 与 reviewer transaction callbacks 显式纳入清点。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 263,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-338 与 RFC-339 将 maintenance workers 和 wrapper execution-local mechanics 拆成可枚举的显式 owner。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 444,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-338、RFC-339 与 RFC-340 新增 bootstrap-owned worker、driver、read-model 与 collaboration context 装配接点。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 1440,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-338、RFC-339 与 RFC-340 新增 bounded-context 文件和 public contracts，故 symbol-level observed edges 完整增长。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -379,10 +364,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 1403,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-338、RFC-339 与 RFC-340 的新增 symbol-level 边按 exact path 和 symbol 登记；RFC-339 同时删除五条过期 R1 债。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -396,10 +378,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 392,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-338、RFC-339 与 RFC-340 新增 maintenance、task-execution 与 collaboration 的 exact public contracts。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -420,10 +399,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18519,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-338、RFC-339 与 RFC-340 新增 bounded-context production files 和 top-level symbols，并逐项分配唯一 owner。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -440,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0c9c48e68b23f15aee5e812193fd3c7c2e371345",
-    "contentDigest": "sha256:a6307e440ffc7a410d738467164a44cc24d4f87eb175b326ca4cf7895c7b7d9a",
+    "currentSnapshotSha": "0eecc7882ef63ad12fa1a3ff0e39b3137562b4ce",
+    "contentDigest": "sha256:22636de19030e2010178a38be11fa13c53fe7e16d95f95cd82a6ff421ab6fbb8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
