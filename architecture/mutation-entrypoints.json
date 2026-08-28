@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 965,
+    "entries": 966,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -9446,7 +9446,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -9457,7 +9457,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "fenceOrOcc",
         "transaction"
       ],
@@ -22425,6 +22424,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/util/inFlight.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/util/inFlight.ts#createInFlightCoalescer",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/util/inFlight.ts#createInFlightCoalescer",
+      "symbol": "createInFlightCoalescer",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -22680,7 +22704,7 @@
       },
       "file": "packages/backend/src/ws/connections.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/connections.ts#$http:delete:80",
+      "id": "mutation:packages/backend/src/ws/connections.ts#$http:delete:88",
       "missingControls": [
         "audit",
         "authority",
@@ -22690,7 +22714,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/connections.ts#$file",
-      "symbol": "$http:delete:80",
+      "symbol": "$http:delete:88",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -22943,7 +22967,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:499ab97ab2a56011c0c80e994867ba38b08df27eac439f4163a1cea1443dbefd",
+  "sourceDigest": "sha256:d3ab17db483fba2664cadbabcc6b8031d83e1971cad804c61adc1561f2edf050",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -25451,8 +25475,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3325:tasks",
-        "line": 3325,
+        "id": "task-authority:packages/backend/src/services/task.ts#3326:tasks",
+        "line": 3326,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -25467,8 +25491,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3450:taskExecutionIntents",
-        "line": 3450,
+        "id": "task-authority:packages/backend/src/services/task.ts#3451:taskExecutionIntents",
+        "line": 3451,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -25483,8 +25507,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3508:tasks",
-        "line": 3508,
+        "id": "task-authority:packages/backend/src/services/task.ts#3509:tasks",
+        "line": 3509,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -25499,8 +25523,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4136:tasks",
-        "line": 4136,
+        "id": "task-authority:packages/backend/src/services/task.ts#4137:tasks",
+        "line": 4137,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -25515,8 +25539,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5685:tasks",
-        "line": 5685,
+        "id": "task-authority:packages/backend/src/services/task.ts#5686:tasks",
+        "line": 5686,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
