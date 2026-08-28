@@ -5,6 +5,7 @@ import type { UserAccessTransactionRunner } from '../ports/userAccessTransaction
 
 export interface UpdateOwnProfileCommand {
   readonly displayName: string
+  readonly gitName: string
   readonly email: string
 }
 
@@ -49,7 +50,10 @@ export class UpdateOwnProfile {
           'email already belongs to another user',
         )
       }
-      const changed = current.displayName !== command.displayName || current.email !== command.email
+      const changed =
+        current.displayName !== command.displayName ||
+        current.gitName !== command.gitName ||
+        current.email !== command.email
       if (changed) {
         const updated = transaction.updateUserConditional({
           id: current.id,
@@ -57,6 +61,7 @@ export class UpdateOwnProfile {
           accessChanged: false,
           values: {
             displayName: command.displayName,
+            gitName: command.gitName,
             email: command.email,
             updatedAt: context.now,
           },
@@ -81,8 +86,9 @@ export class UpdateOwnProfile {
       }
       return {
         displayName: command.displayName,
+        gitName: command.gitName,
         email: command.email,
-        gitCommitIdentity: { name: command.displayName, email: command.email },
+        gitCommitIdentity: { name: command.gitName, email: command.email },
       }
     })
   }

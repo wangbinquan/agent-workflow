@@ -68,6 +68,7 @@ const FULL_ROW = {
   jwksUri: null,
   trustEmailVerified: true,
   usernameClaim: 'login sig',
+  gitNameClaim: 'given_name family_name',
   emailClaim: 'mail',
   subjectClaim: 'id',
   createdAt: 1,
@@ -195,6 +196,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     expect(body.userinfoEndpoint).toBeNull()
     expect(body.jwksUri).toBeNull()
     expect(body.usernameClaim).toBeNull()
+    expect(body.gitNameClaim).toBeNull()
     expect(body.emailClaim).toBeNull()
     expect(body.subjectClaim).toBe('id')
     expect(body.trustEmailVerified).toBe(false)
@@ -256,6 +258,9 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     expect((screen.getByPlaceholderText('preferred_username') as HTMLInputElement).value).toBe(
       'login sig',
     )
+    expect((screen.getByPlaceholderText('git_name') as HTMLInputElement).value).toBe(
+      'given_name family_name',
+    )
     expect((screen.getByPlaceholderText('email') as HTMLInputElement).value).toBe('mail')
     const trust = screen.getByRole('checkbox', {
       name: /Trust emails as verified/,
@@ -274,6 +279,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     >
     expect(body.authorizationEndpoint).toBeNull() // cleared field → null
     expect(body.trustEmailVerified).toBe(false)
+    expect(body.gitNameClaim).toBe('given_name family_name')
     expect(body.emailClaim).toBe('mail')
     expect(body.subjectClaim).toBe('id') // untouched values survive
   })
@@ -283,6 +289,7 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     delete (legacy as Record<string, unknown>).authorizationEndpoint
     delete (legacy as Record<string, unknown>).trustEmailVerified
     delete (legacy as Record<string, unknown>).usernameClaim
+    delete (legacy as Record<string, unknown>).gitNameClaim
     delete (legacy as Record<string, unknown>).emailClaim
     renderAuthentication([legacy])
     fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
@@ -292,9 +299,10 @@ describe('RFC-220 S10 — provider dialog fields', () => {
         .value,
     ).toBe('')
     expect((screen.getByPlaceholderText('email') as HTMLInputElement).value).toBe('')
+    expect((screen.getByPlaceholderText('git_name') as HTMLInputElement).value).toBe('')
   })
 
-  test('username/email selectors fail in their own fields before submit', async () => {
+  test('display/Git/email selectors fail in their own fields before submit', async () => {
     renderAuthentication([FULL_ROW])
     ;(api.patch as ReturnType<typeof vi.fn>).mockResolvedValue({})
     fireEvent.click(await screen.findByTestId('oidc-edit-p1'))
@@ -312,6 +320,12 @@ describe('RFC-220 S10 — provider dialog fields', () => {
     fireEvent.change(username, { target: { value: '__proto__' } })
     expect(username.getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByText(/Use 1–8 plain claim names/)).toBeTruthy()
+    expect(save.disabled).toBe(true)
+
+    fireEvent.change(username, { target: { value: 'login sig' } })
+    const gitName = screen.getByPlaceholderText('git_name')
+    fireEvent.change(gitName, { target: { value: 'given_name  family_name' } })
+    expect(gitName.getAttribute('aria-invalid')).toBe('true')
     expect(save.disabled).toBe(true)
     expect(api.patch).not.toHaveBeenCalled()
   })

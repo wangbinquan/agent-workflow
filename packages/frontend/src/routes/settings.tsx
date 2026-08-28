@@ -2546,6 +2546,7 @@ function OidcProviderDialog(props: {
   const [jwksUri, setJwksUri] = useState(initial?.jwksUri ?? '')
   const [trustEmailVerified, setTrustEmailVerified] = useState(initial?.trustEmailVerified ?? false)
   const [usernameClaim, setUsernameClaim] = useState(initial?.usernameClaim ?? '')
+  const [gitNameClaim, setGitNameClaim] = useState(initial?.gitNameClaim ?? '')
   const [emailClaim, setEmailClaim] = useState(initial?.emailClaim ?? '')
   const [subjectClaim, setSubjectClaim] = useState(initial?.subjectClaim ?? '')
   const [testResult, setTestResult] = useState<null | OidcTestView>(null)
@@ -2559,14 +2560,18 @@ function OidcProviderDialog(props: {
   const busyRef = useRef(false)
 
   const normalizedUsernameClaim = usernameClaim.trim()
+  const normalizedGitNameClaim = gitNameClaim.trim()
   const normalizedEmailClaim = emailClaim.trim()
   const usernameClaimValid = CreateOidcProviderBodySchema.shape.usernameClaim.safeParse(
     normalizedUsernameClaim === '' ? null : normalizedUsernameClaim,
   ).success
+  const gitNameClaimValid = CreateOidcProviderBodySchema.shape.gitNameClaim.safeParse(
+    normalizedGitNameClaim === '' ? null : normalizedGitNameClaim,
+  ).success
   const emailClaimValid = CreateOidcProviderBodySchema.shape.emailClaim.safeParse(
     normalizedEmailClaim === '' ? null : normalizedEmailClaim,
   ).success
-  const profileClaimSelectorsValid = usernameClaimValid && emailClaimValid
+  const profileClaimSelectorsValid = usernameClaimValid && gitNameClaimValid && emailClaimValid
 
   const currentDraftSignature = JSON.stringify({
     slug,
@@ -2585,6 +2590,7 @@ function OidcProviderDialog(props: {
     jwksUri,
     trustEmailVerified,
     usernameClaim,
+    gitNameClaim,
     emailClaim,
     subjectClaim,
   })
@@ -2652,6 +2658,7 @@ function OidcProviderDialog(props: {
         jwksUri: blankToNull(jwksUri),
         trustEmailVerified,
         usernameClaim: blankToNull(usernameClaim),
+        gitNameClaim: blankToNull(gitNameClaim),
         emailClaim: blankToNull(emailClaim),
         subjectClaim: blankToNull(subjectClaim),
       }
@@ -3022,7 +3029,7 @@ function OidcProviderDialog(props: {
             <div className="oidc-form__row oidc-form__row--cols-2">
               <Field
                 label={t('settings.auth.usernameClaim', {
-                  defaultValue: 'Username fields (Git user.name)',
+                  defaultValue: 'Display username fields',
                 })}
                 error={
                   usernameClaimValid
@@ -3035,7 +3042,7 @@ function OidcProviderDialog(props: {
                 errorId="oidc-username-claim-error"
                 hint={t('settings.auth.usernameClaimHint', {
                   defaultValue:
-                    'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
+                    'Userinfo fields for the in-product display name. Space-separate 1–8 fields to join them in order. Blank uses standard preferred_username; refreshed on every sign-in.',
                 })}
               >
                 <TextInput
@@ -3046,6 +3053,34 @@ function OidcProviderDialog(props: {
                   aria-errormessage={usernameClaimValid ? undefined : 'oidc-username-claim-error'}
                 />
               </Field>
+              <Field
+                label={t('settings.auth.gitNameClaim', {
+                  defaultValue: 'Git name fields',
+                })}
+                error={
+                  gitNameClaimValid
+                    ? undefined
+                    : t('settings.auth.gitNameClaimInvalid', {
+                        defaultValue:
+                          'Use 1–8 plain claim names separated by single spaces; reserved object keys are not allowed.',
+                      })
+                }
+                errorId="oidc-git-name-claim-error"
+                hint={t('settings.auth.gitNameClaimHint', {
+                  defaultValue:
+                    'Userinfo fields for Git user.name. Space-separate 1–8 fields to join them in order. Blank follows the resolved display name; refreshed on every sign-in.',
+                })}
+              >
+                <TextInput
+                  value={gitNameClaim}
+                  onChange={setGitNameClaim}
+                  placeholder="git_name"
+                  aria-invalid={!gitNameClaimValid}
+                  aria-errormessage={gitNameClaimValid ? undefined : 'oidc-git-name-claim-error'}
+                />
+              </Field>
+            </div>
+            <div className="oidc-form__row oidc-form__row--cols-2">
               <Field
                 label={t('settings.auth.emailClaim', {
                   defaultValue: 'Email field (Git user.email)',
@@ -3072,8 +3107,6 @@ function OidcProviderDialog(props: {
                   aria-errormessage={emailClaimValid ? undefined : 'oidc-email-claim-error'}
                 />
               </Field>
-            </div>
-            <div className="oidc-form__row oidc-form__row--cols-2">
               <Field
                 label={t('settings.auth.subjectClaim', { defaultValue: 'Subject field' })}
                 hint={t('settings.auth.subjectClaimHint', {

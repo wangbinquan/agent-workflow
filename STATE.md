@@ -2,6 +2,13 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🛠️ **进行中 RFC（实现完成，等待发布/CI，2026-08-28）：[RFC-335 OIDC 显示用户名与 Git name 分离](design/RFC-335-oidc-display-git-name-separation/proposal.md)。**
+> 用户已批准 D1–D7 并授权推送。实现新增 `gitNameClaim/users.git_name`，保留 `usernameClaim` wire 但只映射
+> 产品显示名；existing/create/bind/link 均在 session 前按本次 IdP 值对账 display/Git name。账户页拆成
+> 显示名、Git name、邮箱，新任务从 `git_name + email` 冻结提交身份，旧 task 与 push credential 不变。
+> migration/claim/identity-access/account/task 回归共 153 tests、三 workspace typecheck 已通过；等待 exact-path
+> commit、推送和 exact-SHA hosted CI。
+
 > 🧭 **当前架构节点（In Progress，2026-08-28）：[RFC-334 NodeExecutorRegistry（RFC-294 W2-C）](design/RFC-334-node-executor-registry/proposal.md)。**
 > source pin `0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34` 上的 current-source 调研与 proposal/design/plan 已完成：closed catalog
 > 恰为 14 个 `NodeKind`（13 个 user-authored live + `code-round` synthesized-only/retired），DAG 仍经 RFC-332 W2-C bridge

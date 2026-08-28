@@ -41,6 +41,7 @@ const userActor: MeResponse = {
   },
   profile: {
     displayName: 'Alice',
+    gitName: 'Alice',
     email: 'alice@example.test',
     gitCommitIdentity: { name: 'Alice', email: 'alice@example.test' },
   },

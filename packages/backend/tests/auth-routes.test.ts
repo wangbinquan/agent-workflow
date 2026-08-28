@@ -177,7 +177,12 @@ describe('/api/auth/me', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
       user: { id: string }
-      profile: { displayName: string; email: string | null; gitCommitIdentity: unknown }
+      profile: {
+        displayName: string
+        gitName: string
+        email: string | null
+        gitCommitIdentity: unknown
+      }
       source: string
       linkedIdentities: unknown[]
       pats: unknown[]
@@ -215,6 +220,7 @@ describe('/api/auth/me', () => {
       user: { username: 'alice', displayName: 'Alice' },
       profile: {
         displayName: 'Alice',
+        gitName: 'Alice',
         email: 'alice@example.test',
         gitCommitIdentity: { name: 'Alice', email: 'alice@example.test' },
       },
@@ -227,6 +233,7 @@ describe('/api/auth/me', () => {
         method: 'PATCH',
         body: JSON.stringify({
           displayName: ' Alice Chen ',
+          gitName: ' A. Chen ',
           email: 'ALICE.CHEN@EXAMPLE.TEST',
         }),
       },
@@ -236,8 +243,9 @@ describe('/api/auth/me', () => {
     expect((await updated.json()) as unknown).toEqual({
       profile: {
         displayName: 'Alice Chen',
+        gitName: 'A. Chen',
         email: 'alice.chen@example.test',
-        gitCommitIdentity: { name: 'Alice Chen', email: 'alice.chen@example.test' },
+        gitCommitIdentity: { name: 'A. Chen', email: 'alice.chen@example.test' },
       },
     })
 
@@ -264,7 +272,11 @@ describe('/api/auth/me', () => {
       '/api/auth/me/profile',
       {
         method: 'PATCH',
-        body: JSON.stringify({ displayName: 'Alice', email: 'bob@example.test' }),
+        body: JSON.stringify({
+          displayName: 'Alice',
+          gitName: 'A. Chen',
+          email: 'bob@example.test',
+        }),
       },
       authorization,
     )
@@ -278,6 +290,7 @@ describe('/api/auth/me', () => {
         method: 'PATCH',
         body: JSON.stringify({
           displayName: 'Alice',
+          gitName: 'A. Chen',
           email: 'alice@example.test',
           role: 'admin',
         }),

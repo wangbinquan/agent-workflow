@@ -26,6 +26,10 @@ const REASON_TO_TEXT: Record<string, string> = {
   'userinfo-shape-invalid': 'The provider returned an unusable userinfo response.',
   'oidc-email-claim-invalid':
     'The configured userinfo email field is missing or is not a valid email address.',
+  'oidc-display-name-claim-invalid':
+    'The configured display-name field is missing, empty, or longer than 128 characters.',
+  'oidc-git-name-claim-invalid':
+    'The configured Git name field is missing, empty, or longer than 128 characters.',
   'userinfo-subject-mismatch':
     'The userinfo response does not belong to the verified identity. Contact your administrator.',
   'oidc-email-conflict': 'That email address already belongs to another account.',

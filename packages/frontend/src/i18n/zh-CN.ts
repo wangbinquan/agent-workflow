@@ -993,6 +993,8 @@ export interface Resources {
     profile: string
     username: string
     displayName: string
+    displayNameHint: string
+    gitName: string
     email: string
     gitIdentityTitle: string
     gitIdentityDescription: string
@@ -2376,6 +2378,9 @@ export interface Resources {
       usernameClaim: string
       usernameClaimHint: string
       usernameClaimInvalid: string
+      gitNameClaim: string
+      gitNameClaimHint: string
+      gitNameClaimInvalid: string
       emailClaim: string
       emailClaimHint: string
       emailClaimInvalid: string
@@ -7371,16 +7376,18 @@ export const zhCN: Resources = {
     profile: '基本信息',
     username: '用户名',
     displayName: '显示名',
+    displayNameHint: '在产品界面、成员列表和任务负责人中显示的名称。',
+    gitName: 'Git name',
     email: '邮箱',
     gitIdentityTitle: 'Git 提交身份',
     gitIdentityDescription:
-      '新任务会把这里的值冻结为 Git user.name 和 user.email；推送认证在下方单独配置。',
+      '显示名用于产品内展示；新任务会把 Git name 和邮箱冻结为 user.name 与 user.email，推送认证在下方单独配置。',
     gitIdentityNameHint: '你的任务创建提交时使用的 Git user.name。',
     gitIdentityEmailHint: '你的任务创建提交时使用的 Git user.email。',
     saveProfile: '保存资料',
     profileSaved: '账户资料和 Git 提交身份已保存。',
     oidcProfileRefreshHint:
-      '如果身份提供商配置了用户名和邮箱字段，每次 OIDC 登录都会用最新字段刷新这里。',
+      '显示名、Git name 和邮箱会在每次 OIDC 登录时按身份提供商的字段映射刷新。',
     role: '角色',
     status: '状态',
     source: '登录方式',
@@ -9280,10 +9287,14 @@ export const zhCN: Resources = {
       trustEmailLabel: '信任邮箱已验证',
       trustEmailHint:
         '该 IdP 返回的 email 一律视为已验证（纯 OAuth 2.0 IdP 配合邀请制/白名单时必开）。若 IdP 允许用户自填未验证邮箱请勿开启。',
-      usernameClaim: '用户名字段（Git user.name）',
+      usernameClaim: '显示用户名字段',
       usernameClaimHint:
-        '从身份响应读取呈现名的字段名，可空格分隔多个、按序拼接（如 name signature）。留空用标准 preferred_username。配置后每次登录跟随 IdP 刷新呈现名。',
+        '从 userinfo 读取产品内显示名；可空格分隔 1–8 个字段并按序拼接。留空使用标准 preferred_username；每次登录刷新。',
       usernameClaimInvalid: '请输入 1–8 个普通字段名，并用单个空格分隔；不能使用保留对象键。',
+      gitNameClaim: 'Git name 字段',
+      gitNameClaimHint:
+        '从 userinfo 读取 Git user.name；可空格分隔 1–8 个字段并按序拼接。留空跟随本次解析出的显示名；每次登录刷新。',
+      gitNameClaimInvalid: '请输入 1–8 个普通字段名，并用单个空格分隔；不能使用保留对象键。',
       emailClaim: '邮箱字段（Git user.email）',
       emailClaimHint:
         'userinfo 中承载账号与 Git 提交邮箱的字段名。留空使用标准 email；每次登录都会刷新。',

@@ -19,22 +19,28 @@ export function AccountGitIdentityCard({ me }: { me: MeResponse }) {
   const queryClient = useQueryClient()
   const authSessionRevision = useAuthSessionRevision()
   const [displayName, setDisplayName] = useState(me.profile.displayName)
+  const [gitName, setGitName] = useState(me.profile.gitName)
   const [email, setEmail] = useState(me.profile.email ?? '')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     setDisplayName(me.profile.displayName)
+    setGitName(me.profile.gitName)
     setEmail(me.profile.email ?? '')
-  }, [me.profile.displayName, me.profile.email])
+  }, [me.profile.displayName, me.profile.gitName, me.profile.email])
 
-  const normalizedName = displayName.trim()
+  const normalizedDisplayName = displayName.trim()
+  const normalizedGitName = gitName.trim()
   const normalizedEmail = email.trim().toLowerCase()
   const changed =
-    normalizedName !== me.profile.displayName || normalizedEmail !== (me.profile.email ?? '')
+    normalizedDisplayName !== me.profile.displayName ||
+    normalizedGitName !== me.profile.gitName ||
+    normalizedEmail !== (me.profile.email ?? '')
   const updateProfile = useMutation({
     mutationFn: async () => {
       const response = await api.patch<{ profile: UserPrivateProfile }>('/api/auth/me/profile', {
-        displayName: normalizedName,
+        displayName: normalizedDisplayName,
+        gitName: normalizedGitName,
         email: normalizedEmail,
       })
       return { response, authSessionRevision }
@@ -51,6 +57,7 @@ export function AccountGitIdentityCard({ me }: { me: MeResponse }) {
           : current,
       )
       setDisplayName(profile.displayName)
+      setGitName(profile.gitName)
       setEmail(profile.email ?? '')
       setSaved(true)
     },
@@ -70,10 +77,19 @@ export function AccountGitIdentityCard({ me }: { me: MeResponse }) {
           updateProfile.mutate()
         }}
       >
-        <Field label={t('account.displayName')} hint={t('account.gitIdentityNameHint')} required>
+        <Field label={t('account.displayName')} hint={t('account.displayNameHint')} required>
           <TextInput
             value={displayName}
             onChange={setDisplayName}
+            maxLength={128}
+            autoComplete="name"
+            required
+          />
+        </Field>
+        <Field label={t('account.gitName')} hint={t('account.gitIdentityNameHint')} required>
+          <TextInput
+            value={gitName}
+            onChange={setGitName}
             maxLength={128}
             autoComplete="name"
             required
@@ -107,7 +123,8 @@ export function AccountGitIdentityCard({ me }: { me: MeResponse }) {
             disabled={
               updateProfile.isPending ||
               !changed ||
-              normalizedName.length === 0 ||
+              normalizedDisplayName.length === 0 ||
+              normalizedGitName.length === 0 ||
               normalizedEmail.length === 0
             }
             aria-busy={updateProfile.isPending || undefined}

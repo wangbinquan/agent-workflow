@@ -10,9 +10,9 @@ export class GetUserProfile {
   async execute(userId: string): Promise<UserPrivateProfile | null> {
     const snapshot = await this.repository.findAccessSnapshot(userId)
     if (snapshot === null) return null
-    const { displayName, email } = snapshot.user
+    const { displayName, gitName, email } = snapshot.user
     const gitCommitIdentity: GitCommitIdentity | null =
-      email === null ? null : { name: displayName, email }
-    return { displayName, email, gitCommitIdentity }
+      email === null ? null : { name: gitName, email }
+    return { displayName, gitName, email, gitCommitIdentity }
   }
 }

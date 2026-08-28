@@ -34,6 +34,7 @@ function actor(userId: string, permissions: Permission[]): MeResponse {
     },
     profile: {
       displayName: userId,
+      gitName: userId,
       email: `${userId}@example.test`,
       gitCommitIdentity: { name: userId, email: `${userId}@example.test` },
     },

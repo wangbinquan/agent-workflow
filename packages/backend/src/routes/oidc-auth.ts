@@ -6,7 +6,7 @@
 import type { Context, Hono } from 'hono'
 import { publicOriginOf } from '@/routes/publicOrigin'
 import { resolveEndpoints } from '@/auth/oidc/endpoints'
-import { acquireIdentityClaims } from '@/auth/oidc/identity'
+import { acquireIdentityClaims, resolveOidcProfileNames } from '@/auth/oidc/identity'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
 import { OidcTokenError, exchangeCodeForTokens } from '@/auth/oidc/tokens'
 import { createLoginSession } from '@/auth/sessionStore'
@@ -144,6 +144,8 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
       if (!eff.tokenEndpoint) return c.html(friendly('endpoints-unresolved'), 503)
 
       let claims: IdTokenClaims
+      let displayName: string
+      let gitName: string
       try {
         const tokens = await exchangeCodeForTokens({
           tokenEndpoint: eff.tokenEndpoint,
@@ -160,6 +162,7 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
             clientId: provider.clientId,
             nonce: flow.nonce,
             usernameClaim: provider.usernameClaim,
+            gitNameClaim: provider.gitNameClaim,
             emailClaim: provider.emailClaim,
             subjectClaim: provider.subjectClaim,
             userinfoRequestStyle: provider.userinfoRequestStyle,
@@ -167,6 +170,9 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
           }),
           provider.trustEmailVerified,
         )
+        const profileNames = resolveOidcProfileNames(provider, claims)
+        displayName = profileNames.displayName
+        gitName = profileNames.gitName
       } catch (err) {
         const code =
           err instanceof BadRequestErrorOrFriendlyHtml
@@ -177,10 +183,9 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
         return c.html(friendly(code), 400)
       }
 
-      // RFC-220 D7 — identity snapshot seed ('' = observed-but-absent sentinel);
-      // only meaningful when usernameClaim is configured.
-      const snapshotInit =
-        provider.usernameClaim !== null ? (claims.preferred_username ?? '') : null
+      // RFC-335 — retained for compatibility/diagnostics only; it no longer
+      // controls whether profile reconciliation overwrites an in-app edit.
+      const snapshotInit = displayName
 
       if (flow.linkUserId) {
         try {
@@ -190,9 +195,12 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
             subject: claims.sub,
             email: claims.email ?? null,
             emailVerified: !!claims.email_verified,
+            displayName,
+            gitName,
             preferredSnapshot: snapshotInit,
             expectedSubjectClaim: provider.subjectClaim,
             expectedUsernameClaim: provider.usernameClaim,
+            expectedGitNameClaim: provider.gitNameClaim,
             expectedEmailClaim: provider.emailClaim,
           })
         } catch (err) {
@@ -225,9 +233,12 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
         subject: claims.sub,
         email: claims.email ?? null,
         emailVerified: !!claims.email_verified,
+        displayName,
+        gitName,
         preferredSnapshot: snapshotInit,
         expectedSubjectClaim: provider.subjectClaim,
         expectedUsernameClaim: provider.usernameClaim,
+        expectedGitNameClaim: provider.gitNameClaim,
         expectedEmailClaim: provider.emailClaim,
       }
       let userId: string
@@ -235,19 +246,18 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
         switch (decision.action) {
           case 'login':
             userId = decision.userId
-            // RFC-220 D7 — presented-name follow + email_verified sync for the
-            // existing identity (three-way snapshot merge, design §5.3).
+            // RFC-335 — both names reconcile on every successful callback.
             syncPreferredSnapshot(deps.db, {
               providerId: provider.id,
               subject: claims.sub,
               userId,
-              composed:
-                provider.usernameClaim !== null ? (claims.preferred_username ?? null) : null,
+              displayName,
+              gitName,
               email: claims.email ?? null,
               emailVerified: !!claims.email_verified,
-              usernameClaimConfigured: provider.usernameClaim !== null,
               expectedSubjectClaim: provider.subjectClaim,
               expectedUsernameClaim: provider.usernameClaim,
+              expectedGitNameClaim: provider.gitNameClaim,
               expectedEmailClaim: provider.emailClaim,
             })
             break
@@ -258,11 +268,8 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
             // of leaving an identity-less active account (design §6.2).
             const created = await createUserWithIdentity(deps.db, {
               username: await pickUniqueUsername(deps, claims),
-              displayName:
-                (provider.usernameClaim !== null ? claims.preferred_username : null) ??
-                claims.name ??
-                claims.email ??
-                'OIDC User',
+              displayName,
+              gitName,
               email: claims.email ?? null,
               identity: identitySeed,
             })
@@ -289,6 +296,13 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
         }
         if (isDomainCode(err, 'oidc-email-conflict')) {
           return c.html(friendly('oidc-email-conflict'), 409)
+        }
+        if (
+          err instanceof DomainError &&
+          (err.code === 'oidc-display-name-claim-invalid' ||
+            err.code === 'oidc-git-name-claim-invalid')
+        ) {
+          return c.html(friendly(err.code), 400)
         }
         throw err
       }

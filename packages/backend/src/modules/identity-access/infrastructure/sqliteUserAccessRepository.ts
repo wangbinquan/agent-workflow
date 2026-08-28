@@ -43,6 +43,7 @@ interface RawUserAccessRow {
   username: string
   email: string | null
   display_name: string
+  git_name: string
   password_hash: string | null
   role: string
   status: string
@@ -70,14 +71,14 @@ interface RawAccessSnapshotRow extends RawUserAccessRow {
 }
 
 const USER_SELECT = sql.raw(`
-  SELECT id, username, email, display_name, password_hash, role, status,
+  SELECT id, username, email, display_name, git_name, password_hash, role, status,
          force_password_change, created_by, created_at, updated_at,
          last_login_at, schema_version, access_revision
   FROM users
 `)
 
 const ACCESS_SNAPSHOT_SELECT = sql.raw(`
-  SELECT u.id, u.username, u.email, u.display_name, u.password_hash,
+  SELECT u.id, u.username, u.email, u.display_name, u.git_name, u.password_hash,
          u.role, u.status, u.force_password_change, u.created_by,
          u.created_at, u.updated_at, u.last_login_at, u.schema_version,
          u.access_revision,
@@ -151,6 +152,7 @@ export interface InitialUserAccessProvision {
     readonly username: string
     readonly email: string | null
     readonly displayName: string
+    readonly gitName: string
     readonly passwordHash: string | null
     readonly role: Role
     readonly status: ManagedUserStatus
@@ -282,6 +284,7 @@ class SQLiteUserAccessTransaction implements UserAccessTransaction {
       .select({
         subjectClaim: oidcProviders.subjectClaim,
         usernameClaim: oidcProviders.usernameClaim,
+        gitNameClaim: oidcProviders.gitNameClaim,
         emailClaim: oidcProviders.emailClaim,
       })
       .from(oidcProviders)
@@ -345,6 +348,7 @@ class SQLiteUserAccessTransaction implements UserAccessTransaction {
         username: record.username,
         email: record.email,
         displayName: record.displayName,
+        gitName: record.gitName,
         passwordHash: record.passwordHash,
         role: record.role,
         status: record.status,
@@ -361,6 +365,7 @@ class SQLiteUserAccessTransaction implements UserAccessTransaction {
   updateUserConditional(update: ConditionalUserUpdate): boolean {
     const values: Partial<typeof users.$inferInsert> = {}
     if (update.values.displayName !== undefined) values.displayName = update.values.displayName
+    if (update.values.gitName !== undefined) values.gitName = update.values.gitName
     if (Object.prototype.hasOwnProperty.call(update.values, 'email')) {
       values.email = update.values.email
     }
@@ -427,6 +432,7 @@ function mapUser(row: RawUserAccessRow): UserAccessRecord {
     username: row.username,
     email: row.email,
     displayName: row.display_name,
+    gitName: row.git_name,
     passwordHash: row.password_hash,
     role: row.role as Role,
     status: row.status as UserAccessRecord['status'],

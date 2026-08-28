@@ -57,6 +57,9 @@ export interface CreateIdentityArgs {
   subject: string
   email: string | null
   emailVerified: boolean
+  /** RFC-335 — callback-resolved profile values; omitted by direct API callers. */
+  displayName?: string
+  gitName?: string
   /** RFC-220 D7 — initial presented-name snapshot ('' = observed-but-absent
    * sentinel). Omitted (legacy callers) → NULL, the never-observed state. */
   preferredSnapshot?: string | null
@@ -70,6 +73,7 @@ export interface CreateIdentityArgs {
   expectedSubjectClaim?: string | null
   /** RFC-320 — profile selector snapshots share the same callback/write fence. */
   expectedUsernameClaim?: string | null
+  expectedGitNameClaim?: string | null
   expectedEmailClaim?: string | null
   now?: number
 }
@@ -78,12 +82,17 @@ function assertProviderSnapshot(
   tx: DbTxSync,
   args: Pick<
     CreateIdentityArgs,
-    'providerId' | 'expectedSubjectClaim' | 'expectedUsernameClaim' | 'expectedEmailClaim'
+    | 'providerId'
+    | 'expectedSubjectClaim'
+    | 'expectedUsernameClaim'
+    | 'expectedGitNameClaim'
+    | 'expectedEmailClaim'
   >,
 ): void {
   if (
     args.expectedSubjectClaim === undefined &&
     args.expectedUsernameClaim === undefined &&
+    args.expectedGitNameClaim === undefined &&
     args.expectedEmailClaim === undefined
   ) {
     return
@@ -92,6 +101,7 @@ function assertProviderSnapshot(
     .select({
       subjectClaim: oidcProviders.subjectClaim,
       usernameClaim: oidcProviders.usernameClaim,
+      gitNameClaim: oidcProviders.gitNameClaim,
       emailClaim: oidcProviders.emailClaim,
     })
     .from(oidcProviders)
@@ -104,6 +114,8 @@ function assertProviderSnapshot(
       (provider.subjectClaim ?? null) !== args.expectedSubjectClaim) ||
     (args.expectedUsernameClaim !== undefined &&
       (provider.usernameClaim ?? null) !== args.expectedUsernameClaim) ||
+    (args.expectedGitNameClaim !== undefined &&
+      (provider.gitNameClaim ?? null) !== args.expectedGitNameClaim) ||
     (args.expectedEmailClaim !== undefined &&
       (provider.emailClaim ?? null) !== args.expectedEmailClaim)
   if (changed) {
@@ -175,6 +187,7 @@ export async function createUserWithIdentity(
   args: {
     username: string
     displayName: string
+    gitName: string
     email?: string | null
     identity: Omit<CreateIdentityArgs, 'userId'>
     now?: number
@@ -218,6 +231,7 @@ export async function createUserWithIdentity(
             username: args.username,
             email: args.email ?? null,
             displayName: args.displayName,
+            gitName: args.gitName,
             passwordHash: null,
             // Only self-provisioning consults this policy. Invited identities
             // retain the administrator-selected preset in the bind path below.
@@ -281,15 +295,24 @@ function syncInsertedIdentityProfile(
   identity: CreateIdentityArgs,
   now: number,
 ): void {
-  // Undefined on all three fields is the pre-RFC direct-link API. Callback
-  // flows snapshot at least subjectClaim and RFC-320 snapshots all three.
+  // Undefined selectors are the pre-RFC direct-link API. Callback flows
+  // snapshot all four selectors and carry both resolved names.
   if (
     identity.expectedSubjectClaim === undefined &&
     identity.expectedUsernameClaim === undefined &&
+    identity.expectedGitNameClaim === undefined &&
     identity.expectedEmailClaim === undefined
   ) {
     return
   }
+  if (identity.displayName === undefined || identity.gitName === undefined) {
+    throw new ConflictError(
+      'oidc-profile-names-missing',
+      'callback identity is missing resolved OIDC profile names',
+    )
+  }
+  const displayName = identity.displayName
+  const gitName = identity.gitName
   withExistingSQLiteTransactionScope(tx, (transactionScope) => {
     try {
       syncOidcUserProfileInTransaction(
@@ -299,18 +322,18 @@ function syncInsertedIdentityProfile(
           providerId: identity.providerId,
           subject: identity.subject,
           userId,
-          composed: identity.preferredSnapshot === '' ? null : (identity.preferredSnapshot ?? null),
+          displayName,
+          gitName,
           email: identity.email,
           emailVerified: identity.emailVerified,
-          usernameClaimConfigured:
-            identity.expectedUsernameClaim !== undefined
-              ? identity.expectedUsernameClaim !== null
-              : identity.preferredSnapshot !== null,
           ...(identity.expectedSubjectClaim !== undefined
             ? { expectedSubjectClaim: identity.expectedSubjectClaim }
             : {}),
           ...(identity.expectedUsernameClaim !== undefined
             ? { expectedUsernameClaim: identity.expectedUsernameClaim }
+            : {}),
+          ...(identity.expectedGitNameClaim !== undefined
+            ? { expectedGitNameClaim: identity.expectedGitNameClaim }
             : {}),
           ...(identity.expectedEmailClaim !== undefined
             ? { expectedEmailClaim: identity.expectedEmailClaim }
@@ -326,15 +349,8 @@ function syncInsertedIdentityProfile(
 }
 
 /**
- * RFC-220 D7 — presented-name follow + email_verified sync on the existing-
- * identity login path (design §5.3). Three-way merge against the last-seen
- * IdP value, NOT against displayName — an in-app rename survives until the
- * IdP-side value actually changes.
- *
- * Snapshot domain: '' = observed-but-absent sentinel, NULL = legacy row
- * (pre-RFC-220) whose first sight must only record, never overwrite.
- * All writes share one synchronous transaction: a snapshot persisted without
- * its displayName update would make every later login a silent no-op.
+ * RFC-335 — existing-identity login profile reconciliation. Both resolved
+ * names are authoritative on every callback; email retains RFC-320 semantics.
  */
 export function syncPreferredSnapshot(
   db: DbClient,
@@ -342,34 +358,36 @@ export function syncPreferredSnapshot(
     providerId: string
     subject: string
     userId: string
-    /** composePreferred result; null when the claim list yielded nothing. */
-    composed: string | null
+    displayName: string
+    gitName: string
     /** RFC-320 — normalized IdP email snapshot; null means absent standard claim. */
     email?: string | null
     /** Normalized claims value (post applyEmailTrust) — synced bidirectionally. */
     emailVerified: boolean
-    /** D7 refresh only runs for providers with usernameClaim configured. */
-    usernameClaimConfigured: boolean
     expectedSubjectClaim?: string | null
     expectedUsernameClaim?: string | null
+    expectedGitNameClaim?: string | null
     expectedEmailClaim?: string | null
     now?: number
   },
-): { displayNameRefreshed: boolean; emailRefreshed: boolean } {
+): { displayNameRefreshed: boolean; gitNameRefreshed: boolean; emailRefreshed: boolean } {
   try {
     return syncOidcUserProfile(db, {
       providerId: args.providerId,
       subject: args.subject,
       userId: args.userId,
-      composed: args.composed,
+      displayName: args.displayName,
+      gitName: args.gitName,
       email: args.email ?? null,
       emailVerified: args.emailVerified,
-      usernameClaimConfigured: args.usernameClaimConfigured,
       ...(args.expectedSubjectClaim !== undefined
         ? { expectedSubjectClaim: args.expectedSubjectClaim }
         : {}),
       ...(args.expectedUsernameClaim !== undefined
         ? { expectedUsernameClaim: args.expectedUsernameClaim }
+        : {}),
+      ...(args.expectedGitNameClaim !== undefined
+        ? { expectedGitNameClaim: args.expectedGitNameClaim }
         : {}),
       ...(args.expectedEmailClaim !== undefined
         ? { expectedEmailClaim: args.expectedEmailClaim }

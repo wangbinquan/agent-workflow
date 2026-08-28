@@ -42,6 +42,8 @@ export class OidcTokenError extends Error {
       // RFC-320 — configured profile selectors are strict and a userinfo
       // profile must bind to the verified id-token subject.
       | 'oidc-email-claim-invalid'
+      | 'oidc-display-name-claim-invalid'
+      | 'oidc-git-name-claim-invalid'
       | 'userinfo-subject-mismatch',
   ) {
     super(message)

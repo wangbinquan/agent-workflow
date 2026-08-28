@@ -54,6 +54,7 @@ const GRANTED_USER_ACTOR: MeResponse = {
   user: { id: 'u1', username: 'dev', displayName: 'dev', role: 'user', status: 'active' },
   profile: {
     displayName: 'dev',
+    gitName: 'dev',
     email: 'dev@example.test',
     gitCommitIdentity: { name: 'dev', email: 'dev@example.test' },
   },

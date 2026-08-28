@@ -6,20 +6,22 @@ export interface SyncOidcProfileCommand {
   readonly providerId: string
   readonly subject: string
   readonly userId: string
-  /** Composed configured username fields; null means observed but absent. */
-  readonly composed: string | null
+  /** RFC-335 — authoritative names resolved for this successful callback. */
+  readonly displayName: string
+  readonly gitName: string
   /** Normalized email claim. Null means an optional standard claim was absent. */
   readonly email: string | null
   readonly emailVerified: boolean
-  readonly usernameClaimConfigured: boolean
-  /** Callback callers provide all three; omitted only by pre-RFC compatibility callers. */
+  /** Callback callers provide all four; omitted only by pre-RFC compatibility callers. */
   readonly expectedSubjectClaim?: string | null
   readonly expectedUsernameClaim?: string | null
+  readonly expectedGitNameClaim?: string | null
   readonly expectedEmailClaim?: string | null
 }
 
 export interface SyncOidcProfileResult {
   readonly displayNameRefreshed: boolean
+  readonly gitNameRefreshed: boolean
   readonly emailRefreshed: boolean
 }
 
@@ -69,6 +71,8 @@ export function syncOidcProfileTransaction(
       selectors.subjectClaim !== command.expectedSubjectClaim) ||
     (command.expectedUsernameClaim !== undefined &&
       selectors.usernameClaim !== command.expectedUsernameClaim) ||
+    (command.expectedGitNameClaim !== undefined &&
+      selectors.gitNameClaim !== command.expectedGitNameClaim) ||
     (command.expectedEmailClaim !== undefined &&
       selectors.emailClaim !== command.expectedEmailClaim)
   ) {
@@ -78,6 +82,9 @@ export function syncOidcProfileTransaction(
       'provider identity/profile selectors changed while sign-in was in flight',
     )
   }
+
+  assertProfileName(command.displayName, 'oidc-display-name-claim-invalid')
+  assertProfileName(command.gitName, 'oidc-git-name-claim-invalid')
 
   const identity = transaction.findOidcProfileIdentity(command.providerId, command.subject)
   if (identity === null) {
@@ -126,33 +133,26 @@ export function syncOidcProfileTransaction(
     identityUpdate.emailVerified = command.emailVerified
   }
 
-  let nextDisplayName = user.displayName
-  let displayNameRefreshed = false
-  if (command.usernameClaimConfigured) {
-    const currentClaim = command.composed ?? ''
-    if (identity.preferredSnapshot === null) {
-      // Legacy row: first sight records the IdP snapshot but never overwrites a
-      // possibly intentional in-app rename.
-      identityUpdate.preferredSnapshot = currentClaim
-    } else if (identity.preferredSnapshot !== currentClaim) {
-      identityUpdate.preferredSnapshot = currentClaim
-      if (currentClaim !== '' && user.displayName !== currentClaim) {
-        nextDisplayName = currentClaim
-        displayNameRefreshed = true
-      }
-    }
+  // RFC-335 — both IdP-derived names are authoritative on every callback.
+  // preferred_snapshot remains a compatibility/diagnostic column only; it no
+  // longer gates whether an in-app edit is replaced.
+  const displayNameRefreshed = user.displayName !== command.displayName
+  const gitNameRefreshed = user.gitName !== command.gitName
+  if (identity.preferredSnapshot !== command.displayName) {
+    identityUpdate.preferredSnapshot = command.displayName
   }
 
   if (Object.keys(identityUpdate).length > 1) {
     transaction.updateOidcProfileIdentity(identityUpdate)
   }
-  if (emailRefreshed || displayNameRefreshed) {
+  if (emailRefreshed || displayNameRefreshed || gitNameRefreshed) {
     const updated = transaction.updateUserConditional({
       id: user.id,
       expectedAccessRevision: user.accessRevision,
       accessChanged: false,
       values: {
-        displayName: nextDisplayName,
+        displayName: command.displayName,
+        gitName: command.gitName,
         email: nextEmail,
         updatedAt: execution.now,
       },
@@ -176,7 +176,17 @@ export function syncOidcProfileTransaction(
     })
   }
 
-  return { displayNameRefreshed, emailRefreshed }
+  return { displayNameRefreshed, gitNameRefreshed, emailRefreshed }
+}
+
+function assertProfileName(
+  value: string,
+  code: 'oidc-display-name-claim-invalid' | 'oidc-git-name-claim-invalid',
+): void {
+  const length = value.trim().length
+  if (length === 0 || length > 128) {
+    throw new UserAccessError('validation', code, 'OIDC profile name claim is invalid')
+  }
 }
 
 export function mapOidcEmailConstraint(error: unknown): unknown {

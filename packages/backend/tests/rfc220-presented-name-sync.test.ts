@@ -1,13 +1,8 @@
-// RFC-220 T3 — D7 presented-name follow + provisioning atomicity
-// (design §5.3/§6.2, locks §12 S7/S13/S14).
+// RFC-220 / RFC-335 — OIDC profile reconciliation + provisioning atomicity.
 //
 // The data-integrity invariants:
-//   - Three-way snapshot merge: an in-app rename survives until the IdP-side
-//     value actually CHANGES (never compared against displayName directly).
-//   - Snapshot domain: '' = observed-but-absent sentinel (a newly provisioned
-//     identity whose claim appears later must refresh), NULL = legacy row
-//     (first sight records only — overwriting could clobber a pre-RFC-220
-//     in-app rename).
+//   - Display and Git names are independent and authoritative on every login.
+//   - preferred_snapshot is diagnostic compatibility state, never a merge gate.
 //   - User row + identity row commit in ONE transaction; a write-time
 //     subjectClaim mismatch rolls back BOTH (no identity-less active users,
 //     no half-activated invites).
@@ -54,12 +49,14 @@ async function seedUser(
   id: string,
   displayName: string,
   email: string | null = null,
+  gitName: string = displayName,
 ) {
   await db.insert(users).values({
     id,
     username: `u-${id}`,
     email,
     displayName,
+    gitName,
     passwordHash: null,
     role: 'user',
     status: 'active',
@@ -86,6 +83,11 @@ async function displayNameOf(db: DbClient, userId: string): Promise<string> {
   return rows[0]!.displayName
 }
 
+async function gitNameOf(db: DbClient, userId: string): Promise<string> {
+  const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  return rows[0]!.gitName
+}
+
 async function snapshotOf(db: DbClient, providerId: string, subject: string) {
   const rows = await db
     .select()
@@ -94,7 +96,7 @@ async function snapshotOf(db: DbClient, providerId: string, subject: string) {
   return rows.find((r) => r.subject === subject) ?? null
 }
 
-describe('RFC-220 S14 — syncPreferredSnapshot', () => {
+describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', () => {
   let db: DbClient
   let providerId: string
   beforeEach(async () => {
@@ -118,67 +120,72 @@ describe('RFC-220 S14 — syncPreferredSnapshot', () => {
     subject: 's1',
     userId: 'u1',
     emailVerified: false,
-    usernameClaimConfigured: true,
+    email: null,
   }
 
-  test('unchanged snapshot → nothing moves (in-app rename survives)', async () => {
+  test('unchanged IdP values still replace later in-app edits', async () => {
     await seedIdentity('zhang hello')
-    // simulate an in-app rename after the last login
-    await db.update(users).set({ displayName: 'My Custom Name' }).where(eq(users.id, 'u1'))
-    const r = syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: 'zhang hello' })
-    expect(r.displayNameRefreshed).toBe(false)
-    expect(await displayNameOf(db, 'u1')).toBe('My Custom Name')
+    await db
+      .update(users)
+      .set({ displayName: 'My Custom Name', gitName: 'My Git Name' })
+      .where(eq(users.id, 'u1'))
+    const r = syncPreferredSnapshot(db, {
+      ...baseArgs,
+      providerId,
+      displayName: 'zhang hello',
+      gitName: 'Zhang Git',
+    })
+    expect(r).toMatchObject({ displayNameRefreshed: true, gitNameRefreshed: true })
+    expect(await displayNameOf(db, 'u1')).toBe('zhang hello')
+    expect(await gitNameOf(db, 'u1')).toBe('Zhang Git')
   })
 
-  test('changed IdP value → displayName + snapshot refresh together', async () => {
+  test('display and Git names refresh independently with the snapshot', async () => {
     await seedIdentity('zhang hello')
-    const r = syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: 'zhang 新签名' })
-    expect(r.displayNameRefreshed).toBe(true)
+    const r = syncPreferredSnapshot(db, {
+      ...baseArgs,
+      providerId,
+      displayName: 'zhang 新签名',
+      gitName: 'Zhang Wei',
+    })
+    expect(r).toMatchObject({ displayNameRefreshed: true, gitNameRefreshed: true })
     expect(await displayNameOf(db, 'u1')).toBe('zhang 新签名')
+    expect(await gitNameOf(db, 'u1')).toBe('Zhang Wei')
     expect((await snapshotOf(db, providerId, 's1'))!.preferredSnapshot).toBe('zhang 新签名')
     // the users.updatedAt stamp moved with it (same transaction)
     const row = await db.select().from(users).where(eq(users.id, 'u1')).limit(1)
     expect(row[0]!.updatedAt).toBeGreaterThan(0)
   })
 
-  test('legacy NULL snapshot: first sight records only, never overwrites (存量保护)', async () => {
+  test('legacy NULL snapshot does not suppress first-login refresh', async () => {
     await seedIdentity(null)
-    const r = syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: 'zhang hello' })
-    expect(r.displayNameRefreshed).toBe(false)
-    expect(await displayNameOf(db, 'u1')).toBe('Original Name')
-    expect((await snapshotOf(db, providerId, 's1'))!.preferredSnapshot).toBe('zhang hello')
-    // …and the SECOND login with a changed value does refresh
-    const r2 = syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: 'zhang 变了' })
-    expect(r2.displayNameRefreshed).toBe(true)
-    expect(await displayNameOf(db, 'u1')).toBe('zhang 变了')
-  })
-
-  test("'' sentinel: claim absent at creation, appearing later DOES refresh (哨兵锁)", async () => {
-    await seedIdentity('')
-    const r = syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: 'zhang hello' })
-    expect(r.displayNameRefreshed).toBe(true)
-    expect(await displayNameOf(db, 'u1')).toBe('zhang hello')
-  })
-
-  test('IdP value disappearing tracks the snapshot but never clears the name', async () => {
-    await seedIdentity('zhang hello')
-    const r = syncPreferredSnapshot(db, { ...baseArgs, providerId, composed: null })
-    expect(r.displayNameRefreshed).toBe(false)
-    expect(await displayNameOf(db, 'u1')).toBe('Original Name')
-    expect((await snapshotOf(db, providerId, 's1'))!.preferredSnapshot).toBe('')
-  })
-
-  test('usernameClaim not configured → D7 never runs (回归锁)', async () => {
-    await seedIdentity('zhang hello')
     const r = syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
-      composed: 'zhang 变了',
-      usernameClaimConfigured: false,
+      displayName: 'zhang hello',
+      gitName: 'Zhang Git',
     })
-    expect(r.displayNameRefreshed).toBe(false)
-    expect(await displayNameOf(db, 'u1')).toBe('Original Name')
+    expect(r).toMatchObject({ displayNameRefreshed: true, gitNameRefreshed: true })
+    expect(await displayNameOf(db, 'u1')).toBe('zhang hello')
+    expect(await gitNameOf(db, 'u1')).toBe('Zhang Git')
     expect((await snapshotOf(db, providerId, 's1'))!.preferredSnapshot).toBe('zhang hello')
+  })
+
+  test('identical values are idempotent and avoid an account update', async () => {
+    await seedIdentity('zhang hello')
+    await db
+      .update(users)
+      .set({ displayName: 'zhang hello', gitName: 'Zhang Git', updatedAt: 11 })
+      .where(eq(users.id, 'u1'))
+    const r = syncPreferredSnapshot(db, {
+      ...baseArgs,
+      providerId,
+      displayName: 'zhang hello',
+      gitName: 'Zhang Git',
+    })
+    expect(r).toMatchObject({ displayNameRefreshed: false, gitNameRefreshed: false })
+    const row = await db.select().from(users).where(eq(users.id, 'u1')).limit(1)
+    expect(row[0]!.updatedAt).toBe(11)
   })
 
   test('email_verified follows normalized claims bidirectionally (S7 存量同步)', async () => {
@@ -186,14 +193,16 @@ describe('RFC-220 S14 — syncPreferredSnapshot', () => {
     syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
-      composed: 'zhang hello',
+      displayName: 'Original Name',
+      gitName: 'Original Name',
       emailVerified: true,
     })
     expect((await snapshotOf(db, providerId, 's1'))!.emailVerified).toBe(1)
     syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
-      composed: 'zhang hello',
+      displayName: 'Original Name',
+      gitName: 'Original Name',
       emailVerified: false,
     })
     expect((await snapshotOf(db, providerId, 's1'))!.emailVerified).toBe(0)
@@ -211,6 +220,7 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
   const callbackFence = {
     expectedSubjectClaim: null,
     expectedUsernameClaim: 'login sig',
+    expectedGitNameClaim: null,
     expectedEmailClaim: null,
   }
 
@@ -232,10 +242,10 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
       providerId,
       subject: 's1',
       userId: 'u1',
-      composed: 'alice',
+      displayName: 'Alice',
+      gitName: 'Alice Git',
       email: 'alice@example.test',
       emailVerified: true,
-      usernameClaimConfigured: true,
       ...callbackFence,
     })
     expect(result.emailRefreshed).toBe(true)
@@ -254,10 +264,10 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
       providerId,
       subject: 's1',
       userId: 'u1',
-      composed: 'alice',
+      displayName: 'Alice',
+      gitName: 'Alice Git',
       email: 'idp-old@example.test',
       emailVerified: true,
-      usernameClaimConfigured: true,
       ...callbackFence,
     })
     expect(await emailOf(db, 'u1')).toBe('local@example.test')
@@ -266,10 +276,10 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
       providerId,
       subject: 's1',
       userId: 'u1',
-      composed: 'alice',
+      displayName: 'Alice',
+      gitName: 'Alice Git',
       email: 'idp-new@example.test',
       emailVerified: true,
-      usernameClaimConfigured: true,
       ...callbackFence,
     })
     expect(await emailOf(db, 'u1')).toBe('idp-new@example.test')
@@ -281,10 +291,10 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
       providerId,
       subject: 's1',
       userId: 'u1',
-      composed: 'alice',
+      displayName: 'Alice',
+      gitName: 'Alice Git',
       email: 'idp@example.test',
       emailVerified: true,
-      usernameClaimConfigured: true,
       ...callbackFence,
     })
     expect(result.emailRefreshed).toBe(false)
@@ -301,10 +311,10 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
           providerId,
           subject: 's1',
           userId: 'u1',
-          composed: 'alice',
+          displayName: 'Alice',
+          gitName: 'Alice Git',
           email: 'taken@example.test',
           emailVerified: true,
-          usernameClaimConfigured: true,
           ...callbackFence,
         })
       } catch (caught) {
@@ -326,6 +336,8 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
       subject: 'linked-sub',
       email: 'linked@example.test',
       emailVerified: true,
+      displayName: 'Linked IdP',
+      gitName: 'Linked Git',
       preferredSnapshot: 'linked',
       ...callbackFence,
     })
@@ -336,6 +348,7 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
       username: 'invited',
       email: null,
       displayName: 'Invited',
+      gitName: 'Invited',
       passwordHash: null,
       role: 'user',
       status: 'invited',
@@ -353,6 +366,8 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
         subject: 'invited-sub',
         email: 'invited@example.test',
         emailVerified: true,
+        displayName: 'Invited IdP',
+        gitName: 'Invited Git',
         preferredSnapshot: 'invited',
         ...callbackFence,
       },
@@ -405,6 +420,7 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
     const err = await createUserWithIdentity(db, {
       username: 'ghost',
       displayName: 'Ghost',
+      gitName: 'Ghost Git',
       email: null,
       identity: {
         providerId: provider.id,
@@ -431,6 +447,7 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
       username: 'invited',
       email: 'inv@corp.test',
       displayName: 'Invited',
+      gitName: 'Invited',
       passwordHash: null,
       role: 'user',
       status: 'invited',
@@ -463,12 +480,15 @@ describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisio
     const { userId } = await createUserWithIdentity(db, {
       username: 'zhang',
       displayName: 'zhang hello',
+      gitName: 'Zhang Git',
       email: null,
       identity: {
         providerId: provider.id,
         subject: '42',
         email: null,
         emailVerified: false,
+        displayName: 'zhang hello',
+        gitName: 'Zhang Git',
         preferredSnapshot: 'zhang hello',
         expectedSubjectClaim: 'id',
       },

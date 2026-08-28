@@ -21,6 +21,7 @@ import {
   composePreferred,
   extractUserinfoClaims,
   readClaimField,
+  resolveOidcProfileNames,
 } from '../src/auth/oidc/identity'
 import { OidcTokenError, type VerifyIdTokenInput } from '../src/auth/oidc/tokens'
 import type { EffectiveEndpoints } from '../src/auth/oidc/endpoints'
@@ -97,7 +98,7 @@ describe('RFC-220 readClaimField / composePreferred', () => {
     expect(readClaimField({ id: null }, 'id')).toBeNull()
   })
 
-  test('composePreferred joins configured order, skips absent, caps at 128', () => {
+  test('composePreferred joins configured order, skips absent, and does not truncate', () => {
     const src = { family: '张', given: '三', sig: '我爱写代码' }
     expect(composePreferred(src, 'family given sig')).toBe('张 三 我爱写代码')
     expect(composePreferred(src, 'given family')).toBe('三 张')
@@ -105,7 +106,7 @@ describe('RFC-220 readClaimField / composePreferred', () => {
     expect(composePreferred(src, 'family missing sig')).toBe('张 我爱写代码')
     expect(composePreferred({}, 'family sig')).toBeNull()
     const long = composePreferred({ a: 'x'.repeat(200), b: 'y' }, 'a b')
-    expect(long!.length).toBe(128) // UserSchema.displayName max
+    expect(long!.length).toBe(202) // strict selector validation reports overflow
   })
 })
 
@@ -133,6 +134,7 @@ describe('RFC-220 extractUserinfoClaims', () => {
       email_verified: true,
       name: 'Alice',
       preferred_username: 'alice',
+      git_name: null,
     })
   })
 
@@ -163,7 +165,7 @@ describe('RFC-220 extractUserinfoClaims', () => {
     expect(extractUserinfoClaims({ id: 7 }, withSubject).sub).toBe('7')
   })
 
-  test('usernameClaim list feeds preferred_username; miss falls to null (not the standard claim)', () => {
+  test('usernameClaim list feeds preferred_username and is strict on miss', () => {
     const withUsername = { subjectClaim: null, usernameClaim: 'login sig' }
     const composed = extractUserinfoClaims(
       { sub: 'u-1', login: 'zhang', sig: 'hello', preferred_username: 'standard' },
@@ -172,11 +174,38 @@ describe('RFC-220 extractUserinfoClaims', () => {
     expect(composed.preferred_username).toBe('zhang hello')
     // configured-but-missing must NOT silently reread the standard claim —
     // that would mask a misconfigured field name
-    const missing = extractUserinfoClaims(
-      { sub: 'u-1', preferred_username: 'standard' },
-      withUsername,
+    let error: unknown
+    try {
+      extractUserinfoClaims({ sub: 'u-1', preferred_username: 'standard' }, withUsername)
+    } catch (caught) {
+      error = caught
+    }
+    expect(error).toBeInstanceOf(OidcTokenError)
+    expect((error as OidcTokenError).code).toBe('oidc-display-name-claim-invalid')
+  })
+
+  test('RFC-335 Git name selector is independent and strict', () => {
+    const claims = extractUserinfoClaims(
+      { sub: 'u-1', nickname: 'Alice', family: 'Chen', given: 'Alice' },
+      { subjectClaim: null, usernameClaim: 'nickname', gitNameClaim: 'given family' },
     )
-    expect(missing.preferred_username).toBeNull()
+    expect(claims.preferred_username).toBe('Alice')
+    expect(claims.git_name).toBe('Alice Chen')
+
+    for (const source of [{ sub: 'u-1' }, { sub: 'u-1', git: 'x'.repeat(129) }]) {
+      let error: unknown
+      try {
+        extractUserinfoClaims(source, {
+          subjectClaim: null,
+          usernameClaim: null,
+          gitNameClaim: 'git',
+        })
+      } catch (caught) {
+        error = caught
+      }
+      expect(error).toBeInstanceOf(OidcTokenError)
+      expect((error as OidcTokenError).code).toBe('oidc-git-name-claim-invalid')
+    }
   })
 
   test('default preferred_username stays string-only (byte-compat, round-3 P3)', () => {
@@ -217,6 +246,26 @@ describe('RFC-220 extractUserinfoClaims', () => {
     expect(() => extractUserinfoClaims([1], opts)).toThrow(OidcTokenError)
     expect(() => extractUserinfoClaims('jwt-ish-string', opts)).toThrow(OidcTokenError)
     expect(() => extractUserinfoClaims(null, opts)).toThrow(OidcTokenError)
+  })
+})
+
+describe('RFC-335 resolved profile names', () => {
+  test('Git name defaults to the resolved display name for legacy providers', () => {
+    expect(
+      resolveOidcProfileNames(
+        { usernameClaim: null, gitNameClaim: null },
+        { sub: 'u-1', preferred_username: null, name: ' Alice Display ' },
+      ),
+    ).toEqual({ displayName: 'Alice Display', gitName: 'Alice Display' })
+  })
+
+  test('explicit selectors keep display and Git names independent', () => {
+    expect(
+      resolveOidcProfileNames(
+        { usernameClaim: 'nickname', gitNameClaim: 'full_name' },
+        { sub: 'u-1', preferred_username: 'Visible Alice', git_name: 'Alice A. Chen' },
+      ),
+    ).toEqual({ displayName: 'Visible Alice', gitName: 'Alice A. Chen' })
   })
 })
 
@@ -391,6 +440,27 @@ describe('RFC-220 acquireIdentityClaims matrix (D4/D6)', () => {
       fetcher: userinfoFetcher({ sub: 'idt-1', family: '张', given: '三' }),
     })
     expect(claims.preferred_username).toBe('张 三')
+  })
+
+  test('configured gitNameClaim also forces subject-bound userinfo', async () => {
+    const { publicKey, privateKey } = await generateKeyPair('ES256')
+    const idToken = await signIdToken(privateKey, {
+      sub: 'idt-1',
+      git_name: 'untrusted-token-value',
+    })
+    const claims = await acquireIdentityClaims({
+      tokens: { access_token: 'at', id_token: idToken },
+      effective: effective({
+        jwksUri: `${ISSUER}/jwks`,
+        userinfoEndpoint: `${ISSUER}/userinfo`,
+      }),
+      clientId: AUDIENCE,
+      nonce: NONCE,
+      gitNameClaim: 'git_name',
+      jwks: staticJwks(publicKey),
+      fetcher: userinfoFetcher({ sub: 'idt-1', git_name: 'Trusted Git Name' }),
+    })
+    expect(claims.git_name).toBe('Trusted Git Name')
   })
 
   test('configured profile selectors reject missing, malformed, or mismatched userinfo sub', async () => {

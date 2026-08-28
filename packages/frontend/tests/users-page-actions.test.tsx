@@ -51,6 +51,7 @@ const ME: MeResponse = {
   user: { id: 'me-admin', username: 'root', displayName: 'Root', role: 'admin', status: 'active' },
   profile: {
     displayName: 'Root',
+    gitName: 'Root',
     email: 'root@example.test',
     gitCommitIdentity: { name: 'Root', email: 'root@example.test' },
   },

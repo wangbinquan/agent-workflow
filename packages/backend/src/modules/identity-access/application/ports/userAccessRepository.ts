@@ -6,6 +6,7 @@ export interface UserAccessRecord {
   readonly username: string
   readonly email: string | null
   readonly displayName: string
+  readonly gitName: string
   readonly passwordHash: string | null
   readonly role: Role
   readonly status: ManagedUserStatus
@@ -39,6 +40,7 @@ export interface OidcProfileIdentityRecord {
 export interface OidcProfileSelectorRecord {
   readonly subjectClaim: string | null
   readonly usernameClaim: string | null
+  readonly gitNameClaim: string | null
   readonly emailClaim: string | null
 }
 
@@ -67,6 +69,7 @@ export interface ConditionalUserUpdate {
     Pick<
       UserAccessRecord,
       | 'displayName'
+      | 'gitName'
       | 'email'
       | 'role'
       | 'status'

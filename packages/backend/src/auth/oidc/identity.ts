@@ -48,8 +48,8 @@ export function readClaimField(source: Record<string, unknown>, key: string): st
 /**
  * D7 — compose the presented name from a space-separated claim-name list:
  * values joined in configured order, absent fields skipped (signature-style
- * fields come and go), all absent → null. Capped at 128 chars to match
- * UserSchema.displayName (shared/schemas/user.ts).
+ * fields come and go), all absent → null. Validation happens after composition
+ * so an overlong configured value fails instead of being silently truncated.
  */
 export function composePreferred(
   source: Record<string, unknown>,
@@ -59,7 +59,58 @@ export function composePreferred(
     .split(' ')
     .map((key) => readClaimField(source, key))
     .filter((v): v is string => v !== null)
-  return parts.length > 0 ? parts.join(' ').slice(0, 128) : null
+  return parts.length > 0 ? parts.join(' ') : null
+}
+
+function readConfiguredName(
+  source: Record<string, unknown>,
+  claimList: string,
+  code: 'oidc-display-name-claim-invalid' | 'oidc-git-name-claim-invalid',
+): string {
+  const composed = composePreferred(source, claimList)?.trim() ?? ''
+  if (composed.length === 0 || composed.length > 128) {
+    throw new OidcTokenError('configured userinfo name claim is invalid', code)
+  }
+  return composed
+}
+
+/** RFC-335 — resolve the two durable profile names after claims acquisition.
+ * Explicit selectors have already been read from bound userinfo, but this
+ * function reasserts their contract and owns the legacy standard-claim
+ * fallback in one pure, unit-tested place. */
+export function resolveOidcProfileNames(
+  provider: { usernameClaim: string | null; gitNameClaim: string | null },
+  claims: IdTokenClaims,
+): { displayName: string; gitName: string } {
+  const displayName =
+    provider.usernameClaim !== null
+      ? requireResolvedName(claims.preferred_username, 'oidc-display-name-claim-invalid')
+      : firstValidResolvedName([claims.preferred_username, claims.name, claims.email, 'OIDC User'])
+  const gitName =
+    provider.gitNameClaim !== null
+      ? requireResolvedName(claims.git_name, 'oidc-git-name-claim-invalid')
+      : displayName
+  return { displayName, gitName }
+}
+
+function firstValidResolvedName(values: ReadonlyArray<string | null | undefined>): string {
+  for (const value of values) {
+    if (typeof value !== 'string') continue
+    const normalized = value.trim()
+    if (normalized.length > 0 && normalized.length <= 128) return normalized
+  }
+  return 'OIDC User'
+}
+
+function requireResolvedName(
+  value: string | null | undefined,
+  code: 'oidc-display-name-claim-invalid' | 'oidc-git-name-claim-invalid',
+): string {
+  const normalized = value?.trim() ?? ''
+  if (normalized.length === 0 || normalized.length > 128) {
+    throw new OidcTokenError('configured OIDC profile name is invalid', code)
+  }
+  return normalized
 }
 
 /**
@@ -75,7 +126,9 @@ function readPreferred(
   source: Record<string, unknown>,
   usernameClaim: string | null,
 ): string | null {
-  if (usernameClaim !== null) return composePreferred(source, usernameClaim)
+  if (usernameClaim !== null) {
+    return readConfiguredName(source, usernameClaim, 'oidc-display-name-claim-invalid')
+  }
   const value = source['preferred_username']
   return typeof value === 'string' && value.length > 0 ? value : null
 }
@@ -85,6 +138,8 @@ export function extractUserinfoClaims(
   opts: {
     subjectClaim: string | null
     usernameClaim: string | null
+    /** RFC-335 compatibility: omitted by pre-RFC direct callers = display fallback. */
+    gitNameClaim?: string | null
     /** RFC-320 compatibility: omitted by pre-RFC direct callers = standard email. */
     emailClaim?: string | null
   },
@@ -113,6 +168,10 @@ export function extractUserinfoClaims(
     email_verified: source.email_verified === true,
     name: typeof source.name === 'string' ? source.name : null,
     preferred_username: readPreferred(source, opts.usernameClaim),
+    git_name:
+      opts.gitNameClaim == null
+        ? null
+        : readConfiguredName(source, opts.gitNameClaim, 'oidc-git-name-claim-invalid'),
   }
 }
 
@@ -152,6 +211,7 @@ function claimsFromIdToken(payload: JWTPayload, usernameClaim: string | null): I
     email_verified: source.email_verified === true,
     name: typeof source.name === 'string' ? source.name : null,
     preferred_username: readPreferred(source, usernameClaim),
+    git_name: null,
   }
 }
 
@@ -186,6 +246,7 @@ export interface AcquireIdentityInput {
   clientId: string
   nonce: string
   usernameClaim?: string | null
+  gitNameClaim?: string | null
   emailClaim?: string | null
   subjectClaim?: string | null
   /** RFC-220 D8 — userinfo invocation style + the scope string the post_json
@@ -201,10 +262,12 @@ export interface AcquireIdentityInput {
 export async function acquireIdentityClaims(input: AcquireIdentityInput): Promise<IdTokenClaims> {
   const subjectClaim = input.subjectClaim ?? null
   const usernameClaim = input.usernameClaim ?? null
+  const gitNameClaim = input.gitNameClaim ?? null
   const emailClaim = input.emailClaim ?? null
   const { tokens, effective } = input
   const subjectMode = subjectClaim !== null
-  const profileSelectorsConfigured = usernameClaim !== null || emailClaim !== null
+  const profileSelectorsConfigured =
+    usernameClaim !== null || gitNameClaim !== null || emailClaim !== null
 
   if (!subjectMode && typeof tokens.id_token === 'string' && effective.jwksUri !== null) {
     const payload = await verifyIdToken({
@@ -235,6 +298,7 @@ export async function acquireIdentityClaims(input: AcquireIdentityInput): Promis
     return extractUserinfoClaims(raw, {
       subjectClaim: null,
       usernameClaim,
+      gitNameClaim,
       emailClaim,
     })
   }
@@ -248,7 +312,7 @@ export async function acquireIdentityClaims(input: AcquireIdentityInput): Promis
       ...(input.scopes !== undefined ? { scope: input.scopes } : {}),
       ...(input.fetcher ? { fetcher: input.fetcher } : {}),
     })
-    return extractUserinfoClaims(raw, { subjectClaim, usernameClaim, emailClaim })
+    return extractUserinfoClaims(raw, { subjectClaim, usernameClaim, gitNameClaim, emailClaim })
   }
 
   if (!subjectMode && typeof tokens.id_token === 'string') {

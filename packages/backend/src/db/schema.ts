@@ -3020,6 +3020,8 @@ export const users = sqliteTable(
     username: text('username').notNull().unique(),
     email: text('email').unique(), // nullable; SQLite UNIQUE allows multiple NULL
     displayName: text('display_name').notNull(),
+    // RFC-335 — Git commit author name is independent from in-product display.
+    gitName: text('git_name').notNull().default(''),
     passwordHash: text('password_hash'), // NULL = OIDC-only or invited user
     // RFC-222 added manager; RFC-305 adds the public-read-only guest preset.
     // Type-only widening: the SQLite column has no CHECK constraint
@@ -3289,6 +3291,8 @@ export const oidcProviders = sqliteTable(
       .notNull()
       .default(false),
     usernameClaim: text('username_claim'),
+    // RFC-335 — custom userinfo field(s) mapped to users.git_name.
+    gitNameClaim: text('git_name_claim'),
     // RFC-320 — custom userinfo field mapped to users.email / Git user.email.
     emailClaim: text('email_claim'),
     subjectClaim: text('subject_claim'),

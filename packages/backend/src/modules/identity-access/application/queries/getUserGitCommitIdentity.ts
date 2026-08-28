@@ -35,6 +35,13 @@ export class GetUserGitCommitIdentity {
         'configure an account email before creating a task',
       )
     }
-    return { name: snapshot.user.displayName, email: snapshot.user.email }
+    if (snapshot.user.gitName.trim().length === 0) {
+      throw new UserAccessError(
+        'validation',
+        'git-identity-name-missing',
+        'configure a Git name before creating a task',
+      )
+    }
+    return { name: snapshot.user.gitName, email: snapshot.user.email }
   }
 }

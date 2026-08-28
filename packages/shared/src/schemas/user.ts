@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { PermissionSchema, RoleSchema } from './permission'
 
 export const USERNAME_REGEX = /^[a-z0-9][a-z0-9_-]{0,63}$/
+export const GitNameSchema = z.string().trim().min(1).max(128)
 
 export const UserSchema = z.object({
   id: z.string().min(1),
@@ -26,7 +27,7 @@ export type User = z.infer<typeof UserSchema>
 /** RFC-320 — exact author/committer pair frozen onto a task at launch. */
 export const GitCommitIdentitySchema = z
   .object({
-    name: UserSchema.shape.displayName,
+    name: GitNameSchema,
     email: z.string().email().max(254),
   })
   .strict()
@@ -37,6 +38,7 @@ export type GitCommitIdentity = z.infer<typeof GitCommitIdentitySchema>
 export const UserPrivateProfileSchema = z
   .object({
     displayName: UserSchema.shape.displayName,
+    gitName: GitNameSchema,
     email: UserSchema.shape.email,
     gitCommitIdentity: GitCommitIdentitySchema.nullable(),
   })
@@ -48,6 +50,7 @@ export type UserPrivateProfile = z.infer<typeof UserPrivateProfileSchema>
 export const UpdateOwnProfileBodySchema = z
   .object({
     displayName: z.string().trim().min(1).max(128),
+    gitName: GitNameSchema,
     email: z
       .string()
       .trim()

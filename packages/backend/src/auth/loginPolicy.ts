@@ -231,6 +231,7 @@ export function completeBootstrapWithAdmin(
           username: input.username,
           email: input.email?.toLowerCase() ?? null,
           displayName: input.displayName,
+          gitName: input.displayName,
           passwordHash: input.passwordHash,
           role: 'admin',
           status: 'active',

@@ -84,6 +84,7 @@ export function createOidcProvidersService(deps: {
       jwksUri: row.jwksUri ?? null,
       trustEmailVerified: row.trustEmailVerified,
       usernameClaim: row.usernameClaim ?? null,
+      gitNameClaim: row.gitNameClaim ?? null,
       emailClaim: row.emailClaim ?? null,
       subjectClaim: row.subjectClaim ?? null,
       createdAt: row.createdAt,
@@ -142,6 +143,7 @@ export function createOidcProvidersService(deps: {
         jwksUri: body.jwksUri ?? null,
         trustEmailVerified: body.trustEmailVerified ?? false,
         usernameClaim: body.usernameClaim ?? null,
+        gitNameClaim: body.gitNameClaim ?? null,
         emailClaim: body.emailClaim ?? null,
         subjectClaim: body.subjectClaim ?? null,
         createdAt: now,
@@ -181,6 +183,7 @@ export function createOidcProvidersService(deps: {
       if (body.trustEmailVerified !== undefined)
         updates.trustEmailVerified = body.trustEmailVerified
       if (body.usernameClaim !== undefined) updates.usernameClaim = body.usernameClaim
+      if (body.gitNameClaim !== undefined) updates.gitNameClaim = body.gitNameClaim
       if (body.emailClaim !== undefined) updates.emailClaim = body.emailClaim
       // Empty clientSecret in PATCH = keep existing; non-empty = re-seal.
       if (typeof body.clientSecret === 'string' && body.clientSecret.length > 0) {
@@ -301,7 +304,10 @@ export function createOidcProvidersService(deps: {
       ): { url: string; source: EndpointSource } | null =>
         url !== null && source !== 'none' ? { url, source } : null
       const subjectMode = provider.subjectClaim !== null
-      const userinfoProfileMode = provider.usernameClaim !== null || provider.emailClaim !== null
+      const userinfoProfileMode =
+        provider.usernameClaim !== null ||
+        provider.gitNameClaim !== null ||
+        provider.emailClaim !== null
       let jwksReachable: boolean | undefined
       if (!subjectMode && eff.jwksUri !== null) {
         // RFC-254: ref'd timeout — the platform timeout signal never fires on Windows

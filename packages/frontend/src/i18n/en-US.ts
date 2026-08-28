@@ -1975,16 +1975,18 @@ export const enUS: Resources = {
     profile: 'Profile',
     username: 'Username',
     displayName: 'Display name',
+    displayNameHint: 'Shown in the product UI, member lists, and task ownership.',
+    gitName: 'Git name',
     email: 'Email',
     gitIdentityTitle: 'Git commit identity',
     gitIdentityDescription:
-      'New tasks freeze these values as Git user.name and user.email. Push authentication is configured separately below.',
+      'Display name is used in the product. New tasks freeze Git name and email as user.name and user.email; push authentication is configured separately below.',
     gitIdentityNameHint: 'Used as Git user.name for commits created by your tasks.',
     gitIdentityEmailHint: 'Used as Git user.email for commits created by your tasks.',
     saveProfile: 'Save profile',
     profileSaved: 'Profile and Git commit identity saved.',
     oidcProfileRefreshHint:
-      'Your identity provider refreshes these fields at sign-in when username and email claims are configured for it.',
+      'Display name, Git name, and email refresh from the provider mappings on every OIDC sign-in.',
     role: 'Role',
     status: 'Status',
     source: 'Authenticated via',
@@ -2899,10 +2901,15 @@ export const enUS: Resources = {
       trustEmailLabel: 'Trust emails as verified',
       trustEmailHint:
         'Treat every email from this IdP as verified (needed for invite/allowlist with pure OAuth 2.0 IdPs). Leave off if users can set unverified emails there.',
-      usernameClaim: 'Username fields (Git user.name)',
+      usernameClaim: 'Display username fields',
       usernameClaimHint:
-        'Claim names read as the presented name; space-separate several to join them in order (e.g. "name signature"). Blank = standard preferred_username. When set, the display name follows the IdP on every sign-in.',
+        'Userinfo fields for the in-product display name. Space-separate 1–8 fields to join them in order. Blank uses standard preferred_username; refreshed on every sign-in.',
       usernameClaimInvalid:
+        'Use 1–8 plain claim names separated by single spaces; reserved object keys are not allowed.',
+      gitNameClaim: 'Git name fields',
+      gitNameClaimHint:
+        'Userinfo fields for Git user.name. Space-separate 1–8 fields to join them in order. Blank follows the resolved display name; refreshed on every sign-in.',
+      gitNameClaimInvalid:
         'Use 1–8 plain claim names separated by single spaces; reserved object keys are not allowed.',
       emailClaim: 'Email field (Git user.email)',
       emailClaimHint:

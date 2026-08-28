@@ -36,8 +36,8 @@ const ClaimNameSchema = z
   .regex(CLAIM_NAME_REGEX)
   .refine((v) => !BANNED_CLAIM_KEYS.has(v), { message: 'reserved claim name' })
 
-// RFC-220 D7 — usernameClaim is a space-separated LIST of claim names (1-8
-// tokens; values are joined with single spaces into the presented name).
+// RFC-220 D7 / RFC-335 — display and Git name selectors are space-separated
+// LISTS of claim names (1-8 tokens; values are joined with single spaces).
 // max(519) = 8 tokens × 64 chars + 7 separator spaces.
 const ClaimNameListSchema = z
   .string()
@@ -66,7 +66,12 @@ export const OidcProviderSchema = z.object({
   userinfoRequestStyle: UserinfoRequestStyleSchema,
   jwksUri: HttpUrlSchema.nullable(),
   trustEmailVerified: z.boolean(),
+  // RFC-335 — retained on the wire for compatibility, now exclusively the
+  // in-product display-name selector.
   usernameClaim: ClaimNameListSchema.nullable(),
+  // RFC-335 — independent Git user.name selector. null falls back to the
+  // resolved display name on every successful login.
+  gitNameClaim: ClaimNameListSchema.nullable().default(null),
   // RFC-320 — userinfo field carrying the account/Git email. null keeps the
   // standard OIDC `email` claim; an explicit selector is authoritative.
   emailClaim: ClaimNameSchema.nullable().default(null),
@@ -101,6 +106,7 @@ export const CreateOidcProviderBodySchema = OidcProviderSchema.omit({
   jwksUri: HttpUrlSchema.nullable().optional(),
   trustEmailVerified: z.boolean().optional(),
   usernameClaim: ClaimNameListSchema.nullable().optional(),
+  gitNameClaim: ClaimNameListSchema.nullable().optional(),
   emailClaim: ClaimNameSchema.nullable().optional(),
   subjectClaim: ClaimNameSchema.nullable().optional(),
 })

@@ -136,6 +136,7 @@ describe('AclPanel manage-session loss', () => {
       user: user('actor-b', 'actor-b'),
       profile: {
         displayName: 'actor-b',
+        gitName: 'actor-b',
         email: 'actor-b@example.test',
         gitCommitIdentity: { name: 'actor-b', email: 'actor-b@example.test' },
       },

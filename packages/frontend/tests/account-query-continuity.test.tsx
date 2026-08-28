@@ -29,6 +29,7 @@ const actor: MeResponse = {
   },
   profile: {
     displayName: 'Alice Chen',
+    gitName: 'Alice Chen',
     email: 'alice@example.com',
     gitCommitIdentity: { name: 'Alice Chen', email: 'alice@example.com' },
   },
@@ -153,9 +154,10 @@ describe('/account security center', () => {
           return json({
             profile: {
               displayName: 'Alice Updated',
+              gitName: 'A. Updated',
               email: 'alice.updated@example.test',
               gitCommitIdentity: {
-                name: 'Alice Updated',
+                name: 'A. Updated',
                 email: 'alice.updated@example.test',
               },
             },
@@ -190,28 +192,36 @@ describe('/account security center', () => {
     const email = screen.getByRole('textbox', {
       name: new RegExp(enUS.account.email),
     }) as HTMLInputElement
+    const gitName = screen.getByRole('textbox', {
+      name: new RegExp(enUS.account.gitName),
+    }) as HTMLInputElement
     expect(name.value).toBe('Alice Chen')
+    expect(gitName.value).toBe('Alice Chen')
     expect(email.value).toBe('alice@example.com')
     fireEvent.change(name, { target: { value: ' Alice Updated ' } })
+    fireEvent.change(gitName, { target: { value: ' A. Updated ' } })
     fireEvent.change(email, { target: { value: 'ALICE.UPDATED@EXAMPLE.TEST' } })
     fireEvent.click(screen.getByRole('button', { name: enUS.account.saveProfile }))
 
     expect(await screen.findByText(enUS.account.profileSaved)).toBeTruthy()
     expect(name.value).toBe('Alice Updated')
+    expect(gitName.value).toBe('A. Updated')
     expect(email.value).toBe('alice.updated@example.test')
     expect(calls.find((call) => call.path === '/api/auth/me/profile')).toEqual({
       method: 'PATCH',
       path: '/api/auth/me/profile',
       body: {
         displayName: 'Alice Updated',
+        gitName: 'A. Updated',
         email: 'alice.updated@example.test',
       },
     })
     expect(qc.getQueryData<MeResponse>([...ACTOR_QUERY_KEY, 'tok'])?.profile).toEqual({
       displayName: 'Alice Updated',
+      gitName: 'A. Updated',
       email: 'alice.updated@example.test',
       gitCommitIdentity: {
-        name: 'Alice Updated',
+        name: 'A. Updated',
         email: 'alice.updated@example.test',
       },
     })

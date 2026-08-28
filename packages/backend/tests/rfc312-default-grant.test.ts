@@ -81,12 +81,15 @@ describe('rfc312 默认授权覆盖 OIDC 自助建号', () => {
     const { userId } = await createUserWithIdentity(db, {
       username: 'oidc-user',
       displayName: 'OIDC User',
+      gitName: 'OIDC Git User',
       email: null,
       identity: {
         providerId: provider.id,
         subject,
         email: null,
         emailVerified: false,
+        displayName: 'OIDC User',
+        gitName: 'OIDC Git User',
         preferredSnapshot: '',
         expectedSubjectClaim: null,
       },

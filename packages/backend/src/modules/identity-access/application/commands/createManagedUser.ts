@@ -82,6 +82,7 @@ export class CreateManagedUser {
         }
         transaction.insertUser({
           ...command,
+          gitName: command.displayName,
           accessRevision: 0,
           createdAt: context.now,
           updatedAt: context.now,

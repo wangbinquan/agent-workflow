@@ -61,6 +61,7 @@ const MANUAL = {
   jwksUri: 'https://idp.corp.test/jwks.json',
   trustEmailVerified: true,
   usernameClaim: 'login signature',
+  gitNameClaim: 'name signature',
   emailClaim: 'mail',
   subjectClaim: 'id',
 }
@@ -157,6 +158,13 @@ describe('RFC-220 S1 — CreateOidcProviderBodySchema field validation', () => {
     expect(parse({ usernameClaim: '' }).success).toBe(false)
   })
 
+  test('RFC-335 gitNameClaim uses the same independent list grammar', () => {
+    expect(parse({ gitNameClaim: 'given_name family_name' }).success).toBe(true)
+    expect(parse({ gitNameClaim: null }).success).toBe(true)
+    expect(parse({ gitNameClaim: 'given_name  family_name' }).success).toBe(false)
+    expect(parse({ gitNameClaim: '__proto__' }).success).toBe(false)
+  })
+
   test('RFC-320 emailClaim: one plain claim name only', () => {
     expect(parse({ emailClaim: 'email' }).success).toBe(true)
     expect(parse({ emailClaim: 'profile.mail' }).success).toBe(true)
@@ -187,6 +195,7 @@ describe('RFC-220 S2 — provider service', () => {
     expect(p.jwksUri).toBeNull()
     expect(p.trustEmailVerified).toBe(false)
     expect(p.usernameClaim).toBeNull()
+    expect(p.gitNameClaim).toBeNull()
     expect(p.emailClaim).toBeNull()
     expect(p.subjectClaim).toBeNull()
   })
@@ -199,10 +208,12 @@ describe('RFC-220 S2 — provider service', () => {
     expect(p.jwksUri).toBe(MANUAL.jwksUri)
     expect(p.trustEmailVerified).toBe(true)
     expect(p.usernameClaim).toBe(MANUAL.usernameClaim)
+    expect(p.gitNameClaim).toBe(MANUAL.gitNameClaim)
     expect(p.emailClaim).toBe(MANUAL.emailClaim)
     expect(p.subjectClaim).toBe(MANUAL.subjectClaim)
     const redacted = redactedProvider(p)
     expect(redacted.userinfoEndpoint).toBe(MANUAL.userinfoEndpoint)
+    expect(redacted.gitNameClaim).toBe(MANUAL.gitNameClaim)
     expect(redacted.emailClaim).toBe(MANUAL.emailClaim)
     expect(redacted.subjectClaim).toBe(MANUAL.subjectClaim)
     expect(redacted.clientSecret).toBe('***')
@@ -225,15 +236,18 @@ describe('RFC-220 S2 — provider service', () => {
     // untouched fields survive a partial patch
     expect(afterSet.tokenEndpoint).toBe(MANUAL.tokenEndpoint)
     expect(afterSet.usernameClaim).toBe(MANUAL.usernameClaim)
+    expect(afterSet.gitNameClaim).toBe(MANUAL.gitNameClaim)
     expect(afterSet.emailClaim).toBe(MANUAL.emailClaim)
     const afterClear = await h.svc.patch(p.id, {
       userinfoEndpoint: null,
       usernameClaim: null,
+      gitNameClaim: null,
       emailClaim: null,
       trustEmailVerified: false,
     })
     expect(afterClear.userinfoEndpoint).toBeNull()
     expect(afterClear.usernameClaim).toBeNull()
+    expect(afterClear.gitNameClaim).toBeNull()
     expect(afterClear.emailClaim).toBeNull()
     expect(afterClear.trustEmailVerified).toBe(false)
   })
@@ -294,6 +308,7 @@ describe('RFC-220 S9 — migration columns', () => {
       'userinfo_endpoint',
       'jwks_uri',
       'username_claim',
+      'git_name_claim',
       'email_claim',
       'subject_claim',
     ]) {

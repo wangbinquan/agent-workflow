@@ -11,6 +11,8 @@ export interface IdTokenClaims {
   email_verified?: boolean | null
   name?: string | null
   preferred_username?: string | null
+  /** RFC-335 internal projection of the configured Git name selector. */
+  git_name?: string | null
 }
 
 export interface ExistingIdentity {

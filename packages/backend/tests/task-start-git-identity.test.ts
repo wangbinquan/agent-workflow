@@ -155,12 +155,14 @@ async function seedUser(
   id: string,
   displayName: string,
   email: string | null,
+  gitName: string = displayName,
 ): Promise<void> {
   await db.insert(users).values({
     id,
     username: id,
     email,
     displayName,
+    gitName,
     passwordHash: null,
     role: 'user',
     status: 'active',
@@ -230,17 +232,17 @@ function readCaptured(h: Harness): Array<Record<string, string | null>> {
 }
 
 describe('RFC-320 task Git identity snapshot', () => {
-  test('human root task freezes displayName/email and injects the four Git variables', async () => {
+  test('human root task freezes gitName/email, independent from displayName', async () => {
     const h = await setup()
-    await seedUser(h.db, 'alice', 'Alice Chen', 'alice@example.test')
+    await seedUser(h.db, 'alice', 'Alice Chen', 'alice@example.test', 'A. Chen')
     const task = await launch(h, 'human-root', 'alice')
 
-    expect(task.gitUserName).toBe('Alice Chen')
+    expect(task.gitUserName).toBe('A. Chen')
     expect(task.gitUserEmail).toBe('alice@example.test')
     for (const env of readCaptured(h)) {
-      expect(env.GIT_AUTHOR_NAME).toBe('Alice Chen')
+      expect(env.GIT_AUTHOR_NAME).toBe('A. Chen')
       expect(env.GIT_AUTHOR_EMAIL).toBe('alice@example.test')
-      expect(env.GIT_COMMITTER_NAME).toBe('Alice Chen')
+      expect(env.GIT_COMMITTER_NAME).toBe('A. Chen')
       expect(env.GIT_COMMITTER_EMAIL).toBe('alice@example.test')
     }
   })
@@ -251,7 +253,12 @@ describe('RFC-320 task Git identity snapshot', () => {
     const first = await launch(h, 'first', 'alice')
     await h.db
       .update(users)
-      .set({ displayName: 'Alice B', email: 'alice-b@example.test', updatedAt: 2 })
+      .set({
+        displayName: 'Unrelated Display B',
+        gitName: 'Alice B',
+        email: 'alice-b@example.test',
+        updatedAt: 2,
+      })
       .where(eq(users.id, 'alice'))
     const second = await launch(h, 'second', 'alice')
 
@@ -277,6 +284,15 @@ describe('RFC-320 task Git identity snapshot', () => {
     const error = await launch(h, 'missing-email', 'alice').catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(DomainError)
     expect((error as DomainError).code).toBe('git-identity-email-missing')
+    expect((await h.db.select().from(tasks)).length).toBe(0)
+  })
+
+  test('missing Git name rejects a human task even when displayName exists', async () => {
+    const h = await setup()
+    await seedUser(h.db, 'alice', 'Visible Alice', 'alice@example.test', '')
+    const error = await launch(h, 'missing-git-name', 'alice').catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(DomainError)
+    expect((error as DomainError).code).toBe('git-identity-name-missing')
     expect((await h.db.select().from(tasks)).length).toBe(0)
   })
 
@@ -355,7 +371,12 @@ describe('RFC-320 task Git identity snapshot', () => {
     const parent = await launch(h, 'parent', 'alice')
     await h.db
       .update(users)
-      .set({ displayName: 'Later Name', email: 'later@example.test', updatedAt: 2 })
+      .set({
+        displayName: 'Later Display',
+        gitName: 'Later Git Name',
+        email: 'later@example.test',
+        updatedAt: 2,
+      })
       .where(eq(users.id, 'alice'))
 
     expect(

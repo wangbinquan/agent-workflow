@@ -63,7 +63,20 @@ describe('CreateOidcProviderBodySchema', () => {
   }
 
   test('happy path', () => {
-    expect(() => CreateOidcProviderBodySchema.parse(base)).not.toThrow()
+    expect(CreateOidcProviderBodySchema.parse(base).gitNameClaim).toBeUndefined()
+  })
+
+  test('display and Git name selectors validate independently', () => {
+    const parsed = CreateOidcProviderBodySchema.parse({
+      ...base,
+      usernameClaim: 'nickname',
+      gitNameClaim: 'given_name family_name',
+    })
+    expect(parsed.usernameClaim).toBe('nickname')
+    expect(parsed.gitNameClaim).toBe('given_name family_name')
+    expect(() =>
+      CreateOidcProviderBodySchema.parse({ ...base, gitNameClaim: 'given_name  family_name' }),
+    ).toThrow()
   })
 
   test('rejects bad issuerUrl', () => {
@@ -104,6 +117,7 @@ describe('OidcProviderPublicSchema', () => {
       jwksUri: null,
       trustEmailVerified: false,
       usernameClaim: 'login',
+      gitNameClaim: 'name',
       subjectClaim: 'id',
       createdAt: 0,
       updatedAt: 0,

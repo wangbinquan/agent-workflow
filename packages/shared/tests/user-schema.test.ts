@@ -9,6 +9,8 @@ import {
   LoginBodySchema,
   PatchUserBodySchema,
   ResetPasswordBodySchema,
+  UpdateOwnProfileBodySchema,
+  UserPrivateProfileSchema,
   USERNAME_REGEX,
   UserPublicSchema,
   UserSchema,
@@ -166,5 +168,28 @@ describe('UserPublicSchema', () => {
     ])
     expect((publicView as unknown as Record<string, unknown>).email).toBeUndefined()
     expect((publicView as unknown as Record<string, unknown>).lastLoginAt).toBeUndefined()
+  })
+})
+
+describe('RFC-335 private profile Git name', () => {
+  test('display and Git names are independent required fields', () => {
+    const profile = UserPrivateProfileSchema.parse({
+      displayName: 'Alice Chen',
+      gitName: 'A. Chen',
+      email: 'alice@example.test',
+      gitCommitIdentity: { name: 'A. Chen', email: 'alice@example.test' },
+    })
+    expect(profile.gitName).toBe('A. Chen')
+    expect(
+      UpdateOwnProfileBodySchema.parse({
+        displayName: ' Alice Chen ',
+        gitName: ' A. Chen ',
+        email: ' Alice@Example.TEST ',
+      }),
+    ).toEqual({
+      displayName: 'Alice Chen',
+      gitName: 'A. Chen',
+      email: 'alice@example.test',
+    })
   })
 })
