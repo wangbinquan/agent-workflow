@@ -7,6 +7,7 @@
 
 import { IS_EMBEDDED } from '@/embed'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { writeSync } from 'node:fs'
 
 export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
 export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
@@ -98,9 +99,44 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
 
 function reportLaunchError(launchNonce: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error)
-  process.stderr.write(
+  writeTextToFd(
+    2,
     `${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:${JSON.stringify(message)}\n`,
   )
+}
+
+function writeAllToFd(fd: 1 | 2, bytes: Uint8Array): void {
+  let offset = 0
+  while (offset < bytes.byteLength) {
+    const written = writeSync(fd, bytes, offset, bytes.byteLength - offset)
+    if (written <= 0) throw new Error(`managed process output relay made no progress on fd ${fd}`)
+    offset += written
+  }
+}
+
+function writeTextToFd(fd: 1 | 2, text: string): void {
+  if (process.platform !== 'win32') {
+    ;(fd === 1 ? process.stdout : process.stderr).write(text)
+    return
+  }
+  writeAllToFd(fd, new TextEncoder().encode(text))
+}
+
+async function relayStreamToFd(
+  stream: ReadableStream<Uint8Array> | undefined,
+  fd: 1 | 2,
+): Promise<void> {
+  if (stream === undefined) return
+  const reader = stream.getReader()
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) return
+      if (value !== undefined && value.byteLength > 0) writeAllToFd(fd, value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
 }
 
 /** Hidden CLI entry. Never logs ordinary daemon output or reads product state. */
@@ -130,6 +166,12 @@ export async function runManagedProcessLauncher(
   }
 
   let child: Bun.Subprocess
+  // Bun 1.4's Windows process backend can lose a grandchild's output when the
+  // launcher inherits a stdout/stderr handle that is itself a pipe. Read the
+  // target pipes explicitly there, synchronously forward every byte to the
+  // launcher's parent pipe, and do not return until both streams reach EOF.
+  // POSIX keeps direct inheritance and its existing zero-copy behavior.
+  const relayTargetOutput = process.platform === 'win32'
   try {
     child = Bun.spawn({
       cmd: [...request.targetArgv],
@@ -140,8 +182,8 @@ export async function runManagedProcessLauncher(
           return typeof entry[1] === 'string'
         }),
       ),
-      stdout: 'inherit',
-      stderr: 'inherit',
+      stdout: relayTargetOutput ? 'pipe' : 'inherit',
+      stderr: relayTargetOutput ? 'pipe' : 'inherit',
       stdin: frame.stdin.mode === 'pipe' ? 'pipe' : 'ignore',
       // The launcher is already the detached process-group leader. The target
       // deliberately stays in that group so TERM→KILL reaches the whole tree.
@@ -169,12 +211,26 @@ export async function runManagedProcessLauncher(
     }
   }
 
+  const outputRelays = relayTargetOutput
+    ? [
+        relayStreamToFd(child.stdout as ReadableStream<Uint8Array> | undefined, 1),
+        relayStreamToFd(child.stderr as ReadableStream<Uint8Array> | undefined, 2),
+      ]
+    : []
+
   // This is a timing boundary, not a new admission policy: the target exists
   // and its stdin has been delivered, so only now may its business timeout
   // begin.  The parent consumes this private record instead of surfacing it as
   // runtime stderr.
-  process.stderr.write(`${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`)
-  return await child.exited
+  writeTextToFd(2, `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`)
+  const exitCode = await child.exited
+  try {
+    await Promise.all(outputRelays)
+  } catch (error) {
+    reportLaunchError(request.launchNonce, error)
+    return 126
+  }
+  return exitCode
 }
 
 if (import.meta.main) {

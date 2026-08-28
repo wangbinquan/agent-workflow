@@ -201,7 +201,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         await new Promise((resolveWait) => setTimeout(resolveWait, 100))
       }
       throw new Error(
-        `${label} timed out; last=${JSON.stringify(last)}; lastReadError=${lastReadError ?? 'none'}`,
+        `${label} timed out; last=${JSON.stringify(last)}; lastReadError=${lastReadError ?? 'none'}; daemon=${JSON.stringify(daemon.diagnostics())}`,
       )
     }
 

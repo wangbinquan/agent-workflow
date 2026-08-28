@@ -50,6 +50,22 @@ export function recordStatements(sqlite: Database): StatementRecording {
   const statements: RecordedStatement[] = []
   const originals = new Map<string, unknown>()
 
+  const recordTransaction = <T>(behavior: string, run: () => T): T => {
+    statements.push({
+      sql: behavior === 'deferred' ? 'BEGIN' : `BEGIN ${behavior.toUpperCase()}`,
+      params: 0,
+      rows: 0,
+    })
+    try {
+      const result = run()
+      statements.push({ sql: 'COMMIT', params: 0, rows: 0 })
+      return result
+    } catch (error) {
+      statements.push({ sql: 'ROLLBACK', params: 0, rows: 0 })
+      throw error
+    }
+  }
+
   const wrapStatement = (stmt: object, sql: string): object =>
     new Proxy(stmt, {
       get(target, prop) {
@@ -79,6 +95,37 @@ export function recordStatements(sqlite: Database): StatementRecording {
   ;(sqlite as unknown as Record<string, unknown>).exec = (...args: unknown[]) => {
     statements.push({ sql: String(args[0]), params: Math.max(0, args.length - 1), rows: 0 })
     return origExec(...args)
+  }
+
+  // Bun 1.4 executes Database.transaction() inside the native binding instead
+  // of routing its BEGIN / COMMIT / ROLLBACK through the overridable exec()
+  // method. Keep the recorder attached to the public transaction boundary so
+  // transaction-shape assertions retain the same observation without changing
+  // the production transaction itself.
+  const origTransaction = sqlite.transaction.bind(sqlite) as (
+    callback: (...args: unknown[]) => unknown,
+  ) => ((...args: unknown[]) => unknown) & Record<string, (...args: unknown[]) => unknown>
+  originals.set('transaction', sqlite.transaction)
+  ;(sqlite as unknown as Record<string, unknown>).transaction = (
+    callback: (...args: unknown[]) => unknown,
+  ) => {
+    const transaction = origTransaction(callback)
+    return new Proxy(transaction, {
+      apply(target, thisArg, args) {
+        return recordTransaction('deferred', () => Reflect.apply(target, thisArg, args))
+      },
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown
+        if (
+          typeof value !== 'function' ||
+          (prop !== 'deferred' && prop !== 'immediate' && prop !== 'exclusive')
+        ) {
+          return value
+        }
+        return (...args: unknown[]) =>
+          recordTransaction(String(prop), () => Reflect.apply(value, target, args))
+      },
+    })
   }
 
   return {

@@ -115,18 +115,27 @@ async function pendingReview(
 ): Promise<ReviewSummary> {
   const deadline = Date.now() + timeoutMs
   let last: ReviewSummary | undefined
+  let lastReadError: string | null = null
   while (Date.now() < deadline) {
-    const response = await fetch(`${daemon.baseUrl}/api/reviews?status=pending`, {
-      headers: { Authorization: `Bearer ${daemon.token}` },
-    })
-    if (response.ok) {
-      const rows = (await response.json()) as ReviewSummary[]
-      last = rows.find((row) => row.taskId === taskId)
-      if (last?.awaitingReview === true) return last
+    try {
+      const response = await fetch(`${daemon.baseUrl}/api/reviews?status=pending`, {
+        headers: { Authorization: `Bearer ${daemon.token}` },
+      })
+      lastReadError = null
+      if (response.ok) {
+        const rows = (await response.json()) as ReviewSummary[]
+        last = rows.find((row) => row.taskId === taskId)
+        if (last?.awaitingReview === true) return last
+      }
+    } catch (error) {
+      lastReadError = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, 250))
   }
-  throw new Error(`review gate did not reappear for ${taskId}; last=${JSON.stringify(last)}`)
+  throw new Error(
+    `review gate did not reappear for ${taskId}; last=${JSON.stringify(last)}; ` +
+      `lastReadError=${lastReadError ?? 'none'}; daemon=${JSON.stringify(daemon.diagnostics())}`,
+  )
 }
 
 async function waitForDecisionCommitBarrier(

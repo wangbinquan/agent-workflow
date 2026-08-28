@@ -113,6 +113,35 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
     expect(result.rawStdout).toBe(payload)
   })
 
+  test('launcher drains large target stdout and stderr before reporting exit', async () => {
+    const root = fixtureRoot()
+    const stdoutBytes = 256 * 1024
+    const stderrLine = 'launcher-stderr-before-exit'
+    const result = await runManagedProcess({
+      argv: [
+        process.execPath,
+        '-e',
+        `const { writeSync } = require('node:fs'); writeSync(1, 'x'.repeat(${stdoutBytes})); writeSync(2, '${stderrLine}\\n')`,
+      ],
+      cwd: root,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        }),
+      ),
+      requireSpawnReceipt: true,
+      captureRawStdout: true,
+      onSpawned: () => {},
+    })
+
+    expect(result.outcome).toBe('exited')
+    expect(result.exitCode).toBe(0)
+    expect(result.rawStdout).toHaveLength(stdoutBytes)
+    expect(result.rawStdout.startsWith('x'.repeat(64))).toBe(true)
+    expect(result.stderrTail).toContain(stderrLine)
+    expect(result.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
+  })
+
   test('missing target is surfaced as spawn-failed, not a business nonzero exit', async () => {
     const root = fixtureRoot()
     const result = await runManagedProcess({
