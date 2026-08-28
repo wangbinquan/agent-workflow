@@ -12,7 +12,8 @@
 > 七条 scheduled workflow 共 19/19 jobs 全部 success。[RFC-334](../RFC-334-node-executor-registry/proposal.md)
 > 已完成 W2-C T0～T12：production payload/pin `1271ecb20` → `cfe1326b4`，最终功能 SHA `8e58eb05f`
 > 的主 CI `33142147682` attempt 2 为 35/35 success，七条 production-equivalent scheduled workflow 为 19/19 jobs
-> success。W2-C 已关闭，W2-D 未授权、未启动。
+> success。W2-C 已关闭；[RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已完成 W2-D current-source 调研与设计，
+> 并于 2026-08-28 获批实施。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
 ## 1. 设计原则
@@ -141,9 +142,9 @@ RFC-331 前的历史基线为 `158b67296b05a11f22a92ab64b2045643f895f9f`，repor
 `sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592`。W2-C 自身 shape 由
 payload/pin `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` → `cfe1326b4e948c24772b06708f91e2526ba7022b`
 固定，digest 为 `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓 latest
-shape 已随 RFC-336/337 更新为 payload/pin `f5e7833fd14898e42d299e64b76d4cc52d7705d8` →
-`aa32b65ad2d5c1e9fa027938ad1603ee479061e6`，digest 为
-`sha256:14b1c9bc4f6b634044135575cb3aab2b2db14c2ddf765f3b3e02688a18896576`。下表是该 current shape：
+shape 已随 commit-push projection 更新为 payload/pin `15767cfc9066fcdb9f074b1e93ab182699ba4fc0` →
+`251b5d725ef731d15c17a01656fdc827f925e7c7`，digest 为
+`sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607`。下表是该 current shape：
 
 | current module           | production TS/TSX | architecture interpretation                                                                                          |
 | ------------------------ | ----------------: | -------------------------------------------------------------------------------------------------------------------- |
@@ -3785,7 +3786,9 @@ current 承接路径为：N1/W0-R 已落；RFC-328 已完成 P0-D、`TaskExecuti
 复用已落 authority，未新建 lease/schema/registry/outbox；A1+B1～B4 前五条与 E3 第六条 exact debt 均已从账本删除。
 RFC-331 / W2-A 与 RFC-332 / W2-B 已发布并完成 hosted closeout；RFC-333 已以 open/decision 两条原子事务合同、
 fault/restart matrix、claimed→pending handoff 与 deferred-question 交接关闭 P0-C，并完成 exact-SHA 主 CI/全部 scheduled closeout。
-RFC-334 已完成 T0～T12、关闭 W2-C 并完成 exact-SHA 主 CI/全部 scheduled closeout；W2-D 与 W3 继续另立 RFC/批准。非可选 abort reason、bootstrap fail-fast、child recovery 与功能保真继续作为后续 oracle。
+RFC-334 已完成 T0～T12、关闭 W2-C 并完成 exact-SHA 主 CI/全部 scheduled closeout；RFC-339 已完成 W2-D
+current-source 调研与设计并获批实施；W3 继续另立 RFC/批准。非可选 abort reason、bootstrap fail-fast、child recovery
+与功能保真继续作为后续 oracle。
 W9 只做全局 container/facade 清仓，不回头重做 RFC-328。
 
 ### 16.3 RFC-289（CLOSED）
