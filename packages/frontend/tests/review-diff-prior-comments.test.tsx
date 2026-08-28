@@ -204,6 +204,15 @@ function makeDetail(): ReviewDetail {
     CURRENT_BODY,
   )
   return {
+    capabilities: {
+      scope: 'task',
+      canAddComment: true,
+      canEditOwnComments: true,
+      canDeleteOwnComments: true,
+      canManageAnyComments: false,
+      canSelectDocuments: true,
+      canDecide: true,
+    },
     summary: {
       nodeRunId: 'run',
       taskId: 'task-1',

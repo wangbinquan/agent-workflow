@@ -64,6 +64,8 @@ interface UserPickerProps {
    * 不该知道"在线状态"这回事；调用方传什么就渲染什么。
    */
   renderAdornment?: (userId: string) => ReactNode
+  /** Optional relationship/meta suffix rendered in each search result. */
+  renderOptionMeta?: (user: UserPublic) => ReactNode
 }
 
 export function UserPicker({
@@ -82,6 +84,7 @@ export function UserPicker({
   'aria-invalid': ariaInvalid,
   testidPrefix,
   renderAdornment,
+  renderOptionMeta,
 }: UserPickerProps) {
   const { t } = useTranslation()
   const [input, setInput] = useState('')
@@ -328,6 +331,7 @@ export function UserPicker({
                   >
                     <span className="user-picker__name">{u.displayName}</span>
                     <span className="user-picker__username">@{u.username}</span>
+                    {renderOptionMeta?.(u)}
                   </button>
                 </li>
               ))

@@ -12,6 +12,7 @@
 import {
   isTurnEngineWorkgroupTask,
   RepairRequestSchema,
+  ReplaceReviewNodeReviewersBodySchema,
   rejectRetiredStartTaskKeys,
   StartTaskSchema,
   taskExecutionKind,
@@ -84,11 +85,8 @@ import { getStartupVerification } from '@/services/execution/startupVerification
 import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import {
-  buildStartTaskDeps,
-  createLegacyTaskExecutionTopology,
-  resolveSubagentLiveCapture,
-} from '@/services/startTaskDeps'
+import { buildStartTaskDeps, resolveSubagentLiveCapture } from '@/services/startTaskDeps'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
 import { listRecoveryEventsForTask } from '@/services/recovery'
 import { clearAutoRecoverySuspension, isAutoRecoverySuspended } from '@/services/recoveryBreaker'
@@ -99,7 +97,8 @@ import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
-import { createTaskExecutionReadModels } from '@/modules/task-execution/public/queries'
+import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
+import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */
@@ -136,7 +135,10 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
 // task routes). Call sites below are unchanged.
 
 export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
-  const taskExecutionReadModels = createTaskExecutionReadModels(deps.db)
+  const taskExecutionReadModels = deps.taskExecutionReadModels
+  if (taskExecutionReadModels === undefined) {
+    throw new Error('task-execution-read-models-not-composed')
+  }
   registerRoute(
     app,
     {
@@ -252,6 +254,64 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
+  // RFC-340 — full-replace reviewer sets for every frozen review node. This
+  // remains a task-owner/admin configuration surface; assignments themselves
+  // do not make a user a task member.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/reviewers',
+      permissions: ['tasks:read'],
+      tokenAccess: 'never',
+      summary: 'List review-node reviewer assignments',
+    },
+    async (c) => {
+      if (deps.collaborationContext === undefined) {
+        throw new Error('collaboration-context-not-composed')
+      }
+      return c.json(
+        await getReviewNodeReviewerConfig(deps.collaborationContext, {
+          actor: actorOf(c),
+          taskId: c.req.param('id'),
+        }),
+      )
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'PUT',
+      path: '/api/tasks/:id/reviewers',
+      permissions: ['tasks:update'],
+      tokenAccess: 'never',
+      summary: 'Replace review-node reviewer assignments',
+    },
+    async (c) => {
+      const parsed = ReplaceReviewNodeReviewersBodySchema.safeParse(
+        await safeJsonOrEmpty(c.req.raw),
+      )
+      if (!parsed.success) {
+        throw new ValidationError(
+          'review-reviewers-invalid',
+          'invalid review-node reviewer payload',
+          { issues: parsed.error.issues },
+        )
+      }
+      if (deps.collaborationContext === undefined) {
+        throw new Error('collaboration-context-not-composed')
+      }
+      return c.json(
+        await replaceReviewNodeReviewers(deps.collaborationContext, {
+          actor: actorOf(c),
+          taskId: c.req.param('id'),
+          body: parsed.data,
+        }),
+      )
+    },
+  )
+
   registerRoute(
     app,
     {
@@ -267,7 +327,14 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // JSON-encoded StartTask; files[<inputKey>][] fields are the binary
       // contents bound to `kind: 'upload'` inputs.
       if (ct.toLowerCase().startsWith('multipart/form-data')) {
-        const task = await handleMultipartTaskStart(c.req.raw, deps, actorOf(c))
+        const task = await handleMultipartTaskStart(
+          c.req.raw,
+          {
+            ...deps,
+            schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
+          },
+          actorOf(c),
+        )
         return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))), 201)
       }
 
@@ -326,10 +393,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const startDeps = {
         ...buildStartTaskDeps(
           deps.db,
+          requireSchedulerDriver(deps.schedulerDriver),
           deps.configPath,
           actor.user.id,
           deps.secretBox,
-          deps.repositoryPublicationTransport,
         ),
         // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
         // THIS actor's visibility.
@@ -813,10 +880,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const task = await resumeTask(deps.db, c.req.param('id'), {
         db: deps.db,
-        schedulerDriver: createLegacyTaskExecutionTopology(
-          deps.db,
-          deps.repositoryPublicationTransport,
-        ).schedulerDriver,
+        schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
         configPath: deps.configPath,
         // RFC-328: a session-backed Resume is the explicit actor decision that
         // advances an outcome-unknown operation to its next generation.
@@ -906,10 +970,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const updated = await syncTaskWorkflow(deps.db, id, {
         db: deps.db,
-        schedulerDriver: createLegacyTaskExecutionTopology(
-          deps.db,
-          deps.repositoryPublicationTransport,
-        ).schedulerDriver,
+        schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
         expectedVersion: body.data.expectedVersion,
         launchActor: actor,
         // RFC-328: workflow sync is one of the existing explicit manual
@@ -945,10 +1006,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(
-            deps.db,
-            deps.repositoryPublicationTransport,
-          ).schedulerDriver,
+          schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
           configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
@@ -993,10 +1051,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         appHome: Paths.root,
         deps: {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(
-            deps.db,
-            deps.repositoryPublicationTransport,
-          ).schedulerDriver,
+          schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
           configPath: deps.configPath,
           ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
           // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
@@ -1041,10 +1096,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         cascade,
         deps: {
           db: deps.db,
-          schedulerDriver: createLegacyTaskExecutionTopology(
-            deps.db,
-            deps.repositoryPublicationTransport,
-          ).schedulerDriver,
+          schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
           configPath: deps.configPath,
           // RFC-328: preserve the authenticated manual retry decision; without
           // it an outcome-unknown task is indistinguishable from actorless auto.

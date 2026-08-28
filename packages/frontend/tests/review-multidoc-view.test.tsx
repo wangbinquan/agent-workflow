@@ -15,6 +15,7 @@ import {
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
+import type * as UseActorModule from '../src/hooks/useActor'
 import type { DocVersion, ReviewDetail } from '@agent-workflow/shared'
 
 vi.mock('../src/api/client', async () => {
@@ -23,6 +24,26 @@ vi.mock('../src/api/client', async () => {
 })
 // useTaskSync opens a websocket; stub it out.
 vi.mock('../src/hooks/useTaskSync', () => ({ useTaskSync: () => {} }))
+vi.mock('../src/hooks/useActor', async () => {
+  const actual = await vi.importActual<typeof UseActorModule>('../src/hooks/useActor')
+  return {
+    ...actual,
+    useActor: () => ({
+      status: 'success',
+      data: {
+        source: 'session',
+        user: {
+          id: 'reviewer',
+          username: 'reviewer',
+          displayName: 'Reviewer',
+          role: 'user',
+          status: 'active',
+        },
+      },
+    }),
+    usePermission: () => true,
+  }
+})
 
 import { api } from '../src/api/client'
 import { MultiDocReviewView } from '../src/components/review/MultiDocReviewView'
@@ -49,6 +70,15 @@ function doc(id: string): DocVersion {
 }
 
 const detail: ReviewDetail = {
+  capabilities: {
+    scope: 'task',
+    canAddComment: true,
+    canEditOwnComments: true,
+    canDeleteOwnComments: true,
+    canManageAnyComments: false,
+    canSelectDocuments: true,
+    canDecide: true,
+  },
   summary: {
     nodeRunId: 'run',
     taskId: 't',
@@ -144,11 +174,86 @@ beforeEach(() => {
     if (url === '/api/config') return Promise.resolve({})
     return Promise.resolve(undefined)
   })
-  ;(api.post as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
+  ;(api.post as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    if (url === '/api/users/lookup') return Promise.resolve([])
+    return Promise.resolve({ ok: true })
+  })
   ;(api.patch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
 })
 
 describe('MultiDocReviewView', () => {
+  test('node-scoped reviewer sees documents but no task link, selection, decision, or Q/W writes', async () => {
+    const reviewerDetail: ReviewDetail = {
+      ...detail,
+      capabilities: {
+        scope: 'review-node',
+        canAddComment: true,
+        canEditOwnComments: true,
+        canDeleteOwnComments: false,
+        canManageAnyComments: false,
+        canSelectDocuments: false,
+        canDecide: false,
+      },
+      comments: [
+        {
+          id: 'own-comment',
+          docVersionId: 'd0',
+          anchor: {
+            sectionPath: '# Active document body',
+            paragraphIdx: 0,
+            offsetStart: 0,
+            offsetEnd: 6,
+            selectedText: 'Active',
+            contextBefore: '',
+            contextAfter: ' document body',
+            occurrenceIndex: 1,
+          },
+          commentText: 'My review opinion',
+          author: 'reviewer',
+          authorRole: 'reviewer',
+          createdAt: 1,
+        },
+        {
+          id: 'other-comment',
+          docVersionId: 'd0',
+          anchor: {
+            sectionPath: '# Active document body',
+            paragraphIdx: 0,
+            offsetStart: 0,
+            offsetEnd: 6,
+            selectedText: 'Active',
+            contextBefore: '',
+            contextAfter: ' document body',
+            occurrenceIndex: 1,
+          },
+          commentText: 'Someone else opinion',
+          author: 'other',
+          authorRole: 'user',
+          createdAt: 2,
+        },
+      ],
+    }
+    ;(api.get as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/api/reviews/run') return Promise.resolve(reviewerDetail)
+      if (url === '/api/config') return Promise.resolve({})
+      return Promise.resolve(undefined)
+    })
+    wrap(<MultiDocReviewView nodeRunId="run" />)
+    expect(await screen.findByText('Case A')).toBeTruthy()
+    expect(screen.queryByTestId('review-multidoc-task-link')).toBeNull()
+    expect(screen.getByTestId('review-multidoc-task-label')).toBeTruthy()
+    expect(screen.queryByTestId('multidoc-approve')).toBeNull()
+    expect(screen.queryByTestId('multidoc-accept')).toBeNull()
+    expect(screen.queryByTestId('multidoc-not-accept')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByDisplayValue('My review opinion')).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'q' })
+    fireEvent.keyDown(window, { key: 'w' })
+    expect(api.patch).not.toHaveBeenCalled()
+  })
+
   test('renders the document list and gates approve until all decided', async () => {
     wrap(<MultiDocReviewView nodeRunId="run" />)
     expect(await screen.findByText('Case A')).toBeTruthy()

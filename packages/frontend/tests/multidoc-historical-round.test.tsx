@@ -60,6 +60,15 @@ function doc(id: string): DocVersion {
 }
 
 const detail: ReviewDetail = {
+  capabilities: {
+    scope: 'task',
+    canAddComment: true,
+    canEditOwnComments: true,
+    canDeleteOwnComments: true,
+    canManageAnyComments: false,
+    canSelectDocuments: true,
+    canDecide: true,
+  },
   summary: {
     nodeRunId: 'run',
     taskId: 't',

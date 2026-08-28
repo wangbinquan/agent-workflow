@@ -41,6 +41,7 @@ import { ReviewDocPane } from '@/components/review/ReviewDocPane'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { useUserLookup } from '@/hooks/useUserLookup'
+import { isReviewNodeAccessRevoked } from '@/lib/review/access'
 import { multiDocHotkeyAction, nextDocIndex } from '@/lib/review/multiDocHotkeys'
 import {
   pickViewedRoundDecision,
@@ -79,7 +80,9 @@ export function MultiDocReviewView({
     queryFn: ({ signal }) => api.get(`/api/reviews/${nodeRunId}`, undefined, signal),
     refetchInterval: 8000,
   })
-  useTaskSync(detail.data?.summary.taskId ?? null)
+  useTaskSync(
+    detail.data?.capabilities.scope === 'task' ? (detail.data.summary.taskId ?? null) : null,
+  )
 
   // RFC-142: rounds load only when a historical round is requested — the
   // current-round interactive view stays zero-extra-requests.
@@ -222,13 +225,15 @@ export function MultiDocReviewView({
       // to the owning task so they see the round resume / rerun instead of
       // being stranded on the multi-doc review page.
       const taskId = detail.data?.summary.taskId
-      if (taskId !== undefined) goToTaskDetail(qc, navigate, taskId)
+      if (taskId !== undefined && detail.data?.capabilities.scope === 'task') {
+        goToTaskDetail(qc, navigate, taskId)
+      }
     },
   })
 
   const reviewIteration = detail.data?.summary.reviewIteration ?? 0
   const confirmDecision = useCallback(() => {
-    if (dialog === null) return
+    if (dialog === null || detail.data?.capabilities.canDecide !== true) return
     if (dialog.kind === 'reject') {
       const reason = dialog.reason.trim()
       if (reason.length === 0) {
@@ -244,7 +249,7 @@ export function MultiDocReviewView({
     }
     const decision = dialog.kind === 'approve' ? 'approved' : 'iterated'
     submitDecision.mutate({ decision, reviewIteration })
-  }, [dialog, submitDecision, reviewIteration])
+  }, [dialog, submitDecision, reviewIteration, detail.data])
 
   // RFC-090: keyboard nav for the multi-doc review queue — ↑/↓ switch document,
   // Q/W accept/reject the current one. Suppressed while the reviewer is filling
@@ -275,7 +280,13 @@ export function MultiDocReviewView({
       // accept / not_accept — only when the round is awaiting review and the
       // active document is known (mirrors the per-doc buttons' enable state).
       const cur = idx >= 0 ? documents[idx] : undefined
-      if (mode !== 'awaiting' || cur === undefined || selectionMut.isPending) return
+      if (
+        mode !== 'awaiting' ||
+        detail.data?.capabilities.canSelectDocuments !== true ||
+        cur === undefined ||
+        selectionMut.isPending
+      )
+        return
       e.preventDefault()
       selectionMut.mutate({
         docVersionId: activeDocId,
@@ -284,7 +295,7 @@ export function MultiDocReviewView({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [paneCapturing, dialog, documents, activeDocId, mode, selectionMut])
+  }, [paneCapturing, dialog, documents, activeDocId, mode, selectionMut, detail.data])
 
   // RFC-090: keep the keyboard-selected document visible in the navigator.
   // block:'nearest' is a no-op when the item is already on screen, so mouse
@@ -296,7 +307,7 @@ export function MultiDocReviewView({
     }
   }, [activeDocId])
 
-  if (detail.data === undefined) {
+  if (detail.data === undefined || isReviewNodeAccessRevoked(detail.data, detail.error)) {
     return (
       <div className="page review-multidoc">
         <PageHeader title={t('reviews.title')} />
@@ -337,16 +348,24 @@ export function MultiDocReviewView({
             {/* Lead with the task name linked to its detail page (inline, no
                 extra row — keeps the multi-doc header compact), then the review
                 round's title / node id. */}
-            <Link
-              to="/tasks/$id"
-              params={{ id: detail.data.summary.taskId }}
-              className="link"
-              data-testid="review-multidoc-task-link"
-            >
-              {detail.data.summary.taskName.length > 0
-                ? detail.data.summary.taskName
-                : detail.data.summary.workflowName}
-            </Link>
+            {detail.data.capabilities.scope === 'task' ? (
+              <Link
+                to="/tasks/$id"
+                params={{ id: detail.data.summary.taskId }}
+                className="link"
+                data-testid="review-multidoc-task-link"
+              >
+                {detail.data.summary.taskName.length > 0
+                  ? detail.data.summary.taskName
+                  : detail.data.summary.workflowName}
+              </Link>
+            ) : (
+              <span data-testid="review-multidoc-task-label">
+                {detail.data.summary.taskName.length > 0
+                  ? detail.data.summary.taskName
+                  : detail.data.summary.workflowName}
+              </span>
+            )}
             {' / '}
             {detail.data.summary.title || detail.data.summary.reviewNodeId}
           </>
@@ -365,7 +384,7 @@ export function MultiDocReviewView({
           </>
         }
         actions={
-          mode !== 'historical' ? (
+          mode !== 'historical' && detail.data.capabilities.canDecide ? (
             <>
               <button
                 type="button"
@@ -527,51 +546,57 @@ export function MultiDocReviewView({
           {!isFirst && selectedDoc.error !== null && selectedDoc.error !== undefined && (
             <ErrorBanner error={selectedDoc.error} onRetry={() => void selectedDoc.refetch()} />
           )}
-          {mode !== 'historical' && current !== undefined && (
-            <div className="review-multidoc__doc-actions" aria-busy={selectionMut.isPending}>
-              <button
-                type="button"
-                data-testid="multidoc-accept"
-                title={t('reviews.multiDoc.acceptHint')}
-                className={
-                  'btn btn--sm' + (current.selection === 'accepted' ? ' btn--primary' : '')
-                }
-                disabled={mode !== 'awaiting' || selectionMut.isPending}
-                onClick={() =>
-                  selectionMut.mutate({ docVersionId: activeDocId, selection: 'accepted' })
-                }
-              >
-                {t('reviews.multiDoc.accept')}
-                <kbd className="kbd-shortcut" aria-hidden="true" data-testid="multidoc-accept-kbd">
-                  Q
-                </kbd>
-              </button>
-              <button
-                type="button"
-                data-testid="multidoc-not-accept"
-                title={t('reviews.multiDoc.notAcceptHint')}
-                className={
-                  'btn btn--sm' + (current.selection === 'not_accepted' ? ' btn--danger' : '')
-                }
-                disabled={mode !== 'awaiting' || selectionMut.isPending}
-                onClick={() =>
-                  selectionMut.mutate({ docVersionId: activeDocId, selection: 'not_accepted' })
-                }
-              >
-                {t('reviews.multiDoc.notAccept')}
-                <kbd
-                  className="kbd-shortcut"
-                  aria-hidden="true"
-                  data-testid="multidoc-not-accept-kbd"
+          {mode !== 'historical' &&
+            detail.data.capabilities.canSelectDocuments &&
+            current !== undefined && (
+              <div className="review-multidoc__doc-actions" aria-busy={selectionMut.isPending}>
+                <button
+                  type="button"
+                  data-testid="multidoc-accept"
+                  title={t('reviews.multiDoc.acceptHint')}
+                  className={
+                    'btn btn--sm' + (current.selection === 'accepted' ? ' btn--primary' : '')
+                  }
+                  disabled={mode !== 'awaiting' || selectionMut.isPending}
+                  onClick={() =>
+                    selectionMut.mutate({ docVersionId: activeDocId, selection: 'accepted' })
+                  }
                 >
-                  W
-                </kbd>
-              </button>
-              <span className="muted review-multidoc__shortcut-hint">
-                {t('reviews.multiDoc.shortcutHint')}
-              </span>
-            </div>
-          )}
+                  {t('reviews.multiDoc.accept')}
+                  <kbd
+                    className="kbd-shortcut"
+                    aria-hidden="true"
+                    data-testid="multidoc-accept-kbd"
+                  >
+                    Q
+                  </kbd>
+                </button>
+                <button
+                  type="button"
+                  data-testid="multidoc-not-accept"
+                  title={t('reviews.multiDoc.notAcceptHint')}
+                  className={
+                    'btn btn--sm' + (current.selection === 'not_accepted' ? ' btn--danger' : '')
+                  }
+                  disabled={mode !== 'awaiting' || selectionMut.isPending}
+                  onClick={() =>
+                    selectionMut.mutate({ docVersionId: activeDocId, selection: 'not_accepted' })
+                  }
+                >
+                  {t('reviews.multiDoc.notAccept')}
+                  <kbd
+                    className="kbd-shortcut"
+                    aria-hidden="true"
+                    data-testid="multidoc-not-accept-kbd"
+                  >
+                    W
+                  </kbd>
+                </button>
+                <span className="muted review-multidoc__shortcut-hint">
+                  {t('reviews.multiDoc.shortcutHint')}
+                </span>
+              </div>
+            )}
           {selectionMut.error !== null && selectionMut.error !== undefined && (
             <ErrorBanner
               error={selectionMut.error}
@@ -599,6 +624,7 @@ export function MultiDocReviewView({
               body={activeBody}
               comments={activeComments}
               mode={mode}
+              capabilities={detail.data.capabilities}
               onInvalidate={invalidate}
               onShortcutCaptureChange={setPaneCapturing}
             />
@@ -607,7 +633,7 @@ export function MultiDocReviewView({
       </div>
 
       <Dialog
-        open={dialog !== null}
+        open={dialog !== null && detail.data.capabilities.canDecide}
         onClose={() => {
           if (submitDecision.isPending) return
           submitDecision.reset()

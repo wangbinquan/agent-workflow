@@ -46,6 +46,7 @@ import { WorkflowSyncBanner } from '@/components/tasks/WorkflowSyncBanner'
 import { TaskFeedbackList } from '@/components/tasks/TaskFeedbackList'
 import { TaskQuestionList, type TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { TaskMembersDialogButton } from '@/components/tasks/TaskMembersPanel'
+import { TaskReviewersLinkButton } from '@/components/tasks/TaskReviewersLinkButton'
 import { TaskDigitalEmployeeSourceLink } from '@/components/tasks/TaskDigitalEmployeeSourceLink'
 import { TaskWebhookSourceLink } from '@/components/tasks/TaskWebhookSourceLink'
 import { WorkgroupRoom } from '@/components/workgroup/room/WorkgroupRoom'
@@ -621,6 +622,7 @@ function TaskDetailPage() {
         actions={
           <>
             <TaskMembersDialogButton taskId={id} />
+            <TaskReviewersLinkButton taskId={id} />
             {/* RFC-175: full-parameter relaunch — terminal tasks deep-link into the
               /tasks/new wizard with ALL launch params pre-filled from THIS task
               (?relaunchFrom=). Suppressed for internal/fusion tasks: their subject

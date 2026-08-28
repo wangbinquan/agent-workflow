@@ -52,6 +52,15 @@ function doc(id: string): DocVersion {
 // Round 2 (inherited): a.md carried accepted + content changed → stale; b.md
 // carried not_accepted + unchanged → not stale; c.md unselected → not stale.
 const detail: ReviewDetail = {
+  capabilities: {
+    scope: 'task',
+    canAddComment: true,
+    canEditOwnComments: true,
+    canDeleteOwnComments: true,
+    canManageAnyComments: false,
+    canSelectDocuments: true,
+    canDecide: true,
+  },
   summary: {
     nodeRunId: 'run',
     taskId: 't',

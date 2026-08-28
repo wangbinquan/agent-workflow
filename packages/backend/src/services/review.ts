@@ -30,6 +30,7 @@ import {
   count,
   desc,
   eq,
+  exists,
   gt,
   inArray,
   isNotNull,
@@ -37,6 +38,7 @@ import {
   ne,
   notExists,
   notInArray,
+  or,
   sql,
 } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
@@ -48,6 +50,7 @@ import type {
   DocVersionDecision,
   NodeRunStatus,
   ReviewBatchSelection,
+  ReviewAuthorRole,
   ReviewComment,
   ReviewCommentAnchor,
   ReviewDecisionKind,
@@ -127,6 +130,7 @@ import {
   nodeRunOutputs,
   nodeRuns,
   reviewComments,
+  reviewNodeReviewers,
   tasks,
   workflows,
 } from '@/db/schema'
@@ -1623,6 +1627,8 @@ export interface ListReviewSummariesFilter {
   taskId?: string
   workflowId?: string
   limit?: number
+  /** Internal route flag: actor visibility is applied before the requested page window. */
+  unbounded?: boolean
 }
 
 /**
@@ -1710,11 +1716,13 @@ export async function listReviewSummaries(
         .from(docVersions)
         .where(eq(docVersions.decision, 'pending'))
         .orderBy(desc(docVersions.createdAt))
-    : await db
-        .select()
-        .from(docVersions)
-        .orderBy(desc(docVersions.createdAt))
-        .limit(filter.limit ?? 100)
+    : filter.unbounded === true
+      ? await db.select().from(docVersions).orderBy(desc(docVersions.createdAt))
+      : await db
+          .select()
+          .from(docVersions)
+          .orderBy(desc(docVersions.createdAt))
+          .limit(filter.limit ?? 100)
 
   if (dvRows.length === 0) return []
 
@@ -1806,7 +1814,7 @@ export async function listReviewSummaries(
     out.push(assembleReviewSummary(dv, run, task, wf, nodeMeta))
   }
   // RFC-202 T6: pending pagination happens AFTER filtering (see above).
-  return isPendingQuery ? out.slice(0, filter.limit ?? 100) : out
+  return isPendingQuery && filter.unbounded !== true ? out.slice(0, filter.limit ?? 100) : out
 }
 
 /**
@@ -1817,9 +1825,9 @@ export async function listReviewSummaries(
  *   run exists ∧ status='awaiting_review'       (awaitingReview requirement)
  *   task exists ∧ status ∉ TERMINAL             (RFC-202 T6 zombie filter)
  *   workflow exists                             (assemble skips orphan workflows)
- * plus the route-level per-actor visibility (`filterVisibleByTask`) folded in
- * via `taskAuthorizationCondition` when an actor is passed. The oracle test
- * (rfc311-badge-counts) locks this count to the list+filter pipeline's length.
+ * plus route-level per-actor visibility (task visibility or a review-node
+ * assignment) applied before counting. The oracle test (rfc311-badge-counts)
+ * locks this count to the list+filter pipeline's length.
  */
 export async function countPendingReviews(db: DbClient, actor?: Actor): Promise<number> {
   const newer = alias(docVersions, 'dv_newer')
@@ -1841,7 +1849,21 @@ export async function countPendingReviews(db: DbClient, actor?: Actor): Promise<
   ]
   if (actor !== undefined) {
     conditions.push(
-      taskAuthorizationCondition(db, { id: tasks.id, ownerUserId: tasks.ownerUserId }, actor),
+      or(
+        taskAuthorizationCondition(db, { id: tasks.id, ownerUserId: tasks.ownerUserId }, actor),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(reviewNodeReviewers)
+            .where(
+              and(
+                eq(reviewNodeReviewers.reviewerUserId, actor.user.id),
+                eq(reviewNodeReviewers.taskId, docVersions.taskId),
+                eq(reviewNodeReviewers.reviewNodeId, docVersions.reviewNodeId),
+              ),
+            ),
+        ),
+      )!,
     )
   }
   const rows = await db
@@ -1864,7 +1886,7 @@ export async function getReviewDetail(
   db: DbClient,
   appHome: string,
   nodeRunId: string,
-): Promise<ReviewDetail> {
+): Promise<Omit<ReviewDetail, 'capabilities'>> {
   const allRows = await db
     .select()
     .from(docVersions)
@@ -2311,7 +2333,7 @@ export interface AddReviewCommentArgs {
   commentText: string
   author?: string
   /** RFC-099 (D7) — task-relationship role snapshot; UI/audit only. */
-  authorRole?: TaskActorRole
+  authorRole?: ReviewAuthorRole
   /**
    * RFC-079: in a multi-document round several doc_versions are pending at once;
    * the caller passes the specific document the comment anchors to. Single-doc
@@ -2481,7 +2503,7 @@ async function addReviewCommentUnlocked(
  */
 export interface ReviewCommentAuthz {
   actorUserId: string
-  role: TaskActorRole
+  role: ReviewAuthorRole
   resourceAclBypass?: boolean
 }
 
@@ -2567,6 +2589,7 @@ async function updateReviewCommentTextUnlocked(
     },
     commentText,
     author: row.author,
+    authorRole: (row.authorRole ?? null) as ReviewComment['authorRole'],
     createdAt: row.createdAt,
   }
   emitReviewCommentUpdatedEvent(dv.taskId, nodeRunId, dv.id, updated)
@@ -2616,6 +2639,16 @@ async function deleteReviewCommentUnlocked(
     throw new ConflictError(
       'review-not-awaiting',
       `review ${nodeRunId} is not awaiting a decision; comments are immutable`,
+    )
+  }
+  // RFC-340: a node-scoped reviewer may maintain their own pending opinion,
+  // but deletion is never part of that relationship. Keep the invariant in
+  // the service as well as the HTTP capability gate so future callers cannot
+  // accidentally turn authorship into delete authority.
+  if (authz.role === 'reviewer' && authz.resourceAclBypass !== true) {
+    throw new ForbiddenError(
+      'review-comment-delete-not-allowed',
+      'review-node reviewers cannot delete comments',
     )
   }
   assertCommentWriteAllowed(row.author, authz)

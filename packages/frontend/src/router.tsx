@@ -47,6 +47,7 @@ import { Route as scheduledDetailRoute } from '@/routes/scheduled.$id'
 import { Route as webhooksRoute } from '@/routes/webhooks'
 import { Route as eventsRoute } from '@/routes/events'
 import { Route as taskDetailRoute } from '@/routes/tasks.detail'
+import { Route as taskReviewersRoute } from '@/routes/tasks.reviewers'
 import { Route as taskPreviewRoute } from '@/routes/tasks.preview'
 import { Route as reviewsRoute } from '@/routes/reviews'
 import { Route as reviewDetailRoute } from '@/routes/reviews.detail'
@@ -132,6 +133,7 @@ const routeTree = rootRoute.addChildren([
   employeeCaseDetailRoute,
   // RFC-105: '/tasks/$id/preview' (longer literal) before '/tasks/$id'.
   taskPreviewRoute,
+  taskReviewersRoute,
   taskDetailRoute,
   tasksRoute,
   taskWizardRoute,

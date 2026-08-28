@@ -340,6 +340,41 @@ describe('RFC-285 B6① — review comment authorship matrix', () => {
     expect(updated.commentText).toBe('mine')
   })
 
+  test('节点评审人只能编辑自己的评论，不能删除任何评论或编辑他人评论', async () => {
+    const own = await seedAuthored('u_reviewer')
+    const updated = await updateReviewCommentText(
+      own.db,
+      own.nodeRunId,
+      own.commentId,
+      'reviewer edit',
+      { actorUserId: 'u_reviewer', role: 'reviewer' },
+    )
+    expect(updated.commentText).toBe('reviewer edit')
+    await expect(
+      deleteReviewComment(own.db, own.nodeRunId, own.commentId, {
+        actorUserId: 'u_reviewer',
+        role: 'reviewer',
+      }),
+    ).rejects.toMatchObject({ code: 'review-comment-delete-not-allowed', status: 403 })
+    expect(
+      await own.db.select().from(reviewComments).where(eq(reviewComments.id, own.commentId)),
+    ).toHaveLength(1)
+
+    const other = await seedAuthored('u_other')
+    await expect(
+      updateReviewCommentText(other.db, other.nodeRunId, other.commentId, 'hijack', {
+        actorUserId: 'u_reviewer',
+        role: 'reviewer',
+      }),
+    ).rejects.toMatchObject({ code: 'review-comment-not-author', status: 403 })
+    await expect(
+      deleteReviewComment(other.db, other.nodeRunId, other.commentId, {
+        actorUserId: 'u_reviewer',
+        role: 'reviewer',
+      }),
+    ).rejects.toMatchObject({ code: 'review-comment-delete-not-allowed', status: 403 })
+  })
+
   test('任务 owner 或显式 resource-acl:bypass 可改他人评论', async () => {
     for (const authz of [
       { role: 'owner' as const, resourceAclBypass: false },

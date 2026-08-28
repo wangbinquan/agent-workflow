@@ -26,7 +26,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ReviewComment, ReviewCommentAnchor } from '@agent-workflow/shared'
+import type { ReviewCapabilities, ReviewComment, ReviewCommentAnchor } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { AttributionChip } from '@/components/AttributionChip'
 import { copyText } from '@/lib/clipboard'
@@ -42,6 +42,7 @@ import { deleteDraft, getDraft, setDraft } from '@/lib/review/draftStore'
 import { computeLineRange } from '@/lib/review/lineRange'
 import { compareReviewComments } from '@/lib/review/commentOrder'
 import type { ReviewPaneMode } from '@/lib/review/readonly'
+import { useActor } from '@/hooks/useActor'
 
 // RFC-009-T2: sidebar width persistence + bounds. Shared with the single-doc
 // page's original keys so the user's last width / collapsed preference survives
@@ -75,13 +76,14 @@ export interface ReviewDocPaneProps {
    * RFC-149: single three-state writability mode (replaces the `readonly` +
    * `awaiting` boolean pair, whose (readonly=true, awaiting=true) combination
    * was unrepresentable nonsense):
-   *   - 'awaiting'   — fully writable: popover + edit + delete.
-   *   - 'decided'    — current-but-decided: write affordances render, but
-   *                    edit / delete are disabled (comments froze at the
-   *                    decision boundary).
+   *   - 'awaiting'   — relationship capabilities decide which writes render.
+   *   - 'decided'    — current-but-decided and read-only (comments froze at
+   *                    the decision boundary).
    *   - 'historical' — read-only history view: every write affordance hidden.
    */
   mode: ReviewPaneMode
+  /** Actor-specific server projection; write controls never infer from a role label. */
+  capabilities: ReviewCapabilities
   /** Called after any comment create/edit/delete so the host refetches. */
   onInvalidate: () => Promise<void>
   /**
@@ -121,12 +123,30 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     body,
     comments,
     mode,
+    capabilities,
     onInvalidate,
     diffMode,
     bodySlot,
     onShortcutCaptureChange,
   } = props
   const { t } = useTranslation()
+  const actor = useActor()
+  const actorUserId = actor.data?.user?.id
+  const canAddComment = mode === 'awaiting' && capabilities.canAddComment
+  const canEditComment = useCallback(
+    (comment: ReviewComment) =>
+      mode === 'awaiting' &&
+      (capabilities.canManageAnyComments ||
+        (capabilities.canEditOwnComments && actorUserId === comment.author)),
+    [actorUserId, capabilities, mode],
+  )
+  const canDeleteComment = useCallback(
+    (comment: ReviewComment) =>
+      mode === 'awaiting' &&
+      (capabilities.canManageAnyComments ||
+        (capabilities.canDeleteOwnComments && actorUserId === comment.author)),
+    [actorUserId, capabilities, mode],
+  )
   // RFC-099 — resolve comment author ids to display names (one batched call).
   const authors = useUserLookup(comments.map((c) => c.author))
   const diffActive = diffMode === true
@@ -241,7 +261,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     // a decided round would only get a server-side review-not-awaiting
     // rejection (edit/delete of EXISTING comments keeps its render-visible /
     // disabled treatment below).
-    if (mode !== 'awaiting') return
+    if (!canAddComment) return
     if (markdownRef.current === null) return
     const sel = window.getSelection()
     if (sel === null || sel.isCollapsed) return
@@ -266,7 +286,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
       draft,
       rect: { left: rect.left + window.scrollX, top: rect.bottom + window.scrollY },
     })
-  }, [mode, body, taskId, nodeRunId, docVersionId])
+  }, [canAddComment, body, taskId, nodeRunId, docVersionId])
 
   // Persist popover draft on every keystroke.
   useEffect(() => {
@@ -316,10 +336,14 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     })
   }, [])
 
-  const onStartEdit = useCallback((c: ReviewComment) => {
-    setEditingId(c.id)
-    setEditDraft(c.commentText)
-  }, [])
+  const onStartEdit = useCallback(
+    (c: ReviewComment) => {
+      if (!canEditComment(c)) return
+      setEditingId(c.id)
+      setEditDraft(c.commentText)
+    },
+    [canEditComment],
+  )
   const onCancelEdit = useCallback(() => {
     setEditingId(null)
     setEditDraft('')
@@ -438,7 +462,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
   }, [popover, editingId, mode, jumpComment])
 
   const submitPopover = useCallback(async () => {
-    if (popover === null) return
+    if (popover === null || !canAddComment) return
     const text = popover.draft.trim()
     if (text.length === 0) return
     try {
@@ -450,7 +474,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
     }
     await deleteDraft({ taskId, nodeRunId, docVersionId, anchorHash: anchorKey(popover.anchor) })
     setPopover(null)
-  }, [popover, submitComment, taskId, nodeRunId, docVersionId])
+  }, [popover, canAddComment, submitComment, taskId, nodeRunId, docVersionId])
 
   return (
     <>
@@ -468,7 +492,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
           <div
             className="review-detail__body"
             ref={markdownRef}
-            onMouseUp={mode === 'awaiting' ? () => void onMouseUpInDoc() : undefined}
+            onMouseUp={canAddComment ? () => void onMouseUpInDoc() : undefined}
           >
             <Prose
               body={body}
@@ -582,21 +606,22 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
                     style={top !== undefined ? { top: `${top}px` } : undefined}
                     onClick={() => onBubbleClick(c.id)}
                   >
-                    {mode !== 'historical' && !isEditing && (
+                    {!isEditing && (
                       <div className="comment-bubble__actions">
-                        <button
-                          type="button"
-                          className="comment-bubble__action"
-                          aria-label={t('reviews.commentEdit')}
-                          title={t('reviews.commentEdit')}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onStartEdit(c)
-                          }}
-                          disabled={mode !== 'awaiting'}
-                        >
-                          ✎
-                        </button>
+                        {canEditComment(c) && (
+                          <button
+                            type="button"
+                            className="comment-bubble__action"
+                            aria-label={t('reviews.commentEdit')}
+                            title={t('reviews.commentEdit')}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onStartEdit(c)
+                            }}
+                          >
+                            ✎
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="comment-bubble__action"
@@ -610,19 +635,21 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
                         >
                           ⧉
                         </button>
-                        <button
-                          type="button"
-                          className="comment-bubble__action comment-bubble__delete"
-                          aria-label={t('common.delete')}
-                          title={t('common.delete')}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteComment.mutate(c.id)
-                          }}
-                          disabled={mode !== 'awaiting' || deleteComment.isPending}
-                        >
-                          ×
-                        </button>
+                        {canDeleteComment(c) && (
+                          <button
+                            type="button"
+                            className="comment-bubble__action comment-bubble__delete"
+                            aria-label={t('common.delete')}
+                            title={t('common.delete')}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteComment.mutate(c.id)
+                            }}
+                            disabled={deleteComment.isPending}
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     )}
                     <header className="comment-bubble__section" title={c.anchor.sectionPath}>
@@ -704,7 +731,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
         )}
       </div>
 
-      {mode === 'awaiting' && crossHeadingHint !== null && (
+      {canAddComment && crossHeadingHint !== null && (
         <div
           key={crossHeadingHint.key}
           className="review-cross-heading-hint"
@@ -716,7 +743,7 @@ export function ReviewDocPane(props: ReviewDocPaneProps) {
         </div>
       )}
 
-      {mode === 'awaiting' && popover !== null && (
+      {canAddComment && popover !== null && (
         <div
           className="comment-popover"
           style={{ position: 'absolute', left: popover.rect.left, top: popover.rect.top }}

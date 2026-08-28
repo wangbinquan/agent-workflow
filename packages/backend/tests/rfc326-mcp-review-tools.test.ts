@@ -44,6 +44,8 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createDispatcher, mcpDispatchActor, type Dispatcher } from '../src/mcp/dispatch'
+import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import {
   ALL_TOOLS,
   McpCallError,
@@ -116,6 +118,7 @@ async function harness(): Promise<Harness> {
     role: 'user',
     password: 'pw12345678',
   })
+  const taskExecutionRuntime = composeTaskExecutionRuntime({ db })
   const deps = {
     token: DAEMON_TOKEN,
     configPath,
@@ -123,6 +126,13 @@ async function harness(): Promise<Harness> {
     dbVersion: 1,
     db,
     secretBox: createSecretBoxFromKey(randomBytes(32)),
+    schedulerDriver: taskExecutionRuntime.schedulerDriver,
+    taskExecutionReadModels: taskExecutionRuntime.readModels,
+    collaborationContext: createCollaborationCommandContext({
+      db,
+      appHome,
+      taskExecutionReadModels: taskExecutionRuntime.readModels,
+    }),
   }
   return {
     db,

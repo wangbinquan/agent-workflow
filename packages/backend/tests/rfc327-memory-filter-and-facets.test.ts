@@ -23,6 +23,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents } from '../src/db/schema'
 import { createDispatcher, mcpDispatchActor } from '../src/mcp/dispatch'
 import { ALL_TOOLS, describeResource } from '../src/mcp/tools'
+import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createApp } from '../src/server'
 import { createManualCandidate, promoteCandidate } from '../src/services/memory'
 import { createUser } from '../src/services/users'
@@ -278,6 +280,7 @@ describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
     seen: Array<{ path: string; query: unknown }>
     value: unknown
   }> {
+    const taskExecutionRuntime = composeTaskExecutionRuntime({ db: h.db })
     const dispatch = createDispatcher({
       token: DAEMON_TOKEN,
       configPath: h.configPath,
@@ -285,6 +288,12 @@ describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
       dbVersion: 1,
       db: h.db,
       secretBox: createSecretBoxFromKey(randomBytes(32)),
+      schedulerDriver: taskExecutionRuntime.schedulerDriver,
+      taskExecutionReadModels: taskExecutionRuntime.readModels,
+      collaborationContext: createCollaborationCommandContext({
+        db: h.db,
+        taskExecutionReadModels: taskExecutionRuntime.readModels,
+      }),
     })
     const actor = mcpDispatchActor(patActor(h, []))
     const seen: Array<{ path: string; query: unknown }> = []

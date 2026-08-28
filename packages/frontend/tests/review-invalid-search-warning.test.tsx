@@ -61,6 +61,15 @@ function version(nodeRunId: string): DocVersion {
 function detail(nodeRunId: string, multi: boolean): ReviewDetail {
   const current = version(nodeRunId)
   return {
+    capabilities: {
+      scope: 'task',
+      canAddComment: true,
+      canEditOwnComments: true,
+      canDeleteOwnComments: true,
+      canManageAnyComments: false,
+      canSelectDocuments: true,
+      canDecide: true,
+    },
     summary: {
       nodeRunId,
       taskId: `task-${nodeRunId}`,

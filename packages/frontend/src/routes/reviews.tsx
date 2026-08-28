@@ -75,7 +75,12 @@ export function ReviewsListPage() {
   // breadcrumb) and taskName (the new primary heading).
   const groups = new Map<
     string,
-    { workflowName: string; taskName: string; items: ReviewSummary[] }
+    {
+      workflowName: string
+      taskName: string
+      accessScope: 'task' | 'review-node'
+      items: ReviewSummary[]
+    }
   >()
   for (const r of list.data ?? []) {
     const g = groups.get(r.taskId)
@@ -83,6 +88,7 @@ export function ReviewsListPage() {
       groups.set(r.taskId, {
         workflowName: r.workflowName,
         taskName: r.taskName,
+        accessScope: r.accessScope ?? 'task',
         items: [r],
       })
     } else {
@@ -143,11 +149,17 @@ export function ReviewsListPage() {
       {Array.from(groups.entries()).map(([taskId, g]) => (
         <section key={taskId} className="reviews-group">
           <h2 className="reviews-group__title">
-            <Link to="/tasks/$id" params={{ id: taskId }} className="link">
-              {/* RFC-037: task name first, then workflow name as a muted
-                  breadcrumb, then short ULID. */}
-              {g.taskName.length > 0 ? g.taskName : g.workflowName}
-            </Link>
+            {g.accessScope === 'task' ? (
+              <Link to="/tasks/$id" params={{ id: taskId }} className="link">
+                {/* RFC-037: task name first, then workflow name as a muted
+                    breadcrumb, then short ULID. */}
+                {g.taskName.length > 0 ? g.taskName : g.workflowName}
+              </Link>
+            ) : (
+              <span data-testid="review-group-task-label">
+                {g.taskName.length > 0 ? g.taskName : g.workflowName}
+              </span>
+            )}
             <span className="muted reviews-group__workflow">{g.workflowName}</span>
             <code className="muted reviews-group__taskid"> · {taskId}</code>
           </h2>

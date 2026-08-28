@@ -33,6 +33,7 @@ export type {
 } from '../domain/canonicalGateRequest'
 export type { GateDecisionReceipt, HumanGateIdentity } from '../domain/gateReceipt'
 export type { HumanGateKind, PreparedHumanGateRef } from '../domain/humanGateOperation'
+export type { ReviewAccessDecision, ReviewAccessInputs } from '../domain/reviewAccess'
 export type { ReviewGateOpenDocumentDraft } from '../application/prepareReviewGateOpen'
 export type {
   ReviewDecisionCommandPort,

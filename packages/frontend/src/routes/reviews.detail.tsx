@@ -36,6 +36,7 @@ import { MultiDocReviewView } from '@/components/review/MultiDocReviewView'
 import { ReviewDocPane } from '@/components/review/ReviewDocPane'
 import { useTaskSync } from '@/hooks/useTaskSync'
 import { listDrafts } from '@/lib/review/draftStore'
+import { isReviewNodeAccessRevoked } from '@/lib/review/access'
 import { pickViewedVersion, resolveReviewView, type ReviewPaneMode } from '@/lib/review/readonly'
 import { goToTaskDetail } from '@/lib/nav/taskNav'
 import { Route as RootRoute } from './__root'
@@ -96,7 +97,9 @@ function ReviewDetailPage() {
   // RFC-005 PR-D T30: subscribe to /ws/tasks/{taskId} once detail resolves;
   // useTaskSync invalidates review queries on review.* events as well, so
   // the page stays live across multi-tab edits.
-  useTaskSync(detail.data?.summary.taskId ?? null)
+  useTaskSync(
+    detail.data?.capabilities.scope === 'task' ? (detail.data.summary.taskId ?? null) : null,
+  )
 
   // RFC-005 PR-E T35: diff view toggle + granularity. Default to "off"
   // (single-pane view); flipping it on loads the prior decided doc_version
@@ -284,7 +287,7 @@ function ReviewDetailPage() {
   >(null)
 
   const onApprove = useCallback(async () => {
-    if (detail.data === undefined) return
+    if (detail.data === undefined || !detail.data.capabilities.canDecide) return
     const draftCount = (
       await listDrafts({
         taskId: detail.data.summary.taskId,
@@ -308,7 +311,7 @@ function ReviewDetailPage() {
   }, [detail.data, nodeRunId, submitDecision])
 
   const onReject = useCallback(() => {
-    if (detail.data === undefined) return
+    if (detail.data === undefined || !detail.data.capabilities.canDecide) return
     // Fallback mirrors `onIterate` below: when rerunnableOnReject is empty,
     // services/review.ts still adds dv.sourceNodeId into the rerun set
     // ("direct upstream always rerunnable, regardless of config" — see
@@ -320,7 +323,7 @@ function ReviewDetailPage() {
   }, [detail.data, t])
 
   const onIterate = useCallback(() => {
-    if (detail.data === undefined) return
+    if (detail.data === undefined || !detail.data.capabilities.canDecide) return
     const willRerun = detail.data.rerunnableOnIterate.join(', ') || t('reviews.rerunDirectUpstream')
     setDecisionDialog({
       kind: 'iterate',
@@ -330,7 +333,8 @@ function ReviewDetailPage() {
   }, [detail.data, t])
 
   const confirmDecisionDialog = useCallback(async () => {
-    if (decisionDialog === null || detail.data === undefined) return
+    if (decisionDialog === null || detail.data === undefined || !detail.data.capabilities.canDecide)
+      return
     if (decisionDialog.kind === 'approve') {
       setDecisionDialog(null)
       await submitDecision.mutateAsync({
@@ -370,6 +374,7 @@ function ReviewDetailPage() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (mode === 'historical') return
+      if (detail.data?.capabilities.canDecide !== true) return
       if (paneCapturing) return
       // Don't hijack typing inside form fields.
       if (
@@ -409,13 +414,13 @@ function ReviewDetailPage() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [paneCapturing, onApprove, onReject, onIterate, diffMode, mode])
+  }, [paneCapturing, onApprove, onReject, onIterate, diffMode, mode, detail.data])
 
   // RFC-099 (D7) — resolve the decider id for the attribution chip. Hook must
   // sit above the early returns; tolerant of undefined while loading.
   const deciderLookup = useUserLookup([viewed.decidedBy])
 
-  if (detail.data === undefined) {
+  if (detail.data === undefined || isReviewNodeAccessRevoked(detail.data, detail.error)) {
     return (
       <div className="page review-detail page--review-detail">
         <PageHeader title={nodeRunId} />
@@ -538,14 +543,24 @@ function ReviewDetailPage() {
           <>
             {/* RFC-037: lead with the user-supplied task name, linked to the owning task
                 detail page; workflow name + review node title stay as muted metadata. */}
-            <Link
-              to="/tasks/$id"
-              params={{ id: data.summary.taskId }}
-              className="link"
-              data-testid="review-detail-task-link"
-            >
-              {data.summary.taskName.length > 0 ? data.summary.taskName : data.summary.workflowName}
-            </Link>
+            {data.capabilities.scope === 'task' ? (
+              <Link
+                to="/tasks/$id"
+                params={{ id: data.summary.taskId }}
+                className="link"
+                data-testid="review-detail-task-link"
+              >
+                {data.summary.taskName.length > 0
+                  ? data.summary.taskName
+                  : data.summary.workflowName}
+              </Link>
+            ) : (
+              <span data-testid="review-detail-task-label">
+                {data.summary.taskName.length > 0
+                  ? data.summary.taskName
+                  : data.summary.workflowName}
+              </span>
+            )}
             {' / '}
             {hasTitle ? data.summary.title : <code>{data.summary.reviewNodeId}</code>}
             <span className="muted">
@@ -579,7 +594,7 @@ function ReviewDetailPage() {
               </span>
               {t('reviews.downloadMarkdown')}
             </button>
-            {mode !== 'historical' && (
+            {mode !== 'historical' && data.capabilities.canDecide && (
               <div
                 className="review-detail__decision-actions"
                 role="group"
@@ -743,6 +758,7 @@ function ReviewDetailPage() {
         body={activeBody ?? ''}
         comments={activeComments}
         mode={mode}
+        capabilities={data.capabilities}
         onInvalidate={invalidateDetail}
         onShortcutCaptureChange={setPaneCapturing}
         diffMode={diffMode}
@@ -750,6 +766,7 @@ function ReviewDetailPage() {
       />
 
       {mode !== 'historical' &&
+        data.capabilities.canDecide &&
         submitDecision.error !== null &&
         submitDecision.error !== undefined && (
           <div className="review-detail__error">
@@ -757,7 +774,7 @@ function ReviewDetailPage() {
           </div>
         )}
 
-      {mode !== 'historical' && decisionDialog !== null && (
+      {mode !== 'historical' && data.capabilities.canDecide && decisionDialog !== null && (
         <DecisionDialog
           state={decisionDialog}
           onChange={setDecisionDialog}

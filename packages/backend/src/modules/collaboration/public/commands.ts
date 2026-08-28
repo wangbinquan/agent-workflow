@@ -39,6 +39,29 @@ import { SqliteClarifyQuestionSnapshotReader } from '../infrastructure/sqliteCla
 import { SqliteHumanGateOperationStore } from '../infrastructure/sqliteHumanGateOperationStore'
 import { SqliteManualQuestionOpenWriter } from '../infrastructure/sqliteManualQuestionOpenWriter'
 import type { CollaborationCommandContext } from './types'
+import type { Actor } from '@/auth/actor'
+import type {
+  ReplaceReviewNodeReviewersBody,
+  ReviewNodeReviewerConfig,
+} from '@agent-workflow/shared'
+import { replaceReviewNodeReviewers as replaceReviewNodeReviewersInternal } from '../application/reviewNodeReviewers'
+import { reviewNodeReviewerDependencies } from '../composition/reviewNodeReviewerDependencies'
+
+export function replaceReviewNodeReviewers(
+  context: CollaborationCommandContext,
+  input: {
+    readonly actor: Actor
+    readonly taskId: string
+    readonly body: ReplaceReviewNodeReviewersBody
+  },
+): Promise<ReviewNodeReviewerConfig> {
+  return replaceReviewNodeReviewersInternal(
+    reviewNodeReviewerDependencies(context),
+    input.actor,
+    input.taskId,
+    input.body,
+  )
+}
 
 export {
   canonicalHumanGateJson,

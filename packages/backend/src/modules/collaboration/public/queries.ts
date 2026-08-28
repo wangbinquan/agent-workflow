@@ -27,6 +27,48 @@ import {
   resolveCollaborationCommandContext,
 } from '../composition/commandContext'
 import type { CollaborationCommandContext } from './types'
+import type { Actor } from '@/auth/actor'
+import type { ReviewNodeReviewerConfig, ReviewSummary } from '@agent-workflow/shared'
+import {
+  filterReviewSummariesForActor as filterReviewSummariesForActorInternal,
+  getReviewNodeReviewerConfig as getReviewNodeReviewerConfigInternal,
+  resolveReviewAccess as resolveReviewAccessInternal,
+} from '../application/reviewNodeReviewers'
+import type { ReviewAccessDecision } from '../domain/reviewAccess'
+import { reviewNodeReviewerDependencies } from '../composition/reviewNodeReviewerDependencies'
+
+function reviewerDependencies(context: CollaborationCommandContext) {
+  return reviewNodeReviewerDependencies(context)
+}
+
+export function getReviewNodeReviewerConfig(
+  context: CollaborationCommandContext,
+  input: { readonly actor: Actor; readonly taskId: string },
+): Promise<ReviewNodeReviewerConfig> {
+  return getReviewNodeReviewerConfigInternal(
+    reviewerDependencies(context),
+    input.actor,
+    input.taskId,
+  )
+}
+
+export function resolveReviewAccess(
+  context: CollaborationCommandContext,
+  input: { readonly actor: Actor; readonly nodeRunId: string },
+): Promise<ReviewAccessDecision | null> {
+  return resolveReviewAccessInternal(reviewerDependencies(context), input.actor, input.nodeRunId)
+}
+
+export function filterReviewSummariesForActor<T extends ReviewSummary>(
+  context: CollaborationCommandContext,
+  input: { readonly actor: Actor; readonly rows: readonly T[] },
+): Promise<Array<T & { accessScope: 'task' | 'review-node' }>> {
+  return filterReviewSummariesForActorInternal(
+    reviewerDependencies(context),
+    input.actor,
+    input.rows,
+  )
+}
 
 export function readCommittedReviewArtifactBody(
   context: CollaborationCommandContext,

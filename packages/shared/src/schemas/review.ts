@@ -18,6 +18,7 @@ import {
 } from '../kindParser'
 import { PortRefSchema } from './workflow'
 import { GateDecisionReceiptSchema } from './humanGate'
+import { ReviewAccessScopeSchema, ReviewCapabilitiesSchema } from './reviewCollab'
 
 // -----------------------------------------------------------------------------
 // AgentOutputKind — the per-port output "shape" hint declared on the agent.
@@ -364,15 +365,18 @@ export const ReviewCommentAnchorSchema = z.object({
 })
 export type ReviewCommentAnchor = z.infer<typeof ReviewCommentAnchorSchema>
 
+export const ReviewAuthorRoleSchema = z.union([TaskActorRoleSchema, z.literal('reviewer')])
+export type ReviewAuthorRole = z.infer<typeof ReviewAuthorRoleSchema>
+
 export const ReviewCommentSchema = z.object({
   id: z.string(),
   docVersionId: z.string(),
   anchor: ReviewCommentAnchorSchema,
   commentText: z.string().min(1),
   author: z.string(),
-  /** RFC-099 (D7) — task-relationship role snapshot (TaskActorRole; owner|user|admin|manager);
-   *  null on historic rows. UI-only; renderCommentsForPrompt never reads it. */
-  authorRole: TaskActorRoleSchema.nullable().optional(),
+  /** RFC-099/RFC-340 — relationship snapshot at comment time. `reviewer` is
+   *  review-specific and is intentionally not part of the global TaskActorRole. */
+  authorRole: ReviewAuthorRoleSchema.nullable().optional(),
   createdAt: z.number().int(),
 })
 export type ReviewComment = z.infer<typeof ReviewCommentSchema>
@@ -551,6 +555,8 @@ export const ReviewSummarySchema = z.object({
   workflowId: z.string(),
   workflowName: z.string(),
   reviewNodeId: z.string(),
+  /** Actor-specific visibility source; reviewer-only rows must not link into task detail. */
+  accessScope: ReviewAccessScopeSchema.optional(),
   title: z.string(),
   description: z.string(),
   currentVersionIndex: z.number().int().positive(),
@@ -610,6 +616,8 @@ export const ReviewDetailSchema = z.object({
   currentVersion: DocVersionSchema,
   currentBody: z.string(),
   comments: z.array(ReviewCommentSchema),
+  /** Server-derived controls; clients do not infer authority from a role label. */
+  capabilities: ReviewCapabilitiesSchema,
   /** Lightweight rerun candidate list for the readonly "will rerun" modal. */
   rerunnableOnReject: z.array(z.string()),
   rerunnableOnIterate: z.array(z.string()),

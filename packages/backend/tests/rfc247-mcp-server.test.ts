@@ -22,6 +22,8 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createDispatcher, mcpDispatchActor } from '../src/mcp/dispatch'
+import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import {
   ALL_TOOLS,
   describeCapabilities,
@@ -69,6 +71,7 @@ async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
     role,
     password: 'pw12345678',
   })
+  const taskExecutionRuntime = composeTaskExecutionRuntime({ db })
   return {
     db,
     userId: user.id,
@@ -79,6 +82,12 @@ async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
       dbVersion: 1,
       db,
       secretBox: createSecretBoxFromKey(randomBytes(32)),
+      schedulerDriver: taskExecutionRuntime.schedulerDriver,
+      taskExecutionReadModels: taskExecutionRuntime.readModels,
+      collaborationContext: createCollaborationCommandContext({
+        db,
+        taskExecutionReadModels: taskExecutionRuntime.readModels,
+      }),
     },
   }
 }

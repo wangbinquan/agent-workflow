@@ -21,6 +21,7 @@ import {
 } from '@agent-workflow/shared'
 import type {
   ReviewAnchorRequest,
+  ReviewAuthorRole,
   ReviewCommentAnchor,
   SubmitReviewComment,
   TaskActorRole,
@@ -32,14 +33,18 @@ import { nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
-import { canViewTask, requireTaskMember } from '@/services/taskCollab'
-import { visibleTaskIdsOf } from '@/services/taskAuthorization'
+import { requireTaskMember } from '@/services/taskCollab'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { wakeHumanGateContinuation } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
+import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { submitReviewDecision } from '@/modules/collaboration/public/commands'
 import { createReviewDecisionCommandContext } from '@/services/reviewDecisionComposition'
+import {
+  filterReviewSummariesForActor,
+  resolveReviewAccess,
+} from '@/modules/collaboration/public/queries'
+import type { ReviewAccessDecision } from '@/modules/collaboration/public/types'
 import {
   addReviewComment,
   countPendingReviews,
@@ -52,7 +57,7 @@ import {
   setDocumentSelection,
   updateReviewCommentText,
 } from '@/services/review'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
 /**
@@ -79,11 +84,10 @@ const reviewWriteBodyLimit = verifiedBodyLimit({
 })
 
 /**
- * RFC-099 (D5/D7) — answer-rights gate for every review write (decision /
- * selection / comments): the actor must be a task member (owner or
- * collaborator) or an admin. Replaces the RFC-036 assigned-reviewer triple
- * (the node-level assignment mechanism is removed). Returns the role
- * snapshot to record on the action.
+ * RFC-099/RFC-340 — task-member gate retained for selection and final
+ * decisions. A node-scoped reviewer never enters this path; their only write
+ * surface is requireReviewCommenter below. Returns the task-role snapshot to
+ * record on a task-member action.
  */
 async function ensureReviewMember(
   deps: AppDeps,
@@ -112,45 +116,35 @@ async function ensureReviewMember(
  * non-viewers get a 404 byte-identical to the missing-task branch (existence
  * is not probeable via error codes).
  */
-async function ensureReviewVisible(deps: AppDeps, nodeRunId: string, actor: Actor): Promise<void> {
-  const rows = await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-  const run = rows[0]
-  if (!run) {
+async function ensureReviewVisible(
+  deps: AppDeps,
+  nodeRunId: string,
+  actor: Actor,
+): Promise<ReviewAccessDecision> {
+  if (deps.collaborationContext === undefined) {
+    throw new Error('collaboration-context-not-composed')
+  }
+  const access = await resolveReviewAccess(deps.collaborationContext, { actor, nodeRunId })
+  if (access === null) {
+    // Keep invisible and absent node-run probes byte-identical.
     throw new NotFoundError('node-run-not-found', `node run '${nodeRunId}' not found`)
   }
-  const taskRows = await deps.db
-    .select()
-    .from(tasksTable)
-    .where(eq(tasksTable.id, run.taskId))
-    .limit(1)
-  const task = taskRows[0]
-  if (!task) {
-    throw new NotFoundError('task-not-found', `task '${run.taskId}' not found`)
-  }
-  if (!(await canViewTask(deps.db, actor, task))) {
-    // RFC-285 B1：不可见与不存在同形。这里的探测面是 nodeRunId——若发
-    // task-not-found，调用方就能区分「run 不存在」与「run 存在但任务被藏」，
-    // 等于确认 run 存在。必须与本函数顶部 missing-run 分支逐字节同形。
-    throw new NotFoundError('node-run-not-found', `node run '${nodeRunId}' not found`)
-  }
+  return access
 }
 
-/**
- * RFC-099 (D5) — list filter: keep only summaries whose task is visible to
- * the actor. One tasks query per distinct taskId batch.
- */
-async function filterVisibleByTask<T extends { taskId: string }>(
+async function requireReviewCommenter(
   deps: AppDeps,
+  nodeRunId: string,
   actor: Actor,
-  rows: readonly T[],
-): Promise<T[]> {
-  if (actor.permissions.has('tasks:read:all')) return [...rows]
-  const taskIds = [...new Set(rows.map((r) => r.taskId))]
-  if (taskIds.length === 0) return []
-  // RFC-311: one indexed membership query instead of one collaborator lookup
-  // per task (this ran on the 15s badge poll — audit L1-10).
-  const visible = await visibleTaskIdsOf(deps.db, actor, taskIds)
-  return rows.filter((r) => visible.has(r.taskId))
+): Promise<{ access: ReviewAccessDecision; authorRole: ReviewAuthorRole }> {
+  const access = await ensureReviewVisible(deps, nodeRunId, actor)
+  if (!access.capabilities.canAddComment || access.commentAuthorRole === null) {
+    throw new ForbiddenError(
+      'review-comment-not-allowed',
+      'this review relationship does not allow adding or modifying comments',
+    )
+  }
+  return { access, authorRole: access.commentAuthorRole }
 }
 
 /**
@@ -209,8 +203,17 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
           issues: q.error.issues,
         })
       }
-      const out = await listReviewSummaries(deps.db, q.data)
-      return c.json(await filterVisibleByTask(deps, actorOf(c), out))
+      if (deps.collaborationContext === undefined) {
+        throw new Error('collaboration-context-not-composed')
+      }
+      // Actor filtering happens before pagination so reviewer-only rows are not
+      // starved by unrelated global candidates.
+      const out = await listReviewSummaries(deps.db, { ...q.data, unbounded: true })
+      const visible = await filterReviewSummariesForActor(deps.collaborationContext, {
+        actor: actorOf(c),
+        rows: out,
+      })
+      return c.json(visible.slice(0, q.data.limit))
     },
   )
 
@@ -224,10 +227,9 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Count of pending review gates',
     },
     async (c) => {
-      // RFC-099: badge counts only reviews on tasks visible to the actor.
-      // RFC-311: both branches collapse into one indexed count(*) —
-      // countPendingReviews folds the actor's visibility condition in, so the
-      // 15s badge poll no longer materializes doc_versions + three tables.
+      // RFC-340: badge counts the union of task-visible and assigned-node
+      // reviews. RFC-311's indexed count(*) shape remains intact, so the 15s
+      // poll still avoids materializing doc_versions + three tables.
       return c.json({ count: await countPendingReviews(deps.db, actorOf(c)) })
     },
   )
@@ -243,9 +245,13 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
-      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
+      const access = await ensureReviewVisible(deps, nodeRunId, actorOf(c))
       const detail = await getReviewDetail(deps.db, appHomeFor(deps), nodeRunId)
-      return c.json(detail)
+      return c.json({
+        ...detail,
+        summary: { ...detail.summary, accessScope: access.capabilities.scope },
+        capabilities: access.capabilities,
+      })
     },
   )
 
@@ -345,10 +351,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         wake: async (taskId, continuationRef) => {
           await wakeHumanGateContinuation(taskId, continuationRef, {
             db: deps.db,
-            schedulerDriver: createLegacyTaskExecutionTopology(
-              deps.db,
-              deps.repositoryPublicationTransport,
-            ).schedulerDriver,
+            schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
             appHome: appHomeFor(deps),
             configPath: deps.configPath,
             ...resolveLaunchRuntimeConfig(deps.configPath),
@@ -436,9 +439,10 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      // RFC-099 (D7): record who commented and with which task role.
+      // RFC-099/RFC-340: record who commented and the relationship snapshot
+      // (task role or node-scoped reviewer) used for this opinion.
       const actor = actorOf(c)
-      const role = await ensureReviewMember(deps, nodeRunId, actor)
+      const { authorRole } = await requireReviewCommenter(deps, nodeRunId, actor)
       const comment = await addReviewComment({
         db: deps.db,
         appHome: appHomeFor(deps),
@@ -447,7 +451,7 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         // locator (everything absent = document-level), never both (schema).
         ...toBatchComment(parsed.data),
         author: actor.user.id,
-        authorRole: role,
+        authorRole,
       })
       return c.json(comment, 201)
     },
@@ -474,13 +478,18 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       // RFC-285 B6①：写门返回的角色快照连同 actor id 一起下传作者校验。
-      const role = await ensureReviewMember(deps, nodeRunId, actor)
+      const { access, authorRole } = await requireReviewCommenter(deps, nodeRunId, actor)
       const updated = await updateReviewCommentText(
         deps.db,
         nodeRunId,
         commentId,
         parsed.data.commentText,
-        { actorUserId: actor.user.id, role, resourceAclBypass: hasResourceAclBypass(actor) },
+        {
+          actorUserId: actor.user.id,
+          role: authorRole,
+          resourceAclBypass:
+            access.capabilities.canManageAnyComments || hasResourceAclBypass(actor),
+        },
       )
       return c.json(updated)
     },
@@ -499,11 +508,17 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       const nodeRunId = c.req.param('nodeRunId')
       const commentId = c.req.param('commentId')
       const actor = actorOf(c)
-      const role = await ensureReviewMember(deps, nodeRunId, actor)
+      const { access, authorRole } = await requireReviewCommenter(deps, nodeRunId, actor)
+      if (!access.capabilities.canDeleteOwnComments && !access.capabilities.canManageAnyComments) {
+        throw new ForbiddenError(
+          'review-comment-delete-not-allowed',
+          'this review relationship does not allow deleting comments',
+        )
+      }
       await deleteReviewComment(deps.db, nodeRunId, commentId, {
         actorUserId: actor.user.id,
-        role,
-        resourceAclBypass: hasResourceAclBypass(actor),
+        role: authorRole,
+        resourceAclBypass: access.capabilities.canManageAnyComments || hasResourceAclBypass(actor),
       })
       return c.json({ ok: true })
     },

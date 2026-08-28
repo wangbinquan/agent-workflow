@@ -7,6 +7,7 @@ import type { CollaborationCommandContext } from '../public/types'
 import type { ReviewDecisionCommandPort } from '../application/ports/reviewDecisionCommand'
 import type { QuestionDispatchCommandPort } from '../application/ports/questionDispatchCommand'
 import type { ClarifyDecisionCommandPort } from '../application/ports/clarifyDecisionCommand'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/queries'
 
 export interface CollaborationCommandDependencies {
   readonly db: DbClient
@@ -14,6 +15,7 @@ export interface CollaborationCommandDependencies {
   readonly reviewDecisions?: ReviewDecisionCommandPort
   readonly questionDispatches?: QuestionDispatchCommandPort
   readonly clarifyDecisions?: ClarifyDecisionCommandPort
+  readonly taskExecutionReadModels?: TaskExecutionReadModels
 }
 
 const dependencies = new WeakMap<object, CollaborationCommandDependencies>()
@@ -67,4 +69,14 @@ export function requireClarifyDecisionCommand(
   if (command === undefined)
     throw new Error('collaboration clarify decision command is not composed')
   return command
+}
+
+export function requireCollaborationTaskExecutionReadModels(
+  context: CollaborationCommandContext,
+): TaskExecutionReadModels {
+  const readModels = resolveCollaborationCommandContext(context).taskExecutionReadModels
+  if (readModels === undefined) {
+    throw new Error('collaboration task-execution read models are not composed')
+  }
+  return readModels
 }

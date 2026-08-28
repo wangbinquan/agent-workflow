@@ -37,6 +37,11 @@ export const TASK_QUERY_KEYS = {
     taskId,
     authRevision,
   ],
+  reviewers: (taskId: string | null, authRevision: number): QueryKey => [
+    'task-reviewers',
+    taskId,
+    authRevision,
+  ],
 } as const
 
 export const REVIEW_QUERY_KEYS = {

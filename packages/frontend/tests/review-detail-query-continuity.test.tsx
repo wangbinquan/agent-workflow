@@ -37,7 +37,7 @@ vi.mock('../src/components/shell/AppShell', () => ({
   AppShell: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
-import { api } from '../src/api/client'
+import { api, ApiError } from '../src/api/client'
 import i18n from '../src/i18n'
 import { Route as RootRoute } from '../src/routes/__root'
 import { Route as ReviewRoute } from '../src/routes/reviews.detail'
@@ -67,6 +67,15 @@ function doc(id: string): DocVersion {
 
 function makeDetail(multi: boolean): ReviewDetail {
   return {
+    capabilities: {
+      scope: 'task',
+      canAddComment: true,
+      canEditOwnComments: true,
+      canDeleteOwnComments: true,
+      canManageAnyComments: false,
+      canSelectDocuments: true,
+      canDecide: true,
+    },
     summary: {
       nodeRunId: 'run',
       taskId: 'task-1',
@@ -235,6 +244,30 @@ describe('/reviews/$nodeRunId shared query states', () => {
     expect(screen.getByText('Cached review document')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy()
     expect((await screen.findByRole('alert')).textContent).toContain('refresh failed')
+  })
+
+  test('review-node scope drops cached document when assignment access is revoked', async () => {
+    const client = queryClient()
+    const reviewerDetail = makeDetail(false)
+    reviewerDetail.capabilities = {
+      scope: 'review-node',
+      canAddComment: true,
+      canEditOwnComments: true,
+      canDeleteOwnComments: false,
+      canManageAnyComments: false,
+      canSelectDocuments: false,
+      canDecide: false,
+    }
+    client.setQueryData(['reviews', 'detail', 'run'], reviewerDetail)
+    ;(api.get as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new ApiError(404, 'node-run-not-found', 'review access revoked'),
+    )
+
+    renderSingle(client)
+
+    expect((await screen.findByRole('alert')).textContent).toContain('review access revoked')
+    expect(screen.queryByText('Cached review document')).toBeNull()
+    expect(screen.queryByTestId('review-detail-task-label')).toBeNull()
   })
 
   test('?version surfaces an initial version-list error and Retry without hiding a loaded body', async () => {

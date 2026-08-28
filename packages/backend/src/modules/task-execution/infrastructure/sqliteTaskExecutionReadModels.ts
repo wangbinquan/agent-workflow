@@ -1,11 +1,13 @@
 import { asc, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { taskRepos, tasks } from '@/db/schema'
+import { docVersions, taskRepos, tasks } from '@/db/schema'
 import type {
+  ReviewGateSubjectReadModel,
   TaskCallGraphWorkspaceReadModel,
   TaskExecutionReadModels,
+  TaskReviewNodeCatalogReadModel,
   TaskStatusProjectionReadModel,
-} from '../application/queries/taskExecutionReadModels'
+} from '../public/queries'
 
 export function createSqliteTaskExecutionReadModels(db: DbClient): TaskExecutionReadModels {
   const statusProjection: TaskStatusProjectionReadModel = {
@@ -55,5 +57,64 @@ export function createSqliteTaskExecutionReadModels(db: DbClient): TaskExecution
     },
   }
 
-  return Object.freeze({ statusProjection, callGraphWorkspace })
+  const taskReviewNodes: TaskReviewNodeCatalogReadModel = {
+    async find(taskId) {
+      const rows = await db
+        .select({
+          taskId: tasks.id,
+          taskOwnerUserId: tasks.ownerUserId,
+          workflowSnapshot: tasks.workflowSnapshot,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
+      const row = rows[0]
+      if (row === undefined) return null
+      try {
+        const parsed = JSON.parse(row.workflowSnapshot) as {
+          nodes?: Array<Record<string, unknown>>
+        }
+        return {
+          taskId: row.taskId,
+          taskOwnerUserId: row.taskOwnerUserId,
+          nodes: (parsed.nodes ?? [])
+            .filter(
+              (node): node is Record<string, unknown> & { id: string } =>
+                node.kind === 'review' && typeof node.id === 'string' && node.id.length > 0,
+            )
+            .map((node) => ({
+              reviewNodeId: node.id,
+              title: typeof node.title === 'string' ? node.title : '',
+              description: typeof node.description === 'string' ? node.description : '',
+            })),
+        }
+      } catch {
+        return { taskId: row.taskId, taskOwnerUserId: row.taskOwnerUserId, nodes: [] }
+      }
+    },
+  }
+
+  const reviewGateSubjects: ReviewGateSubjectReadModel = {
+    async find(nodeRunId) {
+      const rows = await db
+        .select({
+          nodeRunId: docVersions.reviewNodeRunId,
+          taskId: docVersions.taskId,
+          reviewNodeId: docVersions.reviewNodeId,
+          taskOwnerUserId: tasks.ownerUserId,
+        })
+        .from(docVersions)
+        .innerJoin(tasks, eq(tasks.id, docVersions.taskId))
+        .where(eq(docVersions.reviewNodeRunId, nodeRunId))
+        .limit(1)
+      return rows[0] ?? null
+    },
+  }
+
+  return Object.freeze({
+    statusProjection,
+    callGraphWorkspace,
+    taskReviewNodes,
+    reviewGateSubjects,
+  })
 }
