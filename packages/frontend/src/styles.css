@@ -20534,10 +20534,62 @@ fieldset.settings-card {
   color: var(--muted);
 }
 
+.user-picker__option > .status-chip {
+  margin-left: auto;
+}
+
 .user-picker__empty {
   padding: 8px;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* RFC-340 — dedicated review-node reviewer configuration. */
+.task-reviewers {
+  max-width: 960px;
+}
+
+.task-reviewers__nodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.task-reviewers__node .card__title-row > code {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.task-reviewers__node .card__body > .muted {
+  margin: 0;
+}
+
+.task-reviewers__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 520px) {
+  .task-reviewers__node .card__title-row,
+  .task-reviewers__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .task-reviewers__actions .btn {
+    width: 100%;
+  }
 }
 
 .attribution-chip {
