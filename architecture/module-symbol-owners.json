@@ -6,7 +6,7 @@
     "moduleFiles": 442,
     "productionFiles": 1751,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 18555
+    "symbolsIncludingFileRoots": 18562
   },
   "entries": [
     {
@@ -77288,9 +77288,74 @@
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
       "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:0ce4c9d056df0d50f94e2a27985d6c80b17d7bce7c7280216628f974baaacf75",
+      "signatureDigest": "sha256:a02b245597c3f8814976d8f1753a2dfe8847d041624de3d36bebda0ab2e7a35e",
       "status": "legacy-target",
       "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#cleanupWindowsOutputSpool",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:30734b8c71985420ff33285a4d71e75cabf6c8bcf661eaacd0a479d07f40ad25",
+      "status": "legacy-target",
+      "symbol": "cleanupWindowsOutputSpool",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#closeSpoolFd",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:09a0c0f5453e526e189d73d2b3fea665367d8f77ee01198fa7ecd54fc3d01b7d",
+      "status": "legacy-target",
+      "symbol": "closeSpoolFd",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#closeWindowsOutputSpoolWriters",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:86c9cd3bd571160a88ef11a1129125fb6ef41594f723d40f979d587a39aed66b",
+      "status": "legacy-target",
+      "symbol": "closeWindowsOutputSpoolWriters",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#createWindowsOutputSpool",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:874726098411167b3be54314dcdcffa28b6570b17ce589a83fe125da2d503f5e",
+      "status": "legacy-target",
+      "symbol": "createWindowsOutputSpool",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#drainSpoolFd",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:a2e84aa6023b589915ad1dd9a18aa97144cfe33a3d52102bdda558b5bbeac6ea",
+      "status": "legacy-target",
+      "symbol": "drainSpoolFd",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -77416,13 +77481,13 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
-      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#relayStreamToFd",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#relayWindowsOutputSpool",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:4cdde7fa7d5dc982b2f783b7e15aa2795c648381078fb2d38b309041e59acf5c",
+      "signatureDigest": "sha256:97f881ee5a1b8dfd211320af8e612afefea531da74c0efdfc7d650c56b9c4ce6",
       "status": "legacy-target",
-      "symbol": "relayStreamToFd",
+      "symbol": "relayWindowsOutputSpool",
       "targetContext": "task-execution",
-      "targetLayer": "application"
+      "targetLayer": "inbound"
     },
     {
       "currentContext": "legacy",
@@ -77444,7 +77509,7 @@
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
       "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#runManagedProcessLauncher",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:e0f7c5afc70b46d729f7d47c89dbb829b5093955e46ca368805187376b58be8d",
+      "signatureDigest": "sha256:17baa029f6df66bcd272e9c50c5ed185fdd325780d5cc6b7177385d03ef6d9a4",
       "status": "legacy-target",
       "symbol": "runManagedProcessLauncher",
       "targetContext": "task-execution",
@@ -77462,6 +77527,32 @@
       "symbol": "selfInvocation",
       "targetContext": "task-execution",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#WindowsOutputSpool",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:7c75c64dd2812bf5ba40328d13eb4d2bbde299f1a602d7705b2a01b4b6fb8018",
+      "status": "legacy-target",
+      "symbol": "WindowsOutputSpool",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "id": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#WindowsOutputSpoolFd",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:e9e46f92d22e3b6b5f969f7f4174e750eb6fd13ed3ae2baa2a0bfda74727556a",
+      "status": "legacy-target",
+      "symbol": "WindowsOutputSpoolFd",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
     },
     {
       "currentContext": "legacy",
@@ -241228,5 +241319,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d8b0ec261cb75c73ef61184edd141d0f12fd533460b959d10c69ad1ad13299b1"
+  "sourceDigest": "sha256:a21f8c94caef6b189f664e11ed791364c87f8b1b31b55ba5449d4039d0a74e22"
 }

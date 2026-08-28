@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 966,
+    "entries": 967,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -12036,6 +12036,31 @@
       },
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/execution/managedProcessLauncher.ts#createWindowsOutputSpool",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#createWindowsOutputSpool",
+      "symbol": "createWindowsOutputSpool",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/execution/managedProcessLauncher.ts#runManagedProcessLauncher",
       "missingControls": [
         "audit",
@@ -22965,7 +22990,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d8b0ec261cb75c73ef61184edd141d0f12fd533460b959d10c69ad1ad13299b1",
+  "sourceDigest": "sha256:a21f8c94caef6b189f664e11ed791364c87f8b1b31b55ba5449d4039d0a74e22",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -3764,7 +3764,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d8b0ec261cb75c73ef61184edd141d0f12fd533460b959d10c69ad1ad13299b1",
+    "sourceDigest": "sha256:a21f8c94caef6b189f664e11ed791364c87f8b1b31b55ba5449d4039d0a74e22",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
