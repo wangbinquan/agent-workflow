@@ -114,21 +114,24 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
 
   test('伪造 actor cast 归零；两条新启臂都判 call-owner-inactive', () => {
     const scheduler = src('services/scheduler.ts')
-    expect(scheduler.includes('as unknown as Parameters<typeof startExecution>')).toBe(false)
+    const nodeMechanics = src('modules/task-execution/composition/nodeMechanics.ts')
+    expect(
+      `${scheduler}\n${nodeMechanics}`.includes('as unknown as Parameters<typeof startExecution>'),
+    ).toBe(false)
     // 臂 1（call-workflow）+ 臂 2（call-workgroup preflight）各一次判定 + 抛码。
-    expect((scheduler.match(/buildInheritedActor\(/g) ?? []).length).toBe(2)
-    expect(scheduler).toContain("'call-workflow'")
-    expect(scheduler).toContain("'call-workgroup'")
-    expect((scheduler.match(/'call-owner-inactive'/g) ?? []).length).toBe(2)
+    expect((nodeMechanics.match(/buildInheritedActor\(/g) ?? []).length).toBe(2)
+    expect(nodeMechanics).toContain("'call-workflow'")
+    expect(nodeMechanics).toContain("'call-workgroup'")
+    expect((nodeMechanics.match(/'call-owner-inactive'/g) ?? []).length).toBe(2)
   })
 
   test('Q6：resume 臂豁免注释锁在位（只拦新任务创建）', () => {
-    const scheduler = src('services/scheduler.ts')
-    const start = scheduler.indexOf('RFC-285 B3 Q6')
+    const nodeMechanics = src('modules/task-execution/composition/nodeMechanics.ts')
+    const start = nodeMechanics.indexOf('RFC-285 B3 Q6')
     expect(start).toBeGreaterThan(-1)
-    const end = scheduler.indexOf('} catch (error)', start)
+    const end = nodeMechanics.indexOf('} catch (error)', start)
     expect(end).toBeGreaterThan(start)
-    const resumeArm = scheduler.slice(start, end)
+    const resumeArm = nodeMechanics.slice(start, end)
     // RFC-331 keeps Q6 on the explicit child-control port: resume extends an
     // existing task and therefore must not rebuild or re-check its owner.
     expect(resumeArm).toContain('const childRuntime = buildChildRuntime(state)')

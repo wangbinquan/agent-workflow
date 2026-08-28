@@ -25,7 +25,7 @@ import { resolve } from 'node:path'
 const TESTS_DIR = resolve(import.meta.dir)
 
 /** 迁移期必须由行为夹具接手、不得靠改锚了事的（design §10.10）。 */
-const MUST_BECOME_BEHAVIOR_FIXTURE = [
+const MUST_HAVE_BEHAVIOR_FIXTURE = [
   'rfc208-unbounded-git-and-permits.test.ts',
   'rfc210-publish-failure-hard-fails.test.ts',
   'process-node-concurrency.test.ts',
@@ -41,10 +41,8 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'depcheck-gate.test.ts',
   'envelope-followup-source-grep.test.ts',
   'freshness.test.ts',
-  'process-node-concurrency.test.ts',
   'retry-budget-single-source.test.ts',
   'review-dispatch-prefers-clarify-rerun.test.ts',
-  'rfc064-source-grep-guards.test.ts',
   'rfc098-commitpush-nonblocking.test.ts',
   'rfc098-git-wrapper-diff-fail.test.ts',
   'rfc103-fanout-kind-aware-split.test.ts',
@@ -52,8 +50,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc130-shard-rerun-undo.test.ts',
   'rfc143-runtime-driver-capability.test.ts',
   'rfc144-stale-replay-regression.test.ts',
-  'rfc183-clarify-invite-accept-symmetry.test.ts',
-  'rfc187-zero-delta-done.test.ts',
   'rfc188-isolated-agent-run.test.ts',
   'rfc193-wrapper-review.test.ts',
   'rfc200-source-lock.test.ts',
@@ -64,7 +60,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc230-wrapper-finalize-superseded.test.ts',
   'rfc271-ref-contract.test.ts',
   'rfc282-b2-resolve-injection.test.ts',
-  'rfc284-t20-child-inheritance.test.ts',
   'rfc285-b3-inherited-actor.test.ts',
   'rfc287-t1-broadcast-sequence.test.ts',
   'rfc287-t1-discard-failure-paths.test.ts',
@@ -132,10 +127,20 @@ describe('RFC-287 T1① — scheduler.ts 源码文本锁清单', () => {
     expect(scanActual()).toEqual([...SCHEDULER_SOURCE_LOCK_FILES])
   })
 
-  test('必须换成行为夹具的三份仍在清单里（改锚了事即为回归）', () => {
-    for (const f of MUST_BECOME_BEHAVIOR_FIXTURE) {
-      expect(SCHEDULER_SOURCE_LOCK_FILES).toContain(f)
+  test('必须换成行为夹具的三份仍有独立处置（RFC-334 已完成 process 迁址）', () => {
+    for (const f of MUST_HAVE_BEHAVIOR_FIXTURE) {
+      const source = readFileSync(resolve(TESTS_DIR, f), 'utf8')
+      expect(source.length).toBeGreaterThan(0)
     }
+    expect(SCHEDULER_SOURCE_LOCK_FILES).toContain('rfc208-unbounded-git-and-permits.test.ts')
+    expect(SCHEDULER_SOURCE_LOCK_FILES).toContain('rfc210-publish-failure-hard-fails.test.ts')
+    expect(SCHEDULER_SOURCE_LOCK_FILES).not.toContain('process-node-concurrency.test.ts')
+    const processFixture = readFileSync(
+      resolve(TESTS_DIR, 'process-node-concurrency.test.ts'),
+      'utf8',
+    )
+    expect(processFixture).toContain('same daemon scope shares one limiter')
+    expect(processFixture).toContain('a full agent pool never blocks a script acquire')
   })
 })
 
