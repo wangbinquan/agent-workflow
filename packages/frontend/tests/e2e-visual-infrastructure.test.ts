@@ -84,7 +84,7 @@ describe('RFC-198 visual infrastructure source gates', () => {
     expect(readme).toContain('65 pixel baselines')
     expect(readme).not.toContain('RUN_VISUAL_REGRESSION=1 bun run e2e')
     expect(workflow).toContain('runs-on: ubuntu-24.04')
-    expect(workflow).toContain("bun-version: '1.3.14'")
+    expect(workflow).toContain("bun-version: '1.4.0'")
   })
 
   test('path-filtered visual jobs include unified system mocks in push and PR gates', () => {
