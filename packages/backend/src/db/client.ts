@@ -57,7 +57,7 @@ export interface OpenDbOptions {
   busyTimeoutMs?: number
   /** RFC-338: only the primary connection establishes the persistent WAL
    * mode. Secondary maintenance/probe connections preserve that mode so
-   * opening them cannot contend with an active writer for a journal switch. */
+   * opening them avoids contending with an active writer for a journal switch. */
   journalMode?: 'configure' | 'preserve'
   /** RFC-311: warn-log any statement slower than this many ms (default 50,
    *  0 disables). Every statement here runs synchronously on the daemon's
