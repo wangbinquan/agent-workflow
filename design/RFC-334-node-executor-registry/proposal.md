@@ -1,15 +1,19 @@
 # RFC-334：NodeExecutorRegistry（RFC-294 W2-C）
 
-> 状态：In Progress（2026-08-28；T2～T11 实现候选与 targeted 验证已完成，T12 等待三笔 architecture provenance、发布及 hosted/scheduled CI）
+> 状态：Done（2026-08-28；T0～T12 全部完成，RFC-294 W2-C 已关闭；W2-D 未授权、未启动）
 >
 > 架构位置：RFC-294 W2-C；承接已完成的 RFC-328 durable execution authority、RFC-331 W2-A topology、
 > RFC-332 W2-B TaskEngine/DAG owner 与 RFC-333 P0-C。只领取 node/workgroup-host mechanics 与 neutral
 > retry-cap contract；不领取 W2-D WrapperRuntime、W3 committed events、W4 public facade、W5 completion 或 W9 config credit。
 >
-> current source pin：`main == origin/main == 0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34`。该 SHA 的主 CI
-> `33127647698` 为 35/35 terminal `success`；其生产源码与 RFC-333 最终 payload/provenance
-> `dda58935ec62b62ec1c962628af3af21edf0e9da` → `57e45c292acec81d8f8cf27fceade4f44369a462`
-> 一致，后者七条 scheduled workflow 共 19/19 jobs 全部 success。以下源码锚均按该 pin 对账；生产实施前必须重新确认未漂移。
+> 调研基线 pin：`0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34`；以下 historical `file:line` 锚仍按该 committed
+> blob 对账。W2-C production payload/provenance 为
+> `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` → `cfe1326b4e948c24772b06708f91e2526ba7022b`，canonical source
+> digest 为 `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。最终功能验收 SHA
+> `8e58eb05f987bcf08007db714119b3f46d519772` 的主 CI `33142147682`（attempt 2）为 35/35 terminal
+> `success`；W2-C production-equivalent SHA `0a0df74c4476355cc5d5e5f0fe289f823759a2e1` 的七条 scheduled
+> workflow 共 19/19 jobs 全部 `success`。`0a0df74c4` 之后本 RFC 只改 source-lock/CI 测试与文档；其间 RFC-336/337
+> 的生产变化属于独立范围，不改变 W2-C candidate-content 结论。
 
 ## 1. 摘要裁决
 
@@ -247,6 +251,22 @@ RFC-334 只有同时满足以下条件才可标 Done：
 6. 14-kind、workgroup host、RFC-313、RFC-333 与架构 oracle 全绿，外部功能无变化；
 7. exact-SHA main CI 与全部 scheduled workflow 提供终态成功证据；
 8. RFC-294 只把 W2-C 置 Done，W2-D/W3/W4/W5/W9 继续保持原批准状态。
+
+### 8.1 关闭证据
+
+- 实现链：`4b7f36c96`（neutral retry contracts）→ `234cfb230`（closed registry）→ `daf4c4a76`
+  （production cutover）→ `1271ecb20`（canonical payload）→ `cfe1326b4`（provenance pin）；
+- W2-C payload 分母：mutation/import/exception/owner=`951/1329/1297/18139`，backend/repo value SCC=`4/6`；
+- 当前仓库在 RFC-336/337 合入后的最新 architecture payload/pin 为 `f5e7833fd` → `aa32b65ad`，source digest
+  `sha256:14b1c9bc4f6b634044135575cb3aab2b2db14c2ddf765f3b3e02688a18896576`；当前分母为
+  mutation/import/exception/owner=`952/1339/1304/18186`，它是全仓最新 shape，不反写 W2-C 自身 payload；
+- 主 CI：`8e58eb05f987bcf08007db714119b3f46d519772` / `33142147682` attempt 2，35/35 jobs terminal
+  `success`；其中 hosted macOS backend shard 1/4 已验证 daemon readiness 预算修复；
+- scheduled：`33137355523`、`33137360247`、`33137365884`、`33137370609`、`33137376055`、
+  `33137380634`、`33137385552`，七条 workflow 合计 19/19 jobs terminal `success`，head SHA 均为
+  `0a0df74c4476355cc5d5e5f0fe289f823759a2e1`；
+- `runOneNode`、`runHostNode`、`buildWorkgroupHooks` production symbol 与两条 W2-C exception 均为 0；三条 wrapper
+  bridge 继续精确归 W2-D，没有新增安全策略、schema、wire、config 或 UI 行为。
 
 ## 9. 批准记录
 

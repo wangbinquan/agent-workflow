@@ -1,10 +1,10 @@
 # RFC-334 技术设计：NodeExecutorRegistry
 
-> 状态：In Progress（T2～T11 实现候选与 targeted 验证完成，T12 hosted/scheduled closeout 待完成）。本文固定 W2-C 的目标模块、
+> 状态：Done（2026-08-28；T0～T12、hosted/scheduled closeout 全部完成）。本文固定 W2-C 的目标模块、
 > closed registry、per-kind 边界、workgroup-host 共用方式、neutral retry-cap contract 与 cutover/rollback。用户已于
 > 2026-08-28 明确批准生产实施；批准不外溢到 W2-D 或后续 wave。
 >
-> source pin：`0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34`。文中的 `file:line` 均指该 committed blob；可用
+> 调研基线 pin：`0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34`。文中的 historical `file:line` 均指该 committed blob；可用
 > `git show 0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34:<path> | nl -ba` 重放，禁止把后续 working-tree 行号冒充本设计事实。
 
 ## 1. 设计不变量
@@ -596,9 +596,18 @@ W2-C 不改表、status、row cause、workflow snapshot、nonce、retry index、
 
 ### 12.5 hosted closeout
 
-生产实现候选必须完成 targeted behavior/architecture/canonical gates；最终发布 SHA 的主 CI 35/35 terminal success，并枚举、
-dispatch、等待仓内全部带 `schedule` 的 workflow terminal success。失败归因到 job/test/path；queued、cancelled、ancestor 或
-unrelated containing run 都不能宣称 W2-C 绿。
+关闭证据分成三层，不能相互冒充：
+
+1. W2-C production payload `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` 与 provenance pin
+   `cfe1326b4e948c24772b06708f91e2526ba7022b` 固定 registry/cutover 的 canonical shape；
+2. 最终功能验收 SHA `8e58eb05f987bcf08007db714119b3f46d519772` 的主 CI `33142147682` attempt 2 为
+   35/35 terminal `success`；attempt 1 因旧 SHA rerun 占用 concurrency 被取消，不计证据；
+3. 仓内七条 scheduled workflow 均在 W2-C production-equivalent SHA `0a0df74c4476355cc5d5e5f0fe289f823759a2e1`
+   完成，run `33137355523` / `33137360247` / `33137365884` / `33137370609` / `33137376055` /
+   `33137380634` / `33137385552` 合计 19/19 jobs terminal `success`。该 SHA 后本 RFC 只有 source-lock/CI
+   测试与文档变化，后续 RFC-336/337 production delta 不属于 W2-C candidate content。
+
+因此 queued、cancelled、ancestor 与无 ancestry/candidate-content 关系的 run 均未被用作绿色结论。
 
 ## 13. 目标架构图
 
@@ -656,8 +665,11 @@ RFC-334 完成后只关闭 RFC-294 W2-C：TaskEngine→NodeExecutor 四级执行
 bridge 删除。W2-D 仍需把 wrapper compatibility port 背后的 loop/git/fanout mechanics 归位；W3/W4/W5/W9 仍按各自前置和批准
 推进。RFC-333 的 P0-C 继续作为 review/clarify 的 durable correctness oracle，不因 executor 迁位重新实现。
 
-当前实现候选已形成 14-key closed registry 与按 kind 分文件的 executor；DAG 与四个 workgroup/dynamic host 构造点统一进入
+落地实现已形成 14-key closed registry 与按 kind 分文件的 executor；DAG 与四个 workgroup/dynamic host 构造点统一进入
 `composition/nodeExecution.ts`。具体 DB/runtime mechanics 归 `composition/nodeMechanics.ts`，不伪装成 domain contract；
 review/clarify 只经 `CollaborationNodeGatePort` 请求 collaboration participant。node 层回调 legacy scheduler 的 production value
 import 只剩 `WrapperNodeExecutionPort` 背后的 `wrapper-git | wrapper-loop | wrapper-fanout` 三条 exact W2-D bridge；旧
-`runOneNode`、`runHostNode`、`buildWorkgroupHooks` 已从 production source 消失。该候选没有修改 schema、wire、config 或 UI。
+`runOneNode`、`runHostNode`、`buildWorkgroupHooks` 已从 production source 消失。W2-C payload digest 为
+`sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`；当前全仓在后续 RFC-336/337 后的最新 digest 为
+`sha256:14b1c9bc4f6b634044135575cb3aab2b2db14c2ddf765f3b3e02688a18896576`，两者分栏记账。该迁移没有修改
+schema、wire、config 或 UI，也没有新增安全策略或功能限制。
