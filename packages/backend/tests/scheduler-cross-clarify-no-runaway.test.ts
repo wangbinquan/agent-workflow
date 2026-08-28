@@ -157,7 +157,7 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     )
   })
 
-  test('scheduler.runOneNode case clarify-cross-agent is idempotent: NO new pending row when a live (pending) row already exists', async () => {
+  test('CrossClarifyNodeExecutor mechanics are idempotent: NO new pending row when a live row already exists', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTaskAndWorkflow(db)
     // Seed a pre-existing pending cross-clarify row (simulating the
@@ -173,16 +173,23 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
       iteration: 0,
     })
 
-    // Re-import the scheduler module to call its internals. The dispatch
-    // path lives inside runOneNode; we don't drive the full scheduler
+    // Read the purpose-specific mechanics. We don't drive the full scheduler
     // here (would require a full mock opencode harness). Instead we lock
     // the source-text rule that the new code reads existing rows + skips
     // insertion when a live row is found — equivalent to the per-tick
     // idempotency guard the bug needed.
     const { readFileSync } = await import('node:fs')
-    const SCHEDULER_TS = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
-    const src = readFileSync(SCHEDULER_TS, 'utf-8')
-    const branchIdx = src.indexOf("if (node.kind === 'clarify-cross-agent') {")
+    const NODE_MECHANICS_TS = resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    )
+    const src = readFileSync(NODE_MECHANICS_TS, 'utf-8')
+    const branchIdx = src.indexOf('export async function runCrossClarifyNode(')
     expect(branchIdx).toBeGreaterThan(-1)
     // Window sized for the branch body; RFC-098 WP-10 widened it (the two
     // guard mints now go through the multi-line mintNodeRun factory call).
@@ -214,8 +221,16 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     expect(rows.length).toBe(0)
     // The fix's comment block in scheduler.ts pins this contract.
     const { readFileSync } = await import('node:fs')
-    const SCHEDULER_TS = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
-    const src = readFileSync(SCHEDULER_TS, 'utf-8')
+    const NODE_MECHANICS_TS = resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    )
+    const src = readFileSync(NODE_MECHANICS_TS, 'utf-8')
     expect(src).toContain('runner will create the node_run')
     expect(src).toContain('common case (no stop, has questioner), do NOTHING')
   })

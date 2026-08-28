@@ -20,23 +20,39 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const NODE_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf8',
+)
+const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS] as const
 
 function bodyOf(signature: string): string {
-  const start = SCHEDULER.indexOf(signature)
+  const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))
+  expect(source, `未找到函数：${signature}`).toBeDefined()
+  if (source === undefined) return ''
+  const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
   // ⚠️ 括号配平，**不能**靠「下一个 function 声明」当边界（四轮门测试有效性自查
   // 实测）：`runHostNode` 是嵌套在 `buildWorkgroupHooks` 里的函数，它的兄弟钩子都写成
   // `const x = async () =>`，正则边界一个都不命中，于是切片一路跑出真实函数体
   // 159 行——把兄弟钩子与两个导出函数全吞了进来。实测把边界补上 `export ` 前缀只收窄
   // 了 31 行，仍然吞着别人的代码。只有配平括号才切得准。
-  const open = SCHEDULER.indexOf('{', start + signature.length - 1)
+  const open = source.indexOf('{', start + signature.length - 1)
   let depth = 1
   let i = open + 1
-  for (; i < SCHEDULER.length && depth > 0; i++) {
-    if (SCHEDULER[i] === '{') depth++
-    else if (SCHEDULER[i] === '}') depth--
+  for (; i < source.length && depth > 0; i++) {
+    if (source[i] === '{') depth++
+    else if (source[i] === '}') depth--
   }
-  return SCHEDULER.slice(open + 1, i - 1)
+  return source.slice(open + 1, i - 1)
 }
 
 /** 该函数体里 broadcastNodeStatus 的状态实参序列（按源码出现序）。 */
@@ -71,14 +87,14 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
   // `broadcastNodeStatus`。旧 `bodyOf` 靠「下一个 function 声明」当边界,而这些兄弟
   // 钩子都写成 `const x = async () =>`,正则一个都不命中,切片于是跑出真实函数体
   // 159 行、把别人的广播算进了本线的序列。`bodyOf` 改成括号配平后基线随之收正。
-  ['async function runHostNode(', ["'failed'", 'result.status', "'failed'"]],
+  ['async function executeWorkgroupHostMechanics(', ["'failed'", 'result.status', "'failed'"]],
   // ⚠️ L4 一直缺席（五轮门终局对账点名）：design §7 T1-④ 点名的**第一项**就是它，
   // 而它是本 RFC 唯一做了真手术的线（拆成 outer + 模式 B 重试窗口）。基线在
   // `d0f6333c` 上按括号配平的 `bodyOf` 实测导出，与其余四线同法。
-  [
-    'async function runOneNode(',
-    ["'done'", "'done'", "'done'", "'pending'", "'pending'", 'lastResult.status'],
-  ],
+  ['async function runAgentSingleNode(', ["'pending'", "'pending'", 'lastResult.status']],
+  ['async function runOutputNode(', ["'done'"]],
+  ['async function runInputNode(', ["'done'"]],
+  ['async function runCrossClarifyNode(', ["'done'"]],
 ]
 
 describe('RFC-287 T1④ — 广播序列快照', () => {
@@ -95,15 +111,18 @@ describe('RFC-287 T1④ — 广播序列快照', () => {
     const offenders: string[] = []
     const re = /broadcastNodeStatus\(/g
     let m: RegExpExecArray | null
-    while ((m = re.exec(SCHEDULER)) !== null) {
-      const after = SCHEDULER.slice(m.index, m.index + 260)
-      // 反序形态：广播之后紧接着对同一 nodeRunId 的 await DB 写，中间无其它语句。
-      if (
-        /^broadcastNodeStatus\([^)]*\)\s*\n\s*await (setNodeRunStatus|db\s*\n?\s*\.update)/.test(
-          after,
-        )
-      ) {
-        offenders.push(SCHEDULER.slice(Math.max(0, m.index - 60), m.index + 120))
+    for (const source of MECHANICS_SOURCES) {
+      re.lastIndex = 0
+      while ((m = re.exec(source)) !== null) {
+        const after = source.slice(m.index, m.index + 260)
+        // 反序形态：广播之后紧接着对同一 nodeRunId 的 await DB 写，中间无其它语句。
+        if (
+          /^broadcastNodeStatus\([^)]*\)\s*\n\s*await (setNodeRunStatus|db\s*\n?\s*\.update)/.test(
+            after,
+          )
+        ) {
+          offenders.push(source.slice(Math.max(0, m.index - 60), m.index + 120))
+        }
       }
     }
     expect(offenders).toEqual([])

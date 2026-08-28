@@ -259,14 +259,13 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
     ).toBe('integration')
   })
 
-  test('scheduler key symbols project to their exact W2 removal wave', () => {
+  test('remaining scheduler key symbols project to their exact removal wave', () => {
     const path = 'packages/backend/src/services/scheduler.ts'
     expect(targetRemoveAfterWaveFor(path, 'runTaskInner')).toBe('W2-B')
     expect(targetRemoveAfterWaveFor(path, 'runScope')).toBe('W2-B')
     expect(targetRemoveAfterWaveFor(path, 'deriveFrontier')).toBe('W2-B')
-    expect(targetRemoveAfterWaveFor(path, 'buildWorkgroupHooks')).toBe('W2-C')
-    expect(targetRemoveAfterWaveFor(path, 'runOneNode')).toBe('W2-C')
     expect(targetRemoveAfterWaveFor(path, 'runWrapperNode')).toBe('W2-D')
+    expect(targetRemoveAfterWaveFor(path, 'runWrapperFanoutNode')).toBe('W2-D')
     expect(targetRemoveAfterWaveFor(path, 'replayPendingMerges')).toBe('W2-D')
     expect(targetRemoveAfterWaveFor(path, 'emitStatus')).toBe('W3')
     expect(targetRemoveAfterWaveFor(path, 'maybeRunCommitPush')).toBe('W5')
@@ -286,10 +285,15 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
     const scope = 'packages/backend/src/modules/task-execution/composition/taskDagScope.ts'
     const application =
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts'
-    expect(bridge(scope, 'runOneNode')).toMatchObject({
-      introducedByRFC: 'RFC-332',
-      removeAfterWave: 'W2-C',
-    })
+    const nodeExecution = 'packages/backend/src/modules/task-execution/composition/nodeExecution.ts'
+    expect(bridge(scope, 'runOneNode')).toBeUndefined()
+    expect(bridge(application, 'buildWorkgroupHooks')).toBeUndefined()
+    for (const symbol of ['runWrapperFanoutNode', 'runWrapperGitNode', 'runWrapperLoopNode']) {
+      expect(bridge(nodeExecution, symbol)).toMatchObject({
+        introducedByRFC: 'RFC-334',
+        removeAfterWave: 'W2-D',
+      })
+    }
     expect(bridge(application, 'replayPendingMerges')).toMatchObject({
       introducedByRFC: 'RFC-332',
       removeAfterWave: 'W2-D',

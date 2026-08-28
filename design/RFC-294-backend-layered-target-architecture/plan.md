@@ -6,7 +6,7 @@
   RFC-329/330 只作为 W4 输入/纵切，不抵扣整波；RFC-288/289 已关闭且未实现；RFC-294 N1a/N1b 治理基线已落，
   RFC-331 T3～T12 / W2-A 与 RFC-332 T3～T13 / W2-B 均已发布并完成 provenance/exact-SHA hosted closeout；
   [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md) 已关闭 P0-C residual 并完成 exact-SHA 主 CI/全部
-  scheduled closeout；[RFC-334](../RFC-334-node-executor-registry/proposal.md) 已获批并进入 W2-C 生产实施，T3 已落地；
+  scheduled closeout；[RFC-334](../RFC-334-node-executor-registry/proposal.md) 已获批，T2～T11 实现候选已完成并等待 T12 hosted/scheduled closeout；
   W2-D 尚未授权）
 - 规划单位：历史偏差收口 + P0 正确性阻断 + W0-R～W9 迁移波次
 - 总原则：承认已落事实、前向修复前置偏差；单写源、逐 consumer 切换、每波可独立验收/回退；禁止
@@ -109,7 +109,7 @@ unresolved first-party=0。required-port/target-edge 分栏继续由对应 canon
 | P0-E | 已收束                                               | RFC-287 Done；RFC-288/289 CLOSED，结论分别转交 W2 新号实现 RFC 与 W7 后新号能力 RFC                                                                                                               |
 | W0-R | N1 governance baseline Done                          | 七份 canonical manifest/report、四 artifact current provenance、global FK、23 required-port liveness 分类、ambient/background/public 全分母已落；物理 debt cutover 不计本波 credit                |
 | W1   | behavior landed / architecture residual              | RFC-287 的 assembly 与 G4～G7 产品行为作为既有基线；target module、ownership、admission/event/SC 边界仍待后续波次                                                                                 |
-| W2   | W2-A/B Done / RFC-334 W2-C In Progress / W2-D 未授权 | RFC-328 durable authority、RFC-331 topology、RFC-332 coordinator/DAG 与 RFC-333 P0-C 前置均已满足；RFC-334 已获批并开始生产实施，T3 neutral retry contract 已落地，其余 wave 未完成               |
+| W2   | W2-A/B Done / RFC-334 W2-C In Progress / W2-D 未授权 | RFC-328 durable authority、RFC-331 topology、RFC-332 coordinator/DAG 与 RFC-333 P0-C 前置均已满足；RFC-334 T2～T11 实现候选已完成，等待 T12 hosted/scheduled closeout；其余 wave 未完成           |
 | W3   | pilot-expanded                                       | RFC-328 已落 task lifecycle outbox，RFC-300/303/314/326 提供其他 oracle；三类 gate common continuation 与全量 committed-event consumer cutover仍未落                                              |
 | W4   | partial vertical slices                              | RFC-318/320/323/324/326/327/329/330 推进合同、ACL、MCP inventory与DE；route→DB=15、AppDeps=54、TE↔DE contract debt与deep ingress仍在；RFC-329不等于catalog完成                                    |
 | W5   | partial vertical slices                              | RFC-308/310/321 已落 source-control candidate/commit/publication transport/credential seam；git SCC、repo/cache/workspace owner、SC endpoint/transport required SPI 与 opaque WorkspaceRef 未收口 |
@@ -589,17 +589,17 @@ public surface `300`、owner `17622`；新增 bridge 全部具名 RFC-332 与 re
 
 2026-08-28：successor [RFC-334](../RFC-334-node-executor-registry/proposal.md) 已在 source pin `0d296ff1b` 完成
 14-kind、`runOneNode`、workgroup host、review/clarify 与 RFC-313 neutral-cap consumer 调研，并固定 proposal/design/plan。
-用户已明确批准生产实施；下列 checklist 按 wave 销账，未全部完成前不倒签 W2-C Done。
+用户已明确批准生产实施；下列 implementation checklist 已在候选内容中销账，T12 hosted/scheduled closeout 完成前不倒签 W2-C Done。
 
 - [x] 在迁 NodeExecutor policy 前，把 RFC-313 的 `retryAttemptCap` 纯算术、ceiling 与 exact codec 抽成
       `platform/contracts` 中性 value/policy contract，登记 task-execution 与 digital-employee 两个真实 consumer；它不读取配置、
       不决定 followup/restart/reaction/outbox，也不持有 attempt/session 状态；
-- [ ] inventory 当前 closed catalog 的 14 个 `NodeKind` dispatch，并单列 user-authored、synthesized-only 与 retired kind；历史
+- [x] inventory 当前 closed catalog 的 14 个 `NodeKind` dispatch，并单列 user-authored、synthesized-only 与 retired kind；历史
       `code-round` 同时存在于兼容 `ExecutionKind/NodeKind`，只注册 fail-closed `code-round-retired` compatibility arm，绝不执行 stage engine；
-- [ ] registry 与 `NODE_KIND_BEHAVIORS satisfies Record<NodeKind,...>` 同源或以穷尽 compile oracle 对拍；
-- [ ] review/clarify executor 只负责 task-side request/park outcome，gate policy 仍在 collaboration；
-- [ ] review/clarify executor production cutover 等 P0-C 完成，禁止把旧 route resume saga 搬进 executor；
-- [ ] 逐 kind cutover，旧 switch/inline body 与旁路（含 workgroup host）生产命中=0。
+- [x] registry 与 `NODE_KIND_BEHAVIORS satisfies Record<NodeKind,...>` 同源或以穷尽 compile oracle 对拍；
+- [x] review/clarify executor 只负责 task-side request/park outcome，gate policy 仍在 collaboration；
+- [x] review/clarify executor production cutover 等 P0-C 完成，禁止把旧 route resume saga 搬进 executor；
+- [x] 逐 kind cutover，旧 switch/inline body 与旁路（含 workgroup host）生产命中=0。
 
 ### W2-D WrapperRuntime
 

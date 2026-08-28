@@ -30,7 +30,10 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from '../src/services/runner'
-import { decideEnvelopeFollowup, type PreviousAttemptShape } from '../src/services/scheduler'
+import {
+  decideEnvelopeFollowup,
+  type PreviousAttemptShape,
+} from '../src/modules/task-execution/composition/nodeMechanics'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

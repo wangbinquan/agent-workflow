@@ -21,15 +21,31 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+const NODE_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf8',
+)
 const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const MECHANICS_SOURCES = [NODE_MECHANICS, SCHEDULER] as const
 
 function bodyOf(signature: string): string {
-  const start = SCHEDULER.indexOf(signature)
+  const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))
+  expect(source, `未找到函数：${signature}`).toBeDefined()
+  if (source === undefined) return ''
+  const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
-  const rest = SCHEDULER.slice(start + signature.length)
+  const rest = source.slice(start + signature.length)
   // 边界必须**同时**认 `export` 前缀（四轮门测试有效性自查实测）：`runHostNode` 是
   // 嵌套函数，真实结尾在 L1449，而旧边界跨过了 `export function decideEnvelopeFollowup`
   // 一路切到 L1608，把 buildWorkgroupHooks 的兄弟钩子与两个导出函数全吞了进来

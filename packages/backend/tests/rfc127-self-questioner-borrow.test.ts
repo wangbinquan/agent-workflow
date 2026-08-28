@@ -268,7 +268,15 @@ describe('RFC-132 PR-B — self/questioner via dispatch is MOVE (去借壳, not 
 describe('RFC-127 borrow conflict — scheduler node-level failure (source lock)', () => {
   test('runOneNode catches ConflictError from resolveBorrowForNode → kind:failed', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     expect(src).toMatch(/catch[\s\S]{0,200}ConflictError[\s\S]{0,80}kind: 'failed'/)

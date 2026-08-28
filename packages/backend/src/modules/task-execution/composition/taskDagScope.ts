@@ -4,7 +4,7 @@ import { clarifyRounds, nodeRuns } from '@/db/schema'
 import { autoDispatchDeferredQuestions } from '@/services/clarifyAutoDispatch'
 import { decideScopeOutcome } from '@/services/dispatchFrontier'
 import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
-import { maybeRunCommitPush, runOneNode } from '@/services/scheduler'
+import { maybeRunCommitPush } from '@/services/scheduler'
 import { deriveFrontier } from './dagFrontier'
 import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
 import type { TaskScopeOutcome } from '../domain/taskEngine'
@@ -14,6 +14,7 @@ import type {
   TaskScopeArgs,
 } from '@/services/execution/taskMechanicsState'
 import { taskExecutionModule } from '../composition'
+import { executeNode } from './nodeExecution'
 
 export async function runScope(
   state: LegacyTaskMechanicsState,
@@ -199,7 +200,7 @@ export async function runScope(
         if (anchor !== undefined) dispatchedPendingRowIds.add(anchor)
         inFlight.set(
           nodeId,
-          runOneNode(state, { node, iteration, log }).then((result) => ({ nodeId, result })),
+          executeNode(state, { node, iteration, log }).then((result) => ({ nodeId, result })),
         )
       }
     }
@@ -350,7 +351,7 @@ function detailFor(
  *   - `askingRunIds`: the node_run ids of the ASKING agent / questioner runs
  *     (`source_agent_node_run_id` / `source_questioner_node_run_id`). When an
  *     agent emits <workflow-clarify>, the runner marks the agent's OWN run
- *     `done` and runOneNode returns `awaiting_human`; the old batch model used
+ *     `done` and the node gateway returns `awaiting_human`; the old batch model used
  *     that return value to keep the agent OUT of `completed` (so downstream
  *     stayed blocked until the answer minted a rerun). A DB-derived frontier
  *     sees only the `done` row, so without this set it would complete the asking

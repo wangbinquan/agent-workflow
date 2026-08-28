@@ -21,7 +21,7 @@ import { resolve } from 'node:path'
 import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
-import { resolveUpstreamInputs } from '../src/services/scheduler'
+import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
 import { createLogger } from '../src/util/log'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 

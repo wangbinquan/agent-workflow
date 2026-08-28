@@ -751,8 +751,16 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
   })
 
   test('source locks: task orchestrator consumes the task-execution engine registry', () => {
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    const nodeMechanics = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     const orchestrator = readFileSync(
@@ -794,8 +802,8 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     expect(enginesSrc).toContain('workgroupModeOf(task.workgroupConfigJson)')
     // Codex impl-gate P1: the generation run's iso delta is dropped, never
     // merged into the canonical worktree (abandon + skip merge-back).
-    expect(src).toContain('req.discardWrites === true')
-    expect(src).toContain("{ kind: 'abandon', reason: 'discard-writes' }")
+    expect(nodeMechanics).toContain('req.discardWrites === true')
+    expect(nodeMechanics).toContain("{ kind: 'abandon', reason: 'discard-writes' }")
   })
 })
 

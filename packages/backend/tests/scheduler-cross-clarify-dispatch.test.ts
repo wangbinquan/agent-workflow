@@ -990,7 +990,15 @@ describe('RFC-217 T9 跟修（Codex impl-gate P2-3）— 调度器尊重短路�
   // persistent-stop，客户端与持久态就此分叉、pending 行搁浅。源锁钉死分支形态。
   test('source — done 广播与 persistent-stop 返回只在 short-circuit-stop 裁决下发生', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     const branch = src.slice(

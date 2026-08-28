@@ -189,6 +189,18 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
       'utf8',
     )
+    const nodeMechanics = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
+      'utf8',
+    )
     // Mainline DAG (agent 线): RFC-287 T7 起本线也迁入装配骨架。合并抛出的 keep
     // 不再是 catch 里的 `keepIso = true`，而是**骨架默认处置**（`keep = true` +
     // `spec.markMergeFailed`）——本线不覆写 onThrow，因此吃的就是那条默认。
@@ -197,9 +209,9 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // 它声明了 markMergeFailed 钩子，且**没有**自己的 onThrow 覆写。
     // runScope 在文件里排在 runOneNode **之前**，不能拿它当右边界（会切出空串）；
     // 取到函数自身的顶格 `}` 为止。
-    const agentStart = src.indexOf('async function runOneNode(')
+    const agentStart = nodeMechanics.indexOf('async function runAgentSingleNode(')
     expect(agentStart).toBeGreaterThan(-1)
-    const agentLine = src.slice(agentStart, src.indexOf('\n}\n', agentStart))
+    const agentLine = nodeMechanics.slice(agentStart, nodeMechanics.indexOf('\n}\n', agentStart))
     const assemblySrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
       'utf8',
@@ -229,8 +241,8 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // （重抛给外层，merge_state 留在 pending-merge 交 entry replay）；`keepHookIso`
     // 仍在，但只承载**另一维**——processUnreaped（旧 child 可能还活着，树不能收）。
     // 逐格断言同样由 rfc287-t1-merge-disposition-matrix 接管，这里只留浅锁。
-    expect(src).toContain('keepHookIso = true')
-    expect(src).toMatch(/onThrow: \(\) => \(\{ keep: true, then: 'rethrow' as const \}\)/)
+    expect(nodeMechanics).toContain('keepHookIso = true')
+    expect(nodeMechanics).toMatch(/onThrow: \(\) => \(\{ keep: true, then: 'rethrow' as const \}\)/)
     // Round 5 (P2): successfully REPLAYED merges must close the iso lifecycle
     // too — without these, node pool refs leak forever and a new path's
     // worktree anchor is never handed over.
@@ -265,6 +277,7 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     )
     const singleLine = [
       ...(src.match(/discardNodeIso\([^\n)]*\)/g) ?? []),
+      ...(nodeMechanics.match(/discardNodeIso\([^\n)]*\)/g) ?? []),
       // 骨架里的清理走注入的 discardIso（其实参在各线 spec 上写明带 writeSem）。
       ...(assembly.match(/discardIso\([^\n)]*\)/g) ?? []),
     ]

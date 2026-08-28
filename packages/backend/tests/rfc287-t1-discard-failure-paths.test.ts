@@ -18,6 +18,18 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const NODE_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf8',
+)
 
 // RFC-287 T7：五条线全部迁入骨架后，「逐函数看 finally 里那次 discard 的保护形态」
 // 这个探针没有消费者了（scheduler.ts 里已无 finally-discard）——连同它的 Guard 类型
@@ -28,8 +40,9 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // ——那个集合到此**归零**，所以断言翻面：scheduler.ts 里不得再有任何「在
     // finally 里清理 iso」的站点，清理与其失败处置单点收敛在骨架。
     // 反向锁（比原来的正向枚举更强）：新写一条线若自己起 finally 清 iso，这里立刻红。
-    const finallyBlocks = [...SCHEDULER.matchAll(/\bfinally\s*\{/g)].map((m) =>
-      SCHEDULER.slice(m.index ?? 0, (m.index ?? 0) + 900),
+    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}`
+    const finallyBlocks = [...mechanics.matchAll(/\bfinally\s*\{/g)].map((m) =>
+      mechanics.slice(m.index ?? 0, (m.index ?? 0) + 900),
     )
     const offenders = finallyBlocks.filter((b) => b.includes('discardNodeIso('))
     expect(offenders.map((b) => b.slice(0, 120))).toEqual([])
@@ -44,7 +57,7 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // 于是残留 worktree / ref 的清理失败全程静默，C3b 对这条线其实**没有**落地。
     // T14 实现门抓到后修掉本地那道吞法：五条线（L1/L4/L5/L6/L7）现在一致地把清理
     // 失败交给骨架单点处置，warn 真正可达。断言随之翻面。
-    const body = SCHEDULER.slice(SCHEDULER.indexOf('async function runScriptNode('))
+    const body = NODE_MECHANICS.slice(NODE_MECHANICS.indexOf('async function runScriptNode('))
     const m = body.slice(0, 20000).match(/discardIso: async \(h: IsoLike\)[\s\S]{0,240}?\n {6}\}/)
     expect(m).not.toBeNull()
     expect(m![0]).toContain('discardNodeIso(')
@@ -59,12 +72,12 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
   test('agent 线（已迁骨架，T7 最后一条）：清理由骨架统一「吞掉并记 warn」', () => {
     // 迁移前本线是三条「完全没兜」之一：finally 抛出会吃掉 return 值，表现成
     // 「节点明明跑完了却报了个清理错」。骨架的 `.catch(+warn)` 落地了 C3b。
-    const start = SCHEDULER.indexOf('async function runOneNode(')
+    const start = NODE_MECHANICS.indexOf('async function runAgentSingleNode(')
     expect(start).toBeGreaterThan(-1)
     // 窗口要够到函数尾：runOneNode 有 1400 行，取到下一个顶格 `}`。
-    const end = SCHEDULER.indexOf('\n}\n', start)
+    const end = NODE_MECHANICS.indexOf('\n}\n', start)
     expect(end).toBeGreaterThan(start)
-    const body = SCHEDULER.slice(start, end)
+    const body = NODE_MECHANICS.slice(start, end)
     expect(body).toMatch(/discardIso: async \(h\) => \{[\s\S]{0,400}await discardNodeIso\(/)
     expect(body).not.toMatch(/try \{[^}]{0,120}await discardNodeIso\(/)
   })
@@ -73,9 +86,9 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // RFC-287 T6：该线的 finally 已迁入骨架。原来的 try/catch 吞法被骨架的
     // `.catch(+warn)` 取代——**同性质、更强**（原来 catch 里是静默的，现在有 warn），
     // 故 C3b 对它也已落地。注入实现本身不再自兜，兜底责任单点在骨架。
-    const start = SCHEDULER.indexOf('function buildWorkgroupHooks(')
+    const start = NODE_MECHANICS.indexOf('async function executeWorkgroupHostMechanics(')
     expect(start).toBeGreaterThan(-1)
-    const body = SCHEDULER.slice(start, start + 40000)
+    const body = NODE_MECHANICS.slice(start, start + 40000)
     expect(body).toMatch(/discardIso: async \(h: IsoLike\) => \{\s*\n\s*await discardNodeIso\(/)
     // 反向：本线不得再自己起 try/catch 兜清理（会把骨架的 warn 吃掉）。
     expect(body).not.toMatch(/try \{[^}]{0,120}await discardNodeIso\(/)

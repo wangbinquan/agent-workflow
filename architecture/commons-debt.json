@@ -1792,21 +1792,27 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/scheduler.ts",
-      "to": "packages/backend/src/modules/task-execution/application/resolveNodeActivation",
-      "specifier": "@/modules/task-execution/application/resolveNodeActivation",
-      "edgeKind": "value",
+      "to": "packages/backend/src/modules/task-execution/composition/nodeMechanics",
+      "specifier": "@/modules/task-execution/composition/nodeMechanics",
+      "edgeKind": "type",
       "syntax": "static-import",
       "owner": "task-execution",
-      "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01",
+      "why": "RFC-334 W2-C 已把 per-kind mechanics 归入 task-execution；残余 wrapper outer runtime 仍由 legacy scheduler 持有，故只在 W2-D 完成前保留这一条精确反向 compatibility import。",
+      "introducedByRFC": "RFC-334",
+      "removeAfterWave": "RFC-294 W2-D（wrapper runtime cut）",
+      "findingId": "RFC-334-W2-D",
       "canonicalImportEdgeIds": [
-        "import:94e0d817bdd66e18a226"
+        "import:4952ef3a2db7df21bdd5",
+        "import:6aefc7ac99e6960cad74",
+        "import:a1b4bfbd93d84af396b6",
+        "import:dfe867bf9d926613a26d"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts#resolveNodeActivationForDispatch"
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#Binding",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#OneNodeArgs",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#OneNodeResult",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#SchedulerState"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/scheduler.ts"
@@ -1815,25 +1821,45 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/scheduler.ts",
-      "to": "packages/backend/src/modules/task-execution/domain/inboundEdges",
-      "specifier": "@/modules/task-execution/domain/inboundEdges",
+      "to": "packages/backend/src/modules/task-execution/composition/nodeMechanics",
+      "specifier": "@/modules/task-execution/composition/nodeMechanics",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
-      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01",
+      "why": "RFC-334 W2-C 已把 per-kind mechanics 归入 task-execution；残余 wrapper outer runtime 仍由 legacy scheduler 持有，故只在 W2-D 完成前保留这一条精确反向 compatibility import。",
+      "introducedByRFC": "RFC-334",
+      "removeAfterWave": "RFC-294 W2-D（wrapper runtime cut）",
+      "findingId": "RFC-334-W2-D",
       "canonicalImportEdgeIds": [
-        "import:364d20bf78bbb1ab7b21",
-        "import:a4a1eb64e0e2535aeef4",
-        "import:d0f9587c4d94710e7884"
+        "import:013f44fd132693c9230a",
+        "import:400fc1bfbb751d68ea43",
+        "import:44fd0dcc9eca491003db",
+        "import:4c019c7bb29a7f598e9a",
+        "import:544e1f3197b3c3ec3422",
+        "import:6a7493bf63411cc40367",
+        "import:792fedc0aaeb6a44be3f",
+        "import:8072b0e8c9b734946f8e",
+        "import:b6aff16f2dcc87cb43a2",
+        "import:e748120905ac9ff06835",
+        "import:eabc37ce5cd82ef9173a",
+        "import:f1c51d4c9b53339480fe",
+        "import:ff2ad90f0228f8f6a722"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/domain/inboundEdges.ts#collectDataflowInboundEdges",
-        "owner:packages/backend/src/modules/task-execution/domain/inboundEdges.ts#collectImplicitInboundRefs",
-        "owner:packages/backend/src/modules/task-execution/domain/inboundEdges.ts#nodeKindIndex"
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#broadcastNodeStatus",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#composePriorOutputBlock",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#freezeBinaryConfig",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#freshestPriorRunWithOutput",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#isoKeyOf",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#parseIsoJsonMap",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#parseIsoSubmodules",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#pickString",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#readBindings",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#readPortRowAtIteration",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#resolveMergeConflicts",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#resolveUpstreamInputs",
+        "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#shouldRetryNodeFailure"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/scheduler.ts"
@@ -3883,7 +3909,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4",
+    "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

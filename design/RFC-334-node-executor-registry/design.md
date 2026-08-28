@@ -1,7 +1,8 @@
 # RFC-334 技术设计：NodeExecutorRegistry
 
-> 状态：In Progress。本文固定 W2-C 的目标模块、closed registry、per-kind 边界、workgroup-host 共用方式、neutral retry-cap
-> contract 与 cutover/rollback。用户已于 2026-08-28 明确批准生产实施；批准不外溢到 W2-D 或后续 wave。
+> 状态：In Progress（T2～T11 实现候选与 targeted 验证完成，T12 hosted/scheduled closeout 待完成）。本文固定 W2-C 的目标模块、
+> closed registry、per-kind 边界、workgroup-host 共用方式、neutral retry-cap contract 与 cutover/rollback。用户已于
+> 2026-08-28 明确批准生产实施；批准不外溢到 W2-D 或后续 wave。
 >
 > source pin：`0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34`。文中的 `file:line` 均指该 committed blob；可用
 > `git show 0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34:<path> | nl -ba` 重放，禁止把后续 working-tree 行号冒充本设计事实。
@@ -654,3 +655,9 @@ flowchart TB
 RFC-334 完成后只关闭 RFC-294 W2-C：TaskEngine→NodeExecutor 四级执行架构形成前三层中的 node 层，W2-C 两条 exact legacy
 bridge 删除。W2-D 仍需把 wrapper compatibility port 背后的 loop/git/fanout mechanics 归位；W3/W4/W5/W9 仍按各自前置和批准
 推进。RFC-333 的 P0-C 继续作为 review/clarify 的 durable correctness oracle，不因 executor 迁位重新实现。
+
+当前实现候选已形成 14-key closed registry 与按 kind 分文件的 executor；DAG 与四个 workgroup/dynamic host 构造点统一进入
+`composition/nodeExecution.ts`。具体 DB/runtime mechanics 归 `composition/nodeMechanics.ts`，不伪装成 domain contract；
+review/clarify 只经 `CollaborationNodeGatePort` 请求 collaboration participant。node 层回调 legacy scheduler 的 production value
+import 只剩 `WrapperNodeExecutionPort` 背后的 `wrapper-git | wrapper-loop | wrapper-fanout` 三条 exact W2-D bridge；旧
+`runOneNode`、`runHostNode`、`buildWorkgroupHooks` 已从 production source 消失。该候选没有修改 schema、wire、config 或 UI。

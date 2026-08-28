@@ -270,13 +270,23 @@ describe('RFC-188 C — markMergeFailed try-variant', () => {
 })
 
 describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
-  const src = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
-    'utf8',
-  )
+  const src =
+    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'), 'utf8') +
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
+      'utf8',
+    )
   const count = (needle: string): number => src.split(needle).length - 1
 
-  test('scheduler.ts 零裸 iso 创建；裸 merge 原语只剩 wrapper 路径各 1 处', () => {
+  test('scheduler mechanics 零裸 iso 创建；裸 merge 原语只剩 wrapper 路径各 1 处', () => {
     // wrapper 新建也必须经过 createIsoUnderLock，否则与顶层 sibling 并发
     // `git worktree add` 会竞争同一 `.git/worktrees` 注册表。wrapper merge
     // 生命周期仍在 RFC-188 agent-site 范围外；任何第 2 处裸 merge = 手抄装配。

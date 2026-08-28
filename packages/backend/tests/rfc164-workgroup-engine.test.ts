@@ -900,8 +900,16 @@ describe('RFC-164 engine — stuck detector S1/S2 workgroup exemption', () => {
 // ---------------------------------------------------------------------------
 
 describe('RFC-164 engine — source locks', () => {
-  const SCHEDULER_SRC = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  const NODE_MECHANICS_SRC = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    ),
     'utf8',
   )
   const TASK_ENGINE_APPLICATION_SRC = readFileSync(
@@ -951,7 +959,7 @@ describe('RFC-164 engine — source locks', () => {
   })
 
   test('runHostNode marks every framework-composed workgroup prompt as literal', () => {
-    expect(SCHEDULER_SRC).toContain('expandPromptTemplate: false')
+    expect(NODE_MECHANICS_SRC).toContain('expandPromptTemplate: false')
   })
 
   // Round-trip (Codex review P1): a workgroup host run is dispatched with clarify
@@ -988,24 +996,24 @@ describe('RFC-164 engine — source locks', () => {
   test('runHostNode round-trips a human clarify answer into a host rerun prompt, shard-scoped', () => {
     // host path selects by req.nodeId/req.nodeRunId (the adopted clarify-answer
     // rerun row) — unique to runHostNode; the normal scheduler path uses node.id.
-    expect(SCHEDULER_SRC).toContain('consumerNodeId: req.nodeId')
-    expect(SCHEDULER_SRC).toContain('dispatchedRunId: req.nodeRunId')
+    expect(NODE_MECHANICS_SRC).toContain('consumerNodeId: req.nodeId')
+    expect(NODE_MECHANICS_SRC).toContain('dispatchedRunId: req.nodeRunId')
     // …and threads the answered queue into the host node's runNode call.
-    expect(SCHEDULER_SRC).toContain('clarifyContext: { flatBlock: clarifyQueue.block }')
+    expect(NODE_MECHANICS_SRC).toContain('clarifyContext: { flatBlock: clarifyQueue.block }')
     // RFC-172 (route 2, R2-T7): injection is now for EVERY host node, SCOPED to the run's shard —
     // leader (shardKey=null) passes undefined (node-scoped = pre-route-2 behavior); a member passes
     // its assignment shard so concurrent members never cross-contaminate (selectAgentQueue / R2-T3).
-    expect(SCHEDULER_SRC).toContain('shardKey: runShardKey === null ? undefined : runShardKey')
+    expect(NODE_MECHANICS_SRC).toContain('shardKey: runShardKey === null ? undefined : runShardKey')
   })
 
   test('runHostNode ENABLES member clarify — no leader-only reject; shardKey-aware generation (R2-T6/T7)', () => {
     // The interim `clarify-not-supported` reject that guarded the unwired member path is REMOVED —
     // member human ask-back is now a first-class, shard-isolated round-trip (S0–S3, R2-T3, R2-T7).
-    expect(SCHEDULER_SRC).not.toContain('clarify-not-supported')
+    expect(NODE_MECHANICS_SRC).not.toContain('clarify-not-supported')
     // …and the host clarify GENERATION is now shardKey-aware (R2-T6: a member's/leader's 2nd round
     // no longer shares the 1st's clarify node_run), not the old hardcoded round index 0.
     // (RFC-217 T9: createClarifyRound's unified arg name is `iteration`.)
-    expect(SCHEDULER_SRC).toContain('iteration: askingGeneration')
+    expect(NODE_MECHANICS_SRC).toContain('iteration: askingGeneration')
   })
 })
 

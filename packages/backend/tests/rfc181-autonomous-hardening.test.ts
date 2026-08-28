@@ -483,7 +483,7 @@ describe('RFC-181 C — 源级契约锁', () => {
   })
 
   test('scheduler：判定器注入 + 建 session 前后双重重读 + 事后补偿遣散（实现门 P1-③）', () => {
-    const scheduler = SRC('services/scheduler.ts')
+    const scheduler = SRC('modules/task-execution/composition/nodeMechanics.ts')
     // RFC-207 §3.4a — the callback must keep the dispatch-time floor in front of the
     // live read: a turn that carried no invite may not ask just because the roster
     // gained a human while it ran.
@@ -492,7 +492,7 @@ describe('RFC-181 C — 源级契约锁', () => {
     const preCheck = scheduler.indexOf(
       'await isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey)',
     )
-    const create = scheduler.indexOf('await createClarifyRound(')
+    const create = scheduler.indexOf('await collaboration.openAgentClarify(')
     const compensate = scheduler.indexOf('await dismissOpenClarifyParksForAutonomous(db, taskId)')
     expect(preCheck).toBeGreaterThan(-1)
     expect(create).toBeGreaterThan(preCheck)

@@ -322,15 +322,23 @@ describe('T28 — plaintext at execution, masked in diagnostics', () => {
   // `stderrTail`, a strict suffix of the bytes the per-line stderr sink stores
   // in node_run_events — same secret, one table over, three read doors.
   describe('the scheduler masks the diagnostic channel and only that', () => {
-    const scheduler = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+    const mechanics = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     // The script branch, delimited so a match from the agent branch cannot
     // stand in for one of these.
-    const branch = scheduler.slice(
-      scheduler.indexOf('const outcome = await runScriptProcess({'),
-      scheduler.indexOf('async function runOneNode('),
+    const branch = mechanics.slice(
+      mechanics.indexOf('const outcome = await runScriptProcess({'),
+      mechanics.indexOf('async function runAgentSingleNode('),
     )
 
     test('the persisted failure detail is masked', () => {

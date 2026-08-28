@@ -22,7 +22,6 @@ import {
 } from '../engine/task/taskEngineRegistry'
 import { WorkgroupTaskEngine } from '../engine/task/workgroupTaskEngine'
 import {
-  buildWorkgroupHooks,
   cancelTaskRow,
   emitStatus,
   failTask,
@@ -31,6 +30,7 @@ import {
   replayPendingMerges,
 } from '@/services/scheduler'
 import { runScope } from './taskDagScope'
+import { buildNodeExecutionWorkgroupHooks } from './nodeExecution'
 import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
 import type { LegacyTaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
@@ -270,11 +270,9 @@ async function runTaskEngineOrchestratorInner(
   }
 
   // 4. Validate node kinds. RFC-146: positive membership in the behavior
-  // table — a kind the scheduler knows is exactly a kind with a behavior row.
-  // (The historical negative enum listed 6 `!==` clauses and silently
-  // admitted nothing new; now adding a NodeKind admits it here by
-  // construction, and runOneNode's fall-through guard catches kinds the
-  // dispatch switch doesn't actually handle yet.)
+  // table — an admitted kind is exactly a kind with a behavior row. RFC-334
+  // independently closes the production executor registry over the same
+  // NodeKind catalog, so admission cannot fall through to an agent default.
   for (const node of definition.nodes) {
     // Object.hasOwn (not `in`) — inherited keys must not pass the whitelist.
     if (!Object.hasOwn(NODE_KIND_BEHAVIORS, node.kind)) {
@@ -493,7 +491,7 @@ async function runTaskEngineOrchestratorInner(
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildWorkgroupHooks(state),
+              hooks: buildNodeExecutionWorkgroupHooks(state),
             }),
           ),
       }),
@@ -505,7 +503,7 @@ async function runTaskEngineOrchestratorInner(
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildWorkgroupHooks(state),
+              hooks: buildNodeExecutionWorkgroupHooks(state),
             }),
           ),
       }),
@@ -520,7 +518,7 @@ async function runTaskEngineOrchestratorInner(
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildWorkgroupHooks(state),
+              hooks: buildNodeExecutionWorkgroupHooks(state),
             })
           : engine === 'workgroup-turns'
             ? await runWorkgroupEngine({
@@ -528,7 +526,7 @@ async function runTaskEngineOrchestratorInner(
                 taskId,
                 log,
                 ...(opts.signal ? { signal: opts.signal } : {}),
-                hooks: buildWorkgroupHooks(state),
+                hooks: buildNodeExecutionWorkgroupHooks(state),
               })
             : await runScope(state, {
                 scopeId: null,

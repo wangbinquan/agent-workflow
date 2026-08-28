@@ -1,11 +1,11 @@
 {
   "denominator": {
-    "consumers": 225,
+    "consumers": 224,
     "exactEntrypointFiles": 35,
     "governedFieldSurfaces": 5,
     "methods": 167,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1509,
+    "recursiveFields": 1513,
     "symbols": 354
   },
   "entries": [
@@ -11114,7 +11114,7 @@
             "import:2f92b0c00b8f3a611626"
           ],
           "name": "execute",
-          "signatureDigest": "sha256:faba63cda867128d9f507e2ba2f1696215bdd3ebb3d3f0336ac4478b956807a2"
+          "signatureDigest": "sha256:8a2486229ea35d4883a62130d8577f205547ce8753625192a46e70c04c7bba1c"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/commands.ts#$file",
@@ -11325,7 +11325,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 25,
+        "maxTransitiveLeafFields": 26,
         "maxUnionVariants": 18
       },
       "consumerEdgeIds": [],
@@ -11403,6 +11403,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "user.forcePasswordChange",
           "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.gitName",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -11578,14 +11583,11 @@
       "entrypoint": "commands",
       "fields": [
         {
-          "consumerEdgeIds": [],
-          "fieldPath": "composed.$variant:0",
+          "consumerEdgeIds": [
+            "import:ca60bc463d24b5cca64b"
+          ],
+          "fieldPath": "displayName",
           "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "composed.$variant:1",
-          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -11614,6 +11616,16 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "expectedGitNameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedGitNameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "expectedSubjectClaim.$variant:0",
           "type": "string"
         },
@@ -11634,6 +11646,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "gitName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "providerId",
           "type": "string"
         },
@@ -11648,11 +11665,6 @@
           ],
           "fieldPath": "userId",
           "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "usernameClaimConfigured",
-          "type": "boolean"
         }
       ],
       "file": "packages/backend/src/modules/identity-access/public/commands.ts",
@@ -11701,6 +11713,11 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "emailRefreshed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "gitNameRefreshed",
           "type": "boolean"
         }
       ],
@@ -11751,7 +11768,7 @@
             "import:a16c110cd4fef44a8039"
           ],
           "name": "execute",
-          "signatureDigest": "sha256:7d036621cc08802c5cb963df0097a590c3e47506dbd36f7b520ad7d2fce0b02b"
+          "signatureDigest": "sha256:1366c3a471130ac588f7ebf5376d206ca59cd00d7ee1fc5b9d9c546d6c4e1ec3"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/commands.ts#$file",
@@ -11794,6 +11811,11 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "email",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "gitName",
           "type": "string"
         }
       ],
@@ -13201,7 +13223,7 @@
         {
           "consumerEdgeIds": [],
           "name": "execute",
-          "signatureDigest": "sha256:bf6036365370fe10bca79ed82a37c16d09bb4d263d13482172829e60c3105100"
+          "signatureDigest": "sha256:a35c963218e44165143363701f2e5bb97557a6a098468f988abcb00262791151"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/queries.ts#$file",
@@ -13240,7 +13262,7 @@
             "import:d1c056504f33b9eff678"
           ],
           "name": "execute",
-          "signatureDigest": "sha256:436e712f926e51c12df1f282690d6f7eca24b869e28d0a49e61d6a6c923a39d8"
+          "signatureDigest": "sha256:818ccd7647712221f4c69909d1c58b9d9a88e4cde9ee3d97f4d32044eeb0dfef"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/queries.ts#$file",
@@ -21262,9 +21284,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:7638e9d72ed2b35c61e9"
-      ],
+      "consumerEdgeIds": [],
       "context": "task-execution",
       "dataClass": "metadata",
       "direction": "offered",
@@ -21275,14 +21295,7 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:7638e9d72ed2b35c61e9",
-          "file": "packages/backend/src/services/scheduler.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:c8bfbd578b219b9e977fe40cc5d605814622dea0d209c1586ecfed5c796398cc",
@@ -22142,7 +22155,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4",
+  "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e",
   "targetContexts": [
     "collaboration",
     "development-automation",

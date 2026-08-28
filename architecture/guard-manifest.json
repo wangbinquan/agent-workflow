@@ -1515,6 +1515,18 @@
       "lines": 306
     },
     {
+      "id": "rfc334-node-executor-boundary",
+      "file": "packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": true,
+      "minCorpusFiles": 12,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 101
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -1912,7 +1924,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4",
+    "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },

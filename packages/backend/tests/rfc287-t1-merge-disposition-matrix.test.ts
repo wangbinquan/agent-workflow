@@ -22,6 +22,19 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const NODE_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf8',
+)
+const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS] as const
 const ASSEMBLY_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
   'utf8',
@@ -48,21 +61,24 @@ function branchAfter(body: string, marker: string): string {
 }
 
 function bodyOf(signature: string): string {
-  const start = SCHEDULER.indexOf(signature)
+  const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))
+  expect(source, `未找到函数：${signature}`).toBeDefined()
+  if (source === undefined) return ''
+  const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
   // ⚠️ 括号配平，**不能**靠「下一个 function 声明」当边界（四轮门测试有效性自查
   // 实测）：`runHostNode` 是嵌套在 `buildWorkgroupHooks` 里的函数，它的兄弟钩子都写成
   // `const x = async () =>`，正则边界一个都不命中，于是切片一路跑出真实函数体
   // 159 行——把兄弟钩子与两个导出函数全吞了进来。实测把边界补上 `export ` 前缀只收窄
   // 了 31 行，仍然吞着别人的代码。只有配平括号才切得准。
-  const open = SCHEDULER.indexOf('{', start + signature.length - 1)
+  const open = source.indexOf('{', start + signature.length - 1)
   let depth = 1
   let i = open + 1
-  for (; i < SCHEDULER.length && depth > 0; i++) {
-    if (SCHEDULER[i] === '{') depth++
-    else if (SCHEDULER[i] === '}') depth--
+  for (; i < source.length && depth > 0; i++) {
+    if (source[i] === '{') depth++
+    else if (source[i] === '}') depth--
   }
-  return SCHEDULER.slice(open + 1, i - 1)
+  return source.slice(open + 1, i - 1)
 }
 
 /** merge 抛出的共同默认：保留 iso + 标记合并失败。 */
@@ -92,12 +108,14 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     // spec 钩子（骨架在默认路径上调它），而不是自己在 catch 里 keep + 标记。
     expect(ASSEMBLY_SRC).toMatch(/keep = true\n\s*if \(spec\.markMergeFailed === undefined\)/)
     expect(ASSEMBLY_SRC).toContain('await spec.markMergeFailed(')
-    // scheduler.ts 里不得再出现「先置 keep 标志、再 markMergeFailed」的手写默认。
-    for (const m of SCHEDULER.matchAll(/markMergeFailed\(db,/g)) {
-      const before = SCHEDULER.slice(Math.max(0, (m.index ?? 0) - 400), m.index ?? 0)
-      expect(before, '默认 throw 处置必须单点在骨架，不得回流到调用线').not.toMatch(
-        /keep\w* = true/,
-      )
+    // 两个 mechanics owner 里不得再出现「先置 keep 标志、再 markMergeFailed」的手写默认。
+    for (const source of MECHANICS_SOURCES) {
+      for (const m of source.matchAll(/markMergeFailed\(db,/g)) {
+        const before = source.slice(Math.max(0, (m.index ?? 0) - 400), m.index ?? 0)
+        expect(before, '默认 throw 处置必须单点在骨架，不得回流到调用线').not.toMatch(
+          /keep\w* = true/,
+        )
+      }
     }
   })
 
@@ -118,7 +136,7 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
   test('conflict-human 列：agent 线（已迁骨架）是 keep + awaiting_human', () => {
     // T7 起处置是 spec 上的 onConflictHuman 声明；语义逐字保持：撞冲突保留 iso
     // （人要在那棵树上把冲突解完，resume 再合一次）并停在等待人工。
-    const branch = branchAfter(bodyOf('async function runOneNode('), 'onConflictHuman:')
+    const branch = branchAfter(bodyOf('async function runAgentSingleNode('), 'onConflictHuman:')
     expect(branch).toMatch(/keep: true/)
     expect(branch).toMatch(/kind: 'awaiting_human'/)
   })
@@ -136,7 +154,7 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     //   · onThrow：keep iso 并**重抛**（merge_state 留在 pending-merge 交 entry replay），
     //     刻意与 DAG 各线的 markMergeFailed 相反；
     //   · onConflictHuman：abandon 且 **不** keep（RFC-187 T8：留状态不留树会楔死任务）。
-    const body = bodyOf('async function runHostNode(')
+    const body = bodyOf('async function executeWorkgroupHostMechanics(')
     const onThrow = branchAfter(body, 'onThrow:')
     expect(onThrow).toMatch(/keep: true/)
     expect(onThrow).toMatch(/then: 'rethrow'/)

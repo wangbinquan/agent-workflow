@@ -15,7 +15,10 @@
 
 import { describe, expect, test } from 'bun:test'
 
-import { decideEnvelopeFollowup, type PreviousAttemptShape } from '@/services/scheduler'
+import {
+  decideEnvelopeFollowup,
+  type PreviousAttemptShape,
+} from '@/modules/task-execution/composition/nodeMechanics'
 
 const BASE: PreviousAttemptShape = {
   status: 'failed',

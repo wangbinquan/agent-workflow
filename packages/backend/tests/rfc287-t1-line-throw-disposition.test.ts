@@ -20,30 +20,46 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { shouldRetryNodeFailure } from '../src/services/scheduler'
+import { shouldRetryNodeFailure } from '../src/modules/task-execution/composition/nodeMechanics'
 
 const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const NODE_MECHANICS = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf8',
+)
+const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS] as const
 
 /** 取某个函数体（自签名起到下一个顶层 `async function` 前）。 */
 function bodyOf(signature: string): string {
-  const start = SCHEDULER.indexOf(signature)
+  const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))
+  expect(source, `未找到函数：${signature}`).toBeDefined()
+  if (source === undefined) return ''
+  const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
   // ⚠️ 括号配平，**不能**靠「下一个 function 声明」当边界（四轮门测试有效性自查
   // 实测）：`runHostNode` 是嵌套在 `buildWorkgroupHooks` 里的函数，它的兄弟钩子都写成
   // `const x = async () =>`，正则边界一个都不命中，于是切片一路跑出真实函数体
   // 159 行——把兄弟钩子与两个导出函数全吞了进来。实测把边界补上 `export ` 前缀只收窄
   // 了 31 行，仍然吞着别人的代码。只有配平括号才切得准。
-  const open = SCHEDULER.indexOf('{', start + signature.length - 1)
+  const open = source.indexOf('{', start + signature.length - 1)
   let depth = 1
   let i = open + 1
-  for (; i < SCHEDULER.length && depth > 0; i++) {
-    if (SCHEDULER[i] === '{') depth++
-    else if (SCHEDULER[i] === '}') depth--
+  for (; i < source.length && depth > 0; i++) {
+    if (source[i] === '{') depth++
+    else if (source[i] === '}') depth--
   }
-  return SCHEDULER.slice(open + 1, i - 1)
+  return source.slice(open + 1, i - 1)
 }
 
 describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', () => {
@@ -82,7 +98,7 @@ describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', (
     // 两条线是 try/finally 无线级 catch，抛出直穿到 scope 循环；L5/L6 则把抛出
     // 收成带 retry 载荷的 failed。锁住这个差异本身——骨架若给它们加同款 catch，
     // 「抛出直穿」会变成「抛出即重试」，是静默的语义变更。
-    for (const sig of ['async function runOneNode(', 'async function runScriptNode(']) {
+    for (const sig of ['async function runAgentSingleNode(', 'async function runScriptNode(']) {
       expect(bodyOf(sig)).not.toMatch(/catch \([\s\S]{0,600}failureCode: null/)
     }
   })
@@ -90,12 +106,12 @@ describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', (
   test('③ keep 分歧：agent 线的 clarify-park 置 keepIso，工作组主机线不置', () => {
     // RFC-287 T7：agent 线迁入骨架后，clarify 停靠是 mergePhase 上的 park 声明
     // （跳合并 + keep），语义与迁移前的 `keepIso = true` 逐字一致。
-    const agent = bodyOf('async function runOneNode(')
+    const agent = bodyOf('async function runAgentSingleNode(')
     expect(agent).toMatch(
       /clarify !== undefined\) \{\s*\n\s*return \{ skip: 'park', keep: true, then: 'settle' \}/,
     )
     // 工作组主机线的 clarify 分支直接 return，不置 keep（finally 无条件清理）。
-    const host = bodyOf('async function runHostNode(')
+    const host = bodyOf('async function executeWorkgroupHostMechanics(')
     const clarifyIdx = host.indexOf('clarify')
     expect(clarifyIdx).toBeGreaterThan(-1)
     expect(host.slice(clarifyIdx, clarifyIdx + 600)).not.toMatch(/keepHookIso = true/)

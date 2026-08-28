@@ -60,16 +60,11 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc123-clarify-directive-single-source.test.ts',
   'rfc123-stop-enforcement.test.ts',
   'rfc127-borrow.test.ts',
-  'rfc127-self-questioner-borrow.test.ts',
   'rfc128-p5-a-pre-refactor-net.test.ts',
   'rfc130-shard-rerun-undo.test.ts',
   'rfc143-runtime-driver-capability.test.ts',
   'rfc144-stale-replay-regression.test.ts',
-  'rfc146-kind-predicate-guard.test.ts',
-  'rfc164-workgroup-engine.test.ts',
   'rfc165-optional-clarify.test.ts',
-  'rfc167-dynamic-workflow-engine.test.ts',
-  'rfc181-autonomous-hardening.test.ts',
   'rfc183-clarify-invite-accept-symmetry.test.ts',
   'rfc187-wg-merge-conflict-abandon.test.ts',
   'rfc187-zero-delta-done.test.ts',
@@ -84,7 +79,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc243-execution-outcome.test.ts',
   'rfc243-executor-facade.test.ts',
   'rfc243-parent-child-lifecycle.test.ts',
-  'rfc253-script-execution.test.ts',
   'rfc271-ref-contract.test.ts',
   'rfc282-b2-resolve-injection.test.ts',
   'rfc284-t20-child-inheritance.test.ts',
@@ -122,6 +116,10 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc331-task-execution-topology.test.ts',
   // RFC-332：旧 body 灭绝断言仍显式读取 scheduler facade。
   'rfc332-task-engine-contracts.test.ts',
+  // RFC-334 T3 still asserts that the legacy scheduler no longer owns either
+  // retry contract; unlike the migrated mechanics locks below, it intentionally
+  // keeps reading scheduler.ts as an extinction surface.
+  'rfc334-retry-contract.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',
@@ -134,7 +132,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'scheduler-boundary-resume-retryindex-vs-id.test.ts',
   'scheduler-clarify-baseline.test.ts',
   'scheduler-cross-clarify-dispatch.test.ts',
-  'scheduler-cross-clarify-no-runaway.test.ts',
   'scheduler-default-retries.test.ts',
   'scheduler-node-overrides.test.ts',
   'scheduler-shard-item-kind-stringify.test.ts',
@@ -143,7 +140,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'source-text-rfc066-guards.test.ts',
   'source-text-rfc066-pr-b-guards.test.ts',
   'source-text-rfc067-guards.test.ts',
-  'workgroup-host-output-isolation.test.ts',
   'wrapper-git-list-path.test.ts',
 ]
 

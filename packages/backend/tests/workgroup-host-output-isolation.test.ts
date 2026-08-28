@@ -365,8 +365,8 @@ describe('RFC-184 — host projection over real runNode', () => {
 // ---------------------------------------------------------------------------
 
 describe('RFC-184 — source wiring locks', () => {
-  const SRC = resolve(import.meta.dir, '..', 'src', 'services')
-  const read = (f: string) => readFileSync(join(SRC, f), 'utf8')
+  const SRC = resolve(import.meta.dir, '..', 'src')
+  const read = (f: string) => readFileSync(join(SRC, 'services', f), 'utf8')
 
   test('hostOutputPorts wiring lives ONLY in the turn skeleton (RFC-217 T3)', () => {
     // 投影布线唯一存在于 executeTurn（wgHostRolePorts(spec.role, …) 单点）；
@@ -377,7 +377,10 @@ describe('RFC-184 — source wiring locks', () => {
   })
 
   test('scheduler runHostNode projects (clears outputKinds), skips persistence, and filters empties', () => {
-    const src = read('scheduler.ts')
+    const src = readFileSync(
+      join(SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+      'utf8',
+    )
     expect(src).toContain('outputKinds: undefined')
     expect(src).toContain('persistDeclaredOutputs: false')
     expect(src).toContain('warnMissingDeclaredPorts: false')

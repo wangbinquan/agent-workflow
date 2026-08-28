@@ -1,6 +1,6 @@
 # RFC-334 实施计划：NodeExecutorRegistry（RFC-294 W2-C）
 
-> 状态：In Progress（2026-08-28；T0/T1 完成，用户已明确批准 T2～T12 生产实施；T3 已落地）
+> 状态：In Progress（2026-08-28；T0～T11 候选完成，T12 等待 architecture provenance、发布及 exact-SHA hosted/scheduled CI）
 >
 > 批准边界：用户已明确批准 RFC-334 T2～T12 生产实施。批准不外溢到 W2-D/W3/W4/W5/W9，不授权
 > 安全/权限策略或正常能力收缩。
@@ -86,7 +86,7 @@ T2 开始前必须重新 fetch/对拍 `origin/main`，用 committed blob 重新�
 
 退出：用户已于 2026-08-28 明确回复“批准实施”；实施仍严格受本 RFC 范围约束。
 
-### T2 — characterization、source-lock 与 red architecture tests
+### T2 — characterization、source-lock 与 red architecture tests（候选完成）
 
 - 生成 closed 14-kind inventory fixture，不手抄测试子集；
 - 为每个 kind建立 current result/row/output/WS/side-effect characterization；
@@ -129,7 +129,7 @@ packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts
 
 退出：registry/gateway纯测全绿；无 production shadow execution；behavior/registry/classification closed-set一致。
 
-### T5 — retired与 virtual I/O 原子 cutover
+### T5 — retired与 virtual I/O 原子 cutover（候选完成）
 
 顺序：`code-round` → `input` → `output`。
 
@@ -141,7 +141,7 @@ packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts
 
 退出：三个 kind旧 branch=0；row/port/WS golden逐项相等；registry是唯一 selector。
 
-### T6 — human-gate family cutover
+### T6 — human-gate family cutover（候选完成）
 
 顺序：`clarify` → `clarify-cross-agent` → `review`。
 
@@ -154,7 +154,7 @@ packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts
 
 退出：route direct resume保持0；operation/intent/recovery与单/多/空 review、self/cross clarify全部同形。
 
-### T7 — call、script 与 code-host-call cutover
+### T7 — call、script 与 code-host-call cutover（候选完成）
 
 - `call-workflow`/`call-workgroup` 两个 entry共享 current child-call mechanics但保留 distinct kind/input identity；
 - script迁 subprocess/pool/iso/retry/output/status；
@@ -164,7 +164,7 @@ packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts
 
 退出：child park/cancel/terminal、script failure/retry、code-host side effect/recovery全部对拍；legacy branches=0。
 
-### T8 — wrapper delegation arms
+### T8 — wrapper delegation arms（候选完成）
 
 - 注册 wrapper-git/loop/fanout三个 exact executor；
 - 只调用 `WrapperNodeExecutionPort`，composition绑定 current W2-D mechanics；
@@ -175,7 +175,7 @@ packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts
 退出：wrapper旧 inline routing body=0、selector只剩 exact delegation；W2-D body/source guards全部保持；wrapper port不暴露
 raw SchedulerState。
 
-### T9 — agent-single DAG lane
+### T9 — agent-single DAG lane（候选完成）
 
 - 依当前顺序迁 identity/borrow/upstream/injection/prompt/review/clarify/retry/row/runtime/iso/run/merge/output/WS；
 - 复用 T3 task-execution envelope retry policy与既有 ExecutionKernel；
@@ -186,7 +186,7 @@ raw SchedulerState。
 
 退出：agent current corpus、RFC-287/313/333、multi-repo/iso/merge/retry/clarify/review全部绿；legacy agent body=0。
 
-### T10 — workgroup/dynamic host lane
+### T10 — workgroup/dynamic host lane（候选完成）
 
 - `AgentSingleNodeExecutor.executeHost` 落 typed host lane；
 - 迁 current host injection/frozen runtime/prompt fencing/host port projection/clarify shard/late suppression/discardWrites/merge disposition；
@@ -196,7 +196,7 @@ raw SchedulerState。
 
 退出：leader/member/dw-generate与 fake-port engine tests全绿；旧 host hit=0；WorkgroupTaskEngine仍唯一 assignment owner。
 
-### T11 — legacy extinction与 architecture artifacts
+### T11 — legacy extinction与 architecture artifacts（候选完成，provenance 待 T12）
 
 - 把 current abort/branch prelude从 selector迁到 gateway，证明每个 DAG node仍恰好执行一次；
 - `taskDagScope` 改为只 import task-execution gateway；
@@ -281,26 +281,37 @@ raw SchedulerState。
 
 ## 6. AC 证据账本（规划）
 
-| AC    | Primary evidence                                                | Wave    | Draft status |
-| ----- | --------------------------------------------------------------- | ------- | ------------ |
-| AC-1  | committed source inventory + classification test                | T0/T2   | T0/T4 Done   |
-| AC-2  | compile record + runtime key/kind guard                         | T4      | T4 Done      |
-| AC-3  | synthetic-kind mutation                                         | T4      | T4 Done      |
-| AC-4  | import/symbol/body/facade extinction                            | T5～T11 | planned      |
-| AC-5  | gateway ordering + real branch cases                            | T2/T5   | T4 pure Done |
-| AC-6  | 14-kind behavior matrix                                         | T2～T10 | planned      |
-| AC-7  | wrapper port boundary + W2-D source guard                       | T8      | planned      |
-| AC-8  | collaboration port + RFC333 corpus                              | T6      | planned      |
-| AC-9  | retired executor + active-stage-zero guard                      | T5      | planned      |
-| AC-10 | host-lane characterization + four-constructor/legacy extinction | T10     | planned      |
-| AC-11 | retry arithmetic/codec/assembly ceiling golden                  | T3      | T3 Done      |
-| AC-12 | import/consumer inventory mutation                              | T3/T11  | T3 Done      |
-| AC-13 | TE shape + DE scene/outbox behavior                             | T3/T9   | T3 Done      |
-| AC-14 | schema/wire/config/UI zero-delta + product regression           | all     | planned      |
-| AC-15 | canonical exception/SCC report                                  | T11     | planned      |
-| AC-16 | owner/layer/wave exact assertions                               | T11     | planned      |
-| AC-17 | production-hit/source AST + side-effect no-double tests         | T5～T11 | planned      |
-| AC-18 | exact-SHA CI API/job evidence + scheduled enumeration           | T12     | planned      |
+| AC    | Primary evidence                                                | Wave    | Draft status   |
+| ----- | --------------------------------------------------------------- | ------- | -------------- |
+| AC-1  | committed source inventory + classification test                | T0/T2   | T0/T4 Done     |
+| AC-2  | compile record + runtime key/kind guard                         | T4      | T4 Done        |
+| AC-3  | synthetic-kind mutation                                         | T4      | T4 Done        |
+| AC-4  | import/symbol/body/facade extinction                            | T5～T11 | candidate Done |
+| AC-5  | gateway ordering + real branch cases                            | T2/T5   | candidate Done |
+| AC-6  | 14-kind behavior matrix                                         | T2～T10 | candidate Done |
+| AC-7  | wrapper port boundary + W2-D source guard                       | T8      | candidate Done |
+| AC-8  | collaboration port + RFC333 corpus                              | T6      | candidate Done |
+| AC-9  | retired executor + active-stage-zero guard                      | T5      | candidate Done |
+| AC-10 | host-lane characterization + four-constructor/legacy extinction | T10     | candidate Done |
+| AC-11 | retry arithmetic/codec/assembly ceiling golden                  | T3      | T3 Done        |
+| AC-12 | import/consumer inventory mutation                              | T3/T11  | T3 Done        |
+| AC-13 | TE shape + DE scene/outbox behavior                             | T3/T9   | T3 Done        |
+| AC-14 | schema/wire/config/UI zero-delta + product regression           | all     | candidate Done |
+| AC-15 | canonical exception/SCC report                                  | T11     | candidate Done |
+| AC-16 | owner/layer/wave exact assertions                               | T11     | candidate Done |
+| AC-17 | production-hit/source AST + side-effect no-double tests         | T5～T11 | candidate Done |
+| AC-18 | exact-SHA CI API/job evidence + scheduled enumeration           | T12     | pending        |
+
+### 6.1 当前候选证据（发布前）
+
+- `NodeKind` / behavior / executor key 集均为 14；legacy `runOneNode`、`runHostNode`、`buildWorkgroupHooks` production symbol 为 0；
+- DAG 与 workgroup/dynamic host 统一经 typed node execution composition；clarify open 只经 `CollaborationNodeGatePort`；
+- task-execution 到 scheduler 只剩三条 exact wrapper value bridge，均登记 `removeAfterWave=W2-D`；W2-C legacy exception 为 0；
+- canonical source digest 为 `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`，
+  mutation/import/exception/owner 分母为 `951/1329/1297/18139`，backend/repo value SCC 保持 `4/6`；
+- backend typecheck、owned ESLint/formatter、RFC-287/313/317/332/333/334 与 scheduler/workgroup targeted corpus 已通过；
+  其中核心行为集 124/124、clarify 相关 54/54、RFC-317 module/guard/ledger 89/89、RFC-317/332/334 combined 仅剩预期的
+  一次性 high-water provenance 红。最终结论仍以 T12 exact-SHA GitHub CI 与全部 scheduled workflow 为准。
 
 ## 7. 停止门与回退
 

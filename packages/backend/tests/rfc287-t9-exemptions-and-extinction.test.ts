@@ -19,20 +19,28 @@ import { resolve } from 'node:path'
 
 const SRC = resolve(import.meta.dir, '..', 'src', 'services')
 const SCHEDULER = readFileSync(resolve(SRC, 'scheduler.ts'), 'utf8')
+const NODE_MECHANICS = readFileSync(
+  resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+  'utf8',
+)
+const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS] as const
 
 /** 取某函数体（到下一个顶格 `}` 为止）。 */
 function bodyOf(signature: string): string {
-  const start = SCHEDULER.indexOf(signature)
+  const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))
+  expect(source, `未找到函数：${signature}`).toBeDefined()
+  if (source === undefined) return ''
+  const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
-  const end = SCHEDULER.indexOf('\n}\n', start)
+  const end = source.indexOf('\n}\n', start)
   expect(end).toBeGreaterThan(start)
-  return SCHEDULER.slice(start, end)
+  return source.slice(start, end)
 }
 
 /** 五条已迁线的函数签名（灭绝锁的射程）。 */
 const MIGRATED_LINES = [
-  ['L1 workgroup-host', 'export function buildWorkgroupHooks('],
-  ['L4 agent-single', 'async function runOneNode('],
+  ['L1 workgroup-host', 'async function executeWorkgroupHostMechanics('],
+  ['L4 agent-single', 'async function runAgentSingleNode('],
   ['L5 fanout-shard', 'async function dispatchFanoutShardAttempt('],
   ['L6 fanout-aggregator', 'async function dispatchFanoutAggregatorAttempt('],
   ['L7 script', 'async function runScriptNode('],
@@ -45,8 +53,8 @@ describe('RFC-287 T9 ① — 四条刻意豁免各带理由锁', () => {
     expect(body).not.toMatch(/agentSem|scriptSem|\.acquire\(\)/)
     expect(body).not.toContain('runAssembly')
     // 理由必须写在源码里——后来者先撞到理由，而不是先撞到这条红。
-    expect(SCHEDULER).toMatch(/deliberately does NOT acquire a node-pool slot/)
-    expect(SCHEDULER).toMatch(/writeSem[↔<-]+pool/)
+    expect(NODE_MECHANICS).toMatch(/deliberately does NOT acquire a node-pool slot/)
+    expect(NODE_MECHANICS).toMatch(/writeSem[↔<-]+pool/)
   })
 
   test('L8 call 节点：整线不迁，且其「可取消的配额 hold」不是信号量池位', () => {

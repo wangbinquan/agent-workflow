@@ -26,7 +26,9 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
   })
 
   test('scheduler forwards opts.subagentLiveCapture into runNode (every call site)', () => {
-    const src = read('packages/backend/src/services/scheduler.ts')
+    const src =
+      read('packages/backend/src/services/scheduler.ts') +
+      read('packages/backend/src/modules/task-execution/composition/nodeMechanics.ts')
     const topology = read(
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionTopology.ts',
     )

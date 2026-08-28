@@ -5,7 +5,7 @@ import type {
 } from '../../application/ports/workgroupHostExecution'
 import type { NodeStepOutcome, NodeStepRequest } from '../../domain/nodeExecution'
 import { isAgentNodeExecutor } from './nodeExecutor'
-import { ClosedNodeExecutorRegistry } from './nodeExecutorRegistry'
+import type { ClosedNodeExecutorRegistry } from './nodeExecutorRegistry'
 
 export type NodeBranchActivationDecision =
   | Readonly<{ kind: 'active' }>

@@ -22,7 +22,10 @@ import { monotonicFactory } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { composePriorOutputBlock, freshestPriorRunWithOutput } from '../src/services/scheduler'
+import {
+  composePriorOutputBlock,
+  freshestPriorRunWithOutput,
+} from '../src/modules/task-execution/composition/nodeMechanics'
 import {
   ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE,
   ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE,

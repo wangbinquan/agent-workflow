@@ -46,6 +46,31 @@ const taskEngineRuntimeOptionsSrc = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'services', 'execution', 'taskEngineRuntimeOptions.ts'),
   'utf8',
 )
+const nodeExecutionCompositionSrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeExecution.ts',
+  ),
+  'utf8',
+)
+const nodeExecutorRegistrySrc = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'engine',
+    'node',
+    'nodeExecutorRegistry.ts',
+  ),
+  'utf8',
+)
 
 describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
   test("validate-node-kinds whitelist includes 'wrapper-fanout'", () => {
@@ -58,10 +83,10 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
     expect(taskEngineApplicationSrc).toMatch(/!Object\.hasOwn\(NODE_KIND_BEHAVIORS, node\.kind\)/)
   })
 
-  test("runOneNode dispatches to runFanoutWrapperNode on kind === 'wrapper-fanout'", () => {
-    expect(schedulerSrc).toMatch(
-      /if \(node\.kind === 'wrapper-fanout'\)\s*\{[^}]*runFanoutWrapperNode/,
-    )
+  test("closed registry dispatches 'wrapper-fanout' through the W2-D delegation port", () => {
+    expect(nodeExecutorRegistrySrc).toContain("'wrapper-fanout': Object.freeze")
+    expect(nodeExecutionCompositionSrc).toContain('return runWrapperFanoutNode(state, args)')
+    expect(nodeExecutionCompositionSrc).toContain('createWrapperDelegatingNodeExecutors')
   })
 
   test('runFanoutWrapperNode function is defined', () => {

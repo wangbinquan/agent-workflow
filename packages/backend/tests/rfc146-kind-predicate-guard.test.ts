@@ -8,8 +8,8 @@
 // node-kind-behavior-table.test.ts）。本守卫防回潮：
 //   1. 被删除的谓词/集合标识符不得在任何生产源码中再现（重新 fork 一份
 //      本地拷贝 = 回归）。
-//   2. scheduler 的三处表接线保持表驱动形态（正向白名单 / SETTLES 派生 /
-//      runOneNode fall-through 守卫）——这三处没有可观察的运行时公共 API
+//   2. task engine 的三处表接线保持闭合形态（正向白名单 / SETTLES 派生 /
+//      NodeExecutorRegistry 穷尽登记）——这三处没有可观察的运行时公共 API
 //      面（zod 在更早层拦掉未知 kind），源码文本锁是唯一诚实断言。
 
 import { describe, expect, test } from 'bun:test'
@@ -74,8 +74,17 @@ describe('RFC-146 ratchet: kind 谓词单源 — 不得再 fork 本地拷贝', (
 })
 
 describe('RFC-146: task engine 三处表接线形态锁', () => {
-  const schedulerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  const registrySrc = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'engine',
+      'node',
+      'nodeExecutorRegistry.ts',
+    ),
     'utf8',
   )
   const applicationSrc = readFileSync(
@@ -117,14 +126,11 @@ describe('RFC-146: task engine 三处表接线形态锁', () => {
     )
   })
 
-  test('runOneNode agent 分派前有 fall-through 穷举守卫', () => {
-    // 守卫必须出现在 agentName 解析之前：表里新增而 runOneNode 未接分支的
-    // kind 要 fail-loud（'unhandled-node-kind'），不能被当 agent 静默驱动。
-    const guardAt = schedulerSrc.indexOf("message: 'unhandled-node-kind'")
-    const agentNameAt = schedulerSrc.indexOf("const agentName = pickString(node, 'agentName')")
-    expect(guardAt).toBeGreaterThan(0)
-    expect(agentNameAt).toBeGreaterThan(0)
-    expect(guardAt).toBeLessThan(agentNameAt)
+  test('NodeExecutorRegistry 用 NodeKind 映射与运行时 key/kind 对拍取代 agent fall-through', () => {
+    expect(registrySrc).toContain('satisfies NodeExecutorSpecMap')
+    expect(registrySrc).toContain('const expected = [...NODE_KIND].sort()')
+    expect(registrySrc).toContain('node-executor-registry-kind-mismatch')
+    expect(registrySrc).not.toContain('unhandled-node-kind')
   })
 })
 

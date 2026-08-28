@@ -1,6 +1,6 @@
 # RFC-334：NodeExecutorRegistry（RFC-294 W2-C）
 
-> 状态：In Progress（2026-08-28；用户已明确批准 T2～T12 生产实施，T3 neutral retry-cap contract 与 T4 closed registry/gateway 骨架已落地）
+> 状态：In Progress（2026-08-28；T2～T11 实现候选与 targeted 验证已完成，T12 等待三笔 architecture provenance、发布及 hosted/scheduled CI）
 >
 > 架构位置：RFC-294 W2-C；承接已完成的 RFC-328 durable execution authority、RFC-331 W2-A topology、
 > RFC-332 W2-B TaskEngine/DAG owner 与 RFC-333 P0-C。只领取 node/workgroup-host mechanics 与 neutral
@@ -251,5 +251,7 @@ RFC-334 只有同时满足以下条件才可标 Done：
 ## 9. 批准记录
 
 2026-08-28，用户要求“完成 RFC333 并提交上库，然后开始 W2-C”。该指令授权完成本轮 current-source 调研、创建并发布
-RFC-334 proposal/design/plan；依据仓库 RFC 规则，**尚未授权 D1～D12 与 plan T2～T12 的生产实现**。生产开工前需用户
-明确批准本 RFC；若批准时 source 已漂移，先刷新 source-lock/能力影响再实施。
+RFC-334 proposal/design/plan；当时尚未授权 D1～D12 与 plan T2～T12 的生产实现。
+
+随后用户明确回复“批准实施”，授权 RFC-334 D1～D12 与 plan T2～T12。授权只覆盖 W2-C 的等价迁移、验证、提交、推送与
+scheduled closeout；不外溢到 W2-D/W3/W4/W5/W9，也不授权新增安全策略或收缩正常功能。

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "boundaryFacades": 62,
+    "boundaryFacades": 88,
     "serviceFiles": 379
   },
   "entries": [
@@ -534,6 +534,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:45b01ecd102b27588a3b",
+        "import:76855ae137509ead0513",
+        "import:91bb5d60556b49e32df0",
+        "import:e34b92fb35515efc0f8d",
         "import:e382d3f4ba1ebaa48eab"
       ],
       "exportedSymbols": [
@@ -616,13 +620,15 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:7a11ab2eb6b354cb15e3"
+      ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarifyQueue.ts",
       "id": "facade:packages/backend/src/services/clarifyQueue.ts",
       "ownerEntryId": "owner:packages/backend/src/services/clarifyQueue.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -638,13 +644,17 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:0cb2aec3a9b3c81fa420",
+        "import:1471bb3b420f40ff4219",
+        "import:e8796dac94221b41b04c"
+      ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarifyRounds.ts",
       "id": "facade:packages/backend/src/services/clarifyRounds.ts",
       "ownerEntryId": "owner:packages/backend/src/services/clarifyRounds.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -677,6 +687,7 @@
       "boundaryEdgeIds": [
         "import:1647cef249d621cadc77",
         "import:1f4820f4d51ace59375c",
+        "import:32d31d14f0e6d1f64df9",
         "import:3d9af2993c79ab5def7e"
       ],
       "exportedSymbols": [
@@ -699,7 +710,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:b07701ac84de0088b782"
+        "import:b07701ac84de0088b782",
+        "import:bea384363e528c9d6286"
       ],
       "exportedSymbols": [
         "CodeHostConnectionMutationConfirmation",
@@ -724,7 +736,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:5b87c80d5dfa59cedcf1"
+      ],
       "exportedSymbols": [
         "ProjectFallbackInput",
         "resolveProjectFallback"
@@ -733,12 +747,14 @@
       "id": "facade:packages/backend/src/services/codeHost/project.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/project.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "integration",
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:a019bc4ddf734dadab1f"
+      ],
       "exportedSymbols": [
         "probeCodeHostMutation"
       ],
@@ -746,7 +762,7 @@
       "id": "facade:packages/backend/src/services/codeHost/recoveryProbe.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeHost/recoveryProbe.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -1192,7 +1208,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:3bdd0a3f60f431a57790",
+        "import:e49c91328fdbaa749ab7"
+      ],
       "exportedSymbols": [
         "BRANCH_MARKER_MALFORMED_PREFIX",
         "BRANCH_PORT_NOT_DECLARED_PREFIX",
@@ -1219,7 +1238,7 @@
       "id": "facade:packages/backend/src/services/envelope.ts",
       "ownerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -1304,7 +1323,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:025128b551d10f4d9fe0",
+        "import:5169fecc3aca8c23e6a3",
+        "import:ae651ed1c3925ba379e0"
+      ],
       "exportedSymbols": [
         "ChildSlotHold",
         "ChildTaskBudget",
@@ -1320,12 +1343,17 @@
       "id": "facade:packages/backend/src/services/execution/childBudget.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/childBudget.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:0a1a2506538037e195ec",
+        "import:168066af4451180fd974",
+        "import:caabaec5e79f4b796e0f",
+        "import:e6d5ffe8654cbc107a10"
+      ],
       "exportedSymbols": [
         "FrozenCallClosure",
         "FrozenWorkflowRef",
@@ -1341,12 +1369,14 @@
       "id": "facade:packages/backend/src/services/execution/closure.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/closure.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:b4098a908d43e1d0b128"
+      ],
       "exportedSymbols": [
         "TerminalWatchResult",
         "notifyTaskTerminal",
@@ -1357,7 +1387,7 @@
       "id": "facade:packages/backend/src/services/execution/executionWatch.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/executionWatch.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -1367,6 +1397,7 @@
         "import:4e46e6da82a9e65d2960",
         "import:67d4c796443d2a5d0436",
         "import:89203e441c8dffce6f24",
+        "import:9497d940b402396ff74a",
         "import:ab23dfa3c61b1425a759",
         "import:d901d5079e15b457fea6"
       ],
@@ -1456,7 +1487,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:e901e9ea1cfbded62e4c"
+      ],
       "exportedSymbols": [
         "OutcomeOutputRow",
         "OutcomeRunRow",
@@ -1469,12 +1502,14 @@
       "id": "facade:packages/backend/src/services/execution/outcome.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/outcome.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:ea4c581b9bd39b107f4d"
+      ],
       "exportedSymbols": [
         "InjectionResolution",
         "ResolutionNotice",
@@ -1486,7 +1521,7 @@
       "id": "facade:packages/backend/src/services/execution/resolveInjection.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/resolveInjection.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -1562,9 +1597,12 @@
         "import:052470d2cfcbf235b183",
         "import:28d3a78f9bc808d19096",
         "import:65a1314d27509b894fb5",
+        "import:66071657419e8ed1d51c",
+        "import:88f3eaaa89feafbc660f",
         "import:8b679ebe6026f7e2a661",
         "import:96ac7dbf92a4e284bd34",
-        "import:d555ae6237b4003cf7f1"
+        "import:d555ae6237b4003cf7f1",
+        "import:f0e1d994e9a98d9c9d4d"
       ],
       "exportedSymbols": [
         "LegacyNodeResult",
@@ -1676,7 +1714,9 @@
         "import:32a7c14ea579504f17e1",
         "import:4a67c1e929e15639fb62",
         "import:6a829e7597089611db6a",
+        "import:89fb82cf8afa90224b31",
         "import:8fa0cefd9187c7b74c6c",
+        "import:be68824a30c5412a865c",
         "import:dc14c72c6a4153225141"
       ],
       "exportedSymbols": [
@@ -2259,7 +2299,13 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:0ebb5df6156b4409f38c",
+        "import:34478042208a57498527",
+        "import:8adca7239c7647bba39e",
+        "import:92c30c64c373e47552b9",
+        "import:98184d2db8234ad6a232"
+      ],
       "exportedSymbols": [
         "MergeSettleOutcome",
         "WriteSemLike",
@@ -2273,7 +2319,7 @@
       "id": "facade:packages/backend/src/services/isolatedAgentRun.ts",
       "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -2316,10 +2362,15 @@
         "import:1e146b37d4cd8c56c11e",
         "import:29768ca659a0280fda50",
         "import:49b4198c95812210b3fd",
+        "import:5129298b52a569abf355",
         "import:52b6f287fd8c62b9046f",
+        "import:62f9f08e5b0378e5ee09",
+        "import:734d51a7c868daf17204",
         "import:8fb47e78c260997055a1",
         "import:9812840393d4bc9cc2bf",
-        "import:e3708cb755459a85c894"
+        "import:9c81610564ea67f73c9a",
+        "import:e3708cb755459a85c894",
+        "import:ef6eeec71427458293af"
       ],
       "exportedSymbols": [
         "ConcurrentMergeStateTransition",
@@ -3063,7 +3114,12 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:5af6bb3cffb8b9251a95",
+        "import:61fafb4bd60c3fc76fe6",
+        "import:70c54af64c132bdaca01",
+        "import:a908b109bf2d15e8ef23"
+      ],
       "exportedSymbols": [
         "MERGE_AGENT_NAME",
         "MERGE_RESOLUTION_PORT",
@@ -3086,7 +3142,7 @@
       "id": "facade:packages/backend/src/services/mergeAgent.ts",
       "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -3105,7 +3161,14 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:2126787881e17e784ce8",
+        "import:878a1ab7b52f271f7f6e",
+        "import:c60f083cae677598aa75",
+        "import:cbefb72a6c305a93b27d",
+        "import:d99812d7a0c0f90e0ed1",
+        "import:fc4c03f688f30d553f96"
+      ],
       "exportedSymbols": [
         "CanonRepo",
         "CanonicalWorktreeMissingError",
@@ -3131,7 +3194,7 @@
       "id": "facade:packages/backend/src/services/nodeIsolation.ts",
       "ownerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -3156,7 +3219,14 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:d0b3d667578549eec96f"
+        "import:0517477bb309799f3c94",
+        "import:23ef315d497c4a26c15f",
+        "import:25c6b4bbeb5ceb2a858a",
+        "import:4358209b8f39fb9ee9cc",
+        "import:8be92942a3beebe1b7aa",
+        "import:a28f35b0356915075c36",
+        "import:d0b3d667578549eec96f",
+        "import:fe0b4253488a70f1e906"
       ],
       "exportedSymbols": [
         "CLARIFY_RERUN_CAUSES",
@@ -3483,7 +3553,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:60b0a330db182265df8e",
+        "import:9dab1529ffaaed67b558"
+      ],
       "exportedSymbols": [
         "ArchivePortArtifactsResult",
         "PortArchive",
@@ -3508,7 +3581,7 @@
       "id": "facade:packages/backend/src/services/portArtifacts.ts",
       "ownerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -3620,7 +3693,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:abaa506d5d2f3a8c920d"
+      ],
       "exportedSymbols": [
         "agentRefOfNode",
         "agentSkillRef",
@@ -3633,7 +3708,7 @@
       "id": "facade:packages/backend/src/services/ref/runtimeRef.ts",
       "ownerEntryId": "owner:packages/backend/src/services/ref/runtimeRef.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -4086,7 +4161,9 @@
     {
       "boundaryEdgeIds": [
         "import:03c5c5821dbc66ecef64",
+        "import:0825e82d89022ff83e73",
         "import:15d52dbcc5e457a912cd",
+        "import:1b8b9bd4a0795b55fa3e",
         "import:30a6613c0e08ce11c0b2",
         "import:5fb92fc1db85b1e884ac",
         "import:ac8057bde3a7ea3c8e87",
@@ -4250,7 +4327,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:6c106e47305a3b3ebdc5",
+        "import:c74b0ad40adb1d4f2de1"
+      ],
       "exportedSymbols": [
         "MAX_AGENT_TEXT_CHARS",
         "MAX_STDERR_TAIL_CHARS",
@@ -4268,7 +4348,7 @@
       "id": "facade:packages/backend/src/services/runner.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -4451,7 +4531,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:28490b02663597eaeebe",
+        "import:508585b40e2cf04f1432"
+      ],
       "exportedSymbols": [
         "RUNTIME_KINDS",
         "getRuntimeDriver",
@@ -4462,7 +4545,7 @@
       "id": "facade:packages/backend/src/services/runtime/index.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -4845,7 +4928,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:8aa6286cda22d5fd2d26"
+      ],
       "exportedSymbols": [
         "BUILTIN_RUNTIMES",
         "CreateRuntimeInput",
@@ -4892,7 +4977,7 @@
       "id": "facade:packages/backend/src/services/runtimeRegistry.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtimeRegistry.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -5015,54 +5100,57 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:013f44fd132693c9230a",
         "import:01f08a9550b4c293bcdd",
         "import:1e1e92bf881073062336",
-        "import:364d20bf78bbb1ab7b21",
+        "import:400fc1bfbb751d68ea43",
         "import:42ff7584d8aa172cc487",
+        "import:44fd0dcc9eca491003db",
+        "import:4952ef3a2db7df21bdd5",
         "import:4aeb9b2d4becb9caa66a",
-        "import:7638e9d72ed2b35c61e9",
+        "import:4c019c7bb29a7f598e9a",
+        "import:544e1f3197b3c3ec3422",
+        "import:6a7493bf63411cc40367",
+        "import:6aefc7ac99e6960cad74",
+        "import:792fedc0aaeb6a44be3f",
         "import:7d98f8116ddfd3f54902",
         "import:7fca322d3774322f4377",
+        "import:8072b0e8c9b734946f8e",
         "import:84b4ce7d90b949b81895",
-        "import:8a0662cabd395084875e",
         "import:93874308c710526da903",
-        "import:94e0d817bdd66e18a226",
         "import:95de9e8bf86b90716021",
         "import:9ae1bf3156c454e42578",
-        "import:a4a1eb64e0e2535aeef4",
+        "import:9ded11c72b8c7550362f",
+        "import:9ff47c00a087634a1ded",
+        "import:a1b4bfbd93d84af396b6",
         "import:b5b25c95a8bd8a9d6d98",
+        "import:b6aff16f2dcc87cb43a2",
+        "import:bb99139c687101c9af81",
         "import:c92cebd3807db733080d",
-        "import:c999f0ec5121f22cbe5c",
         "import:cf3fd16f38440cbd7a18",
-        "import:d0f9587c4d94710e7884",
-        "import:dbcaaf9c3ce16520a1dd"
+        "import:dbcaaf9c3ce16520a1dd",
+        "import:dfe867bf9d926613a26d",
+        "import:e748120905ac9ff06835",
+        "import:eabc37ce5cd82ef9173a",
+        "import:f1c51d4c9b53339480fe",
+        "import:ff2ad90f0228f8f6a722"
       ],
       "exportedSymbols": [
-        "EnvelopeFollowupDecision",
-        "FRAMEWORK_AUDIT_EVENT_PREFIX",
         "InheritableRunConfig",
-        "OneNodeResult",
-        "PreviousAttemptShape",
-        "SchedulerState",
         "buildContainerMap",
-        "buildWorkgroupHooks",
         "cancelTaskRow",
-        "composePriorOutputBlock",
-        "countAgentTextEvents",
         "createOrRebuildWrapperIso",
-        "decideEnvelopeFollowup",
         "emitStatus",
         "failTask",
         "fanoutInnerAgentKey",
-        "freshestPriorRunWithOutput",
         "inspectReadonlyRepos",
         "maybeRunCommitPush",
         "readCommitExcludePatterns",
         "replayConflictHumanResolutions",
         "replayPendingMerges",
-        "resolveUpstreamInputs",
-        "runOneNode",
-        "shouldRetryNodeFailure"
+        "runWrapperFanoutNode",
+        "runWrapperGitNode",
+        "runWrapperLoopNode"
       ],
       "file": "packages/backend/src/services/scheduler.ts",
       "id": "facade:packages/backend/src/services/scheduler.ts",
@@ -5073,7 +5161,10 @@
       "targetLayer": "engine"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:02f0282a9568b02f2cff",
+        "import:1c345040169b3f2085c3"
+      ],
       "exportedSymbols": [
         "ASSEMBLY_MAX_ATTEMPTS",
         "AssemblySpec",
@@ -5088,7 +5179,7 @@
       "id": "facade:packages/backend/src/services/schedulerAssembly.ts",
       "ownerEntryId": "owner:packages/backend/src/services/schedulerAssembly.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -5107,7 +5198,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:04b9c59b4fc398592699",
+        "import:37e08f73e55289a7d8fd",
+        "import:ebcd92949618d5782fb5"
+      ],
       "exportedSymbols": [
         "EnsureDepsInput",
         "ScriptDepsEnv",
@@ -5120,12 +5215,14 @@
       "id": "facade:packages/backend/src/services/scriptDepsEnv.ts",
       "ownerEntryId": "owner:packages/backend/src/services/scriptDepsEnv.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:da02a2ead4c767d02861"
+      ],
       "exportedSymbols": [
         "ScriptPortExtraction",
         "extractScriptPorts"
@@ -5134,7 +5231,7 @@
       "id": "facade:packages/backend/src/services/scriptPorts.ts",
       "ownerEntryId": "owner:packages/backend/src/services/scriptPorts.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -5142,6 +5239,9 @@
       "boundaryEdgeIds": [
         "import:172bab911cae9acd8918",
         "import:1b041f5b55bc114a9d11",
+        "import:2d3bbb550ca951a96dfd",
+        "import:7556465f1964616e4bb3",
+        "import:a81f6a94e5b1894549b2",
         "import:c5c84c87727b9776c6cc",
         "import:d370b30f1436926239f4"
       ],
@@ -5187,7 +5287,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:85bca87c9201a9aa62c0",
+        "import:affba4e4abc8beacce78"
+      ],
       "exportedSymbols": [
         "ClarifyInlineFallbackReason",
         "DecideResumeSessionIdInput",
@@ -5198,7 +5301,7 @@
       "id": "facade:packages/backend/src/services/sessionModeFallback.ts",
       "ownerEntryId": "owner:packages/backend/src/services/sessionModeFallback.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -6251,7 +6354,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:ae85dc8e95f4caf4baae"
+      ],
       "exportedSymbols": [
         "getNodeClarifyDirective",
         "getNodeClarifyDirectiveRow",
@@ -6263,7 +6368,7 @@
       "id": "facade:packages/backend/src/services/taskClarifyDirective.ts",
       "ownerEntryId": "owner:packages/backend/src/services/taskClarifyDirective.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -6313,14 +6418,26 @@
     {
       "boundaryEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
+        "import:0e32fd246c587fe46b1a",
         "import:2ac2eb80ae087bcc7685",
         "import:326be4be0131afd9376f",
         "import:486a0e94fea08793569a",
         "import:5af1d7f41e548afc4039",
+        "import:5c19ced6a46fc4648046",
+        "import:7554c5e3084264ee6df6",
+        "import:866ffe525e1682d2ca3e",
+        "import:93aa74aea542bf463a9a",
         "import:a53830967e380aa35491",
         "import:b15e1d6e1083f78ba6a1",
+        "import:b5599460c9709c54041b",
+        "import:bf5205f4186a1c4387a9",
         "import:d1363fa7a1b360a87ce7",
-        "import:f0f61dc055dab82c8722"
+        "import:dbdc9d8483fabd8dd9f6",
+        "import:dfca015826eecaaa8b83",
+        "import:ec7de9badc37b3b0e8da",
+        "import:ed1679a048f2aad20582",
+        "import:f0f61dc055dab82c8722",
+        "import:fe6bd5097858c2616301"
       ],
       "exportedSymbols": [
         "ProcessEffectAttemptObserver",
@@ -6444,7 +6561,8 @@
       "boundaryEdgeIds": [
         "import:4a9db5b7723cce546d2e",
         "import:720ba8368de50257733e",
-        "import:aa1f1e81ea971445e394"
+        "import:aa1f1e81ea971445e394",
+        "import:b65d58a8c413859166ba"
       ],
       "exportedSymbols": [
         "DispatchTaskQuestionsActor",
@@ -7139,6 +7257,9 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:1e29f156bf09a61886ef",
+        "import:3b5478db21e02e357d9e",
+        "import:530b654606dcd48e4a11",
         "import:815407fb0bed5796dbdb"
       ],
       "exportedSymbols": [
@@ -7157,7 +7278,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:ef3a8c7335830c41ce75"
+      ],
       "exportedSymbols": [
         "WorkgroupEngineHooks",
         "WorkgroupHostRunRequest",
@@ -7167,12 +7290,14 @@
       "id": "facade:packages/backend/src/services/workgroup/hooks.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workgroup/hooks.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:85e7929d61a7fb69cbcc"
+      ],
       "exportedSymbols": [
         "StartWorkgroupTaskFromFrozenArgs",
         "buildWorkgroupHostSnapshot",
@@ -7186,12 +7311,15 @@
       "id": "facade:packages/backend/src/services/workgroup/launch.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workgroup/launch.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:2a43e5108b244265b49e",
+        "import:f862d1faa463861f1b93"
+      ],
       "exportedSymbols": [
         "AutonomousDismissalResult",
         "IllegalWorkgroupAssignmentTransition",
@@ -7214,7 +7342,7 @@
       "id": "facade:packages/backend/src/services/workgroup/lifecycle.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workgroup/lifecycle.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "domain"
     },
@@ -7557,5 +7685,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5b8ec81fe95772f5157d01fb87d5c1c5b9c44070be63c827b469a9700b9e3ef4"
+  "sourceDigest": "sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e"
 }
