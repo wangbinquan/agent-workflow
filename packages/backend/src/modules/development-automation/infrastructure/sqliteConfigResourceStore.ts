@@ -9,6 +9,7 @@
 import { and, eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   actionTemplates,
   actionTemplateRevisions,
@@ -128,7 +129,7 @@ export function createSqliteActionTemplateStore(db: DbClient): ActionTemplateSto
       }
     },
     publishRevision(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const identity = tx
           .select({ id: actionTemplates.id })
           .from(actionTemplates)
@@ -263,7 +264,7 @@ export function createSqliteVerificationProfileStore(db: DbClient): Verification
       }
     },
     publishRevision(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const identity = tx
           .select({ id: verificationProfiles.id })
           .from(verificationProfiles)

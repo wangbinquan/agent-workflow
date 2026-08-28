@@ -23,6 +23,7 @@ import {
 } from '@/db/schema'
 import { createEmployeeInputUploadStore } from '@/modules/digital-employee/infrastructure/inputUploadStore'
 import { createSqliteUploadSessionStore } from '@/modules/development-automation/infrastructure/sqliteUploadSessionStore'
+import { createSqliteActionTemplateStore } from '@/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
 import { runRetentionSweepSlice } from '@/services/maintenanceRetention'
 import { pruneTokenAuditSlice } from '@/services/tokenAudit'
@@ -449,6 +450,68 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       expect(performance.now() - startedAt).toBeLessThan(1_000)
       expect(await released).toEqual({ type: 'released' })
       expect((await primary.select().from(tokenAudit))[0]?.statusCode).toBe(202)
+    } finally {
+      worker.terminate()
+      ;(primary as unknown as { $client: { close(): void } }).$client.close()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test('config resource publish waits at BEGIN IMMEDIATE instead of returning a transient 500', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc338-config-publish-contention-'))
+    const dbPath = join(root, 'db.sqlite')
+    const primary = openDb({
+      path: dbPath,
+      migrationsFolder: MIGRATIONS,
+      skipIntegrityCheck: true,
+      slowQueryMs: 0,
+      busyTimeoutMs: 1_000,
+    })
+    await primary.insert(tokenAudit).values({
+      id: 'foreground-race',
+      patId: 'pat',
+      userId: 'user',
+      channel: 'rest',
+      statusCode: 200,
+      createdAt: 1,
+    })
+    const store = createSqliteActionTemplateStore(primary)
+    store.create({
+      id: 'action-template-race',
+      name: 'Action template race',
+      draftJson: '{}',
+      ownerUserId: 'user',
+      now: 1,
+      extra: { capabilityId: 'change.implement' },
+    })
+    const worker = new Worker(
+      new URL('./fixtures/rfc338-foreground-contention-worker.ts', import.meta.url).href,
+    )
+    const nextMessage = (): Promise<Record<string, unknown>> =>
+      new Promise((resolve, reject) => {
+        worker.onmessage = (event: MessageEvent<Record<string, unknown>>) => resolve(event.data)
+        worker.onerror = (event) => reject(new Error(event.message))
+      })
+    try {
+      const locked = nextMessage()
+      worker.postMessage({ dbPath })
+      expect(await locked).toEqual({ type: 'locked' })
+      const released = nextMessage()
+      expect(() =>
+        store.publishRevision({
+          resourceId: 'action-template-race',
+          revision: 1,
+          contentJson: '{}',
+          contentDigest: 'sha256:action-template-race',
+          publishedAt: 2,
+          publishedBy: 'user',
+        }),
+      ).not.toThrow()
+      expect(await released).toEqual({ type: 'released' })
+      expect(store.getRevision('action-template-race', 1)).toMatchObject({
+        revision: 1,
+        contentDigest: 'sha256:action-template-race',
+      })
     } finally {
       worker.terminate()
       ;(primary as unknown as { $client: { close(): void } }).$client.close()
