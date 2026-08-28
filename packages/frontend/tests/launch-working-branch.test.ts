@@ -19,6 +19,17 @@ const LAUNCH_SRC = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.new.tsx'),
   'utf-8',
 )
+const ADVANCED_SRC = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'components',
+    'task-creation',
+    'TaskCreationAdvancedSettings.tsx',
+  ),
+  'utf-8',
+)
 const DETAIL_SRC = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.detail.tsx'),
   'utf-8',
@@ -35,20 +46,24 @@ describe('tasks.new.tsx — RFC-075 working branch + auto commit&push wiring', (
   })
 
   test('renders the working-branch input + auto commit&push switch', () => {
-    expect(LAUNCH_SRC).toContain('data-testid="wizard-working-branch"')
-    expect(LAUNCH_SRC).toContain("t('launch.workingBranch.label')")
-    expect(LAUNCH_SRC).toContain("t('launch.autoCommitPush.label')")
+    expect(LAUNCH_SRC).toContain('<TaskCreationAdvancedSettings')
+    expect(LAUNCH_SRC).toContain("workingBranch: space.kind === 'remote'")
+    expect(LAUNCH_SRC).toContain("autoCommitPush: space.kind === 'remote'")
+    expect(ADVANCED_SRC).toContain('data-testid="wizard-working-branch"')
+    expect(ADVANCED_SRC).toContain("t('launch.workingBranch.label')")
+    expect(ADVANCED_SRC).toContain("t('launch.autoCommitPush.label')")
     // Uses the shared Switch primitive, not a hand-rolled checkbox.
-    expect(LAUNCH_SRC).toMatch(/<Switch\b/)
+    expect(ADVANCED_SRC).toMatch(/<Switch\b/)
   })
 
   test('validates the branch name with the shared loose validator', () => {
     expect(LAUNCH_SRC).toContain('isLooseValidBranchName')
-    expect(LAUNCH_SRC).toMatch(/const workingBranchError\s*=/)
+    expect(LAUNCH_SRC).toContain('validateTaskCreationAdvancedValues(')
+    expect(ADVANCED_SRC).toMatch(/const workingBranchInvalid\s*=/)
   })
 
   test('canSubmit consults the branch validity gate', () => {
-    expect(LAUNCH_SRC).toMatch(/stepContentReady\s*=[\s\S]*?!workingBranchError/)
+    expect(LAUNCH_SRC).toMatch(/stepContentReady\s*=[\s\S]*?advancedValidation\.valid/)
     expect(LAUNCH_SRC).toMatch(/canSubmit\s*=[\s\S]*?stepContentReady/)
   })
 
@@ -59,9 +74,12 @@ describe('tasks.new.tsx — RFC-075 working branch + auto commit&push wiring', (
 
   test('invalid-branch error rides the shared ErrorBanner (role=alert via component contract)', () => {
     // RFC-286 F1 改锚：死 class error-text 手搓 div 换 <ErrorBanner>——role="alert"
-    // 由公共组件（NoticeBanner tone=error）契约保证，锚从裸 attr 变组件用法。
-    expect(LAUNCH_SRC).toMatch(/<ErrorBanner[\s\S]{0,200}testid="wizard-branch-error"/)
+    // 由公共组件（NoticeBanner tone=error）契约保证；RFC-336 抽取高级设置后，
+    // 锚点归 TaskCreationAdvancedSettings，路由只负责把 validation 接进去。
+    expect(LAUNCH_SRC).toContain('validation={advancedValidation}')
+    expect(ADVANCED_SRC).toMatch(/<ErrorBanner[\s\S]{0,200}testid="wizard-branch-error"/)
     expect(LAUNCH_SRC.includes('className="error-text"')).toBe(false)
+    expect(ADVANCED_SRC.includes('className="error-text"')).toBe(false)
   })
 
   test('toggle persists to localStorage via saveAutoCommitPushPref', () => {
