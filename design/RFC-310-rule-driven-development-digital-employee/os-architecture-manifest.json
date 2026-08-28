@@ -17,6 +17,7 @@
         "cli/start.ts -> public/events",
         "modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts -> public/types",
         "modules/development-automation/composition/digitalEmployeeWorkspace.ts -> public/types",
+        "modules/development-automation/composition/employeeCaseDetailProjection.ts -> public/types",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
@@ -24,7 +25,8 @@
         "modules/task-execution/public/participants.ts -> public/types",
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
-        "server.ts -> public/events"
+        "server.ts -> public/events",
+        "server.ts -> public/types"
       ]
     },
     "event-center": {
@@ -91,6 +93,18 @@
       }
     ],
     "allowlist": [
+      {
+        "file": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
+        "literals": ["merged"],
+        "why": "RFC-337 的共享 Case 详情 contract 在通用 runtime 内严格校验类型 participant 返回的 source-control delivery projection；这里只声明规范化状态集合，不按 development 类型分支。",
+        "removeWhen": "RFC-294 W4-E9"
+      },
+      {
+        "file": "packages/backend/src/modules/digital-employee/public/types.ts",
+        "literals": ["merged"],
+        "why": "RFC-337 的只读 Case 详情 projection 公开 source-control delivery 的闭合状态，供共享 route 消费；该类型不携带 development 类型 ID 或工作项分支。",
+        "removeWhen": "RFC-294 W4-E9"
+      },
       {
         "file": "packages/frontend/src/routes/employee-cases.$caseId.tsx",
         "literals": ["merged"],
