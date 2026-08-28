@@ -73,6 +73,11 @@ import type {
   TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
 import type { RecoverableTerminalMaintenanceClaim } from '../application/ports/terminalMaintenanceStore'
+import type {
+  SchedulerDriverPort,
+  TaskStatusPublisher,
+} from '../application/ports/taskExecutionTopology'
+import type { TaskStatusProjectionReadModel } from './types'
 
 declare const sourceTerminationCapabilityBrand: unique symbol
 declare const workerIdentityBrand: unique symbol
@@ -84,6 +89,13 @@ declare const codeHostSendAttemptHandleBrand: unique symbol
 export type SourceTerminationEffectCapability = Readonly<{
   [sourceTerminationCapabilityBrand]: true
 }>
+
+/** Required runtime participants; production construction has no fallback. */
+export interface SchedulerRuntimeTopology {
+  readonly schedulerDriver: SchedulerDriverPort
+  readonly taskStatusReadModel: TaskStatusProjectionReadModel
+  readonly taskStatusPublisher: TaskStatusPublisher
+}
 
 // RFC-328 — capability identities are owned by this participant entrypoint.
 // Constructors remain module-internal; legacy callers only receive the opaque

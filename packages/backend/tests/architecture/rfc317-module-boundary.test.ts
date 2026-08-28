@@ -31,6 +31,7 @@ import ts from 'typescript'
 
 import {
   backendUnits,
+  BOOTSTRAP_FILES,
   inboundBoundaryEdges,
   moduleShapes,
   outboundBoundaryEdges,
@@ -301,7 +302,7 @@ describe('RFC-317 T26 —— R1 正反 fixture', () => {
   })
 
   test('bootstrap 指向 composition 是被允许的（唯一装配点，不算越界）', () => {
-    for (const path of ['packages/backend/src/server.ts', 'packages/backend/src/cli/start.ts']) {
+    for (const path of BOOTSTRAP_FILES) {
       const unit = fixtureUnit(path, "import { m } from '@/modules/task-execution/composition'\n")
       expect(inboundBoundaryEdges([unit]).length, `bootstrap 被误报：${path}`).toBe(0)
     }

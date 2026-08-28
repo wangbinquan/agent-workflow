@@ -8,6 +8,8 @@
 // Named exports only — no `export *`, no default (the barrel would otherwise leak
 // whatever lands in `domain/` next).
 
+import type { PatPurpose, Permission, Role } from '@agent-workflow/shared'
+
 export type {
   ReviewAnchorBlock,
   ReviewAnchorBlockKind,
@@ -51,6 +53,29 @@ export type {
   QuestionDispatchActorSnapshot,
   QuestionDispatchCommandPort,
 } from '../application/ports/questionDispatchCommand'
+
+/** Structural identity snapshot consumed by review authorization adapters. */
+export interface ReviewActorUser {
+  readonly id: string
+  readonly username: string
+  readonly displayName: string
+  readonly role: Role
+  readonly status: 'active' | 'disabled' | 'invited'
+}
+
+/**
+ * Review-specific projection of the authenticated actor. It preserves the
+ * current permission/purpose inputs without exposing the legacy auth module as
+ * a cross-context public type dependency.
+ */
+export interface ReviewActor {
+  readonly user: ReviewActorUser
+  readonly source: 'session' | 'pat' | 'daemon'
+  readonly permissions: ReadonlySet<Permission>
+  readonly purpose?: PatPurpose
+  readonly patId?: string
+  readonly authorityRevision?: number
+}
 
 declare const collaborationCommandContextBrand: unique symbol
 

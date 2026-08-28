@@ -1619,10 +1619,10 @@
     {
       "boundaryEdgeIds": [
         "import:052470d2cfcbf235b183",
-        "import:0e7aa4003b6d8b2751cb",
         "import:1a765d40a10f3291dde0",
         "import:28d3a78f9bc808d19096",
         "import:66071657419e8ed1d51c",
+        "import:71d3a9eedbcc90b75e7f",
         "import:7fc319259a8835d153f5",
         "import:88f3eaaa89feafbc660f",
         "import:8b679ebe6026f7e2a661",
@@ -5152,12 +5152,12 @@
         "import:059db0d841a2f75e2314",
         "import:066c853fca987668f726",
         "import:1e1e92bf881073062336",
-        "import:62ac641758d1b6d1e04e",
         "import:7d98f8116ddfd3f54902",
         "import:7fca322d3774322f4377",
         "import:8560dbf0705aecf7cb91",
         "import:95de9e8bf86b90716021",
         "import:998fd65ab077856a1a2a",
+        "import:ae39b5aa97c0e6d132ec",
         "import:cf3fd16f38440cbd7a18",
         "import:e44b0833070c49ad0c50"
       ],
@@ -5774,7 +5774,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:94ab34eedb3402310a90"
+        "import:c7112f01c4d5c33ace26"
       ],
       "exportedSymbols": [
         "getCallTargets",
@@ -7712,5 +7712,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d7f3286eb1fe85f8c22db93717c11bf9d5f08fbf95092fd12ff4a52022f23261"
+  "sourceDigest": "sha256:499ab97ab2a56011c0c80e994867ba38b08df27eac439f4163a1cea1443dbefd"
 }

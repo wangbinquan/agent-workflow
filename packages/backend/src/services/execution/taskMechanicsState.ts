@@ -1,8 +1,8 @@
 import type { TriggerContext, WorkflowDefinition } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { tasks } from '@/db/schema'
+import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
 import type {
-  SchedulerRuntimeTopology,
   TaskScopeOutcome,
   WrapperExecutionScopeReadModel,
 } from '@/modules/task-execution/public/types'

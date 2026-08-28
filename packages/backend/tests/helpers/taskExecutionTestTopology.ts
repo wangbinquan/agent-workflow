@@ -1,7 +1,7 @@
 import type { DbClient } from '../../src/db/client'
 import { composeTaskExecutionHumanGateAdapter } from '../../src/modules/collaboration/application/adapters/task-execution-human-gate-adapter'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
-import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/types'
+import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
 import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'

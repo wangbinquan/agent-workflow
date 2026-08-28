@@ -73,6 +73,16 @@
       "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离，剩余两条继续按后续 consumer cutover 删除。"
     },
     {
+      "id": "rfc294-god-surface-allowlist",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "GOD_SURFACE_ALLOWLIST",
+      "baseline": 1,
+      "why": "RFC-294 public god-surface ceiling 的逐符号精确例外；每一项都必须保持超限且写明清偿波次，形状降到预算内时 stale 检查会要求删账。",
+      "allowGrowth": {
+        "why": "RFC-339 明确保留 child resume 的 20 字段 flat explicit inheritance contract；逐字段契约比删除功能配置或退回 Partial/Pick 更可审计。"
+      }
+    },
+    {
       "id": "rfc317-no-corpus-floor",
       "file": "packages/backend/tests/architecture/rfc317-guard-corpus-floor.test.ts",
       "symbol": "NO_FLOOR_YET",
@@ -342,7 +352,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1439,
+      "baseline": 1434,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -363,7 +373,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1402,
+      "baseline": 1397,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -398,12 +408,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 18523,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 18528,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-339/RFC-340 新增 5 个具名闭合合同符号：review actor projection、loop-exit candidate、script-interpreter map 与日志字段值类型；它们替换开放或 legacy 类型边，而非未归属代码。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d7f3286eb1fe85f8c22db93717c11bf9d5f08fbf95092fd12ff4a52022f23261",
+    "sourceDigest": "sha256:499ab97ab2a56011c0c80e994867ba38b08df27eac439f4163a1cea1443dbefd",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

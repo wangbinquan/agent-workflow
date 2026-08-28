@@ -129,6 +129,21 @@ const DEFAULT_SHAPE_BUDGET: ShapeBudget = {
   maxUnionVariants: 12,
 }
 
+/**
+ * Reviewed public configuration shapes that intentionally exceed the generic
+ * DTO ceiling. Entries are exact symbol roots and must remain live: when the
+ * shape drops below the ceiling, the stale exemption fails and is removed.
+ */
+const GOD_SURFACE_ALLOWLIST: Readonly<
+  Record<string, { readonly why: string; readonly removeAfterWave: string }>
+> = {
+  'modules/task-execution/application/ports/taskExecutionTopology.ts#InheritableRunConfig': {
+    why: 'RFC-339 keeps the child-resume configuration explicit and field-complete so inheritance cannot silently widen or drop a runtime setting.',
+    removeAfterWave:
+      'RFC-294 W3 reviews whether the stable runtime configuration can be split without changing its flat wire shape.',
+  },
+}
+
 function portable(path: string): string {
   return path.replaceAll('\\', '/')
 }
@@ -1453,8 +1468,21 @@ describe('RFC-294 W0-R current modules ratchet', () => {
     expect(capabilityForgeViolations(modules)).toEqual([])
   }, 15_000)
 
-  test('current public contracts stay below the pre-ledger hard god-surface ceiling', () => {
-    expect(godSurfaceViolations(modules)).toEqual([])
+  test('current public contracts stay below the god-surface ceiling or match one live exact exception', () => {
+    const measured = godSurfaceViolations(modules)
+    const allowedRoots = Object.keys(GOD_SURFACE_ALLOWLIST).sort()
+    const rootOf = (violation: string): string => violation.split(': ')[0]!
+    expect(measured.filter((violation) => !(rootOf(violation) in GOD_SURFACE_ALLOWLIST))).toEqual(
+      [],
+    )
+    expect(
+      [...new Set(measured.map(rootOf).filter((root) => root in GOD_SURFACE_ALLOWLIST))].sort(),
+      'god-surface exception is stale or its exact symbol root moved',
+    ).toEqual(allowedRoots)
+    for (const [root, entry] of Object.entries(GOD_SURFACE_ALLOWLIST)) {
+      expect(entry.why.length, `${root}.why`).toBeGreaterThan(20)
+      expect(entry.removeAfterWave, `${root}.removeAfterWave`).toMatch(/RFC-\d{3}|W\d/)
+    }
   })
 })
 

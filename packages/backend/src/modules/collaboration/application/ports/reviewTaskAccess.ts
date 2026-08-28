@@ -1,5 +1,5 @@
 import type { TaskActorRole } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
+import type { ReviewActor } from '../../public/types'
 
 export interface ReviewTaskRelationship {
   readonly taskVisible: boolean
@@ -8,11 +8,11 @@ export interface ReviewTaskRelationship {
 }
 
 export interface ReviewTaskAccessPort {
-  canManageReviewers(actor: Actor, taskOwnerUserId: string | null): boolean
+  canManageReviewers(actor: ReviewActor, taskOwnerUserId: string | null): boolean
   resolveRelationship(
-    actor: Actor,
+    actor: ReviewActor,
     taskId: string,
     taskOwnerUserId: string | null,
   ): Promise<ReviewTaskRelationship>
-  visibleTaskIds(actor: Actor, taskIds: readonly string[]): Promise<ReadonlySet<string>>
+  visibleTaskIds(actor: ReviewActor, taskIds: readonly string[]): Promise<ReadonlySet<string>>
 }

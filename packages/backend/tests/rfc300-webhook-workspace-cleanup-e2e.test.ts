@@ -29,6 +29,7 @@ import {
   webhookTriggers,
 } from '../src/db/schema'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createApp } from '../src/server'
 import { cancelExecution } from '../src/services/execution/executor'
 import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
@@ -261,6 +262,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     configPath,
     secretBox: box,
     getDefaultRuntime: async () => null,
+    schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,
   })
 
   for (const [index, one] of (
@@ -501,6 +503,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     configPath,
     secretBox: box,
     getDefaultRuntime: async () => null,
+    schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,
     terminalControl,
   })
   const app = createApp({

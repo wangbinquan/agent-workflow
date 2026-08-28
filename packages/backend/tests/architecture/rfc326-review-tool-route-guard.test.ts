@@ -16,7 +16,8 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
+import { buildActor } from '@/auth/actor'
 import { ALL_TOOLS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountReviewRoutes } from '@/routes/reviews'
@@ -142,6 +143,23 @@ describe('RFC-326 AC-31 — /api/reviews* routes ⟷ MCP gate tools, both direct
 
     resetRouteMetaRegistry()
     const app = new Hono()
+    const injectActor: MiddlewareHandler = async (c, next) => {
+      c.set(
+        'actor',
+        buildActor({
+          user: {
+            id: 'rfc326-composition-guard',
+            username: 'rfc326-composition-guard',
+            displayName: 'RFC-326 composition guard',
+            role: 'admin',
+            status: 'active',
+          },
+          source: 'daemon',
+        }),
+      )
+      await next()
+    }
+    app.use('*', injectActor)
     app.onError((error, c) => c.text(error.message, 500))
     mountReviewRoutes(app, { db: {} as AppDeps['db'], configPath: '' } as AppDeps)
     const response = await app.request('/api/reviews')

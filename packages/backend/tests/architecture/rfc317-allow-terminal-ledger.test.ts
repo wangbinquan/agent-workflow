@@ -43,10 +43,16 @@ interface AllowTerminalLedgerEntry {
  */
 const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
   {
-    file: 'packages/backend/src/services/scheduler.ts',
-    count: 5,
+    file: 'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
+    count: 2,
     rewrites:
-      '3 处 pending|interrupted|canceled→running 的 wrapper 重新认领，以及 2 处 *→pending 的 fanout shard/aggregator 重跑注入（allowedFrom 含 interrupted/failed/canceled）。',
+      '2 处 *→pending 的 fanout shard/aggregator 同代残留重跑（allowedFrom 含 interrupted/failed/canceled）。',
+  },
+  {
+    file: 'packages/backend/src/modules/task-execution/composition/wrapperRunLifecycle.ts',
+    count: 1,
+    rewrites:
+      'pending|awaiting_review|awaiting_human|interrupted|canceled→running 的 wrapper generation 重新认领；同一站点覆盖 git/loop/fanout 三种 wrapper。',
   },
   {
     file: 'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',

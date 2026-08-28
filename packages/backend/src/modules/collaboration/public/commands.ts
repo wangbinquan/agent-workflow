@@ -38,8 +38,7 @@ import { FsHumanGateArtifactStore } from '../infrastructure/fsHumanGateArtifactS
 import { SqliteClarifyQuestionSnapshotReader } from '../infrastructure/sqliteClarifyQuestionSnapshotReader'
 import { SqliteHumanGateOperationStore } from '../infrastructure/sqliteHumanGateOperationStore'
 import { SqliteManualQuestionOpenWriter } from '../infrastructure/sqliteManualQuestionOpenWriter'
-import type { CollaborationCommandContext } from './types'
-import type { Actor } from '@/auth/actor'
+import type { CollaborationCommandContext, ReviewActor } from './types'
 import type {
   ReplaceReviewNodeReviewersBody,
   ReviewNodeReviewerConfig,
@@ -50,7 +49,7 @@ import { reviewNodeReviewerDependencies } from '../composition/reviewNodeReviewe
 export function replaceReviewNodeReviewers(
   context: CollaborationCommandContext,
   input: {
-    readonly actor: Actor
+    readonly actor: ReviewActor
     readonly taskId: string
     readonly body: ReplaceReviewNodeReviewersBody
   },

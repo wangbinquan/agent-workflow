@@ -26,8 +26,7 @@ import {
   requireCollaborationAppHome,
   resolveCollaborationCommandContext,
 } from '../composition/commandContext'
-import type { CollaborationCommandContext } from './types'
-import type { Actor } from '@/auth/actor'
+import type { CollaborationCommandContext, ReviewActor } from './types'
 import type { ReviewNodeReviewerConfig, ReviewSummary } from '@agent-workflow/shared'
 import {
   filterReviewSummariesForActor as filterReviewSummariesForActorInternal,
@@ -43,7 +42,7 @@ function reviewerDependencies(context: CollaborationCommandContext) {
 
 export function getReviewNodeReviewerConfig(
   context: CollaborationCommandContext,
-  input: { readonly actor: Actor; readonly taskId: string },
+  input: { readonly actor: ReviewActor; readonly taskId: string },
 ): Promise<ReviewNodeReviewerConfig> {
   return getReviewNodeReviewerConfigInternal(
     reviewerDependencies(context),
@@ -54,14 +53,14 @@ export function getReviewNodeReviewerConfig(
 
 export function resolveReviewAccess(
   context: CollaborationCommandContext,
-  input: { readonly actor: Actor; readonly nodeRunId: string },
+  input: { readonly actor: ReviewActor; readonly nodeRunId: string },
 ): Promise<ReviewAccessDecision | null> {
   return resolveReviewAccessInternal(reviewerDependencies(context), input.actor, input.nodeRunId)
 }
 
 export function filterReviewSummariesForActor<T extends ReviewSummary>(
   context: CollaborationCommandContext,
-  input: { readonly actor: Actor; readonly rows: readonly T[] },
+  input: { readonly actor: ReviewActor; readonly rows: readonly T[] },
 ): Promise<Array<T & { accessScope: 'task' | 'review-node' }>> {
   return filterReviewSummariesForActorInternal(
     reviewerDependencies(context),

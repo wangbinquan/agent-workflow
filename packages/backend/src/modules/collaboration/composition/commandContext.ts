@@ -7,7 +7,7 @@ import type { CollaborationCommandContext } from '../public/types'
 import type { ReviewDecisionCommandPort } from '../application/ports/reviewDecisionCommand'
 import type { QuestionDispatchCommandPort } from '../application/ports/questionDispatchCommand'
 import type { ClarifyDecisionCommandPort } from '../application/ports/clarifyDecisionCommand'
-import type { TaskExecutionReadModels } from '@/modules/task-execution/public/queries'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 
 export interface CollaborationCommandDependencies {
   readonly db: DbClient

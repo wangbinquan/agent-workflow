@@ -1,4 +1,3 @@
-import type { Actor } from '@/auth/actor'
 import { hasResourceAclBypass, resolveTaskRole } from '@/services/resourceAcl'
 import { canViewTask, hasActingMembership } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
@@ -9,7 +8,7 @@ import {
   requireCollaborationTaskExecutionReadModels,
   resolveCollaborationCommandContext,
 } from './commandContext'
-import type { CollaborationCommandContext } from '../public/types'
+import type { CollaborationCommandContext, ReviewActor } from '../public/types'
 
 function createReviewTaskAccessPort(context: CollaborationCommandContext): ReviewTaskAccessPort {
   const { db } = resolveCollaborationCommandContext(context)
@@ -28,7 +27,7 @@ function createReviewTaskAccessPort(context: CollaborationCommandContext): Revie
         resourceAclBypass: hasResourceAclBypass(actor),
       }
     },
-    async visibleTaskIds(actor: Actor, taskIds: readonly string[]) {
+    async visibleTaskIds(actor: ReviewActor, taskIds: readonly string[]) {
       if (actor.permissions.has('tasks:read:all')) return new Set(taskIds)
       return visibleTaskIdsOf(db, actor, taskIds)
     },

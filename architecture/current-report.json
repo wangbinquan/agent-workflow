@@ -2,12 +2,12 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 444,
-    "architectureExceptions": 1402,
+    "architectureExceptions": 1397,
     "backgroundJobs": 260,
-    "crossContextImports": 1439,
+    "crossContextImports": 1434,
     "facades": 377,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18523,
+    "moduleSymbolOwners": 18528,
     "mutationEntrypoints": 965,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 392,
@@ -120,7 +120,7 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 70,
-    "inboundBoundaryEdges": 92,
+    "inboundBoundaryEdges": 90,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -233,5 +233,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d7f3286eb1fe85f8c22db93717c11bf9d5f08fbf95092fd12ff4a52022f23261"
+  "sourceDigest": "sha256:499ab97ab2a56011c0c80e994867ba38b08df27eac439f4163a1cea1443dbefd"
 }

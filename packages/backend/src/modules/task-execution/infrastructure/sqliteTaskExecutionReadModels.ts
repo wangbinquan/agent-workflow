@@ -7,7 +7,7 @@ import type {
   TaskExecutionReadModels,
   TaskReviewNodeCatalogReadModel,
   TaskStatusProjectionReadModel,
-} from '../public/queries'
+} from '../public/types'
 
 export function createSqliteTaskExecutionReadModels(db: DbClient): TaskExecutionReadModels {
   const statusProjection: TaskStatusProjectionReadModel = {

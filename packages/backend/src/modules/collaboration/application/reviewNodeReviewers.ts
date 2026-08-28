@@ -3,8 +3,7 @@ import type {
   ReviewNodeReviewerConfig,
   ReviewSummary,
 } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
-import type { TaskExecutionReadModels } from '@/modules/task-execution/public/queries'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { deriveReviewAccess, type ReviewAccessDecision } from '../domain/reviewAccess'
 import type {
@@ -12,6 +11,7 @@ import type {
   ReviewNodeReviewerStore,
 } from './ports/reviewNodeReviewerStore'
 import type { ReviewTaskAccessPort } from './ports/reviewTaskAccess'
+import type { ReviewActor } from '../public/types'
 
 export interface ReviewNodeReviewerDependencies {
   readonly reviewerStore: ReviewNodeReviewerStore
@@ -21,7 +21,7 @@ export interface ReviewNodeReviewerDependencies {
 
 async function requireManageableCatalog(
   deps: ReviewNodeReviewerDependencies,
-  actor: Actor,
+  actor: ReviewActor,
   taskId: string,
 ) {
   const catalog = await deps.taskExecutionReadModels.taskReviewNodes.find(taskId)
@@ -40,7 +40,7 @@ async function requireManageableCatalog(
 
 export async function getReviewNodeReviewerConfig(
   deps: ReviewNodeReviewerDependencies,
-  actor: Actor,
+  actor: ReviewActor,
   taskId: string,
 ): Promise<ReviewNodeReviewerConfig> {
   const catalog = await requireManageableCatalog(deps, actor, taskId)
@@ -68,7 +68,7 @@ export async function getReviewNodeReviewerConfig(
 
 export async function replaceReviewNodeReviewers(
   deps: ReviewNodeReviewerDependencies,
-  actor: Actor,
+  actor: ReviewActor,
   taskId: string,
   body: ReplaceReviewNodeReviewersBody,
 ): Promise<ReviewNodeReviewerConfig> {
@@ -126,7 +126,7 @@ export async function replaceReviewNodeReviewers(
 
 export async function resolveReviewAccess(
   deps: ReviewNodeReviewerDependencies,
-  actor: Actor,
+  actor: ReviewActor,
   nodeRunId: string,
 ): Promise<ReviewAccessDecision | null> {
   const subject = await deps.taskExecutionReadModels.reviewGateSubjects.find(nodeRunId)
@@ -145,7 +145,7 @@ export async function resolveReviewAccess(
 
 export async function filterReviewSummariesForActor<T extends ReviewSummary>(
   deps: ReviewNodeReviewerDependencies,
-  actor: Actor,
+  actor: ReviewActor,
   rows: readonly T[],
 ): Promise<Array<T & { accessScope: 'task' | 'review-node' }>> {
   const taskIds = [...new Set(rows.map((row) => row.taskId))]

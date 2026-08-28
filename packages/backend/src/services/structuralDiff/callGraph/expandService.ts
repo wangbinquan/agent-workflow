@@ -8,7 +8,7 @@
 import { readFile as fsReadFile, readdir } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import type { CallTarget } from '@agent-workflow/shared'
-import type { TaskCallGraphWorkspaceReadModel } from '@/modules/task-execution/public/queries'
+import type { TaskCallGraphWorkspaceReadModel } from '@/modules/task-execution/public/types'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { isGitWorkTree } from '@/util/git'
 import { resolveLang } from '../lang/grammars'

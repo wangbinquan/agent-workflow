@@ -24,11 +24,8 @@ import { trySetTaskStatus } from '@/services/lifecycle'
 import { loadRunEnvelopeNonce, mintNodeRun, resolveFrozenRuntime } from '@/services/nodeRunMint'
 
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
-import {
-  taskStopProjection,
-  type SchedulerRuntimeTopology,
-  type TaskStopCause,
-} from '@/modules/task-execution/public/types'
+import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
+import { taskStopProjection, type TaskStopCause } from '@/modules/task-execution/public/types'
 import {
   buildCommitAgent,
   buildCommitMessagePrompt,

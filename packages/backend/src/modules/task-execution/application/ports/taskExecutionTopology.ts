@@ -1,4 +1,4 @@
-import type { Language, ScriptLanguage, TaskStatus, TriggerContext } from '@agent-workflow/shared'
+import type { Language, TaskStatus, TriggerContext } from '@agent-workflow/shared'
 import type { OwnershipToken } from '../../domain/ownership'
 
 /**
@@ -13,12 +13,21 @@ export interface TaskExecutionContextRef {
   readonly token: OwnershipToken
 }
 
+type TaskExecutionLogFieldValue = string | number | boolean | null | undefined
+
 export interface TaskExecutionTopologyLogger {
-  debug(message: string, fields?: Record<string, unknown>): void
-  info(message: string, fields?: Record<string, unknown>): void
-  warn(message: string, fields?: Record<string, unknown>): void
-  error(message: string, fields?: Record<string, unknown>): void
+  debug(message: string, fields?: Readonly<Record<string, TaskExecutionLogFieldValue>>): void
+  info(message: string, fields?: Readonly<Record<string, TaskExecutionLogFieldValue>>): void
+  warn(message: string, fields?: Readonly<Record<string, TaskExecutionLogFieldValue>>): void
+  error(message: string, fields?: Readonly<Record<string, TaskExecutionLogFieldValue>>): void
   child(name: string): TaskExecutionTopologyLogger
+}
+
+/** Closed interpreter vocabulary; `ScriptLanguage` has exactly these three members. */
+interface ScriptInterpreterOverrides {
+  readonly python?: string
+  readonly bash?: string
+  readonly node?: string
 }
 
 /**
@@ -34,7 +43,7 @@ export interface TaskDriveRuntimeKnobs {
   readonly defaultPerNodeTimeoutMs?: number
   readonly defaultNodeRetries?: number
   readonly sessionRestartBudget?: number
-  readonly scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
+  readonly scriptInterpreters?: ScriptInterpreterOverrides
   readonly scriptDepsInstallTimeoutMs?: number
   readonly maxConcurrentNodes?: number
   readonly maxConcurrentScriptNodes?: number
@@ -117,7 +126,7 @@ export interface InheritableRunConfig {
     readonly consecutiveFailureLimit: number
   }
   readonly commitPushExcludePatterns?: readonly string[]
-  readonly scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
+  readonly scriptInterpreters?: ScriptInterpreterOverrides
   readonly scriptDepsInstallTimeoutMs?: number
 }
 

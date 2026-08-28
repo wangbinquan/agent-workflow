@@ -107,7 +107,7 @@ import {
   requireSchedulerDriver,
   type SchedulerDriverPort,
 } from '@/modules/task-execution/public/commands'
-import type { TaskExecutionReadModels } from '@/modules/task-execution/public/queries'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import { createCollaborationCommandContext } from '@/modules/collaboration/composition'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'

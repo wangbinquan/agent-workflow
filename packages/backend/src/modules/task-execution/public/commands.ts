@@ -2,14 +2,11 @@ import { parkPreparedHumanGate as parkPreparedHumanGateInternal } from '../compo
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
 
 export type {
-  ChildResumeRuntime,
   InheritableRunConfig,
   SchedulerDriverPort,
   TaskDriveRequest,
-  TaskDriveRuntimeKnobs,
   TaskDriveRuntimeOptions,
   TaskExecutionContextRef,
-  TaskExecutionTopologyLogger,
 } from '../application/ports/taskExecutionTopology'
 export {
   INHERITABLE_RUN_CONFIG_KEYS,

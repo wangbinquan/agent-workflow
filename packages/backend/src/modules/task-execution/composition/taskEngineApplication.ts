@@ -50,7 +50,7 @@ import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import type { SchedulerRuntimeTopology } from '../public/types'
+import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { HumanGateOpenParticipant } from '../application/ports/humanGateOpenParticipant'
 import {
   ManualQuestionParkRequired,
