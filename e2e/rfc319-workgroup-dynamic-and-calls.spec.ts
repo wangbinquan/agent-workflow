@@ -793,10 +793,16 @@ test.describe('call-workgroup child tasks', () => {
       '父任务行的展开控件初始不是展开态 ⇒ 命中子任务的那一支没有把上下文自动摊开',
     ).toHaveAttribute('aria-expanded', 'true')
 
-    // 子任务只在树里出现一次，且不在根层。
-    const childDepths = await page
-      .getByTestId(`task-row-${childTaskId}`)
-      .evaluateAll((els) => els.map((el) => el.parentElement?.getAttribute('data-depth') ?? 'none'))
+    // 子任务查询在父行之后异步收敛；evaluateAll 本身不会等待 locator 出现。
+    // 先用可重试断言同时钉住「最终出现」和「全页只有一条」，再读取层级。
+    const childRow = page.getByTestId(`task-row-${childTaskId}`)
+    await expect(
+      childRow,
+      '子任务查询没有收敛成全页唯一的一条子行（0 条 = 未加载，2 条 = 根层重复）',
+    ).toHaveCount(1, { timeout: 60_000 })
+    const childDepths = await childRow.evaluateAll((els) =>
+      els.map((el) => el.parentElement?.getAttribute('data-depth') ?? 'none'),
+    )
     expect(
       childDepths,
       '子任务没有恰好以一条一级子行的形态出现（根层多出一格 = 同一次调用被列了两遍）',
@@ -812,7 +818,6 @@ test.describe('call-workgroup child tasks', () => {
       '子任务不在父行的分支容器里 ⇒ 它只是碰巧排在父行下面，并没有构成父子树',
     ).toHaveCount(1)
 
-    const childRow = page.getByTestId(`task-row-${childTaskId}`)
     await expect(
       childRow,
       '子行没有写清它是哪个 call 节点起出来的 ⇒ 一次调用多个子工作组时无从分辨',
