@@ -1,6 +1,6 @@
 # RFC-337 — 数字员工任务详情的信息架构与交付可见性
 
-- 状态：Implemented / Publication In Progress（用户已批准 D1–D7，2026-08-28）
+- 状态：Done（D1–D7 已落地、发布并通过远端 CI，2026-08-28）
 - 发起：用户，2026-08-28
 - source pin：`234cfb2307602ced40bfb3279843843d6818997a`
 - 前置：RFC-310（数字员工操作系统）、RFC-294（后台目标架构）
@@ -173,5 +173,6 @@ URL 使用 `?tab=overview|details|artifacts|execution|activity`。无 `tab` 或�
 ## 7. 实施状态
 
 用户已于 2026-08-28 明确批准 §5 D1–D7，并授权实现完成后提交、推送到远端。生产投影、前端页签、
-共享职责图与测试已经完成；本地 backend/frontend 类型检查、目标测试、Chromium E2E、390px 紧凑页签和
-真实浏览器视觉检查均通过。远端发布与 exact-SHA CI 证据在 `plan.md` T10–T11 收口。
+共享职责图与测试已经完成；主实现 `07c7d37b4` 已进入 `origin/main`，并为最终 containing SHA
+`8e58eb05f` 的祖先。该 SHA 的 GitHub Actions CI run `33142147682` 35/35 成功，visual run `33139682210`
+1/1 成功；本地 backend/frontend 类型检查、目标测试、Chromium E2E、390px 与真实浏览器视觉检查也已通过。

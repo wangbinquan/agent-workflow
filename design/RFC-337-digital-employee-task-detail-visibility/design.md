@@ -1,6 +1,6 @@
 # RFC-337 设计 — 数字员工任务详情的信息架构与交付可见性
 
-配套 `proposal.md`。当前状态：Implemented / Publication In Progress；用户已于 2026-08-28 批准 D1–D7。
+配套 `proposal.md`。当前状态：Done；用户已于 2026-08-28 批准 D1–D7，实现已发布并通过远端 CI。
 
 ## 1. 不变量
 
@@ -463,3 +463,7 @@ Case tabs → tests”纵向完成，避免先提交一个会让主干 route/typ
 
 遵循当前仓库规则：最终以包含实现的完整 SHA 查询 GitHub Actions。若结果来自 superseding SHA，先证明实现
 commit 是其祖先，再报告相关 CI/visual/E2E 终态；并发无关失败与本 RFC 的目标证据分开说明。
+
+实际发布结果：主实现 `07c7d37b4` 与后续归一化/架构修复均已进入 `origin/main`；已用
+`git merge-base --is-ancestor` 证明它们都是 `8e58eb05f` 祖先。该 containing SHA 的 CI run
+`33142147682` 35/35 成功，visual run `33139682210` 1/1 成功。

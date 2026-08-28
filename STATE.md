@@ -2,19 +2,22 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚚 **已实现、发布中 RFC（Implemented / Publication In Progress，2026-08-28）：[RFC-337 数字员工任务详情的信息架构与交付可见性](design/RFC-337-digital-employee-task-detail-visibility/proposal.md)。**
+> ✅ **已完成 RFC（Done，2026-08-28）：[RFC-337 数字员工任务详情的信息架构与交付可见性](design/RFC-337-digital-employee-task-detail-visibility/proposal.md)。**
 > 源码确认 Case 的真实输入/仓库已在 `development.issue-handling` Context，工作区表已有
 > `baselineSha/targetBranch/sourceBranch`，MR Context 也已有 `webUrl` 与完整交付事实；当前页面只是把三个
-> authoring 入口误接到运行态，并在单列长页和窄 `projectionFields` 中丢掉这些事实。RFC-337 拟改为
+> authoring 入口误接到运行态，并在单列长页和窄 `projectionFields` 中丢掉这些事实。RFC-337 已改为
 > “概览 / 详细信息 / 产物 / 执行记录 / 关注与协作”五页签、唯一绿色真实输入，以及页头/职责 2/三个 MR
-> 工作项的 exact MR 直达链接。**用户已批准 proposal §5 D1–D7，并授权实现完成后提交、推送到远端。**
+> 工作项的 exact MR 直达链接。主实现 `07c7d37b4` 已进入 `origin/main`；最终 containing SHA `8e58eb05f`
+> 的 CI run `33142147682` 35/35 成功，visual run `33139682210` 1/1 成功。
 
-> 🚚 **已实现、发布中 RFC（Implemented / Publication In Progress，2026-08-28）：[RFC-336 数字员工任务高级选项补齐](design/RFC-336-digital-employee-task-advanced-options/proposal.md)。**
+> ✅ **已完成 RFC（Done，2026-08-28）：[RFC-336 数字员工任务高级选项补齐](design/RFC-336-digital-employee-task-advanced-options/proposal.md)。**
 > current source 确认编排创建的高级区实际包含协作者、工作分支、自动提交并推送、最大时长和 Token 上限，
 > 用户已明确裁决数字员工本来固定自动提交发布，**不要该开关**；因此只补协作者、工作分支、最大时长、Token 上限四项。
 > RFC-336 已抽取逐项 capability 驱动的同一高级设置组件；协作者随 Case 原子创建，时长/Token 按本 Case 多轮 exact
 > metering 累计，工作分支由类型 capability 冻结并由平台交付链消费，验证→commit→CAS push→MR 继续固定执行。
-> **D1～D10 已获用户批准，并授权实现完成后提交、推送到远端。**
+> 主实现 `07c7d37b4`、归一化/来源锁定 `1c296f3a4` / `287ea50fe`、测试与架构修复 `e2bee56ae` / `f5e7833fd` /
+> `aa32b65ad` 均已进入 `origin/main` 并为 `8e58eb05f` 祖先；该 SHA 的 CI run `33142147682` 35/35 成功，
+> visual run `33139682210` 与 Windows run `33139296772` 均 1/1 成功。
 
 > 🛠️ **进行中 RFC（实现完成，等待发布/CI，2026-08-28）：[RFC-335 OIDC 显示用户名与 Git name 分离](design/RFC-335-oidc-display-git-name-separation/proposal.md)。**
 > 用户已批准 D1–D7 并授权推送。实现新增 `gitNameClaim/users.git_name`，保留 `usernameClaim` wire 但只映射

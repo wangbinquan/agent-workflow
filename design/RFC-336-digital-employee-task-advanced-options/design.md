@@ -1,8 +1,8 @@
 # RFC-336 设计：数字员工任务高级选项补齐
 
-> 状态：Implemented / Publication In Progress（2026-08-28；proposal D1～D10 已落地，等待远端 exact-SHA CI 收口）
+> 状态：Done（2026-08-28；proposal D1～D10 已落地、发布并通过远端 CI）
 >
-> 本文描述已批准并完成的实现；最终完成状态以远端 exact-SHA GitHub CI 为准。
+> 本文描述已批准并发布的最终实现。
 
 ## 1. 设计原则
 
@@ -352,3 +352,12 @@ interface EmployeeCaseAdvancedViewV1 {
 - DE→Task table read=0、TE→employee table write=0、bootstrap type branch=0；
 - shared advanced component唯一、来源私有高级 JSX 重复=0；
 - RFC-310 unified Host/source registration 与 RFC-294 import/public surface guards 全绿。
+
+## 10. 实施与发布证据
+
+- 主实现 `07c7d37b4`；归一化/来源锁定 `1c296f3a4` / `287ea50fe`；测试/架构修复
+  `e2bee56ae` / `f5e7833fd` / `aa32b65ad`。六个提交均已进入 `origin/main`。
+- 目标架构/合同诊断 24/24、相关 Prettier/ESLint 和 backend typecheck 通过；数字员工
+  `autoCommitPush` 的 DOM/wire/state/source absence 与固定发布链由回归测试锁定。
+- 最终 containing SHA `8e58eb05f` 已证明包含上述提交；其 CI run `33142147682` 35/35 成功，
+  visual run `33139682210` 和 Windows run `33139296772` 均 1/1 成功。

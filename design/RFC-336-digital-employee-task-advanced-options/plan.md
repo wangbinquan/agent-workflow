@@ -1,6 +1,6 @@
 # RFC-336 实施计划：数字员工任务高级选项补齐
 
-> 状态：Implemented / Publication In Progress（2026-08-28；T0～T9 完成，T10 正在精确提交、推送并等待 exact-SHA CI）
+> 状态：Done（2026-08-28；T0～T10 已完成并通过远端 CI）
 >
 > current source pin：`234cfb2307602ced40bfb3279843843d6818997a`。共享 `main` 上 RFC-334 与 RFC-335 正在并行工作；
 > 实施前必须重新 fetch、确认 `main/origin/main`、重采 target files 与 owner，不能覆盖或夹带其他 session 的输出。
@@ -163,6 +163,15 @@ worktree/临时 clone。
 - 全绿后更新 RFC/STATE/index 为 Done，记录 exact payload/provenance/CI；再次按授权发布 closure docs。
 
 退出：本地 `main == origin/main` 或报告 concrete blocker；RFC-336 任务文件无未说明残留，所有并行输出原样保留并在 handoff 标注。
+
+完成证据：
+
+- 主实现 `07c7d37b4`，归一化/来源锁定 `1c296f3a4` / `287ea50fe`，测试/架构修复
+  `e2bee56ae` / `f5e7833fd` / `aa32b65ad`，均已推送并为 `8e58eb05f` 祖先。
+- containing SHA `8e58eb05f` 的 CI run `33142147682` 35/35 成功；visual run `33139682210`
+  与 Windows run `33139296772` 均 1/1 成功。
+- 提交按 exact allowlist 发布并验证路径/message/Codex trailer；共享文件中的 RFC-337 产出与并发
+  RFC-287 架构守卫修复均原样保留。
 
 ## 4. 建议文件范围（批准后以 T2 live inventory 为准）
 

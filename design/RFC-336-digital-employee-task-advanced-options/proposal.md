@@ -1,6 +1,6 @@
 # RFC-336：数字员工任务高级选项补齐
 
-> 状态：Implemented / Publication In Progress（2026-08-28；D1～D10 已落地，正在完成精确提交、远端推送与 exact-SHA CI）
+> 状态：Done（2026-08-28；D1～D10 已落地并发布）
 >
 > current source pin：`main == origin/main == 234cfb2307602ced40bfb3279843843d6818997a`（本轮调研时）。
 > 以下源码锚以该 committed pin 为准；生产实施前必须重新 fetch 并对拍正在实施的 RFC-334 与并行共享树。
@@ -226,4 +226,9 @@ Case 或 block 的时间不计。子 Case 不继承也不反向计入父 Case。
 2. Token 只累计本 Case 启动的 Reaction executions；
 3. 工作分支留空继续自动生成；显式分支不存在时创建，已存在时从 exact remote head 继续并只做 CAS fast-forward。
 
-生产代码、DB migration、前后端测试与真实发布旅程自该批准后进入实施。
+生产代码、DB migration、前后端测试与真实发布旅程已完成并发布：
+
+- 主实现 `07c7d37b4`，归一化/来源锁定 `1c296f3a4` / `287ea50fe`，测试/架构修复
+  `e2bee56ae` / `f5e7833fd` / `aa32b65ad`；全部已进入 `origin/main` 并为 `8e58eb05f` 祖先。
+- containing SHA `8e58eb05f` 的 GitHub Actions CI run `33142147682` 35/35 成功；visual run
+  `33139682210` 和 Windows run `33139296772` 均 1/1 成功。
