@@ -308,10 +308,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 951,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-334 W2-C：closed registry、typed host lane 与 composition mechanics 的真实命令写面进入完整清点；本次再生成同时补录 parent 已发布 RFC-335 的新增写面。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -346,10 +343,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 1329,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-334 W2-C：新增 node executor、ports 与 composition 文件的每条真实 import symbol 都进入 source-complete observed edge；本次再生成同时补录 parent 已发布 RFC-335 的新增边。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -370,10 +364,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 1297,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-334 W2-C：source-complete edge 投影随新 node 文件增长；W2-C legacy exceptions 已归零，只保留三条具名到期于 W2-D 的 wrapper bridge，并补录 parent RFC-335 的投影。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -408,10 +399,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18139,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-334 W2-C：新增 per-kind executor、consumer-owned ports 与 composition owners 必须逐文件逐符号纳管；本次再生成同时补录 parent 已发布 RFC-335 的 owner 投影。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -428,8 +416,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "dda58935ec62b62ec1c962628af3af21edf0e9da",
-    "contentDigest": "sha256:cb112cc3f6a679f646f8e0457d75e36e6cba360f067536b231adbdad011b6fe1",
+    "currentSnapshotSha": "daf4c4a76c79f57a26c22a98fe12ffa99448f1c3",
+    "contentDigest": "sha256:bedc8c75eb9b8c2e9dec4ff5d229a47efcb029d766588b84499955a63e87b722",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
