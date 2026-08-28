@@ -201,6 +201,85 @@ describe('RFC-338 maintenance Worker', () => {
     expect(supervisor.live()).toMatchObject({ state: 'stopped', active: null })
   })
 
+  test('supervisor immediately replaces a Worker that closes without an error event', async () => {
+    class FakeWorker {
+      onmessage: ((event: MessageEvent<unknown>) => void) | null = null
+      onerror: ((event: ErrorEvent) => unknown) | null = null
+      private onclose: ((event: { readonly code?: number }) => void) | null = null
+      readonly messages: unknown[] = []
+      terminated = false
+      addEventListener(type: 'close', listener: (event: { readonly code?: number }) => void): void {
+        if (type === 'close') this.onclose = listener
+      }
+      postMessage(message: unknown): void {
+        this.messages.push(message)
+      }
+      terminate(): void {
+        this.terminated = true
+      }
+      emit(data: unknown): void {
+        this.onmessage?.({ data } as MessageEvent<unknown>)
+      }
+      emitClose(code: number): void {
+        this.onclose?.({ code })
+      }
+    }
+    const first = new FakeWorker()
+    const second = new FakeWorker()
+    const workers = [first, second]
+    const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
+    const supervisor = startMaintenanceWorkerSupervisor({
+      dbPath: '/tmp/rfc338-close.sqlite',
+      migrationsFolder: MIGRATIONS,
+      appHome: '/tmp/rfc338-close',
+      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      workerFactory: () => workers.shift()!,
+      setTimer: (fn, ms) => {
+        const timer = { fn, ms, cleared: false }
+        timers.push(timer)
+        return timer
+      },
+      clearTimer: (value) => {
+        ;(value as { cleared: boolean }).cleared = true
+      },
+    })
+    first.emit({
+      type: 'ready',
+      version: MAINTENANCE_PROTOCOL_VERSION,
+      catalogDigest: MAINTENANCE_CATALOG_DIGEST,
+      at: 100,
+    })
+
+    first.emitClose(1)
+    expect(first.terminated).toBe(false)
+    expect(supervisor.live()).toMatchObject({
+      state: 'degraded',
+      error: 'maintenance worker closed unexpectedly (code=1)',
+      active: null,
+    })
+
+    const restart = timers.find((timer) => !timer.cleared && timer.ms === 250)
+    expect(restart).toBeDefined()
+    restart!.fn()
+    second.emit({
+      type: 'ready',
+      version: MAINTENANCE_PROTOCOL_VERSION,
+      catalogDigest: MAINTENANCE_CATALOG_DIGEST,
+      at: 200,
+    })
+    expect(supervisor.live()).toMatchObject({ state: 'ready', error: null })
+
+    // A late close notification from the previous generation cannot degrade
+    // or replace the live generation.
+    first.emitClose(0)
+    expect(supervisor.live()).toMatchObject({ state: 'ready', error: null })
+
+    const drained = supervisor.drain()
+    second.emit({ type: 'drained', version: MAINTENANCE_PROTOCOL_VERSION, at: 300 })
+    await drained
+    expect(second.terminated).toBe(true)
+  })
+
   test('supervisor restarts a Worker whose heartbeat stops without an ErrorEvent', async () => {
     class FakeWorker {
       onmessage: ((event: MessageEvent<unknown>) => void) | null = null

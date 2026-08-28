@@ -13,6 +13,7 @@ declare const AW_COMPILED_BUILD: boolean | undefined
 interface WorkerLike {
   onmessage: ((event: MessageEvent<unknown>) => void) | null
   onerror: ((event: ErrorEvent) => unknown) | null
+  addEventListener?(type: 'close', listener: (event: { readonly code?: number }) => void): void
   postMessage(message: unknown): void
   terminate(): void
 }
@@ -281,6 +282,36 @@ export function startMaintenanceWorkerSupervisor(
         ;(failureTimer as { unref?: () => void } | null)?.unref?.()
         return true
       }
+      next.addEventListener?.('close', (event) => {
+        // Bun 1.3.14 dispatches Worker close on the parent thread after the
+        // Worker has released its native resources. A fatal Worker exit can
+        // bypass both the protocol-level `degraded` event and the cancelable
+        // ErrorEvent, so this is the final generation-fenced recovery edge.
+        if (worker !== next) return
+        clearHandshake()
+        clearWatchdog()
+        clearFailureDrain()
+        const pendingRestartReason = restartAfterDrainReason
+        restartAfterDrainReason = null
+        worker = null
+
+        if (stopped) {
+          live = { ...live, state: 'stopped', error: null, active: null }
+          const resolve = drainResolve
+          drainResolve = null
+          resolve?.()
+          return
+        }
+
+        const code = typeof event.code === 'number' ? ` (code=${event.code})` : ''
+        live = {
+          ...live,
+          state: 'degraded',
+          error: pendingRestartReason ?? `maintenance worker closed unexpectedly${code}`,
+          active: null,
+        }
+        scheduleSpawn()
+      })
       post({
         type: 'init',
         version: MAINTENANCE_PROTOCOL_VERSION,
