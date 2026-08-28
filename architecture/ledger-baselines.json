@@ -335,15 +335,21 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 261,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 263,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-338 adds the Worker-local fatal-event boundary and its deferred restart notification to the complete background-job census."
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 444,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+      "baseline": 445,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
+      "allowGrowth": {
+        "why": "RFC-338 registers the Worker-local error boundary explicitly so an uncaught maintenance failure remains observable and restartable."
+      }
     },
     {
       "id": "rfc294-cross-context-observed-imports",
@@ -405,12 +411,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 18545,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 18551,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-338 adds one platform-owned Worker error-boundary module and its exact top-level symbol ownership records."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d3ab17db483fba2664cadbabcc6b8031d83e1971cad804c61adc1561f2edf050",
+    "sourceDigest": "sha256:e7790089429f5ac5f0d99ae31cefd874794cbb137ae28c34a8013f5b989eb67e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

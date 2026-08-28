@@ -10,6 +10,10 @@ import {
   MaintenanceWorkerEventSchema,
   MaintenanceWorkerRequestSchema,
 } from '@/platform/background/maintenanceProtocol'
+import {
+  installMaintenanceWorkerErrorBoundary,
+  type MaintenanceWorkerRejectionEvent,
+} from '@/platform/background/maintenanceWorkerErrorBoundary'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
 import { createMaintenanceRunStore } from '@/platform/persistence/sqlite/maintenanceRunStore'
 import { MIGRATIONS } from './migration-freeze'
@@ -20,6 +24,54 @@ afterEach(() => {
 })
 
 describe('RFC-338 maintenance Worker', () => {
+  test('Worker-local error and rejection events are canceled before one deferred restart notice', () => {
+    type ListenerMap = {
+      error?: (event: ErrorEvent) => void
+      unhandledrejection?: (event: MaintenanceWorkerRejectionEvent) => void
+    }
+    const listeners: ListenerMap = {}
+    const deferred: Array<() => void> = []
+    const failures: string[] = []
+    installMaintenanceWorkerErrorBoundary({
+      target: {
+        addEventListener(type, listener) {
+          if (type === 'error') listeners.error = listener as (event: ErrorEvent) => void
+          else
+            listeners.unhandledrejection = listener as (
+              event: MaintenanceWorkerRejectionEvent,
+            ) => void
+        },
+      },
+      onFatal: (error) => failures.push(error),
+      defer: (notify) => deferred.push(notify),
+    })
+
+    let errorPrevented = false
+    listeners.error?.({
+      message: 'sqlite-worker-failure',
+      error: new Error('sqlite-worker-failure'),
+      preventDefault: () => {
+        errorPrevented = true
+      },
+    } as unknown as ErrorEvent)
+    expect(errorPrevented).toBe(true)
+    expect(failures).toEqual([])
+    expect(deferred).toHaveLength(1)
+
+    let rejectionPrevented = false
+    listeners.unhandledrejection?.({
+      reason: new Error('late-rejection'),
+      preventDefault: () => {
+        rejectionPrevented = true
+      },
+    } as MaintenanceWorkerRejectionEvent)
+    expect(rejectionPrevented).toBe(true)
+    expect(deferred).toHaveLength(1)
+
+    deferred[0]!()
+    expect(failures).toEqual(['sqlite-worker-failure'])
+  })
+
   test('protocol rejects unknown versions, jobs, and delta shapes', () => {
     expect(MaintenanceWorkerRequestSchema.safeParse({ type: 'wake', version: 2 }).success).toBe(
       false,
@@ -84,13 +136,18 @@ describe('RFC-338 maintenance Worker', () => {
     })
     expect(first.messages[0]).toMatchObject({ type: 'init', version: MAINTENANCE_PROTOCOL_VERSION })
     let firstErrorPrevented = false
-    first.onerror?.({
+    const parentErrorResult = first.onerror?.({
       message: 'worker-crashed',
       preventDefault: () => {
         firstErrorPrevented = true
       },
     } as unknown as ErrorEvent)
     expect(firstErrorPrevented).toBe(true)
+    expect(parentErrorResult).toBe(true)
+    expect(first.terminated).toBe(false)
+    const deferredFailure = timers.find((timer) => !timer.cleared && timer.ms === 0)
+    expect(deferredFailure).toBeDefined()
+    deferredFailure!.fn()
     expect(first.terminated).toBe(true)
     expect(supervisor.live()).toMatchObject({ state: 'degraded', error: 'worker-crashed' })
 

@@ -208,12 +208,19 @@ export function startMaintenanceWorkerSupervisor(
         // this supervisor can restart from the durable lease/cursor. Cancel
         // first, including for a late event from a terminated generation.
         event.preventDefault()
-        if (worker !== next) return
-        scheduleRestart(
+        if (worker !== next) return true
+        const reason =
           event.message ||
-            (event.error instanceof Error ? event.error.message : '') ||
-            'maintenance worker error',
-        )
+          (event.error instanceof Error ? event.error.message : '') ||
+          'maintenance worker error'
+        // Let the cancelable ErrorEvent finish before terminating this Worker.
+        // Bun 1.3 otherwise still has a window where the Worker exception can
+        // win the race and abort the owning daemon.
+        const failureTimer = setTimer(() => {
+          if (worker === next) scheduleRestart(reason)
+        }, 0)
+        ;(failureTimer as { unref?: () => void } | null)?.unref?.()
+        return true
       }
       post({
         type: 'init',

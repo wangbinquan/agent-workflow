@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 976,
+    "backendFiles": 977,
     "frontendFiles": 620,
-    "legacyFiles": 534,
+    "legacyFiles": 535,
     "moduleFiles": 442,
-    "productionFiles": 1750,
+    "productionFiles": 1751,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 18545
+    "symbolsIncludingFileRoots": 18551
   },
   "entries": [
     {
@@ -61142,7 +61142,7 @@
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "id": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:9516f4d4625520c05eb873a9ede2f3560ea2b47a41ee2fe84d2471e034ead8af",
+      "signatureDigest": "sha256:51bf98b692f8081b55ea105284da66e9ae70e7f32e2d057858a28f3b06426017",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "platform",
@@ -61607,10 +61607,88 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:efc1451244204cf75770d85324a278c45568b65cdd7181d96360a6c8927e2f4c",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#installMaintenanceWorkerErrorBoundary",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:6544caad59c99a5cfb4d58f592ebe04a28366184028cdc3b2ba6d23aa7139f77",
+      "status": "legacy-target",
+      "symbol": "installMaintenanceWorkerErrorBoundary",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#MaintenanceWorkerErrorBoundaryOptions",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:271765ccc90be4e248516914911dea0a35fa40b97292d6f79071ad0901e8b9c6",
+      "status": "legacy-target",
+      "symbol": "MaintenanceWorkerErrorBoundaryOptions",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#MaintenanceWorkerErrorTarget",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:a1bb1fa2d4473caf5394a96ac14748177712bf3fb9bac3cc6dccb44d8c2df4b2",
+      "status": "legacy-target",
+      "symbol": "MaintenanceWorkerErrorTarget",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#MaintenanceWorkerRejectionEvent",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:c97323575b4338fefcbcca2e4698753cc2a6811e3e2deabfb3eaa15693221a7a",
+      "status": "legacy-target",
+      "symbol": "MaintenanceWorkerRejectionEvent",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#messageOf",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:927b90947031b93fde048aa313ad455787de8b1c1177bdd5f8bb9f100db5dc78",
+      "status": "legacy-target",
+      "symbol": "messageOf",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
       "id": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:dc76443e55a8af5b4b504f0f30428786b345c1bff68086fb8ae7072561e0e226",
+      "signatureDigest": "sha256:71ec3c767ebff5193bf5fdbcc464e3bba1f69def04f3e032ec26a52a08bafd80",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "platform",
@@ -61714,7 +61792,7 @@
       "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
       "id": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#startMaintenanceWorkerSupervisor",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:027989ffa16e22a470513bf9713dbac3256d172014178c53e971f462b9b6b8dc",
+      "signatureDigest": "sha256:76921adf973e075283acb32a057596fdbc77dd31f952a5c59398a293ff83cd2e",
       "status": "legacy-target",
       "symbol": "startMaintenanceWorkerSupervisor",
       "targetContext": "platform",
@@ -241098,5 +241176,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d3ab17db483fba2664cadbabcc6b8031d83e1971cad804c61adc1561f2edf050"
+  "sourceDigest": "sha256:e7790089429f5ac5f0d99ae31cefd874794cbb137ae28c34a8013f5b989eb67e"
 }

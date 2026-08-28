@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 444,
+    "ambientWiring": 445,
     "architectureExceptions": 1397,
-    "backgroundJobs": 261,
+    "backgroundJobs": 263,
     "crossContextImports": 1434,
     "facades": 377,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18545,
+    "moduleSymbolOwners": 18551,
     "mutationEntrypoints": 966,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 392,
     "transactionExternalEffects": 269
   },
   "metrics": {
-    "ambientWiringEntries": 444,
+    "ambientWiringEntries": 445,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -70,7 +70,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 976,
+    "backendProductionFiles": 977,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -94,7 +94,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 261,
+    "backgroundEntries": 263,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -119,7 +119,7 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 24,
-    "directNativeTimers": 70,
+    "directNativeTimers": 71,
     "inboundBoundaryEdges": 90,
     "knownViolations": 31,
     "moduleContexts": [
@@ -233,5 +233,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d3ab17db483fba2664cadbabcc6b8031d83e1971cad804c61adc1561f2edf050"
+  "sourceDigest": "sha256:e7790089429f5ac5f0d99ae31cefd874794cbb137ae28c34a8013f5b989eb67e"
 }

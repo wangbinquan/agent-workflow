@@ -16,6 +16,7 @@ import {
 } from '@/platform/persistence/sqlite/maintenanceRunStore'
 import { MAINTENANCE_CATALOG_DIGEST } from './maintenanceCatalog'
 import { runMaintenanceJob } from './maintenanceJobRunner'
+import { installMaintenanceWorkerErrorBoundary } from './maintenanceWorkerErrorBoundary'
 import {
   MAINTENANCE_PROTOCOL_VERSION,
   MaintenanceWorkerRequestSchema,
@@ -90,6 +91,18 @@ function emit(event: MaintenanceWorkerEvent): void {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
+
+installMaintenanceWorkerErrorBoundary({
+  target: self,
+  onFatal: (error) => {
+    emit({
+      type: 'degraded',
+      version: MAINTENANCE_PROTOCOL_VERSION,
+      at: Date.now(),
+      error,
+    })
+  },
+})
 
 function isSqliteBusy(error: unknown): boolean {
   return retryableSqliteWriteErrorCode(error) !== undefined

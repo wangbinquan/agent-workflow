@@ -111,6 +111,17 @@
       "targetContext": "platform"
     },
     {
+      "callee": "installMaintenanceWorkerErrorBoundary",
+      "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "id": "ambient:packages/backend/src/platform/background/maintenanceWorker.ts#installMaintenanceWorkerErrorBoundary:95",
+      "kind": "register-call",
+      "line": 95,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "removeAfterWave": "W6/W9",
+      "symbol": "$file",
+      "targetContext": "platform"
+    },
+    {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "id": "ambient:packages/backend/src/routes/accountRepositoryTransportCredentials.ts#registerRoute:151",
@@ -4902,13 +4913,13 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 444,
+    "ambientWiring": 445,
     "disabled": 7,
-    "entries": 261,
+    "entries": 263,
     "executionLocal": 24,
     "longRunning": 51,
     "managed": 8,
-    "periodic": 179
+    "periodic": 181
   },
   "entries": [
     {
@@ -6754,7 +6765,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:370",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:383",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -6768,7 +6779,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:370",
+      "symbol": "$setInterval:383",
       "targetContext": "platform"
     },
     {
@@ -6777,7 +6788,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:372",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:385",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -6791,7 +6802,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "before-ready",
-      "symbol": "$setInterval:372",
+      "symbol": "$setInterval:385",
       "targetContext": "platform"
     },
     {
@@ -6800,7 +6811,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:128",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:141",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -6814,7 +6825,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:128",
+      "symbol": "$setTimeout:141",
       "targetContext": "platform"
     },
     {
@@ -6920,6 +6931,50 @@
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#timingCounters",
       "phase": "unknown",
       "symbol": "timingCounters",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#$setTimeout:45",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:45",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#installMaintenanceWorkerErrorBoundary",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#installMaintenanceWorkerErrorBoundary",
+      "phase": "after-ready",
+      "symbol": "installMaintenanceWorkerErrorBoundary",
       "targetContext": "platform"
     },
     {
@@ -10738,5 +10793,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d3ab17db483fba2664cadbabcc6b8031d83e1971cad804c61adc1561f2edf050"
+  "sourceDigest": "sha256:e7790089429f5ac5f0d99ae31cefd874794cbb137ae28c34a8013f5b989eb67e"
 }
