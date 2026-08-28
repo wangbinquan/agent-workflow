@@ -9,7 +9,9 @@
 > consumer 恰为 TaskExecution/DigitalEmployee。目标为公共 prelude + 14-key closed registry + per-kind executor，workgroup host
 > 走 `agent-single` typed lane，wrapper 只委托 W2-D，review/clarify policy 继续归 collaboration。
 > **用户已明确批准 T2～T12 生产实施**。T3 已把 neutral retry cap/codec 迁到 `platform/contracts`，
-> TaskExecution retry shape/state 迁回本域，TaskExecution/DigitalEmployee 两个生产 consumer 已切换；T2/T4～T12 继续推进。
+> TaskExecution retry shape/state 迁回本域，TaskExecution/DigitalEmployee 两个生产 consumer 已切换；T4 已落 14-key
+> closed specs/registry、gateway 与 typed workgroup-host port 骨架，缺/多/wrong-kind 变异及 abort/branch/host ordering 纯测已锁。
+> T2/T5～T12 继续推进。
 > 不引入安全策略或功能收缩。
 
 > ✅ **已完成 RFC（Done，2026-08-28）：[RFC-333 人工门原子停驻与持久续跑（RFC-294 P0-C）](design/RFC-333-human-gate-atomic-park-and-continuation/proposal.md)**

@@ -118,7 +118,7 @@ packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts
 
 退出：两个生产 consumer数值对拍；platform 不 import领域/config/state；旧 cap定义=0；R=0/NaN/Infinity/ceiling golden全绿。
 
-### T4 — node domain、gateway 与 closed registry skeleton
+### T4 — node domain、gateway 与 closed registry skeleton（已完成）
 
 - 新增 `NodeStepRequest/Outcome`、host request/result adapter合同；
 - 建 `NodeExecutionGateway`，但 production尚不切 kind；
@@ -283,11 +283,11 @@ raw SchedulerState。
 
 | AC    | Primary evidence                                                | Wave    | Draft status |
 | ----- | --------------------------------------------------------------- | ------- | ------------ |
-| AC-1  | committed source inventory + classification test                | T0/T2   | T0 Done      |
-| AC-2  | compile record + runtime key/kind guard                         | T4      | planned      |
-| AC-3  | synthetic-kind mutation                                         | T4      | planned      |
+| AC-1  | committed source inventory + classification test                | T0/T2   | T0/T4 Done   |
+| AC-2  | compile record + runtime key/kind guard                         | T4      | T4 Done      |
+| AC-3  | synthetic-kind mutation                                         | T4      | T4 Done      |
 | AC-4  | import/symbol/body/facade extinction                            | T5～T11 | planned      |
-| AC-5  | gateway ordering + real branch cases                            | T2/T5   | planned      |
+| AC-5  | gateway ordering + real branch cases                            | T2/T5   | T4 pure Done |
 | AC-6  | 14-kind behavior matrix                                         | T2～T10 | planned      |
 | AC-7  | wrapper port boundary + W2-D source guard                       | T8      | planned      |
 | AC-8  | collaboration port + RFC333 corpus                              | T6      | planned      |

@@ -1,6 +1,6 @@
 # RFC-334：NodeExecutorRegistry（RFC-294 W2-C）
 
-> 状态：In Progress（2026-08-28；用户已明确批准 T2～T12 生产实施，T3 neutral retry-cap contract 已落地）
+> 状态：In Progress（2026-08-28；用户已明确批准 T2～T12 生产实施，T3 neutral retry-cap contract 与 T4 closed registry/gateway 骨架已落地）
 >
 > 架构位置：RFC-294 W2-C；承接已完成的 RFC-328 durable execution authority、RFC-331 W2-A topology、
 > RFC-332 W2-B TaskEngine/DAG owner 与 RFC-333 P0-C。只领取 node/workgroup-host mechanics 与 neutral
