@@ -67,6 +67,8 @@ const MAINTENANCE_WORKER_ENTRY =
 const DEFAULT_FACTORY = (): WorkerLike =>
   new Worker(MAINTENANCE_WORKER_ENTRY) as unknown as WorkerLike
 
+const FAILURE_DRAIN_TIMEOUT_MS = 10_000
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -88,6 +90,8 @@ export function startMaintenanceWorkerSupervisor(
   let restartTimer: unknown | null = null
   let handshakeTimer: unknown | null = null
   let watchdogTimer: unknown | null = null
+  let failureDrainTimer: unknown | null = null
+  let restartAfterDrainReason: string | null = null
   let drainResolve: (() => void) | null = null
   let live: MaintenanceWorkerLiveState = {
     state: 'starting',
@@ -105,14 +109,12 @@ export function startMaintenanceWorkerSupervisor(
     if (watchdogTimer !== null) clearTimer(watchdogTimer)
     watchdogTimer = null
   }
-  const scheduleRestart = (reason: string): void => {
-    if (stopped) return
-    clearHandshake()
-    clearWatchdog()
-    worker?.terminate()
-    worker = null
-    live = { ...live, state: 'degraded', error: reason, active: null }
-    if (restartTimer !== null) return
+  const clearFailureDrain = (): void => {
+    if (failureDrainTimer !== null) clearTimer(failureDrainTimer)
+    failureDrainTimer = null
+  }
+  const scheduleSpawn = (): void => {
+    if (stopped || worker !== null || restartTimer !== null) return
     if (restartAttempt >= 6) return
     const delay = Math.min(10_000, 250 * 2 ** restartAttempt)
     restartAttempt += 1
@@ -122,6 +124,48 @@ export function startMaintenanceWorkerSupervisor(
     }, delay)
     ;(restartTimer as { unref?: () => void } | null)?.unref?.()
   }
+  const forceStopFailedWorker = (reason: string): void => {
+    clearFailureDrain()
+    restartAfterDrainReason = null
+    worker?.terminate()
+    worker = null
+    live = { ...live, state: 'degraded', error: reason, active: null }
+    scheduleSpawn()
+  }
+  const scheduleRestart = (reason: string, force = false): void => {
+    if (stopped) return
+    clearHandshake()
+    clearWatchdog()
+    live = { ...live, state: 'degraded', error: reason, active: null }
+    if (worker === null) {
+      scheduleSpawn()
+      return
+    }
+    if (force) {
+      forceStopFailedWorker(reason)
+      return
+    }
+    if (restartAfterDrainReason !== null) return
+
+    // A maintenance Worker owns a live bun:sqlite connection. Forcefully
+    // terminating that thread while SQLite statements are unwinding can take
+    // the request-serving daemon down with it. Error events are cancelable, so
+    // keep this generation alive just long enough to finish its bounded slice,
+    // close the connection, and emit `drained`; only the timeout fallback uses
+    // terminate(), matching the already-safe explicit shutdown path below.
+    const failedWorker = worker
+    restartAfterDrainReason = reason
+    post({ type: 'drain', version: MAINTENANCE_PROTOCOL_VERSION })
+    failureDrainTimer = setTimer(() => {
+      // A cleared timeout may already be queued. Fence it to the generation
+      // that requested the drain so it can never terminate a healthy
+      // replacement Worker.
+      if (worker === failedWorker && restartAfterDrainReason === reason) {
+        forceStopFailedWorker(reason)
+      }
+    }, FAILURE_DRAIN_TIMEOUT_MS)
+    ;(failureDrainTimer as { unref?: () => void } | null)?.unref?.()
+  }
 
   const scheduleWatchdog = (): void => {
     if (stopped || live.state !== 'ready' || watchdogTimer !== null) return
@@ -130,7 +174,9 @@ export function startMaintenanceWorkerSupervisor(
       if (stopped || live.state !== 'ready') return
       const lastHeartbeatAt = live.lastHeartbeatAt
       if (lastHeartbeatAt !== null && now() - lastHeartbeatAt > heartbeatTimeoutMs) {
-        scheduleRestart('maintenance worker heartbeat timed out')
+        // A Worker that cannot answer its heartbeat also cannot be trusted to
+        // process a drain request. Preserve the forceful watchdog fallback.
+        scheduleRestart('maintenance worker heartbeat timed out', true)
         return
       }
       scheduleWatchdog()
@@ -180,8 +226,21 @@ export function startMaintenanceWorkerSupervisor(
       case 'drained': {
         clearHandshake()
         clearWatchdog()
+        clearFailureDrain()
+        const restartReason = restartAfterDrainReason
+        restartAfterDrainReason = null
         worker?.terminate()
         worker = null
+        if (!stopped && restartReason !== null) {
+          live = {
+            state: 'degraded',
+            lastHeartbeatAt: event.at,
+            error: restartReason,
+            active: null,
+          }
+          scheduleSpawn()
+          return
+        }
         live = { state: 'stopped', lastHeartbeatAt: event.at, error: null, active: null }
         const resolve = drainResolve
         drainResolve = null
@@ -237,7 +296,7 @@ export function startMaintenanceWorkerSupervisor(
         },
       })
       handshakeTimer = setTimer(
-        () => scheduleRestart('maintenance worker handshake timed out'),
+        () => scheduleRestart('maintenance worker handshake timed out', true),
         10_000,
       )
       ;(handshakeTimer as { unref?: () => void } | null)?.unref?.()
@@ -264,6 +323,8 @@ export function startMaintenanceWorkerSupervisor(
       restartTimer = null
       clearHandshake()
       clearWatchdog()
+      clearFailureDrain()
+      restartAfterDrainReason = null
       if (worker === null) {
         live = { ...live, state: 'stopped', active: null }
         return Promise.resolve()

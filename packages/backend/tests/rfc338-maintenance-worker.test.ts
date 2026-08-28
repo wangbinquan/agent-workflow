@@ -99,7 +99,7 @@ describe('RFC-338 maintenance Worker', () => {
     ).toBe(false)
   })
 
-  test('supervisor restarts a crashed Worker, fences its late event, and drains the replacement', async () => {
+  test('supervisor drains a failed SQLite Worker before replacement and fences its late event', async () => {
     class FakeWorker {
       onmessage: ((event: MessageEvent<unknown>) => void) | null = null
       onerror: ((event: ErrorEvent) => unknown) | null = null
@@ -148,8 +148,20 @@ describe('RFC-338 maintenance Worker', () => {
     const deferredFailure = timers.find((timer) => !timer.cleared && timer.ms === 0)
     expect(deferredFailure).toBeDefined()
     deferredFailure!.fn()
-    expect(first.terminated).toBe(true)
+    expect(first.terminated).toBe(false)
+    expect(first.messages.at(-1)).toMatchObject({
+      type: 'drain',
+      version: MAINTENANCE_PROTOCOL_VERSION,
+    })
     expect(supervisor.live()).toMatchObject({ state: 'degraded', error: 'worker-crashed' })
+    const failureDrainTimeout = timers.find((timer) => !timer.cleared && timer.ms === 10_000)
+    expect(failureDrainTimeout).toBeDefined()
+
+    // The Worker closes its bun:sqlite connection before this receipt. Only
+    // then may the supervisor terminate the message-listener shell and replace
+    // the generation without risking a daemon-wide native crash.
+    first.emit({ type: 'drained', version: MAINTENANCE_PROTOCOL_VERSION, at: 50 })
+    expect(first.terminated).toBe(true)
 
     const restart = timers.find((timer) => !timer.cleared && timer.ms === 250)
     expect(restart).toBeDefined()
@@ -160,6 +172,12 @@ describe('RFC-338 maintenance Worker', () => {
       catalogDigest: MAINTENANCE_CATALOG_DIGEST,
       at: 100,
     })
+    expect(supervisor.live()).toMatchObject({ state: 'ready', error: null })
+
+    // Even if the cleared drain timeout had already entered the timer queue,
+    // its generation fence must not terminate the healthy replacement.
+    failureDrainTimeout!.fn()
+    expect(second.terminated).toBe(false)
     expect(supervisor.live()).toMatchObject({ state: 'ready', error: null })
 
     // A queued ErrorEvent from the terminated generation must not tear down

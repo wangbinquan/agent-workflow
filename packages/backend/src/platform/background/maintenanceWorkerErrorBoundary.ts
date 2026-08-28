@@ -35,7 +35,7 @@ function messageOf(error: unknown): string {
  *
  * Bun 1.3 can propagate an uncaught Worker error into the owning process even
  * when the parent has an `onerror` observer. Cancel it at the originating
- * global scope, then notify the parent on the next task so it can terminate and
+ * global scope, then notify the parent on the next task so it can drain and
  * replace this generation from the durable lease/cursor without racing the
  * cancelable event dispatch itself.
  */
