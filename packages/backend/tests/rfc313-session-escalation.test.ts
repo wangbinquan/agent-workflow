@@ -11,7 +11,7 @@
 // 形状判定本身的真值表在 packages/shared/tests/rfc313-retry-shape.test.ts。
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { RETRY_ATTEMPT_CAP_CEILING } from '@agent-workflow/shared'
+import { RETRY_ATTEMPT_CAP_CEILING } from '../src/platform/contracts/retryAttemptCap'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

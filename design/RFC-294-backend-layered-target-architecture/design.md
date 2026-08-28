@@ -10,7 +10,7 @@
 > `33052994318`（2/2）均为 terminal `success`。[RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md)
 > 已关闭 P0-C residual；其最终 payload/provenance `dda58935e` → `57e45c292` 的主 CI `33123261690` 35/35、
 > 七条 scheduled workflow 共 19/19 jobs 全部 success。[RFC-334](../RFC-334-node-executor-registry/proposal.md)
-> 已在 source pin `0d296ff1b` 完成 W2-C current-source 调研并形成 Draft 三件套；生产实现仍未授权。
+> 已在 source pin `0d296ff1b` 完成 W2-C current-source 调研，获批后已进入生产实施，T3 已落地。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
 ## 1. 设计原则
@@ -3780,7 +3780,7 @@ current 承接路径为：N1/W0-R 已落；RFC-328 已完成 P0-D、`TaskExecuti
 复用已落 authority，未新建 lease/schema/registry/outbox；A1+B1～B4 前五条与 E3 第六条 exact debt 均已从账本删除。
 RFC-331 / W2-A 与 RFC-332 / W2-B 已发布并完成 hosted closeout；RFC-333 已以 open/decision 两条原子事务合同、
 fault/restart matrix、claimed→pending handoff 与 deferred-question 交接关闭 P0-C，并完成 exact-SHA 主 CI/全部 scheduled closeout。
-W2-C 前置已解除，RFC-334 已完成 current-source 调研与设计；仍须明确批准才可实施 W2-C，W2-D 与 W3 继续另立 RFC/批准。非可选 abort reason、bootstrap fail-fast、child recovery 与功能保真继续作为后续 oracle。
+W2-C 前置已解除，RFC-334 已获批并正在实施；未完成 registry/host/legacy extinction/hosted closeout 前不倒签 W2-C Done，W2-D 与 W3 继续另立 RFC/批准。非可选 abort reason、bootstrap fail-fast、child recovery 与功能保真继续作为后续 oracle。
 W9 只做全局 container/facade 清仓，不回头重做 RFC-328。
 
 ### 16.3 RFC-289（CLOSED）

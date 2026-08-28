@@ -6,7 +6,7 @@
 // 单测覆盖不到「有人在别处又加了一次预算」，只有源码层断言能拦住。
 //
 // 锁三件事：
-//   ① 形状判定只有一个定义点（decideRetryShape 在 shared，backend 只调用不重实现）；
+//   ① 形状判定只有一个 TaskExecution 定义点；neutral cap 只有一个 platform 定义点；
 //   ② scheduler.ts 里 restartsUsed 只被纯函数的返回值推进，没有第二处自增；
 //   ③ 告知段只有 renderSessionRestartNotice 一个出口（不许有人再拼一份文案）。
 
@@ -20,9 +20,18 @@ const read = (...seg: string[]): string => readFileSync(resolve(...seg), 'utf8')
 const occurrences = (src: string, needle: string): number => src.split(needle).length - 1
 
 describe('RFC-313 源码层锁', () => {
-  test('decideRetryShape 只在 shared 定义一次，backend 只调用', () => {
+  test('decideRetryShape 只在 TaskExecution domain 定义一次', () => {
     const shared = read(SHARED_SRC, 'prompt.ts')
-    expect(occurrences(shared, 'export function decideRetryShape')).toBe(1)
+    expect(shared).not.toContain('export function decideRetryShape')
+
+    const policy = read(
+      BACKEND_SRC,
+      'modules',
+      'task-execution',
+      'domain',
+      'envelopeRetryPolicy.ts',
+    )
+    expect(occurrences(policy, 'export function decideRetryShape')).toBe(1)
 
     const scheduler = read(BACKEND_SRC, 'services', 'scheduler.ts')
     expect(scheduler).not.toContain('function decideRetryShape')
@@ -41,8 +50,13 @@ describe('RFC-313 源码层锁', () => {
   test('attempt 上限只由 retryAttemptCap 导出，agent 线不再自己拼预算', () => {
     const scheduler = read(BACKEND_SRC, 'services', 'scheduler.ts')
     expect(occurrences(scheduler, 'retryAttemptCap(followupBudget, restartBudget)')).toBe(1)
-    // 公式必须留在 shared —— backend 里再出现一次乘法就是复制了单源。
+    const platform = read(BACKEND_SRC, 'platform', 'contracts', 'retryAttemptCap.ts')
+    expect(occurrences(platform, 'export function retryAttemptCap(')).toBe(1)
+    expect(occurrences(platform, 'export function retryAttemptCapFromPolicy(')).toBe(1)
+    expect(occurrences(platform, '(1 + normalizeBudget(followupBudget)) *')).toBe(1)
+    // 公式必须只在 platform contract；scheduler 里再出现就是复制了单源。
     expect(scheduler).not.toContain('(1 + followupBudget) * (1 + restartBudget)')
+    expect(read(SHARED_SRC, 'prompt.ts')).not.toContain('export function retryAttemptCap')
   })
 
   test('会话升级告知只有一个渲染出口', () => {

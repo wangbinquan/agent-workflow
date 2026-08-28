@@ -5,11 +5,8 @@ import {
 } from '@/modules/digital-employee/public/types'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { z } from 'zod'
-import {
-  PLATFORM_WORKSPACE_DIR,
-  retryAttemptCap,
-  type TaskLaunchOrigin,
-} from '@agent-workflow/shared'
+import { PLATFORM_WORKSPACE_DIR, type TaskLaunchOrigin } from '@agent-workflow/shared'
+import { retryAttemptCap } from '@/platform/contracts/retryAttemptCap'
 
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import type { EventObservationInput } from '@/modules/event-center/public/types'

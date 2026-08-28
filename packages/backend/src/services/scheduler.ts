@@ -31,11 +31,6 @@ import {
   DAEMON_SHUTDOWN_ABORT_REASON,
   FANOUT_DONE_PORT_NAME,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
-  DEFAULT_SESSION_RESTART_BUDGET,
-  decideRetryShape,
-  retryAttemptCap,
-  type RetryShapeState,
-  type EnvelopeFollowupOutcome,
   agentHasClarifyChannel,
   buildWorkflowScopeParentMap,
   buildPriorOutputBlock,
@@ -58,6 +53,13 @@ import {
   splitPortItems,
   isCodeHostAction,
 } from '@agent-workflow/shared'
+import {
+  DEFAULT_SESSION_RESTART_BUDGET,
+  decideRetryShape,
+  type EnvelopeFollowupOutcome,
+  type RetryShapeState,
+} from '@/modules/task-execution/domain/envelopeRetryPolicy'
+import { retryAttemptCap } from '@/platform/contracts/retryAttemptCap'
 import { resolveRepositoryPublicationTransportFromKeyFile } from '@/modules/source-control/composition'
 import {
   applyAutoPromote,
@@ -910,10 +912,9 @@ export interface PreviousAttemptShape {
 /**
  * RFC-042 的续跑判定结论。
  *
- * RFC-313 起它就是 shared 的 `EnvelopeFollowupOutcome` 本身，不再在这里重述一遍
- * 结构：`decideRetryShape`（形状判定）要消费同一个值，两处各写一份同形类型只会
- * 让它们悄悄漂移。渲染域 `reason` 与 `failures` 元素（`PortValidationFailure`）
- * 的单一事实源都在 shared/prompt.ts。
+ * RFC-334 起它就是 TaskExecution 的 `EnvelopeFollowupOutcome` 本身，不再在
+ * scheduler 里重述一遍结构。`decideRetryShape`（形状判定）与该值同属
+ * task-execution/domain；渲染域 `reason` 与 `failures` 元素仍复用 shared 契约。
  */
 export type EnvelopeFollowupDecision = EnvelopeFollowupOutcome
 

@@ -22,8 +22,8 @@ import type { Logger } from '@/util/log'
  * 模式 B 重试循环的防御性硬上限。取值远高于任何真实重试预算（脚本线与 agent 线
  * 的默认预算是个位数），够到它只可能是 spec 的 shouldRetry 写错了。
  */
-// RFC-313 导出：shared 的 RETRY_ATTEMPT_CAP_CEILING 必须严格小于它（产品预算永远
-// 够不到这条 spec-bug 保险丝），该关系由 rfc313-session-escalation 直接断言。
+// RFC-334 导出：platform contract 的 RETRY_ATTEMPT_CAP_CEILING 必须严格小于它
+//（产品预算永远够不到这条 spec-bug 保险丝），该关系由契约测试直接断言。
 export const ASSEMBLY_MAX_ATTEMPTS = 100
 
 /** 池的最小切片：只需要「取一个位子、拿到释放函数」。 */

@@ -48,7 +48,8 @@ export interface RunTaskOptions {
   defaultNodeRetries?: number
   /**
    * RFC-313: 同会话追问链触顶后允许整体换几次干净会话（from config.sessionRestartBudget）。
-   * 与 defaultNodeRetries 相乘决定 attempt 硬上限，见 shared `retryAttemptCap`。
+   * 与 defaultNodeRetries 相乘决定 attempt 硬上限，见 platform contract
+   * `retryAttemptCap`。
    */
   sessionRestartBudget?: number
   /**

@@ -1,7 +1,7 @@
 # RFC-334 技术设计：NodeExecutorRegistry
 
-> 状态：Draft。本文固定 W2-C 的目标模块、closed registry、per-kind 边界、workgroup-host 共用方式、neutral retry-cap
-> contract 与 cutover/rollback。生产代码必须在用户明确批准后实施。
+> 状态：In Progress。本文固定 W2-C 的目标模块、closed registry、per-kind 边界、workgroup-host 共用方式、neutral retry-cap
+> contract 与 cutover/rollback。用户已于 2026-08-28 明确批准生产实施；批准不外溢到 W2-D 或后续 wave。
 >
 > source pin：`0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34`。文中的 `file:line` 均指该 committed blob；可用
 > `git show 0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34:<path> | nl -ba` 重放，禁止把后续 working-tree 行号冒充本设计事实。

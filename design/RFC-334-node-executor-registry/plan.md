@@ -1,9 +1,9 @@
 # RFC-334 实施计划：NodeExecutorRegistry（RFC-294 W2-C）
 
-> 状态：Draft（2026-08-28；T0 current-source 调研与 RFC 三件套完成，等待用户批准 T2～T12 生产实施）
+> 状态：In Progress（2026-08-28；T0/T1 完成，用户已明确批准 T2～T12 生产实施；T3 已落地）
 >
-> 批准边界：本轮“开始 W2-C”只授权 T0/T1 文档准备与发布。用户明确批准 RFC-334 后才可修改生产代码；批准不外溢到
-> W2-D/W3/W4/W5/W9，不授权安全/权限策略或正常能力收缩。
+> 批准边界：用户已明确批准 RFC-334 T2～T12 生产实施。批准不外溢到 W2-D/W3/W4/W5/W9，不授权
+> 安全/权限策略或正常能力收缩。
 >
 > 验证边界：沿用当前用户约束——GitHub exact-SHA CI 是最终权威；不在本机启动 full Bun gate、E2E 或服务。实现期可运行
 > 与候选直接相关的 typecheck、纯单测、源码/架构守卫、formatter 与 artifact generator；最终必须等待 main CI 与全部 scheduled
@@ -72,7 +72,7 @@ T2 开始前必须重新 fetch/对拍 `origin/main`，用 committed blob 重新�
 
 退出：三件套 Markdown/链接/状态检查通过；远端 exact-SHA CI terminal success。
 
-### T1 — 用户批准门（待完成）
+### T1 — 用户批准门（已完成）
 
 用户逐项批准或修改 D1～D12，至少确认：
 
@@ -84,7 +84,7 @@ T2 开始前必须重新 fetch/对拍 `origin/main`，用 committed blob 重新�
 - 零产品行为变化、零新增安全策略；
 - GitHub exact-SHA main/scheduled closeout。
 
-退出：用户明确批准实施；不得把“开始 W2-C/继续”自动解释为生产批准。
+退出：用户已于 2026-08-28 明确回复“批准实施”；实施仍严格受本 RFC 范围约束。
 
 ### T2 — characterization、source-lock 与 red architecture tests
 
@@ -293,9 +293,9 @@ raw SchedulerState。
 | AC-8  | collaboration port + RFC333 corpus                              | T6      | planned      |
 | AC-9  | retired executor + active-stage-zero guard                      | T5      | planned      |
 | AC-10 | host-lane characterization + four-constructor/legacy extinction | T10     | planned      |
-| AC-11 | retry arithmetic/codec/assembly ceiling golden                  | T3      | planned      |
-| AC-12 | import/consumer inventory mutation                              | T3/T11  | planned      |
-| AC-13 | TE shape + DE scene/outbox behavior                             | T3/T9   | planned      |
+| AC-11 | retry arithmetic/codec/assembly ceiling golden                  | T3      | T3 Done      |
+| AC-12 | import/consumer inventory mutation                              | T3/T11  | T3 Done      |
+| AC-13 | TE shape + DE scene/outbox behavior                             | T3/T9   | T3 Done      |
 | AC-14 | schema/wire/config/UI zero-delta + product regression           | all     | planned      |
 | AC-15 | canonical exception/SCC report                                  | T11     | planned      |
 | AC-16 | owner/layer/wave exact assertions                               | T11     | planned      |
