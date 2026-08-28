@@ -102,7 +102,7 @@ export function recordStatements(sqlite: Database): StatementRecording {
   // method. Keep the recorder attached to the public transaction boundary so
   // transaction-shape assertions retain the same observation without changing
   // the production transaction itself.
-  const origTransaction = sqlite.transaction.bind(sqlite) as (
+  const origTransaction = sqlite.transaction.bind(sqlite) as unknown as (
     callback: (...args: unknown[]) => unknown,
   ) => ((...args: unknown[]) => unknown) & Record<string, (...args: unknown[]) => unknown>
   originals.set('transaction', sqlite.transaction)
