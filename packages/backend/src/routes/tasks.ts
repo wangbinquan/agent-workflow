@@ -466,7 +466,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      const rows = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
+      const rows = await deps.db
+        .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
+        .from(tasksTable)
+        .where(eq(tasksTable.id, taskId))
+        .limit(1)
       const task = rows[0]
       if (!task) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       return c.json(await updateTaskMembers(deps.db, actorOf(c), task, parsed.data))
@@ -1328,6 +1332,12 @@ async function requireTaskOperatorFromRoute(c: Context, deps: AppDeps): Promise<
 async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {
   const id = c.req.param('id')
   if (!id) return
+  // Global readers can see every task by definition. The concrete handler
+  // still owns its normal not-found read, so this removes only the redundant
+  // middleware probe (especially important for detail polling and member
+  // writes over large frozen workflow snapshots).
+  const actor = actorOf(c)
+  if (actor.permissions.has('tasks:read:all')) return
   // RFC-311 (audit L2-3): canViewTask needs three scalar columns; the former
   // select() decoded the full task row (workflow_snapshot and friends) once
   // per `/api/tasks/:id/*` request — every events/stdout/node-runs poll paid
@@ -1342,7 +1352,7 @@ async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {
     // Let the per-route 404 handler fire; do not leak existence vs. forbidden.
     return
   }
-  if (!(await canViewTask(deps.db, actorOf(c), row))) {
+  if (!(await canViewTask(deps.db, actor, row))) {
     // RFC-285 B1（D1）：「存在但无权」与「不存在」同形 404——错误码探测不出
     // 任务存在性。字节形态与本文件各路由的 missing 分支一致（task-not-found +
     // `task '<id>' not found`）。成员制写门的 403 是另一层语义，保留不动。

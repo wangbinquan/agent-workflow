@@ -83,7 +83,14 @@ describe('RFC-338 maintenance Worker', () => {
       },
     })
     expect(first.messages[0]).toMatchObject({ type: 'init', version: MAINTENANCE_PROTOCOL_VERSION })
-    first.onerror?.({ message: 'worker-crashed' } as ErrorEvent)
+    let firstErrorPrevented = false
+    first.onerror?.({
+      message: 'worker-crashed',
+      preventDefault: () => {
+        firstErrorPrevented = true
+      },
+    } as unknown as ErrorEvent)
+    expect(firstErrorPrevented).toBe(true)
     expect(first.terminated).toBe(true)
     expect(supervisor.live()).toMatchObject({ state: 'degraded', error: 'worker-crashed' })
 
@@ -99,8 +106,15 @@ describe('RFC-338 maintenance Worker', () => {
     expect(supervisor.live()).toMatchObject({ state: 'ready', error: null })
 
     // A queued ErrorEvent from the terminated generation must not tear down
-    // the healthy replacement.
-    first.onerror?.({ message: 'late-old-worker-error' } as ErrorEvent)
+    // the healthy replacement or propagate into the daemon.
+    let lateErrorPrevented = false
+    first.onerror?.({
+      message: 'late-old-worker-error',
+      preventDefault: () => {
+        lateErrorPrevented = true
+      },
+    } as unknown as ErrorEvent)
+    expect(lateErrorPrevented).toBe(true)
     expect(second.terminated).toBe(false)
     expect(supervisor.live()).toMatchObject({ state: 'ready', error: null })
 

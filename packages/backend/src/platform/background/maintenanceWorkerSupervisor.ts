@@ -202,8 +202,18 @@ export function startMaintenanceWorkerSupervisor(
         handleEvent(event.data)
       }
       next.onerror = (event) => {
+        // A Worker ErrorEvent is cancelable. Merely observing it does not stop
+        // the default propagation into the daemon process; under Bun that
+        // turns a recoverable Worker failure into a daemon-wide exit before
+        // this supervisor can restart from the durable lease/cursor. Cancel
+        // first, including for a late event from a terminated generation.
+        event.preventDefault()
         if (worker !== next) return
-        scheduleRestart(event.message || 'maintenance worker error')
+        scheduleRestart(
+          event.message ||
+            (event.error instanceof Error ? event.error.message : '') ||
+            'maintenance worker error',
+        )
       }
       post({
         type: 'init',

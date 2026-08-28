@@ -320,7 +320,13 @@ export async function updateTaskMembers(
   // The WS revalidation wait and the broadcast stay OUTSIDE the lock — they can
   // take arbitrarily long and must not stall reviews / cancels on the same task.
   const commit = await withTaskReviewMutationLock(task.id, async () => {
-    const fresh = (await db.select().from(tasksTable).where(eq(tasksTable.id, task.id)).limit(1))[0]
+    const fresh = (
+      await db
+        .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
+        .from(tasksTable)
+        .where(eq(tasksTable.id, task.id))
+        .limit(1)
+    )[0]
     if (fresh === undefined)
       throw new NotFoundError('task-not-found', `task '${task.id}' not found`)
     const committed = await updateTaskMembersLocked(db, actor, fresh, body)

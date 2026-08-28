@@ -10356,7 +10356,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-maintenance-tickers.spec.ts",
-          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到第 8 分钟才置空 body 与删过期行、保留期清扫到第 16 分钟才删 fire 与事件流水，到点前一行不动，在飞投递与未终态宿主永不被删 @nightly"
+          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: boot catch-up 合并补跑投递与保留清扫，且在飞投递与未终态宿主永不被删 @nightly"
         }
       ]
     },
@@ -10468,7 +10468,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-maintenance-tickers.spec.ts",
-          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到第 8 分钟才置空 body 与删过期行、保留期清扫到第 16 分钟才删 fire 与事件流水，到点前一行不动，在飞投递与未终态宿主永不被删 @nightly"
+          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: boot catch-up 合并补跑投递与保留清扫，且在飞投递与未终态宿主永不被删 @nightly"
         }
       ]
     },
@@ -11752,7 +11752,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-maintenance-tickers.spec.ts",
-          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: 同一台 daemon 上投递保留 GC 到第 8 分钟才置空 body 与删过期行、保留期清扫到第 16 分钟才删 fire 与事件流水，到点前一行不动，在飞投递与未终态宿主永不被删 @nightly"
+          "test": "RFC-319 EVENT-28/EVENT-X4/OPS-X9: boot catch-up 合并补跑投递与保留清扫，且在飞投递与未终态宿主永不被删 @nightly"
         }
       ]
     },
