@@ -9,13 +9,15 @@
 //   · 对 `setTaskStatus` 写着「holders: resumeTask, retryNode, repair CR-1,
 //     repair T3, and RFC-109 syncTaskWorkflow」——**五个具名持有者**。
 //
-// 实测是 **21 个生产站点**，且其中包含正常用户流程：review supersede 把一条 `done`
-// 的 node_run 改写成 `canceled`（review.ts）、review 兄弟级联把 `done` 改回 `pending`。
+// 开账时实测是 **21 个生产站点**；RFC-339 把 scheduler 中 5 个 wrapper 站点收敛到
+// wrapperMechanics / wrapperRunLifecycle 的 3 个具名站点，当前为 **19 个**。其中仍包含正常
+// 用户流程：review supersede 把一条 `done` 的 node_run 改写成 `canceled`（review.ts）、
+// review 兄弟级联把 `done` 改回 `pending`。
 // 共享表在这件事上是**斩钉截铁**的：`nextNodeRunStatus` 对任何终态 `cur` 直接抛，
 // `nextTaskStatus` 唯二能从终态出发的事件是 `retry` / `sync-workflow`（都只到 `pending`）。
 //
-// 文档说五个、实际二十一个，后果不是「文档过期」这么轻——**审第 22 个站点的人失去了
-// 基线**：他看不出自己是在扩大一个已经失控的口子，还是在做一件早有先例的常规操作。
+// 文档说五个、实际远多于五个，后果不是「文档过期」这么轻——**审下一条新增站点的人失去了
+// 基线**：他看不出自己是在扩大既有口子，还是在做一件早有先例的常规操作。
 //
 // 本文件不改任何语义（那是另一次独立决策），只把现状变成**可见且只能减**的账本：
 // 逐文件精确计数 + 每条写清它改写的是哪种终态→X。新增一个站点 ⇒ 红；
@@ -36,7 +38,7 @@ interface AllowTerminalLedgerEntry {
 }
 
 /**
- * 开账当天（RFC-317 T49）的真实分布：21 个生产站点。
+ * 开账当天（RFC-317 T49）为 21 个生产站点；RFC-339 收敛后当前为 19 个。
  *
  * 计数走 AST（`allowTerminal: true` 的属性赋值），不是文本——`lifecycle.ts` 的头注释里
  * 就写着这个词组两次，文本计数会把说明自己的那两行算成站点。
@@ -148,10 +150,10 @@ describe('RFC-317 T49 —— allowTerminal 站点账本（只减不增）', () =
     ).toEqual(expected)
   })
 
-  test('总数就是 21，且每条都写清了改写什么', () => {
-    // 总数单独锁一条：逐文件相等已经能抓住增减，但「21」这个数字是 lifecycle.ts
+  test('总数就是 19，且每条都写清了改写什么', () => {
+    // 总数单独锁一条：逐文件相等已经能抓住增减，但「19」仍是 lifecycle.ts
     // 头注释里那句「五个具名持有者」的反证，值得让它在测试里显式出现一次。
-    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(21)
+    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(19)
     for (const entry of ALLOW_TERMINAL_LEDGER) {
       expect(entry.rewrites.length, `${entry.file}.rewrites`).toBeGreaterThan(15)
     }
