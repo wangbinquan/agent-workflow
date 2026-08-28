@@ -47,7 +47,13 @@ describe('RFC-292 trigger namespace source locks', () => {
   })
 
   test('scheduler passes one frozen context to every authored runtime sink', () => {
-    const source = readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8')
+    const source = [
+      readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8'),
+      readFileSync(
+        resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+        'utf8',
+      ),
+    ].join('\n')
     // RFC-287 moved the main-agent call into an assembly callback. Lock the
     // adjacency and exact frozen-context identity without coupling RFC-292 to
     // that callback's indentation depth.

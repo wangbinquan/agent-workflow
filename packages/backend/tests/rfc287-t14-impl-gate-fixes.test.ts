@@ -13,17 +13,25 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const schedulerSrc = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+const nodeMechanicsSrc = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
   'utf8',
 )
 
 /** 截出脚本线 runScriptNode 的函数体——避免锚点误命中别的线（同名回调满天飞）。 */
 function scriptLineBody(): string {
-  const start = schedulerSrc.indexOf('async function runScriptNode')
+  const start = nodeMechanicsSrc.indexOf('async function runScriptNode')
   expect(start).toBeGreaterThan(0)
   // 下一个顶层 `\nasync function ` / `\nfunction ` 即边界。
-  const rest = schedulerSrc.slice(start + 1)
+  const rest = nodeMechanicsSrc.slice(start + 1)
   const endRel = rest.search(/\n(?:async )?function /)
   return endRel === -1 ? rest : rest.slice(0, endRel)
 }

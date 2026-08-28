@@ -28,6 +28,18 @@ const SCHEDULER_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf-8',
 )
+const NODE_MECHANICS_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf-8',
+)
 const RUNNER_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
   'utf-8',
@@ -46,13 +58,14 @@ describe('RFC-066 PR-B — source guards', () => {
   })
 
   test('PB-G2 scheduler threads `state.repos` into every dispatch (via RFC-130 iso creation)', () => {
+    const executionSource = `${SCHEDULER_SRC}\n${NODE_MECHANICS_SRC}`
     // RFC-130: the 3 dispatch sites (single-agent, fanout shard, fanout aggregator)
     // no longer pass `state.repos` DIRECTLY into templateMeta — each first builds an
     // ISOLATED worktree from the SchedulerState-owned snapshot
     // (`createNodeIso({ canonRepos: state.repos })`) and then threads the DERIVED iso
     // repos into templateMeta (`<handle>.repos.map(...)`). The snapshot still flows to
     // every dispatch, now through the iso-creation seam. Anchor on both ends.
-    const canonMatches = SCHEDULER_SRC.match(/canonRepos: state\.repos/g) ?? []
+    const canonMatches = executionSource.match(/canonRepos: state\.repos/g) ?? []
     expect(canonMatches.length).toBeGreaterThanOrEqual(3)
     // RFC-287 T3/T4：两条 fanout 线迁入装配骨架后，句柄在钩子内以局部 `iso` 承接
     // （`const iso = shardIso as IsoHandle`），故变量名不再是 shardIso/aggIso。
@@ -60,9 +73,9 @@ describe('RFC-066 PR-B — source guards', () => {
     // 绝不回退到直接摊 state.repos——所以把匹配面放宽到「任一 iso 句柄变量」，
     // 同时补一条反向锁：templateMeta 里不得直接出现 state.repos.map。
     const isoRepoThreads =
-      SCHEDULER_SRC.match(/(isoHandle|shardIso|aggIso|iso)\.repos\.map\(/g) ?? []
+      executionSource.match(/(isoHandle|shardIso|aggIso|iso)\.repos\.map\(/g) ?? []
     expect(isoRepoThreads.length).toBeGreaterThanOrEqual(3)
-    expect(SCHEDULER_SRC).not.toMatch(/templateMeta:[\s\S]{0,400}state\.repos\.map\(/)
+    expect(executionSource).not.toMatch(/templateMeta:[\s\S]{0,400}state\.repos\.map\(/)
   })
 
   test('PB-G3 runner cwd is opts.worktreePath at the spawn site exactly', () => {

@@ -289,9 +289,14 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
     why: '评审兄弟级联：一条被打回时，同批兄弟 run 一并重置为 pending，无论它们当前处在哪一态。',
   },
   {
-    site: 'services/scheduler.ts:failed',
+    site: 'modules/task-execution/composition/nodeMechanics.ts:failed',
     offTable: ['done'],
-    why: 'wrapper 收尾发现内层实际失败：把已标 done 的容器 run 改成 failed。',
+    why: 'workgroup host 的 ask-back 在执行期间被策略关闭：把已标 done 的 host run 改成 failed。',
+  },
+  {
+    site: 'modules/task-execution/composition/nodeMechanics.ts:running',
+    offTable: ['canceled', 'interrupted'],
+    why: 'call child adoption 复用既有 node_run：从 shutdown/cancel 终态重新认领为 running；pending 来源本身符合 mark-running 表。',
   },
   {
     site: 'services/scheduler.ts:running',

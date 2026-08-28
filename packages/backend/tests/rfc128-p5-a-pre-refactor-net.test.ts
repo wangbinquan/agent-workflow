@@ -41,7 +41,15 @@ import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-w
 // Monotonic ulids so a later-seeded run always sorts freshest (asking run + rerun back-to-back).
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const SCHEDULER_SRC = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
+const NODE_MECHANICS_SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'composition',
+  'nodeMechanics.ts',
+)
 
 beforeEach(() => {
   resetBroadcastersForTests()
@@ -186,9 +194,9 @@ async function seedAnsweredRound(
 // self/q 整轮注入」——会改这两个 consumerKind 的调度器接线（源码文本锁）以及整轮渲染（行为锁）。
 // ===========================================================================
 
-describe('RFC-128 P5-A #1 → RFC-132 PR-C — self/q 注入收敛为统一平铺注入器: 调度器源码文本锁', () => {
-  test('scheduler.ts 用 buildClarifyQueueContext 统一注入 self/q/designer（整轮 buildPromptContext + consumerKind 接线已删）', () => {
-    const src = readFileSync(SCHEDULER_SRC, 'utf8')
+describe('RFC-128 P5-A #1 → RFC-132 PR-C — self/q 注入收敛为统一平铺注入器: node mechanics 源码文本锁', () => {
+  test('nodeMechanics.ts 用 buildClarifyQueueContext 统一注入 self/q/designer（整轮 buildPromptContext + consumerKind 接线已删）', () => {
+    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
     // RFC-132 (PR-C):整轮 buildPromptContext + per-role consumerKind 调度器接线被单一平铺注入器
     // buildClarifyQueueContext 取代(selectAgentQueue 一次查全 self/questioner/designer)。
     expect(src).toContain('await buildClarifyQueueContext(')

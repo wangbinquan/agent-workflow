@@ -314,9 +314,17 @@ describe('RFC-243 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', 
     })
   })
 
-  test('源码锁：调度器 F 步对 call-workgroup 执行折叠', () => {
+  test('源码锁：node mechanics 对 call-workgroup 执行折叠', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('const projectedOutputs')

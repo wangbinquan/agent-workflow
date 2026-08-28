@@ -71,7 +71,7 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
   })
 
   test('call 分支纪律：不持任何节点池名额；adoption 区零 mint（实现门 P2-4 源锁）', () => {
-    const text = srcText('services/scheduler.ts')
+    const text = srcText('modules/task-execution/composition/nodeMechanics.ts')
     const fnStart = text.indexOf('async function runCallWorkflowNode')
     const fnEnd = text.indexOf('async function failCallRow')
     expect(fnStart).toBeGreaterThan(0)

@@ -62,12 +62,14 @@ describe('RFC-334 neutral retry-attempt-cap contract', () => {
   })
 
   test('the only production consumers are TaskExecution and DigitalEmployee', () => {
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    const nodeMechanics = read(
+      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    )
     const employee = read(
       'packages/backend/src/modules/digital-employee/application/runtimeService.ts',
     )
     const shared = read('packages/shared/src/prompt.ts')
-    expect(scheduler).toContain("from '@/platform/contracts/retryAttemptCap'")
+    expect(nodeMechanics).toContain("from '@/platform/contracts/retryAttemptCap'")
     expect(employee).toContain("from '@/platform/contracts/retryAttemptCap'")
     expect(shared).not.toContain('export function retryAttemptCap')
     expect(shared).not.toContain('export const RETRY_ATTEMPT_CAP_CEILING')

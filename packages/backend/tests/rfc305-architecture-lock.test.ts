@@ -708,7 +708,10 @@ describe('RFC-305 reusable-authority fences', () => {
       'utf8',
     )
     const actor = readFileSync(resolve(BACKEND_SRC, 'auth', 'actor.ts'), 'utf8')
-    const scheduler = readFileSync(resolve(BACKEND_SRC, 'services', 'scheduler.ts'), 'utf8')
+    const nodeMechanics = readFileSync(
+      resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+      'utf8',
+    )
     const scheduled = readFileSync(resolve(BACKEND_SRC, 'services', 'scheduledTasks.ts'), 'utf8')
     const webhook = readFileSync(
       resolve(BACKEND_SRC, 'services', 'webhook', 'webhookDispatch.ts'),
@@ -720,8 +723,8 @@ describe('RFC-305 reusable-authority fences', () => {
     expect(contexts).toContain('new WeakMap<')
     expect(contexts).toContain("throw new Error('untrusted-delegated-authority')")
     expect(actor).toContain('.delegatedAuthority.resolve(')
-    expect(scheduler).toContain("'call-workflow'")
-    expect(scheduler).toContain("'call-workgroup'")
+    expect(nodeMechanics).toContain("'call-workflow'")
+    expect(nodeMechanics).toContain("'call-workgroup'")
     expect(scheduled).toContain("'schedule'")
     expect(webhook).toContain("'webhook'")
   })

@@ -237,7 +237,13 @@ describe('RFC-074 PR-C baseline T4 — clarify generation is derived, not inheri
   test('source-text grep: scheduler derives the generation by id-order, no cci inheritance var', async () => {
     const fs = await import('node:fs/promises')
     const txt = await fs.readFile(
-      resolve(import.meta.dir, '..', '..', '..', 'packages/backend/src/services/scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        '..',
+        '..',
+        'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+      ),
       'utf8',
     )
     // RFC-074 PR-C: the `inheritedClarifyIteration` wiring (patch-2026-05-25's
@@ -250,10 +256,16 @@ describe('RFC-074 PR-C baseline T4 — clarify generation is derived, not inheri
     expect(txt).toContain('clarifyGeneration')
   })
 
-  test('source-text grep: shared channel-edge dataflow policy is callable in scheduler cascade path', async () => {
+  test('source-text grep: shared channel-edge dataflow policy is callable in task DAG graph', async () => {
     const fs = await import('node:fs/promises')
     const txt = await fs.readFile(
-      resolve(import.meta.dir, '..', '..', '..', 'packages/backend/src/services/scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        '..',
+        '..',
+        'packages/backend/src/modules/task-execution/composition/taskDagGraph.ts',
+      ),
       'utf8',
     )
     // RFC-058/RFC-147 baseline lock: the scope graph uses the nuanced shared

@@ -190,15 +190,23 @@ describe('RFC-165 O1 — runner accepts either envelope under optional', () => {
   })
 })
 
-describe('RFC-165 O2 — scheduler composition + R3-5 compat (source locks)', () => {
-  const schedulerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+describe('RFC-165 O2 — node mechanics composition + R3-5 compat (source locks)', () => {
+  const nodeMechanicsSrc = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'nodeMechanics.ts',
+    ),
     'utf8',
   )
   const norm = (x: string) => x.replace(/\s+/g, ' ')
 
   test('optional derives from the wired self-clarify node clarifyMode (static field, every rerun)', () => {
-    expect(norm(schedulerSrc)).toContain(
+    expect(norm(nodeMechanicsSrc)).toContain(
       "const clarifyOptional = hasClarifyChannel && clarifyNodeObjForGate?.clarifyMode === 'optional'",
     )
   })
@@ -207,14 +215,14 @@ describe('RFC-165 O2 — scheduler composition + R3-5 compat (source locks)', ()
     // The ladder falls through optional ONLY when the field says 'optional';
     // an undefined clarifyMode reaches the historical
     // effectiveHasClarifyChannel branch verbatim.
-    expect(norm(schedulerSrc)).toContain(
+    expect(norm(nodeMechanicsSrc)).toContain(
       "clarifyOptional ? ('optional' as const) : effectiveHasClarifyChannel ? ('mandatory' as const) : ('suppressed' as const)",
     )
   })
 
   test('the channel-family local is renamed channelKind (no clash with the node field)', () => {
-    expect(norm(schedulerSrc)).toContain("const channelKind: 'self' | 'cross' =")
-    expect(norm(schedulerSrc)).not.toContain("const clarifyMode: 'self' | 'cross' =")
+    expect(norm(nodeMechanicsSrc)).toContain("const channelKind: 'self' | 'cross' =")
+    expect(norm(nodeMechanicsSrc)).not.toContain("const clarifyMode: 'self' | 'cross' =")
   })
 })
 

@@ -592,7 +592,15 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
 
   test('scheduler reads the override at dispatch and threads it (source-level lock)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     // Dispatch read (parallel to hasPersistentStop) gated on hasClarifyChannel.
@@ -611,7 +619,15 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
 
   test('H1: the override is read INSIDE the retry loop (per attempt), not cached before it', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     // The getNodeClarifyDirective read must happen ONCE PER ATTEMPT so each
@@ -659,7 +675,15 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
 
   test('same-session follow-up is bypassed when the STOP toggle flips the mode', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     // The clarifyModeFlip guard + the gated envelopeFollowup arg. Without the
@@ -672,7 +696,15 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
 
   test('mode-flip session-clear: effectiveResumeSessionId also gates on !clarifyModeFlip', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
       'utf8',
     )
     // A mode-flip retry must NOT resume the prior (wrong-mode) session — the

@@ -39,14 +39,12 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'agent-output-kinds-scheduler-load.test.ts',
   'clarify-inline-fallback.test.ts',
   'clarify-prompt-wire-up.test.ts',
-  'cross-clarify-baseline-patches.test.ts',
   'cross-clarify-stop-directive-scoped-to-cci-rerun.test.ts',
   'depcheck-gate.test.ts',
   'envelope-followup-source-grep.test.ts',
   'freshness.test.ts',
   'node-run-mint.test.ts',
   'process-node-concurrency.test.ts',
-  'rerun-prior-output-source-guards.test.ts',
   'retry-budget-single-source.test.ts',
   'review-dispatch-prefers-clarify-rerun.test.ts',
   'rfc064-source-grep-guards.test.ts',
@@ -56,15 +54,12 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc103-fanout-kind-aware-split.test.ts',
   'rfc103-launch-config-passthrough.test.ts',
   'rfc120-deferred-dispatch.test.ts',
-  'rfc122-clarify-directive-dispatch.test.ts',
   'rfc123-clarify-directive-single-source.test.ts',
   'rfc123-stop-enforcement.test.ts',
   'rfc127-borrow.test.ts',
-  'rfc128-p5-a-pre-refactor-net.test.ts',
   'rfc130-shard-rerun-undo.test.ts',
   'rfc143-runtime-driver-capability.test.ts',
   'rfc144-stale-replay-regression.test.ts',
-  'rfc165-optional-clarify.test.ts',
   'rfc183-clarify-invite-accept-symmetry.test.ts',
   'rfc187-wg-merge-conflict-abandon.test.ts',
   'rfc187-zero-delta-done.test.ts',
@@ -76,8 +71,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc210-publish-failure-hard-fails.test.ts',
   'rfc223-pr2-refs.test.ts',
   'rfc230-wrapper-finalize-superseded.test.ts',
-  'rfc243-execution-outcome.test.ts',
-  'rfc243-executor-facade.test.ts',
   'rfc243-parent-child-lifecycle.test.ts',
   'rfc271-ref-contract.test.ts',
   'rfc282-b2-resolve-injection.test.ts',
@@ -89,25 +82,14 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc287-t1-merge-disposition-matrix.test.ts',
   'rfc287-t1-release-before-discard.test.ts',
   // T14 新增（字符串序里 `t14` 在 `t5` 之前：第 9 位 '1' < '5'）：
-  //  · fanout 两条线撞冲突落 abandon（既存缺陷，用户拍板本 RFC 内补）；
-  //  · 实现门抓出的迁移期回归（脚本线 preAttempt 抢占位置 + 两处对外契约）。
+  // fanout 两条线撞冲突落 abandon（既存缺陷，用户拍板本 RFC 内补）。
   'rfc287-t14-fanout-merge-conflict-abandon.test.ts',
-  'rfc287-t14-impl-gate-fixes.test.ts',
   'rfc287-t5-script-merge-throw.test.ts',
   // T8 新增：取行前奏收编后的「单一实现 + 四线×五项差异矩阵」锁。
   'rfc287-t8-run-row-prelude-single-source.test.ts',
   // T9 新增：G3 四条豁免的理由锁 + 装配散写的终局灭绝锁（三处显式挖洞）。
   'rfc287-t9-exemptions-and-extinction.test.ts',
   'rfc292-trigger-source-locks.test.ts',
-  // RFC-304 §2.3：daemon 代际的接线锁。代际只在**跨进程**才不同，一个进程内的
-  // 行为断言看不出「恒为 'dev'」与「每次启动新铸」的区别，所以这条只能锁源码：
-  // scheduler 必须走 `resolveDaemonGeneration`，且不得退回字面量兜底。
-  // RFC-304 2ter.2：能力配置的主键锁——`repo_capability_config.repo_id` 存的是
-  // cached-repo ULID，而调度器曾传 `task.repoPath`（文件路径）。两者都是 string，
-  // 类型与运行时都抓不住，只能锁「那个错误写法不许再出现」。
-  // RFC-305 delegated-authority architecture lock verifies the three reviewed
-  // scheduler launch sources while keeping the underlying behavior fixtures.
-  'rfc305-architecture-lock.test.ts',
   // RFC-313：锁住「升级预算只有一处推进、形状判定只有一个定义点」。
   'rfc313-source-locks.test.ts',
   // RFC-321：发布架构棘轮仍读取 scheduler 源码，必须登记在迁移清单。
@@ -116,10 +98,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc331-task-execution-topology.test.ts',
   // RFC-332：旧 body 灭绝断言仍显式读取 scheduler facade。
   'rfc332-task-engine-contracts.test.ts',
-  // RFC-334 T3 still asserts that the legacy scheduler no longer owns either
-  // retry contract; unlike the migrated mechanics locks below, it intentionally
-  // keeps reading scheduler.ts as an extinction surface.
-  'rfc334-retry-contract.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',
@@ -131,7 +109,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'scheduler-audit-s21-fanout-aggregator-idempotency.test.ts',
   'scheduler-boundary-resume-retryindex-vs-id.test.ts',
   'scheduler-clarify-baseline.test.ts',
-  'scheduler-cross-clarify-dispatch.test.ts',
   'scheduler-default-retries.test.ts',
   'scheduler-node-overrides.test.ts',
   'scheduler-shard-item-kind-stringify.test.ts',

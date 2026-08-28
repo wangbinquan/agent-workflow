@@ -101,12 +101,20 @@ describe('RFC-269 凭据服务的磁盘懒解析（scheduler 的唯一接线点�
   })
 })
 
-describe('RFC-269 接线：scheduler 侧的解析点必须存在', () => {
+describe('RFC-269 接线：node mechanics 侧的解析点必须存在', () => {
   // 源码层兜底。上面的行为断言可以在「有人把 scheduler 里的 fallback 删掉、
   // 只留 opts.codeHostConnections」之后继续全绿——那恰好是回归本身。
-  test('scheduler 在没有注入时回落到密钥文件解析', async () => {
+  test('node mechanics 在没有注入时回落到密钥文件解析', async () => {
     const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'nodeMechanics.ts',
+      ),
     ).text()
     expect(src).toContain('opts.codeHostConnections ?? resolveCodeHostConnectionsFromKeyFile(')
     expect(src).toContain('Paths.secretKeyFile')

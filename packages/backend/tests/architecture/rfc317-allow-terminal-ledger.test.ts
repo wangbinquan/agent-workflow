@@ -44,9 +44,15 @@ interface AllowTerminalLedgerEntry {
 const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
   {
     file: 'packages/backend/src/services/scheduler.ts',
-    count: 7,
+    count: 5,
     rewrites:
-      'done→failed（wrapper 收尾发现内层实际失败）、pending|interrupted|canceled→running（重新认领）、以及 4 处 *→pending 的重跑注入（allowedFrom 含 interrupted/failed/canceled）。',
+      '3 处 pending|interrupted|canceled→running 的 wrapper 重新认领，以及 2 处 *→pending 的 fanout shard/aggregator 重跑注入（allowedFrom 含 interrupted/failed/canceled）。',
+  },
+  {
+    file: 'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    count: 2,
+    rewrites:
+      'done→failed（workgroup host 的 ask-back 被晚到策略关闭）与 pending|interrupted|canceled→running（call child adoption 复用既有行）。',
   },
   {
     file: 'packages/backend/src/services/review.ts',

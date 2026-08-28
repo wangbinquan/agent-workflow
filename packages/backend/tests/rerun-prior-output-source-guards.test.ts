@@ -18,15 +18,23 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const SCHEDULER_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+const NODE_MECHANICS_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
   'utf8',
 )
 
-describe('RFC-119 — scheduler source guards', () => {
+describe('RFC-119 — node mechanics source guards', () => {
   test('the broad selector exists and is exported', () => {
-    expect(SCHEDULER_SRC).toContain('export async function freshestPriorRunWithOutput')
-    expect(SCHEDULER_SRC).toContain('export async function composePriorOutputBlock')
+    expect(NODE_MECHANICS_SRC).toContain('export async function freshestPriorRunWithOutput')
+    expect(NODE_MECHANICS_SRC).toContain('export async function composePriorOutputBlock')
   })
 
   test('generalized priorOutputUpdate computation: inline gate stays, RFC-141-removed gates stay gone', () => {
@@ -37,9 +45,9 @@ describe('RFC-119 — scheduler source guards', () => {
     // ask-back suppression. Only the inline-session-resume gate remains (the resumed session
     // already holds the prior output). Isolate the block from the priorOutputUpdate declaration
     // to the dispatch site.
-    const start = SCHEDULER_SRC.indexOf('let priorOutputUpdate:')
+    const start = NODE_MECHANICS_SRC.indexOf('let priorOutputUpdate:')
     expect(start).toBeGreaterThan(-1)
-    const region = SCHEDULER_SRC.slice(start, start + 900)
+    const region = NODE_MECHANICS_SRC.slice(start, start + 900)
     expect(region).toContain('!resumeDecision.inlineMode')
     expect(region).toContain('freshestPriorRunWithOutput')
     // RFC-141 negative locks — a revert that re-adds either removed gate goes red here.
@@ -52,9 +60,9 @@ describe('RFC-119 — scheduler source guards', () => {
   })
 
   test('priorDoneGenerationsForRun stays done-only (must NOT be widened)', () => {
-    const start = SCHEDULER_SRC.indexOf('async function priorDoneGenerationsForRun')
+    const start = NODE_MECHANICS_SRC.indexOf('async function priorDoneGenerationsForRun')
     expect(start).toBeGreaterThan(-1)
-    const region = SCHEDULER_SRC.slice(start, start + 700)
+    const region = NODE_MECHANICS_SRC.slice(start, start + 700)
     expect(region).toContain("eq(nodeRuns.status, 'done')")
   })
 })

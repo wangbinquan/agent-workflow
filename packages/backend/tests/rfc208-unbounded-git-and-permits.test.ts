@@ -35,10 +35,23 @@ const schedulerSource = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
+const nodeMechanicsSource = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'nodeMechanics.ts',
+  ),
+  'utf8',
+)
 const assemblySource = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
   'utf8',
 )
+const executionSource = `${schedulerSource}\n${nodeMechanicsSource}`
 
 /** A git invocation that hangs deterministically, locally, with no network:
  *  a `!`-prefixed alias runs through the shell, so the child spawns a
@@ -130,7 +143,7 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
     // RFC-287 T7 起五条装配线全部迁入骨架，`scheduler.ts` 里已**没有**同时做两件事
     // 的 finally；不变量本身没变，扫描面随代码搬到 `schedulerAssembly.ts`（那里是
     // 全部装配线唯一的取/放点）。两个文件一起扫，对「代码搬到哪」免疫。
-    const scanned = schedulerSource + '\n' + assemblySource
+    const scanned = `${executionSource}\n${assemblySource}`
     const finallyBlocks = [...scanned.matchAll(/\bfinally\s*\{/g)].map((m) => {
       // Take a generous window; these blocks are short and we only compare the
       // relative order of two markers inside the same block.
@@ -171,7 +184,7 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
   // inside another is an existing sanctioned shape (fanout shard / aggregator);
   // flagging it here would be a false positive, not a finding.
   test('no rejectable await sits between a pool acquire() and its guarding try', () => {
-    const acquires = [...schedulerSource.matchAll(POOL_ACQUIRE_RE)]
+    const acquires = [...executionSource.matchAll(POOL_ACQUIRE_RE)]
     // RFC-266: 两个池都必须被本条守卫覆盖，否则改名/拆池会让它退化成零覆盖。
     // RFC-287 起覆盖有两种合法形态，缺一即为漏网：
     //   ① 直线取许可（`= await xxxSem.acquire()`）——由本扫描器守；
@@ -181,10 +194,10 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
     // 也迁完，形态①会自然清零而覆盖不减。
     for (const pool of ['agentSem', 'scriptSem']) {
       const straightLine = new RegExp(`=\\s*await\\s+(?:state\\.)?${pool}\\.acquire\\(\\)`).test(
-        schedulerSource,
+        executionSource,
       )
       const viaSkeleton = new RegExp(`pools:\\s*\\[(?:state\\.)?${pool}[,\\]]`).test(
-        schedulerSource,
+        executionSource,
       )
       expect(
         straightLine || viaSkeleton,
@@ -195,7 +208,7 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
     const offenders: string[] = []
     for (const m of acquires) {
       const from = (m.index ?? 0) + m[0].length
-      const region = schedulerSource.slice(from, from + 6000)
+      const region = executionSource.slice(from, from + 6000)
 
       // Walk forward tracking try-block nesting. An await that can reject is
       // safe once it is inside ANY try (its finally/catch owns the release);
