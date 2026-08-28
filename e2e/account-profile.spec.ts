@@ -3,7 +3,7 @@
 // 这条能力**不是**一个可有可无的资料页：账号邮箱是**任务能否启动的前置**。
 // `getUserGitCommitIdentity`（modules/identity-access/application/queries/
 // getUserGitCommitIdentity.ts:31-36）在建任务时读它，缺邮箱直接
-// `git-identity-email-missing` 拒绝启动；而 displayName / email 会成为
+// `git-identity-email-missing` 拒绝启动；而 gitName / email 会成为
 // 任务里每一次 git commit 的作者身份。所以判据不能停在「接口回了 200」，
 // 要一路走到**这个值真的改变了系统行为**。
 //
@@ -74,16 +74,24 @@ async function seedSession(): Promise<{ id: string; username: string; token: str
   return { id: created.id, username, token: sessionToken }
 }
 
-test('RFC-319: a user edits their own display name and email, and the new email is what the platform will commit with', async () => {
+test('RFC-335: display name and Git name stay independent in the account profile', async () => {
   const user = await seedSession()
 
-  const updated = await jsonOf<{ profile: { displayName: string; email: string } }>(
+  const updated = await jsonOf<{
+    profile: {
+      displayName: string
+      gitName: string
+      email: string
+      gitCommitIdentity: { name: string; email: string }
+    }
+  }>(
     await req(
       '/api/auth/me/profile',
       {
         method: 'PATCH',
         body: JSON.stringify({
           displayName: 'RFC-319 Renamed Person',
+          gitName: 'RFC-335 Git Author',
           // 大小写要被归一到小写（schema 的 transform）——这条顺带锁住它，
           // 否则同一个人可能在 git 历史里留下两种大小写的作者邮箱。
           email: `RFC319.Renamed.${sequence}@Example.COM`,
@@ -94,25 +102,43 @@ test('RFC-319: a user edits their own display name and email, and the new email 
     'update own profile',
   )
   expect(updated.profile.displayName).toBe('RFC-319 Renamed Person')
+  expect(updated.profile.gitName).toBe('RFC-335 Git Author')
   expect(
     updated.profile.email,
     '邮箱没有被归一成小写 ⇒ 同一个人会在 git 历史里留下两种大小写的作者身份',
   ).toBe(`rfc319.renamed.${sequence}@example.com`)
+  expect(updated.profile.gitCommitIdentity).toEqual({
+    name: 'RFC-335 Git Author',
+    email: `rfc319.renamed.${sequence}@example.com`,
+  })
 
   // 回读一次：改动落库了，不只是回执里好看。
-  const me = await jsonOf<{ profile: { displayName: string; email: string } }>(
-    await req('/api/auth/me', undefined, user.token),
-    'read me back',
-  )
+  const me = await jsonOf<{
+    profile: {
+      displayName: string
+      gitName: string
+      email: string
+      gitCommitIdentity: { name: string; email: string }
+    }
+  }>(await req('/api/auth/me', undefined, user.token), 'read me back')
   expect(me.profile.displayName).toBe('RFC-319 Renamed Person')
+  expect(me.profile.gitName).toBe('RFC-335 Git Author')
   expect(me.profile.email).toBe(`rfc319.renamed.${sequence}@example.com`)
+  expect(me.profile.gitCommitIdentity.name).toBe('RFC-335 Git Author')
 
   // 这是别人的资料——令牌通道够不着自己的账号面，别人的更不用说。
   // `tokenAccess: 'never'`（routes/auth.ts:248）。
   const other = await seedSession()
   const cross = await req(
     '/api/auth/me/profile',
-    { method: 'PATCH', body: JSON.stringify({ displayName: 'hijacked', email: 'x@example.com' }) },
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        displayName: 'hijacked',
+        gitName: 'Other Git Author',
+        email: 'x@example.com',
+      }),
+    },
     other.token,
   )
   expect(cross.ok, '前提：另一个人改自己的资料应当成功').toBe(true)
@@ -133,6 +159,7 @@ test('RFC-319: a user edits their own display name and email, and the new email 
       method: 'PATCH',
       body: JSON.stringify({
         displayName: 'RFC-319 Renamed Person',
+        gitName: 'RFC-335 Git Author',
         email: `rfc319.renamed.${sequence}@example.com`,
         role: 'admin',
       }),

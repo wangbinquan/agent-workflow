@@ -159,11 +159,16 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       })
     }
 
-    // RFC-320: triggers retain owner identity, not a copied author pair. A
-    // profile change after trigger save must be the snapshot used at fire.
+    // RFC-335: triggers retain owner identity, not a copied author pair. A
+    // profile change after trigger save must snapshot the independent Git name
+    // (not the visible display name) at fire.
     await db
       .update(users)
-      .set({ displayName: 'RFC 268 Owner At Fire', email: 'owner.fire@example.test' })
+      .set({
+        displayName: 'RFC 268 Visible Owner',
+        gitName: 'RFC 268 Git Owner At Fire',
+        email: 'owner.fire@example.test',
+      })
       .where(eq(users.id, owner.id))
 
     const event: CodeHostEvent = {
@@ -207,7 +212,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       expect(JSON.parse(task.triggerContextJson!)).toEqual(expectedTriggerContext)
       expect(JSON.parse(task.triggerContextJson!)).toHaveProperty('trigger.webhook.event_json')
       expect(task.spaceKind).toBe('scratch')
-      expect(task.gitUserName).toBe('RFC 268 Owner At Fire')
+      expect(task.gitUserName).toBe('RFC 268 Git Owner At Fire')
       expect(task.gitUserEmail).toBe('owner.fire@example.test')
       expect(task.repoPath).toBe(task.worktreePath)
       expect(

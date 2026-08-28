@@ -233,6 +233,7 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
 async function seedRfc321AccountCredentials(): Promise<void> {
   await requestJson('PATCH', '/api/auth/me/profile', {
     displayName: 'E2E Administrator',
+    gitName: 'E2E Git Administrator',
     email: 'e2e-admin@example.test',
   })
   await requestJson('PUT', '/api/code-hosts/gitlab', {

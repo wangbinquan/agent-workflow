@@ -424,11 +424,16 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
         }),
       })
       .where(eq(scheduledTasks.id, created.id))
-    // RFC-320: the durable schedule stores no identity snapshot. Whatever the
-    // owner profile contains at the actual fire becomes the new task snapshot.
+    // RFC-335: the durable schedule stores no identity snapshot. The
+    // independent Git name/email at actual fire become the new task snapshot;
+    // the product display name must not leak into Git authorship.
     await db
       .update(users)
-      .set({ displayName: 'Alice At Fire', email: 'alice.fire@example.test' })
+      .set({
+        displayName: 'Alice Visible At Fire',
+        gitName: 'Alice Git At Fire',
+        email: 'alice.fire@example.test',
+      })
       .where(eq(users.id, ownerId))
     const row = (await getScheduledTaskRow(db, created.id))!
     const { taskId } = await fireSchedule(
@@ -442,7 +447,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
     expect(task.scheduledTaskId).toBe(created.id)
     expect(task.spaceKind).toBe('scratch')
     expect(task.name).toContain('nightly') // decorateTaskName keeps the base
-    expect(task.gitUserName).toBe('Alice At Fire')
+    expect(task.gitUserName).toBe('Alice Git At Fire')
     expect(task.gitUserEmail).toBe('alice.fire@example.test')
   })
 
