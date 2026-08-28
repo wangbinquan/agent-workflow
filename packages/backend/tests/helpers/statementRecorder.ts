@@ -31,6 +31,12 @@ export interface StatementRecording {
   stop(): void
 }
 
+type TransactionInvoker = ((...args: unknown[]) => unknown) & {
+  deferred: (...args: unknown[]) => unknown
+  immediate: (...args: unknown[]) => unknown
+  exclusive: (...args: unknown[]) => unknown
+}
+
 function countParams(args: unknown[]): number {
   if (
     args.length === 1 &&
@@ -104,28 +110,30 @@ export function recordStatements(sqlite: Database): StatementRecording {
   // the production transaction itself.
   const origTransaction = sqlite.transaction.bind(sqlite) as unknown as (
     callback: (...args: unknown[]) => unknown,
-  ) => ((...args: unknown[]) => unknown) & Record<string, (...args: unknown[]) => unknown>
+  ) => TransactionInvoker
   originals.set('transaction', sqlite.transaction)
   ;(sqlite as unknown as Record<string, unknown>).transaction = (
     callback: (...args: unknown[]) => unknown,
   ) => {
     const transaction = origTransaction(callback)
-    return new Proxy(transaction, {
-      apply(target, thisArg, args) {
-        return recordTransaction('deferred', () => Reflect.apply(target, thisArg, args))
+    return Object.assign(
+      (...args: unknown[]) =>
+        recordTransaction('deferred', () => Reflect.apply(transaction, undefined, args)),
+      {
+        deferred: (...args: unknown[]) =>
+          recordTransaction('deferred', () =>
+            Reflect.apply(transaction.deferred, transaction, args),
+          ),
+        immediate: (...args: unknown[]) =>
+          recordTransaction('immediate', () =>
+            Reflect.apply(transaction.immediate, transaction, args),
+          ),
+        exclusive: (...args: unknown[]) =>
+          recordTransaction('exclusive', () =>
+            Reflect.apply(transaction.exclusive, transaction, args),
+          ),
       },
-      get(target, prop, receiver) {
-        const value = Reflect.get(target, prop, receiver) as unknown
-        if (
-          typeof value !== 'function' ||
-          (prop !== 'deferred' && prop !== 'immediate' && prop !== 'exclusive')
-        ) {
-          return value
-        }
-        return (...args: unknown[]) =>
-          recordTransaction(String(prop), () => Reflect.apply(value, target, args))
-      },
-    })
+    )
   }
 
   return {
