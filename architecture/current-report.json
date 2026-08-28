@@ -1,23 +1,21 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 440,
-    "architectureExceptions": 1304,
-    "backgroundJobs": 218,
-    "crossContextImports": 1339,
-    "facades": 379,
+    "ambientWiring": 444,
+    "architectureExceptions": 1403,
+    "backgroundJobs": 263,
+    "crossContextImports": 1440,
+    "facades": 377,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18186,
-    "mutationEntrypoints": 952,
+    "moduleSymbolOwners": 18519,
+    "mutationEntrypoints": 965,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 358,
-    "transactionExternalEffects": 264
+    "publicSurfaces": 392,
+    "transactionExternalEffects": 269
   },
   "metrics": {
-    "ambientWiringEntries": 440,
+    "ambientWiringEntries": 444,
     "appDepsConsumers": [
-      "packages/backend/src/mcp/dispatch.ts",
-      "packages/backend/src/mcp/server.ts",
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
       "packages/backend/src/routes/auth.ts",
@@ -36,6 +34,7 @@
       "packages/backend/src/routes/fusions.ts",
       "packages/backend/src/routes/health.ts",
       "packages/backend/src/routes/intentSessions.ts",
+      "packages/backend/src/routes/maintenance.ts",
       "packages/backend/src/routes/maintenanceDisk.ts",
       "packages/backend/src/routes/mcps.ts",
       "packages/backend/src/routes/memories.ts",
@@ -71,7 +70,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 940,
+    "backendProductionFiles": 975,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -95,7 +94,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 218,
+    "backgroundEntries": 263,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -103,6 +102,8 @@
       "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "packages/backend/src/platform/background/maintenanceService.ts",
+      "packages/backend/src/platform/background/maintenanceWorker.ts",
       "packages/backend/src/services/autoKill.ts",
       "packages/backend/src/services/autoRepair.ts",
       "packages/backend/src/services/backupScheduler.ts",
@@ -117,9 +118,9 @@
       "packages/backend/src/services/scheduledTaskScheduler.ts",
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
-    "directNativeIntervals": 20,
-    "directNativeTimers": 61,
-    "inboundBoundaryEdges": 95,
+    "directNativeIntervals": 24,
+    "directNativeTimers": 70,
+    "inboundBoundaryEdges": 90,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -128,11 +129,11 @@
       },
       {
         "context": "collaboration",
-        "files": 40
+        "files": 46
       },
       {
         "context": "development-automation",
-        "files": 114
+        "files": 115
       },
       {
         "context": "digital-employee",
@@ -168,10 +169,10 @@
       },
       {
         "context": "task-execution",
-        "files": 101
+        "files": 121
       }
     ],
-    "moduleFiles": 415,
+    "moduleFiles": 442,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -227,10 +228,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 379,
+    "serviceFiles": 377,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607"
+  "sourceDigest": "sha256:b046206abb6805dba60737e407027462aa4eacd076d4418135ea84c6d8f4bfa8"
 }
