@@ -180,7 +180,7 @@ import {
   taskBroadcaster,
   tasksListBroadcaster,
 } from '@/ws/broadcaster'
-import type { SchedulerDriverPort } from '@/modules/task-execution/public/topology'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { Paths } from '@/util/paths'
 import { createLogger, type Logger } from '@/util/log'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
@@ -315,6 +315,17 @@ function submitContinuationIntentTx(input: {
  *  scheduler-liveness preflight. */
 export function isTaskActive(taskId: string): boolean {
   return isTaskDriverActive(taskId) || testActiveControllers.has(taskId)
+}
+
+/** RFC-338: point-in-time advisory input for the off-thread maintenance
+ * worker. Durable task status/maintenance claims remain the deletion fence. */
+export function activeTaskIdsSnapshot(): string[] {
+  return [
+    ...new Set([
+      ...taskDriverRegistry.activeTokens().map((token) => token.taskId),
+      ...testActiveControllers.keys(),
+    ]),
+  ]
 }
 
 /** RFC-222 — test-only: inject/clear the in-memory active-task set so the delete
@@ -2806,7 +2817,7 @@ async function startTaskImpl(
   // 两种组合，理由是包裹器只会对单一 worktree 取快照、上传物不知道该落到哪个仓。
   // 两条都已解除：
   //   - wrapper-git 现在逐仓快照、逐仓 diff，路径用挂载路径前缀化后合并成一个
-  //     `list<path>`（scheduler.ts runGitWrapperNode）。不解除的话仓库组永远
+  //     `list<path>`（task-execution GitStrategy）。不解除的话仓库组永远
   //     用不了平台的 Code → Audit → Fix 主链路。
   //   - 上传输入落到任务根下的 `.agent-workflow/inputs/`，由 per-worktree
   //     platform profile 排除，不属于任何成员仓。
@@ -4634,8 +4645,8 @@ function parseSnapshotDefinition(snapshot: unknown): WorkflowDefinition {
 
 /**
  * RFC-109 (Codex impl-gate re-review P2) — the wrapper top-level statuses after
- * which `wrapper_progress_json` is a pure debug breadcrumb the scheduler never
- * re-reads. Mirrors `findResumableWrapperRun` exactly (scheduler.ts), which
+ * which `wrapper_progress_json` is a pure debug breadcrumb the runtime never
+ * re-reads. Mirrors `wrapperRunLifecycle.findResumableWrapperRun` exactly, which
  * returns null (→ fresh wrapper row, no progress decode) for these and resumes
  * from progress for everything else (RFC-095 keeps canceled/interrupted live).
  */
@@ -4658,10 +4669,10 @@ export function buildSyncRunSummary(
   const liveWrapper = new Set<string>()
   for (const r of runs) {
     if (r.parentNodeRunId === null && r.status === 'done') completed.add(r.nodeId)
-    // Live wrapper state = state the scheduler would actually RE-READ on resume.
+    // Live wrapper state = state WrapperRuntime would actually RE-READ on resume.
     // Codex impl-gate re-review P2: `wrapper_progress_json` is left in place after
     // a TERMINAL wrapper transition as a debug breadcrumb and is never read again
-    // (scheduler.ts ~2736). Mirror findResumableWrapperRun's gate exactly — it
+    // (wrapperRunLifecycle.ts). Mirror findResumableWrapperRun's gate exactly — it
     // resumes (and decodes progress for) every status EXCEPT done/failed/exhausted
     // (RFC-095 keeps canceled/interrupted resumable). So a done/failed/exhausted
     // wrapper with a leftover breadcrumb must NOT count as live (else a completed
