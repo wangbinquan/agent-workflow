@@ -120,16 +120,14 @@ export interface CommitPushParams {
   generateRepair: (ctx: GenerateRepairCtx) => Promise<GeneratedMessage>
   /**
    * RFC-076 C4 — optional write-lock acquirer (the scheduler passes its
-   * per-task `writeSem.acquire`). Held ONLY around `git add -A` + the
-   * `git diff --cached` capture so the staged index snapshot is consistent: a
-   * sibling writer node still in flight under the completion-driven race loop
-   * could otherwise mutate the worktree mid-`add`, splitting its changes across
-   * two commits. Writer nodes hold the same Semaphore(1) for their whole run, so
-   * acquiring it here means "capture only when no writer is mid-write" — the
-   * quiescence the old batch barrier gave for free. Released BEFORE the LLM
-   * message-gen / commit / push (those operate on the frozen index, so a writer
-   * resuming after the snapshot lands in its OWN later commit). Omit → no lock
-   * (single-writer / test callers take a byte-identical unlocked path).
+   * per-task `writeSem.acquire`). Acquired once around `git add -A` + the
+   * `git diff --cached` capture and again around the eventual local `git commit`.
+   * The first section freezes a consistent index snapshot; the second prevents
+   * a sibling writer's Git lifecycle from contending for `.git/index.lock` while
+   * that snapshot becomes a commit. The lock remains RELEASED during slow LLM
+   * message generation and network push, so independent node work is not held
+   * behind either. Omit → no lock (single-writer / test callers take the same
+   * unlocked path).
    */
   acquireWrite?: () => Promise<() => void>
 }
@@ -449,17 +447,26 @@ export async function runCommitPush(
     })
   }
 
-  // 4. Commit locally with the task identity.
-  const commit = await bindRepositoryCommitParticipant({
-    repoPath: W,
-    configuredPatterns: params.excludePatterns ?? [],
-    runGit,
-  }).commitPrepared({
-    message,
-    verification: 'normal',
-    authorName: params.gitUserName,
-    authorEmail: params.gitUserEmail,
-  })
+  // 4. Commit locally with the task identity. Reacquire the same short write
+  // lock used for index capture: message generation deliberately ran unlocked,
+  // but the actual Git mutation must not race a sibling writer's Git lifecycle.
+  const commit = await (async () => {
+    const releaseCommit = params.acquireWrite ? await params.acquireWrite() : null
+    try {
+      return await bindRepositoryCommitParticipant({
+        repoPath: W,
+        configuredPatterns: params.excludePatterns ?? [],
+        runGit,
+      }).commitPrepared({
+        message,
+        verification: 'normal',
+        authorName: params.gitUserName,
+        authorEmail: params.gitUserEmail,
+      })
+    } finally {
+      releaseCommit?.()
+    }
+  })()
   if (!commit.ok) {
     // A failed commit is unusual (e.g. unknown identity, hook). Surface it as a
     // failed node but keep the staged changes for the user.

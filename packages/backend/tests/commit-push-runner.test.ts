@@ -436,16 +436,19 @@ describe('runCommitPush', () => {
     expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(true)
   })
 
-  // RFC-076 C4 — the write lock (scheduler's writeSem) is held ONLY around the
-  // `git add -A` + `git diff --cached` capture and released BEFORE the slow LLM
-  // message-gen / commit / push, so a concurrent writer node (race loop) can't
-  // mutate the worktree mid-stage (which would split its changes across commits)
-  // yet isn't blocked for the whole commit duration.
-  test('C4: write lock spans stage+diff and is released before message-gen', async () => {
+  // RFC-076 C4 — the write lock (scheduler's writeSem) protects both local Git
+  // mutation windows: stage+diff capture, then commit. It remains released for
+  // slow LLM generation and network push, so a concurrent writer is serialized
+  // only where sharing the worktree/index would corrupt function.
+  test('C4: write lock spans stage+diff and commit, but is released during message-gen', async () => {
     f = await build()
     writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
     const events: string[] = []
     let held = false
+    const observedRunGit: typeof runGit = async (cwd, args, opts) => {
+      if (args[0] === 'commit') events.push(`commit(held=${held})`)
+      return runGit(cwd, args, opts)
+    }
     await runCommitPush(
       baseParams(f, {
         acquireWrite: async () => {
@@ -461,11 +464,18 @@ describe('runCommitPush', () => {
           return { message: 'feat: locked capture' }
         },
       }),
-      { db: f.db },
+      { db: f.db, runGit: observedRunGit },
     )
-    // Lock acquired, the staged snapshot captured, lock released — THEN the
-    // (slow) message generator runs, with the lock no longer held.
-    expect(events).toEqual(['acquire', 'release', 'msg(held=false)'])
+    // Capture is locked, message generation is not, and local commit reacquires
+    // the lock before touching Git's shared index/ref state.
+    expect(events).toEqual([
+      'acquire',
+      'release',
+      'msg(held=false)',
+      'acquire',
+      'commit(held=true)',
+      'release',
+    ])
   })
 
   test('C4: write lock is released even when nothing is staged (skipped-empty)', async () => {
