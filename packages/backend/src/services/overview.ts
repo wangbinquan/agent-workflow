@@ -57,7 +57,6 @@ function overviewFlight(db: DbClient): InFlightCoalescer<string, OverviewRespons
 function overviewFlightKey(actor: Actor): string {
   return JSON.stringify([
     actor.user.id,
-    actor.user.role,
     actor.source,
     actor.authorityRevision ?? 0,
     [...actor.permissions].sort(),

@@ -1,11 +1,13 @@
 // RFC-312 T0 —— WS 升级路径不得对同一个 token 解析两遍。
 //
 // 修复前：`tryUpgrade` 先 `resolveActor(db, token)`，再 `buildWsCredential(db, token)`，
-// 两者各跑一遍 `lookupActiveSession` ⇒ 每次升级 **5 读 + 2 次 `UPDATE user_sessions.last_used_at`**。
+// 两者各跑一遍 `lookupActiveSession` ⇒ 越过活动写入合流窗口的升级会有
+// **5 读 + 2 次 `UPDATE user_sessions.last_used_at`**。
 // `ws/server.ts` 那行注释自己就写着 "Computed from the same token resolveActor just consumed"，
 // 只是没把结果传下来。合并后是 3 读 1 写，且**对所有 WS 连接生效**，不只 presence。
 //
-// 断言口径必须写成「**成功 session 的 tryUpgrade 认证段**」：失败凭据会提前返回，
+// 断言口径必须写成「**越过活动写入合流窗口后，成功 session 的 tryUpgrade 认证段**」：
+// RFC-338 允许窗口内的热请求零写入；失败凭据会提前返回，
 // 带升级门的通道（task / memory-distill-jobs / presence）另有各自的读取，
 // 所以这不是"完整建连总成本"。
 //
@@ -54,10 +56,15 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
   test('一次成功的 session 升级只写一次 last_used_at（修复前是两次）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedUser(db, 'u-1')
-    const { token } = await createSession({ db, userId: 'u-1' })
+    const { token } = await createSession({ db, userId: 'u-1', now: 1_000 })
 
     const counter = countSessionUpdates(db)
-    const resolved = await resolveActorWithWsCredential(db, token, Buffer.from('daemon-token'))
+    const resolved = await resolveActorWithWsCredential(
+      db,
+      token,
+      Buffer.from('daemon-token'),
+      2_000,
+    )
 
     expect(resolved.actor).not.toBeNull()
     expect(resolved.actor!.user.id).toBe('u-1')
