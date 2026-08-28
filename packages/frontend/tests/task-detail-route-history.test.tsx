@@ -63,6 +63,9 @@ vi.mock('@/components/tasks/TaskQuestionList', () => ({
 vi.mock('@/components/tasks/TaskMembersPanel', () => ({
   TaskMembersDialogButton: () => null,
 }))
+vi.mock('@/components/tasks/TaskReviewersLinkButton', () => ({
+  TaskReviewersLinkButton: () => null,
+}))
 vi.mock('@/components/TaskSubjectLink', () => ({
   TaskSubjectLink: ({ task }: { task: Task }) => (
     <span data-testid="task-subject-stub">{task.workflowName}</span>

@@ -47,13 +47,16 @@ describe('ReviewDocPane — cross-heading selection hint', () => {
     expect(s).toMatch(/setCrossHeadingHint\(null\)/)
   })
 
-  test("hint element renders with the i18n key and is gated behind mode === 'awaiting'", () => {
+  test('hint element renders with the i18n key and is gated behind canAddComment', () => {
     const s = src(PANE_TSX)
-    // RFC-149 impl-gate: the hint belongs to the NEW-comment creation chain
-    // (awaiting-only) — a decided round must not advertise a write affordance
-    // the server would reject.
+    // RFC-340: the hint belongs to the NEW-comment creation chain, whose
+    // effective gate combines awaiting mode with the projected actor
+    // capability. Reviewers can receive it; decided/historical readers cannot.
     expect(s).toMatch(
-      /\{\s*mode === 'awaiting'\s*&&\s*crossHeadingHint\s*!==\s*null\s*&&[\s\S]*?reviews\.crossHeadingHint/,
+      /const canAddComment\s*=\s*mode\s*===\s*'awaiting'\s*&&\s*capabilities\.canAddComment/,
+    )
+    expect(s).toMatch(
+      /\{\s*canAddComment\s*&&\s*crossHeadingHint\s*!==\s*null\s*&&[\s\S]*?reviews\.crossHeadingHint/,
     )
     expect(s).toMatch(/review-cross-heading-hint/)
   })
