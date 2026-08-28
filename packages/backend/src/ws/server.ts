@@ -14,7 +14,7 @@
 //                → server.upgrade
 //   open:        registry openWsChannel (gatedSubscribe + hello + onOpenExtra)
 //   close:       unsubscribe
-//   message:     ignored (v1 channels are server→client only)
+//   message:     bounded ping/pong only (domain channels remain server→client)
 //
 // There must be NO per-channel `kind === '…'` branch in this file — adding a
 // channel means adding a registry spec, nothing here. A source-level ratchet
@@ -25,6 +25,7 @@
 // recognises (RFC-036).
 
 import type { ServerWebSocket } from 'bun'
+import { type WsControlMessage, WsClientControlMessageSchema } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import {
   extractUpgradeToken,
@@ -280,8 +281,22 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     }
   }
 
-  function handleMessage(_ws: ServerWebSocket<ConnectionData>, _msg: string | Buffer): void {
-    // v1: clients are read-only on these channels. Ignore inbound frames.
+  function handleMessage(ws: ServerWebSocket<ConnectionData>, msg: string | Buffer): void {
+    // Application channels remain read-only. RFC-338 adds one bounded control
+    // frame so a browser/soak can distinguish a quiet channel from a blocked
+    // server event loop. It carries no domain input and performs no DB work.
+    const text = typeof msg === 'string' ? msg : msg.toString('utf-8')
+    if (text.length > 256) return
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      return
+    }
+    const control = WsClientControlMessageSchema.safeParse(parsed)
+    if (!control.success) return
+    const response: WsControlMessage = { type: 'pong', nonce: control.data.nonce }
+    ws.send(JSON.stringify(response))
   }
 
   return {

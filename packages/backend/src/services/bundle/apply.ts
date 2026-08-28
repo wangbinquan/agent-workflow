@@ -971,6 +971,7 @@ export async function convergeResourceBundleApplies(
   db: DbClient,
   appHome: string,
   log: Logger = createLogger('bundleApply'),
+  options: { activeApplyIds?: readonly string[] } = {},
 ): Promise<{ failed: number; rolledForward: number }> {
   let failed = 0
   let rolledForward = 0
@@ -1006,7 +1007,12 @@ export async function convergeResourceBundleApplies(
       continue
     }
     if (row.state === 'failed') continue
-    if (ACTIVE_BUNDLE_APPLIES.has(row.id) || row.updatedAt > reapBefore) continue
+    if (
+      ACTIVE_BUNDLE_APPLIES.has(row.id) ||
+      options.activeApplyIds?.includes(row.id) === true ||
+      row.updatedAt > reapBefore
+    )
+      continue
 
     let compensated = true
     const artifacts = parseArtifacts(row.preparedArtifactsJson)
@@ -1071,3 +1077,8 @@ function compensateArtifact(db: DbClient, appHome: string, artifact: BundleArtif
 }
 
 export { ACTIVE_BUNDLE_APPLIES as __activeBundleAppliesForTests }
+
+/** RFC-338: strict process-local advisory snapshot for the maintenance Worker. */
+export function activeResourceBundleApplyIds(): string[] {
+  return [...ACTIVE_BUNDLE_APPLIES]
+}

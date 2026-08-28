@@ -1,3 +1,5 @@
+import type { DbClient } from '@/db/client'
+import { createEmployeeInputUploadStore } from '../infrastructure/inputUploadStore'
 import type {
   DigitalEmployeeResourceReceipt,
   EmployeeCaseLaunchInput,
@@ -5,6 +7,11 @@ import type {
   EmployeeTypeRef,
   ExactResourceRef,
 } from './types'
+
+/** Platform maintenance command; keeps the SQLite adapter behind this context's public edge. */
+export function sweepExpiredEmployeeInputUploads(db: DbClient, now: number, limit: number): number {
+  return createEmployeeInputUploadStore(db).sweepExpired(now, limit)
+}
 
 export type DigitalEmployeeAuthoringCommand =
   | {

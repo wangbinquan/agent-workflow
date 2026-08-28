@@ -145,6 +145,22 @@ describe('source identity update checks', () => {
 })
 
 describe('generation GC safety', () => {
+  test('empty plugin storage bypasses the active-run database scan', async () => {
+    const dbThatMustNotBeRead = new Proxy({} as DbClient, {
+      get() {
+        throw new Error('unexpected-database-read')
+      },
+    })
+    expect(
+      await runPluginGenerationGc({
+        db: dbThatMustNotBeRead,
+        pluginsDir,
+        graceMs: 1,
+        now: Date.now() + 60_000,
+      }),
+    ).toEqual([])
+  })
+
   test('keeps referenced generation, removes only aged orphan and crashed check dir', async () => {
     const created = await createPlugin(db, { name: 'kept', spec: 'kept@1' }, deps())
     const orphan = join(pluginsDir, 'orphan-id', 'generations', 'orphan-op')

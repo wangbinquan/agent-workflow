@@ -20,7 +20,7 @@
 // `tx.select(…).all()` / `.get()`, `tx.update(…).run()`, `tx.insert(…).run()`,
 // `tx.delete(…).run()`. Never `await`.
 
-import type { DbClient } from './client'
+import { observeDbTransaction, type DbClient } from './client'
 
 /** The drizzle bun-sqlite transaction handle (sync execution surface). */
 export type DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]
@@ -29,20 +29,34 @@ export type DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]
 export type NotPromise<T> = T extends PromiseLike<unknown> ? never : T
 
 export function dbTxSync<T>(db: DbClient, fn: (tx: DbTxSync) => NotPromise<T>): T {
-  return db.transaction((tx) => {
-    const result: unknown = fn(tx)
-    if (
-      result instanceof Promise ||
-      (result !== null &&
-        typeof result === 'object' &&
-        typeof (result as { then?: unknown }).then === 'function')
-    ) {
-      // Fail LOUD inside the transaction: this throw makes drizzle ROLLBACK,
-      // so a runtime-smuggled async callback can never half-commit.
-      throw new Error(
-        'dbTxSync callback returned a Promise — async bodies COMMIT at their first await under bun:sqlite (audit S-10). Use the synchronous drizzle surface (.all()/.run()/.get()) inside dbTxSync.',
-      )
-    }
-    return result as T
-  })
+  const startedAt = performance.now()
+  try {
+    return db.transaction(
+      (tx) => {
+        const result: unknown = fn(tx)
+        if (
+          result instanceof Promise ||
+          (result !== null &&
+            typeof result === 'object' &&
+            typeof (result as { then?: unknown }).then === 'function')
+        ) {
+          // Fail LOUD inside the transaction: this throw makes drizzle ROLLBACK,
+          // so a runtime-smuggled async callback can never half-committing.
+          throw new Error(
+            'dbTxSync callback returned a Promise — async bodies COMMIT at their first await under bun:sqlite (audit S-10). Use the synchronous drizzle surface (.all()/.run()/.get()) inside dbTxSync.',
+          )
+        }
+        return result as T
+      },
+      // RFC-338 AC-2: every sanctioned write transaction reserves the writer
+      // before taking a read snapshot. A deferred read-then-write transaction
+      // can otherwise fail its upgrade immediately with SQLITE_BUSY_SNAPSHOT,
+      // bypassing busy_timeout while a short maintenance commit is in flight.
+      // BEGIN IMMEDIATE waits at the boundary, where the request connection's
+      // busy timeout works and the Worker can finish its bounded transaction.
+      { behavior: 'immediate' },
+    )
+  } finally {
+    observeDbTransaction(db, performance.now() - startedAt)
+  }
 }

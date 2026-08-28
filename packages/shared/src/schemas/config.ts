@@ -3,6 +3,7 @@
 // backfilled by the backend on load.
 
 import { z } from 'zod'
+import { MaintenanceScheduleSchema } from './maintenance'
 import { SETTINGS_NUMERIC_BOUNDS, type SettingsNumericPath } from '../settingsNumericBounds'
 
 function utf8ByteLength(value: string): number {
@@ -283,6 +284,11 @@ export const ConfigSchema = z.object({
    *  (the historical behavior); default 10. Retention now also runs at boot +
    *  hourly even when the scheduled-backup ticker is disabled. */
   backupProtectedKeepCount: z.number().int().nonnegative().default(10),
+
+  /** RFC-338: cadence for heavy cleanup only. Correctness/recovery and WAL
+   * checkpoint keep their independent cadences. Existing installs remain
+   * byte-for-byte hourly unless an administrator explicitly chooses daily. */
+  maintenanceSchedule: MaintenanceScheduleSchema.default({ kind: 'hourly' }),
 
   // --- RFC-261 webhook 投递保留（D9'）---
   /** 投递 body_json 置空天数（观测/重放窗口）。10 万投递/天的部署下 30 天 body
@@ -720,6 +726,7 @@ export const DEFAULT_CONFIG: Config = {
   backupRetentionDays: 30,
   backupMaxTotalBytes: 0,
   backupProtectedKeepCount: 10,
+  maintenanceSchedule: { kind: 'hourly' },
   // RFC-261 webhook 投递保留
   webhookDeliveryBodyRetentionDays: 30,
   webhookDeliveryRowRetentionDays: 90,

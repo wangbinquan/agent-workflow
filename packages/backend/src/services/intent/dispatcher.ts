@@ -146,11 +146,20 @@ export async function dispatchIntentTurn(
 }
 
 /** Claim queued rows left by a dead process or a lost completion wake-up. */
-export async function resumeQueuedIntentWorkingSets(deps: IntentDispatchDeps): Promise<number> {
-  const queued = await deps.db
+export function listQueuedIntentWorkingSetSessionIds(db: DbClient): string[] {
+  return db
     .select({ sessionId: intentWorkingSetChanges.sessionId })
     .from(intentWorkingSetChanges)
     .where(eq(intentWorkingSetChanges.state, 'queued'))
+    .all()
+    .map((row) => row.sessionId)
+}
+
+export async function resumeQueuedIntentWorkingSets(
+  deps: IntentDispatchDeps,
+  sessionIds: readonly string[] = listQueuedIntentWorkingSetSessionIds(deps.db),
+): Promise<number> {
+  const queued = sessionIds.map((sessionId) => ({ sessionId }))
   let resumed = 0
   for (const { sessionId } of queued) {
     const session = (

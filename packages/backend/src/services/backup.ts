@@ -44,6 +44,13 @@ import {
 
 const log = createLogger('backup')
 
+declare const AW_COMPILED_BUILD: boolean | undefined
+
+const BACKUP_VACUUM_WORKER_ENTRY =
+  typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD
+    ? './services/backupVacuumWorker.ts'
+    : new URL('./backupVacuumWorker.ts', import.meta.url).href
+
 /** RFC-311 — see backupVacuumWorker.ts: the copy runs off-thread so the
  *  daemon's synchronous connection keeps serving during a backup.
  *
@@ -55,7 +62,7 @@ const log = createLogger('backup')
  *  worker 失败都回落到同线程 VACUUM INTO——丢的只是「不冻结主线程」这个优化,
  *  绝不丢备份本身。 */
 function vacuumIntoWorker(dbPath: string, dest: string): Promise<void> {
-  const worker = new Worker(new URL('./backupVacuumWorker.ts', import.meta.url).href)
+  const worker = new Worker(BACKUP_VACUUM_WORKER_ENTRY)
   return new Promise<void>((resolvePromise, rejectPromise) => {
     const settle = (fn: () => void): void => {
       worker.terminate()

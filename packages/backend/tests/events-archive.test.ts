@@ -1,7 +1,7 @@
 // P-5-01: events archival background task + endpoint fallback.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -128,6 +128,92 @@ describe('archiveEvents', () => {
     expect(remaining.length).toBe(4)
   })
 
+  test('RFC-338 Worker row budget yields a backlog across resumable passes', async () => {
+    const { nodeRunId } = await seedTaskWithNodeRun(h, { events: 10 })
+    const config = { eventsArchiveThresholds: { perNodeRunRows: 4, globalRows: 1_000 } }
+    const first = await archiveEvents(h.db, config, h.logsDir, { rowBudgetRows: 3 })
+    expect(first.perGroupArchived).toBe(3)
+    expect(
+      await h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    ).toHaveLength(7)
+
+    const second = await archiveEvents(h.db, config, h.logsDir, { rowBudgetRows: 3 })
+    expect(second.perGroupArchived).toBe(3)
+    expect(
+      await h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    ).toHaveLength(4)
+  })
+
+  for (const faultPoint of [
+    'after-journal-prepare',
+    'after-file-append',
+    'after-db-delete',
+    'after-journal-finalize',
+  ] as const) {
+    test(`RFC-338 archive retry is exact after ${faultPoint}`, async () => {
+      const { taskId, nodeRunId, eventIds } = await seedTaskWithNodeRun(h, { events: 10 })
+      const config = { eventsArchiveThresholds: { perNodeRunRows: 4, globalRows: 1_000 } }
+      let injected = false
+      await expect(
+        archiveEvents(h.db, config, h.logsDir, {
+          onFault: (point) => {
+            if (!injected && point === faultPoint) {
+              injected = true
+              throw new Error(`injected-${point}`)
+            }
+          },
+        }),
+      ).rejects.toThrow(`injected-${faultPoint}`)
+      expect(injected).toBe(true)
+
+      await archiveEvents(h.db, config, h.logsDir)
+      const remaining = await h.db
+        .select()
+        .from(nodeRunEvents)
+        .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+      expect(remaining).toHaveLength(4)
+      const archived = await readArchivedEvents(h.logsDir, taskId, nodeRunId, 0, 100)
+      expect(archived.map((row) => row.id)).toEqual(eventIds.slice(0, 6))
+      expect(new Set(archived.map((row) => row.id)).size).toBe(6)
+      expect(existsSync(join(h.logsDir, taskId, `${nodeRunId}.jsonl.append-journal.json`))).toBe(
+        false,
+      )
+    })
+  }
+
+  test('RFC-338 truncates a partial uncommitted append only while every DB row survives', async () => {
+    const { taskId, nodeRunId, eventIds } = await seedTaskWithNodeRun(h, { events: 10 })
+    const config = { eventsArchiveThresholds: { perNodeRunRows: 4, globalRows: 1_000 } }
+    await expect(
+      archiveEvents(h.db, config, h.logsDir, {
+        onFault: (point) => {
+          if (point === 'after-journal-prepare') throw new Error('injected-before-append')
+        },
+      }),
+    ).rejects.toThrow('injected-before-append')
+
+    const file = join(h.logsDir, taskId, `${nodeRunId}.jsonl`)
+    writeFileSync(file, '{"partial":', 'utf-8')
+    await archiveEvents(h.db, config, h.logsDir)
+    const archived = await readArchivedEvents(h.logsDir, taskId, nodeRunId, 0, 100)
+    expect(archived.map((row) => row.id)).toEqual(eventIds.slice(0, 6))
+  })
+
+  test('RFC-338 never deletes DB rows when the archive destination is unwritable', async () => {
+    const { nodeRunId } = await seedTaskWithNodeRun(h, { events: 10 })
+    writeFileSync(h.logsDir, 'not-a-directory', 'utf-8')
+    await expect(
+      archiveEvents(
+        h.db,
+        { eventsArchiveThresholds: { perNodeRunRows: 4, globalRows: 1_000 } },
+        h.logsDir,
+      ),
+    ).rejects.toThrow()
+    expect(
+      await h.db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)),
+    ).toHaveLength(10)
+  })
+
   test('archives globally when total exceeds globalRows even if per-group is fine', async () => {
     // Two node_runs, each with 5 events; perNodeRunRows=10 (untouched), globalRows=6.
     const a = await seedTaskWithNodeRun(h, { events: 5 })
@@ -136,9 +222,11 @@ describe('archiveEvents', () => {
       h.db,
       { eventsArchiveThresholds: { perNodeRunRows: 10, globalRows: 6 } },
       h.logsDir,
+      { knownGlobalRows: 10 },
     )
     expect(r.perGroupArchived).toBe(0)
-    expect(r.globalArchived).toBeGreaterThan(0)
+    expect(r.globalArchived).toBe(4)
+    expect(r.remainingRows).toBe(6)
     const remainingA = await h.db
       .select()
       .from(nodeRunEvents)

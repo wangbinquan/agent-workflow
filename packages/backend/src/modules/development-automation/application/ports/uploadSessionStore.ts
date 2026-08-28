@@ -33,5 +33,5 @@ export interface UploadSessionStore {
     readonly uploadRefs: readonly string[]
     readonly now: number
   }): UploadSessionRow[]
-  sweepExpired(now: number): number
+  sweepExpired(now: number, limit?: number): number
 }

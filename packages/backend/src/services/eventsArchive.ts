@@ -11,14 +11,32 @@
 // JSONL file, so the UI sees a single seamless stream.
 
 import { and, asc, count, eq, gt, inArray, lte, sql } from 'drizzle-orm'
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  statSync,
+  truncateSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Config } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRuns } from '@/db/schema'
 import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
-import { readMaintenanceNumber, writeMaintenanceValue } from '@/services/maintenanceState'
+import {
+  readMaintenanceNumber,
+  readMaintenanceValue,
+  writeMaintenanceValue,
+} from '@/services/maintenanceState'
+import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('events-archive')
@@ -28,7 +46,46 @@ const HOUR_MS = 60 * 60 * 1000
 export interface ArchiveRunResult {
   perGroupArchived: number
   globalArchived: number
+  /** Exact remaining row estimate carried by the RFC-338 Worker cursor. */
+  remainingRows: number
   files: string[]
+}
+
+export type EventsArchiveFaultPoint =
+  | 'after-journal-prepare'
+  | 'after-file-append'
+  | 'after-db-delete'
+  | 'after-journal-finalize'
+
+interface EventsArchiveOptions {
+  /** Test-only window override used by the RFC-311 scale corpus. */
+  scanWindowIds?: number
+  /** Worker slice budget. */
+  rowBudgetRows?: number
+  /**
+   * Row count captured by the Worker immediately before this archive pass.
+   * Supplying it avoids repeating an O(table) COUNT for every 5k continuation.
+   * Legacy callers omit it and retain the exact one-pass COUNT behavior.
+   */
+  knownGlobalRows?: number
+  /** RFC-338 fault injection at every mixed DB/FS linearization point. */
+  onFault?: (point: EventsArchiveFaultPoint) => void
+}
+
+interface ArchiveAppendJournalV1 {
+  readonly version: 1
+  readonly nodeRunId: string
+  readonly offset: number
+  readonly length: number
+  readonly digest: string
+  readonly firstId: number
+  readonly lastId: number
+  readonly rowCount: number
+}
+
+interface ArchiveBatchResult {
+  readonly file: string | null
+  readonly archived: number
 }
 
 /**
@@ -57,6 +114,7 @@ function* chunked<T>(items: readonly T[], size: number): Generator<T[]> {
 }
 /** maintenance_state 键：per-run pass 的增量扫描水位（上次扫过的 max(id)）。 */
 const HIGH_WATER_KEY = 'events_archive_high_water'
+const PENDING_APPEND_KEY = 'events_archive_pending_append_v1'
 
 /**
  * One archival pass. Returns counters for tests / log lines.
@@ -99,16 +157,33 @@ export async function archiveEvents(
   config: { eventsArchiveThresholds: ArchiveThresholds },
   logsDir: string,
   /** 测试注入:把扫描窗口调小到几十行，才测得出窗口边界有没有漏行。 */
-  opts: { scanWindowIds?: number } = {},
+  opts: EventsArchiveOptions = {},
 ): Promise<ArchiveRunResult> {
   const scanWindowIds = opts.scanWindowIds ?? ARCHIVE_SCAN_WINDOW_IDS
+  const rowBudgetRows = opts.rowBudgetRows ?? ARCHIVE_TICK_BUDGET_ROWS
+  if (!Number.isInteger(rowBudgetRows) || rowBudgetRows < 1) {
+    throw new Error('events-archive-row-budget-invalid')
+  }
+  if (
+    opts.knownGlobalRows !== undefined &&
+    (!Number.isSafeInteger(opts.knownGlobalRows) || opts.knownGlobalRows < 0)
+  ) {
+    throw new Error('events-archive-known-global-rows-invalid')
+  }
+  const recovered = await recoverPendingArchiveAppendFromState(db, logsDir)
   const { perNodeRunRows, globalRows } = await effectiveRowThresholds(
     db,
     config.eventsArchiveThresholds,
   )
-  const result: ArchiveRunResult = { perGroupArchived: 0, globalArchived: 0, files: [] }
+  const result: ArchiveRunResult = {
+    perGroupArchived: recovered.archived,
+    globalArchived: 0,
+    remainingRows: 0,
+    files: [],
+  }
   const touched = new Set<string>()
-  let budget = ARCHIVE_TICK_BUDGET_ROWS
+  if (recovered.file !== null) touched.add(recovered.file)
+  let budget = Math.max(0, rowBudgetRows - recovered.archived)
 
   // --- Per-node-run pass (RFC-311: incremental) ---------------------------
   // The old shape GROUP BY'd the ENTIRE table every hour (O(all rows) even as
@@ -162,12 +237,13 @@ export async function archiveEvents(
     for (const over of overs) {
       if (budget <= 0) break
       const toDrop = Math.min(over.own - perNodeRunRows, budget)
-      const file = await archiveOldestForNode(db, over.nodeRunId, toDrop, logsDir)
-      budget -= toDrop
-      if (file !== null) {
-        result.perGroupArchived += toDrop
-        touched.add(file)
+      const batch = await archiveOldestForNode(db, over.nodeRunId, toDrop, logsDir, opts)
+      budget -= batch.archived
+      if (batch.file !== null) {
+        result.perGroupArchived += batch.archived
+        touched.add(batch.file)
       }
+      if (batch.archived === 0) break
     }
     // 只有整窗处理完(没被预算截断)才认这一窗:被截断的那一窗下轮重扫,
     // 宁可重做也不能让水位跳过没处理的行。
@@ -182,10 +258,21 @@ export async function archiveEvents(
   }
 
   // --- Global pass --------------------------------------------------------
-  // COUNT(*) once per hour is acceptable under the RFC-311 page-cache budget;
-  // a running counter would drift (taskDelete cascades also remove rows).
-  const totalRow = await db.select({ n: count(nodeRunEvents.id) }).from(nodeRunEvents)
-  let total = totalRow[0]?.n ?? 0
+  // Legacy callers still count once per standalone pass. The RFC-338 Worker,
+  // however, resumes this function every 5k rows: repeating that whole-table
+  // COUNT on every continuation froze a 10M-row deployment for 300-450ms per
+  // slice. Its durable cursor therefore carries a bounded-window count. Rows
+  // removed by the per-run pass are subtracted before the global cap is used.
+  // Concurrent appends beyond the count snapshot are deliberately deferred to
+  // the next scheduled run; rows are never deleted without first being archived.
+  const removedBeforeGlobal = rowBudgetRows - budget
+  let total: number
+  if (opts.knownGlobalRows === undefined) {
+    const totalRow = await db.select({ n: count(nodeRunEvents.id) }).from(nodeRunEvents)
+    total = totalRow[0]?.n ?? 0
+  } else {
+    total = Math.max(0, opts.knownGlobalRows - removedBeforeGlobal)
+  }
   while (total > globalRows && budget > 0) {
     // Find the oldest event row, then archive its node_run's oldest chunk.
     const oldest = await db
@@ -204,14 +291,15 @@ export async function archiveEvents(
     const own = ownCount[0]?.n ?? 0
     const toDrop = Math.min(overflow, own, budget)
     if (toDrop <= 0) break
-    const file = await archiveOldestForNode(db, head.nodeRunId, toDrop, logsDir)
-    budget -= toDrop
-    if (file === null) break
-    result.globalArchived += toDrop
-    touched.add(file)
-    total -= toDrop
+    const batch = await archiveOldestForNode(db, head.nodeRunId, toDrop, logsDir, opts)
+    budget -= batch.archived
+    if (batch.file === null || batch.archived === 0) break
+    result.globalArchived += batch.archived
+    touched.add(batch.file)
+    total -= batch.archived
   }
 
+  result.remainingRows = total
   result.files = [...touched]
   if (result.perGroupArchived > 0 || result.globalArchived > 0) {
     log.info('archived events', {
@@ -232,8 +320,9 @@ async function archiveOldestForNode(
   nodeRunId: string,
   toDrop: number,
   logsDir: string,
-): Promise<string | null> {
-  if (toDrop <= 0) return null
+  opts: EventsArchiveOptions,
+): Promise<ArchiveBatchResult> {
+  if (toDrop <= 0) return { file: null, archived: 0 }
   const owner = await db
     .select({ taskId: nodeRuns.taskId })
     .from(nodeRuns)
@@ -264,7 +353,7 @@ async function archiveOldestForNode(
       remaining -= batch.length
       if (batch.length < ARCHIVE_BATCH_ROWS) break
     }
-    return null
+    return { file: null, archived: toDrop - remaining }
   }
 
   const file = jsonlPath(logsDir, taskId, nodeRunId)
@@ -296,19 +385,233 @@ async function archiveOldestForNode(
           parentSessionId: r.parentSessionId,
         }) + '\n'
     }
-    // Append BEFORE delete: a crash between the two duplicates rows into the
-    // JSONL (the reader tolerates that — ids are monotonic and consumers
-    // filter `id > since`), it never loses them.
-    appendFileSync(file, buf, 'utf-8')
-    wroteAny = true
+    const firstId = rows[0]!.id
     const lastId = rows.at(-1)!.id
+    const encoded = Buffer.from(buf, 'utf-8')
+    const journal: ArchiveAppendJournalV1 = {
+      version: 1,
+      nodeRunId,
+      offset: existsSync(file) ? statSync(file).size : 0,
+      length: encoded.byteLength,
+      digest: sha256Hex(encoded),
+      firstId,
+      lastId,
+      rowCount: rows.length,
+    }
+
+    // RFC-338 AC-7/AC-8: persist the exact append offset/digest before the
+    // mixed FS/DB effect. Recovery can distinguish no append, a partial
+    // append, a complete append before delete, and a committed delete before
+    // receipt. This keeps the legacy single JSONL path while making retries
+    // lossless and duplicate-free.
+    await writeMaintenanceValue(
+      db,
+      PENDING_APPEND_KEY,
+      JSON.stringify({ version: 1, taskId, nodeRunId }),
+    )
+    writeArchiveJournal(file, journal)
+    opts.onFault?.('after-journal-prepare')
+    appendAndSync(file, encoded)
+    verifyJournalAppend(file, journal)
+    opts.onFault?.('after-file-append')
+    wroteAny = true
     await db
       .delete(nodeRunEvents)
       .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), lte(nodeRunEvents.id, lastId)))
+    opts.onFault?.('after-db-delete')
+    finalizeArchiveJournal(file)
+    await writeMaintenanceValue(db, PENDING_APPEND_KEY, '')
+    opts.onFault?.('after-journal-finalize')
     dropped += rows.length
     if (rows.length < ARCHIVE_BATCH_ROWS) break
   }
-  return wroteAny ? file : null
+  return { file: wroteAny ? file : null, archived: dropped }
+}
+
+function archiveJournalPath(file: string): string {
+  return `${file}.append-journal.json`
+}
+
+function writeArchiveJournal(file: string, journal: ArchiveAppendJournalV1): void {
+  const path = archiveJournalPath(file)
+  const tmp = `${path}.tmp`
+  const fd = openSync(tmp, 'w')
+  try {
+    writeSync(fd, JSON.stringify(journal))
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  renameSync(tmp, path)
+}
+
+function appendAndSync(file: string, contents: Uint8Array): void {
+  const fd = openSync(file, 'a')
+  try {
+    let offset = 0
+    while (offset < contents.byteLength) {
+      offset += writeSync(fd, contents, offset, contents.byteLength - offset)
+    }
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
+
+function readFileRange(file: string, offset: number, length: number): Buffer {
+  const fd = openSync(file, 'r')
+  try {
+    const out = Buffer.alloc(length)
+    let read = 0
+    while (read < length) {
+      const n = readSync(fd, out, read, length - read, offset + read)
+      if (n === 0) break
+      read += n
+    }
+    return out.subarray(0, read)
+  } finally {
+    closeSync(fd)
+  }
+}
+
+function verifyJournalAppend(file: string, journal: ArchiveAppendJournalV1): void {
+  if (!existsSync(file)) throw new Error('events-archive-append-missing')
+  const size = statSync(file).size
+  if (size !== journal.offset + journal.length) {
+    throw new Error('events-archive-append-length-mismatch')
+  }
+  const appended = readFileRange(file, journal.offset, journal.length)
+  if (appended.byteLength !== journal.length || sha256Hex(appended) !== journal.digest) {
+    throw new Error('events-archive-append-digest-mismatch')
+  }
+}
+
+function parseArchiveJournal(file: string): ArchiveAppendJournalV1 | null {
+  const path = archiveJournalPath(file)
+  if (!existsSync(path)) return null
+  const value = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ArchiveAppendJournalV1>
+  if (
+    value.version !== 1 ||
+    typeof value.nodeRunId !== 'string' ||
+    !Number.isSafeInteger(value.offset) ||
+    value.offset! < 0 ||
+    !Number.isSafeInteger(value.length) ||
+    value.length! < 1 ||
+    typeof value.digest !== 'string' ||
+    !Number.isSafeInteger(value.firstId) ||
+    !Number.isSafeInteger(value.lastId) ||
+    value.firstId! < 1 ||
+    value.lastId! < value.firstId! ||
+    !Number.isSafeInteger(value.rowCount) ||
+    value.rowCount! < 1
+  ) {
+    throw new Error('events-archive-journal-invalid')
+  }
+  return value as ArchiveAppendJournalV1
+}
+
+async function pendingJournalDbRows(
+  db: DbClient,
+  journal: ArchiveAppendJournalV1,
+): Promise<number> {
+  const rows = await db
+    .select({ n: count(nodeRunEvents.id) })
+    .from(nodeRunEvents)
+    .where(
+      and(
+        eq(nodeRunEvents.nodeRunId, journal.nodeRunId),
+        gt(nodeRunEvents.id, journal.firstId - 1),
+        lte(nodeRunEvents.id, journal.lastId),
+      ),
+    )
+  return rows[0]?.n ?? 0
+}
+
+async function recoverPendingArchiveAppend(
+  db: DbClient,
+  nodeRunId: string,
+  file: string,
+): Promise<number> {
+  const journal = parseArchiveJournal(file)
+  if (journal === null) return 0
+  if (journal.nodeRunId !== nodeRunId) throw new Error('events-archive-journal-owner-mismatch')
+
+  const dbRows = await pendingJournalDbRows(db, journal)
+  const fileExists = existsSync(file)
+  const fileSize = fileExists ? statSync(file).size : 0
+  const appendComplete =
+    fileExists &&
+    fileSize === journal.offset + journal.length &&
+    sha256Hex(readFileRange(file, journal.offset, journal.length)) === journal.digest
+
+  if (appendComplete) {
+    if (dbRows > 0) {
+      await db
+        .delete(nodeRunEvents)
+        .where(
+          and(
+            eq(nodeRunEvents.nodeRunId, nodeRunId),
+            gt(nodeRunEvents.id, journal.firstId - 1),
+            lte(nodeRunEvents.id, journal.lastId),
+          ),
+        )
+    }
+    finalizeArchiveJournal(file)
+    return dbRows
+  }
+
+  // A short/partial append is safe to roll back only while every selected DB
+  // row is still present. If any row is already gone, fail closed: truncating
+  // could destroy the only surviving copy.
+  if (dbRows !== journal.rowCount) throw new Error('events-archive-recovery-ambiguous')
+  if (fileSize < journal.offset) throw new Error('events-archive-base-truncated')
+  if (fileSize > journal.offset + journal.length) {
+    throw new Error('events-archive-recovery-overlap')
+  }
+  if (fileExists && fileSize !== journal.offset) truncateSync(file, journal.offset)
+  finalizeArchiveJournal(file)
+  return 0
+}
+
+async function recoverPendingArchiveAppendFromState(
+  db: DbClient,
+  logsDir: string,
+): Promise<ArchiveBatchResult> {
+  const raw = await readMaintenanceValue(db, PENDING_APPEND_KEY)
+  if (raw === null || raw === '') return { file: null, archived: 0 }
+  let pointer: { version: 1; taskId: string; nodeRunId: string }
+  try {
+    const value = JSON.parse(raw) as Partial<typeof pointer>
+    if (
+      value.version !== 1 ||
+      typeof value.taskId !== 'string' ||
+      value.taskId === '' ||
+      typeof value.nodeRunId !== 'string' ||
+      value.nodeRunId === ''
+    ) {
+      throw new Error('invalid')
+    }
+    pointer = value as typeof pointer
+  } catch {
+    throw new Error('events-archive-pending-pointer-invalid')
+  }
+
+  const file = jsonlPath(logsDir, pointer.taskId, pointer.nodeRunId)
+  const journal = parseArchiveJournal(file)
+  if (journal === null) {
+    // Crash after publishing the DB pointer but before the FS journal, or
+    // after finalizing the journal but before clearing the pointer.
+    await writeMaintenanceValue(db, PENDING_APPEND_KEY, '')
+    return { file: null, archived: 0 }
+  }
+  const archived = await recoverPendingArchiveAppend(db, pointer.nodeRunId, file)
+  await writeMaintenanceValue(db, PENDING_APPEND_KEY, '')
+  return { file, archived }
+}
+
+function finalizeArchiveJournal(file: string): void {
+  const path = archiveJournalPath(file)
+  if (existsSync(path)) unlinkSync(path)
 }
 
 /**

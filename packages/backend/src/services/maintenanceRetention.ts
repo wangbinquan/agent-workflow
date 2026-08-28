@@ -15,19 +15,8 @@
 // 不为此再开 migration。删除一律分批（chunkedAll 的 500 上限之下）防长写锁。
 
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { and, asc, inArray, lt, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import {
-  intentSessions,
-  intentTurnEvents,
-  intentTurns,
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessions,
-  memoryDistillEvents,
-  memoryDistillJobs,
-  webhookTriggerFires,
-  tasks,
-} from '@/db/schema'
 import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
@@ -35,7 +24,7 @@ import { createLogger } from '@/util/log'
 const log = createLogger('maintenance-retention')
 
 const DAY_MS = 86_400_000
-const DELETE_BATCH = 5_000
+export const RETENTION_DELETE_BATCH = 5_000
 
 export interface RetentionConfig {
   /** 事件流水三胞胎（distill / intent turn / mcp runtime test），0 = off。 */
@@ -52,34 +41,189 @@ export interface RetentionSweepResult {
   userAccessAudit: number
 }
 
-async function deleteExpiredByTs(
-  db: DbClient,
-  target: typeof memoryDistillEvents | typeof intentTurnEvents | typeof mcpRuntimeTestEvents,
-  cutoff: number,
-  /** 宿主终态判据。design.md §7.2 写的是「宿主终态后 30 天」,而首版实现只看行
-   *  时间戳——实现门 P2-11:清掉一个**仍在进行**的会话/任务的事件流,而宿主行上的
-   *  计数与状态列还在,UI 就会正面宣称「complete · 42 events」而面板空白,蒸馏
-   *  详情页更会把「抓取失败」标记行一并删掉、把诊断信号反转成「没有抓取问题」。 */
-  hostSettled: ReturnType<typeof sql>,
-): Promise<number> {
-  let total = 0
-  for (;;) {
-    const batch = await db
-      .select({ id: target.id })
-      .from(target)
-      .where(and(lt(target.ts, cutoff), hostSettled))
-      .orderBy(asc(target.id))
-      .limit(DELETE_BATCH)
-    if (batch.length === 0) return total
-    await db.delete(target).where(
-      inArray(
-        target.id,
-        batch.map((row) => row.id),
-      ),
-    )
-    total += batch.length
-    if (batch.length < DELETE_BATCH) return total
+type RetentionPhase =
+  | 'distill-events'
+  | 'intent-turn-events'
+  | 'mcp-runtime-test-events'
+  | 'webhook-trigger-fires'
+  | 'done'
+
+export interface RetentionSweepCursorV1 {
+  readonly version: 1
+  readonly phase: RetentionPhase
+  readonly eventCutoff: number | null
+  readonly webhookCutoff: number | null
+}
+
+export interface RetentionSweepSliceResult {
+  readonly done: boolean
+  readonly cursor: RetentionSweepCursorV1
+  readonly counters: RetentionSweepResult
+}
+
+function zeroRetentionResult(): RetentionSweepResult {
+  return {
+    distillEvents: 0,
+    intentTurnEvents: 0,
+    mcpRuntimeTestEvents: 0,
+    webhookTriggerFires: 0,
+    userAccessAudit: 0,
   }
+}
+
+function retentionPhases(cursor: RetentionSweepCursorV1): RetentionPhase[] {
+  return [
+    ...(cursor.eventCutoff === null
+      ? []
+      : (['distill-events', 'intent-turn-events', 'mcp-runtime-test-events'] as const)),
+    ...(cursor.webhookCutoff === null ? [] : (['webhook-trigger-fires'] as const)),
+    'done',
+  ]
+}
+
+function retentionCursor(
+  value: unknown,
+  config: RetentionConfig,
+  now: number,
+): RetentionSweepCursorV1 {
+  if (value === null || value === undefined) {
+    const cursor: RetentionSweepCursorV1 = {
+      version: 1,
+      phase: 'done',
+      eventCutoff:
+        config.eventStreamRetentionDays > 0 ? now - config.eventStreamRetentionDays * DAY_MS : null,
+      webhookCutoff:
+        config.webhookTriggerFiresRetentionDays > 0
+          ? now - config.webhookTriggerFiresRetentionDays * DAY_MS
+          : null,
+    }
+    return { ...cursor, phase: retentionPhases(cursor)[0]! }
+  }
+  const cursor = value as Partial<RetentionSweepCursorV1> | null
+  const validCutoff = (cutoff: unknown): cutoff is number | null =>
+    cutoff === null || Number.isSafeInteger(cutoff)
+  if (
+    typeof cursor !== 'object' ||
+    cursor === null ||
+    cursor.version !== 1 ||
+    ![
+      'distill-events',
+      'intent-turn-events',
+      'mcp-runtime-test-events',
+      'webhook-trigger-fires',
+      'done',
+    ].includes(String(cursor.phase)) ||
+    !validCutoff(cursor.eventCutoff) ||
+    !validCutoff(cursor.webhookCutoff)
+  ) {
+    throw new Error('maintenance-retention-cursor-invalid')
+  }
+  const parsed = cursor as RetentionSweepCursorV1
+  if (!retentionPhases(parsed).includes(parsed.phase)) {
+    throw new Error('maintenance-retention-cursor-phase-invalid')
+  }
+  return parsed
+}
+
+function advanceRetentionPhase(cursor: RetentionSweepCursorV1): RetentionSweepCursorV1 {
+  const phases = retentionPhases(cursor)
+  const index = phases.indexOf(cursor.phase)
+  return { ...cursor, phase: phases[Math.min(phases.length - 1, index + 1)]! }
+}
+
+/**
+ * One predicate-rechecking DELETE statement. This is the Worker-facing owner
+ * contract; it cannot keep SQLite's writer lock across phases or batches.
+ */
+export async function runRetentionSweepSlice(
+  db: DbClient,
+  config: RetentionConfig,
+  cursorValue: unknown,
+  now: number = Date.now(),
+  batchSize: number = RETENTION_DELETE_BATCH,
+): Promise<RetentionSweepSliceResult> {
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new Error('maintenance-retention-batch-invalid')
+  }
+  const cursor = retentionCursor(cursorValue, config, now)
+  const counters = zeroRetentionResult()
+  if (cursor.phase === 'done') return { done: true, cursor, counters }
+
+  let deleted: Array<{ id: string }>
+  switch (cursor.phase) {
+    case 'distill-events':
+      deleted = await db.all(sql`
+        DELETE FROM memory_distill_events
+        WHERE rowid IN (
+          SELECT event.rowid FROM memory_distill_events event
+          WHERE event.ts < ${cursor.eventCutoff}
+            AND EXISTS (
+              SELECT 1 FROM memory_distill_jobs job
+              WHERE job.id = event.distill_job_id
+                AND job.status IN ('done', 'failed', 'canceled')
+            )
+          ORDER BY event.id
+          LIMIT ${batchSize}
+        )
+        RETURNING id`)
+      counters.distillEvents = deleted.length
+      break
+    case 'intent-turn-events':
+      deleted = await db.all(sql`
+        DELETE FROM intent_turn_events
+        WHERE rowid IN (
+          SELECT event.rowid FROM intent_turn_events event
+          WHERE event.ts < ${cursor.eventCutoff}
+            AND EXISTS (
+              SELECT 1 FROM intent_turns turn
+              JOIN intent_sessions session ON session.id = turn.session_id
+              WHERE turn.id = event.turn_id AND session.status = 'archived'
+            )
+          ORDER BY event.id
+          LIMIT ${batchSize}
+        )
+        RETURNING id`)
+      counters.intentTurnEvents = deleted.length
+      break
+    case 'mcp-runtime-test-events':
+      deleted = await db.all(sql`
+        DELETE FROM mcp_runtime_test_events
+        WHERE rowid IN (
+          SELECT event.rowid FROM mcp_runtime_test_events event
+          WHERE event.ts < ${cursor.eventCutoff}
+            AND EXISTS (
+              SELECT 1 FROM mcp_runtime_test_sessions session
+              WHERE session.id = event.test_session_id AND session.status = 'ended'
+            )
+          ORDER BY event.id
+          LIMIT ${batchSize}
+        )
+        RETURNING id`)
+      counters.mcpRuntimeTestEvents = deleted.length
+      break
+    case 'webhook-trigger-fires':
+      deleted = await db.all(sql`
+        DELETE FROM webhook_trigger_fires
+        WHERE rowid IN (
+          SELECT fire.rowid FROM webhook_trigger_fires fire
+          WHERE fire.fired_at < ${cursor.webhookCutoff}
+            AND NOT EXISTS (
+              SELECT 1 FROM tasks task
+              WHERE task.id = fire.task_id
+                AND task.status NOT IN (${sql.join(
+                  TERMINAL_TASK_STATUSES.map((value) => sql`${value}`),
+                  sql`, `,
+                )})
+            )
+          ORDER BY fire.id
+          LIMIT ${batchSize}
+        )
+        RETURNING id`)
+      counters.webhookTriggerFires = deleted.length
+      break
+  }
+  const next = deleted.length < batchSize ? advanceRetentionPhase(cursor) : cursor
+  return { done: next.phase === 'done', cursor: next, counters }
 }
 
 /** One hourly retention pass. Every stage is independent and fail-soft. */
@@ -88,83 +232,15 @@ export async function runRetentionSweep(
   config: RetentionConfig,
   now: number = Date.now(),
 ): Promise<RetentionSweepResult> {
-  const result: RetentionSweepResult = {
-    distillEvents: 0,
-    intentTurnEvents: 0,
-    mcpRuntimeTestEvents: 0,
-    webhookTriggerFires: 0,
-    userAccessAudit: 0,
-  }
-
-  if (config.eventStreamRetentionDays > 0) {
-    const cutoff = now - config.eventStreamRetentionDays * DAY_MS
-    result.distillEvents = await deleteExpiredByTs(
-      db,
-      memoryDistillEvents,
-      cutoff,
-      sql`exists (
-        select 1 from ${memoryDistillJobs} j
-        where j.id = ${memoryDistillEvents.distillJobId}
-          and j.status in ('done', 'failed', 'canceled')
-      )`,
-    )
-    result.intentTurnEvents = await deleteExpiredByTs(
-      db,
-      intentTurnEvents,
-      cutoff,
-      sql`exists (
-        select 1 from ${intentTurns} t
-        join ${intentSessions} s on s.id = t.session_id
-        where t.id = ${intentTurnEvents.turnId} and s.status = 'archived'
-      )`,
-    )
-    result.mcpRuntimeTestEvents = await deleteExpiredByTs(
-      db,
-      mcpRuntimeTestEvents,
-      cutoff,
-      sql`exists (
-        select 1 from ${mcpRuntimeTestSessions} s
-        where s.id = ${mcpRuntimeTestEvents.testSessionId} and s.status = 'ended'
-      )`,
-    )
-  }
-
-  if (config.webhookTriggerFiresRetentionDays > 0) {
-    const cutoff = now - config.webhookTriggerFiresRetentionDays * DAY_MS
-    for (;;) {
-      const batch = await db
-        .select({ id: webhookTriggerFires.id })
-        .from(webhookTriggerFires)
-        .where(
-          and(
-            lt(webhookTriggerFires.firedAt, cutoff),
-            // 实现门 P1-3:这张表是 webhook supersede(D8/D21「同流最近一次
-            // launched 的任务未终态 ⇒ 取消」)的**唯一事实源**,没有任何回退。
-            // 一个卡在 awaiting_human 的任务超过保留期后,它的 fire 行被删 ⇒
-            // 下一次同流触发不再取消它,同一 MR 上两个活任务在同一分支上互相踩。
-            // 保留期不得吃掉仍未终态的那一行。
-            sql`not exists (
-              select 1 from ${tasks} t
-              where t.id = ${webhookTriggerFires.taskId}
-                and t.status not in (${sql.join(
-                  TERMINAL_TASK_STATUSES.map((v) => sql`${v}`),
-                  sql`, `,
-                )})
-            )`,
-          ),
-        )
-        .orderBy(asc(webhookTriggerFires.id))
-        .limit(DELETE_BATCH)
-      if (batch.length === 0) break
-      await db.delete(webhookTriggerFires).where(
-        inArray(
-          webhookTriggerFires.id,
-          batch.map((row) => row.id),
-        ),
-      )
-      result.webhookTriggerFires += batch.length
-      if (batch.length < DELETE_BATCH) break
+  const result = zeroRetentionResult()
+  let cursor: RetentionSweepCursorV1 | null = null
+  for (;;) {
+    const slice = await runRetentionSweepSlice(db, config, cursor, now)
+    for (const key of Object.keys(result) as Array<keyof RetentionSweepResult>) {
+      result[key] += slice.counters[key]
     }
+    if (slice.done) break
+    cursor = slice.cursor
   }
 
   // user_access_audit 有 append-only 触发器（user_access_audit_append_only，

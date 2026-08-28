@@ -1,0 +1,127 @@
+# RFC-338 AC-11 — real-socket large-database responsiveness gate.
+#
+# Push/PR runs the regular 50-client tier whenever the maintenance boundary
+# changes. The nightly and manual tier uses 100 clients. Both use RFC-311's
+# full 100k/3M/~10M seed; `small` exists only for workflow debugging.
+
+name: maintenance-soak-nightly
+
+on:
+  schedule:
+    # Stagger from e2e-full (06:00), WebKit (07:00), evidence (08:30), and
+    # visual regression (09:00).
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Exact commit to checkout (empty = workflow SHA)'
+        required: false
+        default: ''
+      clients:
+        description: 'Concurrent mixed HTTP/WS clients'
+        required: false
+        default: '100'
+      duration_seconds:
+        description: 'Seconds per control/maintenance phase'
+        required: false
+        default: '180'
+      scale:
+        description: 'RFC-311 seed scale (full or small)'
+        required: false
+        default: 'full'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/backend/src/cli/start.ts'
+      - 'packages/backend/src/db/client.ts'
+      - 'packages/backend/src/db/txSync.ts'
+      - 'packages/backend/src/platform/background/**'
+      - 'packages/backend/src/platform/persistence/sqlite/maintenanceRunStore.ts'
+      - 'packages/backend/src/services/eventsArchive.ts'
+      - 'packages/backend/src/services/maintenanceRetention.ts'
+      - 'packages/backend/src/services/taskArchive.ts'
+      - 'packages/backend/src/services/tokenAudit.ts'
+      - 'packages/backend/src/services/webhook/**'
+      - 'packages/backend/db/migrations/0216_rfc338_maintenance_runs.sql'
+      - 'packages/shared/src/schemas/maintenance.ts'
+      - 'scripts/build-binary.ts'
+      - 'scripts/perf-seed.ts'
+      - 'scripts/rfc338-maintenance-soak.ts'
+      - '.github/workflows/maintenance-soak-nightly.yml'
+  pull_request:
+    paths:
+      - 'packages/backend/src/cli/start.ts'
+      - 'packages/backend/src/db/client.ts'
+      - 'packages/backend/src/db/txSync.ts'
+      - 'packages/backend/src/platform/background/**'
+      - 'packages/backend/src/platform/persistence/sqlite/maintenanceRunStore.ts'
+      - 'packages/backend/src/services/eventsArchive.ts'
+      - 'packages/backend/src/services/maintenanceRetention.ts'
+      - 'packages/backend/src/services/taskArchive.ts'
+      - 'packages/backend/src/services/tokenAudit.ts'
+      - 'packages/backend/src/services/webhook/**'
+      - 'packages/backend/db/migrations/0216_rfc338_maintenance_runs.sql'
+      - 'packages/shared/src/schemas/maintenance.ts'
+      - 'scripts/build-binary.ts'
+      - 'scripts/perf-seed.ts'
+      - 'scripts/rfc338-maintenance-soak.ts'
+      - '.github/workflows/maintenance-soak-nightly.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  maintenance-soak:
+    name: Maintenance ${{ github.event_name == 'schedule' && '100-client nightly' || 'large-seed gate' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.13'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Report free disk before the large seed
+        run: df -h /
+
+      - name: Build the separately bundled daemon and Worker entries
+        run: bun run build:binary:e2e
+
+      - name: Run RFC-338 control and maintenance windows
+        env:
+          RFC338_TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+          SOAK_CLIENTS: ${{ github.event_name == 'schedule' && '100' || github.event_name == 'workflow_dispatch' && inputs.clients || '50' }}
+          SOAK_DURATION: ${{ github.event_name == 'schedule' && '180' || github.event_name == 'workflow_dispatch' && inputs.duration_seconds || '60' }}
+          SOAK_SCALE: ${{ github.event_name == 'workflow_dispatch' && inputs.scale || 'full' }}
+        run: >-
+          bun run soak:maintenance
+          --clients "$SOAK_CLIENTS"
+          --duration-seconds "$SOAK_DURATION"
+          --scale "$SOAK_SCALE"
+          --report test-results/rfc338-maintenance-soak.json
+
+      - name: Upload machine-readable and Markdown reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rfc338-maintenance-soak-${{ github.run_id }}
+          path: |
+            test-results/rfc338-maintenance-soak.json
+            test-results/rfc338-maintenance-soak.md
+          if-no-files-found: error
+          retention-days: 30

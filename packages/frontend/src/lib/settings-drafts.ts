@@ -101,6 +101,7 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'eventStreamRetentionDays',
     'webhookTriggerFiresRetentionDays',
     'taskArchive',
+    'maintenanceSchedule',
   ],
   // RFC-210. Registering here is not optional bookkeeping: this list IS the
   // minimal-write allowlist, so a key missing from it gets silently dropped on

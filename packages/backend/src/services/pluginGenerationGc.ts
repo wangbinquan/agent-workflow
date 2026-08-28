@@ -8,9 +8,13 @@
 
 import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
+import type { Dirent } from 'node:fs'
+import { readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import { nodeRuns } from '@/db/schema'
 import { createLogger } from '@/util/log'
+import { Paths } from '@/util/paths'
 import { collectPluginGenerationGarbage } from './plugin'
 import { HOUR_MS, MAINTENANCE_PHASE } from './daemonCadence'
 import { startMaintenanceTicker } from './maintenanceTicker'
@@ -20,12 +24,51 @@ const DEFAULT_GRACE_MS = 24 * 60 * 60_000
 // RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
 const NON_TERMINAL = CANCELABLE_TASK_STATUSES
 
+function missingDirectory(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    ((error as { code?: unknown }).code === 'ENOENT' ||
+      (error as { code?: unknown }).code === 'ENOTDIR')
+  )
+}
+
+/**
+ * Cheap filesystem preflight for the common empty-installation case. An
+ * unreadable existing directory is treated as a candidate so uncertainty can
+ * never bypass the active-run safety proof.
+ */
+export async function hasPluginGenerationGcCandidates(pluginsDir?: string): Promise<boolean> {
+  const root = pluginsDir ?? Paths.pluginsDir
+  let plugins: Dirent[]
+  try {
+    plugins = await readdir(root, { withFileTypes: true })
+  } catch (error) {
+    return !missingDirectory(error)
+  }
+  for (const plugin of plugins) {
+    if (!plugin.isDirectory()) continue
+    if (plugin.name.startsWith('.check-')) return true
+    try {
+      const generations = await readdir(join(root, plugin.name, 'generations'), {
+        withFileTypes: true,
+      })
+      if (generations.some((generation) => generation.isDirectory())) return true
+    } catch (error) {
+      if (!missingDirectory(error)) return true
+    }
+  }
+  return false
+}
+
 export async function runPluginGenerationGc(opts: {
   db: DbClient
   pluginsDir?: string
   graceMs?: number
   now?: number
 }): Promise<string[]> {
+  if (!(await hasPluginGenerationGcCandidates(opts.pluginsDir))) return []
   const active = await opts.db
     .select({ id: nodeRuns.id })
     .from(nodeRuns)

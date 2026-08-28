@@ -22,11 +22,10 @@ export type HumanGateContinuationRecoveryResult = Readonly<{
   >[]
 }>
 
-export async function recoverPendingHumanGateContinuations(input: {
-  db: DbClient
-  wake: (continuation: PendingHumanGateContinuation) => Promise<void>
-}): Promise<HumanGateContinuationRecoveryResult> {
-  const pending = input.db
+export function listPendingHumanGateContinuations(
+  db: DbClient,
+): readonly PendingHumanGateContinuation[] {
+  return db
     .select({
       taskId: taskExecutionIntents.taskId,
       continuationRef: taskExecutionIntents.id,
@@ -40,6 +39,13 @@ export async function recoverPendingHumanGateContinuations(input: {
     )
     .orderBy(asc(taskExecutionIntents.createdAt), asc(taskExecutionIntents.id))
     .all()
+}
+
+export async function recoverPendingHumanGateContinuations(input: {
+  db: DbClient
+  wake: (continuation: PendingHumanGateContinuation) => Promise<void>
+}): Promise<HumanGateContinuationRecoveryResult> {
+  const pending = listPendingHumanGateContinuations(input.db)
 
   const woken: PendingHumanGateContinuation[] = []
   const failed: Array<PendingHumanGateContinuation & { error: string }> = []

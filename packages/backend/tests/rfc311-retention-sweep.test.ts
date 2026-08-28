@@ -300,19 +300,25 @@ describe('RFC-311 C6 — the other two event streams share the window', () => {
   })
 
   // mcp_runtime_test_events 的 fixture 需要一整条 runtime-test session 链(必填列
-  // 远多于上面两张),行为面由同一个 deleteExpiredByTs 助手覆盖;这里用源码守卫
-  // 锁住「第三条腿仍然接着」——变异 #14 正是把它写死 0 而无人发现。
+  // 远多于上面两张),这里用源码守卫锁住「第三条腿仍然接着」；RFC-338 后每条腿
+  // 必须是一个 predicate-rechecking bounded DELETE，不能退回全阶段同步循环。
   test('all three event streams stay wired into the same window (source lock)', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'maintenanceRetention.ts'),
       'utf8',
     )
-    for (const table of ['memoryDistillEvents', 'intentTurnEvents', 'mcpRuntimeTestEvents']) {
-      expect(src).toMatch(new RegExp(`deleteExpiredByTs\\(\\s*db,\\s*${table},\\s*cutoff,`))
+    for (const table of [
+      'memory_distill_events',
+      'intent_turn_events',
+      'mcp_runtime_test_events',
+    ]) {
+      expect(src).toContain(`DELETE FROM ${table}`)
     }
+    expect(src).toContain('export async function runRetentionSweepSlice(')
+    expect(src).toContain('LIMIT ${batchSize}')
     // 且三条腿都带宿主终态判据(实现门 P2-11)。
-    expect(src).toContain("j.status in ('done', 'failed', 'canceled')")
-    expect(src).toContain("s.status = 'archived'")
-    expect(src).toContain("s.status = 'ended'")
+    expect(src).toContain("job.status IN ('done', 'failed', 'canceled')")
+    expect(src).toContain("session.status = 'archived'")
+    expect(src).toContain("session.status = 'ended'")
   })
 })

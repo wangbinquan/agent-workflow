@@ -3384,6 +3384,37 @@ export const taskCollaborators = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// RFC-340 review_node_reviewers — node-scoped, opinion-only review access.
+// This is not a task_collaborators grade: the assignment exposes only review
+// resources for the frozen review node id and grants comment capabilities only.
+// -----------------------------------------------------------------------------
+export const reviewNodeReviewers = sqliteTable(
+  'review_node_reviewers',
+  {
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    reviewNodeId: text('review_node_id').notNull(),
+    reviewerUserId: text('reviewer_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    assignedByUserId: text('assigned_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    assignedAt: integer('assigned_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.taskId, t.reviewNodeId, t.reviewerUserId] }),
+    actorIdx: index('idx_review_node_reviewers_actor').on(
+      t.reviewerUserId,
+      t.taskId,
+      t.reviewNodeId,
+    ),
+    nodeIdx: index('idx_review_node_reviewers_node').on(t.taskId, t.reviewNodeId),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // RFC-041 memories — single source of truth for the platform's long-term
 // memory layer. One row = one atomic learned rule / decision / preference
 // scoped to exactly one of agent / workflow / repo / global. CHECK
@@ -7233,3 +7264,50 @@ export const maintenanceState = sqliteTable('maintenance_state', {
   value: text('value').notNull(),
   updatedAt: integer('updated_at').notNull(),
 })
+
+// -----------------------------------------------------------------------------
+// RFC-338 maintenance_runs — durable scheduling/lease/cursor metadata for the
+// off-thread maintenance worker. This is not a second owner for job business
+// state; deleting it only loses scheduling receipts and forces safe re-admission.
+// -----------------------------------------------------------------------------
+export const maintenanceRuns = sqliteTable(
+  'maintenance_runs',
+  {
+    id: text('id').primaryKey(),
+    jobKey: text('job_key').notNull(),
+    jobClass: text('job_class', { enum: ['cleanup', 'recovery', 'checkpoint'] }).notNull(),
+    slotKey: text('slot_key').notNull(),
+    cycleKey: text('cycle_key'),
+    state: text('state', {
+      enum: ['pending', 'running', 'deferred', 'succeeded', 'failed'],
+    }).notNull(),
+    payloadJson: text('payload_json').notNull().default('{}'),
+    cursorVersion: integer('cursor_version').notNull().default(1),
+    cursorJson: text('cursor_json'),
+    leaseToken: text('lease_token'),
+    leaseExpiresAt: integer('lease_expires_at'),
+    heartbeatAt: integer('heartbeat_at'),
+    attempt: integer('attempt').notNull().default(0),
+    sliceNo: integer('slice_no').notNull().default(0),
+    countersJson: text('counters_json').notNull().default('{}'),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    scheduledAt: integer('scheduled_at').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    startedAt: integer('started_at'),
+    finishedAt: integer('finished_at'),
+  },
+  (t) => ({
+    jobSlotUnique: uniqueIndex('idx_maintenance_runs_job_slot').on(t.jobKey, t.slotKey),
+    oneRunningUnique: uniqueIndex('idx_maintenance_runs_one_running')
+      .on(t.jobKey)
+      .where(sql`${t.state} = 'running'`),
+    oneQueuedUnique: uniqueIndex('idx_maintenance_runs_one_queued')
+      .on(t.jobKey)
+      .where(sql`${t.state} in ('pending','deferred')`),
+    admissionIdx: index('idx_maintenance_runs_admission').on(t.state, t.jobClass, t.scheduledAt),
+    leaseIdx: index('idx_maintenance_runs_lease').on(t.state, t.leaseExpiresAt),
+    lastIdx: index('idx_maintenance_runs_last').on(t.finishedAt, t.jobKey),
+  }),
+)

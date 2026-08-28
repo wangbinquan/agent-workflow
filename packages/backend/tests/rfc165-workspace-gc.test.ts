@@ -215,6 +215,31 @@ describe('RFC-165 T2b — two-phase workspace tombstone + revive gate', () => {
     expect((await taskRow(h, id)).workspacePruningAt).toBeNull()
   })
 
+  test('G4c a task revived after candidate scan still wins the durable pre-delete CAS', async () => {
+    const dir = mkDir(h, 'ws-revived-after-scan')
+    const id = await seedTask(h, {
+      status: 'done',
+      spaceKind: 'scratch',
+      worktreePath: dir,
+      repoPath: dir,
+    })
+    let injected = false
+    const result = await runWorktreeGc(h.db, GC_ON, Date.now(), (taskId) => {
+      if (taskId === id && !injected) {
+        injected = true
+        h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, id)).run()
+      }
+      // Simulate an admission-time advisory snapshot that did not contain the
+      // newly revived task. The durable terminal-status CAS must still win.
+      return false
+    })
+
+    expect(injected).toBe(true)
+    expect(result.removed).toEqual([])
+    expect(existsSync(dir)).toBe(true)
+    expect(await taskRow(h, id)).toMatchObject({ status: 'pending', workspacePruningAt: null })
+  })
+
   test('G5 delete failure keeps the claim; re-claim only past the lease', async () => {
     // A single-"repo" task whose worktree is a PLAIN dir and whose repoPath
     // does not exist: removeWorktree throws deterministically, so phase 2

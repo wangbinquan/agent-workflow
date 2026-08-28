@@ -2,6 +2,35 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🛠️ **进行中 RFC（候选实现完成，2026-08-28）：[RFC-340 节点级意见型评审人授权与配置](design/RFC-340-node-scoped-comment-reviewers/proposal.md)。**
+> 用户已明确 reviewer 不能删除意见、通过、重新生成、退回或逐篇取舍，只能为被指派的 review 节点新增意见并修改自己的 pending 意见；
+> 该角色不获得整任务可见性。
+> RFC-340 设计为 `(task, frozen review node, user)` assignment：reviewer 看该节点全部轮次、文档和所有意见，只能新增及维护自己的
+> pending 意见；不能逐篇取舍或 final decision。owner/collaborator/observer/admin 现有能力保持，配置由 owner/admin 在独立
+> `/tasks/:taskId/reviewers` 页面完成；策略归 RFC-294 `collaboration`，不复活 RFC-036 的单人决策型 assignment。
+> migration/shared、collaboration policy + ports、配置 REST、review REST/MCP 共路由授权、独立配置页和 capability-driven review UI
+> 已完成；shared 4、backend reviewer/comment 20（77 expects）、frontend review/config 52、RFC-326 MCP 15（145 expects）项定向测试通过。
+> RFC-339 的 dispatcher bootstrap 漏接已闭合，backend typecheck 与全 MCP 回归均通过；共享树仍有未发布 RFC-338 / RFC-339
+> 候选且与本 RFC 共用 migration journal、schema、task-execution、server、i18n；按 shared-main 规则等待其发布后同步、跑全门、精确
+> 提交推送并核验 exact-SHA CI，当前 index 为空、未代交并发产物。
+
+> 🛠️ **进行中 RFC（已批准，2026-08-28）：[RFC-338 重维护 Worker 隔离与每日维护时刻](design/RFC-338-maintenance-worker-daily-window/proposal.md)。**
+> current source 确认 14 个小时维护虽已由 RFC-322 错峰，job body 仍在 daemon 的 HTTP/WS 主事件循环直接执行；
+> 单条同步 `bun:sqlite` statement、连续 batch、`appendFileSync/rmSync` 或主连接 WAL checkpoint 仍会让页面失去响应。
+> RFC-338 将 proactive DB/FS cleanup 改为独立 Worker/连接上的串行可恢复切片，并提供“每小时错峰 / 每天
+> `HH:MM + IANA timezone` 启动”热配置；correctness/recovery 保持原 boot/周期节奏但同样移出主线程，纯内存小 GC
+> 留 main。durable slot/lease/cursor、短事务/BUSY 退让、状态 UI 与真实并发 HTTP/WS 大库门共同防止回退。
+> PostgreSQL、普通 query pool 与多实例是后续独立 RFC。用户已在确认 PostgreSQL 不内嵌、迁移另立 RFC 后明确批准
+> D1–D11；live baseline `f5f573a533e8527857f47b9cf74023e3629985b1`。T1～T9 候选实现与定向门已完成：
+> durable ledger/Worker supervisor/daily IANA schedule/bounded DB slices/混合 FS phase/correctness typed delta/status API 与设置页均已落位；
+> 真实 socket 在 Worker 连续 2 秒同步阻塞时仍持续完成 HTTP/WS，两连接竞争在 50ms busy budget 内退让，active workspace race
+> 与 crash/late receipt 有回归锁。390px 实际浏览器的键盘/字段错误通过；真实编译二进制初测抓到并修复 Bun `/$bunfs`
+> Worker entry 解析，重建后状态为 `Ready`，并新增 compiled-binary E2E。50-client/full-seed（100k tasks / 3M node runs /
+> 10M events）正式门已 PASS：维护窗口 API max 385.2ms、写 max 359.0ms、WS gap max 573.6ms、event-loop gap max
+> 371.5ms、错误/超时 0；50,636 条 SQLite statement p95≤50ms、max 78.2ms。backend 目标/owner 回归 109、shared 3、
+> frontend 2、compiled E2E 1 与完整 fault/mutation receipts 均绿，报告见 RFC `verification-report.md`。用户随后明确授权
+> “完整实现并提交上库”；仍需发布后的 exact-SHA 主 CI、100-client hosted soak 与 remote ancestry，故保持 In Progress。
+
 > ✅ **已完成 RFC（Done，2026-08-28）：[RFC-337 数字员工任务详情的信息架构与交付可见性](design/RFC-337-digital-employee-task-detail-visibility/proposal.md)。**
 > 源码确认 Case 的真实输入/仓库已在 `development.issue-handling` Context，工作区表已有
 > `baselineSha/targetBranch/sourceBranch`，MR Context 也已有 `webUrl` 与完整交付事实；当前页面只是把三个
@@ -26,17 +55,27 @@
 > migration/claim/identity-access/account/task 回归共 153 tests、三 workspace typecheck 已通过；等待 exact-path
 > commit、推送和 exact-SHA hosted CI。
 
-> 🧭 **当前架构节点（In Progress，2026-08-28）：[RFC-334 NodeExecutorRegistry（RFC-294 W2-C）](design/RFC-334-node-executor-registry/proposal.md)。**
-> source pin `0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34` 上的 current-source 调研与 proposal/design/plan 已完成：closed catalog
-> 恰为 14 个 `NodeKind`（13 个 user-authored live + `code-round` synthesized-only/retired），DAG 仍经 RFC-332 W2-C bridge
-> 调 `scheduler.runOneNode`，workgroup/dw host 仍经 `buildWorkgroupHooks/runHostNode` 旁路；RFC-313 neutral cap 的生产
-> consumer 恰为 TaskExecution/DigitalEmployee。目标为公共 prelude + 14-key closed registry + per-kind executor，workgroup host
-> 走 `agent-single` typed lane，wrapper 只委托 W2-D，review/clarify policy 继续归 collaboration。
-> **用户已明确批准 T2～T12 生产实施**。T3 已把 neutral retry cap/codec 迁到 `platform/contracts`，
-> TaskExecution retry shape/state 迁回本域，TaskExecution/DigitalEmployee 两个生产 consumer 已切换；T4 已落 14-key
-> closed specs/registry、gateway 与 typed workgroup-host port 骨架，缺/多/wrong-kind 变异及 abort/branch/host ordering 纯测已锁。
-> T2/T5～T12 继续推进。
-> 不引入安全策略或功能收缩。
+> 🧭 **当前架构节点（Draft，2026-08-28）：[RFC-339 WrapperRuntime 归位与 wrapper/replay mechanics cutover（RFC-294 W2-D）](design/RFC-339-wrapper-runtime-cutover/proposal.md)。**
+> source pin `251b5d725ef731d15c17a01656fdc827f925e7c7` 上的 current-source 调研与 proposal/design/plan 已完成：当前恰有
+> `wrapper-loop` / `wrapper-git` / `wrapper-fanout` 三种 wrapper，真实 body 与 merge replay 仍寄居于 `services/scheduler.ts`；
+> source-lock 登记 10 个 W2-D scheduler symbol、6 条正向 bridge、17 条 scheduler→nodeMechanics reverse import 与 2 条
+> adjacent task-internal edge。目标为 closed `WrapperRuntime`、唯一 common lifecycle template、Loop/Git/Fanout strategies、
+> `ExecutionScopeIndex`、`ExecutionMergeRecovery` 与 bootstrap-only composition；逐 kind 原子 cutover 并删除 legacy owner。
+> 当前 architecture payload/provenance `15767cfc9066fcdb9f074b1e93ab182699ba4fc0` →
+> `251b5d725ef731d15c17a01656fdc827f925e7c7`，digest
+> `sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607`，backend/repo SCC=`4/6`、KNOWN=`31`；
+> task-execution-containing SCC 已为 0，故 W2-D 只按 exact edge extinction 记账，不重复领取 RFC-331 的 SCC/KNOWN credit。
+> **等待用户明确批准 D1～D10 与 T2～T11；production 尚未启动。**所有既有 wrapper/nesting/replay/merge/park/terminal/
+> error/persisted compatibility 必须保持，不新增安全策略、权限或功能限制；本 RFC 只关闭 W2-D，不自动授权 W3 以后 wave。
+
+> ✅ **已完成 RFC（Done，2026-08-28）：[RFC-334 NodeExecutorRegistry（RFC-294 W2-C）](design/RFC-334-node-executor-registry/proposal.md)。**
+> source pin `0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34` 锁定 14 个 `NodeKind`；公共 abort/branch prelude、14-key closed
+> registry、per-kind executor、`agent-single` typed host lane、collaboration gate port 与 neutral retry contract 已全部切入生产。
+> 实现链 `4b7f36c96` → `234cfb230` → `daf4c4a76` → payload `1271ecb20` → provenance `cfe1326b4`；legacy
+> `runOneNode` / `runHostNode` / `buildWorkgroupHooks` 与 W2-C exception 均归零，三条 wrapper bridge 完整留给 W2-D。
+> 最终功能 SHA `8e58eb05f987bcf08007db714119b3f46d519772` 的主 CI `33142147682` attempt 2 为 35/35 success；
+> production-equivalent SHA `0a0df74c4476355cc5d5e5f0fe289f823759a2e1` 上七条 scheduled workflow 共 19/19 jobs success。
+> W2-C 已关闭；零产品行为变化、零新增安全策略，且未倒签 W2-D/W3 以后 wave。
 
 > ✅ **已完成 RFC（Done，2026-08-28）：[RFC-333 人工门原子停驻与持久续跑（RFC-294 P0-C）](design/RFC-333-human-gate-atomic-park-and-continuation/proposal.md)**
 > —— review/clarify/questions open 已以 purpose-specific journal + `TaskParkTx` 同事务提交 gate/node/task，三类 decision 已以

@@ -51,10 +51,25 @@ export interface OpenDbOptions {
   /** RFC-311: PRAGMA mmap_size window in MiB (default 512, 0 disables). The
    *  engine silently falls back to 0 on filesystems without mmap support. */
   mmapMib?: number
+  /** RFC-338: per-connection SQLite lock wait. The daemon primary keeps 5s;
+   * maintenance Worker connections use a short value and defer instead of
+   * making foreground writes wait behind a maintenance retry loop. */
+  busyTimeoutMs?: number
   /** RFC-311: warn-log any statement slower than this many ms (default 50,
    *  0 disables). Every statement here runs synchronously on the daemon's
    *  event loop, so a slow one freezes ALL HTTP/WS — surface them. */
   slowQueryMs?: number
+  /** RFC-338: Worker-only timing sink for every synchronous SQLite statement. */
+  observeStatementMs?: (ms: number) => void
+  /** RFC-338: Worker-only timing sink for dbTxSync critical sections. */
+  observeTransactionMs?: (ms: number) => void
+}
+
+const transactionObservers = new WeakMap<object, (ms: number) => void>()
+
+/** Internal dbTxSync hook; absent on ordinary request-serving/test connections. */
+export function observeDbTransaction(db: DbClient, ms: number): void {
+  transactionObservers.get(db as object)?.(ms)
 }
 
 /** 进程累计 CPU 时间（微秒）。不可用时返回 null——诊断字段绝不能成为新的崩溃源。 */
@@ -91,8 +106,9 @@ export function instrumentSlowStatements(
   // 有 4 处）逐字不受影响。
   logSlow: (ms: number, sql: string, cpuMs: number) => void = (ms, sql, cpuMs) =>
     console.warn(`[db-slow] ${ms}ms (cpu ${cpuMs < 0 ? 'n/a' : `${cpuMs}ms`}): ${sql}`),
+  observe?: (ms: number) => void,
 ): void {
-  if (thresholdMs <= 0) return
+  if (thresholdMs <= 0 && observe === undefined) return
   const clip = (sql: string): string => (sql.length > 300 ? `${sql.slice(0, 300)}…` : sql)
   const timed = <A extends unknown[], R>(sql: string, fn: (...args: A) => R) => {
     return (...args: A): R => {
@@ -104,7 +120,8 @@ export function instrumentSlowStatements(
         return fn(...args)
       } finally {
         const ms = performance.now() - t0
-        if (ms >= thresholdMs) {
+        observe?.(ms)
+        if (thresholdMs > 0 && ms >= thresholdMs) {
           const c1 = c0 === null ? null : cpuMicros()
           const cpuMs = c0 === null || c1 === null ? -1 : Math.round((c1 - c0) / 1000)
           logSlow(Math.round(ms), clip(sql), cpuMs)
@@ -163,7 +180,8 @@ export function openDb(opts: OpenDbOptions): DbClient {
     // is where a malformed header typically throws.
     sqlite.exec('PRAGMA journal_mode = WAL;')
     sqlite.exec(`PRAGMA synchronous = ${opts.synchronous === 'FULL' ? 'FULL' : 'NORMAL'};`)
-    sqlite.exec('PRAGMA busy_timeout = 5000;')
+    const busyTimeoutMs = Math.max(0, Math.floor(opts.busyTimeoutMs ?? 5_000))
+    sqlite.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`)
     // RFC-311 — capacity pragmas for a single long-lived connection over a
     // multi-GB file. Negative cache_size = KiB budget. mmap_size is a request:
     // unsupported filesystems answer 0 and reads fall back to the page cache.
@@ -249,9 +267,12 @@ export function openDb(opts: OpenDbOptions): DbClient {
     } else {
       sqlite.exec('PRAGMA foreign_keys = ON;')
     }
+    if (opts.observeTransactionMs !== undefined) {
+      transactionObservers.set(db as object, opts.observeTransactionMs)
+    }
     // RFC-311 — armed after migrations so one-time upgrade work stays out of
     // the steady-state slow log.
-    instrumentSlowStatements(sqlite, opts.slowQueryMs ?? 50)
+    instrumentSlowStatements(sqlite, opts.slowQueryMs ?? 50, undefined, opts.observeStatementMs)
     return db
   } catch (err) {
     // Admission/migration failures happen before the caller owns the client.

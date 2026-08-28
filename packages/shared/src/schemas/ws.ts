@@ -499,11 +499,21 @@ export const PresenceWsMessageSchema = z.discriminatedUnion('type', [
 export type PresenceWsMessage = z.infer<typeof PresenceWsMessageSchema>
 
 // -----------------------------------------------------------------------------
+// Client → server control frames common to every channel.
+// -----------------------------------------------------------------------------
+
+export const WsClientControlMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('ping'), nonce: z.number().int().nonnegative() }).strict(),
+])
+export type WsClientControlMessage = z.infer<typeof WsClientControlMessageSchema>
+
+// -----------------------------------------------------------------------------
 // Server → client control frames common to every channel.
 // -----------------------------------------------------------------------------
 
 export const WsControlMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), channel: z.string(), since: z.number().int().optional() }),
+  z.object({ type: z.literal('pong'), nonce: z.number().int().nonnegative() }).strict(),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string() }),
   z.object({ type: z.literal('authority.changed'), revision: z.number().int().nonnegative() }),
   /**

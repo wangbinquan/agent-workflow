@@ -17,6 +17,10 @@ import {
   MAINTENANCE_SLOW_TICK_MS,
   MIN_PHASE_GAP_MS,
 } from '../src/services/daemonCadence'
+import {
+  HEAVY_MAINTENANCE_JOB_KEYS,
+  MAINTENANCE_JOB_CATALOG,
+} from '../src/platform/background/maintenanceCatalog'
 import { startMaintenanceTicker, type TimerApi } from '../src/services/maintenanceTicker'
 import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 
@@ -485,11 +489,17 @@ describe('RFC-322 登记棘轮（AC-2）', () => {
     expect(offenders).toEqual([])
   })
 
-  test('MAINTENANCE_PHASE 的每个 job 都真的接到了 startMaintenanceTicker 上', () => {
+  test('MAINTENANCE_PHASE 的每个 job 都接到了 ticker 或 RFC-338 coordinator', () => {
     const all = tsFiles(SRC)
       .map((f) => readFileSync(f, 'utf8'))
       .join('\n')
     for (const job of Object.keys(MAINTENANCE_PHASE)) {
+      if ((HEAVY_MAINTENANCE_JOB_KEYS as readonly string[]).includes(job)) {
+        expect(MAINTENANCE_JOB_CATALOG.find((spec) => spec.key === job)?.phaseOffsetMs).toBe(
+          MAINTENANCE_PHASE[job as keyof typeof MAINTENANCE_PHASE],
+        )
+        continue
+      }
       const hits = all.split(`job: '${job}'`).length - 1
       expect(hits, `${job} 登记了相位却没有任何 ticker 使用它（或被用了多次）`).toBe(1)
     }

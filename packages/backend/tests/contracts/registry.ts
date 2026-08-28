@@ -25,6 +25,7 @@ import {
   AgentSchema,
   ErrorResponseSchema,
   McpSchema,
+  MaintenanceStatusSchema,
   OverviewResponseSchema,
   ScheduledTaskListItemSchema,
   SkillSchema,
@@ -689,6 +690,11 @@ export const ENDPOINTS: EndpointSpec[] = [
   // directory, so it is registered without a happy-path body.
   { method: 'GET', path: '/api/maintenance/disk' },
   { method: 'POST', path: '/api/maintenance/disk/cleanup' },
+  {
+    method: 'GET',
+    path: '/api/maintenance/status',
+    happy: { schema: MaintenanceStatusSchema },
+  },
   // RFC-222 — admin-only hard delete (tasks:delete + type-to-confirm body).
   { method: 'DELETE', path: '/api/tasks/:id' },
   { method: 'POST', path: '/api/tasks/:id/cancel' },

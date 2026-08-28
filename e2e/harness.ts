@@ -132,6 +132,12 @@ export interface SpawnOptions {
   runtimeBinaries?: { opencode?: string; claudeCode?: string }
   /** Optional model values written to the isolated runtime rows after boot. */
   runtimeModels?: { opencode?: string | null; claudeCode?: string | null }
+  /**
+   * Maximum time to wait for the daemon's ready line. Ordinary browser tests
+   * keep the platform default; large-database characterization can opt into a
+   * longer cold-start budget without weakening request-time assertions.
+   */
+  readyTimeoutMs?: number
 }
 
 // RFC-254 T26 — must stay in lockstep with scripts/build-binary.ts; the two are
@@ -371,7 +377,10 @@ interface ReadyDaemon {
   bootstrapToken: string | null
 }
 
-async function waitForDaemonReady(child: DaemonChild): Promise<ReadyDaemon> {
+async function waitForDaemonReady(
+  child: DaemonChild,
+  readyTimeoutMs = READY_TIMEOUT_MS,
+): Promise<ReadyDaemon> {
   child.stderr.setEncoding('utf-8')
   child.stdout.setEncoding('utf-8')
 
@@ -391,11 +400,11 @@ async function waitForDaemonReady(child: DaemonChild): Promise<ReadyDaemon> {
       cleanup()
       rejectReady(
         new Error(
-          `e2e/harness: timed out after ${READY_TIMEOUT_MS / 1_000}s waiting for daemon ready line\n` +
+          `e2e/harness: timed out after ${readyTimeoutMs / 1_000}s waiting for daemon ready line\n` +
             `  stdout so far:\n${stdoutTail}\n  stderr so far:\n${stderrTail}`,
         ),
       )
-    }, READY_TIMEOUT_MS)
+    }, readyTimeoutMs)
 
     const onData = (chunk: string): void => {
       if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
@@ -634,7 +643,7 @@ async function startDaemonWithPortAllocator(
       child = attemptChild
 
       try {
-        const ready = await waitForDaemonReady(attemptChild)
+        const ready = await waitForDaemonReady(attemptChild, opts.readyTimeoutMs)
 
         const token =
           opts.authMode === 'bootstrap'

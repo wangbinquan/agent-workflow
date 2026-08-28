@@ -161,6 +161,103 @@ export type DeliveryRetention = { bodyRetentionMs: number; rowRetentionMs: numbe
  *  WAL 有界）且 RETURNING 物化有界（原 `.returning()` 会物化百万级 id 数组）。 */
 export const DELIVERY_GC_BATCH = 10_000
 
+export interface DeliveryGcCursorV1 {
+  readonly version: 1
+  readonly phase: 'bodies' | 'rows'
+  readonly bodyCutoff: number
+  readonly rowCutoff: number
+}
+
+export interface DeliveryGcSliceResult {
+  readonly done: boolean
+  readonly cursor: DeliveryGcCursorV1
+  readonly counters: { readonly bodiesCleared: number; readonly rowsDeleted: number }
+}
+
+function deliveryGcCursor(
+  value: unknown,
+  now: number,
+  retention: DeliveryRetention,
+): DeliveryGcCursorV1 {
+  if (value === null || value === undefined) {
+    return {
+      version: 1,
+      phase: 'bodies',
+      bodyCutoff: now - retention.bodyRetentionMs,
+      rowCutoff: now - retention.rowRetentionMs,
+    }
+  }
+  const record = value as Partial<DeliveryGcCursorV1> | null
+  if (
+    typeof record !== 'object' ||
+    record === null ||
+    record.version !== 1 ||
+    (record.phase !== 'bodies' && record.phase !== 'rows') ||
+    !Number.isSafeInteger(record.bodyCutoff) ||
+    !Number.isSafeInteger(record.rowCutoff)
+  ) {
+    throw new Error('maintenance-webhook-delivery-cursor-invalid')
+  }
+  return record as DeliveryGcCursorV1
+}
+
+/** One bounded UPDATE or DELETE statement for the RFC-338 Worker. */
+export async function gcDeliveriesSlice(
+  db: DbClient,
+  now: number,
+  retention: DeliveryRetention,
+  cursorValue: unknown,
+  batchSize: number = DELIVERY_GC_BATCH,
+): Promise<DeliveryGcSliceResult> {
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new Error('maintenance-webhook-delivery-batch-invalid')
+  }
+  const cursor = deliveryGcCursor(cursorValue, now, retention)
+  if (cursor.phase === 'bodies') {
+    const batch = await db.all<{ id: string }>(sql`
+      UPDATE webhook_deliveries SET body_json = NULL
+      WHERE rowid IN (
+        SELECT rowid FROM webhook_deliveries
+        WHERE received_at < ${cursor.bodyCutoff} AND body_json IS NOT NULL
+          AND status NOT IN ('received','processing')
+        LIMIT ${batchSize}
+      )
+      RETURNING id`)
+    return {
+      done: false,
+      cursor: {
+        ...cursor,
+        phase: batch.length < batchSize ? 'rows' : 'bodies',
+      },
+      counters: { bodiesCleared: batch.length, rowsDeleted: 0 },
+    }
+  }
+  const batch = await db.all<{ id: string }>(sql`
+    DELETE FROM webhook_deliveries
+    WHERE rowid IN (
+      SELECT rowid FROM webhook_deliveries
+      WHERE received_at < ${cursor.rowCutoff}
+        AND status NOT IN ('received','processing')
+        AND NOT EXISTS (
+          SELECT 1 FROM webhook_mr_control_effects effect
+          WHERE effect.delivery_id = webhook_deliveries.id
+            AND effect.status <> 'succeeded'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM webhook_mr_launch_guards guard
+          WHERE guard.delivery_id = webhook_deliveries.id
+            AND guard.status IN ('reserved','launching','revoking-terminal','task-committed')
+        )
+      LIMIT ${batchSize}
+    )
+    RETURNING id`)
+  return {
+    done: batch.length < batchSize,
+    cursor,
+    counters: { bodiesCleared: 0, rowsDeleted: batch.length },
+  }
+}
+
 /** 保留 GC：超期置空 body_json / 删行，按 batchSize 分批。返回 {bodiesCleared,
  *  rowsDeleted}。body>row 的畸形组合（手改 config 绕过保存门）无害：行先死，
  *  body 段自然空转。在途行（received/processing）两段都不动（防御）。 */
@@ -173,49 +270,15 @@ export async function gcDeliveries(
   },
   batchSize: number = DELIVERY_GC_BATCH,
 ): Promise<{ bodiesCleared: number; rowsDeleted: number }> {
-  const bodyCutoff = now - retention.bodyRetentionMs
-  const rowCutoff = now - retention.rowRetentionMs
-  // body 段子查询吃 idx_webhook_deliveries_body_retention 部分索引（0139）；
-  // 置空后行退出该索引，循环自然推进。
-  let bodiesCleared = 0
+  let cursor: DeliveryGcCursorV1 | null = null
+  const total = { bodiesCleared: 0, rowsDeleted: 0 }
   for (;;) {
-    const batch = await db.all<{ id: string }>(sql`
-      UPDATE webhook_deliveries SET body_json = NULL
-      WHERE rowid IN (
-        SELECT rowid FROM webhook_deliveries
-        WHERE received_at < ${bodyCutoff} AND body_json IS NOT NULL
-          AND status NOT IN ('received','processing')
-        LIMIT ${batchSize}
-      )
-      RETURNING id`)
-    bodiesCleared += batch.length
-    if (batch.length < batchSize) break
+    const slice = await gcDeliveriesSlice(db, now, retention, cursor, batchSize)
+    total.bodiesCleared += slice.counters.bodiesCleared
+    total.rowsDeleted += slice.counters.rowsDeleted
+    if (slice.done) return total
+    cursor = slice.cursor
   }
-  let rowsDeleted = 0
-  for (;;) {
-    const batch = await db.all<{ id: string }>(sql`
-      DELETE FROM webhook_deliveries
-      WHERE rowid IN (
-        SELECT rowid FROM webhook_deliveries
-        WHERE received_at < ${rowCutoff}
-          AND status NOT IN ('received','processing')
-          AND NOT EXISTS (
-            SELECT 1 FROM webhook_mr_control_effects effect
-            WHERE effect.delivery_id = webhook_deliveries.id
-              AND effect.status <> 'succeeded'
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM webhook_mr_launch_guards guard
-            WHERE guard.delivery_id = webhook_deliveries.id
-              AND guard.status IN ('reserved','launching','revoking-terminal','task-committed')
-          )
-        LIMIT ${batchSize}
-      )
-      RETURNING id`)
-    rowsDeleted += batch.length
-    if (batch.length < batchSize) break
-  }
-  return { bodiesCleared, rowsDeleted }
 }
 
 /** 更新端点观测列（best-effort，不参与主链路失败语义）。 */

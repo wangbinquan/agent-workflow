@@ -4,7 +4,7 @@
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { Hono } from 'hono'
-import type { WorkflowRevision } from '@agent-workflow/shared'
+import type { MaintenanceStatus, WorkflowRevision } from '@agent-workflow/shared'
 import { dirname, join } from 'node:path'
 import { actorOf, tryActorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
@@ -56,6 +56,7 @@ import { mountIntentSessionRoutes } from '@/routes/intentSessions'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'
+import { mountMaintenanceRoutes } from '@/routes/maintenance'
 import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
@@ -101,6 +102,14 @@ import {
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import {
+  requireSchedulerDriver,
+  type SchedulerDriverPort,
+} from '@/modules/task-execution/public/commands'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/queries'
+import { createCollaborationCommandContext } from '@/modules/collaboration/composition'
+import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -168,6 +177,10 @@ export interface RuntimeDiagnosticTestDependencies {
 }
 
 export interface AppDeps {
+  /** One daemon-scoped execution driver composed by server/CLI bootstrap. */
+  schedulerDriver?: SchedulerDriverPort
+  /** Read projections composed with the same task-execution runtime. */
+  taskExecutionReadModels?: TaskExecutionReadModels
   /**
    * RFC-321 bootstrap publication transport. Task launch/continuation topologies
    * reuse its GitHub/GitLab endpoint discovery instead of rebuilding a
@@ -214,6 +227,10 @@ export interface AppDeps {
   dbVersion: number
   /** Drizzle DB client. */
   db: DbClient
+  /** RFC-340 bootstrap-owned review access/config context shared by REST and MCP dispatch. */
+  collaborationContext?: CollaborationCommandContext
+  /** RFC-338: indexed/live projection from the off-thread maintenance owner. */
+  maintenanceStatus?: () => MaintenanceStatus
   /**
    * RFC-036 — AES-256-GCM seal/unseal helper. Required only for the OIDC
    * routes (admin CRUD + login callback). Tests that do not exercise OIDC
@@ -284,6 +301,18 @@ export interface AppDeps {
   }
 }
 
+/**
+ * Route tables consume one already-composed task-execution runtime. Keeping
+ * these fields required at the REST/MCP mount boundary makes every alternate
+ * entry point (including direct dispatcher tests) choose an explicit bootstrap
+ * composition instead of discovering a missing driver only on first request.
+ */
+export type ComposedAppDeps = AppDeps & {
+  readonly schedulerDriver: SchedulerDriverPort
+  readonly taskExecutionReadModels: TaskExecutionReadModels
+  readonly collaborationContext: CollaborationCommandContext
+}
+
 function composeApplicationEventCenter(deps: AppDeps): EventCenterModule {
   const approvalGateway = composeApprovalGatewayRunner(deps.db)
   const missionContinuation = createDevelopmentMissionCodeHostEventContinuation(deps.db)
@@ -345,7 +374,23 @@ export function createApp(deps: AppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
   const identityAccess = composeIdentityAccess(deps.db)
-  const effectiveDeps: AppDeps = {
+  const taskExecutionRuntime =
+    deps.schedulerDriver === undefined || deps.taskExecutionReadModels === undefined
+      ? composeTaskExecutionRuntime({
+          db: deps.db,
+          ...(deps.repositoryPublicationTransport === undefined
+            ? {}
+            : { repositoryPublicationTransport: deps.repositoryPublicationTransport }),
+        })
+      : undefined
+  const schedulerDriver = requireSchedulerDriver(
+    deps.schedulerDriver ?? taskExecutionRuntime?.schedulerDriver,
+  )
+  const taskExecutionReadModels = deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels
+  if (taskExecutionReadModels === undefined) {
+    throw new Error('task-execution-read-models-not-composed')
+  }
+  const effectiveDeps: ComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
       : deps),
@@ -361,6 +406,15 @@ export function createApp(deps: AppDeps): Hono {
       composeDevelopmentEmployeeCaseDetailProjection(
         createDevelopmentEmployeeCaseWorkspaceDetailReader(deps.db),
       ),
+    schedulerDriver,
+    taskExecutionReadModels,
+    collaborationContext:
+      deps.collaborationContext ??
+      createCollaborationCommandContext({
+        db: deps.db,
+        appHome: deps.appHome ?? dirname(deps.configPath),
+        taskExecutionReadModels,
+      }),
   }
 
   app.use('*', async (c, next) => {
@@ -510,7 +564,7 @@ export function createApp(deps: AppDeps): Hono {
  * the entry point (HTTP for `createApp`, the token that opened the MCP session
  * for the dispatcher), while authorization belongs to the route declarations.
  */
-export function mountApiRoutes(app: Hono, deps: AppDeps): void {
+export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   const identityAccess = composeIdentityAccess(deps.db)
   const appHome = deps.appHome ?? dirname(deps.configPath)
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -567,7 +621,17 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
         ? {}
         : { endpointDiscovery: repositoryEndpointDiscovery }),
     })
-  const routeDeps: AppDeps = { ...deps, repositoryPublicationTransport }
+  const schedulerDriver = requireSchedulerDriver(deps.schedulerDriver)
+  if (deps.taskExecutionReadModels === undefined) {
+    throw new Error('task-execution-read-models-not-composed')
+  }
+  const routeDeps: ComposedAppDeps = {
+    ...deps,
+    repositoryPublicationTransport,
+    schedulerDriver,
+    taskExecutionReadModels: deps.taskExecutionReadModels,
+    collaborationContext: deps.collaborationContext,
+  }
   const approvalGateway = composeApprovalGatewayRunner(deps.db)
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     db: deps.db,
@@ -628,10 +692,10 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
           appHome,
           startDeps: buildStartTaskDeps(
             deps.db,
+            schedulerDriver,
             deps.configPath,
             SYSTEM_USER_ID,
             deps.secretBox,
-            repositoryPublicationTransport,
           ),
           workspace: developmentWorkspace,
           executionContracts,
@@ -680,6 +744,7 @@ export function mountApiRoutes(app: Hono, deps: AppDeps): void {
   })
 
   mountConfigRoutes(app, deps)
+  mountMaintenanceRoutes(app, deps)
   mountDaemonRoutes(app, deps)
   mountPlantumlRoutes(app, deps)
   mountRuntimeRoutes(app, deps)

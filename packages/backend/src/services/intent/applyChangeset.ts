@@ -1309,6 +1309,7 @@ export async function convergeIntentApplyJournal(
   db: DbClient,
   appHome: string,
   log: Logger = createLogger('intentApply'),
+  options: { activeJournalIds?: readonly string[] } = {},
 ): Promise<{ failed: number; rolledForward: number }> {
   void appHome
   let failed = 0
@@ -1321,7 +1322,12 @@ export async function convergeIntentApplyJournal(
       // P2-1: an apply this PROCESS is running, or one still fresh enough to
       // be a slow install, is ACTIVE — reaping it would compensate a live
       // transaction's prestage and then fail its journal CAS.
-      if (ACTIVE_APPLY_JOURNALS.has(row.id) || row.updatedAt > reapBefore) continue
+      if (
+        ACTIVE_APPLY_JOURNALS.has(row.id) ||
+        options.activeJournalIds?.includes(row.id) === true ||
+        row.updatedAt > reapBefore
+      )
+        continue
       for (const artifact of [...artifacts].reverse()) {
         try {
           if (artifact.kind === 'skill-stage') {
@@ -1360,4 +1366,10 @@ export async function convergeIntentApplyJournal(
     }
   }
   return { failed, rolledForward }
+}
+
+/** RFC-338: strict process-local advisory snapshot for the maintenance Worker.
+ * The persisted age/state CAS remains the deletion fence. */
+export function activeIntentApplyJournalIds(): string[] {
+  return [...ACTIVE_APPLY_JOURNALS]
 }

@@ -6,7 +6,7 @@
 // mission 拿走）则零消费——「upload-already-claimed」与「不存在」在错误码上
 // 区分，但都不泄露他人行内容（uploadRef 不是 bearer capability，§12.3）。
 
-import { and, eq, lt } from 'drizzle-orm'
+import { and, eq, inArray, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -17,6 +17,7 @@ import type { UploadSessionRow, UploadSessionStore } from '../application/ports/
 export type { UploadSessionRow, UploadSessionStore }
 
 export const UPLOAD_SESSION_TTL_MS = 2 * 60 * 60 * 1000
+export const UPLOAD_SESSION_SWEEP_LIMIT = 1_000
 
 function rowOf(r: typeof missionInputUploads.$inferSelect): UploadSessionRow {
   return {
@@ -117,16 +118,24 @@ export function createSqliteUploadSessionStore(db: DbClient): UploadSessionStore
         return rows
       })
     },
-    sweepExpired(now) {
+    sweepExpired(now, limit = UPLOAD_SESSION_SWEEP_LIMIT) {
       const expired = db
         .select({ id: missionInputUploads.id })
         .from(missionInputUploads)
         .where(
           and(eq(missionInputUploads.state, 'pending'), lt(missionInputUploads.expiresAt, now)),
         )
+        .limit(limit)
         .all()
-      for (const row of expired) {
-        db.delete(missionInputUploads).where(eq(missionInputUploads.id, row.id)).run()
+      if (expired.length > 0) {
+        db.delete(missionInputUploads)
+          .where(
+            inArray(
+              missionInputUploads.id,
+              expired.map((row) => row.id),
+            ),
+          )
+          .run()
       }
       return expired.length
     },

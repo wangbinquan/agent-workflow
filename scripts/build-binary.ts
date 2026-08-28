@@ -38,7 +38,10 @@ const mainEntry = join(backendSrc, 'main.ts')
 // bundler 追踪——worker 必须显式作为**额外入口**参与 --compile,否则发布版单
 // 二进制里它 ModuleNotFound,备份的 off-thread VACUUM 每次都落到回退路径。
 // 新增 worker 时把文件加进这个清单(backup.ts 侧仍保留能力等价的同线程回退)。
-const WORKER_ENTRIES = [join(backendSrc, 'services', 'backupVacuumWorker.ts')]
+const WORKER_ENTRIES = [
+  join(backendSrc, 'services', 'backupVacuumWorker.ts'),
+  join(backendSrc, 'platform', 'background', 'maintenanceWorker.ts'),
+]
 // Test-only external executables are owned by the unified system mock package.
 const stubEntry = join(repoRoot, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')
 const systemMockToolEntry = join(repoRoot, 'packages', 'system-mocks', 'src', 'tool.ts')
@@ -239,6 +242,11 @@ async function buildDaemonBinary(input: {
     define: {
       AW_BUILD_VERSION: JSON.stringify(input.buildVersion),
       AW_E2E_BUILD: JSON.stringify(input.e2e),
+      // Worker modules are separate executable entries. Once their caller is
+      // bundled into main.ts, import.meta.url points at that main entry rather
+      // than at the caller's original source file, so runtime resolution must
+      // use a path relative to main.ts (see the Worker entry constants).
+      AW_COMPILED_BUILD: 'true',
     },
     compile: { outfile: input.outfile },
     files: { [generatedPath]: input.generatedContents },

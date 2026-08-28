@@ -17,7 +17,7 @@
 // the failure is logged: a daemon that refuses to serve because it could not
 // write a log row has turned an observability feature into an outage.
 
-import { desc, eq, lt } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Context } from 'hono'
 import type { Actor } from '@/auth/actor'
@@ -181,16 +181,97 @@ export async function pruneTokenAudit(
   retentionDays: number,
   now: number = Date.now(),
 ): Promise<{ audits: number; snapshots: number }> {
-  const cutoff = now - retentionDays * 86_400_000
-  const snapshots = await db
-    .delete(tokenDeleteSnapshot)
-    .where(lt(tokenDeleteSnapshot.createdAt, cutoff))
-    .returning({ id: tokenDeleteSnapshot.id })
-  const audits = await db
-    .delete(tokenAudit)
-    .where(lt(tokenAudit.createdAt, cutoff))
-    .returning({ id: tokenAudit.id })
-  return { audits: audits.length, snapshots: snapshots.length }
+  let cursor: TokenAuditPruneCursorV1 | null = null
+  const total = { audits: 0, snapshots: 0 }
+  for (;;) {
+    const slice = await pruneTokenAuditSlice(db, retentionDays, cursor, now)
+    total.audits += slice.counters.audits
+    total.snapshots += slice.counters.snapshots
+    if (slice.done) return total
+    cursor = slice.cursor
+  }
+}
+
+export interface TokenAuditPruneCursorV1 {
+  readonly version: 1
+  readonly phase: 'snapshots' | 'audits'
+  readonly cutoff: number
+}
+
+export interface TokenAuditPruneSliceResult {
+  readonly done: boolean
+  readonly cursor: TokenAuditPruneCursorV1
+  readonly counters: { readonly audits: number; readonly snapshots: number }
+}
+
+export const TOKEN_AUDIT_PRUNE_BATCH = 1_000
+
+function tokenAuditCursor(value: unknown, cutoff: number): TokenAuditPruneCursorV1 {
+  if (value === null || value === undefined) return { version: 1, phase: 'snapshots', cutoff }
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    (value as { version?: unknown }).version !== 1 ||
+    !['snapshots', 'audits'].includes(String((value as { phase?: unknown }).phase)) ||
+    !Number.isSafeInteger((value as { cutoff?: unknown }).cutoff)
+  ) {
+    throw new Error('maintenance-token-audit-cursor-invalid')
+  }
+  return value as TokenAuditPruneCursorV1
+}
+
+/**
+ * One bounded deletion statement. The versioned phase is persisted by the
+ * maintenance run ledger between calls; replay after a crash is harmless
+ * because each phase selects only rows that still exist.
+ */
+export async function pruneTokenAuditSlice(
+  db: DbClient,
+  retentionDays: number,
+  cursorValue: unknown,
+  now: number = Date.now(),
+  batchSize: number = TOKEN_AUDIT_PRUNE_BATCH,
+): Promise<TokenAuditPruneSliceResult> {
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new Error('maintenance-token-audit-batch-invalid')
+  }
+  const cursor = tokenAuditCursor(cursorValue, now - retentionDays * 86_400_000)
+  const cutoff = cursor.cutoff
+  if (cursor.phase === 'snapshots') {
+    const deleted = await db.all<{ id: string }>(sql`
+      DELETE FROM token_delete_snapshot
+      WHERE rowid IN (
+        SELECT rowid FROM token_delete_snapshot
+        WHERE created_at < ${cutoff}
+        ORDER BY created_at, id
+        LIMIT ${batchSize}
+      )
+      RETURNING id
+    `)
+    return {
+      done: false,
+      cursor:
+        deleted.length < batchSize
+          ? { version: 1, phase: 'audits', cutoff }
+          : { version: 1, phase: 'snapshots', cutoff },
+      counters: { audits: 0, snapshots: deleted.length },
+    }
+  }
+  const deleted = await db.all<{ id: string }>(sql`
+    DELETE FROM token_audit
+    WHERE rowid IN (
+      SELECT rowid FROM token_audit
+      WHERE created_at < ${cutoff}
+      ORDER BY created_at, id
+      LIMIT ${batchSize}
+    )
+    RETURNING id
+  `)
+  return {
+    done: deleted.length < batchSize,
+    cursor: { version: 1, phase: 'audits', cutoff },
+    counters: { audits: deleted.length, snapshots: 0 },
+  }
 }
 
 /**

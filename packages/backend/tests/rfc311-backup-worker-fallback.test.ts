@@ -27,7 +27,16 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
     // 主二进制与 e2e 二进制共用同一个 compile helper；worker 必须作为
     // 额外入口进入该 helper，且两个产物都通过它构建。
     expect(src).toContain('entrypoints: [mainEntry, ...WORKER_ENTRIES]')
+    expect(src).toContain("AW_COMPILED_BUILD: 'true'")
     expect(src.match(/await buildDaemonBinary\(\{/g)).toHaveLength(2)
+
+    const backup = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'backup.ts'),
+      'utf8',
+    )
+    expect(backup).toContain("? './services/backupVacuumWorker.ts'")
+    expect(backup).toContain(": new URL('./backupVacuumWorker.ts', import.meta.url).href")
+    expect(backup).toContain('new Worker(BACKUP_VACUUM_WORKER_ENTRY)')
   })
 
   test('a real file DB copies through the worker', async () => {

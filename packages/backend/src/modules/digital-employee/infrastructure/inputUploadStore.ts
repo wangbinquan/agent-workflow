@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt } from 'drizzle-orm'
+import { and, eq, inArray, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
@@ -6,6 +6,7 @@ import { employeeInputUploads } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
 export const EMPLOYEE_INPUT_UPLOAD_TTL_MS = 2 * 60 * 60 * 1_000
+export const EMPLOYEE_INPUT_UPLOAD_SWEEP_LIMIT = 1_000
 
 export interface EmployeeInputUploadRecord {
   readonly id: string
@@ -52,7 +53,7 @@ export interface EmployeeInputUploadStore {
     readonly now: number
   }): EmployeeInputUploadRecord[]
   delete(id: string, actorUserId: string | null): void
-  sweepExpired(now: number): number
+  sweepExpired(now: number, limit?: number): number
 }
 
 export function createEmployeeInputUploadStore(db: DbClient): EmployeeInputUploadStore {
@@ -134,16 +135,24 @@ export function createEmployeeInputUploadStore(db: DbClient): EmployeeInputUploa
       db.delete(employeeInputUploads).where(eq(employeeInputUploads.id, id)).run()
     },
 
-    sweepExpired(now) {
+    sweepExpired(now, limit = EMPLOYEE_INPUT_UPLOAD_SWEEP_LIMIT) {
       const expired = db
         .select({ id: employeeInputUploads.id })
         .from(employeeInputUploads)
         .where(
           and(eq(employeeInputUploads.state, 'pending'), lt(employeeInputUploads.expiresAt, now)),
         )
+        .limit(limit)
         .all()
-      for (const row of expired) {
-        db.delete(employeeInputUploads).where(eq(employeeInputUploads.id, row.id)).run()
+      if (expired.length > 0) {
+        db.delete(employeeInputUploads)
+          .where(
+            inArray(
+              employeeInputUploads.id,
+              expired.map((row) => row.id),
+            ),
+          )
+          .run()
       }
       return expired.length
     },

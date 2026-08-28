@@ -21,9 +21,13 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import { useTranslation } from 'react-i18next'
 import {
   CreateOidcProviderBodySchema,
+  MaintenanceStatusSchema,
+  isValidIanaTz,
   type AuthLoginPolicy,
   type Config,
   type ConfigPatch,
+  type MaintenanceJobKey,
+  type MaintenanceStatus,
   type OidcProvider,
   type UpdateAuthLoginPolicyBody,
 } from '@agent-workflow/shared'
@@ -932,13 +936,173 @@ function GitTab({ config }: TabProps) {
   )
 }
 
+const MAINTENANCE_STATUS_QUERY_KEY = ['maintenance', 'status'] as const
+const MAINTENANCE_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+const MAINTENANCE_JOB_I18N: Record<MaintenanceJobKey, string> = {
+  worktreeGc: 'settings.maintenance.jobs.worktreeGc',
+  webhookDeliveryGc: 'settings.maintenance.jobs.webhookDeliveryGc',
+  eventsArchive: 'settings.maintenance.jobs.eventsArchive',
+  retentionSweep: 'settings.maintenance.jobs.retentionSweep',
+  taskArchive: 'settings.maintenance.jobs.taskArchive',
+  backupPrune: 'settings.maintenance.jobs.backupPrune',
+  pluginGenerationGc: 'settings.maintenance.jobs.pluginGenerationGc',
+  developmentUploadGc: 'settings.maintenance.jobs.developmentUploadGc',
+  developmentRetentionSweep: 'settings.maintenance.jobs.developmentRetentionSweep',
+  employeeInputGc: 'settings.maintenance.jobs.employeeInputGc',
+  intentScratchGc: 'settings.maintenance.jobs.intentScratchGc',
+  tokenAuditGc: 'settings.maintenance.jobs.tokenAuditGc',
+  workspaceRecovery: 'settings.maintenance.jobs.workspaceRecovery',
+  intentRecovery: 'settings.maintenance.jobs.intentRecovery',
+  lifecycleInvariants: 'settings.maintenance.jobs.lifecycleInvariants',
+  stuckTaskDetector: 'settings.maintenance.jobs.stuckTaskDetector',
+  humanGateRecovery: 'settings.maintenance.jobs.humanGateRecovery',
+  walCheckpoint: 'settings.maintenance.jobs.walCheckpoint',
+}
+
+function browserTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+}
+
+function MaintenanceStatusSummary({ status }: { status: MaintenanceStatus }) {
+  const { t, i18n } = useTranslation()
+  const timezone = status.schedule.kind === 'daily' ? status.schedule.timezone : browserTimezone()
+  const formatTime = (value: number): string =>
+    new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: timezone,
+    }).format(new Date(value))
+  const jobLabel = (job: MaintenanceJobKey): string => t(MAINTENANCE_JOB_I18N[job])
+  const workerKind =
+    status.worker.state === 'ready'
+      ? 'success'
+      : status.worker.state === 'degraded'
+        ? 'danger'
+        : status.worker.state === 'starting'
+          ? 'info'
+          : 'neutral'
+  const activeCounters = status.active === null ? [] : Object.entries(status.active.counters)
+  const lastCounters = status.last === null ? [] : Object.entries(status.last.counters)
+  const counters = activeCounters.length > 0 ? activeCounters : lastCounters
+
+  return (
+    <div className="form-grid" data-testid="maintenance-status-summary" aria-live="polite">
+      <div className="form-grid form-grid--cols-2">
+        <Field label={t('settings.maintenance.workerLabel')} group>
+          <StatusChip
+            kind={workerKind}
+            withDot
+            size="sm"
+            aria-label={t(`settings.maintenance.worker.${status.worker.state}`)}
+            data-testid="maintenance-worker-state"
+          >
+            {t(`settings.maintenance.worker.${status.worker.state}`)}
+          </StatusChip>
+        </Field>
+        <Field label={t('settings.maintenance.nextRunLabel')} group>
+          {status.nextRunAt === null ? (
+            <span>{t('settings.maintenance.notScheduled')}</span>
+          ) : (
+            <time
+              dateTime={new Date(status.nextRunAt).toISOString()}
+              title={new Date(status.nextRunAt).toISOString()}
+            >
+              {formatTime(status.nextRunAt)} ({timezone})
+            </time>
+          )}
+        </Field>
+        <Field label={t('settings.maintenance.activeLabel')} group>
+          {status.active === null ? (
+            <span>{t('settings.maintenance.noActive')}</span>
+          ) : (
+            <span data-testid="maintenance-active-job">
+              {t('settings.maintenance.jobAt', {
+                job: jobLabel(status.active.job),
+                time: formatTime(status.active.startedAt),
+              })}
+            </span>
+          )}
+        </Field>
+        <Field label={t('settings.maintenance.lastLabel')} group>
+          {status.last === null ? (
+            <span>{t('settings.maintenance.neverRun')}</span>
+          ) : (
+            <span data-testid="maintenance-last-run">
+              {t('settings.maintenance.lastAt', {
+                job: jobLabel(status.last.job),
+                outcome: t(`settings.maintenance.outcome.${status.last.outcome}`),
+                time: formatTime(status.last.finishedAt),
+              })}
+            </span>
+          )}
+        </Field>
+        <Field label={t('settings.maintenance.progressLabel')} group>
+          <span data-testid="maintenance-progress">
+            {counters.length === 0
+              ? t('settings.maintenance.noProgress')
+              : counters.map(([key, value]) => `${key}: ${value}`).join(' · ')}
+          </span>
+        </Field>
+        <Field label={t('settings.maintenance.backlogLabel')} group>
+          <span data-testid="maintenance-backlog">
+            {status.backlog.length === 0
+              ? t('settings.maintenance.noBacklog')
+              : t('settings.maintenance.backlogCount', { count: status.backlog.length })}
+          </span>
+        </Field>
+      </div>
+      {status.backlog.length > 0 && (
+        <p className="muted settings-hint settings-hint--tight">
+          {status.backlog.map((row) => jobLabel(row.job)).join(' · ')}
+        </p>
+      )}
+      {status.worker.error !== null && (
+        <NoticeBanner tone="error" size="compact" title={t('settings.maintenance.workerError')}>
+          {status.worker.error}
+        </NoticeBanner>
+      )}
+      {status.last?.errorMessage !== undefined && (
+        <NoticeBanner tone="warning" size="compact" title={t('settings.maintenance.lastError')}>
+          {status.last.errorMessage}
+        </NoticeBanner>
+      )}
+    </div>
+  )
+}
+
 export function GcTab({ config }: TabProps) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const canRunBackup = usePermission('backup:run')
-  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.gc, config)
+  const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.gc, config, {
+    onSaved: () => {
+      void queryClient.invalidateQueries({ queryKey: MAINTENANCE_STATUS_QUERY_KEY })
+    },
+  })
   const { state, setState, save } = draft
   const gc = state.worktreeAutoGc
   const thresholds = state.eventsArchiveThresholds
+  const schedule = state.maintenanceSchedule ?? { kind: 'hourly' }
+  const [dailySchedule, setDailySchedule] = useState<{
+    kind: 'daily'
+    at: string
+    timezone: string
+  }>(() =>
+    config.maintenanceSchedule.kind === 'daily'
+      ? config.maintenanceSchedule
+      : { kind: 'daily', at: '02:00', timezone: browserTimezone() },
+  )
+  const maintenanceStatus = useQuery<MaintenanceStatus>({
+    queryKey: MAINTENANCE_STATUS_QUERY_KEY,
+    queryFn: async ({ signal }) =>
+      MaintenanceStatusSchema.parse(
+        await api.get<unknown>('/api/maintenance/status', undefined, signal),
+      ),
+    refetchInterval: 5_000,
+  })
+  const timeValid = schedule.kind !== 'daily' || MAINTENANCE_TIME_RE.test(schedule.at)
+  const timezoneValid = schedule.kind !== 'daily' || isValidIanaTz(schedule.timezone)
   return (
     <SectionForm
       onSave={save.mutate}
@@ -947,6 +1111,97 @@ export function GcTab({ config }: TabProps) {
       success={save.isSuccess && save.error === null ? 'saved' : null}
       editState={draft}
     >
+      <SettingsCard
+        title={t('settings.cardGroups.maintenanceTitle')}
+        hint={t('settings.cardGroups.maintenanceHint')}
+        data-testid="settings-maintenance-card"
+      >
+        <Field
+          label={t('settings.maintenance.modeLabel')}
+          hint={t('settings.maintenance.modeHint')}
+          group
+        >
+          <Segmented
+            value={schedule.kind}
+            onChange={(kind) => {
+              if (kind === 'hourly') {
+                if (schedule.kind === 'daily') setDailySchedule(schedule)
+                setState({ ...state, maintenanceSchedule: { kind: 'hourly' } })
+              } else {
+                setState({ ...state, maintenanceSchedule: dailySchedule })
+              }
+            }}
+            options={[
+              { value: 'hourly', label: t('settings.maintenance.hourly') },
+              { value: 'daily', label: t('settings.maintenance.daily') },
+            ]}
+            ariaLabel={t('settings.maintenance.modeLabel')}
+            testidPrefix="maintenance-schedule-mode"
+          />
+        </Field>
+        {schedule.kind === 'daily' && (
+          <div className="form-grid form-grid--cols-2">
+            <Field
+              label={t('settings.maintenance.timeLabel')}
+              hint={t('settings.maintenance.timeHint')}
+              error={timeValid ? undefined : t('settings.maintenance.timeError')}
+              errorId="maintenance-time-error"
+              required
+            >
+              <TextInput
+                value={schedule.at}
+                onChange={(at) => {
+                  const next = { ...schedule, at }
+                  setDailySchedule(next)
+                  setState({ ...state, maintenanceSchedule: next })
+                }}
+                placeholder="02:00"
+                aria-invalid={!timeValid}
+                aria-errormessage={timeValid ? undefined : 'maintenance-time-error'}
+                data-testid="maintenance-schedule-time"
+              />
+            </Field>
+            <Field
+              label={t('settings.maintenance.timezoneLabel')}
+              hint={t('settings.maintenance.timezoneHint')}
+              error={timezoneValid ? undefined : t('settings.maintenance.timezoneError')}
+              errorId="maintenance-timezone-error"
+              required
+            >
+              <TextInput
+                value={schedule.timezone}
+                onChange={(timezone) => {
+                  const next = { ...schedule, timezone }
+                  setDailySchedule(next)
+                  setState({ ...state, maintenanceSchedule: next })
+                }}
+                placeholder="Asia/Shanghai"
+                aria-invalid={!timezoneValid}
+                aria-errormessage={timezoneValid ? undefined : 'maintenance-timezone-error'}
+                data-testid="maintenance-schedule-timezone"
+              />
+            </Field>
+          </div>
+        )}
+        {maintenanceStatus.isPending ? (
+          <LoadingState
+            size="compact"
+            label={t('settings.maintenance.statusLoading')}
+            data-testid="maintenance-status-loading"
+          />
+        ) : maintenanceStatus.error !== null ? (
+          <ErrorBanner
+            error={maintenanceStatus.error}
+            message={t('settings.maintenance.statusError')}
+            onRetry={() => {
+              void maintenanceStatus.refetch()
+            }}
+            testid="maintenance-status-error"
+          />
+        ) : (
+          <MaintenanceStatusSummary status={maintenanceStatus.data} />
+        )}
+      </SettingsCard>
       <SettingsCard
         title={t('settings.cardGroups.gcWorktreesTitle')}
         hint={t('settings.cardGroups.gcWorktreesHint')}

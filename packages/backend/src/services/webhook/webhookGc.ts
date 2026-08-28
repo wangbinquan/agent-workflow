@@ -12,6 +12,8 @@ import {
   DELIVERY_BODY_RETENTION_MS,
   DELIVERY_ROW_RETENTION_MS,
   gcDeliveries,
+  gcDeliveriesSlice,
+  type DeliveryGcSliceResult,
   type DeliveryRetention,
 } from '@/services/webhook/deliveryStore'
 import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
@@ -44,6 +46,15 @@ export async function runDeliveryGcSweep(
     ? retentionFromConfig(getConfig())
     : { bodyRetentionMs: DELIVERY_BODY_RETENTION_MS, rowRetentionMs: DELIVERY_ROW_RETENTION_MS }
   return gcDeliveries(db, Date.now(), retention)
+}
+
+export function runDeliveryGcSlice(
+  db: DbClient,
+  config: RetentionConfig,
+  cursor: unknown,
+  batchSize?: number,
+): Promise<DeliveryGcSliceResult> {
+  return gcDeliveriesSlice(db, Date.now(), retentionFromConfig(config), cursor, batchSize)
 }
 
 export function startWebhookDeliveryGc(

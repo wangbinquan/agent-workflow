@@ -2,8 +2,6 @@
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
-import { tokenAuditRetentionDays } from '@/services/mcpSurface'
-import { pruneTokenAudit } from '@/services/tokenAudit'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
@@ -30,12 +28,13 @@ import {
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
+import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { sha256Hex } from '@/util/hash'
-import { buildStartTaskDeps, createLegacyTaskExecutionTopology } from '@/services/startTaskDeps'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentWorkspaceRepositoryPreparation,
@@ -43,7 +42,6 @@ import {
   buildDevelopmentPipelineDeps,
   resolveDevelopmentRepoBinding,
 } from '@/services/developmentDeliveryDeps'
-import { startWebhookDeliveryGc } from '@/services/webhook/webhookGc'
 import { openDb, DbCorruptionError } from '@/db/client'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
@@ -51,9 +49,6 @@ import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { createApp } from '@/server'
 import { startFusionReconcileLoop } from '@/services/fusion'
 import { startLimitsTicker } from '@/services/limits'
-import { convergeIntentApplyJournal } from '@/services/intent/applyChangeset'
-import { convergeResourceBundleApplies } from '@/services/bundle/apply'
-import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/maintenance'
 import { resumeQueuedIntentWorkingSets } from '@/services/intent/dispatcher'
 import { reapOrphanRuns } from '@/services/orphans'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
@@ -74,26 +69,18 @@ import {
   retryRepositoryPreparation,
   wakeHumanGateContinuation,
 } from '@/services/task'
-import { recoverPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { startEventsArchiver } from '@/services/eventsArchive'
-import { startRetentionSweeper } from '@/services/maintenanceRetention'
-import { recoverInterruptedArchives, startTaskArchiveSweeper } from '@/services/taskArchive'
+import { recoverInterruptedArchives } from '@/services/taskArchive'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import {
   finishClaimedWebhookWorkspacePrune,
   recoverInterruptedWorkspaceGc,
   runClaimedWebhookWorkspacePrunes,
-  startWorktreeGc,
 } from '@/services/gc'
-import {
-  startBackupScheduler,
-  startWalCheckpointLoop,
-  maybePreMigrationBackup,
-} from '@/services/backupScheduler'
+import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
 import {
   registerTerminalTaskHook,
@@ -101,11 +88,8 @@ import {
   registerTerminalWorkspacePrunePolicy,
 } from '@/services/lifecycle'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
-import { startLifecycleInvariantsLoop } from '@/services/lifecycleInvariants'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
-import { startStuckTaskDetectorLoop } from '@/services/stuckTaskDetector'
 import { startBatchImportGc } from '@/services/repoBatchImport'
-import { startPluginGenerationGc } from '@/services/pluginGenerationGc'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import {
@@ -122,8 +106,8 @@ import { buildWebSocketAdapter } from '@/ws/server'
 import { isBootstrapRequired } from '@/auth/loginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { DAEMON_CADENCE, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
+import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { startMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeEventCenter, startEventCenterWorker } from '@/modules/event-center/composition'
 import {
@@ -564,6 +548,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     endpointDiscovery: repositoryEndpointDiscovery,
   })
+  const taskExecutionRuntime = composeTaskExecutionRuntime({
+    db,
+    repositoryPublicationTransport,
+  })
   const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
   if (removedCredentialLeases > 0) {
     log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
@@ -883,7 +871,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     configPath: Paths.config,
     secretBox,
-    repositoryPublicationTransport,
+    schedulerDriver: taskExecutionRuntime.schedulerDriver,
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
     terminalControl: webhookTerminalControl,
     digitalEmployeeWorkStart: digitalEmployeeWorkStart.participant,
@@ -932,6 +920,100 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
   )
 
+  const broadcastAlert = (
+    row: { taskId: string; rule: string; severity: 'warning' | 'error' },
+    transition: 'new' | 'promoted',
+  ): void => {
+    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+      type: 'lifecycle.alert',
+      taskId: row.taskId,
+      rule: row.rule,
+      severity: row.severity,
+      transition,
+    })
+  }
+  const broadcastResolved = (taskId: string): void => {
+    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+      type: 'lifecycle.alert.resolved',
+      taskId,
+    })
+  }
+
+  const gateContinuationDeps = {
+    db,
+    schedulerDriver: taskExecutionRuntime.schedulerDriver,
+    configPath: Paths.config,
+    ...(secretBox !== undefined ? { secretBox } : {}),
+    ...(config.subagentLiveCapture !== undefined
+      ? { subagentLiveCapture: config.subagentLiveCapture }
+      : {}),
+    ...resolveLaunchRuntimeConfig(Paths.config),
+  }
+
+  // RFC-338 — every periodic DB/FS-heavy maintenance body runs on a dedicated
+  // Worker connection. Main only admits durable slots and consumes typed
+  // notification/admission deltas; Worker failure never falls back to running
+  // the old body on this HTTP event loop.
+  const maintenanceService = startMaintenanceService({
+    dbPath: Paths.db,
+    migrationsFolder,
+    appHome: Paths.root,
+    configPath: Paths.config,
+    loadConfig: () => loadConfig(Paths.config),
+    onLifecycleDelta: (delta) => {
+      for (const alert of delta.alerts) {
+        broadcastAlert(alert, alert.transition)
+      }
+      for (const taskId of delta.resolvedTaskIds) {
+        broadcastResolved(taskId)
+      }
+    },
+    onIntentQueued: (sessionIds) => {
+      if (sessionIds.length === 0) return
+      void resumeQueuedIntentWorkingSets(
+        {
+          db,
+          appHome: Paths.root,
+          configSnapshot: loadConfig(Paths.config),
+        },
+        sessionIds,
+      ).catch((err) =>
+        log.warn('queued intent working-set admission failed', {
+          err: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    },
+    onHumanGateContinuations: (continuations) => {
+      void (async () => {
+        let woken = 0
+        let failed = 0
+        for (const continuation of continuations) {
+          try {
+            await wakeHumanGateContinuation(
+              continuation.taskId,
+              continuation.continuationRef,
+              gateContinuationDeps,
+            )
+            woken += 1
+          } catch (error) {
+            failed += 1
+            log.warn('pending human-gate continuation wake failed', {
+              ...continuation,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+        if (continuations.length > 0) {
+          log.info('pending human-gate continuation recovery on boot', {
+            attempted: continuations.length,
+            woken,
+            failed,
+          })
+        }
+      })()
+    },
+  })
+
   // 7. HTTP server.
   const app = createApp({
     token,
@@ -943,8 +1025,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     opencodeVersion: null,
     dbVersion,
     db,
+    maintenanceStatus: maintenanceService.status,
     secretBox,
     repositoryPublicationTransport,
+    schedulerDriver: taskExecutionRuntime.schedulerDriver,
+    taskExecutionReadModels: taskExecutionRuntime.readModels,
     webhookDispatcher,
     webhookTerminalControl,
     digitalEmployeeEventCenter: employeeHttpEventCenter,
@@ -1017,41 +1102,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   })()
 
-  // 8. Background tickers (P-4-04 limits + P-4-09 worktree GC + P-5-01 events archival
-  //    + RFC-033 batch-import retention GC).
+  // 8. Background loops. RFC-338 owns every DB/FS-heavy maintenance cadence;
+  // limits and the in-memory batch-import Map remain lightweight on main.
   const limitsTicker = startLimitsTicker(db)
-  const gcTicker = startWorktreeGc(
-    db,
-    () => loadConfig(Paths.config),
-    undefined,
-    Paths.root,
-    isTaskActive,
-  )
-  // RFC-257 (设计门 F-12) — deliveries 保留 GC；RFC-261 (D9')：保留天数走 config
-  // （默认 30 天置空 body、90 天删行），getter 每次 sweep 读取 → 热生效。
-  const webhookGcTicker = startWebhookDeliveryGc(db, () => loadConfig(Paths.config))
-  const archiveTicker = startEventsArchiver(db, () => loadConfig(Paths.config), Paths.logsDir)
-  // RFC-311（proposal C6）：无界流水表（事件三胞胎/trigger fires/access audit/
-  // probes）的 hourly 保留期清理。
-  const retentionTicker = startRetentionSweeper(db, () => {
-    const cfg = loadConfig(Paths.config)
-    return {
-      eventStreamRetentionDays: cfg.eventStreamRetentionDays,
-      webhookTriggerFiresRetentionDays: cfg.webhookTriggerFiresRetentionDays,
-    }
-  })
-  // RFC-311 T19(proposal C1):终态任务树归档出库。**默认关闭**;开启后整树终态
-  // 且超保留期的任务被导出到 archive/ 并从库删除(前台 404)。RFC-328 的 durable
-  // claim recovery 已在 admission 打开前同步完成。
-  const taskArchiveTicker = startTaskArchiveSweeper(db, () => {
-    const cfg = loadConfig(Paths.config)
-    return {
-      enabled: cfg.taskArchive.enabled,
-      retentionDays: cfg.taskArchive.retentionDays,
-      maxTreesPerSweep: cfg.taskArchive.maxTreesPerSweep,
-    }
-  })
-  // RFC-213: scheduled backup + retention (disabled by default — backupIntervalMs=0).
+  // Scheduled backup creation keeps its own cadence; retention is admitted to
+  // the maintenance Worker both by the configured heavy schedule and after a
+  // backup settles.
   const backupTicker = startBackupScheduler({
     db,
     intervalMs: config.backupIntervalMs,
@@ -1070,14 +1126,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       }
     },
     appHome: Paths.root,
-  })
-  // RFC-213 G4c: bound -wal growth. RFC-311 flipped the default ON (10min
-  // TRUNCATE) — archive/GC deletes otherwise leave the -wal file to absorb
-  // every burst until the next passive checkpoint; 0 still disables.
-  const walCheckpointTicker = startWalCheckpointLoop({
-    db,
-    // RFC-311 余项：每拍热读，跟邻居一致——调这个值不再需要重启 daemon。
-    getIntervalMs: () => loadConfig(Paths.config).walCheckpointIntervalMs,
+    pruneMode: 'external',
+    onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
   })
   // RFC-210 G7: keep cached mirrors (and their submodules) from going stale when
   // nobody launches a task against them. Reads its own enable flag each tick.
@@ -1096,7 +1146,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     undefined,
     batchImportCfg.repoBatchImportRetentionMs,
   )
-  const pluginGenerationGcTicker = startPluginGenerationGc({ db, pluginsDir: Paths.pluginsDir })
   // RFC-050: register an ambient provider so enqueueDistillJob callers
   // pick up the current `config.memoryDistillLang` without us having to
   // thread configPath through review.ts / clarify.ts / taskFeedback.ts.
@@ -1132,47 +1181,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     sourceContextBudget: batchImportCfg.memoryDistillSourceContext,
   })
 
-  // RFC-234 — intent-builder maintenance: settle turns orphaned by the previous
-  // daemon, converge unsettled apply-journal rows (compensate or roll forward),
-  // and sweep retained failure scratch dirs on an hourly cadence.
-  try {
-    const orphaned = recoverIntentTurnsOnBoot(db)
-    const converged = await convergeIntentApplyJournal(db, Paths.root)
-    const resumedWorkingSets = await resumeQueuedIntentWorkingSets({
-      db,
-      appHome: Paths.root,
-      configSnapshot: loadConfig(Paths.config),
-    })
-    if (
-      orphaned > 0 ||
-      converged.failed > 0 ||
-      converged.rolledForward > 0 ||
-      resumedWorkingSets > 0
-    ) {
-      log.info('intent maintenance on boot', { orphaned, resumedWorkingSets, ...converged })
-    }
-  } catch (err) {
-    log.warn('intent boot maintenance failed', {
-      err: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // RFC-271 — the resource-bundle apply journal needs the SAME treatment as the
-  // intent one: without this, a daemon killed between pre-stage and the big tx
-  // leaves plugin generations / staged skill dirs on disk forever, and the
-  // importId stays permanently unsettled (every retry answers
-  // `bundle-apply-unsettled`). Separate try/catch so one converger failing does
-  // not skip the other.
-  try {
-    const converged = await convergeResourceBundleApplies(db, Paths.root)
-    if (converged.failed > 0 || converged.rolledForward > 0) {
-      log.info('resource-bundle maintenance on boot', converged)
-    }
-  } catch (err) {
-    log.warn('resource-bundle boot maintenance failed', {
-      err: err instanceof Error ? err.message : String(err),
-    })
-  }
+  // Intent/apply/resource-bundle boot convergence is admitted by
+  // maintenanceService and executes off-thread; typed queued-session deltas
+  // above are the only work handed back to main.
   // RFC-310 PR-3/PR-4 —— development-automation 装配：启动恢复（fence 悬挂 /
   // epoch 过期 effect / 到期 wake，与 sweep 同一 reconcile 机制）+ 30s wake
   // sweep + hourly 未 claim 上传 TTL 回收 + agent 执行 runner（task-execution
@@ -1196,10 +1207,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       db,
       startDeps: buildStartTaskDeps(
         db,
+        taskExecutionRuntime.schedulerDriver,
         Paths.config,
         SYSTEM_USER_ID,
         secretBox,
-        repositoryPublicationTransport,
       ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(db, executionRef)
@@ -1233,10 +1244,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       db,
       startDeps: buildStartTaskDeps(
         db,
+        taskExecutionRuntime.schedulerDriver,
         Paths.config,
         SYSTEM_USER_ID,
         secretBox,
-        repositoryPublicationTransport,
       ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(db, executionRef)
@@ -1287,42 +1298,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }, DAEMON_CADENCE.developmentWakeSweep)
   developmentWakeTimer.unref?.()
-  const developmentUploadGcTimer = startMaintenanceTicker({
-    job: 'developmentUploadGc',
-    intervalMs: DAEMON_CADENCE.developmentUploadGc,
-    phaseOffsetMs: MAINTENANCE_PHASE.developmentUploadGc,
-    onTick: () => {
-      try {
-        const swept = developmentAutomation.sweepUploads()
-        if (swept.swept > 0) log.info('mission input uploads swept', swept)
-      } catch (err) {
-        log.warn('mission upload sweep failed', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    },
-  })
-
-  // RFC-310 T71 —— retention 的执行者。此前 policy 的 `retention.*TtlDays` 一个
-  // 消费者都没有：字段在、设置页能改，而终态 Mission 的台账与证据只增不减。
-  const developmentRetentionTimer = startMaintenanceTicker({
-    job: 'developmentRetentionSweep',
-    intervalMs: DAEMON_CADENCE.developmentRetentionSweep,
-    phaseOffsetMs: MAINTENANCE_PHASE.developmentRetentionSweep,
-    onTick: () =>
-      developmentAutomation
-        .sweepRetention()
-        .then((result) => {
-          if (result.prunedAttempts > 0 || result.markedBundleRefs > 0) {
-            log.info('mission retention swept', { ...result })
-          }
-        })
-        .catch((err: unknown) => {
-          log.warn('mission retention sweep failed', {
-            err: err instanceof Error ? err.message : String(err),
-          })
-        }),
-  })
+  // Upload/input/retention sweeps are direct RFC-338 Worker adapters. The
+  // development wake driver remains a separate 30s correctness loop.
 
   // RFC-310 OS runtime: the HTTP composition is intentionally stateless and
   // may be recreated by tests; the daemon owns the one durable driver that
@@ -1394,10 +1371,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           appHome: Paths.root,
           startDeps: buildStartTaskDeps(
             db,
+            taskExecutionRuntime.schedulerDriver,
             Paths.config,
             SYSTEM_USER_ID,
             secretBox,
-            repositoryPublicationTransport,
           ),
           workspace: employeeWorkspace,
           executionContracts: employeeExecutionContracts,
@@ -1469,113 +1446,17 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       }
     },
   })
-  // 周期与 developmentUploadGc 相同、**相位不同**——两者曾在同一秒装配、同刻引爆。
-  const employeeInputGcTimer = startMaintenanceTicker({
-    job: 'employeeInputGc',
-    intervalMs: DAEMON_CADENCE.developmentUploadGc,
-    phaseOffsetMs: MAINTENANCE_PHASE.employeeInputGc,
-    onTick: () => {
-      try {
-        const swept = employeeOs.inputUploads.sweepExpired()
-        if (swept > 0) log.info('digital employee input uploads swept', { swept })
-      } catch (err) {
-        log.warn('digital employee input upload sweep failed', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    },
-  })
-
-  const intentGcTimer = startMaintenanceTicker({
-    job: 'intentScratchGc',
-    intervalMs: DAEMON_CADENCE.intentScratchGc,
-    phaseOffsetMs: MAINTENANCE_PHASE.intentScratchGc,
-    onTick: () => {
-      try {
-        const retention = loadConfig(Paths.config).intentBuilderScratchRetentionHours ?? 24
-        sweepIntentScratch(db, Paths.root, retention)
-        void convergeIntentApplyJournal(db, Paths.root)
-        void resumeQueuedIntentWorkingSets({
-          db,
-          appHome: Paths.root,
-          configSnapshot: loadConfig(Paths.config),
-        })
-        // 同上：两条 journal 各自收敛（RFC-271）。收敛器自带 active-set + 10 分钟
-        // 下限，所以一个慢 npm 安装跨过 tick 不会被当成崩溃残留收割。
-        void convergeResourceBundleApplies(db, Paths.root)
-      } catch (err) {
-        log.warn('intent hourly maintenance failed', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    },
-  })
-
-  // RFC-247 D16 — token-audit retention. Rides the same hourly cadence as the
-  // other sweeps rather than adding a scheduler: an audit row that lingers an
-  // extra hour past its retention window is not a problem worth a new timer.
-  const tokenAuditGcTimer = startMaintenanceTicker({
-    job: 'tokenAuditGc',
-    intervalMs: DAEMON_CADENCE.tokenAuditGc,
-    phaseOffsetMs: MAINTENANCE_PHASE.tokenAuditGc,
-    onTick: async () => {
-      try {
-        const days = tokenAuditRetentionDays(Paths.config)
-        const pruned = await pruneTokenAudit(db, days)
-        if (pruned.audits > 0 || pruned.snapshots > 0) {
-          log.info('token audit pruned', { ...pruned, retentionDays: days })
-        }
-      } catch (err) {
-        log.warn('token audit prune failed', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    },
-  })
-
-  // RFC-053 P-3 — lifecycle invariant scan. Boot-time scan (~5s after the
-  // listener comes up) catches historic stuck tasks; hourly incremental
-  // scan keeps the open-alerts feed live. New findings broadcast on the
-  // tasks-list channel so the UI banner / detail diagnose panel can react.
-  const broadcastAlert = (
-    row: { taskId: string; rule: string; severity: 'warning' | 'error' },
-    transition: 'new' | 'promoted',
-  ): void => {
-    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-      type: 'lifecycle.alert',
-      taskId: row.taskId,
-      rule: row.rule,
-      severity: row.severity,
-      transition,
-    })
-  }
-  const broadcastResolved = (taskId: string): void => {
-    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-      type: 'lifecycle.alert.resolved',
-      taskId,
-    })
-  }
-  const lifecycleInvariantsTicker = startLifecycleInvariantsLoop({
-    db,
-    onAlert: broadcastAlert,
-    onResolved: broadcastResolved,
-  })
-
-  // RFC-053 P-6 — stuck-task detector. Runs every 5 min looking for tasks
-  // that are parked in a non-terminal status past their threshold without
-  // matching evidence (S1: awaiting_review w/o pending dv; S2:
-  // awaiting_human w/o open clarify_session; S3: running w/ no active
-  // node_runs; S4: pending > 5 min). Shares the lifecycle_alerts table
-  // and the WS lifecycle.alert event so banner UI reacts uniformly.
-  const stuckDetectorTicker = startStuckTaskDetectorLoop({
-    db,
-    onAlert: broadcastAlert,
-    onResolved: broadcastResolved,
-  })
+  // Employee input, intent cleanup/recovery, token audit, lifecycle invariants
+  // and stuck detection are all admitted by maintenanceService. Lifecycle
+  // notifications return through its typed delta callback above.
 
   // RFC-101: settle running fusions (engine task done → awaiting_approval) so
   // the inbox badge lights up without a client poll.
-  const fusionReconcileTicker = startFusionReconcileLoop({ db, appHome: Paths.root })
+  const fusionReconcileTicker = startFusionReconcileLoop({
+    db,
+    appHome: Paths.root,
+    schedulerDriver: taskExecutionRuntime.schedulerDriver,
+  })
 
   // RFC-108 T19 (AR-04) — closed auto-repair loop (DEFAULT OFF). Free until an
   // operator enables a rule in config.autoRepair (each tick early-outs in O(1)).
@@ -1583,7 +1464,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     appHome: Paths.root,
     configPath: Paths.config,
-    repositoryPublicationTransport,
+    schedulerDriver: taskExecutionRuntime.schedulerDriver,
     onAlert: broadcastAlert,
     onResolved: broadcastResolved,
   })
@@ -1599,47 +1480,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const scheduledTaskTicker = startScheduledTaskLoop({
     db,
     loadConfig: () => loadConfig(Paths.config),
-    buildLaunch: buildScheduleLaunch(db, Paths.config, repositoryPublicationTransport),
+    buildLaunch: buildScheduleLaunch(db, taskExecutionRuntime.schedulerDriver, Paths.config),
   })
-
-  // RFC-333 T11 — a committed gate decision already owns one exact durable
-  // continuation. A daemon exit between commit and post-commit wake leaves it
-  // pending; boot claims that same ref rather than submitting a second intent.
-  // The scan is launched before the ready line but remains non-blocking because
-  // pre-drive rollback or scheduler work may be long-running.
-  const gateContinuationDeps = {
-    db,
-    schedulerDriver: createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)
-      .schedulerDriver,
-    configPath: Paths.config,
-    ...(secretBox !== undefined ? { secretBox } : {}),
-    ...(config.subagentLiveCapture !== undefined
-      ? { subagentLiveCapture: config.subagentLiveCapture }
-      : {}),
-    ...resolveLaunchRuntimeConfig(Paths.config),
-  }
-  void recoverPendingHumanGateContinuations({
-    db,
-    wake: ({ taskId, continuationRef }) =>
-      wakeHumanGateContinuation(taskId, continuationRef, gateContinuationDeps),
-  })
-    .then((result) => {
-      if (result.attempted.length > 0) {
-        log.info('pending human-gate continuation recovery on boot', {
-          attempted: result.attempted.length,
-          woken: result.woken.length,
-          failed: result.failed.length,
-        })
-      }
-      for (const failure of result.failed) {
-        log.warn('pending human-gate continuation wake failed', failure)
-      }
-    })
-    .catch((error) =>
-      log.warn('pending human-gate continuation recovery failed', {
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    )
 
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
   // the daemon-restart loop: every task `reapOrphanRuns` just flipped to
@@ -1651,8 +1493,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   if (config.autoResumeOnBoot) {
     const resumeDeps = {
       db,
-      schedulerDriver: createLegacyTaskExecutionTopology(db, repositoryPublicationTransport)
-        .schedulerDriver,
+      schedulerDriver: taskExecutionRuntime.schedulerDriver,
       // RFC-282 C1-2: the scheduler resolves config heads at the mint freeze.
       configPath: Paths.config,
       // boot 恢复同样会走到 unseal（同文件另外三处都经 buildStartTaskDeps 带上了它）。
@@ -1711,20 +1552,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     shuttingDown = true
     log.info('shutting down', { signal })
     limitsTicker.stop()
-    gcTicker.stop()
-    webhookGcTicker.stop()
-    archiveTicker.stop()
-    retentionTicker.stop()
-    taskArchiveTicker.stop()
     backupTicker.stop()
-    walCheckpointTicker.stop()
     submoduleRefreshTicker.stop()
     unregisterSubmoduleRefreshConfig()
     batchImportGcTicker.stop()
-    pluginGenerationGcTicker.stop()
     memoryDistillTicker.stop()
-    lifecycleInvariantsTicker.stop()
-    stuckDetectorTicker.stop()
     fusionReconcileTicker.stop()
     autoRepairTicker.stop()
     heartbeatKillTicker.stop()
@@ -1733,12 +1565,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     employeeOsWorker.stop()
     eventCenterWorker.stop()
     clearInterval(developmentWakeTimer)
-    developmentUploadGcTimer.stop()
-    developmentRetentionTimer.stop()
-    employeeInputGcTimer.stop()
-    // RFC-322：这两个此前只 unref、从未在关停路径里清掉。收编成 ticker 后顺手补上。
-    intentGcTimer.stop()
-    tokenAuditGcTimer.stop()
+    await maintenanceService.stop()
     await webhookTerminalControl.stop()
     removeDaemonInfo()
     server.stop(true)

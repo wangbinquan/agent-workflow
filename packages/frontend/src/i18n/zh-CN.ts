@@ -883,6 +883,26 @@ export interface Resources {
     plantumlRenderFailed: string
     plantumlPrivacyNotice: string
   }
+  reviewers: {
+    entry: string
+    title: string
+    backToTask: string
+    capabilityNotice: string
+    emptyTitle: string
+    emptyDescription: string
+    nodeReviewers: string
+    nodeHint: string
+    pickerPlaceholder: string
+    pickerAria: string
+    strongerRoleHint: string
+    replaceHint: string
+    saved: string
+    relationship: {
+      owner: string
+      collaborator: string
+      observer: string
+    }
+  }
   auth: {
     title: string
     hint: string
@@ -2142,6 +2162,8 @@ export interface Resources {
       gitAutoCommitHint: string
       gitRefreshTitle: string
       gitRefreshHint: string
+      maintenanceTitle: string
+      maintenanceHint: string
       gcWorktreesTitle: string
       gcWorktreesHint: string
       gcEventsTitle: string
@@ -2162,6 +2184,67 @@ export interface Resources {
       appearanceDisplayHint: string
       renderingServiceTitle: string
       renderingServiceHint: string
+    }
+    maintenance: {
+      modeLabel: string
+      modeHint: string
+      hourly: string
+      daily: string
+      timeLabel: string
+      timeHint: string
+      timeError: string
+      timezoneLabel: string
+      timezoneHint: string
+      timezoneError: string
+      statusLoading: string
+      statusError: string
+      workerLabel: string
+      nextRunLabel: string
+      activeLabel: string
+      lastLabel: string
+      progressLabel: string
+      backlogLabel: string
+      notScheduled: string
+      noActive: string
+      neverRun: string
+      noProgress: string
+      noBacklog: string
+      backlogCount: string
+      jobAt: string
+      lastAt: string
+      workerError: string
+      lastError: string
+      worker: {
+        starting: string
+        ready: string
+        degraded: string
+        stopped: string
+      }
+      outcome: {
+        succeeded: string
+        failed: string
+        deferred: string
+      }
+      jobs: {
+        worktreeGc: string
+        webhookDeliveryGc: string
+        eventsArchive: string
+        retentionSweep: string
+        taskArchive: string
+        backupPrune: string
+        pluginGenerationGc: string
+        developmentUploadGc: string
+        developmentRetentionSweep: string
+        employeeInputGc: string
+        intentScratchGc: string
+        tokenAuditGc: string
+        workspaceRecovery: string
+        intentRecovery: string
+        lifecycleInvariants: string
+        stuckTaskDetector: string
+        humanGateRecovery: string
+        walCheckpoint: string
+      }
     }
     tabRuntime: string
     tabSystemAgents: string
@@ -6570,7 +6653,7 @@ export interface Resources {
   }
   attribution: {
     localHistoric: string
-    role: { owner: string; user: string; admin: string; manager: string }
+    role: { owner: string; user: string; admin: string; manager: string; reviewer: string }
     submittedBy: string
     lastEditedBy: string
     decidedBy: string
@@ -7261,6 +7344,28 @@ export const zhCN: Resources = {
     plantumlRendering: '渲染中…',
     plantumlRenderFailed: 'PlantUML 渲染失败：{{msg}}',
     plantumlPrivacyNotice: '将向 {{host}} 发送文档源码以渲染该图。',
+  },
+  reviewers: {
+    entry: '评审人配置',
+    title: '按节点配置评审人',
+    backToTask: '返回任务',
+    capabilityNotice:
+      '评审人仅能查看被指派节点的文档和全部评审意见，并提交或修改自己的待处理意见；不能删除意见、通过、重新生成、退回或选择文档。',
+    emptyTitle: '此任务没有评审节点',
+    emptyDescription: '冻结的任务工作流中没有可配置评审人的节点。',
+    nodeReviewers: '评审人集合',
+    nodeHint: '可为同一节点选择多人；保存会完整替换此任务全部评审节点的评审人集合。',
+    pickerPlaceholder: '搜索并添加评审人…',
+    pickerAria: '为 {{node}} 选择评审人',
+    strongerRoleHint:
+      '部分已选用户同时是任务所有者或协作者；他们保留原有的通过、重新生成和退回能力。',
+    replaceHint: '保存后立即按当前页面的集合完整替换。',
+    saved: '评审人配置已保存。',
+    relationship: {
+      owner: '所有者',
+      collaborator: '协作者',
+      observer: '观察者',
+    },
   },
   auth: {
     title: '登录',
@@ -9030,6 +9135,9 @@ export const zhCN: Resources = {
       gitAutoCommitHint: '阻止平台运行物与管理员指定路径进入提交及待推送历史。',
       gitRefreshTitle: '后台刷新',
       gitRefreshHint: 'daemon 运行期间持续保持仓库引用为最新状态。',
+      maintenanceTitle: '后台维护',
+      maintenanceHint:
+        '数据库与文件重清理会在隔离 Worker 中严格串行执行，不再占用处理页面请求的主事件循环。',
       gcWorktreesTitle: '工作树清理',
       gcWorktreesHint: '在清理前按期限保留已完成任务的工作树。',
       gcEventsTitle: '事件清理',
@@ -9051,6 +9159,67 @@ export const zhCN: Resources = {
       appearanceDisplayHint: '选择当前安装的界面主题与语言。',
       renderingServiceTitle: 'PlantUML 服务',
       renderingServiceHint: '连接可选的外部服务来渲染 PlantUML 图表。',
+    },
+    maintenance: {
+      modeLabel: '重清理日程',
+      modeHint: '这里只控制重清理；正确性恢复与 WAL 维护继续保持各自原有节奏。',
+      hourly: '每小时错峰',
+      daily: '每天一次',
+      timeLabel: '启动时刻（24 小时制）',
+      timeHint: '格式必须是 HH:MM，例如 02:00。这是启动时刻；积压较多时可继续运行。',
+      timeError: '请输入有效的 24 小时时刻，格式 HH:MM（00:00–23:59）。',
+      timezoneLabel: 'IANA 时区',
+      timezoneHint: '请输入 IANA 时区名，例如 Asia/Shanghai 或 America/New_York。',
+      timezoneError: '请输入有效的 IANA 时区，例如 Asia/Shanghai。',
+      statusLoading: '正在读取后台维护状态…',
+      statusError: '无法读取后台维护状态。',
+      workerLabel: '维护 Worker',
+      nextRunLabel: '下次重清理启动',
+      activeLabel: '当前执行',
+      lastLabel: '最近一次',
+      progressLabel: '处理进度',
+      backlogLabel: '积压',
+      notScheduled: '尚未排期',
+      noActive: '空闲',
+      neverRun: '尚无已完成记录',
+      noProgress: '尚未上报计数',
+      noBacklog: '没有等待中的任务',
+      backlogCount: '{{count}} 项等待或失败',
+      jobAt: '{{job}} · {{time}} 开始',
+      lastAt: '{{job}} · {{outcome}} · {{time}}',
+      workerError: '维护 Worker 已降级',
+      lastError: '最近一次维护错误',
+      worker: {
+        starting: '启动中',
+        ready: '就绪',
+        degraded: '已降级',
+        stopped: '已停止',
+      },
+      outcome: {
+        succeeded: '成功',
+        failed: '失败',
+        deferred: '已退让',
+      },
+      jobs: {
+        worktreeGc: '工作树清理',
+        webhookDeliveryGc: 'Webhook 投递清理',
+        eventsArchive: '事件归档',
+        retentionSweep: '保留期清理',
+        taskArchive: '终态任务归档',
+        backupPrune: '备份清理',
+        pluginGenerationGc: '插件生成物清理',
+        developmentUploadGc: '开发上传清理',
+        developmentRetentionSweep: '开发记录保留期清理',
+        employeeInputGc: '数字员工输入清理',
+        intentScratchGc: '意图草稿清理',
+        tokenAuditGc: '令牌审计记录清理',
+        workspaceRecovery: '工作区清理恢复',
+        intentRecovery: '意图恢复',
+        lifecycleInvariants: '生命周期一致性检查',
+        stuckTaskDetector: '卡住任务检测',
+        humanGateRecovery: '人工门恢复',
+        walCheckpoint: 'WAL checkpoint',
+      },
     },
     tabRuntime: '运行时',
     tabSystemAgents: '系统 Agent',
@@ -14851,7 +15020,13 @@ export const zhCN: Resources = {
   },
   attribution: {
     localHistoric: '本地用户（历史）',
-    role: { owner: '所有者', user: '用户', admin: '管理员', manager: '资源管理员' },
+    role: {
+      owner: '所有者',
+      user: '用户',
+      admin: '管理员',
+      manager: '资源管理员',
+      reviewer: '评审人',
+    },
     submittedBy: '提交人',
     lastEditedBy: '最后修改',
     decidedBy: '决策人',

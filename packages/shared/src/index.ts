@@ -9,6 +9,7 @@ export * from './schemas/changeNarrative' // RFC-239
 export * from './schemas/cachedRepo'
 export * from './schemas/clarify'
 export * from './schemas/config'
+export * from './schemas/maintenance' // RFC-338
 export * from './settingsNumericBounds'
 export * from './schemas/auth'
 export * from './schemas/oidcProvider'
@@ -25,6 +26,7 @@ export * from './schemas/runtimeInventory' // RFC-297
 export * from './schemas/importRef'
 export * from './schemas/humanGate'
 export * from './schemas/review'
+export * from './schemas/reviewCollab' // RFC-340
 export * from './schemas/runtime'
 export * from './schemas/mcp'
 export * from './schemas/mcpProbe'

@@ -154,6 +154,11 @@ export interface BackupSchedulerOptions {
     protectedKeepCount?: number
   }
   appHome?: string
+  /** RFC-338: production delegates retention to the maintenance Worker. The
+   * default stays internal for embedded callers and existing unit tests. */
+  pruneMode?: 'internal' | 'external'
+  /** Wake the external prune owner after a scheduled backup settles. */
+  onBackupSettled?: () => void
 }
 
 export interface BackupSchedulerHandle {
@@ -180,6 +185,7 @@ function runPrune(opts: BackupSchedulerOptions, appHome: string): void {
  *  without bound. Retention now runs at boot + hourly regardless. */
 export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedulerHandle {
   const appHome = opts.appHome ?? Paths.root
+  const externalPrune = opts.pruneMode === 'external'
   const safePrune = (label: string): void => {
     try {
       runPrune(opts, appHome)
@@ -192,15 +198,17 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
   // whose `createBackup` kept failing (no `tar`, disk full) never pruned at all
   // — the very L3-2 shape C4 exists to fix, just with a narrower trigger.
   // Implementation-gate finding P2-1 / mutation #19.
-  safePrune('boot prune')
+  if (!externalPrune) safePrune('boot prune')
   // RFC-322：这里原本是 `setInterval(…, 3_600_000)` 裸字面量——正是 daemonCadence
   // 头部注释点名的那种形状，现收编进相位注册表。
-  const pruneTicker = startMaintenanceTicker({
-    job: 'backupPrune',
-    intervalMs: HOUR_MS,
-    phaseOffsetMs: MAINTENANCE_PHASE.backupPrune,
-    onTick: () => safePrune('prune tick'),
-  })
+  const pruneTicker = externalPrune
+    ? { stop: (): void => {} }
+    : startMaintenanceTicker({
+        job: 'backupPrune',
+        intervalMs: HOUR_MS,
+        phaseOffsetMs: MAINTENANCE_PHASE.backupPrune,
+        onTick: () => safePrune('prune tick'),
+      })
 
   if (!opts.intervalMs || opts.intervalMs <= 0) {
     return { stop: () => pruneTicker.stop() }
@@ -216,7 +224,17 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
       .finally(() => {
         // A fresh backup is exactly when the family caps want re-applying, and
         // it must survive a failed backup — hence `finally`, not the then-path.
-        safePrune('post-backup prune')
+        if (externalPrune) {
+          try {
+            opts.onBackupSettled?.()
+          } catch (err) {
+            log.warn('external post-backup prune wake threw', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        } else {
+          safePrune('post-backup prune')
+        }
         running = false
       })
   }, opts.intervalMs)
