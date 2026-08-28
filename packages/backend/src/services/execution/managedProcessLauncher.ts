@@ -190,8 +190,12 @@ function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void 
   }
 }
 
-function drainSpoolFd(readFd: number, targetFd: 1 | 2, startOffset: number): number {
-  const buffer = new Uint8Array(64 * 1024)
+function drainSpoolFd(
+  readFd: number,
+  targetFd: 1 | 2,
+  startOffset: number,
+  buffer: Uint8Array,
+): number {
   let offset = startOffset
   for (;;) {
     const count = readSync(readFd, buffer, 0, buffer.byteLength, offset)
@@ -201,11 +205,13 @@ function drainSpoolFd(readFd: number, targetFd: 1 | 2, startOffset: number): num
   }
 }
 
-async function relaySpoolFileToFd(
-  readFd: number,
-  fd: 1 | 2,
+async function relayWindowsOutputSpool(
+  spool: WindowsOutputSpool,
   childExited: Promise<number>,
 ): Promise<void> {
+  if (spool.stdoutReadFd === undefined || spool.stderrReadFd === undefined) {
+    throw new Error('managed process output spool is not readable')
+  }
   let childIsExited = false
   const observedExit = childExited.then(
     () => {
@@ -215,19 +221,19 @@ async function relaySpoolFileToFd(
       childIsExited = true
     },
   )
-  let offset = 0
+  const stdoutBuffer = new Uint8Array(64 * 1024)
+  const stderrBuffer = new Uint8Array(64 * 1024)
+  let stdoutOffset = 0
+  let stderrOffset = 0
   while (!childIsExited) {
-    offset = drainSpoolFd(readFd, fd, offset)
-    await Promise.race([
-      observedExit,
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, 10)
-      }),
-    ])
+    stdoutOffset = drainSpoolFd(spool.stdoutReadFd, 1, stdoutOffset, stdoutBuffer)
+    stderrOffset = drainSpoolFd(spool.stderrReadFd, 2, stderrOffset, stderrBuffer)
+    await Promise.race([observedExit, Bun.sleep(10)])
   }
   // Process exit closes and flushes the inherited file handles. One final
   // drain therefore includes every byte without guessing a post-exit delay.
-  drainSpoolFd(readFd, fd, offset)
+  drainSpoolFd(spool.stdoutReadFd, 1, stdoutOffset, stdoutBuffer)
+  drainSpoolFd(spool.stderrReadFd, 2, stderrOffset, stderrBuffer)
 }
 
 /** Hidden CLI entry. Never logs ordinary daemon output or reads product state. */
@@ -305,10 +311,7 @@ export async function runManagedProcessLauncher(
   const outputRelay =
     outputSpool === undefined
       ? Promise.resolve()
-      : Promise.all([
-          relaySpoolFileToFd(outputSpool.stdoutReadFd as number, 1, childExited),
-          relaySpoolFileToFd(outputSpool.stderrReadFd as number, 2, childExited),
-        ]).then(() => {})
+      : relayWindowsOutputSpool(outputSpool, childExited)
   // The relay can observe a broken parent pipe before the target exits. Attach
   // a handler immediately; the same promise is awaited and reported below.
   void outputRelay.catch(() => {})
