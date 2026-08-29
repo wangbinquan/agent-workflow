@@ -1478,6 +1478,7 @@
         "MANAGED_PROCESS_LAUNCHER_SUBCOMMAND",
         "MANAGED_PROCESS_LAUNCH_ERROR_PREFIX",
         "MANAGED_PROCESS_LAUNCH_NONCE_FLAG",
+        "MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX",
         "MANAGED_PROCESS_LAUNCH_READY_PREFIX",
         "MANAGED_PROCESS_TARGET_SEPARATOR",
         "MANAGED_PROCESS_WINDOWS_CONTROL_FLAG",
@@ -7720,5 +7721,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9b483ca752c8de35b85a9bf2bd59c080fdd7f56d719fa03181582cd8f9c0d189"
+  "sourceDigest": "sha256:eb10e6a9122798bd2276f60d4fc9004885cd4bbb16693df07a73fffb52d4c624"
 }
