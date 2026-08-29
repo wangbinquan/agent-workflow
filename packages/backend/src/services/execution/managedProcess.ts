@@ -290,10 +290,13 @@ function readWindowsOutputSpoolChunk(path: string, offset: number, buffer: Uint8
 function windowsOutputSpoolStream(
   path: string,
   writersClosed: Promise<void>,
+  completion?: { expectedBytes: Promise<number> } | { completionSeen: Promise<void> },
 ): ReadableStream<Uint8Array> {
   const buffer = new Uint8Array(64 * 1024)
   let offset = 0
   let writersAreClosed = false
+  let expectedBytes: number | undefined
+  let completionWasSeen = completion === undefined
   let stablePolls = 0
   let canceled = false
   const observedClosure = writersClosed.then(
@@ -308,6 +311,17 @@ function windowsOutputSpoolStream(
   // `pull` propagates the same rejection; this prevents a temporary unhandled
   // promise while the durable receipt callback is still running.
   void observedClosure.catch(() => {})
+  if (completion !== undefined) {
+    if ('expectedBytes' in completion) {
+      void completion.expectedBytes.then((value) => {
+        expectedBytes = value
+      })
+    } else {
+      void completion.completionSeen.then(() => {
+        completionWasSeen = true
+      })
+    }
+  }
 
   return new ReadableStream<Uint8Array>({
     async pull(controller): Promise<void> {
@@ -324,6 +338,21 @@ function windowsOutputSpoolStream(
 
           if (writersAreClosed) {
             await observedClosure
+            if (completion !== undefined && 'expectedBytes' in completion) {
+              if (expectedBytes !== undefined && offset >= expectedBytes) {
+                controller.close()
+                return
+              }
+              await Promise.race([completion.expectedBytes, Bun.sleep(10)])
+              continue
+            }
+            if (!completionWasSeen) {
+              await Promise.race([
+                (completion as { completionSeen: Promise<void> }).completionSeen,
+                Bun.sleep(10),
+              ])
+              continue
+            }
             stablePolls += 1
             if (stablePolls >= 2) {
               controller.close()
@@ -530,6 +559,16 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   let stderrTail = ''
   let launcherSpawnError: string | undefined
   let launcherOutputBytes: { stdoutBytes: number; stderrBytes: number } | undefined
+  let launcherOutputResolve:
+    | ((value: { stdoutBytes: number; stderrBytes: number }) => void)
+    | undefined
+  const launcherOutput = new Promise<{ stdoutBytes: number; stderrBytes: number }>((resolve) => {
+    launcherOutputResolve = resolve
+  })
+  let launcherOutputSeenResolve: (() => void) | undefined
+  const launcherOutputSeen = new Promise<void>((resolve) => {
+    launcherOutputSeenResolve = resolve
+  })
   let launcherReadyResolve: (() => void) | undefined
   const launcherReady = new Promise<void>((resolve) => {
     launcherReadyResolve = resolve
@@ -577,6 +616,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
           stderrBytes >= 0
         ) {
           launcherOutputBytes = { stdoutBytes, stderrBytes }
+          launcherOutputResolve?.(launcherOutputBytes)
+          launcherOutputSeenResolve?.()
         } else {
           launcherSpawnError = 'invalid managed-process launcher output record'
         }
@@ -591,7 +632,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const stdoutPump = pump(
     activeOutputSpool === undefined
       ? (child.stdout as ReadableStream<Uint8Array>)
-      : windowsOutputSpoolStream(activeOutputSpool.stdoutPath, outputWritersClosed),
+      : windowsOutputSpoolStream(activeOutputSpool.stdoutPath, outputWritersClosed, {
+          expectedBytes: launcherOutput.then((value) => value.stdoutBytes),
+        }),
     req.onStdoutLine,
     req.captureRawStdout === true
       ? (chunk) => {
@@ -606,7 +649,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const stderrPump = pump(
     activeOutputSpool === undefined
       ? (child.stderr as ReadableStream<Uint8Array>)
-      : windowsOutputSpoolStream(activeOutputSpool.stderrPath, outputWritersClosed),
+      : windowsOutputSpoolStream(activeOutputSpool.stderrPath, outputWritersClosed, {
+          expectedBytes: launcherOutput.then((value) => value.stderrBytes),
+        }),
     async (line) => {
       if (consumeLauncherControlLine(line)) return
       await req.onStderrLine?.(line)
@@ -623,7 +668,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     activeOutputSpool === undefined
       ? undefined
       : pump(
-          windowsOutputSpoolStream(activeOutputSpool.controlPath, outputWritersClosed),
+          windowsOutputSpoolStream(activeOutputSpool.controlPath, outputWritersClosed, {
+            completionSeen: launcherOutputSeen,
+          }),
           (line) => {
             if (!consumeLauncherControlLine(line)) {
               log.warn('unknown managed-process launcher control record', { line })
