@@ -159,7 +159,7 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
     : { v: 1, launchNonce, stdin: { mode: 'ignore' } }
 }
 
-function launcherControlPath(argv: readonly string[]): string | undefined {
+function requestedControlPathFromArgv(argv: readonly string[]): string | undefined {
   const index = argv.indexOf(MANAGED_PROCESS_WINDOWS_CONTROL_FLAG)
   const value = index < 0 ? undefined : argv[index + 1]
   return typeof value === 'string' && value.length > 0 ? value : undefined
@@ -214,7 +214,7 @@ export function createWindowsOutputSpool(): WindowsOutputSpool {
     controlPath: join(root, 'control'),
   }
   try {
-    // Create both paths before the relay can poll. Bun.file below owns the
+    // Create all paths before the relay can poll. Bun.file below owns the
     // actual child redirection handles; no numeric descriptor crosses a
     // compiled Windows process boundary.
     writeFileSync(spool.stdoutPath, '')
@@ -320,7 +320,7 @@ async function relayWindowsOutputSpool(
 export async function runManagedProcessLauncher(
   argv: readonly string[] = Bun.argv,
 ): Promise<number> {
-  const requestedControlPath = launcherControlPath(argv)
+  const requestedControlPath = requestedControlPathFromArgv(argv)
   let request: ReturnType<typeof parseLauncherRequest>
   try {
     request = parseLauncherRequest(argv)
