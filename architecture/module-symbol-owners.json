@@ -6,7 +6,7 @@
     "moduleFiles": 452,
     "productionFiles": 1769,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 18759
+    "symbolsIncludingFileRoots": 18760
   },
   "entries": [
     {
@@ -2785,7 +2785,7 @@
       "file": "packages/backend/src/cli/start.ts",
       "id": "owner:packages/backend/src/cli/start.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:ae3144f4c4a3a6dac9a43f5e6b4ee942ebad897b59ce5a995bbffb2a37466992",
+      "signatureDigest": "sha256:7b0989755b254789e16d976d5028cd45d79650f127318da8895a60b6471d359b",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "bootstrap",
@@ -52783,7 +52783,7 @@
       "file": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#$file",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:b576d9b54f184041d45ec01d4802f078c82ac028c7e9f8519f5a2f8544747a37",
+      "signatureDigest": "sha256:62b7d2613a83fb1621b73cc5fb92cff614cf191cb6a17c55a425aa2b3179ade5",
       "status": "current-module",
       "symbol": "$file",
       "targetContext": "task-execution",
@@ -52812,19 +52812,6 @@
       "signatureDigest": "sha256:c5654304411a37d0860a5e89feceff3b52ad91b4f64db5485ebc5b3c7822b33d",
       "status": "current-module",
       "symbol": "bindTaskDecisionParticipantInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#composeHumanGateContinuationDriver",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:1a8189c5416e90ed732a530a84dcf4f81b7c4ebfb6c41be6623f1a7afe41d2cd",
-      "status": "current-module",
-      "symbol": "composeHumanGateContinuationDriver",
       "targetContext": "task-execution",
       "targetLayer": "composition"
     },
@@ -60128,7 +60115,7 @@
       "file": "packages/backend/src/modules/task-execution/public/participants.ts",
       "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:52da340e84c4d2639db998567d49ac8366f4937a3b3b0c33ef988411f34b3a92",
+      "signatureDigest": "sha256:e9361bc4d982cf27c15293c4fbe910b38cc807c338e2cf99e69719505d6cc732",
       "status": "current-module",
       "symbol": "$file",
       "targetContext": "task-execution",
@@ -60547,6 +60534,19 @@
       "signatureDigest": "sha256:2b24ed2635ae1f40dc3609594f355ee5258ffaec6b58bd53bdcbed89d1784eb9",
       "status": "current-module",
       "symbol": "humanGateNodeProjectionFence",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#isLegacyTaskGateContinuationPayload",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:ebaf334779b5bcde205df1bf99ab7c10eda4c30fe43dab41f16bf64248b1c092",
+      "status": "current-module",
+      "symbol": "isLegacyTaskGateContinuationPayload",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -83372,7 +83372,7 @@
       "file": "packages/backend/src/services/humanGateContinuationRecovery.ts",
       "id": "owner:packages/backend/src/services/humanGateContinuationRecovery.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:a18e86605679e5a2b36c0ed653c53f1fa570d48225e9cf3cfc0147f01bac0673",
+      "signatureDigest": "sha256:6652eb65acaf3e495e9d65c03bc81b1737efe86120f1e9773b1be3b86c47ff2a",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "collaboration",
@@ -83398,7 +83398,7 @@
       "file": "packages/backend/src/services/humanGateContinuationRecovery.ts",
       "id": "owner:packages/backend/src/services/humanGateContinuationRecovery.ts#listPendingHumanGateContinuations",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:6f08f75b3f939b53c2d90008f72539c72e897d183fb7c63dbc9982e2033aa217",
+      "signatureDigest": "sha256:be32e6792a9378ecdaeb71dfde9c62e5d685ed0a360e54113fa0892bba0224fd",
       "status": "legacy-target",
       "symbol": "listPendingHumanGateContinuations",
       "targetContext": "collaboration",
@@ -117601,7 +117601,7 @@
       "file": "packages/backend/src/services/task.ts",
       "id": "owner:packages/backend/src/services/task.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:523f859dd277bcd01babf91f54029e01eca2c807ef28ccb61e1246d340c8df08",
+      "signatureDigest": "sha256:1a426e2433f5e2683827760c3849db643d02a812f65e7aefa0df1e93c2a7ed2a",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "task-execution",
@@ -117788,6 +117788,19 @@
       "symbol": "clearTaskDriverLifecycleForTesting",
       "targetContext": "task-execution",
       "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/task.ts",
+      "id": "owner:packages/backend/src/services/task.ts#composeHumanGateContinuationDriver",
+      "removeAfterWave": "W4/W9",
+      "signatureDigest": "sha256:1a8189c5416e90ed732a530a84dcf4f81b7c4ebfb6c41be6623f1a7afe41d2cd",
+      "status": "legacy-target",
+      "symbol": "composeHumanGateContinuationDriver",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
     },
     {
       "currentContext": "legacy",
@@ -243880,5 +243893,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac"
+  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e"
 }

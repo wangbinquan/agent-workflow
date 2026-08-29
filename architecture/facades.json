@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "boundaryFacades": 100,
+    "boundaryFacades": 101,
     "serviceFiles": 378
   },
   "entries": [
@@ -1977,7 +1977,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:98bfd740aaae2e52f8f4"
+      ],
       "exportedSymbols": [
         "HumanGateContinuationRecoveryResult",
         "PendingHumanGateContinuation",
@@ -1988,7 +1990,7 @@
       "id": "facade:packages/backend/src/services/humanGateContinuationRecovery.ts",
       "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationRecovery.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -6272,9 +6274,7 @@
         "import:9fabe1c5d40f0886cfef",
         "import:b0bb0b43a43c37e8e8df",
         "import:b20c5073febb0f2fcfbe",
-        "import:b54d7b1f4233e55b634a",
         "import:c07d7479e713e86827ac",
-        "import:cf4075013df911f6c143",
         "import:d07907c42947e6c5855e",
         "import:de17d18a53431aaefb1a",
         "import:ee07aef5f87771b4e498",
@@ -6303,6 +6303,7 @@
         "buildSyncRunSummary",
         "cancelTask",
         "cleanupMaterializedSpace",
+        "composeHumanGateContinuationDriver",
         "computeWorkflowSyncPreview",
         "finalizeCanceledTaskWithoutDriver",
         "getNodeRunEvents",
@@ -7750,5 +7751,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac"
+  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e"
 }

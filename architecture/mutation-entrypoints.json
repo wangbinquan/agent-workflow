@@ -24102,7 +24102,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac",
+  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -26674,8 +26674,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5670:tasks",
-        "line": 5670,
+        "id": "task-authority:packages/backend/src/services/task.ts#5681:tasks",
+        "line": 5681,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

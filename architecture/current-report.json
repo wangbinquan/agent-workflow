@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 448,
-    "architectureExceptions": 1470,
+    "architectureExceptions": 1468,
     "backgroundJobs": 265,
-    "crossContextImports": 1508,
+    "crossContextImports": 1506,
     "facades": 378,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18759,
+    "moduleSymbolOwners": 18760,
     "mutationEntrypoints": 1015,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 400,
+    "publicSurfaces": 401,
     "transactionExternalEffects": 280
   },
   "metrics": {
@@ -76,13 +76,6 @@
         "packages/backend/src/mcp/dispatch.ts",
         "packages/backend/src/mcp/server.ts",
         "packages/backend/src/server.ts"
-      ],
-      [
-        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-        "packages/backend/src/modules/task-execution/public/commands.ts",
-        "packages/backend/src/services/humanGateComposition.ts",
-        "packages/backend/src/services/humanGateContinuationEffects.ts",
-        "packages/backend/src/services/task.ts"
       ],
       [
         "packages/backend/src/services/agent.ts",
@@ -210,13 +203,6 @@
         "packages/backend/src/server.ts"
       ],
       [
-        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-        "packages/backend/src/modules/task-execution/public/commands.ts",
-        "packages/backend/src/services/humanGateComposition.ts",
-        "packages/backend/src/services/humanGateContinuationEffects.ts",
-        "packages/backend/src/services/task.ts"
-      ],
-      [
         "packages/backend/src/services/agent.ts",
         "packages/backend/src/services/agentDeps.ts",
         "packages/backend/src/services/agentResourceIntegrity.ts"
@@ -247,5 +233,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac"
+  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e"
 }

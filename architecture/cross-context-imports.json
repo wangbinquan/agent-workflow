@@ -15269,6 +15269,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationRecovery.ts#$file",
+      "fromPath": "packages/backend/src/services/humanGateContinuationRecovery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:98bfd740aaae2e52f8f4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#isLegacyTaskGateContinuationPayload",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "isLegacyTaskGateContinuationPayload",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#$file",
       "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "fromSymbol": "$file",
@@ -17887,23 +17904,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:b54d7b1f4233e55b634a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#wakeHumanGateContinuation",
-      "toPath": "packages/backend/src/services/task.ts",
-      "toSymbol": "wakeHumanGateContinuation",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromSymbol": "$file",
@@ -20076,23 +20076,6 @@
       "toPath": "packages/backend/src/services/scheduler.ts",
       "toSymbol": "failTask",
       "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cf4075013df911f6c143",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#StartTaskDeps",
-      "toPath": "packages/backend/src/services/task.ts",
-      "toSymbol": "StartTaskDeps",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -22579,23 +22562,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e75c4e9786fdfa4fceaa",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#composeHumanGateContinuationDriver",
-      "toPath": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-      "toSymbol": "composeHumanGateContinuationDriver",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file",
       "fromPath": "packages/backend/src/services/lifecycle.ts",
       "fromSymbol": "$file",
@@ -24992,9 +24958,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1470,
+    "architectureExceptions": 1468,
     "implementationSccs": 0,
-    "observedEdges": 1508,
+    "observedEdges": 1506,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -39436,6 +39402,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/humanGateContinuationRecovery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationRecovery.ts#$file",
+      "id": "import:98bfd740aaae2e52f8f4",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "isLegacyTaskGateContinuationPayload",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#isLegacyTaskGateContinuationPayload"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "digital-employee",
       "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#$file",
@@ -42157,22 +42139,6 @@
     {
       "edgeKind": "value",
       "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#$file",
-      "id": "import:b54d7b1f4233e55b634a",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/services/task",
-      "syntax": "static-import",
-      "targetSymbol": "wakeHumanGateContinuation",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/task.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#wakeHumanGateContinuation"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "id": "import:b5599460c9709c54041b",
@@ -44329,22 +44295,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/scheduler.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#failTask"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#$file",
-      "id": "import:cf4075013df911f6c143",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/services/task",
-      "syntax": "static-import",
-      "targetSymbol": "StartTaskDeps",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/task.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#StartTaskDeps"
     },
     {
       "edgeKind": "type",
@@ -46793,22 +46743,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/execution/closure.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/closure.ts#FrozenWorkgroupRef"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:e75c4e9786fdfa4fceaa",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/humanGate",
-      "syntax": "static-import",
-      "targetSymbol": "composeHumanGateContinuationDriver",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#composeHumanGateContinuationDriver"
     },
     {
       "edgeKind": "value",
@@ -49541,7 +49475,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac",
+  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
