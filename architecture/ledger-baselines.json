@@ -385,10 +385,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 403,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-341 为 committed-event collaboration projector 与 continuous continuation worker 增加三个受控 public participant/composition 合同。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
