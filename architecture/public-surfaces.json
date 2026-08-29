@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 288,
+    "consumers": 295,
     "exactEntrypointFiles": 37,
     "governedFieldSurfaces": 5,
-    "methods": 196,
+    "methods": 200,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1747,
-    "symbols": 400
+    "recursiveFields": 1741,
+    "symbols": 403
   },
   "entries": [
     {
@@ -2130,6 +2130,203 @@
       "status": "target-context-current-surface",
       "symbol": "collaborationCommittedEventCatalogJson",
       "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:1706e6be76f5d5d2d6ec",
+        "import:35bf81ce31bb04d6b81c",
+        "import:abfe5b8689b7c0fbfdd3",
+        "import:eedf3254adf80563122e"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "public:collaboration:participants:appendHumanGateDecisionCommittedEventTx",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:e5d0b587bb76fb70f0e15c629b83c8f4b7136d002ce861d20698c209d894dbb2"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:1706e6be76f5d5d2d6ec",
+          "file": "packages/backend/src/services/taskQuestionDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:35bf81ce31bb04d6b81c",
+          "file": "packages/backend/src/services/review.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/review.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:abfe5b8689b7c0fbfdd3",
+          "file": "packages/backend/src/services/clarify/seal.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:eedf3254adf80563122e",
+          "file": "packages/backend/src/services/clarifyDecision.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:4bfc58d337c32a9721c53330315a134120eb15e6d09e554ccf9e4ce6e5ac187f",
+      "status": "target-context-current-surface",
+      "symbol": "appendHumanGateDecisionCommittedEventTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:c0500513466abfb1787f"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "public:collaboration:participants:appendQuestionDispatchCommittedEventTx",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:4a1ff6a5a2d150bccb74f6913868197a6ff01db76e9d88f22374d7b630d2ee7f"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c0500513466abfb1787f",
+          "file": "packages/backend/src/services/taskQuestionDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:cd151acc8098a20d498ce6c0a0f893246dd16f3681ea714f579532ba396a1899",
+      "status": "target-context-current-surface",
+      "symbol": "appendQuestionDispatchCommittedEventTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:ba42023bd682a1c29b7c"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "public:collaboration:participants:appendReviewCommentsChangedCommittedEventTx",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:0f73451154c41a95707df272837445487002941563bd33ecac1d290e81dd95d3"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:ba42023bd682a1c29b7c",
+          "file": "packages/backend/src/services/review.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/review.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:d99f054c2962f2e5820209314fd7d9fdccf406ded2da769a8d50ec385351626c",
+      "status": "target-context-current-surface",
+      "symbol": "appendReviewCommentsChangedCommittedEventTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:4a8cbb050bbfdec2b651"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "public:collaboration:participants:appendReviewSelectionChangedCommittedEventTx",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:2c17a5f0f7e8c97533873634675d2acf19d33f8de2ebb797a4d841221a8a207c"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:4a8cbb050bbfdec2b651",
+          "file": "packages/backend/src/services/review.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/review.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:391e41167153266bcdaf3b1f6a83f8cfab4048dc5929bf7f2815b62a551c0001",
+      "status": "target-context-current-surface",
+      "symbol": "appendReviewSelectionChangedCommittedEventTx",
+      "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
     },
@@ -13333,7 +13530,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:9e47062fefd95c496209"
+      ],
       "context": "identity-access",
       "dataClass": "metadata",
       "direction": "offered",
@@ -13365,7 +13564,9 @@
           "type": "'system'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:9e47062fefd95c496209"
+          ],
           "fieldPath": "userId",
           "type": "string"
         }
@@ -13378,7 +13579,14 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AuthenticatedPrincipal",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:9e47062fefd95c496209",
+          "file": "packages/backend/src/services/memory.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
+        }
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:c7334e0c803b43c750804c5d9279a28550cc863d666c57bf77627221e2ba5739",
@@ -13849,7 +14057,7 @@
             "import:bc0ac2093611bbcf5b73"
           ],
           "name": "resolveCommandContext",
-          "signatureDigest": "sha256:aaa6bb521d611a105b4e08ea8335e1349543a80c38c4c6e7bd921d053f9936da"
+          "signatureDigest": "sha256:f2d38eb7fcee0d4aba08575fb8d869c2691479cc354d6c71daf4e9b7ae97be97"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectOperationContextFactory",
@@ -13881,7 +14089,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:3e90040b0c74af538766dce573934f0749d4e1d24cbdace5e407b1e2cd2c81d0",
+      "signatureDigest": "sha256:9f4f1791148930bd6b70cb1d5de5e12b2c1b3a2102eab170ce8aa90c8850ec67",
       "status": "target-context-current-surface",
       "symbol": "DirectOperationContextFactory",
       "transaction": "caller-tx",
@@ -14168,80 +14376,6 @@
       "signatureDigest": "sha256:3a70513596b5efd10408434b6a182c64ab8f1be2cb4f7d8856656a7d0c5c31e9",
       "status": "target-context-current-surface",
       "symbol": "RequestAuthority",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:fb0547bd7cf5b5803e62"
-      ],
-      "context": "identity-access",
-      "dataClass": "confidential",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "source.$variant:0",
-          "type": "'session'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "source.$variant:1",
-          "type": "'pat'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "source.$variant:2",
-          "type": "'daemon'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "source.$variant:3",
-          "type": "'cli'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "source.$variant:4",
-          "type": "'system'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fb0547bd7cf5b5803e62"
-          ],
-          "fieldPath": "userId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "public:identity-access:participants:ResolvedDirectRequestAuthority",
-      "members": [
-        "source",
-        "userId"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#ResolvedDirectRequestAuthority",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:fb0547bd7cf5b5803e62",
-          "file": "packages/backend/src/services/memory.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
-        }
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:5a0c272fc7b1c5f1328a5234ed3880cd0c6ce62f30fff19d1a790c8d7f332ac6",
-      "status": "target-context-current-surface",
-      "symbol": "ResolvedDirectRequestAuthority",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -25563,7 +25697,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c9f06c7235d39f5e1f125c5fd1fc3afb03828c5c438fbfe5bea6b44352f1c6f4",
+  "sourceDigest": "sha256:8ee1ff56be0646a7ea04f6944df72df4634f04ddc347bb044b65c69d73a72bce",
   "targetContexts": [
     "collaboration",
     "development-automation",

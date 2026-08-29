@@ -1539,6 +1539,18 @@
       "lines": 85
     },
     {
+      "id": "rfc341-collaboration-source-locks",
+      "file": "packages/backend/tests/rfc341-collaboration-source-locks.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 110
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -1936,7 +1948,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c9f06c7235d39f5e1f125c5fd1fc3afb03828c5c438fbfe5bea6b44352f1c6f4",
+    "sourceDigest": "sha256:8ee1ff56be0646a7ea04f6944df72df4634f04ddc347bb044b65c69d73a72bce",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
