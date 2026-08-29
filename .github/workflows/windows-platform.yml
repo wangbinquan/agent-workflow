@@ -245,17 +245,20 @@ jobs:
             exit 1
           fi
 
-      # A direct compiled-stub invocation is not enough: Bun 1.4 on Windows
-      # previously returned empty stdout only through the production chain
-      # compiled daemon -> compiled launcher -> compiled runtime. Exercise that
-      # exact nested hop after the artifact exists.
-      - name: RFC-328 compiled runtime output through the launcher
+      # A source `bun test` parent is not the production chain and previously
+      # stayed green while all four Windows e2e shards lost runtime stdout. Run
+      # the oracle inside the compiled e2e daemon so every one of the eight
+      # concurrent attempts is compiled daemon -> compiled launcher -> compiled
+      # runtime, with the same durable receipt and output transport as tasks.
+      - name: RFC-328 compiled daemon-launcher-runtime output
         shell: pwsh
         run: |
           $stub = Get-ChildItem -Path dist -Filter 'stub-opencode-windows-*' -File | Select-Object -First 1
           if ($null -eq $stub) { throw 'compiled stub-opencode artifact is missing' }
-          $env:AW_RFC328_COMPILED_TARGET = $stub.FullName
-          bun test --isolate packages/backend/tests/rfc328-process-preactivation.test.ts --test-name-pattern 'compiled Bun target'
+          $daemon = Get-ChildItem -Path dist -Filter 'agent-workflow-e2e-windows-*' -File | Select-Object -First 1
+          if ($null -eq $daemon) { throw 'compiled e2e daemon artifact is missing' }
+          & $daemon.FullName __managed-process-output-probe --target $stub.FullName
+          if ($LASTEXITCODE -ne 0) { throw "compiled managed-process probe failed with exit $LASTEXITCODE" }
 
       - name: The compiled system mock tool answers on Windows
         shell: bash

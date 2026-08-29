@@ -404,26 +404,31 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   let child: Bun.Subprocess
   let outputSpool: WindowsOutputSpool | undefined
   try {
-    const spawnArgv =
-      launchNonce === undefined
-        ? [...req.argv]
-        : managedProcessLauncherArgv({ launchNonce, targetArgv: req.argv })
-    // A compiled Bun daemon reading a compiled launcher's pipe can observe an
-    // empty stream under concurrent Windows launches even when the launcher
-    // exits 0. Route this outer hop through Bun-owned regular files too. The
-    // launcher does the same for its target, so neither compiled boundary
-    // inherits a pipe or a numeric descriptor.
     outputSpool =
       process.platform === 'win32' && launchNonce !== undefined
         ? createWindowsOutputSpool()
         : undefined
+    const spawnArgv =
+      launchNonce === undefined
+        ? [...req.argv]
+        : managedProcessLauncherArgv({
+            launchNonce,
+            targetArgv: req.argv,
+            ...(outputSpool === undefined ? {} : { windowsOutputPaths: outputSpool }),
+          })
+    // A compiled Bun launcher can lose writes to its inherited fd 1/2 even
+    // when both ends use regular-file redirection. On Windows the parent passes
+    // three private paths instead: the launcher copies target bytes directly to
+    // stdout/stderr files and writes readiness/errors to a separate control
+    // file. The launcher process owns every final writer, so its exit is an
+    // actual close boundary rather than a timing guess across nested stdio.
     child = Bun.spawn({
       ...platformSpawnOptionsForHost(),
       cmd: spawnArgv,
       cwd: req.cwd,
       env: req.env,
-      stdout: outputSpool === undefined ? 'pipe' : Bun.file(outputSpool.stdoutPath),
-      stderr: outputSpool === undefined ? 'pipe' : Bun.file(outputSpool.stderrPath),
+      stdout: outputSpool === undefined ? 'pipe' : 'ignore',
+      stderr: outputSpool === undefined ? 'pipe' : 'ignore',
       // A gated launcher always needs its private activation pipe. The target's
       // actual stdin mode is carried inside the post-receipt frame.
       stdin: launchNonce !== undefined || req.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
@@ -525,6 +530,30 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   })
   const truncated = { stdout: false, stderr: false }
 
+  const consumeLauncherControlLine = (line: string): boolean => {
+    if (
+      launchNonce !== undefined &&
+      line.startsWith(`${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${launchNonce}`)
+    ) {
+      launcherReadyResolve?.()
+      return true
+    }
+    if (
+      launchNonce !== undefined &&
+      line.startsWith(`${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`)
+    ) {
+      const encoded = line.slice(`${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`.length)
+      try {
+        const parsed: unknown = JSON.parse(encoded)
+        launcherSpawnError = typeof parsed === 'string' ? parsed : encoded
+      } catch {
+        launcherSpawnError = encoded
+      }
+      return true
+    }
+    return false
+  }
+
   const stdoutPump = pump(
     activeOutputSpool === undefined
       ? (child.stdout as ReadableStream<Uint8Array>)
@@ -545,26 +574,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       ? (child.stderr as ReadableStream<Uint8Array>)
       : windowsOutputSpoolStream(activeOutputSpool.stderrPath, outputWritersClosed),
     async (line) => {
-      if (
-        launchNonce !== undefined &&
-        line.startsWith(`${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${launchNonce}`)
-      ) {
-        launcherReadyResolve?.()
-        return
-      }
-      if (
-        launchNonce !== undefined &&
-        line.startsWith(`${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`)
-      ) {
-        const encoded = line.slice(`${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`.length)
-        try {
-          const parsed: unknown = JSON.parse(encoded)
-          launcherSpawnError = typeof parsed === 'string' ? parsed : encoded
-        } catch {
-          launcherSpawnError = encoded
-        }
-        return
-      }
+      if (consumeLauncherControlLine(line)) return
       await req.onStderrLine?.(line)
     },
     (chunk) => {
@@ -575,6 +585,18 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     req.onLineTruncated,
     req.onStderrChunkEnd,
   )
+  const controlPump =
+    activeOutputSpool === undefined
+      ? undefined
+      : pump(
+          windowsOutputSpoolStream(activeOutputSpool.controlPath, outputWritersClosed),
+          (line) => {
+            if (!consumeLauncherControlLine(line)) {
+              log.warn('unknown managed-process launcher control record', { line })
+            }
+          },
+          undefined,
+        )
 
   let outcome: ManagedProcessOutcome = activationFailure === null ? 'exited' : 'spawn-failed'
   let killTimer: ReturnType<typeof setTimeout> | undefined
@@ -627,6 +649,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   }
   void stdoutPump.done.catch(onPumpError)
   void stderrPump.done.catch(onPumpError)
+  void controlPump?.done.catch(onPumpError)
 
   const onAbort = (): void => {
     if (outcome === 'exited') outcome = 'aborted'
@@ -691,6 +714,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   if (childUnreaped) {
     stdoutPump.cancel()
     stderrPump.cancel()
+    controlPump?.cancel()
     // impl-gate P1-1: the child is STILL ALIVE here (its `.exited` never
     // resolved), so its handle keeps the event loop ref'd. Without unref the
     // abandoned unkillable child pins the daemon (and `bun test`) open forever
@@ -718,7 +742,11 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const drained = await Promise.race([
     // allSettled: a rejected pump (callback threw) is already recorded via
     // onPumpError — it must not THROW out of the race.
-    Promise.allSettled([stdoutPump.done, stderrPump.done]).then(() => true),
+    Promise.allSettled([
+      stdoutPump.done,
+      stderrPump.done,
+      ...(controlPump === undefined ? [] : [controlPump.done]),
+    ]).then(() => true),
     new Promise<boolean>((resolve) => {
       // RFC-254: this deadline must stay ref'd — the await depends on it, and
       // unref'd timers never fire on Windows Bun once the loop is otherwise
@@ -731,6 +759,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   if (!drained) {
     stdoutPump.cancel()
     stderrPump.cancel()
+    controlPump?.cancel()
     killTree(child, 'SIGKILL')
     if (outcome === 'exited') {
       // RFC-280 T4: an agent caller keeps the real exitCode (trailing output

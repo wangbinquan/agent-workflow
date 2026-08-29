@@ -8,6 +8,7 @@
 import { IS_EMBEDDED } from '@/embed'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import {
+  appendFileSync,
   closeSync,
   mkdtempSync,
   openSync,
@@ -21,6 +22,9 @@ import { join } from 'node:path'
 
 export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
 export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
+export const MANAGED_PROCESS_WINDOWS_STDOUT_FLAG = '--windows-stdout-path'
+export const MANAGED_PROCESS_WINDOWS_STDERR_FLAG = '--windows-stderr-path'
+export const MANAGED_PROCESS_WINDOWS_CONTROL_FLAG = '--windows-control-path'
 export const MANAGED_PROCESS_TARGET_SEPARATOR = '--'
 export const MANAGED_PROCESS_LAUNCH_ERROR_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_ERROR:'
 export const MANAGED_PROCESS_LAUNCH_READY_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_READY:'
@@ -29,6 +33,12 @@ export interface ManagedProcessActivationFrame {
   readonly v: 1
   readonly launchNonce: string
   readonly stdin: Readonly<{ mode: 'ignore' }> | Readonly<{ mode: 'pipe'; data: string }>
+}
+
+export interface WindowsManagedProcessOutputPaths {
+  readonly stdoutPath: string
+  readonly stderrPath: string
+  readonly controlPath: string
 }
 
 function selfInvocation(): string[] {
@@ -42,6 +52,7 @@ function selfInvocation(): string[] {
 export function managedProcessLauncherArgv(input: {
   launchNonce: string
   targetArgv: readonly string[]
+  windowsOutputPaths?: WindowsManagedProcessOutputPaths
 }): string[] {
   if (input.launchNonce.length === 0 || input.targetArgv.length === 0) {
     throw new Error('managed process launcher requires a nonce and target argv')
@@ -50,6 +61,16 @@ export function managedProcessLauncherArgv(input: {
     ...selfInvocation(),
     MANAGED_PROCESS_LAUNCH_NONCE_FLAG,
     input.launchNonce,
+    ...(input.windowsOutputPaths === undefined
+      ? []
+      : [
+          MANAGED_PROCESS_WINDOWS_STDOUT_FLAG,
+          input.windowsOutputPaths.stdoutPath,
+          MANAGED_PROCESS_WINDOWS_STDERR_FLAG,
+          input.windowsOutputPaths.stderrPath,
+          MANAGED_PROCESS_WINDOWS_CONTROL_FLAG,
+          input.windowsOutputPaths.controlPath,
+        ]),
     MANAGED_PROCESS_TARGET_SEPARATOR,
     ...input.targetArgv,
   ]
@@ -58,6 +79,7 @@ export function managedProcessLauncherArgv(input: {
 function parseLauncherRequest(argv: readonly string[]): {
   launchNonce: string
   targetArgv: readonly string[]
+  windowsOutputPaths?: WindowsManagedProcessOutputPaths
 } {
   const subcommandIndex = argv.indexOf(MANAGED_PROCESS_LAUNCHER_SUBCOMMAND)
   const nonceFlagIndex = argv.indexOf(MANAGED_PROCESS_LAUNCH_NONCE_FLAG, subcommandIndex + 1)
@@ -74,7 +96,37 @@ function parseLauncherRequest(argv: readonly string[]): {
   ) {
     throw new Error('invalid managed process launcher argv')
   }
-  return { launchNonce, targetArgv }
+  const launcherArgValue = (flag: string): string | undefined => {
+    const index = argv.indexOf(flag, nonceFlagIndex + 2)
+    if (index < 0 || index >= separatorIndex) return undefined
+    const value = argv[index + 1]
+    if (typeof value !== 'string' || value.length === 0 || index + 1 >= separatorIndex) {
+      throw new Error(`invalid managed process launcher ${flag}`)
+    }
+    return value
+  }
+  const stdoutPath = launcherArgValue(MANAGED_PROCESS_WINDOWS_STDOUT_FLAG)
+  const stderrPath = launcherArgValue(MANAGED_PROCESS_WINDOWS_STDERR_FLAG)
+  const controlPath = launcherArgValue(MANAGED_PROCESS_WINDOWS_CONTROL_FLAG)
+  const windowsPathCount = [stdoutPath, stderrPath, controlPath].filter(
+    (value) => value !== undefined,
+  ).length
+  if (windowsPathCount !== 0 && windowsPathCount !== 3) {
+    throw new Error('managed process launcher requires all Windows output paths')
+  }
+  return {
+    launchNonce,
+    targetArgv,
+    ...(windowsPathCount === 3
+      ? {
+          windowsOutputPaths: {
+            stdoutPath: stdoutPath!,
+            stderrPath: stderrPath!,
+            controlPath: controlPath!,
+          },
+        }
+      : {}),
+  }
 }
 
 function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessActivationFrame {
@@ -107,15 +159,29 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
     : { v: 1, launchNonce, stdin: { mode: 'ignore' } }
 }
 
-function reportLaunchError(launchNonce: string, error: unknown): void {
+function launcherControlPath(argv: readonly string[]): string | undefined {
+  const index = argv.indexOf(MANAGED_PROCESS_WINDOWS_CONTROL_FLAG)
+  const value = index < 0 ? undefined : argv[index + 1]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function writeLaunchControlRecord(path: string | undefined, record: string): void {
+  if (path !== undefined) {
+    appendFileSync(path, record)
+    return
+  }
+  writeTextToFd(2, record)
+}
+
+function reportLaunchError(launchNonce: string, error: unknown, controlPath?: string): void {
   const message = error instanceof Error ? error.message : String(error)
-  writeTextToFd(
-    2,
+  writeLaunchControlRecord(
+    controlPath,
     `${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:${JSON.stringify(message)}\n`,
   )
 }
 
-function writeAllToFd(fd: 1 | 2, bytes: Uint8Array): void {
+function writeAllToFd(fd: number, bytes: Uint8Array): void {
   let offset = 0
   while (offset < bytes.byteLength) {
     const written = writeSync(fd, bytes, offset, bytes.byteLength - offset)
@@ -136,6 +202,7 @@ export interface WindowsOutputSpool {
   readonly root: string
   readonly stdoutPath: string
   readonly stderrPath: string
+  readonly controlPath: string
 }
 
 export function createWindowsOutputSpool(): WindowsOutputSpool {
@@ -144,6 +211,7 @@ export function createWindowsOutputSpool(): WindowsOutputSpool {
     root,
     stdoutPath: join(root, 'stdout'),
     stderrPath: join(root, 'stderr'),
+    controlPath: join(root, 'control'),
   }
   try {
     // Create both paths before the relay can poll. Bun.file below owns the
@@ -151,6 +219,7 @@ export function createWindowsOutputSpool(): WindowsOutputSpool {
     // compiled Windows process boundary.
     writeFileSync(spool.stdoutPath, '')
     writeFileSync(spool.stderrPath, '')
+    writeFileSync(spool.controlPath, '')
     return spool
   } catch (error) {
     cleanupWindowsOutputSpool(spool)
@@ -170,7 +239,7 @@ export function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined)
 
 function drainSpoolPath(
   path: string,
-  targetFd: 1 | 2,
+  targetFd: number,
   startOffset: number,
   buffer: Uint8Array,
 ): number {
@@ -195,6 +264,7 @@ function drainSpoolPath(
 async function relayWindowsOutputSpool(
   spool: WindowsOutputSpool,
   writersClosed: Promise<void>,
+  destinationPaths?: WindowsManagedProcessOutputPaths,
 ): Promise<void> {
   let writersAreClosed = false
   const observedClosure = writersClosed.then(
@@ -209,29 +279,40 @@ async function relayWindowsOutputSpool(
   // The main await below owns propagation; this handler only prevents a
   // close failure from becoming temporarily unhandled while the child runs.
   void observedClosure.catch(() => {})
-  const stdoutBuffer = new Uint8Array(64 * 1024)
-  const stderrBuffer = new Uint8Array(64 * 1024)
-  let stdoutOffset = 0
-  let stderrOffset = 0
-  while (!writersAreClosed) {
-    stdoutOffset = drainSpoolPath(spool.stdoutPath, 1, stdoutOffset, stdoutBuffer)
-    stderrOffset = drainSpoolPath(spool.stderrPath, 2, stderrOffset, stderrBuffer)
-    await Promise.race([observedClosure, Bun.sleep(10)])
-  }
-  await observedClosure
+  const stdoutFd = destinationPaths === undefined ? 1 : openSync(destinationPaths.stdoutPath, 'a')
+  const stderrFd = destinationPaths === undefined ? 2 : openSync(destinationPaths.stderrPath, 'a')
+  try {
+    const stdoutBuffer = new Uint8Array(64 * 1024)
+    const stderrBuffer = new Uint8Array(64 * 1024)
+    let stdoutOffset = 0
+    let stderrOffset = 0
+    while (!writersAreClosed) {
+      stdoutOffset = drainSpoolPath(spool.stdoutPath, stdoutFd, stdoutOffset, stdoutBuffer)
+      stderrOffset = drainSpoolPath(spool.stderrPath, stderrFd, stderrOffset, stderrBuffer)
+      await Promise.race([observedClosure, Bun.sleep(10)])
+    }
+    await observedClosure
 
-  // Bun 1.4 can report a compiled Windows child exited just before its final
-  // regular-file growth becomes visible to a fresh reader. Require two empty
-  // post-close polls; any observed growth resets the bounded stability count.
-  let stablePolls = 0
-  while (stablePolls < 2) {
-    const priorStdoutOffset = stdoutOffset
-    const priorStderrOffset = stderrOffset
-    stdoutOffset = drainSpoolPath(spool.stdoutPath, 1, stdoutOffset, stdoutBuffer)
-    stderrOffset = drainSpoolPath(spool.stderrPath, 2, stderrOffset, stderrBuffer)
-    stablePolls =
-      stdoutOffset === priorStdoutOffset && stderrOffset === priorStderrOffset ? stablePolls + 1 : 0
-    if (stablePolls < 2) await Bun.sleep(10)
+    // Bun 1.4 can report a compiled Windows child exited just before its final
+    // regular-file growth becomes visible to a fresh reader. Require two empty
+    // post-close polls; any observed growth resets the bounded stability count.
+    let stablePolls = 0
+    while (stablePolls < 2) {
+      const priorStdoutOffset = stdoutOffset
+      const priorStderrOffset = stderrOffset
+      stdoutOffset = drainSpoolPath(spool.stdoutPath, stdoutFd, stdoutOffset, stdoutBuffer)
+      stderrOffset = drainSpoolPath(spool.stderrPath, stderrFd, stderrOffset, stderrBuffer)
+      stablePolls =
+        stdoutOffset === priorStdoutOffset && stderrOffset === priorStderrOffset
+          ? stablePolls + 1
+          : 0
+      if (stablePolls < 2) await Bun.sleep(10)
+    }
+  } finally {
+    if (destinationPaths !== undefined) {
+      closeSync(stdoutFd)
+      closeSync(stderrFd)
+    }
   }
 }
 
@@ -239,11 +320,12 @@ async function relayWindowsOutputSpool(
 export async function runManagedProcessLauncher(
   argv: readonly string[] = Bun.argv,
 ): Promise<number> {
+  const requestedControlPath = launcherControlPath(argv)
   let request: ReturnType<typeof parseLauncherRequest>
   try {
     request = parseLauncherRequest(argv)
   } catch (error) {
-    reportLaunchError('invalid', error)
+    reportLaunchError('invalid', error, requestedControlPath)
     return 125
   }
 
@@ -257,7 +339,7 @@ export async function runManagedProcessLauncher(
   try {
     frame = parseActivationFrame(raw, request.launchNonce)
   } catch (error) {
-    reportLaunchError(request.launchNonce, error)
+    reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
     return 125
   }
 
@@ -289,7 +371,7 @@ export async function runManagedProcessLauncher(
     })
   } catch (error) {
     cleanupWindowsOutputSpool(outputSpool)
-    reportLaunchError(request.launchNonce, error)
+    reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
     return 127
   }
 
@@ -302,7 +384,7 @@ export async function runManagedProcessLauncher(
   const outputRelay =
     activeOutputSpool === undefined
       ? Promise.resolve()
-      : relayWindowsOutputSpool(activeOutputSpool, outputWritersClosed)
+      : relayWindowsOutputSpool(activeOutputSpool, outputWritersClosed, request.windowsOutputPaths)
   // The relay can observe a broken parent pipe before the target exits. Attach
   // a handler immediately; the same promise is awaited and reported below.
   void outputRelay.catch(() => {})
@@ -318,12 +400,15 @@ export async function runManagedProcessLauncher(
     // and its stdin has been delivered, so only now may its business timeout
     // begin.  The parent consumes this private record instead of surfacing it as
     // runtime stderr.
-    writeTextToFd(2, `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`)
+    writeLaunchControlRecord(
+      request.windowsOutputPaths?.controlPath,
+      `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`,
+    )
     const exitCode = await childExited
     await outputRelay
     return exitCode
   } catch (error) {
-    reportLaunchError(request.launchNonce, error)
+    reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
     try {
       child.kill(15)
     } catch {

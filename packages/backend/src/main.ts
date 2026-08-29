@@ -29,6 +29,13 @@ import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   runManagedProcessLauncher,
 } from './services/execution/managedProcessLauncher'
+import { runManagedProcess } from './services/execution/managedProcess'
+
+declare const AW_E2E_BUILD: boolean | undefined
+
+function isE2eBuild(): boolean {
+  return typeof AW_E2E_BUILD === 'boolean' && AW_E2E_BUILD
+}
 
 function readFlag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name)
@@ -60,6 +67,62 @@ async function main(): Promise<void> {
       // RFC-328: hidden pre-activation process gate. It intentionally bypasses
       // every daemon/bootstrap concern and exits with the target's code.
       process.exit(await runManagedProcessLauncher(Bun.argv))
+      break
+    }
+
+    case '__managed-process-output-probe': {
+      // Test-only compiled-chain oracle for hosted Windows. A source `bun test`
+      // parent cannot reproduce the production hop (compiled daemon -> compiled
+      // launcher -> compiled runtime), so the e2e artifact owns this narrow
+      // executable check. Production builds reject it before spawning anything.
+      if (!isE2eBuild()) {
+        console.error('managed-process output probe is available only in e2e builds')
+        process.exit(2)
+      }
+      const target = readFlag(Bun.argv, '--target')
+      if (target === undefined) process.exit(2)
+      const env = Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        }),
+      )
+      const attempts = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          runManagedProcess({
+            argv: [target, '--version'],
+            cwd: process.cwd(),
+            env: { ...env, AW_STUB_MODE: 'basic' },
+            requireSpawnReceipt: true,
+            captureRawStdout: true,
+            onSpawned: () => {},
+          }),
+        ),
+      )
+      const expected = 'stub-opencode custom-build'
+      const failures = attempts
+        .map((result, index) => ({ index, result }))
+        .filter(
+          ({ result }) =>
+            result.outcome !== 'exited' ||
+            result.exitCode !== 0 ||
+            !result.rawStdout.includes(expected) ||
+            result.stderrTail.includes('AW_MANAGED_PROCESS_LAUNCH_'),
+        )
+      console.log(
+        JSON.stringify({
+          attempts: attempts.length,
+          failures: failures.map(({ index, result }) => ({
+            index,
+            outcome: result.outcome,
+            exitCode: result.exitCode,
+            rawStdout: result.rawStdout,
+            stderrTail: result.stderrTail,
+            spawnError: result.spawnError,
+            pumpError: result.pumpError,
+          })),
+        }),
+      )
+      process.exit(failures.length === 0 ? 0 : 1)
       break
     }
 
