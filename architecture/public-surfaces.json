@@ -1,11 +1,11 @@
 {
   "denominator": {
-    "consumers": 295,
+    "consumers": 297,
     "exactEntrypointFiles": 37,
     "governedFieldSurfaces": 5,
     "methods": 196,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1741,
+    "recursiveFields": 1743,
     "symbols": 403
   },
   "entries": [
@@ -2901,7 +2901,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 33,
+        "maxTransitiveLeafFields": 34,
         "maxUnionVariants": 15
       },
       "consumerEdgeIds": [
@@ -3039,6 +3039,13 @@
           ],
           "fieldPath": "payload.$variant:1.selectionsJson",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e7dae2614e7fadd00cae"
+          ],
+          "fieldPath": "payload.$variant:2.actorRole",
+          "type": "z.infer<typeof TaskActorRoleSchema>"
         },
         {
           "consumerEdgeIds": [
@@ -3187,7 +3194,9 @@
       "status": "target-context-current-surface",
       "symbol": "CanonicalHumanGateRequest",
       "transaction": "none",
-      "unresolvedTypeRefs": [],
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -3517,6 +3526,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2a02c9e15c2bcd034104",
             "import:720ba8368de50257733e"
           ],
           "fieldPath": "gateRevision",
@@ -3675,7 +3685,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
+        "maxTransitiveLeafFields": 25,
         "maxUnionVariants": 13
       },
       "consumerEdgeIds": [],
@@ -3738,6 +3748,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:1.selectionsJson",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.actorRole",
+          "type": "z.infer<typeof TaskActorRoleSchema>"
         },
         {
           "consumerEdgeIds": [],
@@ -3817,7 +3832,9 @@
       "status": "target-context-current-surface",
       "symbol": "HumanGateRequestPayload",
       "transaction": "none",
-      "unresolvedTypeRefs": [],
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -21673,6 +21690,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:0421543ef953b805b435",
         "import:075f63d0c44a4eb0cc24",
         "import:98bfd740aaae2e52f8f4"
       ],
@@ -21687,6 +21705,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#isLegacyTaskGateContinuationPayload",
       "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:0421543ef953b805b435",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:075f63d0c44a4eb0cc24",
@@ -22529,7 +22553,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
+        "import:075f63d0c44a4eb0cc24",
+        "import:dc5ff59494a886c35ef8"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -22547,6 +22572,12 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:dc5ff59494a886c35ef8",
+          "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file"
         }
       ],
       "removeAfterWave": null,
@@ -25673,7 +25704,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5efdd7077c57dc8e26458c31bf194b40a47aacd66cbf219115409fe8a9e078dd",
+  "sourceDigest": "sha256:f7d9136fe9a1f4de876ee43bd9362ecbdcca9cea7104c4bbb6a969cd7a2c9033",
   "targetContexts": [
     "collaboration",
     "development-automation",

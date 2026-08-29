@@ -446,7 +446,8 @@
         "DESIGNER_DEFERRABLE_CONFLICTS",
         "autoDispatchClarifyRound",
         "autoDispatchClarifyRoundWithDecision",
-        "autoDispatchDeferredQuestions"
+        "autoDispatchDeferredQuestions",
+        "finishCommittedClarifyAutoDispatch"
       ],
       "file": "packages/backend/src/services/clarify/autoDispatch.ts",
       "id": "facade:packages/backend/src/services/clarify/autoDispatch.ts",
@@ -1914,6 +1915,7 @@
         "import:0cdf5e7f8eef10df3fb0",
         "import:2a368a687055a9380d5b",
         "import:2af557f5dc96e75c906d",
+        "import:2c92bad5dd168c05a692",
         "import:2cad8b73b382ab2a79a4",
         "import:5211f60ddb3a9be4344f",
         "import:55348f9123db078151d8",
@@ -1956,12 +1958,14 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0421543ef953b805b435",
         "import:1b5e07c66977a2064440",
         "import:3c606fd7f430b388674c",
         "import:4d8b06536c625c830493",
         "import:a565d89a85dadec282d6",
         "import:ad9e685c2854e741e976",
         "import:b8288b60d247ee059059",
+        "import:dc5ff59494a886c35ef8",
         "import:f6f6a79d7ea24d7f92c0"
       ],
       "exportedSymbols": [
@@ -6419,7 +6423,8 @@
         "getNodeClarifyDirectiveRow",
         "isAskingNodeInSnapshot",
         "listNodeClarifyDirectives",
-        "setNodeClarifyDirective"
+        "setNodeClarifyDirective",
+        "setNodeClarifyDirectiveTx"
       ],
       "file": "packages/backend/src/services/taskClarifyDirective.ts",
       "id": "facade:packages/backend/src/services/taskClarifyDirective.ts",
@@ -6632,6 +6637,7 @@
       ],
       "exportedSymbols": [
         "DispatchTaskQuestionsActor",
+        "DispatchTaskQuestionsCommittedEventIdentity",
         "DispatchTaskQuestionsDecisionArgs",
         "DispatchTaskQuestionsDecisionResult",
         "DispatchTaskQuestionsResult",
@@ -7751,5 +7757,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5efdd7077c57dc8e26458c31bf194b40a47aacd66cbf219115409fe8a9e078dd"
+  "sourceDigest": "sha256:f7d9136fe9a1f4de876ee43bd9362ecbdcca9cea7104c4bbb6a969cd7a2c9033"
 }

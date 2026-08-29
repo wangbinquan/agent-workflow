@@ -1695,6 +1695,7 @@
         "import:0b5d48a45de5a9739079",
         "import:2a368a687055a9380d5b",
         "import:2af557f5dc96e75c906d",
+        "import:2c92bad5dd168c05a692",
         "import:5211f60ddb3a9be4344f",
         "import:55348f9123db078151d8",
         "import:5e5d25b4e190cff24137",
@@ -3739,7 +3740,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5efdd7077c57dc8e26458c31bf194b40a47aacd66cbf219115409fe8a9e078dd",
+    "sourceDigest": "sha256:f7d9136fe9a1f4de876ee43bd9362ecbdcca9cea7104c4bbb6a969cd7a2c9033",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

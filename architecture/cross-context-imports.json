@@ -734,6 +734,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
+      "fromPath": "packages/backend/src/services/humanGateContinuationEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0421543ef953b805b435",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#isLegacyTaskGateContinuationPayload",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "isLegacyTaskGateContinuationPayload",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -5218,6 +5235,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ConflictError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "fromPath": "packages/backend/src/services/humanGateComposition.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2c92bad5dd168c05a692",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/collaboration/composition.ts",
+      "toSymbol": "decodeCollaborationCommittedEvent",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -21474,6 +21508,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
+      "fromPath": "packages/backend/src/services/humanGateContinuationEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dc5ff59494a886c35ef8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#TaskExecutionError",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "TaskExecutionError",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts",
       "fromSymbol": "$file",
@@ -24907,9 +24958,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1465,
+    "architectureExceptions": 1468,
     "implementationSccs": 0,
-    "observedEdges": 1501,
+    "observedEdges": 1504,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -25108,6 +25159,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/hash.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/humanGateContinuationEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
+      "id": "import:0421543ef953b805b435",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "isLegacyTaskGateContinuationPayload",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#isLegacyTaskGateContinuationPayload"
     },
     {
       "edgeKind": "value",
@@ -29460,6 +29527,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/humanGateComposition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
+      "id": "import:2c92bad5dd168c05a692",
+      "owner": "task-execution",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/collaboration/composition",
+      "syntax": "static-import",
+      "targetSymbol": "decodeCollaborationCommittedEvent",
+      "toContext": "collaboration",
+      "toFile": "packages/backend/src/modules/collaboration/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -45591,6 +45674,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/humanGateContinuationEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
+      "id": "import:dc5ff59494a886c35ef8",
+      "owner": "collaboration",
+      "removeAfterWave": "W4/W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "TaskExecutionError",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#TaskExecutionError"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts#$file",
@@ -49344,7 +49443,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5efdd7077c57dc8e26458c31bf194b40a47aacd66cbf219115409fe8a9e078dd",
+  "sourceDigest": "sha256:f7d9136fe9a1f4de876ee43bd9362ecbdcca9cea7104c4bbb6a969cd7a2c9033",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

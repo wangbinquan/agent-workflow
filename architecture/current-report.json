@@ -2,16 +2,16 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 448,
-    "architectureExceptions": 1465,
+    "architectureExceptions": 1468,
     "backgroundJobs": 265,
-    "crossContextImports": 1501,
+    "crossContextImports": 1504,
     "facades": 378,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18769,
-    "mutationEntrypoints": 1015,
+    "moduleSymbolOwners": 18778,
+    "mutationEntrypoints": 1016,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 403,
-    "transactionExternalEffects": 280
+    "transactionExternalEffects": 281
   },
   "metrics": {
     "ambientWiringEntries": 448,
@@ -187,8 +187,8 @@
       {
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1487",
-        "line": 1487,
+        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1499",
+        "line": 1499,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "removeAfterWave": "W2/W7",
         "status": "reviewed-dispatch-exception",
@@ -233,5 +233,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5efdd7077c57dc8e26458c31bf194b40a47aacd66cbf219115409fe8a9e078dd"
+  "sourceDigest": "sha256:f7d9136fe9a1f4de876ee43bd9362ecbdcca9cea7104c4bbb6a969cd7a2c9033"
 }

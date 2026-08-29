@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1015,
+    "entries": 1016,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -11649,7 +11649,7 @@
     },
     {
       "controls": {
-        "audit": true,
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": true,
@@ -11660,6 +11660,7 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/clarify/autoDispatch.ts#sealRoundAsWholeFinalize",
       "missingControls": [
+        "audit",
         "authority",
         "authorization",
         "transaction"
@@ -13795,10 +13796,10 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
+        "authority": "system",
+        "authorization": true,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
@@ -13806,10 +13807,7 @@
       "id": "mutation:packages/backend/src/services/humanGateContinuationEffects.ts#createGateContinuationPreDriveStep",
       "missingControls": [
         "audit",
-        "authority",
-        "authorization",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#createGateContinuationPreDriveStep",
@@ -21008,10 +21006,10 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
+        "fenceOrOcc": false,
+        "transaction": true
       },
       "file": "packages/backend/src/services/taskClarifyDirective.ts",
       "finalCriterion": "W3/W4 owner cutover",
@@ -21019,11 +21017,34 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
         "event",
-        "transaction"
+        "fenceOrOcc"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/taskClarifyDirective.ts#setNodeClarifyDirective",
       "symbol": "setNodeClarifyDirective",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/services/taskClarifyDirective.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/taskClarifyDirective.ts#setNodeClarifyDirectiveTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/taskClarifyDirective.ts#setNodeClarifyDirectiveTx",
+      "symbol": "setNodeClarifyDirectiveTx",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -24091,8 +24112,8 @@
     {
       "file": "packages/backend/src/services/taskQuestionDispatch.ts",
       "guard": "rfc098-node-run-mint-grep-guard",
-      "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1487",
-      "line": 1487,
+      "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1499",
+      "line": 1499,
       "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
       "removeAfterWave": "W2/W7",
       "status": "reviewed-dispatch-exception",
@@ -24100,7 +24121,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5efdd7077c57dc8e26458c31bf194b40a47aacd66cbf219115409fe8a9e078dd",
+  "sourceDigest": "sha256:f7d9136fe9a1f4de876ee43bd9362ecbdcca9cea7104c4bbb6a969cd7a2c9033",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -24210,7 +24231,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 167,
+      "durableWriterSites": 168,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -25568,8 +25589,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/clarify/seal.ts",
-        "id": "task-authority:packages/backend/src/services/clarify/seal.ts#375:nodeRuns",
-        "line": 375,
+        "id": "task-authority:packages/backend/src/services/clarify/seal.ts#413:nodeRuns",
+        "line": 413,
         "ownerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#sealRoundQuestions",
         "requiredBrandedProof": "GateDecisionTransaction",
         "revisionPredicate": "task-scoped-decision-transaction-and-row-cas",
@@ -25782,6 +25803,22 @@
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
         "symbol": "runIsoWorktreeGc"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionIntents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "releaseClarifyConvergenceForRetry",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionIntents",
+        "file": "packages/backend/src/services/humanGateContinuationEffects.ts",
+        "id": "task-authority:packages/backend/src/services/humanGateContinuationEffects.ts#89:taskExecutionIntents",
+        "line": 89,
+        "ownerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#releaseClarifyConvergenceForRetry",
+        "requiredBrandedProof": "OwnershipToken+ExactClaimedIntentFence",
+        "revisionPredicate": "exact-intent-task-kind-claimed-epoch-and-state",
+        "symbol": "releaseClarifyConvergenceForRetry"
       },
       {
         "allowedTables": [
@@ -26768,8 +26805,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
-        "id": "task-authority:packages/backend/src/services/taskQuestionDispatch.ts#1487:nodeRuns",
-        "line": 1487,
+        "id": "task-authority:packages/backend/src/services/taskQuestionDispatch.ts#1499:nodeRuns",
+        "line": 1499,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "requiredBrandedProof": "GateDecisionTransaction",
         "revisionPredicate": "task-scoped-decision-transaction-and-row-cas",
