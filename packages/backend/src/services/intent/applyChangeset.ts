@@ -55,6 +55,7 @@ import {
   intentProvenance,
   intentSessions,
   plugins as pluginsTable,
+  skillOperations,
 } from '@/db/schema'
 import { ACL_TABLES } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
@@ -85,12 +86,7 @@ import {
   type PreparedPluginCreate,
 } from '@/services/plugin'
 import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
-import {
-  cleanupInstallGeneration,
-  installPlugin,
-  plannedGenerationDir,
-  type InstallResult,
-} from '@/services/pluginInstaller'
+import { installPlugin, plannedGenerationDir, type InstallResult } from '@/services/pluginInstaller'
 import {
   commitSkillReadyInTx,
   compensateManagedSkillStage,
@@ -141,6 +137,12 @@ import {
 import { resolveIntentBundle, type IntentDecision, type ResolvedIntentOp } from './resolveChangeset'
 import { sessionManifest } from './session'
 import { monotonicNow } from '@/util/time'
+import {
+  decodeIntentJournalArtifacts,
+  encodeIntentJournalArtifacts,
+  type IntentJournalArtifact,
+  type IntentJournalArtifactV1,
+} from './journalArtifacts'
 
 export interface IntentApplyReceipt {
   journalId: string
@@ -154,14 +156,6 @@ export interface IntentApplyReceipt {
     name: string
   }>
 }
-
-type JournalArtifact =
-  /** RFC-271 T17：`generationDir` 由调用方**预铸**并先落库——只记 pluginId 时，
-   *  崩溃后的收敛器不知道该删哪个 generation 目录，而粗粒度 GC 又被任一非终态
-   *  node run 完全挡住 ⇒ 目录永久残留。旧形态（无该字段）仍可解析。 */
-  | { kind: 'plugin-install'; pluginId: string; generationDir?: string }
-  | { kind: 'skill-stage'; skillId: string; opId: string; skillDir: string }
-  | { kind: 'skill-version-stage'; skillId: string; opId: string; stagingDir: string }
 
 /**
  * Codex impl-gate P0-1/P2-3 — update targets the actor cannot modify in place:
@@ -237,6 +231,8 @@ export interface ApplyIntentFaults {
   beforeTx?: () => void
   inTxAfterOps?: () => void
   afterTxBeforeRollForward?: () => void
+  /** Test-only seam for proving that partial cleanup never terminalizes a journal. */
+  beforeArtifactCompensation?: (artifact: IntentJournalArtifact) => void
 }
 
 export interface ApplyIntentDeps {
@@ -266,18 +262,22 @@ async function withSessionApplyLock<T>(sessionId: string, fn: () => Promise<T>):
   const gate = new Promise<void>((r) => {
     release = r
   })
-  applyLocks.set(
-    sessionId,
-    prior.then(() => gate),
-  )
+  const chain = prior.then(() => gate)
+  applyLocks.set(sessionId, chain)
   await prior.catch(() => {})
   try {
     return await fn()
   } finally {
     release()
-    if (applyLocks.get(sessionId) === gate) applyLocks.delete(sessionId)
+    if (applyLocks.get(sessionId) === chain) applyLocks.delete(sessionId)
   }
 }
+
+export function __intentApplyLockCountForTests(): number {
+  return applyLocks.size
+}
+
+export { withSessionApplyLock as __withSessionApplyLockForTests }
 
 async function occupiedNamesFor(
   db: DbClient,
@@ -469,12 +469,15 @@ async function applyInner(
   // never mistake this process's own live apply for a crashed one.
   ACTIVE_APPLY_JOURNALS.add(journalId)
 
-  const artifacts: JournalArtifact[] = []
-  const recordArtifact = (artifact: JournalArtifact): void => {
+  const artifacts: IntentJournalArtifactV1[] = []
+  const recordArtifact = (artifact: IntentJournalArtifactV1): void => {
     artifacts.push(artifact)
     dbTxSync(db, (tx) => {
       tx.update(intentApplyJournal)
-        .set({ preparedArtifactsJson: JSON.stringify(artifacts), updatedAt: Date.now() })
+        .set({
+          preparedArtifactsJson: encodeIntentJournalArtifacts(artifacts),
+          updatedAt: Date.now(),
+        })
         .where(eq(intentApplyJournal.id, journalId))
         .run()
     })
@@ -488,6 +491,21 @@ async function applyInner(
             error instanceof Error
               ? `${(error as { code?: string }).code ?? 'error'}: ${error.message}`
               : String(error),
+          updatedAt: Date.now(),
+        })
+        .where(eq(intentApplyJournal.id, journalId))
+        .run()
+    })
+  }
+  const keepRetryable = (error: unknown, compensationErrors: readonly unknown[]): void => {
+    const original = error instanceof Error ? error.message : String(error)
+    const cleanup = compensationErrors
+      .map((item) => (item instanceof Error ? item.message : String(item)))
+      .join('; ')
+    dbTxSync(db, (tx) => {
+      tx.update(intentApplyJournal)
+        .set({
+          error: `retryable after apply error: ${original}; compensation incomplete: ${cleanup}`,
           updatedAt: Date.now(),
         })
         .where(eq(intentApplyJournal.id, journalId))
@@ -780,11 +798,14 @@ async function applyInner(
           generationId,
           deps.pluginInstallOpts?.pluginsDir,
         )
-        recordArtifact({
-          kind: 'plugin-install',
-          pluginId: item.op.resourceId,
-          ...(generationDir === null ? {} : { generationDir }),
-        })
+        if (generationDir !== null) {
+          recordArtifact({
+            kind: 'plugin-install',
+            pluginId: item.op.resourceId,
+            generationId,
+            generationDir,
+          })
+        }
         const install = await installPlugin(item.op.resourceId, item.spec, {
           ...deps.pluginInstallOpts,
           generationId,
@@ -829,12 +850,7 @@ async function applyInner(
         )
         ;(item as { staged: StagedSkillVersion }).staged = staged
         skillVersionStages.set(item.op.resourceId, staged)
-        recordArtifact({
-          kind: 'skill-version-stage',
-          skillId: staged.skillId,
-          opId: staged.opId ?? '',
-          stagingDir: staged.stagingDir,
-        })
+        recordArtifact({ kind: 'skill-version-stage', staged })
         deps.faults?.afterSkillStage?.()
       } else if (item.kind === 'skill-create') {
         const payload = item.op.payload as {
@@ -1185,9 +1201,9 @@ async function applyInner(
     deps.faults?.afterTxBeforeRollForward?.()
     rollForwardCommitted(
       db,
+      deps.appHome,
       {
         skillStages: [...skillStages.values()],
-        appHome: deps.appHome,
         skillVersionStages: [...skillVersionStages.values()],
       },
       log,
@@ -1218,64 +1234,89 @@ async function applyInner(
       })
       throw error
     }
-    // ── compensation: reverse order, then journal 'failed' (zero visible) ──
-    for (const staged of [...skillVersionStages.values()].reverse()) {
+    // ── compensation: the durable artifact list is the oracle ──
+    // A plugin installer may create its generation and throw before returning
+    // InstallResult, so the success-only in-memory maps are insufficient here.
+    const compensationErrors: unknown[] = []
+    for (const artifact of [...artifacts].reverse()) {
       try {
-        abortStagedSkillVersion(db, staged)
+        deps.faults?.beforeArtifactCompensation?.(artifact)
+        compensateIntentArtifact(db, artifact)
       } catch (err) {
-        log.warn('intent-skill-version-compensation-failed', {
-          skillId: staged.skillId,
+        compensationErrors.push(err)
+        log.warn('intent-artifact-compensation-failed', {
+          kind: artifact.kind,
           err: err instanceof Error ? err.message : String(err),
         })
       }
     }
-    for (const stage of [...skillStages.values()].reverse()) {
-      try {
-        compensateManagedSkillStage(db, stage)
-      } catch (err) {
-        log.warn('intent-skill-compensation-failed', {
-          skillId: stage.skillId,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
+    if (compensationErrors.length === 0) settleFailed(error)
+    else {
+      // A non-terminal row truthfully records that cleanup is incomplete and
+      // lets boot/hourly convergence retry. Marking it failed would make the
+      // converger skip the residue forever.
+      keepRetryable(error, compensationErrors)
+      log.warn('intent-left-retryable', {
+        journalId,
+        err: error instanceof Error ? error.message : String(error),
+      })
     }
-    for (const install of [...pluginInstalls.values()].reverse()) {
-      try {
-        await cleanupInstallGeneration(install)
-      } catch (err) {
-        log.warn('intent-plugin-compensation-failed', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-    settleFailed(error)
     throw error
   } finally {
     ACTIVE_APPLY_JOURNALS.delete(journalId)
   }
 }
 
-/** Post-commit publishes. Safe to replay: finishOperation on an already
- *  finished op throws and is swallowed per item. */
+/** Post-commit publishes. Completed exact operations are skipped; unfinished
+ * failures remain observable so convergence can retry them. */
 function rollForwardCommitted(
   db: DbClient,
+  appHome: string,
   state: {
     skillStages: Array<{ skillId: string; opId: string }>
-    /** RFC-271 T14：技能原地更新的发布段。 */
-    appHome?: string
-    skillVersionStages?: StagedSkillVersion[]
+    skillVersionStages: StagedSkillVersion[]
   },
   log: Logger,
-): void {
-  // ⚠️ 先把**全部**已提交技能 unmark，再逐项 publish（T10 的那条注释）：放进
-  // publish 里的话，先发布的已经 mark 回来，而后一个还没发布的仍带着上一代
-  // admission。
-  for (const staged of state.skillVersionStages ?? []) unmarkSkillBootVerified(staged.skillId)
-  for (const staged of state.skillVersionStages ?? []) {
-    if (state.appHome === undefined) break
+): boolean {
+  let complete = true
+  // Committed rows remain in the audit ledger and are swept repeatedly. Only
+  // an exact still-active operation has an unfinished publish tail; replaying
+  // an old completed artifact after a later edit would unmark the healthy new
+  // generation and try to publish stale bytes.
+  const pendingSkillVersions: StagedSkillVersion[] = []
+  for (const staged of state.skillVersionStages) {
+    if (staged.noop !== null) continue
+    if (staged.opId === null) {
+      pendingSkillVersions.push(staged)
+      continue
+    }
+    const op = db
+      .select({ active: skillOperations.active, phase: skillOperations.phase })
+      .from(skillOperations)
+      .where(eq(skillOperations.opId, staged.opId))
+      .get()
+    if (op?.active === 1 && (op.phase === 'db-committed' || op.phase === 'fs-published')) {
+      pendingSkillVersions.push(staged)
+      continue
+    }
+    if (op?.phase !== 'done') {
+      complete = false
+      log.warn('intent-skill-publish-op-not-replayable', {
+        skillId: staged.skillId,
+        opId: staged.opId,
+        phase: op?.phase ?? 'missing',
+      })
+    }
+  }
+
+  // Unmark every pending skill before publishing any of them; otherwise an
+  // earlier item can be re-admitted while a later committed item is stale.
+  for (const staged of pendingSkillVersions) unmarkSkillBootVerified(staged.skillId)
+  for (const staged of pendingSkillVersions) {
     try {
-      publishStagedSkillVersion(db, { appHome: state.appHome }, staged)
+      publishStagedSkillVersion(db, { appHome }, staged)
     } catch (err) {
+      complete = false
       log.warn('intent-skill-publish-replayed-or-failed', {
         skillId: staged.skillId,
         err: err instanceof Error ? err.message : String(err),
@@ -1283,15 +1324,32 @@ function rollForwardCommitted(
     }
   }
   for (const stage of state.skillStages) {
+    const op = db
+      .select({ active: skillOperations.active, phase: skillOperations.phase })
+      .from(skillOperations)
+      .where(eq(skillOperations.opId, stage.opId))
+      .get()
+    if (op?.active === 0 && op.phase === 'done') continue
+    if (op?.active !== 1 || op.phase !== 'db-committed') {
+      complete = false
+      log.warn('intent-skill-finish-op-not-replayable', {
+        skillId: stage.skillId,
+        opId: stage.opId,
+        phase: op?.phase ?? 'missing',
+      })
+      continue
+    }
     try {
       dbTxSync(db, (tx) => finishOperation(tx, stage.opId))
     } catch (err) {
+      complete = false
       log.warn('intent-skill-finish-replayed-or-failed', {
         skillId: stage.skillId,
         err: err instanceof Error ? err.message : String(err),
       })
     }
   }
+  return complete
 }
 
 /** Boot/hourly convergence (design §9.5): sweep unsettled journal rows.
@@ -1311,13 +1369,38 @@ export async function convergeIntentApplyJournal(
   log: Logger = createLogger('intentApply'),
   options: { activeJournalIds?: readonly string[] } = {},
 ): Promise<{ failed: number; rolledForward: number }> {
-  void appHome
   let failed = 0
   let rolledForward = 0
   const rows = await db.select().from(intentApplyJournal)
   const reapBefore = Date.now() - CONVERGE_MIN_AGE_MS
   for (const row of rows) {
-    const artifacts = JSON.parse(row.preparedArtifactsJson) as JournalArtifact[]
+    if (row.state === 'failed') continue
+    let artifacts: IntentJournalArtifact[]
+    try {
+      artifacts = decodeIntentJournalArtifacts(row.preparedArtifactsJson)
+    } catch (err) {
+      // The journal is the recovery oracle. If it is corrupt or an old lossy
+      // skill-version shape, claiming compensation/roll-forward succeeded is
+      // worse than leaving the row visible for repair.
+      log.warn('intent-journal-artifact-corrupt', {
+        journalId: row.id,
+        state: row.state,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      if (row.state === 'prepared' || row.state === 'applying' || row.state === 'committed') {
+        dbTxSync(db, (tx) => {
+          tx.update(intentApplyJournal)
+            .set({
+              error: `retryable: artifact decode failed: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            })
+            .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
+            .run()
+        })
+      }
+      continue
+    }
     if (row.state === 'prepared' || row.state === 'applying') {
       // P2-1: an apply this PROCESS is running, or one still fresh enough to
       // be a slow install, is ACTIVE — reaping it would compensate a live
@@ -1328,44 +1411,117 @@ export async function convergeIntentApplyJournal(
         row.updatedAt > reapBefore
       )
         continue
+      const compensationErrors: unknown[] = []
       for (const artifact of [...artifacts].reverse()) {
         try {
-          if (artifact.kind === 'skill-stage') {
-            compensateManagedSkillStage(db, artifact)
-          } else if (artifact.kind === 'plugin-install' && artifact.generationDir !== undefined) {
-            // RFC-271 T17：精确路径事前落了库 ⇒ 这里删得准。旧行（无该字段）仍
-            // 退回「靠 installer 自己的 generation GC」——不能因为格式演进就把
-            // 存量 journal 判成不可补偿。
-            rmSync(artifact.generationDir, { recursive: true, force: true })
-          }
+          compensateIntentArtifact(db, artifact)
         } catch (err) {
+          compensationErrors.push(err)
           log.warn('intent-converge-compensation-failed', {
             journalId: row.id,
+            kind: artifact.kind,
             err: err instanceof Error ? err.message : String(err),
           })
         }
       }
-      dbTxSync(db, (tx) => {
-        tx.update(intentApplyJournal)
+      if (compensationErrors.length > 0) {
+        dbTxSync(db, (tx) => {
+          tx.update(intentApplyJournal)
+            .set({
+              error: `retryable: compensation incomplete: ${compensationErrors
+                .map((item) => (item instanceof Error ? item.message : String(item)))
+                .join('; ')}`,
+            })
+            .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
+            .run()
+        })
+        log.warn('intent-converge-left-retryable', { journalId: row.id })
+        continue
+      }
+      const cas = dbTxSync(db, (tx) =>
+        tx
+          .update(intentApplyJournal)
           .set({ state: 'failed', error: 'daemon-restart before commit', updatedAt: Date.now() })
           .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-          .run()
-      })
-      failed += 1
+          .run(),
+      )
+      if ((cas as unknown as { changes?: number }).changes === 1) failed += 1
     } else if (row.state === 'committed') {
-      rollForwardCommitted(
+      const complete = rollForwardCommitted(
         db,
+        appHome,
         {
           skillStages: artifacts.flatMap((a) =>
             a.kind === 'skill-stage' ? [{ skillId: a.skillId, opId: a.opId }] : [],
           ),
+          skillVersionStages: artifacts.flatMap((artifact) =>
+            artifact.kind === 'skill-version-stage' ? [artifact.staged] : [],
+          ),
         },
         log,
       )
-      rolledForward += 1
+      if (complete) {
+        rolledForward += 1
+        if (row.error !== null) {
+          dbTxSync(db, (tx) => {
+            tx.update(intentApplyJournal)
+              .set({ error: null, updatedAt: Date.now() })
+              .where(
+                and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')),
+              )
+              .run()
+          })
+        }
+      } else {
+        dbTxSync(db, (tx) => {
+          tx.update(intentApplyJournal)
+            .set({
+              error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
+              updatedAt: Date.now(),
+            })
+            .where(
+              and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')),
+            )
+            .run()
+        })
+      }
     }
   }
   return { failed, rolledForward }
+}
+
+function compensateIntentArtifact(db: DbClient, artifact: IntentJournalArtifact): void {
+  switch (artifact.kind) {
+    case 'legacy-plugin-install-untracked':
+      // Historical rows did not record a generation path. Keep their former
+      // converger behavior (installer GC owns any residue) without pretending
+      // the serialized artifact was the new precise shape.
+      return
+    case 'plugin-install':
+      rmSync(artifact.generationDir, { recursive: true, force: true })
+      return
+    case 'skill-stage':
+      compensateManagedSkillStage(db, artifact)
+      return
+    case 'skill-version-stage': {
+      abortStagedSkillVersion(db, artifact.staged)
+      if (artifact.staged.opId === null) return
+      const op = db
+        .select({ active: skillOperations.active })
+        .from(skillOperations)
+        .where(eq(skillOperations.opId, artifact.staged.opId))
+        .get()
+      // abortStagedSkillVersion intentionally preserves an active op when it
+      // cannot prove cleanup. Surface that fact to the journal state machine
+      // instead of mistaking its void return for successful compensation.
+      if (op === undefined || op.active === 1) {
+        throw new Error(
+          `skill version compensation remains active for operation ${artifact.staged.opId}`,
+        )
+      }
+      return
+    }
+  }
 }
 
 /** RFC-338: strict process-local advisory snapshot for the maintenance Worker.

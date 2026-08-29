@@ -225,6 +225,12 @@ fallback 或 module-level mutable state。新 module 禁止反向 import facade�
 
 ### P0-A Memory scope move 与 ghost event
 
+**实施 successor**：[RFC-342 Memory scope move 事务正确性](../RFC-342-memory-scope-move-correctness/proposal.md)。
+2026-08-29 已形成 content-only PATCH、candidate-only Move、可信 RequestAuthority、双 scope 同事务授权、version CAS、
+durable move receipt、commit 后 WS 及现有编辑 UI Move cutover 的本地候选；目标删除/权限漂移/版本竞争/rollback/prompt
+audience/UI command-plan proof 已写。
+尚未发布，也未取得 exact-SHA hosted CI，因此本节退出门仍保持未关闭。
+
 **前置**：独立安全 RFC，用户拍板 candidate/approved/archived 的 move 能力。
 
 **任务**：
@@ -244,6 +250,10 @@ fallback 或 module-level mutable state。新 module 禁止反向 import facade�
 **冲突面**：memory route/service/shared schema/injection/broadcaster；与 W3/W4 同文件时排它。
 
 ### P0-B Intent Apply 立即正确性
+
+**实施 successor**：[RFC-343 Intent Apply 恢复正确性](../RFC-343-intent-apply-recovery-correctness/proposal.md)。
+2026-08-29 已形成本地候选：actual-chain lock cleanup、retryable compensation、V1 完整 artifact codec、
+prepared/committed convergence 与 corruption/mutation corpus；尚未发布，也未取得 exact-SHA hosted CI，因此本节退出门仍保持未关闭。
 
 **前置**：不等待 W6 泛化引擎，先修已知恢复缺陷。
 
@@ -384,7 +394,7 @@ P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队
 | N6   | RFC-333 / P0-C residual（Done）     | 三类 open/decision 原子 participant、canonical continuation、boot recovery、真实 SIGKILL、慢 sibling/deferred-question handoff 均已落                                      | `dda58935e` → `57e45c292`；CI 35/35、七条 scheduled 19/19 success；W2-C 前置解除                                           |
 | N7   | RFC-334 / W2-C（Done）              | 14-key NodeExecutorRegistry、typed host lane、neutral cap、legacy node selector/host body 与两条 W2-C exception 归零；三条 wrapper bridge 留 W2-D                          | `1271ecb20` → `cfe1326b4`；`8e58eb05f` CI `33142147682` 35/35；七条 scheduled 19/19 success                                |
 | N8   | RFC-339 / W2-D（Done）              | closed WrapperRuntime、Loop/Git/Fanout strategies、ExecutionScopeIndex、ExecutionMergeRecovery 与 bootstrap-only composition 已落；legacy wrapper/replay owner/bridge 归零 | `0c9c48e68` 主实现；payload/pin `5ac1e1c64` → `4c8497c2a`，digest `a0fd3ea9…`；exact-SHA hosted/scheduled closeout success |
-| N9   | RFC-341 / W3（Draft）               | task lifecycle + review/clarify/questions committed events、per-consumer delivery、持续 continuation worker与Event Center运维面设计已落档 | 产品口径已确认；proposal D1～D12、plan T2～T14生产实施待用户明确批准，production credit=0 |
+| N9   | RFC-341 / W3（Draft）               | task lifecycle + review/clarify/questions committed events、per-consumer delivery、持续 continuation worker与Event Center运维面设计已落档                                  | 产品口径已确认；proposal D1～D12、plan T2～T14生产实施待用户明确批准，production credit=0                                  |
 | OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                   | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                   |
 
 P0-A、P0-B 可从当前 committed measurement source 按非重叠文件面独立做设计准备：P0-A 只阻断 W4-E2，P0-B 只阻断 W6；生产

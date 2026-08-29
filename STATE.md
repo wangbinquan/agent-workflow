@@ -2,6 +2,21 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🛠️ **进行中 RFC（本地候选，2026-08-29）：[RFC-342 Memory scope move 事务正确性（RFC-294 P0-A）](design/RFC-342-memory-scope-move-correctness/proposal.md)。**
+> generic PATCH 已收窄为 title/body/tags；新增 strict candidate-only Move command、factory-minted RequestAuthority、
+> old/new scope 双授权与 expected-version CAS。migration `0221` 新增不可变 `memory_scope_move_events`，与 scope/version 在同一
+> `dbTxSync` 提交，`memory.updated` 移到 commit 后；现有编辑 UI 也已改为 candidate scope 走 Move、非 candidate 显示原因并冻结
+> scope。目标删除、权限漂移、memory version 竞争、写后 fault、PAT bypass、route identity injection、move→promote→prompt
+> audience 与 UI command-plan tests 已写；shared/frontend/backend typecheck、exact ESLint/Prettier 与 SQLite SQL smoke 已过。候选待发布，
+> 不关闭 P0-A。
+
+> 🛠️ **进行中 RFC（本地候选，2026-08-29）：[RFC-343 Intent Apply 恢复正确性（RFC-294 P0-B）](design/RFC-343-intent-apply-recovery-correctness/proposal.md)。**
+> session lock 已改为 actual-chain identity cleanup；compensation 任一失败保持 retryable；新增 V1 journal artifact codec，完整保存
+> staged skill version 并对 lossy/corrupt artifact fail closed；prepared/committed convergence 只 roll forward durable commit，
+> 重复 convergence 不重发 stale version。lock residue、crash/compensation、codec mutation、corruption 与完整 skill-version tail tests
+> 已写，exact Prettier/ESLint 已过；并发 RFC-341 已收口其在制诊断，backend typecheck 当前全绿。
+> 候选待发布，不关闭 P0-B。
+
 > 📝 **Draft RFC（产品口径已确认，生产实施待批准，2026-08-29）：[RFC-341 生命周期已提交事件与协作命令收口（RFC-294 W3）](design/RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md)。**
 > current source `1947e1ad02d3eb3f8a0c062f2a2f42a1ce5f61ce` 证明 RFC-328/RFC-310 已有 task lifecycle
 > outbox/publisher pilot，RFC-333 已有三类人工门原子 decision + durable continuation intent；尚未收口的是 transaction 后的

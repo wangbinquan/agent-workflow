@@ -24,6 +24,14 @@ import { copyOnlyTargetsFor } from '../src/services/intent/applyChangeset'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src', 'services', 'intent', 'applyChangeset.ts')
+const ARTIFACT_SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'services',
+  'intent',
+  'journalArtifacts.ts',
+)
 
 const actorOf = (id: string) =>
   buildActor({
@@ -167,12 +175,12 @@ describe('T17 · plugin 半边的两条要害（源码层）', () => {
     expect(prestage).toContain('generationId')
   })
 
-  test('收敛器能精确删掉 generation 目录；存量无该字段的行仍可解析', () => {
-    expect(src).toContain(
-      "artifact.kind === 'plugin-install' && artifact.generationDir !== undefined",
-    )
-    // 旧形态可选，不是必填——格式演进不能把存量 journal 判成不可补偿。
-    expect(src).toContain('generationDir?: string')
+  test('收敛器只按完整 codec 的精确 generation 目录补偿', () => {
+    const codec = readFileSync(ARTIFACT_SRC, 'utf8')
+    expect(src).toContain('rmSync(artifact.generationDir, { recursive: true, force: true })')
+    expect(codec).toContain('generationId: NonEmptyString')
+    expect(codec).toContain('generationDir: NonEmptyString')
+    expect(codec).toContain('INTENT_JOURNAL_ARTIFACT_VERSION = 1')
   })
 
   test('spec 没变就**不**预安装（避免为一次纯 options 编辑跑 npm）', () => {

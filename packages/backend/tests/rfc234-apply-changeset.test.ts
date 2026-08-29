@@ -558,6 +558,48 @@ describe('applyIntentChangeset', () => {
     expect((await db.select().from(intentProvenance)).length).toBe(0)
   })
 
+  test('a compensation failure leaves the journal retryable until convergence succeeds', async () => {
+    const existing = await seedAgent('retryable-compensation-agent')
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    const draft = installDraft(
+      session.id,
+      fullBundle(existing.id, filePluginFixture()),
+      manifestWithAgent(existing.id, existing.updatedAt),
+    )
+    let compensationAttempts = 0
+    await expect(
+      applyIntentChangeset(
+        deps({
+          faults: {
+            beforeTx: () => {
+              throw new Error('boom-before-tx')
+            },
+            beforeArtifactCompensation: () => {
+              compensationAttempts += 1
+              throw new Error('cleanup temporarily blocked')
+            },
+          },
+        }),
+        { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: happyDecisions },
+      ),
+    ).rejects.toThrow(/boom-before-tx/)
+
+    const pending = db.select().from(intentApplyJournal).get()!
+    expect(compensationAttempts).toBeGreaterThan(0)
+    expect(pending.state).toBe('prepared')
+    expect(pending.error).toContain('compensation incomplete')
+
+    db.update(intentApplyJournal)
+      .set({ updatedAt: Date.now() - 11 * 60 * 1000 })
+      .where(eq(intentApplyJournal.id, pending.id))
+      .run()
+    expect(await convergeIntentApplyJournal(db, appHome)).toEqual({
+      failed: 1,
+      rolledForward: 0,
+    })
+    expect(db.select().from(intentApplyJournal).get()?.state).toBe('failed')
+  })
+
   test('post-commit crash: resources visible, convergence replays roll-forward', async () => {
     const existing = await seedAgent('existing-agent')
     const { session } = await createIntentSession(db, actor, { message: 'x' })
