@@ -203,7 +203,28 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
       expect(stderrResult.exitCode).toBe(2)
       expect(stderrResult.stderrTail).toContain('unknown AW_STUB_MODE')
       expect(stderrResult.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
+
+      const concurrentResults = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          runManagedProcess({
+            argv: [compiledTarget, '--version'],
+            cwd: fixtureRoot(),
+            env: { ...baseEnv, AW_STUB_MODE: 'basic' },
+            requireSpawnReceipt: true,
+            captureRawStdout: true,
+            onSpawned: () => {},
+          }),
+        ),
+      )
+      expect(concurrentResults).toHaveLength(8)
+      for (const result of concurrentResults) {
+        expect(result.outcome).toBe('exited')
+        expect(result.exitCode).toBe(0)
+        expect(result.rawStdout).toContain('stub-opencode custom-build')
+        expect(result.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
+      }
     },
+    30_000,
   )
 
   test('missing target is surfaced as spawn-failed, not a business nonzero exit', async () => {

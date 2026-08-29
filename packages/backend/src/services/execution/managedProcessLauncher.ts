@@ -208,30 +208,45 @@ function drainSpoolPath(
 
 async function relayWindowsOutputSpool(
   spool: WindowsOutputSpool,
-  childExited: Promise<number>,
+  writersClosed: Promise<void>,
 ): Promise<void> {
-  let childIsExited = false
-  const observedExit = childExited.then(
+  let writersAreClosed = false
+  const observedClosure = writersClosed.then(
     () => {
-      childIsExited = true
+      writersAreClosed = true
     },
-    () => {
-      childIsExited = true
+    (error) => {
+      writersAreClosed = true
+      throw error
     },
   )
+  // The main await below owns propagation; this handler only prevents a
+  // close failure from becoming temporarily unhandled while the child runs.
+  void observedClosure.catch(() => {})
   const stdoutBuffer = new Uint8Array(64 * 1024)
   const stderrBuffer = new Uint8Array(64 * 1024)
   let stdoutOffset = 0
   let stderrOffset = 0
-  while (!childIsExited) {
+  while (!writersAreClosed) {
     stdoutOffset = drainSpoolPath(spool.stdoutPath, 1, stdoutOffset, stdoutBuffer)
     stderrOffset = drainSpoolPath(spool.stderrPath, 2, stderrOffset, stderrBuffer)
-    await Promise.race([observedExit, Bun.sleep(10)])
+    await Promise.race([observedClosure, Bun.sleep(10)])
   }
-  // Process exit closes and flushes the inherited file handles. One final
-  // drain therefore includes every byte without guessing a post-exit delay.
-  drainSpoolPath(spool.stdoutPath, 1, stdoutOffset, stdoutBuffer)
-  drainSpoolPath(spool.stderrPath, 2, stderrOffset, stderrBuffer)
+  await observedClosure
+
+  // Bun 1.4 can report a compiled Windows child exited just before its final
+  // regular-file growth becomes visible to a fresh reader. Require two empty
+  // post-close polls; any observed growth resets the bounded stability count.
+  let stablePolls = 0
+  while (stablePolls < 2) {
+    const priorStdoutOffset = stdoutOffset
+    const priorStderrOffset = stderrOffset
+    stdoutOffset = drainSpoolPath(spool.stdoutPath, 1, stdoutOffset, stdoutBuffer)
+    stderrOffset = drainSpoolPath(spool.stderrPath, 2, stderrOffset, stderrBuffer)
+    stablePolls =
+      stdoutOffset === priorStdoutOffset && stderrOffset === priorStderrOffset ? stablePolls + 1 : 0
+    if (stablePolls < 2) await Bun.sleep(10)
+  }
 }
 
 /** Hidden CLI entry. Never logs ordinary daemon output or reads product state. */
@@ -292,24 +307,21 @@ export async function runManagedProcessLauncher(
     return 127
   }
 
-  try {
-    if (outputSpool !== undefined) closeWindowsOutputSpoolWriters(outputSpool)
-  } catch (error) {
-    cleanupWindowsOutputSpool(outputSpool)
-    reportLaunchError(request.launchNonce, error)
-    try {
-      child.kill(15)
-    } catch {
-      // The child may already have exited.
-    }
-    await child.exited.catch(() => {})
-    return 126
-  }
   const childExited = child.exited
-  const outputRelay =
-    outputSpool === undefined
+  const activeOutputSpool = outputSpool
+  // Do not close these numeric descriptors immediately after Bun.spawn on
+  // Windows. Under concurrent compiled launches Bun 1.4 can finish handle
+  // inheritance asynchronously; closing here races the target and produces a
+  // successful exit with empty stdout. Keep the parent copies until the child
+  // is terminal, then make their closure the relay's final-drain boundary.
+  const outputWritersClosed =
+    activeOutputSpool === undefined
       ? Promise.resolve()
-      : relayWindowsOutputSpool(outputSpool, childExited)
+      : childExited.then(() => closeWindowsOutputSpoolWriters(activeOutputSpool))
+  const outputRelay =
+    activeOutputSpool === undefined
+      ? Promise.resolve()
+      : relayWindowsOutputSpool(activeOutputSpool, outputWritersClosed)
   // The relay can observe a broken parent pipe before the target exits. Attach
   // a handler immediately; the same promise is awaited and reported below.
   void outputRelay.catch(() => {})
