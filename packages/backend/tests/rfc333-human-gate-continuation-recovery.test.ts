@@ -111,6 +111,73 @@ describe('RFC-333 pending human-gate continuation recovery', () => {
     ).toEqual({ state: 'pending' })
   })
 
+  test('boot orphan reap fences an interrupted owner row without consuming its pending RFC-333 successor', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = 'task-gate-owner-before-wake'
+    const continuationRef = 'intent-gate-owner-before-wake'
+    seedIntent(db, {
+      id: continuationRef,
+      taskId,
+      kind: 'gate-continuation',
+      state: 'pending',
+      createdAt: NOW,
+      payloadJson: JSON.stringify({
+        v: 1,
+        gate: { kind: 'clarify', ref: `clarify:${taskId}:0` },
+        operationId: 'operation-gate-owner-before-wake',
+        expectedNodeProjection: { digest: 'a'.repeat(64), memberCount: 0 },
+        continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds: [] },
+      }),
+    })
+    db.insert(nodeRuns)
+      .values([
+        {
+          id: 'run-gate-old-owner',
+          taskId,
+          nodeId: 'designer-old-owner',
+          status: 'running',
+          retryIndex: 0,
+          iteration: 0,
+          startedAt: NOW - 1,
+        },
+        {
+          id: 'run-gate-pending-successor',
+          taskId,
+          nodeId: 'designer-successor',
+          status: 'pending',
+          retryIndex: 0,
+          iteration: 1,
+        },
+      ])
+      .run()
+
+    expect(await reapOrphanRuns(db, { killStaleRunProcessTree: async () => 'no-pid' })).toEqual({
+      tasks: 0,
+      runs: 1,
+    })
+    expect(
+      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
+    ).toEqual({ status: 'pending' })
+    expect(
+      db
+        .select({ id: nodeRuns.id, status: nodeRuns.status })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
+        .orderBy(nodeRuns.id)
+        .all(),
+    ).toEqual([
+      { id: 'run-gate-old-owner', status: 'interrupted' },
+      { id: 'run-gate-pending-successor', status: 'pending' },
+    ])
+    expect(
+      db
+        .select({ state: taskExecutionIntents.state })
+        .from(taskExecutionIntents)
+        .where(eq(taskExecutionIntents.id, continuationRef))
+        .get(),
+    ).toEqual({ state: 'pending' })
+  })
+
   test('wakes each RFC-333 pending gate ref but leaves legacy task gates request-owned', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedIntent(db, {

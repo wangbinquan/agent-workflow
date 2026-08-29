@@ -28,7 +28,10 @@ import {
   type StaleRunKillOpts,
 } from '@/util/process'
 import { createLogger } from '@/util/log'
-import { terminalizeTaskExecutionIntentsTx } from '@/services/taskExecutionParticipants'
+import {
+  isLegacyTaskGateContinuationPayload,
+  terminalizeTaskExecutionIntentsTx,
+} from '@/services/taskExecutionParticipants'
 
 const log = createLogger('orphans')
 
@@ -63,15 +66,19 @@ export async function reapOrphanRuns(
     .select()
     .from(nodeRuns)
     .where(inArray(nodeRuns.status, ['running', 'pending'] as const))
-  // RFC-333: commit -> wake leaves a task + its freshly minted rerun rows in
-  // `pending` together with one canonical pending gate-continuation intent.
-  // That is durable boot work, not an abandoned in-process kick. Preserve the
-  // exact all-pending shape for the dedicated intent recovery below; a task
-  // with any `running` row is still a real orphan and follows the legacy reap.
+  // RFC-333: commit -> wake leaves a `pending` task and one canonical pending
+  // gate-continuation intent. The previous owner may still have a `running`
+  // node row when SIGKILL lands: reap that row, but preserve the task, its
+  // pending anchors and the durable successor for the continuous worker.
+  // Legacy workgroup/dynamic-workflow task gates remain request-owned and keep
+  // the historical orphan-reap behavior.
   const pendingGateContinuationTaskIds = new Set(
     (
       await db
-        .select({ taskId: taskExecutionIntents.taskId })
+        .select({
+          taskId: taskExecutionIntents.taskId,
+          payloadJson: taskExecutionIntents.payloadJson,
+        })
         .from(taskExecutionIntents)
         .where(
           and(
@@ -79,19 +86,15 @@ export async function reapOrphanRuns(
             eq(taskExecutionIntents.state, 'pending'),
           ),
         )
-    ).map((row) => row.taskId),
-  )
-  const gateRecoveryTaskIds = new Set(
-    [...pendingGateContinuationTaskIds].filter(
-      (taskId) =>
-        !runningRunCandidates.some((row) => row.taskId === taskId && row.status === 'running'),
-    ),
+    )
+      .filter((row) => !isLegacyTaskGateContinuationPayload(row.payloadJson))
+      .map((row) => row.taskId),
   )
   const runningTasks = runningTaskCandidates.filter(
-    (task) => !(task.status === 'pending' && gateRecoveryTaskIds.has(task.id)),
+    (task) => !(task.status === 'pending' && pendingGateContinuationTaskIds.has(task.id)),
   )
   const runningRuns = runningRunCandidates.filter(
-    (run) => !(run.status === 'pending' && gateRecoveryTaskIds.has(run.taskId)),
+    (run) => !(run.status === 'pending' && pendingGateContinuationTaskIds.has(run.taskId)),
   )
   // A runner that exhausted TERM→KILL records a terminal row but deliberately
   // leaves its native-session lease held. Boot must prove that child gone too

@@ -86,16 +86,16 @@ describe('migration 0222 — RFC-341 collaboration cutover', () => {
       expect(
         raw
           .query(
-            `SELECT family, mode, epoch
+            `SELECT family, mode, epoch, change_ref AS changeRef
              FROM committed_event_family_cutovers
              WHERE producer = 'collaboration'
              ORDER BY family`,
           )
           .all(),
       ).toEqual([
-        { family: 'clarify', mode: 'shadow', epoch: 2 },
-        { family: 'questions', mode: 'legacy', epoch: 1 },
-        { family: 'review', mode: 'legacy', epoch: 1 },
+        { family: 'clarify', mode: 'shadow', epoch: 2, changeRef: 'drift' },
+        { family: 'questions', mode: 'legacy', epoch: 1, changeRef: 'rfc341:foundation' },
+        { family: 'review', mode: 'legacy', epoch: 1, changeRef: 'rfc341:foundation' },
       ])
     } finally {
       raw.close()
