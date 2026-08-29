@@ -119,6 +119,7 @@ async function main(): Promise<void> {
             stderrTail: result.stderrTail,
             spawnError: result.spawnError,
             pumpError: result.pumpError,
+            launcherOutputBytes: result.launcherOutputBytes,
           })),
         }),
       )

@@ -16,6 +16,7 @@ import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import {
   MANAGED_PROCESS_LAUNCH_ERROR_PREFIX,
+  MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX,
   MANAGED_PROCESS_LAUNCH_READY_PREFIX,
   cleanupWindowsOutputSpool,
   createWindowsOutputSpool,
@@ -140,6 +141,8 @@ export interface ManagedProcessResult {
   /** Durable launcher identity when pre-activation is enabled. */
   launchNonce?: string
   spawnError?: string
+  /** Hosted Windows relay evidence from the compiled launcher. */
+  launcherOutputBytes?: { stdoutBytes: number; stderrBytes: number }
 }
 
 const noopLog: Logger = {
@@ -163,13 +166,15 @@ function stripLauncherProtocol(text: string, launchNonce: string | undefined): s
   if (launchNonce === undefined) return text
   const ready = `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${launchNonce}`
   const error = `${MANAGED_PROCESS_LAUNCH_ERROR_PREFIX}${launchNonce}:`
+  const output = `${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${launchNonce}:`
   return text
     .split('\n')
     .map((line) => {
       const readyAt = line.indexOf(ready)
       const errorAt = line.indexOf(error)
-      const controlAt = readyAt < 0 ? errorAt : errorAt < 0 ? readyAt : Math.min(readyAt, errorAt)
-      return controlAt < 0 ? line : line.slice(0, controlAt)
+      const outputAt = line.indexOf(output)
+      const controlOffsets = [readyAt, errorAt, outputAt].filter((index) => index >= 0)
+      return controlOffsets.length === 0 ? line : line.slice(0, Math.min(...controlOffsets))
     })
     .join('\n')
 }
@@ -524,6 +529,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   let rawStdout = ''
   let stderrTail = ''
   let launcherSpawnError: string | undefined
+  let launcherOutputBytes: { stdoutBytes: number; stderrBytes: number } | undefined
   let launcherReadyResolve: (() => void) | undefined
   const launcherReady = new Promise<void>((resolve) => {
     launcherReadyResolve = resolve
@@ -548,6 +554,34 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         launcherSpawnError = typeof parsed === 'string' ? parsed : encoded
       } catch {
         launcherSpawnError = encoded
+      }
+      return true
+    }
+    if (
+      launchNonce !== undefined &&
+      line.startsWith(`${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${launchNonce}:`)
+    ) {
+      const encoded = line.slice(`${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${launchNonce}:`.length)
+      try {
+        const parsed: unknown = JSON.parse(encoded)
+        const stdoutBytes = (parsed as { stdoutBytes?: unknown } | null)?.stdoutBytes
+        const stderrBytes = (parsed as { stderrBytes?: unknown } | null)?.stderrBytes
+        if (
+          parsed !== null &&
+          typeof parsed === 'object' &&
+          typeof stdoutBytes === 'number' &&
+          Number.isSafeInteger(stdoutBytes) &&
+          stdoutBytes >= 0 &&
+          typeof stderrBytes === 'number' &&
+          Number.isSafeInteger(stderrBytes) &&
+          stderrBytes >= 0
+        ) {
+          launcherOutputBytes = { stdoutBytes, stderrBytes }
+        } else {
+          launcherSpawnError = 'invalid managed-process launcher output record'
+        }
+      } catch {
+        launcherSpawnError = 'invalid managed-process launcher output record'
       }
       return true
     }
@@ -733,6 +767,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       ...(launchNonce !== undefined ? { launchNonce } : {}),
       ...(activationFailure !== null ? { spawnError: activationFailure } : {}),
       ...(pumpError !== undefined ? { pumpError } : {}),
+      ...(launcherOutputBytes === undefined ? {} : { launcherOutputBytes }),
     }
   }
 
@@ -803,5 +838,6 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         : {}),
     ...(drainTimedOut ? { drainTimedOut: true } : {}),
     ...(pumpError !== undefined ? { pumpError } : {}),
+    ...(launcherOutputBytes === undefined ? {} : { launcherOutputBytes }),
   }
 }

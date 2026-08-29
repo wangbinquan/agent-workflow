@@ -28,6 +28,7 @@ export const MANAGED_PROCESS_WINDOWS_CONTROL_FLAG = '--windows-control-path'
 export const MANAGED_PROCESS_TARGET_SEPARATOR = '--'
 export const MANAGED_PROCESS_LAUNCH_ERROR_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_ERROR:'
 export const MANAGED_PROCESS_LAUNCH_READY_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_READY:'
+export const MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_OUTPUT:'
 
 export interface ManagedProcessActivationFrame {
   readonly v: 1
@@ -295,7 +296,7 @@ async function relayWindowsOutputSpool(
   spool: WindowsOutputSpool,
   writersClosed: Promise<void>,
   destinationPaths?: WindowsManagedProcessOutputPaths,
-): Promise<void> {
+): Promise<{ stdoutBytes: number; stderrBytes: number }> {
   let writersAreClosed = false
   const observedClosure = writersClosed.then(
     () => {
@@ -338,6 +339,7 @@ async function relayWindowsOutputSpool(
           : 0
       if (stablePolls < 2) await Bun.sleep(10)
     }
+    return { stdoutBytes: stdoutOffset, stderrBytes: stderrOffset }
   } finally {
     if (destinationPaths !== undefined) {
       closeSync(stdoutFd)
@@ -415,7 +417,7 @@ export async function runManagedProcessLauncher(
       : childExited.then(() => closeWindowsOutputWriters(activeOutputSpool))
   const outputRelay =
     activeOutputSpool === undefined
-      ? Promise.resolve()
+      ? Promise.resolve(undefined)
       : relayWindowsOutputSpool(activeOutputSpool, outputWritersClosed, request.windowsOutputPaths)
   // The relay can observe a broken destination before the target exits. Attach
   // a handler immediately; the same promise is awaited and reported below.
@@ -437,7 +439,16 @@ export async function runManagedProcessLauncher(
       `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`,
     )
     const exitCode = await childExited
-    await outputRelay
+    const outputBytes = await outputRelay
+    if (outputBytes !== undefined) {
+      // This is both the relay completion barrier and the layer diagnostic: it
+      // tells the parent exactly how many bytes the compiled launcher observed
+      // in the compiled target's private files before closing its final writers.
+      writeLaunchControlRecord(
+        request.windowsOutputPaths?.controlPath,
+        `${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${request.launchNonce}:${JSON.stringify(outputBytes)}\n`,
+      )
+    }
     return exitCode
   } catch (error) {
     reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
