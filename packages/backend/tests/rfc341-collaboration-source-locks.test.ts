@@ -55,33 +55,49 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('clarify commit barrier precedes nested dispatch and replay never enters the seam', () => {
-    const value = source('services/clarify/autoDispatch.ts')
-    const wrapperAt = value.indexOf('export async function autoDispatchClarifyRoundWithDecision')
-    const replayAt = value.indexOf('if (replay !== null)', wrapperAt)
-    const replayReturnAt = value.indexOf('return {', replayAt)
-    const barrierBindingAt = value.indexOf('afterSealCommit: async () =>', replayReturnAt)
-    const barrierWaitAt = value.indexOf('waitAtHumanGateDecisionCommitBarrier', barrierBindingAt)
-    const wrapperFinallyAt = value.indexOf('} finally {', barrierWaitAt)
-    const roundAt = value.indexOf(
+    const autoDispatch = source('services/clarify/autoDispatch.ts')
+    const seal = source('services/clarify/seal.ts')
+    const wrapperAt = autoDispatch.indexOf(
+      'export async function autoDispatchClarifyRoundWithDecision',
+    )
+    const replayAt = autoDispatch.indexOf('if (replay !== null)', wrapperAt)
+    const replayReturnAt = autoDispatch.indexOf('return {', replayAt)
+    const barrierBindingAt = autoDispatch.indexOf('afterSealCommit: async () =>', replayReturnAt)
+    const barrierWaitAt = autoDispatch.indexOf(
+      'waitAtHumanGateDecisionCommitBarrier',
+      barrierBindingAt,
+    )
+    const wrapperFinallyAt = autoDispatch.indexOf('} finally {', barrierWaitAt)
+    const roundAt = autoDispatch.indexOf(
       'export async function autoDispatchClarifyRound(',
       wrapperFinallyAt,
     )
-    const sealAt = value.indexOf('await sealRoundAsWholeFinalize(', roundAt)
-    const postSealAt = value.indexOf('await args.afterSealCommit?.()', sealAt)
-    const askerReadAt = value.indexOf('const askerRows =', postSealAt)
-    const nestedDispatchAt = value.indexOf('dispatchTaskQuestions(', askerReadAt)
+    const sealCallAt = autoDispatch.indexOf('const sealResult = await sealRoundQuestions({')
+    const forwardedBarrierAt = autoDispatch.indexOf('afterCommit: args.afterSealCommit', sealCallAt)
+    const distillAt = autoDispatch.indexOf('await enqueueDistillJob(', forwardedBarrierAt)
+    const askerReadAt = autoDispatch.indexOf('const askerRows =', roundAt)
+    const nestedDispatchAt = autoDispatch.indexOf('dispatchTaskQuestions(', askerReadAt)
+    const txAt = seal.indexOf('const committed = dbTxSync(args.db, (tx) => {')
+    const postCommitAt = seal.indexOf('await args.afterCommit?.()', txAt)
+    const returnAt = seal.indexOf('return committed', postCommitAt)
+    const firstPostCommitAwait = seal.slice(txAt, postCommitAt).match(/\b(?:await|yield)\b/)
 
     expect(wrapperAt).toBeGreaterThan(-1)
     expect(replayReturnAt).toBeGreaterThan(replayAt)
     expect(barrierBindingAt).toBeGreaterThan(replayReturnAt)
     expect(barrierWaitAt).toBeGreaterThan(barrierBindingAt)
     expect(wrapperFinallyAt).toBeGreaterThan(barrierWaitAt)
-    expect(value.slice(wrapperFinallyAt, roundAt)).not.toContain(
+    expect(autoDispatch.slice(wrapperFinallyAt, roundAt)).not.toContain(
       'waitAtHumanGateDecisionCommitBarrier',
     )
-    expect(postSealAt).toBeGreaterThan(sealAt)
-    expect(askerReadAt).toBeGreaterThan(postSealAt)
-    expect(nestedDispatchAt).toBeGreaterThan(postSealAt)
+    expect(forwardedBarrierAt).toBeGreaterThan(sealCallAt)
+    expect(distillAt).toBeGreaterThan(forwardedBarrierAt)
+    expect(askerReadAt).toBeGreaterThan(roundAt)
+    expect(nestedDispatchAt).toBeGreaterThan(askerReadAt)
+    expect(autoDispatch).not.toContain('await args.afterSealCommit?.()')
+    expect(postCommitAt).toBeGreaterThan(txAt)
+    expect(firstPostCommitAwait).toBeNull()
+    expect(returnAt).toBeGreaterThan(postCommitAt)
   })
 
   test('covered collaboration writers have no legacy direct broadcaster', () => {

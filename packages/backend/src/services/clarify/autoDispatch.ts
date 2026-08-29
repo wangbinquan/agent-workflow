@@ -264,8 +264,8 @@ export interface AutoDispatchClarifyRoundArgs {
   actor: { userId: string; role: TaskActorRole }
   /** RFC-333 T9 internal seam; public route callers use the collaboration command wrapper. */
   decisionParticipant?: ClarifySealDecisionParticipantInTx
-  /** RFC-341 compiled-E2E seam. Runs immediately after the seal transaction commits and before
-   * any nested question dispatch can publish an event that nudges the global dispatcher. */
+  /** RFC-341 compiled-E2E seam. The seal primitive invokes it in the same JS stack immediately
+   * after dbTxSync commits and before any post-seal await or nested dispatch can wake recovery. */
   afterSealCommit?: () => Promise<void>
   now?: () => number
 }
@@ -347,6 +347,7 @@ async function sealRoundAsWholeFinalize(
     ...(args.decisionParticipant === undefined
       ? {}
       : { decisionParticipant: args.decisionParticipant }),
+    ...(args.afterSealCommit === undefined ? {} : { afterCommit: args.afterSealCommit }),
     ...(args.now !== undefined ? { now: args.now } : {}),
   })
   const sealedQuestionIds = sealResult.sealedQuestionIds
@@ -721,7 +722,6 @@ export async function autoDispatchClarifyRound(
     round,
     originNodeRunId,
   )
-  await args.afterSealCommit?.()
 
   // 4. Collect the round's SELF/QUESTIONER entries to auto-dispatch (sealed, not yet dispatched,
   //    still open). Designer entries are intentionally excluded (see the module header). The dispatch

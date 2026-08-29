@@ -108,6 +108,9 @@ export interface SealRoundQuestionsArgs {
    * quick channel supplies it so answer sealing and durable continuation
    * admission share one commit; the deferred control channel omits it. */
   decisionParticipant?: ClarifySealDecisionParticipantInTx
+  /** RFC-341 compiled-E2E seam. Invoked in the seal primitive immediately after dbTxSync returns,
+   * before this frame reaches any await/yield or publishes post-commit events. */
+  afterCommit?: () => Promise<void>
   now?: () => number
 }
 
@@ -171,8 +174,8 @@ export async function sealRoundQuestions(
       .where(eq(clarifyRounds.intermediaryNodeRunId, args.originNodeRunId))
       .limit(1)
   )[0]
-  const runSealTx = async () =>
-    dbTxSync(args.db, (tx) => {
+  const runSealTx = async () => {
+    const committed = dbTxSync(args.db, (tx) => {
       // Re-read the round INSIDE the tx so a concurrent seal's committed answers/status are
       // observed (TOCTOU-free).
       const round = tx
@@ -515,6 +518,13 @@ export async function sealRoundQuestions(
         eventRefs,
       }
     })
+    // RFC-341: this call must be the first operation after the synchronous transaction returns.
+    // The compiled E2E callback writes its marker synchronously before returning a pending promise,
+    // so neither the continuous event dispatcher nor the continuation worker can claim the durable
+    // intent before the harness SIGKILLs the daemon. Production builds return from the seam at once.
+    await args.afterCommit?.()
+    return committed
+  }
   // Run the seal tx UNDER the per-task question-write lock B (finding 2). If the round is missing the
   // taskId lookup is empty — run unlocked so the tx throws the canonical NotFoundError.
   const txResult =
