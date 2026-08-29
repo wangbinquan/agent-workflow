@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 448,
-    "architectureExceptions": 1468,
+    "architectureExceptions": 1465,
     "backgroundJobs": 265,
-    "crossContextImports": 1506,
+    "crossContextImports": 1501,
     "facades": 378,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18760,
+    "moduleSymbolOwners": 18766,
     "mutationEntrypoints": 1015,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 401,
+    "publicSurfaces": 400,
     "transactionExternalEffects": 280
   },
   "metrics": {
@@ -70,7 +70,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 995,
+    "backendProductionFiles": 997,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -129,7 +129,7 @@
       },
       {
         "context": "collaboration",
-        "files": 53
+        "files": 54
       },
       {
         "context": "development-automation",
@@ -169,10 +169,10 @@
       },
       {
         "context": "task-execution",
-        "files": 124
+        "files": 125
       }
     ],
-    "moduleFiles": 452,
+    "moduleFiles": 454,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -187,8 +187,8 @@
       {
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1486",
-        "line": 1486,
+        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1487",
+        "line": 1487,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "removeAfterWave": "W2/W7",
         "status": "reviewed-dispatch-exception",
@@ -233,5 +233,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e"
+  "sourceDigest": "sha256:c9f06c7235d39f5e1f125c5fd1fc3afb03828c5c438fbfe5bea6b44352f1c6f4"
 }

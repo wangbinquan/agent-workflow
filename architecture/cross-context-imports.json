@@ -6784,23 +6784,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/ports/humanGateOpenParticipant.ts#$file",
-      "fromPath": "packages/backend/src/modules/collaboration/application/ports/humanGateOpenParticipant.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3d6294eb32d38100500b",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventRef",
-      "toPath": "packages/backend/src/platform/events/committed/types.ts",
-      "toSymbol": "CommittedEventRef",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts#$file",
@@ -16544,23 +16527,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a5338c5c24b1b9345606",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventRef",
-      "toPath": "packages/backend/src/platform/events/committed/types.ts",
-      "toSymbol": "CommittedEventRef",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "fromPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "fromSymbol": "$file",
@@ -23223,23 +23189,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:eda14d3165b879dbaebd",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventRef",
-      "toPath": "packages/backend/src/platform/events/committed/types.ts",
-      "toSymbol": "CommittedEventRef",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts#$file",
@@ -24958,9 +24907,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1468,
+    "architectureExceptions": 1465,
     "implementationSccs": 0,
-    "observedEdges": 1506,
+    "observedEdges": 1501,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -31001,22 +30950,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/application/ports/humanGateOpenParticipant.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/ports/humanGateOpenParticipant.ts#$file",
-      "id": "import:3d6294eb32d38100500b",
-      "owner": "collaboration",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/events/committed/types",
-      "syntax": "static-import",
-      "targetSymbol": "CommittedEventRef",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/events/committed/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventRef"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts",
@@ -35129,22 +35062,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts#$file",
-      "id": "import:684aa46213f801e4f931",
-      "owner": "collaboration",
-      "removeAfterWave": null,
-      "role": "offered-consumption",
-      "specifier": "@/modules/event-center/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "EventObservationParticipant",
-      "toContext": "event-center",
-      "toFile": "packages/backend/src/modules/event-center/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/public/participants.ts#EventObservationParticipant"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
@@ -36391,22 +36308,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/public/events.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#$file",
-      "id": "import:76073850aa2259e4e7a3",
-      "owner": "collaboration",
-      "removeAfterWave": null,
-      "role": "offered-consumption",
-      "specifier": "@/modules/event-center/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "EventObservationInput",
-      "toContext": "event-center",
-      "toFile": "packages/backend/src/modules/event-center/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/public/types.ts#EventObservationInput"
     },
     {
       "edgeKind": "value",
@@ -40663,22 +40564,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/events/committed/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventConsumerDefinition"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts#$file",
-      "id": "import:a5338c5c24b1b9345606",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/events/committed/types",
-      "syntax": "static-import",
-      "targetSymbol": "CommittedEventRef",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/events/committed/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventRef"
     },
     {
       "edgeKind": "type",
@@ -47385,22 +47270,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#ProcessEffectAttemptObserver"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts#$file",
-      "id": "import:eda14d3165b879dbaebd",
-      "owner": "task-execution",
-      "removeAfterWave": "W4/W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/events/committed/types",
-      "syntax": "static-import",
-      "targetSymbol": "CommittedEventRef",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/events/committed/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventRef"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts",
@@ -49475,7 +49344,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e",
+  "sourceDigest": "sha256:c9f06c7235d39f5e1f125c5fd1fc3afb03828c5c438fbfe5bea6b44352f1c6f4",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 290,
+    "consumers": 288,
     "exactEntrypointFiles": 37,
     "governedFieldSurfaces": 5,
-    "methods": 197,
+    "methods": 196,
     "opaqueTypeRefs": 5,
     "recursiveFields": 1747,
-    "symbols": 401
+    "symbols": 400
   },
   "entries": [
     {
@@ -2134,41 +2134,6 @@
       "version": 1
     },
     {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "events",
-      "fields": [],
-      "file": "packages/backend/src/modules/collaboration/public/events.ts",
-      "id": "public:collaboration:events:collaborationCommittedObservation",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:2f7bd52556193f5f7b1efd6751ac8f33f8ac3c9d68b1d20bae04a9d13b4981f5"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#collaborationCommittedObservation",
-      "productionConsumers": [],
-      "removeAfterWave": null,
-      "serialization": "durable",
-      "signatureDigest": "sha256:2f7bd52556193f5f7b1efd6751ac8f33f8ac3c9d68b1d20bae04a9d13b4981f5",
-      "status": "target-context-current-surface",
-      "symbol": "collaborationCommittedObservation",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
       "authority": "context-bound",
       "budget": {
         "maxMethods": 5,
@@ -2190,7 +2155,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "eventRefs",
-          "type": "readonly CommittedEventRef[]"
+          "type": "readonly CollaborationPostCommitEventRef[]"
         },
         {
           "consumerEdgeIds": [],
@@ -3386,6 +3351,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2a02c9e15c2bcd034104",
             "import:720ba8368de50257733e"
           ],
           "fieldPath": "operationId",
@@ -9345,7 +9311,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:684aa46213f801e4f931",
         "import:7ee3c1c323363482f6ab"
       ],
       "context": "event-center",
@@ -9361,7 +9326,6 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:684aa46213f801e4f931",
             "import:7ee3c1c323363482f6ab"
           ],
           "name": "observe",
@@ -9370,12 +9334,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/public/participants.ts#EventObservationParticipant",
       "productionConsumers": [
-        {
-          "context": "collaboration",
-          "edgeId": "import:684aa46213f801e4f931",
-          "file": "packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts#$file"
-        },
         {
           "context": "task-execution",
           "edgeId": "import:7ee3c1c323363482f6ab",
@@ -9966,7 +9924,6 @@
       "consumerEdgeIds": [
         "import:1ee7bd03fabec51fdd22",
         "import:672a4e3d7be3a9592ba1",
-        "import:76073850aa2259e4e7a3",
         "import:7db2493a31e56d0426ba",
         "import:c64e5a4e25ac3e23398c"
       ],
@@ -9979,7 +9936,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9990,7 +9946,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10001,7 +9956,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10012,7 +9966,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10043,7 +9996,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10054,7 +10006,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10065,7 +10016,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10076,7 +10026,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10087,7 +10036,6 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
-            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -10132,12 +10080,6 @@
           "edgeId": "import:672a4e3d7be3a9592ba1",
           "file": "packages/backend/src/modules/digital-employee/public/events.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/events.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:76073850aa2259e4e7a3",
-          "file": "packages/backend/src/modules/collaboration/public/events.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#$file"
         },
         {
           "context": "digital-employee",
@@ -18499,7 +18441,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "eventRefs",
-          "type": "readonly CommittedEventRef[]"
+          "type": "readonly TaskExecutionPostCommitEventRef[]"
         },
         {
           "consumerEdgeIds": [],
@@ -25621,7 +25563,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b71ecc063b24045a93101954beef4210e7fffcd5076572756e3b98336cbfcd8e",
+  "sourceDigest": "sha256:c9f06c7235d39f5e1f125c5fd1fc3afb03828c5c438fbfe5bea6b44352f1c6f4",
   "targetContexts": [
     "collaboration",
     "development-automation",
