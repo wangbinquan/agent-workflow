@@ -22,12 +22,15 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 
 describe('RFC-182 — pending 帧源级锁', () => {
-  test('taskQuestionDispatch：提交后对 wg 宿主 mint 广播 pending（外部 mint 点）', () => {
+  test('taskQuestionDispatch：wg 宿主 pending 投影随提交事件在 commit 后发布', () => {
     const src = SRC('services/taskQuestionDispatch.ts')
     const block = src.slice(src.indexOf('if (!committed) return EMPTY_RESULT'))
-    expect(block).toContain('WG_LEADER_NODE_ID')
-    expect(block).toContain('WG_MEMBER_NODE_ID')
-    expect(block).toContain("status: 'pending'")
+    expect(src).toContain('const pendingProjectionNodeChanges = mintPlans')
+    expect(src).toContain('plan.values.nodeId === WG_LEADER_NODE_ID')
+    expect(src).toContain('plan.values.nodeId === WG_MEMBER_NODE_ID')
+    expect(src).toContain("status: 'pending' as const")
+    expect(src).toContain('nodeChanges: pendingProjectionNodeChanges')
+    expect(block).toContain('publishCommittedEventsAfterCommit(committedEventRefs)')
   })
 
   test('broadcastPendingMint：runner 恒 1 定义、骨架恒 1 真 mint 调用（adopted 不重发）', () => {

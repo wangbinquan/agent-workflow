@@ -51,6 +51,7 @@ import {
 import { createApp } from '../src/server'
 import { DomainError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
@@ -157,6 +158,7 @@ async function buildSingle(
   const appHome = join(tmp, 'appHome')
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
+  const uninstallProjection = installCommittedEventProjectionHarness(db)
 
   const [ownerId, memberId, strangerId] = ['owner', 'member', 'stranger'].map(() => ulid())
   await db.insert(users).values(
@@ -267,6 +269,7 @@ async function buildSingle(
     memberId: memberId!,
     strangerId: strangerId!,
     cleanup: () => {
+      uninstallProjection()
       db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
     },
@@ -298,6 +301,7 @@ async function buildMulti(
   mkdirSync(appHome, { recursive: true })
   mkdirSync(worktree, { recursive: true })
   const db = createInMemoryDb(MIGRATIONS)
+  const uninstallProjection = installCommittedEventProjectionHarness(db)
   const caseGenId = ulid()
   await db.insert(agentsTable).values({
     id: caseGenId,
@@ -395,6 +399,7 @@ async function buildMulti(
     reviewRunId: docs[0]!.reviewNodeRunId,
     docs,
     cleanup: () => {
+      uninstallProjection()
       db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
     },

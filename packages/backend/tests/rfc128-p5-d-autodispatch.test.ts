@@ -1202,7 +1202,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     ])
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await autoDispatchClarifyRound({
+    await autoDispatchClarifyRoundWithDecision({
       db,
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
@@ -1218,7 +1218,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await autoDispatchClarifyRound({
+    await autoDispatchClarifyRoundWithDecision({
       db,
       originNodeRunId: crossNodeRunId,
       answers: [ans('q1')],
@@ -1262,7 +1262,7 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
     let caught: unknown
     try {
-      await autoDispatchClarifyRound({
+      await autoDispatchClarifyRoundWithDecision({
         db,
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],

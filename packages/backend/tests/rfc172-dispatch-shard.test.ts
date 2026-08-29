@@ -319,7 +319,7 @@ describe('RFC-172 S2a — dispatch mint-loop shard wiring (source lock)', () => 
     // … null shard passed as undefined (never null — else manual-to-member regresses) …
     expect(SRC).toContain('sk === null ? undefined : sk')
     // … and each entry maps to ITS shard's rerun.
-    expect(SRC).toContain('shardOf(e) === p.shardKey')
+    expect(SRC).toContain('shardOf(entry) === plan.shardKey')
   })
 })
 

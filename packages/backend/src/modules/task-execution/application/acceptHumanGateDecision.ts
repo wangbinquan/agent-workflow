@@ -19,9 +19,9 @@ import {
 } from '../domain/humanGateContinuation'
 import type { TaskExecutionEffectStore } from './ports/taskExecutionEffectStore'
 import type { HumanGateTaskLifecycle } from './ports/humanGateTaskLifecycle'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { committedEventGroupId } from '@/platform/events/committed/types'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
+import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { submitTaskContinuationTx } from './submitTaskContinuation'
 import { TaskExecutionError } from './taskExecutionError'
 
@@ -40,7 +40,7 @@ export interface AcceptHumanGateDecisionInput {
 export interface AcceptedHumanGateDecision {
   readonly taskRevision: number
   readonly continuationRef: string
-  readonly eventRefs: readonly CommittedEventRef[]
+  readonly eventRefs: readonly TaskExecutionPostCommitEventRef[]
 }
 
 export interface TaskDecisionParticipantInTx {

@@ -9,7 +9,6 @@ import type {
 } from '@/modules/collaboration/public/types'
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { dispatchTaskQuestionsWithDecision } from '@/services/taskQuestionDispatch'
-import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import type { TaskActorRole } from '@agent-workflow/shared'
 
 export function createQuestionDispatchCommandContext(input: {
@@ -36,13 +35,6 @@ export function createQuestionDispatchCommandContext(input: {
             : { idempotencyKey: command.idempotencyKey }),
         },
       )
-      if (dispatched.continuationRef !== null) {
-        await waitAtHumanGateDecisionCommitBarrier({
-          kind: 'questions',
-          taskId: dispatched.taskId,
-          operationId: dispatched.receipt.operationId,
-        })
-      }
       return {
         taskId: dispatched.taskId,
         receipt: dispatched.receipt,

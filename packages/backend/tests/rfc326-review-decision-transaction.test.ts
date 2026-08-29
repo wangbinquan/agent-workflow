@@ -61,6 +61,10 @@ import { gitStashSnapshot, runGit } from '../src/util/git'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { registerRevalidationTrigger } from '../src/ws/revalidationHook'
 import { recordStatements } from './helpers/statementRecorder'
+import {
+  installCommittedEventDeliveryHarness,
+  type CommittedEventDeliveryTestHarness,
+} from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
@@ -139,6 +143,7 @@ interface Fixture {
   member: string
   stranger: string
   extraUser: string
+  committedEvents: CommittedEventDeliveryTestHarness
   cleanup: () => void
 }
 
@@ -178,6 +183,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
   writeFileSync(join(repo, 'stray.txt'), 'stray\n')
 
   const db = createInMemoryDb(MIGRATIONS)
+  const committedEvents = installCommittedEventDeliveryHarness(db)
   const [owner, member, stranger, extraUser] = [ulid(), ulid(), ulid(), ulid()]
   await db.insert(users).values(
     [owner, member, stranger, extraUser].map((id, i) => ({
@@ -291,7 +297,9 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
     member,
     stranger,
     extraUser,
+    committedEvents,
     cleanup: () => {
+      committedEvents.dispose()
       db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
     },
@@ -359,12 +367,12 @@ const BATCH_COMMENT = { commentText: 'batched', anchorRequest: { quote: 'export 
 // AC-17 — one transaction, distill outside it
 // ---------------------------------------------------------------------------
 
-describe('RFC-326 AC-17 — one transaction per decision; the distill row is a separate later write', () => {
+describe('RFC-326 AC-17 — one decision transaction; distill is a later durable consumer write', () => {
   let f: Fixture
   afterEach(() => f?.cleanup())
 
   test.each<['approved' | 'iterated' | 'rejected']>([['approved'], ['iterated'], ['rejected']])(
-    '%s (with a batch comment): exactly one BEGIN / COMMIT, distill inserted after the COMMIT',
+    '%s (with a batch comment): exactly one BEGIN / COMMIT, no inline distill write',
     async (decision) => {
       f = await buildFixture()
       const recording = recordStatements(f.db.$client)
@@ -388,7 +396,7 @@ describe('RFC-326 AC-17 — one transaction per decision; the distill row is a s
       expect(rollbacks.length).toBe(0)
       const commitAt = sqls.findIndex((s) => /^\s*commit/i.test(s))
       const distillAt = sqls.findIndex((s) => /insert into "memory_distill_jobs"/i.test(s))
-      expect(distillAt).toBeGreaterThan(commitAt)
+      expect(distillAt).toBe(-1)
       // Every review-state write sits between BEGIN and COMMIT.
       const beginAt = sqls.findIndex((s) => /^\s*begin/i.test(s))
       for (const [i, s] of sqls.entries()) {
@@ -401,6 +409,7 @@ describe('RFC-326 AC-17 — one transaction per decision; the distill row is a s
           expect(i, s).toBeLessThan(commitAt)
         }
       }
+      await f.committedEvents.drain()
       expect((await f.db.select().from(memoryDistillJobs)).length).toBe(1)
     },
   )
@@ -416,6 +425,7 @@ describe('RFC-326 AC-17 — one transaction per decision; the distill row is a s
         decisionArgs(f, { decision: 'approved', comments: [BATCH_COMMENT] }),
       )
       expect(result.batch?.commentsAdded).toBe(1)
+      await f.committedEvents.drain()
     } finally {
       ev.stop()
     }

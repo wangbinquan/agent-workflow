@@ -184,7 +184,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     )
   })
 
-  test('T7 clarify target: complete preparation precedes one TaskParkTx and post-commit WS', () => {
+  test('T7 clarify target: complete preparation precedes one TaskParkTx and committed projection', () => {
     const create = declaredFunction(
       'packages/backend/src/services/clarify/service.ts',
       'createClarifyRound',
@@ -205,12 +205,10 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       callInventory.find((candidate) => candidate.name === name)!.position
     const prepare = position('prepareClarifyGateOpen')
     const park = position('parkPreparedHumanGate')
-    const selfBroadcast = create.indexOf('broadcastSelfCreated(round')
-    const crossBroadcast = create.indexOf('broadcastCrossCreated(round)')
     expect(prepare).toBeGreaterThanOrEqual(0)
     expect(park).toBeGreaterThan(prepare)
-    expect(selfBroadcast).toBeGreaterThan(park)
-    expect(crossBroadcast).toBeGreaterThan(park)
+    expect(create).not.toContain('broadcastSelfCreated(')
+    expect(create).not.toContain('broadcastCrossCreated(')
 
     const participant = declaredFunction(
       'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts',
@@ -220,6 +218,11 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(participant).toContain('tx.insert(clarifyRounds)')
     expect(participant).toContain('tx.insert(taskQuestions)')
     expect(participant).toContain('tx.insert(nodeRunEvents)')
+    expect(participant).toContain('appendHumanGateOpenedCommittedEventTx(this.tx, {')
+    const parkTx = read(
+      'packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts',
+    )
+    expect(parkTx).toContain('this.lifecycle.publishAfterCommit(result.eventRefs)')
   })
 
   test('T7 new rounds project eager questions while historical lazy reconciliation remains', () => {

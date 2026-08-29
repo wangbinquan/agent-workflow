@@ -1,6 +1,3 @@
-import type { EventObservationInput } from '@/modules/event-center/public/types'
-import type { CollaborationCommittedV1 } from '../domain/collaborationCommittedEvent'
-
 export const COLLABORATION_COMMITTED_SOURCE_REF = {
   id: 'platform.collaboration-committed',
   revision: 1,
@@ -59,32 +56,3 @@ export const collaborationCommittedEventCatalogJson = JSON.stringify({
     },
   ],
 })
-
-export function collaborationCommittedObservation(
-  event: CollaborationCommittedV1,
-): EventObservationInput {
-  const gate = event.payload.gate
-  return {
-    sourceRef: COLLABORATION_COMMITTED_SOURCE_REF,
-    eventTypeRef: COLLABORATION_COMMITTED_EVENT_REF,
-    subject: { typeId: 'platform.task', subjectRef: gate.taskId },
-    occurredAt: Date.parse(event.occurredAt),
-    dedupeKey: event.eventId,
-    summary: `${event.family}/${event.type}: ${gate.gateId}`,
-    payloadArtifactRef: null,
-    routingFactsJson: JSON.stringify({
-      taskId: gate.taskId,
-      family: event.family,
-      eventType: event.type,
-      gateKind: gate.gateKind,
-      gateId: gate.gateId,
-      roundId: gate.roundId,
-    }),
-    triggerParameters: {
-      task_id: gate.taskId,
-      family: event.family,
-      event_type: event.type,
-      gate_kind: gate.gateKind,
-    },
-  }
-}

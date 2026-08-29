@@ -11,7 +11,6 @@ import type {
 } from '@/modules/collaboration/public/types'
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { submitReviewDecision as submitLegacyReviewDecision } from '@/services/review'
-import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 
 export function createReviewDecisionCommandContext(input: {
   readonly db: DbClient
@@ -40,11 +39,6 @@ export function createReviewDecisionCommandContext(input: {
         ...(command.idempotencyKey === undefined ? {} : { idempotencyKey: command.idempotencyKey }),
         ...(command.comments === undefined ? {} : { comments: command.comments }),
         ...(command.selections === undefined ? {} : { selections: command.selections }),
-      })
-      await waitAtHumanGateDecisionCommitBarrier({
-        kind: 'review',
-        taskId: decided.taskId,
-        operationId: decided.receipt.operationId,
       })
       return {
         taskId: decided.taskId,

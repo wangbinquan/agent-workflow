@@ -8,7 +8,6 @@ import type {
 } from '@/modules/collaboration/public/types'
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { autoDispatchClarifyRoundWithDecision } from '@/services/clarify/autoDispatch'
-import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import type { TaskActorRole } from '@agent-workflow/shared'
 
 export function createClarifyDecisionCommandContext(input: {
@@ -38,11 +37,6 @@ export function createClarifyDecisionCommandContext(input: {
             ? {}
             : { idempotencyKey: command.idempotencyKey }),
         },
-      })
-      await waitAtHumanGateDecisionCommitBarrier({
-        kind: 'clarify',
-        taskId: decided.taskId,
-        operationId: decided.receipt.operationId,
       })
       return {
         taskId: decided.taskId,

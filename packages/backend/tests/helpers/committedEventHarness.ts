@@ -3,21 +3,25 @@ import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { committedEventFamilyCutovers } from '@/db/schema'
 import {
+  createCollaborationDurableConsumerDefinitions,
   collaborationCommittedEventCodec,
   createCollaborationWsProjector,
 } from '@/modules/collaboration/composition/committedEvents'
 import {
+  createTaskLifecycleDurableConsumerDefinitions,
   createTaskLifecycleWsProjector,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/composition/committedEvents'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
-import { combineCommittedEventCodecRegistries } from '@/platform/events/committed/dispatcherWorker'
+import {
+  combineCommittedEventCodecRegistries,
+  createCommittedEventDispatcher,
+} from '@/platform/events/committed/dispatcherWorker'
+import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 
-/** Install only the synchronous projection half of the RFC-341 bootstrap for
- * broadcaster-boundary tests. Durable consumer behavior has its own worker
- * harnesses; these tests need deterministic frame delivery in-process. */
-export function installCommittedEventProjectionHarness(db: DbClient): () => void {
+function enableCollaborationCutover(db: DbClient): void {
   db.update(committedEventFamilyCutovers)
     .set({ mode: 'dispatchable', epoch: 2, changedAt: Date.now(), changeRef: 'test-harness' })
     .where(
@@ -27,6 +31,13 @@ export function installCommittedEventProjectionHarness(db: DbClient): () => void
       ),
     )
     .run()
+}
+
+/** Install only the synchronous projection half of the RFC-341 bootstrap for
+ * broadcaster-boundary tests. Durable consumer behavior has its own worker
+ * harnesses; these tests need deterministic frame delivery in-process. */
+export function installCommittedEventProjectionHarness(db: DbClient): () => void {
+  enableCollaborationCutover(db)
   const codecs = combineCommittedEventCodecRegistries(
     taskLifecycleCommittedEventCodec,
     collaborationCommittedEventCodec,
@@ -40,4 +51,100 @@ export function installCommittedEventProjectionHarness(db: DbClient): () => void
     }),
   )
   return () => registerAfterCommitEventPump(null)
+}
+
+export interface CommittedEventDeliveryTestHarness {
+  /** Drain the same durable consumer definitions used by daemon bootstrap. */
+  drain(maxSteps?: number): Promise<void>
+  dispose(): void
+}
+
+function durableTestConsumers(db: DbClient) {
+  const events = {
+    observe(input: { readonly dedupeKey: string }) {
+      return { eventId: input.dedupeKey, duplicate: false, deliveryCount: 0, deliveryIds: [] }
+    },
+  }
+  return [
+    ...createTaskLifecycleDurableConsumerDefinitions({
+      events,
+      closeTerminalGates() {},
+      notifyChildBudget() {},
+      notifyExecutionWatch() {},
+      nudgeWorkspacePrune() {},
+    }),
+    ...createCollaborationDurableConsumerDefinitions({
+      events,
+      nudgeContinuation() {},
+      async enqueueReviewDistill(input) {
+        await enqueueDistillJob(db, {
+          sourceKind: 'review',
+          sourceEventId: input.sourceEventId,
+          taskId: input.taskId,
+        })
+      },
+    }),
+  ]
+}
+
+/** Drain only durable effects without installing or replaying any WS
+ * projector. Useful when a test already owns a task-lifecycle projection
+ * pump but needs to observe the later durable consumer boundary. */
+export async function drainCommittedEventDeliveriesForTests(
+  db: DbClient,
+  maxSteps = 256,
+): Promise<void> {
+  enableCollaborationCutover(db)
+  const dispatcher = createCommittedEventDispatcher({
+    db,
+    workerId: 'committed-event-test-drain',
+    codecs: combineCommittedEventCodecRegistries(
+      taskLifecycleCommittedEventCodec,
+      collaborationCommittedEventCodec,
+    ),
+    consumers: durableTestConsumers(db),
+    maxAttempts: () => 1,
+  })
+  await dispatcher.drain(maxSteps)
+}
+
+/** Full RFC-341 test composition for legacy service tests that assert a
+ * durable consumer effect (currently review distill) as well as immediate WS
+ * projection. The caller chooses the deterministic drain point; request
+ * services never run durable consumers inline. */
+export function installCommittedEventDeliveryHarness(
+  db: DbClient,
+): CommittedEventDeliveryTestHarness {
+  enableCollaborationCutover(db)
+  const codecs = combineCommittedEventCodecRegistries(
+    taskLifecycleCommittedEventCodec,
+    collaborationCommittedEventCodec,
+  )
+  const projectors = [createTaskLifecycleWsProjector(db), createCollaborationWsProjector(db)]
+  const projectionLedger = createCommittedEventProjectionLedger()
+  const dispatcher = createCommittedEventDispatcher({
+    db,
+    workerId: 'committed-event-test-harness',
+    codecs,
+    consumers: [...durableTestConsumers(db), ...projectors],
+    projectionLedger,
+    maxAttempts: () => 1,
+  })
+  registerAfterCommitEventPump(
+    createAfterCommitEventPump({
+      db,
+      codecs,
+      projectors,
+      projectionLedger,
+      nudgeDispatcher() {},
+    }),
+  )
+  return {
+    async drain(maxSteps = 256) {
+      await dispatcher.drain(maxSteps)
+    },
+    dispose() {
+      registerAfterCommitEventPump(null)
+    },
+  }
 }

@@ -12,10 +12,15 @@ WHERE `producer` = 'collaboration'
 	AND `epoch` = 1;
 --> statement-breakpoint
 CREATE TABLE `__rfc341_collaboration_cutover_guard` (
-	`dispatchable_family_count` integer NOT NULL,
-	CONSTRAINT `rfc341_collaboration_cutover_complete`
-		CHECK(`dispatchable_family_count` = 3)
+	`dispatchable_family_count` integer NOT NULL
 );
+--> statement-breakpoint
+CREATE TRIGGER `__rfc341_collaboration_cutover_complete`
+BEFORE INSERT ON `__rfc341_collaboration_cutover_guard`
+WHEN NEW.`dispatchable_family_count` <> 3
+BEGIN
+	SELECT RAISE(ABORT, 'rfc341 collaboration cutover incomplete');
+END;
 --> statement-breakpoint
 INSERT INTO `__rfc341_collaboration_cutover_guard` (`dispatchable_family_count`)
 SELECT COUNT(*)

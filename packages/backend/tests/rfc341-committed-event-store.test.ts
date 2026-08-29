@@ -4,7 +4,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import { committedEventDeliveries, committedEvents } from '@/db/schema'
+import {
+  committedEventDeliveries,
+  committedEventFamilyCutovers,
+  committedEvents,
+} from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import {
@@ -24,6 +28,20 @@ import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_789_488_100_000
 const CONSUMER = { id: 'event-center.fixture', deliveryClass: 'critical' as const }
+
+function createLegacyStoreDb(): ReturnType<typeof createInMemoryDb> {
+  const db = createInMemoryDb(MIGRATIONS)
+  db.update(committedEventFamilyCutovers)
+    .set({ mode: 'legacy', epoch: 1, changedAt: NOW, changeRef: 'test:legacy-baseline' })
+    .where(
+      and(
+        eq(committedEventFamilyCutovers.producer, 'collaboration'),
+        eq(committedEventFamilyCutovers.family, 'review'),
+      ),
+    )
+    .run()
+  return db
+}
 
 function eventInput(input: {
   operation: string
@@ -72,7 +90,7 @@ describe('RFC-341 committed-event store', () => {
   })
 
   test('keeps legacy inert, appends shadow atomically and rejects conflicting replay', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createLegacyStoreDb()
     const legacy = dbTxSync(db, (tx) =>
       appendCommittedEventTx(tx, eventInput({ operation: 'legacy' })),
     )
@@ -100,7 +118,7 @@ describe('RFC-341 committed-event store', () => {
   })
 
   test('claims only current dispatchable epoch and preserves per-consumer aggregate FIFO', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createLegacyStoreDb()
     cutover(db, 'legacy', 1, 'shadow')
     dbTxSync(db, (tx) => appendCommittedEventTx(tx, eventInput({ operation: 'shadow' })))
     cutover(db, 'shadow', 2, 'dispatchable')
@@ -140,7 +158,7 @@ describe('RFC-341 committed-event store', () => {
   })
 
   test('dead-letters bounded consumer failure and manual retry is a single-winner CAS', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createLegacyStoreDb()
     cutover(db, 'legacy', 1, 'shadow')
     cutover(db, 'shadow', 2, 'dispatchable')
     const appended = dbTxSync(db, (tx) =>

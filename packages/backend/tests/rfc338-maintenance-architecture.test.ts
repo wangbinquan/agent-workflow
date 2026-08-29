@@ -20,7 +20,10 @@ const readBackend = (path: string): string => readFileSync(resolve(BACKEND, path
 describe('RFC-338 maintenance architecture', () => {
   test('catalog is closed and every historical phase is classified exactly once', () => {
     const catalogKeys = MAINTENANCE_JOB_CATALOG.map((spec) => spec.key)
-    expect(catalogKeys).toEqual([...MAINTENANCE_JOB_KEYS])
+    // RFC-341 replaced the old maintenance payload with a continuously
+    // recovering committed-event worker. Keep the legacy shared decode key
+    // readable during rolling upgrade, but it is no longer schedulable.
+    expect(catalogKeys).toEqual(MAINTENANCE_JOB_KEYS.filter((key) => key !== 'humanGateRecovery'))
     expect(new Set(catalogKeys).size).toBe(catalogKeys.length)
     const historicalHeavy = Object.keys(MAINTENANCE_PHASE).filter(
       (job) => job !== 'batchImportGc' && job !== 'lifecycleInvariants',
@@ -33,6 +36,7 @@ describe('RFC-338 maintenance architecture', () => {
       class: 'checkpoint',
       schedule: 'checkpoint',
     })
+    expect(MAINTENANCE_JOB_CATALOG.find((spec) => spec.key === 'humanGateRecovery')).toBeUndefined()
   })
 
   test('production bootstrap admits heavy work to one maintenance service and keeps only memory GC on main', () => {

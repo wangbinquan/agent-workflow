@@ -176,6 +176,7 @@ import {
   appendReviewSelectionChangedCommittedEventTx,
 } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 
 const {
   canonicalHumanGateRequestHash,
@@ -3874,6 +3875,11 @@ async function submitReviewDecisionUnlocked(
     )
   }
 
+  await waitAtHumanGateDecisionCommitBarrier({
+    kind: 'review',
+    taskId: dv.taskId,
+    operationId: committed.receipt.decision.operationId,
+  })
   publishCommittedEventsAfterCommit(committed.eventRefs)
 
   const hasBatch = args.comments !== undefined || args.selections !== undefined

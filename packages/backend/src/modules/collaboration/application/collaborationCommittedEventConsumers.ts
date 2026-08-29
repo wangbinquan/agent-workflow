@@ -1,10 +1,58 @@
-import type { EventObservationParticipant } from '@/modules/event-center/public/participants'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
 import {
   COLLABORATION_COMMITTED_EVENT_TYPES,
   decodeCollaborationCommittedEvent,
+  type CollaborationCommittedV1,
 } from '../domain/collaborationCommittedEvent'
-import { collaborationCommittedObservation } from '../public/events'
+import {
+  COLLABORATION_COMMITTED_EVENT_REF,
+  COLLABORATION_COMMITTED_SOURCE_REF,
+} from '../public/events'
+
+interface CollaborationCommittedObservationInput {
+  readonly sourceRef: { readonly id: string; readonly revision: number }
+  readonly eventTypeRef: { readonly id: string; readonly revision: number }
+  readonly subject: { readonly typeId: string; readonly subjectRef: string }
+  readonly occurredAt: number
+  readonly dedupeKey: string
+  readonly summary: string
+  readonly payloadArtifactRef: string | null
+  readonly routingFactsJson?: string | null
+  readonly triggerParameters?: Readonly<Record<string, string>> | null
+}
+
+interface CollaborationCommittedObservationParticipant {
+  observe(input: CollaborationCommittedObservationInput): unknown
+}
+
+function collaborationCommittedObservation(
+  event: CollaborationCommittedV1,
+): CollaborationCommittedObservationInput {
+  const gate = event.payload.gate
+  return {
+    sourceRef: COLLABORATION_COMMITTED_SOURCE_REF,
+    eventTypeRef: COLLABORATION_COMMITTED_EVENT_REF,
+    subject: { typeId: 'platform.task', subjectRef: gate.taskId },
+    occurredAt: Date.parse(event.occurredAt),
+    dedupeKey: event.eventId,
+    summary: `${event.family}/${event.type}: ${gate.gateId}`,
+    payloadArtifactRef: null,
+    routingFactsJson: JSON.stringify({
+      taskId: gate.taskId,
+      family: event.family,
+      eventType: event.type,
+      gateKind: gate.gateKind,
+      gateId: gate.gateId,
+      roundId: gate.roundId,
+    }),
+    triggerParameters: {
+      task_id: gate.taskId,
+      family: event.family,
+      event_type: event.type,
+      gate_kind: gate.gateKind,
+    },
+  }
+}
 
 export const collaborationCommittedEventCodec = {
   eventTypes: COLLABORATION_COMMITTED_EVENT_TYPES,
@@ -12,7 +60,7 @@ export const collaborationCommittedEventCodec = {
 } as const
 
 export function createCollaborationDurableConsumerDefinitions(input: {
-  readonly events: EventObservationParticipant
+  readonly events: CollaborationCommittedObservationParticipant
   readonly nudgeContinuation: () => void
   readonly enqueueReviewDistill: (input: {
     taskId: string

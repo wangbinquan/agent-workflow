@@ -19,6 +19,7 @@ import { createSession } from '../src/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -148,11 +149,16 @@ function captureTaskEvents(taskId: string): { events: TaskWsMessage[]; stop: () 
 
 describe('RFC-161 defer full-seal node.status broadcast', () => {
   let h: Harness
+  let uninstallProjection = (): void => {}
   beforeEach(async () => {
     resetBroadcastersForTests()
     h = await buildHarness()
+    uninstallProjection = installCommittedEventProjectionHarness(h.db)
   })
-  afterEach(() => resetBroadcastersForTests())
+  afterEach(() => {
+    uninstallProjection()
+    resetBroadcastersForTests()
+  })
 
   test('defer=true FULL seal → node.status(done) for the intermediary run', async () => {
     const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [makeQ('q1')])

@@ -23,6 +23,7 @@ import { createApp } from '../src/server'
 import { deleteReviewComment, updateReviewCommentText } from '../src/services/review'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -116,6 +117,7 @@ const OWNER_AUTHZ = { actorUserId: 'u_owner_authz', role: 'owner' as const }
 describe('RFC-009-T1 updateReviewCommentText service', () => {
   test('200 happy path — updates commentText, returns new row, fires ws event', async () => {
     const s = await seed()
+    const uninstallProjection = installCommittedEventProjectionHarness(s.db)
 
     let captured: unknown = null
     const unsub = taskBroadcaster.subscribe(TASK_CHANNEL(s.taskId), (evt) => {
@@ -128,8 +130,10 @@ describe('RFC-009-T1 updateReviewCommentText service', () => {
       s.commentId,
       'revised text',
       OWNER_AUTHZ,
-    )
-    unsub()
+    ).finally(() => {
+      unsub()
+      uninstallProjection()
+    })
 
     expect(updated.commentText).toBe('revised text')
     expect(updated.id).toBe(s.commentId)

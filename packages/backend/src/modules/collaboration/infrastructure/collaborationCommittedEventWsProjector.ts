@@ -195,24 +195,20 @@ function clarifyDecisionFrames(
         .map((row) => row.id),
     )
     if (roundEntryIds.size === 0) return null
+    // The clarify decision and its follow-up question dispatch intentionally
+    // have different gate-node correlation refs. Match the immutable question
+    // ids instead; they are globally unique and preserve the exact rerun even
+    // when the two commits belong to different gate aggregates.
     const dispatchEvents = db
       .select({ payloadJson: committedEvents.payloadJson })
       .from(committedEvents)
       .where(
-        event.correlationRef === null
-          ? and(
-              eq(committedEvents.producer, 'collaboration'),
-              eq(committedEvents.family, 'questions'),
-              eq(committedEvents.eventType, 'collaboration.question-dispatch-committed.v1'),
-              gte(committedEvents.occurredAt, Date.parse(event.occurredAt)),
-            )
-          : and(
-              eq(committedEvents.producer, 'collaboration'),
-              eq(committedEvents.family, 'questions'),
-              eq(committedEvents.eventType, 'collaboration.question-dispatch-committed.v1'),
-              eq(committedEvents.correlationRef, event.correlationRef),
-              gte(committedEvents.occurredAt, Date.parse(event.occurredAt)),
-            ),
+        and(
+          eq(committedEvents.producer, 'collaboration'),
+          eq(committedEvents.family, 'questions'),
+          eq(committedEvents.eventType, 'collaboration.question-dispatch-committed.v1'),
+          gte(committedEvents.occurredAt, Date.parse(event.occurredAt)),
+        ),
       )
       .orderBy(asc(committedEvents.occurredAt), asc(committedEvents.createdAt))
       .limit(256)

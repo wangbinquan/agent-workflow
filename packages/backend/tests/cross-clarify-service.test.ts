@@ -25,7 +25,7 @@
 // If any of these go red the runtime contract drifted — investigate before
 // relaxing.
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -50,6 +50,7 @@ import type {
   TaskWsMessage,
   WorkflowDefinition,
 } from '@agent-workflow/shared'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -205,16 +206,22 @@ async function seedDesignerRun(
   return id
 }
 
+let uninstallProjection = (): void => {}
+
 beforeEach(() => {
+  uninstallProjection()
+  uninstallProjection = (): void => {}
   resetBroadcastersForTests()
 })
-afterAll(() => {
+afterEach(() => {
+  uninstallProjection()
   resetBroadcastersForTests()
 })
 
 describe('RFC-056 createClarifyRound', () => {
   test('mints row + parks cross-clarify node_run awaiting_human + broadcasts cross-clarify.created', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    uninstallProjection = installCommittedEventProjectionHarness(db)
     const { taskId } = await seedTask(db)
     const qRunId = await seedQuestionerRun(db, taskId)
 

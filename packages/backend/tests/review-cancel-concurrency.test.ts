@@ -46,6 +46,7 @@ import {
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
+import { drainCommittedEventDeliveriesForTests } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -488,6 +489,7 @@ describe('review mutation vs task cancellation linearization', () => {
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'writer'))),
     ).toHaveLength(1)
+    await drainCommittedEventDeliveriesForTests(h.db)
     expect(await h.db.select().from(memoryDistillJobs)).toHaveLength(1)
   })
 

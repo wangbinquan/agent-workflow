@@ -1,6 +1,10 @@
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
+import {
+  collaborationCommittedEventCodec,
+  createCollaborationWsProjector,
+} from '@/modules/collaboration/composition/committedEvents'
 import { taskLifecycleCommittedEventCodec } from '@/modules/task-execution/application/taskLifecycleConsumers'
 import {
   decodeTaskLifecycleCommittedEvent,
@@ -8,6 +12,7 @@ import {
 } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
 import { createTaskLifecycleWsProjector } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjector'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
+import { combineCommittedEventCodecRegistries } from '@/platform/events/committed/dispatcherWorker'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
@@ -28,9 +33,13 @@ export function installTaskLifecycleAfterCommitTestPump(
 ): () => void {
   const pump = createAfterCommitEventPump({
     db,
-    codecs: taskLifecycleCommittedEventCodec,
+    codecs: combineCommittedEventCodecRegistries(
+      taskLifecycleCommittedEventCodec,
+      collaborationCommittedEventCodec,
+    ),
     projectors: [
       createTaskLifecycleWsProjector(db),
+      createCollaborationWsProjector(db),
       {
         id: 'task-lifecycle-test-effect-projector',
         eventTypes: TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,

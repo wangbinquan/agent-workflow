@@ -15,7 +15,7 @@
 // (RFC-132 retired the legacy quick-channel outcome contract; its unified
 // equivalents are locked by rfc128-p5-d-autodispatch.test.ts.)
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
@@ -35,6 +35,7 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -203,8 +204,17 @@ function makeAnswer(overrides: Partial<ClarifyAnswer> = {}): ClarifyAnswer {
   }
 }
 
-beforeEach(() => resetBroadcastersForTests())
-afterAll(() => resetBroadcastersForTests())
+let uninstallProjection = (): void => {}
+
+beforeEach(() => {
+  uninstallProjection()
+  uninstallProjection = (): void => {}
+  resetBroadcastersForTests()
+})
+afterEach(() => {
+  uninstallProjection()
+  resetBroadcastersForTests()
+})
 
 // ---------------------------------------------------------------------------
 // PARAMETERIZED — the symmetric createClarifyRound invariants (RFC-217 T9
@@ -284,6 +294,7 @@ for (const kind of ['self', 'cross'] as const) {
 
     test('created WS event fires with the kind-correct FROZEN type string', async () => {
       const db = createInMemoryDb(MIGRATIONS)
+      uninstallProjection = installCommittedEventProjectionHarness(db)
       const { events } = await seedAndCreate(db)
       const expected = kind === 'self' ? 'clarify.created' : 'cross-clarify.created'
       expect(events.map((e) => e.type)).toContain(expected)

@@ -16,7 +16,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRoundWithDecision } from '../src/services/clarifyAutoDispatch'
 import { getClarifyRoundDetail, listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
@@ -451,7 +451,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     })
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await autoDispatchClarifyRound({
+    await autoDispatchClarifyRoundWithDecision({
       db,
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
@@ -504,7 +504,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     })
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await autoDispatchClarifyRound({
+    await autoDispatchClarifyRoundWithDecision({
       db,
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
@@ -541,7 +541,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     })
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
-    await autoDispatchClarifyRound({
+    await autoDispatchClarifyRoundWithDecision({
       db,
       originNodeRunId: clarifyNodeRunId,
       answers: [makeAnswer()],

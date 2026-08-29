@@ -61,15 +61,16 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
     expect(src('services/launchRuntimeConfig.ts')).toContain('cfg.defaultPerNodeTimeoutMs')
   })
 
-  test('parked clarify / review resume + fusion 都透传 resolveLaunchRuntimeConfig', () => {
-    // RFC-132 PR-B (universal deferred model): clarify.ts now has ONE unified resume branch
-    // (autoDispatchClarifyRound; the legacy self/cross immediate-mint branches were removed). It
-    // still MUST thread the floor.
-    const clarifyCalls = (
-      src('routes/clarify.ts').match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []
-    ).length
-    expect(clarifyCalls).toBeGreaterThanOrEqual(1)
-    expect(src('routes/reviews.ts')).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
+  test('continuous human-gate continuation + fusion 都透传 resolveLaunchRuntimeConfig', () => {
+    // RFC-341 removes request-owned wakeups. The daemon composes one continuous
+    // continuation driver with the same launch floor; clarify/review routes now
+    // submit collaboration commands and do not construct StartTaskDeps.
+    const start = src('cli/start.ts')
+    expect(start).toContain('const gateContinuationDeps = {')
+    expect(start).toContain('...resolveLaunchRuntimeConfig(Paths.config)')
+    expect(start).toContain('drive: composeHumanGateContinuationDriver(gateContinuationDeps)')
+    expect(src('routes/clarify.ts')).toContain('submitClarifyDecision(commandContext, {')
+    expect(src('routes/reviews.ts')).toContain('submitReviewDecision(commandContext, {')
     expect(src('routes/fusions.ts')).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
   })
 

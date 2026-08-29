@@ -26,6 +26,10 @@ import {
 import { addReviewComment, submitReviewDecision } from '../src/services/review'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  installCommittedEventDeliveryHarness,
+  type CommittedEventDeliveryTestHarness,
+} from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -38,6 +42,7 @@ interface Harness {
   dvId: string
   agentRunId: string
   definition: WorkflowDefinition
+  committedEvents: CommittedEventDeliveryTestHarness
   cleanup: () => void
 }
 
@@ -58,6 +63,7 @@ async function buildHarness(opts?: {
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
   const db = createInMemoryDb(MIGRATIONS)
+  const committedEvents = installCommittedEventDeliveryHarness(db)
   await db.insert(agentsTable).values({
     id: ulid(),
     name: 'doc',
@@ -178,7 +184,11 @@ async function buildHarness(opts?: {
     dvId,
     agentRunId,
     definition,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    committedEvents,
+    cleanup: () => {
+      committedEvents.dispose()
+      rmSync(tmp, { recursive: true, force: true })
+    },
   }
 }
 
@@ -197,6 +207,7 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
       expectedReviewIteration: 0,
       author: 'tester-123',
     })
+    await h.committedEvents.drain()
 
     // node_run: status=done, finishedAt set ≥ before
     const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
@@ -395,6 +406,7 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
       expectedReviewIteration: 0,
       author: 'tester',
     })
+    await h.committedEvents.drain()
     expect(first.receipt.replayed).toBe(false)
     expect(replay.receipt).toMatchObject({
       operationId: first.receipt.operationId,
@@ -419,6 +431,7 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
       expectedReviewIteration: 0,
       author: 'tester',
     })
+    await h.committedEvents.drain()
 
     const jobs = await h.db
       .select()
@@ -443,6 +456,7 @@ describe('RFC-053 PR-A T1g — review decision full-field assertions', () => {
       expectedReviewIteration: 0,
       author: 'tester',
     })
+    await h.committedEvents.drain()
     const jobs = await h.db
       .select()
       .from(memoryDistillJobs)
@@ -463,6 +477,7 @@ describe('review decision concurrency — one complete winner, zero loser side e
   }
 
   async function taskDistillJobs(): Promise<Array<typeof memoryDistillJobs.$inferSelect>> {
+    await h.committedEvents.drain()
     return h.db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.taskId, h.taskId))
   }
 

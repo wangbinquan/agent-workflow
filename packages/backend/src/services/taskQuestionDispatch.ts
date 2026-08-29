@@ -113,6 +113,7 @@ import {
   appendQuestionDispatchCommittedEventTx,
 } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import {
   isClarifyChannelEdge,
@@ -1689,6 +1690,13 @@ async function commitDispatchPlan(
     throw e
   }
   if (!committed) return EMPTY_RESULT
+  if (!replayed && decision?.capture.envelope !== undefined) {
+    await waitAtHumanGateDecisionCommitBarrier({
+      kind: 'questions',
+      taskId: decision.capture.envelope.result.taskId,
+      operationId: decision.capture.envelope.decision.operationId,
+    })
+  }
   publishCommittedEventsAfterCommit(committedEventRefs)
   if (replayed && decision?.capture.envelope !== undefined) {
     const envelope = decision.capture.envelope

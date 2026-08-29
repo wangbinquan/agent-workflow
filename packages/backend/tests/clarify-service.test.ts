@@ -19,7 +19,7 @@
 // Together with clarify-no-cross-review-interference (separate file), this
 // keeps the create/seal unit lock.
 
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -40,6 +40,7 @@ import type {
   WorkflowDefinition,
   WorkflowNode,
 } from '@agent-workflow/shared'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -121,16 +122,27 @@ function makeAnswer(overrides: Partial<ClarifyAnswer> = {}): ClarifyAnswer {
   }
 }
 
+let uninstallProjection = (): void => {}
+
+function createProjectionDb(): DbClient {
+  const db = createInMemoryDb(MIGRATIONS)
+  uninstallProjection = installCommittedEventProjectionHarness(db)
+  return db
+}
+
 beforeEach(() => {
+  uninstallProjection()
+  uninstallProjection = (): void => {}
   resetBroadcastersForTests()
 })
-afterAll(() => {
+afterEach(() => {
+  uninstallProjection()
   resetBroadcastersForTests()
 })
 
 describe('createClarifyRound', () => {
   test('inserts row, parks clarify node_run awaiting_human, broadcasts clarify.created', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createProjectionDb()
     const { taskId } = await seedTask(db)
 
     // Pre-existing source agent node_run (asking node_run).
@@ -188,7 +200,7 @@ describe('createClarifyRound', () => {
   })
 
   test('exact re-emit replays one round/question/event; changed content advances the stable gate', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createProjectionDb()
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_source_reemit'
     await db.insert(nodeRuns).values({

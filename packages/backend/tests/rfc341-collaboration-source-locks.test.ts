@@ -23,6 +23,37 @@ describe('RFC-341 collaboration owner source locks', () => {
     }
   })
 
+  test('compiled restart barriers stop after commit and before every immediate event wake', () => {
+    const cases = [
+      {
+        path: 'services/review.ts',
+        publish: 'publishCommittedEventsAfterCommit(committed.eventRefs)',
+      },
+      {
+        path: 'services/clarify/autoDispatch.ts',
+        publish: 'publishCommittedEventsAfterCommit(prepared.capture.eventRefs)',
+      },
+      {
+        path: 'services/taskQuestionDispatch.ts',
+        publish: 'publishCommittedEventsAfterCommit(committedEventRefs)',
+      },
+    ] as const
+    for (const entry of cases) {
+      const value = source(entry.path)
+      const publishAt = value.indexOf(entry.publish)
+      const barrierAt = value.lastIndexOf('waitAtHumanGateDecisionCommitBarrier', publishAt)
+      expect(barrierAt, entry.path).toBeGreaterThan(-1)
+      expect(publishAt, entry.path).toBeGreaterThan(barrierAt)
+    }
+    for (const path of [
+      'services/reviewDecisionComposition.ts',
+      'services/clarifyDecisionComposition.ts',
+      'services/questionDispatchComposition.ts',
+    ]) {
+      expect(source(path)).not.toContain('waitAtHumanGateDecisionCommitBarrier')
+    }
+  })
+
   test('covered collaboration writers have no legacy direct broadcaster', () => {
     for (const path of [
       'services/review.ts',

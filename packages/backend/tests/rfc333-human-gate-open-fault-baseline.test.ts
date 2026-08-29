@@ -33,6 +33,7 @@ import {
 import { createClarifyRound } from '../src/services/clarify/service'
 import { dispatchReviewNode } from '../src/services/review'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const REVIEW_DOCS = ['# Alpha\n\nalpha', '# Beta\n\nbeta', '# Gamma\n\ngamma']
@@ -207,6 +208,7 @@ describe('RFC-333 open fault witnesses', () => {
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
     const db = createInMemoryDb(MIGRATIONS)
+    const uninstallProjection = installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
     try {
@@ -323,6 +325,7 @@ describe('RFC-333 open fault witnesses', () => {
       expect(frames).toHaveLength(1)
     } finally {
       unsubscribe()
+      uninstallProjection()
       db.$client.close()
       rmSync(root, { recursive: true, force: true })
     }
@@ -335,6 +338,7 @@ describe('RFC-333 open fault witnesses', () => {
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
     const db = createInMemoryDb(MIGRATIONS)
+    const uninstallProjection = installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
     try {
@@ -391,6 +395,7 @@ describe('RFC-333 open fault witnesses', () => {
       expect(frames).toEqual([])
     } finally {
       unsubscribe()
+      uninstallProjection()
       db.$client.close()
       rmSync(root, { recursive: true, force: true })
     }
@@ -398,6 +403,7 @@ describe('RFC-333 open fault witnesses', () => {
 
   test('clarify round failure leaves only a retryable prepared manifest, then retries atomically', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    const uninstallProjection = installCommittedEventProjectionHarness(db)
     const frames: TaskWsMessage[] = []
     let unsubscribe = (): void => {}
     try {
@@ -510,6 +516,7 @@ describe('RFC-333 open fault witnesses', () => {
       expect(frames[0]?.type).toBe('clarify.created')
     } finally {
       unsubscribe()
+      uninstallProjection()
       db.$client.close()
     }
   })

@@ -54,6 +54,7 @@ import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { buildFrozenAttributionSet } from './rounds'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import {
@@ -606,6 +607,14 @@ export async function autoDispatchClarifyRoundWithDecision(
     })
   } finally {
     if (prepared.capture.eventRefs !== undefined) {
+      const committed = prepared.capture.envelope
+      if (committed !== undefined) {
+        await waitAtHumanGateDecisionCommitBarrier({
+          kind: 'clarify',
+          taskId: committed.result.taskId,
+          operationId: committed.decision.operationId,
+        })
+      }
       publishCommittedEventsAfterCommit(prepared.capture.eventRefs)
     }
   }
