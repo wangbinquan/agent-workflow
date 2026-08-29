@@ -14,6 +14,7 @@ export {
   canonicalHumanGateValueJson,
   deriveHumanGateCompatibilityKey,
 } from './domain/canonicalGateRequest'
+export { decodeCollaborationCommittedEvent } from './domain/collaborationCommittedEvent'
 export {
   decodeClarifyDecisionManifest,
   decodeClarifyDecisionReceipt,

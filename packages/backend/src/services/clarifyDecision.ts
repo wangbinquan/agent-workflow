@@ -17,7 +17,7 @@ import {
 import type { ClarifySealDecisionParticipantInTx } from '@/services/clarify/seal'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-import type { ClarifyAnswer, ClarifyDirective } from '@agent-workflow/shared'
+import type { ClarifyAnswer, ClarifyDirective, TaskActorRole } from '@agent-workflow/shared'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/public/participants'
 
@@ -39,6 +39,7 @@ export interface ClarifyDecisionArgs {
 }
 
 export interface PreparedClarifyDecision {
+  readonly operationId: string
   readonly participant: ClarifySealDecisionParticipantInTx
   readonly capture: {
     envelope?: ClarifyDecisionReceiptEnvelope
@@ -50,6 +51,7 @@ function clarifyDecisionPayload(input: {
   roundId: string
   answers: readonly ClarifyAnswer[]
   directive: ClarifyDirective
+  actorRole: TaskActorRole
 }) {
   return {
     kind: 'clarify-decision' as const,
@@ -57,6 +59,7 @@ function clarifyDecisionPayload(input: {
     directive: input.directive,
     answersJson: canonicalHumanGateValueJson(input.answers),
     releaseGate: true,
+    actorRole: input.actorRole,
   }
 }
 
@@ -151,6 +154,7 @@ export function replayCommittedClarifyDecision(input: {
   originNodeRunId: string
   roundId: string
   actorUserId: string
+  actorRole: TaskActorRole
   answers: readonly ClarifyAnswer[]
   directive: ClarifyDirective
   decision: ClarifyDecisionArgs
@@ -191,8 +195,24 @@ export function replayCommittedClarifyDecision(input: {
       expectedGateRevision: input.decision.expectedGateRevision ?? row.expectedGateRevision,
       payload,
     }
+    const legacyRequest: CanonicalHumanGateRequest | null =
+      manifest.request.payload.kind === 'clarify-decision' &&
+      manifest.request.payload.actorRole === undefined
+        ? {
+            ...request,
+            payload: {
+              kind: 'clarify-decision',
+              roundId: payload.roundId,
+              directive: payload.directive,
+              answersJson: payload.answersJson,
+              releaseGate: payload.releaseGate,
+            },
+          }
+        : null
     return (
-      canonicalHumanGateRequestHash(request) === row.requestHash &&
+      (canonicalHumanGateRequestHash(request) === row.requestHash ||
+        (legacyRequest !== null &&
+          canonicalHumanGateRequestHash(legacyRequest) === row.requestHash)) &&
       canonicalHumanGateRequestHash(manifest.request) === row.requestHash
     )
   })
@@ -214,6 +234,7 @@ export function prepareClarifyDecision(input: {
   originNodeRunId: string
   roundId: string
   actorUserId: string
+  actorRole: TaskActorRole
   answers: readonly ClarifyAnswer[]
   directive: ClarifyDirective
   taskRevision: number
@@ -394,5 +415,5 @@ export function prepareClarifyDecision(input: {
           : [...accepted.eventRefs, collaborationEventRef]
     },
   }
-  return { participant, capture }
+  return { operationId, participant, capture }
 }

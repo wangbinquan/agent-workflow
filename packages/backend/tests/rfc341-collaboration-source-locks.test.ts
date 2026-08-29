@@ -100,6 +100,40 @@ describe('RFC-341 collaboration owner source locks', () => {
     expect(returnAt).toBeGreaterThan(postCommitAt)
   })
 
+  test('fresh, replay and claimed pre-drive share durable clarify convergence', () => {
+    const autoDispatch = source('services/clarify/autoDispatch.ts')
+    const preDrive = source('services/humanGateContinuationEffects.ts')
+    const seal = source('services/clarify/seal.ts')
+    const replayAt = autoDispatch.indexOf('if (replay !== null)')
+    const freshAt = autoDispatch.indexOf('committedOperationId: prepared.operationId')
+    const finishAt = autoDispatch.indexOf(
+      'export async function finishCommittedClarifyAutoDispatch',
+    )
+
+    expect(finishAt).toBeGreaterThan(-1)
+    expect(
+      autoDispatch.indexOf('await finishCommittedClarifyAutoDispatch({', replayAt),
+    ).toBeGreaterThan(replayAt)
+    expect(freshAt).toBeGreaterThan(replayAt)
+    expect(
+      autoDispatch.indexOf('await finishCommittedClarifyAutoDispatch({', freshAt),
+    ).toBeGreaterThan(freshAt)
+    expect(autoDispatch).not.toContain('dispatch: EMPTY_DISPATCH,')
+    expect(preDrive).toContain('await finishCommittedClarifyAutoDispatch({')
+    expect(preDrive).toContain("state: 'pending'")
+    expect(preDrive).toContain(
+      'eq(taskExecutionIntents.claimedEpoch, context.execution.token.epoch)',
+    )
+    expect(seal).toContain('freezeAnswerAttributions({')
+    expect(seal).toContain('setNodeClarifyDirectiveTx(')
+    expect(seal.indexOf('freezeAnswerAttributions({')).toBeLessThan(
+      seal.indexOf('await args.afterCommit?.()'),
+    )
+    expect(seal.indexOf('setNodeClarifyDirectiveTx(')).toBeLessThan(
+      seal.indexOf('await args.afterCommit?.()'),
+    )
+  })
+
   test('covered collaboration writers have no legacy direct broadcaster', () => {
     for (const path of [
       'services/review.ts',

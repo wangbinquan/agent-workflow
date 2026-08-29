@@ -5,6 +5,7 @@ import { canonicalHumanGateValueJson } from './canonicalGateRequest'
 import type { GateDecisionReceipt } from './gateReceipt'
 import { HumanGateOperationError } from './humanGateOperation'
 import type { ValidatedWorkspaceRollbackPlan } from './workspaceRollbackPlan'
+import { TaskActorRoleSchema } from '@agent-workflow/shared'
 
 export interface ClarifyDecisionManifest {
   readonly schemaVersion: 1
@@ -53,6 +54,8 @@ export function decodeClarifyDecisionManifest(raw: string): ClarifyDecisionManif
     value.request.gateKind !== 'clarify' ||
     value.request.operationKind !== 'decide' ||
     value.request.payload.kind !== 'clarify-decision' ||
+    (value.request.payload.actorRole !== undefined &&
+      !TaskActorRoleSchema.safeParse(value.request.payload.actorRole).success) ||
     !Array.isArray(value.sourceNodeRunIds) ||
     value.sourceNodeRunIds.some((id) => typeof id !== 'string' || id.length === 0)
   ) {

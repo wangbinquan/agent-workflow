@@ -41,7 +41,15 @@
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
-import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
+import {
+  clarifyRounds,
+  collaborationGateOperations,
+  committedEvents,
+  nodeRunOutputs,
+  nodeRuns,
+  taskQuestions,
+  tasks,
+} from '@/db/schema'
 import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify/service'
 import { hasOpenDispatchedEntryOnHome } from './rerunLedger'
 import { sealRoundQuestions, type ClarifySealDecisionParticipantInTx } from './seal'
@@ -55,11 +63,11 @@ import { humanGateComposition } from '@/services/humanGateComposition'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
-import { buildFrozenAttributionSet } from './rounds'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import {
   dispatchDeferredTaskQuestions,
   dispatchTaskQuestions,
+  type DispatchTaskQuestionsCommittedEventIdentity,
   type DispatchTaskQuestionsResult,
 } from '@/services/taskQuestionDispatch'
 import { loadSealedQuestionIds } from '@/services/taskQuestions'
@@ -268,6 +276,15 @@ export interface AutoDispatchClarifyRoundArgs {
    * after dbTxSync commits and before any post-seal await or nested dispatch can wake recovery. */
   afterSealCommit?: () => Promise<void>
   now?: () => number
+  /** Internal: binds the fresh post-seal convergence to its durable decision. */
+  committedOperationId?: string
+  /** Internal: receipt replay / claimed-intent convergence skips the already-committed seal. */
+  committedConvergence?: {
+    readonly operationId: string
+    readonly roundId: string
+    readonly sealedQuestionIds: readonly string[]
+    readonly roundFullySealed: boolean
+  }
 }
 
 export interface AutoDispatchClarifyRoundResult {
@@ -344,6 +361,7 @@ async function sealRoundAsWholeFinalize(
     answers: sealAnswers,
     ...(args.directive !== undefined ? { directive: args.directive } : {}),
     sealedBy: args.actor.userId,
+    sealedByRole: args.actor.role,
     ...(args.decisionParticipant === undefined
       ? {}
       : { decisionParticipant: args.decisionParticipant }),
@@ -375,33 +393,6 @@ async function sealRoundAsWholeFinalize(
       /* swallow — best-effort */
     })
   }
-
-  // 3b. RFC-099 (D8/D14/D17) attribution FREEZE — the quick channel is the "submit" the legacy
-  //     submitClarifyAnswers / submitCrossClarifyAnswers froze attribution on (buildFrozenAttributionSet:
-  //     per-question editor kept where the sealed value matches their draft, else the submitter; clears
-  //     the draft; records the submitter's role). sealRoundQuestions does NOT freeze (it is the shared
-  //     seal primitive), so RFC-132 PR-B re-applies the freeze here on the whole-round finalize. Reads
-  //     the round's post-seal answers (authoritative merged set) so the draft-vs-submit comparison matches
-  //     what the legacy path did. Never enters a prompt (RFC-099 — audit/UI only).
-  const postSealRound = (
-    await db
-      .select({ answersJson: clarifyRounds.answersJson })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, round.id))
-      .limit(1)
-  )[0]
-  const frozenAnswers = ((): ClarifyAnswer[] => {
-    try {
-      return JSON.parse(postSealRound?.answersJson ?? '[]') as ClarifyAnswer[]
-    } catch {
-      return args.answers
-    }
-  })()
-  const attributionSet = await buildFrozenAttributionSet(db, round.id, frozenAnswers, {
-    userId: args.actor.userId,
-    role: args.actor.role,
-  })
-  await db.update(clarifyRounds).set(attributionSet).where(eq(clarifyRounds.id, round.id))
 
   return { sealedQuestionIds, roundFullySealed }
 }
@@ -515,6 +506,12 @@ async function dispatchSealedDesignerEntries(
             round.taskId,
             designerEntryIds,
             args.actor,
+            args.committedConvergence === undefined
+              ? undefined
+              : {
+                  operationRef: args.committedConvergence.operationId,
+                  eventGroupOrdinal: 4,
+                },
           )
         } catch (err) {
           if (err instanceof ConflictError && DESIGNER_DEFERRABLE_CONFLICTS.has(err.code)) {
@@ -531,6 +528,238 @@ async function dispatchSealedDesignerEntries(
     }
   }
   return designerDispatch
+}
+
+function mergeDurableDispatchResult(
+  local: DispatchTaskQuestionsResult,
+  durableEvents: readonly ReturnType<
+    typeof humanGateComposition.decodeCollaborationCommittedEvent
+  >[],
+  entries: readonly Pick<
+    typeof taskQuestions.$inferSelect,
+    'id' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'dispatchedAt'
+  >[],
+): DispatchTaskQuestionsResult {
+  const reruns = new Map<
+    string,
+    { targetNodeId: string; nodeRunId: string; entryIds: Set<string> }
+  >()
+  const addRerun = (rerun: {
+    targetNodeId: string
+    nodeRunId: string
+    entryIds: readonly string[]
+  }) => {
+    const current = reruns.get(rerun.nodeRunId) ?? {
+      targetNodeId: rerun.targetNodeId,
+      nodeRunId: rerun.nodeRunId,
+      entryIds: new Set<string>(),
+    }
+    for (const id of rerun.entryIds) current.entryIds.add(id)
+    reruns.set(rerun.nodeRunId, current)
+  }
+  for (const rerun of local.reruns) addRerun(rerun)
+  const eventQuestionIds = new Set<string>()
+  for (const event of durableEvents) {
+    if (event.type !== 'collaboration.question-dispatch-committed.v1') continue
+    for (const id of event.payload.questionIds) eventQuestionIds.add(id)
+    for (const rerun of event.payload.reruns) {
+      addRerun({
+        targetNodeId: rerun.nodeId,
+        nodeRunId: rerun.nodeRunId,
+        entryIds: rerun.entryIds,
+      })
+    }
+  }
+
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]))
+  const dispatched = new Set(local.dispatchedEntryIds)
+  const deferred = new Map(local.deferred.map((entry) => [entry.entryId, entry]))
+  for (const id of eventQuestionIds) {
+    const entry = entryById.get(id)
+    if (entry?.dispatchedAt !== null && entry?.dispatchedAt !== undefined) {
+      dispatched.add(id)
+      deferred.delete(id)
+      continue
+    }
+    if (entry !== undefined && !deferred.has(id)) {
+      deferred.set(id, {
+        entryId: id,
+        homeNodeId: entry.overrideTargetNodeId ?? entry.defaultTargetNodeId ?? '',
+        reason: 'durable clarify dispatch remains deferred and will be retried',
+      })
+    }
+  }
+
+  return {
+    reruns: [...reruns.values()]
+      .map((rerun) => ({ ...rerun, entryIds: [...rerun.entryIds].sort() }))
+      .sort((left, right) => left.nodeRunId.localeCompare(right.nodeRunId)),
+    dispatchedEntryIds: [...dispatched].sort(),
+    deferred: [...deferred.values()].sort((left, right) =>
+      left.entryId.localeCompare(right.entryId),
+    ),
+  }
+}
+
+async function rebuildCommittedClarifyDispatch(
+  db: DbClient,
+  operationId: string,
+  local: DispatchTaskQuestionsResult,
+): Promise<DispatchTaskQuestionsResult> {
+  const rows = await db
+    .select({ payloadJson: committedEvents.payloadJson })
+    .from(committedEvents)
+    .where(
+      and(
+        eq(committedEvents.producer, 'collaboration'),
+        eq(committedEvents.family, 'questions'),
+        eq(committedEvents.operationRef, operationId),
+        eq(committedEvents.eventType, 'collaboration.question-dispatch-committed.v1'),
+      ),
+    )
+  const events = rows.map((row) =>
+    humanGateComposition.decodeCollaborationCommittedEvent(JSON.parse(row.payloadJson)),
+  )
+  const questionIds = [
+    ...new Set(
+      events.flatMap((event) =>
+        event.type === 'collaboration.question-dispatch-committed.v1'
+          ? [...event.payload.questionIds]
+          : [],
+      ),
+    ),
+  ]
+  const entries =
+    questionIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: taskQuestions.id,
+            defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
+            overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+            dispatchedAt: taskQuestions.dispatchedAt,
+          })
+          .from(taskQuestions)
+          .where(inArray(taskQuestions.id, questionIds))
+  return mergeDurableDispatchResult(local, events, entries)
+}
+
+export async function finishCommittedClarifyAutoDispatch(input: {
+  readonly db: DbClient
+  readonly operationId: string
+  readonly expectedTaskId?: string
+  readonly expectedOriginNodeRunId?: string
+  readonly expectedContinuationRef?: string
+}): Promise<AutoDispatchClarifyRoundResult> {
+  const operation = input.db
+    .select()
+    .from(collaborationGateOperations)
+    .where(eq(collaborationGateOperations.id, input.operationId))
+    .get()
+  if (
+    operation === undefined ||
+    operation.id !== input.operationId ||
+    operation.gateKind !== 'clarify' ||
+    operation.operationKind !== 'decide' ||
+    operation.state !== 'completed' ||
+    operation.receiptJson === null
+  ) {
+    throw new ConflictError(
+      'clarify-convergence-stale',
+      `clarify operation '${input.operationId}' is not a completed durable decision`,
+    )
+  }
+  const manifest = humanGateComposition.decodeClarifyDecisionManifest(operation.manifestJson)
+  const receipt = humanGateComposition.decodeClarifyDecisionReceipt(operation.receiptJson)
+  const sourceNodeRunIds = [...manifest.sourceNodeRunIds]
+  const actorRole =
+    manifest.request.payload.kind === 'clarify-decision'
+      ? manifest.request.payload.actorRole
+      : undefined
+  const originNodeRunId = sourceNodeRunIds[0]
+  if (
+    sourceNodeRunIds.length !== 1 ||
+    originNodeRunId === undefined ||
+    humanGateComposition.canonicalHumanGateRequestHash(manifest.request) !==
+      operation.requestHash ||
+    manifest.request.taskId !== operation.taskId ||
+    manifest.request.gateRef !== operation.gateRef ||
+    manifest.request.expectedTaskRevision !== operation.expectedTaskRevision ||
+    manifest.request.expectedGateRevision !== operation.expectedGateRevision ||
+    manifest.request.gateRef !== `clarify:${originNodeRunId}` ||
+    manifest.request.actorUserId === null ||
+    manifest.request.actorUserId !== operation.actorUserId ||
+    manifest.request.payload.kind !== 'clarify-decision' ||
+    manifest.request.payload.roundId !== receipt.result.roundId ||
+    receipt.decision.operationId !== operation.id ||
+    receipt.decision.gate.kind !== 'clarify' ||
+    receipt.decision.gate.ref !== operation.gateRef ||
+    receipt.decision.gateRevision !== operation.resultGateRevision ||
+    receipt.result.taskId !== operation.taskId ||
+    (input.expectedTaskId !== undefined && input.expectedTaskId !== operation.taskId) ||
+    (input.expectedOriginNodeRunId !== undefined &&
+      input.expectedOriginNodeRunId !== originNodeRunId) ||
+    (input.expectedContinuationRef !== undefined &&
+      input.expectedContinuationRef !== receipt.result.continuationRef)
+  ) {
+    throw new ConflictError(
+      'clarify-convergence-conflict',
+      `clarify operation '${input.operationId}' no longer matches its committed continuation`,
+    )
+  }
+  if (actorRole === undefined) {
+    const pending = input.db
+      .select({ id: taskQuestions.id })
+      .from(taskQuestions)
+      .where(
+        and(
+          eq(taskQuestions.taskId, operation.taskId),
+          eq(taskQuestions.originNodeRunId, originNodeRunId),
+          eq(taskQuestions.confirmation, 'open'),
+          isNotNull(taskQuestions.sealedAt),
+          isNull(taskQuestions.dispatchedAt),
+        ),
+      )
+      .get()
+    if (pending !== undefined) {
+      throw new ConflictError(
+        'clarify-convergence-conflict',
+        `clarify operation '${input.operationId}' has unfinished work without a durable actor role`,
+      )
+    }
+    const round = input.db
+      .select({ kind: clarifyRounds.kind, status: clarifyRounds.status })
+      .from(clarifyRounds)
+      .where(eq(clarifyRounds.id, receipt.result.roundId))
+      .get()
+    if (round === undefined || round.status !== 'answered') {
+      throw new ConflictError(
+        'clarify-convergence-stale',
+        `clarify operation '${input.operationId}' lost its answered round`,
+      )
+    }
+    return {
+      taskId: operation.taskId,
+      kind: round.kind,
+      sealedQuestionIds: [...receipt.result.sealedQuestionIds],
+      roundFullySealed: receipt.result.roundFullySealed,
+      dispatch: await rebuildCommittedClarifyDispatch(input.db, operation.id, EMPTY_DISPATCH),
+    }
+  }
+
+  return await autoDispatchClarifyRound({
+    db: input.db,
+    originNodeRunId,
+    answers: [],
+    directive: manifest.request.payload.directive,
+    actor: { userId: manifest.request.actorUserId, role: actorRole },
+    committedConvergence: {
+      operationId: operation.id,
+      roundId: receipt.result.roundId,
+      sealedQuestionIds: receipt.result.sealedQuestionIds,
+      roundFullySealed: receipt.result.roundFullySealed,
+    },
+  })
 }
 
 /** RFC-333 T9 collaboration command implementation. The answer seal owns the
@@ -575,17 +804,23 @@ export async function autoDispatchClarifyRoundWithDecision(
     originNodeRunId: args.originNodeRunId,
     roundId: round.id,
     actorUserId: args.actor.userId,
+    actorRole: args.actor.role,
     answers: args.answers,
     directive,
     decision,
   })
   if (replay !== null) {
+    const converged = await finishCommittedClarifyAutoDispatch({
+      db: args.db,
+      operationId: replay.decision.operationId,
+      expectedTaskId: replay.result.taskId,
+      expectedOriginNodeRunId: args.originNodeRunId,
+      expectedContinuationRef: replay.result.continuationRef,
+    })
     return {
-      taskId: replay.result.taskId,
-      kind: round.kind,
+      ...converged,
       sealedQuestionIds: [...replay.result.sealedQuestionIds],
       roundFullySealed: replay.result.roundFullySealed,
-      dispatch: EMPTY_DISPATCH,
       receipt: gateDecisionReceipt({ ...replay.decision, replayed: true }),
       continuationRef: replay.result.continuationRef,
     }
@@ -597,6 +832,7 @@ export async function autoDispatchClarifyRoundWithDecision(
     originNodeRunId: args.originNodeRunId,
     roundId: round.id,
     actorUserId: args.actor.userId,
+    actorRole: args.actor.role,
     answers: args.answers,
     directive,
     taskRevision: task.lifecycleEventRevision,
@@ -607,6 +843,7 @@ export async function autoDispatchClarifyRoundWithDecision(
     result = await autoDispatchClarifyRound({
       ...args,
       directive,
+      committedOperationId: prepared.operationId,
       decisionParticipant: prepared.participant,
       afterSealCommit: async () => {
         const committed = prepared.capture.envelope
@@ -682,16 +919,29 @@ export async function autoDispatchClarifyRound(
   //     PARTIAL control seal leaves the round awaiting_human, so the legitimate mixed flow (control
   //     seal q1 → quick-finalize the rest) still passes. Terminal rounds (canceled/abandoned) reject
   //     here too (sealRoundQuestions would also reject them).
-  if (round.status !== 'awaiting_human') {
+  if (args.committedConvergence === undefined && round.status !== 'awaiting_human') {
     throw new ConflictError(
       'clarify-already-answered',
       `clarify round ${originNodeRunId} is '${round.status}', not awaiting_human; it was already finalized (a control-channel full seal is dispatched via the board, not the quick channel)`,
     )
   }
+  if (
+    args.committedConvergence !== undefined &&
+    (round.status !== 'answered' || round.id !== args.committedConvergence.roundId)
+  ) {
+    throw new ConflictError(
+      'clarify-convergence-stale',
+      `clarify round ${originNodeRunId} no longer matches committed operation ${args.committedConvergence.operationId}`,
+    )
+  }
 
   // 1b. RFC-023 optimistic lock — reject a stale answer (mirrors submitClarifyAnswers /
   //     submitCrossClarifyAnswers; the /clarify page always sends ifMatchIteration = round.iteration).
-  if (args.ifMatchIteration !== undefined && args.ifMatchIteration !== round.iteration) {
+  if (
+    args.committedConvergence === undefined &&
+    args.ifMatchIteration !== undefined &&
+    args.ifMatchIteration !== round.iteration
+  ) {
     throw new ConflictError(
       'clarify-iteration-mismatch',
       `If-Match iteration ${args.ifMatchIteration} does not match server iteration ${round.iteration}`,
@@ -716,12 +966,21 @@ export async function autoDispatchClarifyRound(
     throw new NotFoundError('task-not-found', `task ${round.taskId} not found`)
   }
 
-  const { sealedQuestionIds, roundFullySealed } = await sealRoundAsWholeFinalize(
-    db,
-    args,
-    round,
-    originNodeRunId,
-  )
+  const { sealedQuestionIds, roundFullySealed } =
+    args.committedConvergence === undefined
+      ? await sealRoundAsWholeFinalize(db, args, round, originNodeRunId)
+      : {
+          sealedQuestionIds: [...args.committedConvergence.sealedQuestionIds],
+          roundFullySealed: args.committedConvergence.roundFullySealed,
+        }
+  if (args.committedConvergence === undefined && args.committedOperationId !== undefined) {
+    return await finishCommittedClarifyAutoDispatch({
+      db,
+      operationId: args.committedOperationId,
+      expectedTaskId: round.taskId,
+      expectedOriginNodeRunId: originNodeRunId,
+    })
+  }
 
   // 4. Collect the round's SELF/QUESTIONER entries to auto-dispatch (sealed, not yet dispatched,
   //    still open). Designer entries are intentionally excluded (see the module header). The dispatch
@@ -809,7 +1068,14 @@ export async function autoDispatchClarifyRound(
   let dispatchDeferredReason: string | undefined
   const tryDispatch = async (): Promise<DispatchTaskQuestionsResult> => {
     try {
-      return await dispatchTaskQuestions(db, round.taskId, entryIds, args.actor)
+      const committedIdentity: DispatchTaskQuestionsCommittedEventIdentity | undefined =
+        args.committedConvergence === undefined
+          ? undefined
+          : {
+              operationRef: args.committedConvergence.operationId,
+              eventGroupOrdinal: 2,
+            }
+      return await dispatchTaskQuestions(db, round.taskId, entryIds, args.actor, committedIdentity)
     } catch (err) {
       if (err instanceof ConflictError && RECOVERABLE_DISPATCH_CONFLICTS.has(err.code)) {
         dispatchDeferredReason = err.code
@@ -902,6 +1168,13 @@ export async function autoDispatchClarifyRound(
     reruns: [...dispatch.reruns, ...designerDispatch.reruns],
     dispatchedEntryIds: [...dispatch.dispatchedEntryIds, ...designerDispatch.dispatchedEntryIds],
     deferred: [...dispatch.deferred, ...designerDispatch.deferred],
+  }
+  if (args.committedConvergence !== undefined) {
+    dispatch = await rebuildCommittedClarifyDispatch(
+      db,
+      args.committedConvergence.operationId,
+      dispatch,
+    )
   }
 
   log.info('clarify round auto-dispatched (quick channel, deferred)', {

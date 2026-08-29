@@ -165,6 +165,12 @@ export interface DispatchTaskQuestionsResult {
   deferred: Array<{ entryId: string; homeNodeId: string; reason: string }>
 }
 
+/** RFC-341 — lets a post-decision dispatch join the immutable decision event group. */
+export interface DispatchTaskQuestionsCommittedEventIdentity {
+  readonly operationRef: string
+  readonly eventGroupOrdinal: number
+}
+
 export interface DispatchTaskQuestionsDecisionArgs {
   readonly expectedTaskRevision?: number
   readonly expectedGateRevision?: number
@@ -594,6 +600,7 @@ export async function dispatchTaskQuestions(
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
+  committedEventIdentity?: DispatchTaskQuestionsCommittedEventIdentity,
 ): Promise<DispatchTaskQuestionsResult> {
   if (entryIds.length === 0) return EMPTY_RESULT
   // RFC-140 W2 (Codex design-gate rounds 3-4): the QUESTION-WRITE lock (B) is acquired HERE —
@@ -604,7 +611,7 @@ export async function dispatchTaskQuestions(
   // unstage+re-stage collides). Lock discipline: callers MUST NOT hold lock B when calling this
   // (the semaphore is non-reentrant); stageTaskQuestion takes the same lock (RFC-140).
   return await getTaskQuestionWriteSem(taskId).run(() =>
-    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor),
+    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, undefined, committedEventIdentity),
   )
 }
 
@@ -899,6 +906,7 @@ async function dispatchTaskQuestionsLocked(
     readonly args: DispatchTaskQuestionsDecisionArgs
     readonly capture: PreparedQuestionDispatchDecision['capture']
   },
+  committedEventIdentity?: DispatchTaskQuestionsCommittedEventIdentity,
 ): Promise<DispatchTaskQuestionsResult> {
   // 0. RFC-132 PR-B (universal deferred model): every task dispatches through this ONE path now
   //    (the route routes ALL clarify answers to autoDispatchClarifyRound → dispatchTaskQuestions).
@@ -971,6 +979,7 @@ async function dispatchTaskQuestionsLocked(
         shardOf: () => null,
       },
       prepared,
+      committedEventIdentity,
     )
   }
 
@@ -1083,6 +1092,7 @@ async function dispatchTaskQuestionsLocked(
         shardOf: () => null,
       },
       prepared,
+      committedEventIdentity,
     )
   }
 
@@ -1116,6 +1126,7 @@ async function dispatchTaskQuestionsLocked(
       shardOf,
     },
     prepared,
+    committedEventIdentity,
   )
 }
 
@@ -1192,6 +1203,7 @@ async function commitDispatchPlan(
     shardOf: (e: TaskQuestionRow) => string | null
   },
   decision?: PreparedQuestionDispatchDecision,
+  committedEventIdentity?: DispatchTaskQuestionsCommittedEventIdentity,
 ): Promise<DispatchTaskQuestionsResult> {
   const { dispatchEntries, deferredEntries, affected, mintPlans } = plan
   const { mintCauseByTarget, mintShardsByTarget, shardOf } = plan
@@ -1612,8 +1624,12 @@ async function commitDispatchPlan(
           ]
           decision.capture.envelope = envelope
         } else if (dispatchIds.length > 0 || deferredEntries.length > 0) {
-          const operationRef = `question-dispatch:${taskId}:${ulid(now)}`
+          const operationRef =
+            committedEventIdentity?.operationRef ?? `question-dispatch:${taskId}:${ulid(now)}`
           const eventGroupId = committedEventGroupId('collaboration', operationRef)
+          const taskEventOrdinal = committedEventIdentity?.eventGroupOrdinal ?? 0
+          const questionEventOrdinal =
+            committedEventIdentity === undefined ? 1 : committedEventIdentity.eventGroupOrdinal + 1
           const taskEventRef =
             pendingProjectionNodeChanges.length === 0
               ? null
@@ -1625,7 +1641,7 @@ async function commitDispatchPlan(
                   identity: {
                     operationRef,
                     eventGroupId,
-                    eventGroupOrdinal: 0,
+                    eventGroupOrdinal: taskEventOrdinal,
                     correlationRef: `human-gate-node-run:${gateNodeRunId}`,
                   },
                 })
@@ -1653,7 +1669,7 @@ async function commitDispatchPlan(
             identity: {
               operationRef,
               eventGroupId,
-              eventGroupOrdinal: 1,
+              eventGroupOrdinal: questionEventOrdinal,
               correlationRef: `human-gate-node-run:${gateNodeRunId}`,
             },
           })

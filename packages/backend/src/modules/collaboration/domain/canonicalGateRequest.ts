@@ -5,6 +5,7 @@ import {
   type HumanGateKind,
   type HumanGateOperationKind,
 } from './humanGateOperation'
+import type { TaskActorRole } from '@agent-workflow/shared'
 
 export type ReviewGateDecision = 'approved' | 'rejected' | 'iterated'
 export type ClarifyGateDirective = 'continue' | 'stop'
@@ -28,6 +29,7 @@ export type HumanGateRequestPayload =
       directive: ClarifyGateDirective
       answersJson: string
       releaseGate: boolean
+      actorRole?: TaskActorRole
     }>
   | Readonly<{
       kind: 'question-dispatch'

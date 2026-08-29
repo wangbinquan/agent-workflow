@@ -33,7 +33,12 @@ import {
 import {
   autoDispatchClarifyRound,
   autoDispatchClarifyRoundWithDecision,
+  finishCommittedClarifyAutoDispatch,
 } from '../src/services/clarifyAutoDispatch'
+import { createGateContinuationPreDriveStep } from '../src/services/humanGateContinuationEffects'
+import { createTaskExecutionTestModule } from '../src/modules/task-execution/composition'
+import { createTaskExecutionContext } from '../src/modules/task-execution/application/taskExecutionContext'
+import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import {
@@ -155,6 +160,7 @@ describe('RFC-333 clarify decision transaction', () => {
 
     const replay = await autoDispatchClarifyRoundWithDecision(command)
     expect(replay.receipt).toEqual({ ...decided.receipt, replayed: true })
+    expect(replay.dispatch).toEqual(decided.dispatch)
     expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
     expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
       runCount,
@@ -166,6 +172,134 @@ describe('RFC-333 clarify decision transaction', () => {
         directive: 'stop',
       }),
     ).rejects.toMatchObject({ code: 'human-gate-idempotency-conflict' })
+  })
+
+  test('commit-edge recovery finishes sealed clarify dispatch exactly once before drive', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    const command = {
+      db,
+      originNodeRunId: intermediaryNodeRunId,
+      answers: [ans('q1')],
+      directive: 'stop' as const,
+      actor,
+      decision: { idempotencyKey: 'commit-edge-convergence' },
+      afterSealCommit: async () => {
+        throw new Error('rfc341-commit-edge-fault')
+      },
+    }
+
+    await expect(autoDispatchClarifyRoundWithDecision(command)).rejects.toThrow(
+      'rfc341-commit-edge-fault',
+    )
+    const operation = db
+      .select()
+      .from(collaborationGateOperations)
+      .where(eq(collaborationGateOperations.operationKind, 'decide'))
+      .get()!
+    const intent = (await db.select().from(taskExecutionIntents))[0]!
+    const sealedRound = (
+      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    )[0]!
+    expect(JSON.parse(operation.manifestJson)).toMatchObject({
+      request: { actorUserId: actor.userId, payload: { actorRole: actor.role } },
+    })
+    expect(sealedRound).toMatchObject({
+      status: 'answered',
+      submittedByRole: actor.role,
+      draftAnswersJson: null,
+    })
+    expect(JSON.parse(sealedRound.answerAttributionsJson ?? '{}')).toMatchObject({
+      q1: { userId: actor.userId, role: actor.role },
+    })
+    expect(await getNodeClarifyDirectiveRow(db, taskId, P)).toMatchObject({ directive: 'stop' })
+    expect(
+      (await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)))[0],
+    ).toMatchObject({ sealedAt: expect.any(Number), dispatchedAt: null })
+
+    const module = createTaskExecutionTestModule(`daemon-${ulid()}`)
+    const claimed = module.claim({ db, intentId: intent.id })
+    module.claimGate.leave(claimed.permit)
+    const context = {
+      taskId,
+      execution: createTaskExecutionContext({ intentId: intent.id, token: claimed.token, db }),
+      signal: new AbortController().signal,
+      runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence' }),
+    }
+    const step = createGateContinuationPreDriveStep(db)
+    await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
+    const firstRunCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+      .length
+    await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
+    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
+      firstRunCount,
+    )
+
+    const finished = await finishCommittedClarifyAutoDispatch({
+      db,
+      operationId: operation.id,
+      expectedTaskId: taskId,
+      expectedOriginNodeRunId: intermediaryNodeRunId,
+      expectedContinuationRef: intent.id,
+    })
+    const replay = await autoDispatchClarifyRoundWithDecision(command)
+    expect(replay.dispatch).toEqual(finished.dispatch)
+    expect(replay.dispatch.reruns).toHaveLength(1)
+    expect(replay.dispatch.dispatchedEntryIds).toHaveLength(1)
+    expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
+  })
+
+  test('claimed clarify convergence fails closed and returns the exact intent to pending', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const taskId = `t_${ulid()}`
+    await seedTask(db, taskId)
+    const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
+    await expect(
+      autoDispatchClarifyRoundWithDecision({
+        db,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: [ans('q1')],
+        actor,
+        decision: { idempotencyKey: 'missing-durable-role' },
+        afterSealCommit: async () => {
+          throw new Error('rfc341-commit-edge-fault')
+        },
+      }),
+    ).rejects.toThrow('rfc341-commit-edge-fault')
+    const operation = db
+      .select()
+      .from(collaborationGateOperations)
+      .where(eq(collaborationGateOperations.operationKind, 'decide'))
+      .get()!
+    const manifest = JSON.parse(operation.manifestJson) as {
+      request: { payload: Record<string, unknown> }
+    }
+    delete manifest.request.payload.actorRole
+    await db
+      .update(collaborationGateOperations)
+      .set({ manifestJson: JSON.stringify(manifest) })
+      .where(eq(collaborationGateOperations.id, operation.id))
+    const intent = (await db.select().from(taskExecutionIntents))[0]!
+    const module = createTaskExecutionTestModule(`daemon-${ulid()}`)
+    const claimed = module.claim({ db, intentId: intent.id })
+    module.claimGate.leave(claimed.permit)
+    const step = createGateContinuationPreDriveStep(db)
+    await expect(
+      step.run({
+        taskId,
+        execution: createTaskExecutionContext({ intentId: intent.id, token: claimed.token, db }),
+        signal: new AbortController().signal,
+        runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence-fault' }),
+      }),
+    ).rejects.toMatchObject({ code: 'clarify-convergence-conflict' })
+    expect(
+      db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.id, intent.id)).get(),
+    ).toMatchObject({ state: 'pending', claimedEpoch: null })
+    expect(
+      (await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)))[0],
+    ).toMatchObject({ dispatchedAt: null })
   })
 
   test('intent fault rolls answer, node, task and decision operation back together', async () => {

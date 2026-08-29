@@ -43,13 +43,17 @@ import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify/ser
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
 import { wgClarifyAskerKeyForRound } from '../workgroup/askerKey'
-import { setNodeClarifyDirective } from '@/services/taskClarifyDirective'
+import { setNodeClarifyDirectiveTx } from '@/services/taskClarifyDirective'
+import { freezeAnswerAttributions } from './rounds'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   mergeSealedAnswers,
   type ClarifyAnswer,
+  type ClarifyAnswerAttributions,
   type ClarifyDirective,
+  type ClarifyDraftValue,
   type ClarifyQuestion,
+  type TaskActorRole,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
@@ -69,12 +73,14 @@ export interface SealRoundQuestionsArgs {
   /** Audit-only setter id (RFC-099 — NEVER enters an agent prompt). Stamped on the
    *  sealed entries' sealed_by and, when the round flips, on the round's answered_by. */
   sealedBy?: string
+  /** Durable relationship role captured with sealedBy in the same decision transaction. */
+  sealedByRole?: TaskActorRole
   /** RFC-128 P2 (Codex P2-2) — round-level directive ('continue' | 'stop'), threaded from
    *  the answer body so the control channel matches the quick path's directive semantics:
    *  it is persisted to clarify_rounds.directive (+ the legacy session) and FEEDS the
    *  reconcile designer gate (a 'stop' round produces NO designer entries). When the round
-   *  fully seals with 'stop' the canvas directive (RFC-123 nodeStopOverride) is also written
-   *  (post-tx, mirroring submitClarifyAnswers/submitCrossClarifyAnswers). When omitted the
+   *  fully seals with 'stop' the canvas directive (RFC-123 nodeStopOverride) is also written in the
+   *  same transaction. When omitted the
    *  round's existing directive is preserved, defaulting to 'continue' — NB this default is
    *  also what the §18 designer park requires (loadUndispatchedDesignerTargets filters
    *  directive='continue'), so a full continue-seal correctly parks until board dispatch. */
@@ -150,6 +156,18 @@ function parseQuestions(json: string): ClarifyQuestion[] {
   }
 }
 
+function parseJsonRecord<T extends Record<string, unknown>>(json: string | null): T | null {
+  if (json === null) return null
+  try {
+    const value: unknown = JSON.parse(json)
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value as T)
+      : null
+  } catch {
+    return null
+  }
+}
+
 /** RFC-128 §7/§10 — seal a subset of a clarify round's questions (control channel; no
  *  rerun mint). The whole sequence runs in ONE dbTxSync (P2-1): the round + entries are
  *  re-read inside the transaction (no TOCTOU) and all writes commit atomically. Async
@@ -165,8 +183,7 @@ export async function sealRoundQuestions(
   // already read lockedIds (empty) and is about to write a stale whole-round answersJson over it
   // (data loss, breaks P2-2). The taskId is read first (for the lock); the tx re-reads the round
   // (TOCTOU-free). Lock order: sealRoundQuestions is HTTP-route-only (never under the scheduler's A),
-  // takes B alone → no A→B/B→A cycle. The post-tx setNodeClarifyDirective stays outside B (different
-  // table, no answers/question write).
+  // takes B alone → no A→B/B→A cycle. The directive participant writes in the same short dbTxSync.
   const taskIdRow = (
     await args.db
       .select({ taskId: clarifyRounds.taskId })
@@ -324,7 +341,7 @@ export async function sealRoundQuestions(
       // round fully seals; a PARTIAL seal writes it to NEITHER table:
       //   - stop detection now reads the questioner node's node-level directive
       //     (task_node_clarify_directives, via resolveCrossNodeStopped). The node-level write
-      //     below (setNodeClarifyDirective, gated on stopFinalized = fullySealed) must NOT fire
+      //     below (setNodeClarifyDirectiveTx, gated on flipNow) must NOT fire
       //     on a partial seal, or a 'stop' would be taken as a PERMANENT node stop and
       //     short-circuit the cross node BEFORE the round is answered. crossClarifySessions.directive
       //     is audit-only now, but is kept in lockstep (gated the same way) so the two never disagree;
@@ -334,6 +351,26 @@ export async function sealRoundQuestions(
       // nothing schedulable". The reconcile below still uses the IN-MEMORY effectiveDirective (a
       // partial seal produces no designer entries regardless — P2-4a).
       const directiveSet = flipNow ? { directive: effectiveDirective } : {}
+      const attributionSet =
+        flipNow && args.sealedBy !== undefined && args.sealedByRole !== undefined
+          ? {
+              submittedByRole: args.sealedByRole,
+              answerAttributionsJson: JSON.stringify(
+                freezeAnswerAttributions({
+                  answers: merged,
+                  draftAnswers: parseJsonRecord<Record<string, ClarifyDraftValue>>(
+                    round.draftAnswersJson,
+                  ),
+                  draftAttributions: parseJsonRecord<ClarifyAnswerAttributions>(
+                    round.answerAttributionsJson,
+                  ),
+                  submitter: { userId: args.sealedBy, role: args.sealedByRole },
+                  now: ts,
+                }),
+              ),
+              draftAnswersJson: null,
+            }
+          : {}
 
       // Write clarify_rounds (the SoT): merged answers + merged scopes; flip status (+ directive
       // + answeredAt) only when fully sealed NOW (RFC-136: an answered round being re-answered
@@ -343,6 +380,7 @@ export async function sealRoundQuestions(
         .set({
           answersJson: mergedJson,
           ...directiveSet,
+          ...attributionSet,
           ...(flipNow
             ? {
                 status: 'answered' as const,
@@ -442,6 +480,20 @@ export async function sealRoundQuestions(
           .run()
       }
 
+      // RFC-341 — stop is part of the committed decision fact, not an async
+      // post-commit side effect that can be lost at the commit-before-wake edge.
+      if (flipNow && effectiveDirective === 'stop' && round.askingNodeId) {
+        setNodeClarifyDirectiveTx(
+          tx,
+          round.taskId,
+          round.askingNodeId,
+          'stop',
+          args.sealedBy ?? 'local',
+          wgClarifyAskerKeyForRound(round.askingNodeId, round.askingShardKey ?? null),
+          ts,
+        )
+      }
+
       const eventRefs: CommittedEventRef[] = []
       if (flipNow && args.decisionParticipant === undefined) {
         const operationRef = `clarify-seal:${round.id}:${ulid(ts)}`
@@ -508,13 +560,6 @@ export async function sealRoundQuestions(
         sealedQuestionIds: [...freshSet],
         resealedQuestionIds: [...resealSet],
         roundFullySealed: fullySealed,
-        // Post-tx side effect inputs (RFC-128 P2 Codex P2-2): mirror the quick path's
-        // stop → canvas directive write when the round FINALIZES with 'stop'. RFC-136:
-        // flipNow — a re-answer on an answered round never re-fires the canvas write.
-        stopFinalized: flipNow && effectiveDirective === 'stop',
-        taskId: round.taskId,
-        askingNodeId: round.askingNodeId,
-        askingShardKey: round.askingShardKey,
         eventRefs,
       }
     })
@@ -532,25 +577,6 @@ export async function sealRoundQuestions(
       ? await getTaskQuestionWriteSem(taskIdRow.taskId).run(runSealTx)
       : await runSealTx()
 
-  // RFC-128 P2 (Codex P2-2) — mirror submitClarifyAnswers/submitCrossClarifyAnswers: a 'stop'
-  // answer also writes the per-(task, asking-node) clarify directive (RFC-123 canvas toggle /
-  // nodeStopOverride) so the toggle reflects the choice durably. Done AFTER the tx
-  // (setNodeClarifyDirective is async + writes a different table); the round's own directive
-  // is already persisted in-tx. askingNodeId is the source agent (self) or questioner (cross)
-  // — the same node the quick paths target. Still NO rerun / NO resume (defer semantics).
-  if (txResult.stopFinalized && txResult.askingNodeId) {
-    // RFC-207 — the 6th arg stops the ASKER that asked, not every asker on the
-    // node. The round records which shard asked; the key function collapses a
-    // workgroup message turn to its member so a stop survives the next message.
-    await setNodeClarifyDirective(
-      args.db,
-      txResult.taskId,
-      txResult.askingNodeId,
-      'stop',
-      args.sealedBy ?? 'local',
-      wgClarifyAskerKeyForRound(txResult.askingNodeId, txResult.askingShardKey ?? null),
-    )
-  }
   publishCommittedEventsAfterCommit(txResult.eventRefs)
   return {
     sealedQuestionIds: txResult.sealedQuestionIds,

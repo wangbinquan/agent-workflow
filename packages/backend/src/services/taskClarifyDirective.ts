@@ -15,6 +15,7 @@ import { and, eq, ne } from 'drizzle-orm'
 import { isClarifyAskingNode, type ClarifyDirective } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { taskNodeClarifyDirectives } from '@/db/schema'
 
 /**
@@ -99,9 +100,23 @@ export async function setNodeClarifyDirective(
   shardKey?: string | null,
 ): Promise<void> {
   const now = Date.now()
+  dbTxSync(db, (tx) => {
+    setNodeClarifyDirectiveTx(tx, taskId, nodeId, directive, setBy, shardKey ?? null, now)
+  })
+}
+
+/** RFC-341 — transaction participant used by the clarify decision seal. */
+export function setNodeClarifyDirectiveTx(
+  tx: DbTxSync,
+  taskId: string,
+  nodeId: string,
+  directive: ClarifyDirective,
+  setBy: string | null,
+  shardKey: string | null,
+  now: number,
+): void {
   const key = shardKey ?? ''
-  await db
-    .insert(taskNodeClarifyDirectives)
+  tx.insert(taskNodeClarifyDirectives)
     .values({ taskId, nodeId, shardKey: key, directive, setBy, updatedAt: now })
     .onConflictDoUpdate({
       target: [
@@ -111,13 +126,13 @@ export async function setNodeClarifyDirective(
       ],
       set: { directive, setBy, updatedAt: now },
     })
+    .run()
   // RFC-207 — a NODE-level 'continue' is the "un-stop everything here" gesture.
   // Without this the per-asker rows would keep winning the resolution above, and
   // the canvas toggle would read as continue while an asker stayed silenced —
   // a stop with no way back.
   if (key === '' && directive === 'continue') {
-    await db
-      .delete(taskNodeClarifyDirectives)
+    tx.delete(taskNodeClarifyDirectives)
       .where(
         and(
           eq(taskNodeClarifyDirectives.taskId, taskId),
@@ -125,6 +140,7 @@ export async function setNodeClarifyDirective(
           ne(taskNodeClarifyDirectives.shardKey, ''),
         ),
       )
+      .run()
   }
 }
 
