@@ -16,6 +16,7 @@ import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import {
   MANAGED_PROCESS_LAUNCH_ERROR_PREFIX,
+  MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX,
   MANAGED_PROCESS_LAUNCH_READY_PREFIX,
   cleanupWindowsOutputSpool,
@@ -460,7 +461,10 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       ...platformSpawnOptionsForHost(),
       cmd: spawnArgv,
       cwd: req.cwd,
-      env: req.env,
+      env:
+        launchNonce === undefined
+          ? req.env
+          : { ...req.env, [MANAGED_PROCESS_LAUNCH_NONCE_ENV]: launchNonce },
       stdout: outputSpool === undefined ? 'pipe' : 'ignore',
       stderr: outputSpool === undefined ? 'pipe' : 'ignore',
       // A gated launcher always needs its private activation pipe. The target's
@@ -527,6 +531,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         const frame: ManagedProcessActivationFrame = {
           v: 1,
           launchNonce,
+          targetArgv: req.argv,
           stdin:
             req.stdin?.mode === 'pipe'
               ? { mode: 'pipe', data: req.stdin.data }

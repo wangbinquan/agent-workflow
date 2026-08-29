@@ -27,6 +27,7 @@ import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
+  MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   runManagedProcessLauncher,
 } from './services/execution/managedProcessLauncher'
 import { runManagedProcess } from './services/execution/managedProcess'
@@ -60,6 +61,12 @@ function readPortFlag(argv: string[]): number | undefined {
 }
 
 async function main(): Promise<void> {
+  // Bun's compiled Windows executable can re-enter itself without preserving
+  // application argv. The private nonce marker is therefore the authoritative
+  // launcher entry signal; the post-receipt frame carries the complete request.
+  if ((process.env[MANAGED_PROCESS_LAUNCH_NONCE_ENV]?.length ?? 0) > 0) {
+    process.exit(await runManagedProcessLauncher(Bun.argv))
+  }
   const sub = Bun.argv[2] ?? 'help'
 
   switch (sub) {

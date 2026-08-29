@@ -22,6 +22,7 @@ import { join } from 'node:path'
 
 export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
 export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
+export const MANAGED_PROCESS_LAUNCH_NONCE_ENV = 'AW_MANAGED_PROCESS_LAUNCH_NONCE'
 export const MANAGED_PROCESS_WINDOWS_STDOUT_FLAG = '--windows-stdout-path'
 export const MANAGED_PROCESS_WINDOWS_STDERR_FLAG = '--windows-stderr-path'
 export const MANAGED_PROCESS_WINDOWS_CONTROL_FLAG = '--windows-control-path'
@@ -39,6 +40,7 @@ export interface WindowsManagedProcessOutputPaths {
 export interface ManagedProcessActivationFrame {
   readonly v: 1
   readonly launchNonce: string
+  readonly targetArgv?: readonly string[]
   readonly stdin: Readonly<{ mode: 'ignore' }> | Readonly<{ mode: 'pipe'; data: string }>
   /**
    * Windows output destinations are repeated in the post-receipt frame. Bun's
@@ -151,6 +153,7 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
   const value = parsed as {
     v?: unknown
     launchNonce?: unknown
+    targetArgv?: unknown
     stdin?: { mode?: unknown; data?: unknown }
     windowsOutputPaths?: {
       stdoutPath?: unknown
@@ -167,6 +170,14 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
     (value.stdin.mode === 'pipe' && typeof value.stdin.data !== 'string')
   ) {
     throw new Error('managed process activation frame does not match launcher nonce')
+  }
+  if (
+    value.targetArgv !== undefined &&
+    (!Array.isArray(value.targetArgv) ||
+      value.targetArgv.length === 0 ||
+      value.targetArgv.some((part) => typeof part !== 'string'))
+  ) {
+    throw new Error('invalid managed process activation frame target argv')
   }
   const rawWindowsOutputPaths = value.windowsOutputPaths
   if (
@@ -193,6 +204,7 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
   return {
     v: 1,
     launchNonce,
+    ...(value.targetArgv === undefined ? {} : { targetArgv: value.targetArgv as string[] }),
     stdin:
       value.stdin.mode === 'pipe'
         ? { mode: 'pipe', data: value.stdin.data as string }
@@ -393,12 +405,24 @@ async function relayWindowsOutputSpool(
 export async function runManagedProcessLauncher(
   argv: readonly string[] = Bun.argv,
 ): Promise<number> {
+  const environmentLaunchNonce = process.env[MANAGED_PROCESS_LAUNCH_NONCE_ENV]
   const requestedControlPath = requestedControlPathFromArgv(argv)
-  let request: ReturnType<typeof parseLauncherRequest>
+  let request: ReturnType<typeof parseLauncherRequest> | undefined
   try {
     request = parseLauncherRequest(argv)
   } catch (error) {
-    reportLaunchError('invalid', error, requestedControlPath)
+    if (environmentLaunchNonce === undefined || environmentLaunchNonce.length === 0) {
+      reportLaunchError('invalid', error, requestedControlPath)
+      return 125
+    }
+  }
+  const launchNonce = environmentLaunchNonce ?? request!.launchNonce
+  if (request !== undefined && request.launchNonce !== launchNonce) {
+    reportLaunchError(
+      launchNonce,
+      'managed process launcher nonce channels disagree',
+      requestedControlPath,
+    )
     return 125
   }
 
@@ -410,12 +434,21 @@ export async function runManagedProcessLauncher(
 
   let frame: ManagedProcessActivationFrame
   try {
-    frame = parseActivationFrame(raw, request.launchNonce)
+    frame = parseActivationFrame(raw, launchNonce)
   } catch (error) {
-    reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
+    reportLaunchError(launchNonce, error, request?.windowsOutputPaths?.controlPath)
     return 125
   }
-  const windowsOutputPaths = frame.windowsOutputPaths ?? request.windowsOutputPaths
+  const targetArgv = frame.targetArgv ?? request?.targetArgv
+  const windowsOutputPaths = frame.windowsOutputPaths ?? request?.windowsOutputPaths
+  if (targetArgv === undefined || targetArgv.length === 0) {
+    reportLaunchError(
+      launchNonce,
+      'managed process activation frame has no target argv',
+      windowsOutputPaths?.controlPath,
+    )
+    return 125
+  }
 
   let child: Bun.Subprocess
   let outputSpool: WindowsOutputSpool | undefined
@@ -428,12 +461,12 @@ export async function runManagedProcessLauncher(
   try {
     outputSpool = process.platform === 'win32' ? createWindowsOutputSpool(true) : undefined
     child = Bun.spawn({
-      cmd: [...request.targetArgv],
+      cmd: [...targetArgv],
       ...platformSpawnOptionsForHost(),
       cwd: process.cwd(),
       env: Object.fromEntries(
         Object.entries(process.env).filter((entry): entry is [string, string] => {
-          return typeof entry[1] === 'string'
+          return entry[0] !== MANAGED_PROCESS_LAUNCH_NONCE_ENV && typeof entry[1] === 'string'
         }),
       ),
       stdout: outputSpool?.stdoutWriteFd ?? 'inherit',
@@ -445,7 +478,7 @@ export async function runManagedProcessLauncher(
     })
   } catch (error) {
     cleanupWindowsOutputSpool(outputSpool)
-    reportLaunchError(request.launchNonce, error, windowsOutputPaths?.controlPath)
+    reportLaunchError(launchNonce, error, windowsOutputPaths?.controlPath)
     return 127
   }
 
@@ -478,7 +511,7 @@ export async function runManagedProcessLauncher(
     // runtime stderr.
     writeLaunchControlRecord(
       windowsOutputPaths?.controlPath,
-      `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`,
+      `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${launchNonce}\n`,
     )
     const exitCode = await childExited
     const outputBytes = await outputRelay
@@ -488,12 +521,12 @@ export async function runManagedProcessLauncher(
       // in the compiled target's private files before closing its final writers.
       writeLaunchControlRecord(
         windowsOutputPaths?.controlPath,
-        `${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${request.launchNonce}:${JSON.stringify(outputBytes)}\n`,
+        `${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${launchNonce}:${JSON.stringify(outputBytes)}\n`,
       )
     }
     return exitCode
   } catch (error) {
-    reportLaunchError(request.launchNonce, error, windowsOutputPaths?.controlPath)
+    reportLaunchError(launchNonce, error, windowsOutputPaths?.controlPath)
     try {
       child.kill(15)
     } catch {

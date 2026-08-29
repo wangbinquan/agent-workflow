@@ -8,11 +8,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runManagedProcess } from '../src/services/execution/managedProcess'
 import {
-  MANAGED_PROCESS_LAUNCH_NONCE_FLAG,
+  MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX,
   MANAGED_PROCESS_LAUNCH_READY_PREFIX,
-  MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
-  MANAGED_PROCESS_TARGET_SEPARATOR,
 } from '../src/services/execution/managedProcessLauncher'
 
 const roots: string[] = []
@@ -176,7 +174,7 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
   })
 
   test.skipIf(process.platform !== 'win32')(
-    'activation frame retains Windows output paths when launcher argv omits them',
+    'activation frame retains the complete Windows launch request when argv omits it',
     async () => {
       const root = fixtureRoot()
       const stdoutPath = join(root, 'stdout')
@@ -189,15 +187,9 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
           process.execPath,
           'run',
           join(import.meta.dir, '..', 'src', 'services', 'execution', 'managedProcessLauncher.ts'),
-          MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
-          MANAGED_PROCESS_LAUNCH_NONCE_FLAG,
-          launchNonce,
-          MANAGED_PROCESS_TARGET_SEPARATOR,
-          process.execPath,
-          '-e',
-          "process.stdout.write('frame-stdout'); process.stderr.write('frame-stderr')",
         ],
         cwd: root,
+        env: { ...process.env, [MANAGED_PROCESS_LAUNCH_NONCE_ENV]: launchNonce },
         stdin: 'pipe',
         stdout: 'ignore',
         stderr: 'ignore',
@@ -207,6 +199,11 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
         JSON.stringify({
           v: 1,
           launchNonce,
+          targetArgv: [
+            process.execPath,
+            '-e',
+            "process.stdout.write('frame-stdout'); process.stderr.write('frame-stderr')",
+          ],
           stdin: { mode: 'ignore' },
           windowsOutputPaths: { stdoutPath, stderrPath, controlPath },
         }),
