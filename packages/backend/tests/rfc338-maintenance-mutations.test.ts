@@ -43,7 +43,7 @@ function issues(source: Sources): string[] {
   if (source.service.includes('runMaintenanceJob(')) out.push('main-timer-body')
   if (
     !source.runner.includes('const DB_WRITE_SLICE_ROWS = 1_000') ||
-    !source.runner.includes('const EVENT_ARCHIVE_SLICE_ROWS = 5_000') ||
+    !source.runner.includes('const EVENT_ARCHIVE_SLICE_ROWS = 1_000') ||
     !source.runner.includes('const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000') ||
     !source.runner.includes('DB_WRITE_SLICE_ROWS') ||
     !source.runner.includes('EVENT_ARCHIVE_SLICE_ROWS') ||
@@ -126,7 +126,7 @@ describe('RFC-338 mutation receipts', () => {
         runner: source.runner
           .replace('const DB_WRITE_SLICE_ROWS = 1_000', 'const DB_WRITE_SLICE_ROWS = Infinity')
           .replace(
-            'const EVENT_ARCHIVE_SLICE_ROWS = 5_000',
+            'const EVENT_ARCHIVE_SLICE_ROWS = 1_000',
             'const EVENT_ARCHIVE_SLICE_ROWS = Infinity',
           ),
       }),

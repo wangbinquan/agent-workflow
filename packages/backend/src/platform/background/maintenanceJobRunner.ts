@@ -35,7 +35,13 @@ import type { MaintenanceWorkerDelta } from './maintenanceProtocol'
 
 const log = createLogger('maintenance-worker')
 const DB_WRITE_SLICE_ROWS = 1_000
-const EVENT_ARCHIVE_SLICE_ROWS = 5_000
+// Keep the mixed FS/SQLite archive body inside the RFC-338 wall budget on the
+// 4.5GB / 100-client tier. A 5k slice held the Worker hot for up to 2.23s and
+// produced 516ms statement outliers even though the durable cursor and the
+// foreground loop stayed healthy. The smaller slice preserves exact progress
+// and backlog semantics while yielding to the queue/cooldown five times as
+// often; no rows, jobs, or archive capabilities are skipped.
+const EVENT_ARCHIVE_SLICE_ROWS = 1_000
 /** One short primary-key range COUNT per Worker slice at large event scale. */
 const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000
 
