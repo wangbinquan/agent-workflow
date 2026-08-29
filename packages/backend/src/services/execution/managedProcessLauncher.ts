@@ -203,22 +203,40 @@ export interface WindowsOutputSpool {
   readonly stdoutPath: string
   readonly stderrPath: string
   readonly controlPath: string
+  stdoutWriteFd: number | undefined
+  stderrWriteFd: number | undefined
 }
 
-export function createWindowsOutputSpool(): WindowsOutputSpool {
+type WindowsOutputWriterKey = 'stdoutWriteFd' | 'stderrWriteFd'
+
+function closeWindowsOutputWriter(spool: WindowsOutputSpool, key: WindowsOutputWriterKey): void {
+  const fd = spool[key]
+  if (fd === undefined) return
+  closeSync(fd)
+  spool[key] = undefined
+}
+
+export function createWindowsOutputSpool(openWriters = false): WindowsOutputSpool {
   const root = mkdtempSync(join(tmpdir(), 'aw-managed-process-output-'))
   const spool: WindowsOutputSpool = {
     root,
     stdoutPath: join(root, 'stdout'),
     stderrPath: join(root, 'stderr'),
     controlPath: join(root, 'control'),
+    stdoutWriteFd: undefined,
+    stderrWriteFd: undefined,
   }
   try {
-    // Create all paths before the relay can poll. Bun.file below owns the
-    // actual child redirection handles; no numeric descriptor crosses a
-    // compiled Windows process boundary.
-    writeFileSync(spool.stdoutPath, '')
-    writeFileSync(spool.stderrPath, '')
+    if (openWriters) {
+      // The compiled launcher owns these handles until its target exits. This
+      // keeps Windows handle inheritance complete before close while the outer
+      // daemon/launcher boundary remains path-based rather than inheriting fd1/2.
+      spool.stdoutWriteFd = openSync(spool.stdoutPath, 'w')
+      spool.stderrWriteFd = openSync(spool.stderrPath, 'w')
+    } else {
+      writeFileSync(spool.stdoutPath, '')
+      writeFileSync(spool.stderrPath, '')
+    }
     writeFileSync(spool.controlPath, '')
     return spool
   } catch (error) {
@@ -227,8 +245,20 @@ export function createWindowsOutputSpool(): WindowsOutputSpool {
   }
 }
 
+function closeWindowsOutputWriters(spool: WindowsOutputSpool): void {
+  closeWindowsOutputWriter(spool, 'stdoutWriteFd')
+  closeWindowsOutputWriter(spool, 'stderrWriteFd')
+}
+
 export function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void {
   if (spool === undefined) return
+  for (const key of ['stdoutWriteFd', 'stderrWriteFd'] as const) {
+    try {
+      closeWindowsOutputWriter(spool, key)
+    } catch {
+      // Best effort after the process is already terminal.
+    }
+  }
   try {
     rmSync(spool.root, { recursive: true, force: true })
   } catch {
@@ -349,10 +379,10 @@ export async function runManagedProcessLauncher(
   // compiled Bun daemon launches this compiled launcher, which then launches a
   // second compiled Bun executable. A direct Bun -e target does not reproduce
   // it. Use regular files for that one inner hop and tail them into the
-  // launcher's parent pipes while the target runs. POSIX retains direct
+  // parent-owned final paths while the target runs. POSIX retains direct
   // inheritance and its existing zero-copy behaviour.
   try {
-    outputSpool = process.platform === 'win32' ? createWindowsOutputSpool() : undefined
+    outputSpool = process.platform === 'win32' ? createWindowsOutputSpool(true) : undefined
     child = Bun.spawn({
       cmd: [...request.targetArgv],
       ...platformSpawnOptionsForHost(),
@@ -362,8 +392,8 @@ export async function runManagedProcessLauncher(
           return typeof entry[1] === 'string'
         }),
       ),
-      stdout: outputSpool === undefined ? 'inherit' : Bun.file(outputSpool.stdoutPath),
-      stderr: outputSpool === undefined ? 'inherit' : Bun.file(outputSpool.stderrPath),
+      stdout: outputSpool?.stdoutWriteFd ?? 'inherit',
+      stderr: outputSpool?.stderrWriteFd ?? 'inherit',
       stdin: frame.stdin.mode === 'pipe' ? 'pipe' : 'ignore',
       // The launcher is already the detached process-group leader. The target
       // deliberately stays in that group so TERM→KILL reaches the whole tree.
@@ -377,15 +407,17 @@ export async function runManagedProcessLauncher(
 
   const childExited = child.exited
   const activeOutputSpool = outputSpool
-  // `Bun.file(path)` makes Bun own the redirection handle at spawn time. This
-  // avoids both the nested pipe loss and numeric-fd inheritance loss observed
-  // in compiled Windows daemons; child terminal is the final-flush boundary.
-  const outputWritersClosed = childExited.then(() => {})
+  // The launcher keeps its own copies open until the target is terminal. Their
+  // explicit close is the inner relay's final-flush boundary.
+  const outputWritersClosed =
+    activeOutputSpool === undefined
+      ? Promise.resolve()
+      : childExited.then(() => closeWindowsOutputWriters(activeOutputSpool))
   const outputRelay =
     activeOutputSpool === undefined
       ? Promise.resolve()
       : relayWindowsOutputSpool(activeOutputSpool, outputWritersClosed, request.windowsOutputPaths)
-  // The relay can observe a broken parent pipe before the target exits. Attach
+  // The relay can observe a broken destination before the target exits. Attach
   // a handler immediately; the same promise is awaited and reported below.
   void outputRelay.catch(() => {})
 
