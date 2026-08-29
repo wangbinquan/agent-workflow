@@ -11792,7 +11792,7 @@
         "audit": true,
         "authority": "none-observed",
         "authorization": true,
-        "event": false,
+        "event": true,
         "fenceOrOcc": false,
         "transaction": true
       },
@@ -11801,7 +11801,6 @@
       "id": "mutation:packages/backend/src/services/clarify/seal.ts#SealRoundQuestionsArgs",
       "missingControls": [
         "authority",
-        "event",
         "fenceOrOcc"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#SealRoundQuestionsArgs",
@@ -24101,7 +24100,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6ec9992942ae8c68e19339d9c1d8aaea964806714390bb904587ed93d8c96319",
+  "sourceDigest": "sha256:5efdd7077c57dc8e26458c31bf194b40a47aacd66cbf219115409fe8a9e078dd",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -25569,8 +25568,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/services/clarify/seal.ts",
-        "id": "task-authority:packages/backend/src/services/clarify/seal.ts#372:nodeRuns",
-        "line": 372,
+        "id": "task-authority:packages/backend/src/services/clarify/seal.ts#375:nodeRuns",
+        "line": 375,
         "ownerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#sealRoundQuestions",
         "requiredBrandedProof": "GateDecisionTransaction",
         "revisionPredicate": "task-scoped-decision-transaction-and-row-cas",
