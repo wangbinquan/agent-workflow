@@ -1,11 +1,12 @@
 # RFC-339 — WrapperRuntime 归位与 wrapper/replay mechanics cutover（RFC-294 W2-D）
 
-- 状态：In Progress（2026-08-28 用户已批准 D1～D10 与 T2～T11；设计批次先发布，production 实施随后启动）
+- 状态：Done（2026-08-29；T0～T11、canonical replay 与 hosted/scheduled closeout 全部完成）
 - 发起：RFC-294 W2-D successor，2026-08-28
-- source pin：`251b5d725ef731d15c17a01656fdc827f925e7c7`
-- canonical architecture payload / provenance pin：`15767cfc9066fcdb9f074b1e93ab182699ba4fc0` →
-  `251b5d725ef731d15c17a01656fdc827f925e7c7`
-- canonical source digest：`sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607`
+- 开工 source pin：`251b5d725ef731d15c17a01656fdc827f925e7c7`
+- 主实现：`0c9c48e68b23f15aee5e812193fd3c7c2e371345`
+- current canonical architecture payload / provenance pin：`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` →
+  `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`
+- current canonical source digest：`sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`
 - 前置：RFC-328（durable execution authority）、RFC-331（W2-A）、RFC-332（W2-B）、
   RFC-333（P0-C）、RFC-334（W2-C）均已完成
 - 授权边界：用户已批准完整实施；本 RFC 只关闭 W2-D，不自动授权 W3 以后 wave
@@ -242,3 +243,38 @@ runtime fallback 或 feature flag。
 
 2026-08-28，用户明确要求“先把设计文档提交上库，然后完整实现RFC，并提交上库”，据此批准 **D1～D10 与
 plan.md T2～T11**。本批准只关闭 RFC-294 W2-D，不自动批准 W3、W4、W5、W6、W7、W8 或 W9。
+
+## 8. 落地与关闭记录
+
+2026-08-29，RFC-339 已按批准范围完成并关闭：
+
+- `0c9c48e68b23f15aee5e812193fd3c7c2e371345` 把 loop/git/fanout、scope、progress 与 merge recovery
+  迁入 `task-execution`，以 closed `WrapperRuntime`、三 strategy、`ExecutionScopeIndex` 与
+  `ExecutionMergeRecovery` 形成唯一生产 owner；`services/scheduler.ts` 从 3,816 行收缩到 543 行。
+- `761598e9877af7fa7ccf67c4b64d5f9e87f12012` 把 REST/MCP transport 统一到必填 `ComposedAppDeps`；同一 bootstrap
+  instance 显式携带 scheduler driver、task-execution read models 与 collaboration context，没有 route-time fallback。
+- 10 个 legacy scheduler symbol、6 条 W2-D 正向 bridge、17 条 scheduler→nodeMechanics reverse import、2 条 adjacent
+  task-internal edge、legacy `wrapperProgress` / fanout service owner 与 `createLegacyTaskExecutionTopology` 均已归零；W3/W5
+  的 lifecycle/commit-push mechanics 保持原 owner。
+- current canonical payload/provenance 为 `5ac1e1c6416e231e37abae4ea0b218c7f63eef52` →
+  `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，source digest 为
+  `sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`；`KNOWN_VIOLATIONS=31`、
+  backend/repository value SCC=`4/6`、task-execution-containing SCC=`0`，没有用新 exception 抵账。
+- 全部现有 wrapper、嵌套、park/revival、merge/replay、fanout、persisted codec、status/error 与用户可见能力保持；无 migration、
+  wire、UI、权限或安全策略变化。Bun 1.4 同期升级暴露的 Windows compiled-runtime pipe 空输出先由
+  `33fe816e1840e6d1ebc3ac8780a2930345fb8c86` 建立 launcher→target regular-file relay 与稳定 post-close poll；
+  `94f6d3d3074202190b7dbca9e1decc4fe426a843` 虽把 relay 扩到 gated parent→launcher，但 hosted 主 CI 证明 compiled daemon
+  下继承 numeric fd 仍会产生空 stdout；`7d2fbbaa4b33ad4c64e151241fcfd4fc3afbc6e8` 改用 `Bun.file(path)` 后也只让
+  平台单链通过，4-shard compiled daemon 负载仍复现同错。根因最终收敛到公共 spawn policy：仓内
+  `spawnVersionProbe` 已记录 Bun 的 Windows detached child 会丢输出，而 managed process 仍无条件 detached。
+  `b55feb64a8691aeb42600dc8b17b97d9061484df` 因而只在 POSIX 建 detached process group，Windows 保持 flat 并继续复用既有
+  Job Object/`taskkill /T` 树杀；bounded spool pump、readiness、timeout/cancel、协议过滤与 POSIX 组杀均保持。exact-SHA hosted
+  Windows run `33226568513` 的平台、typecheck、编译产物、compiled launcher output 与 compiled system mock 全部通过。后续
+  `4cf5f80440e0215d41c73f93a6aee3475dcf7372` 又闭合 standalone Git credential helper 与 timeout/cancel drain：Windows run
+  `33235746831` terminal success；同 SHA 的 Main CI `33235746816` 中所有 Linux/macOS/Windows Playwright shard 与功能 job 均绿，
+  唯一失败是 canonical artifact 尚未重放，已由上述 payload/provenance 两步闭合。
+- RFC-338 联合落地门没有以 50-client push tier 代替验收：workflow-dispatch run `33219830508` 在同一功能 SHA
+  `9126e4b3a4f4549ae4697a08ce4d85fe992c2cec` 上实跑 `clients=100`、`scale=full`、每阶段 `180s` 并 PASS；daemon
+  保持运行且 HTTP/WS errors=0，维护期 API p95=`144.4ms`、event-loop max=`152.6ms`、SQLite statement max=`129.0ms`。
+
+RFC-294 只据此把 W2-D 置 Done。下一架构节点是 W3 的 current-source 调研与独立 RFC；本关闭记录不构成 W3 或后续 wave 的生产授权。

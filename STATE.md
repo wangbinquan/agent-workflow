@@ -55,18 +55,17 @@
 > migration/claim/identity-access/account/task 回归共 153 tests、三 workspace typecheck 已通过；等待 exact-path
 > commit、推送和 exact-SHA hosted CI。
 
-> 🧭 **当前架构节点（Draft，2026-08-28）：[RFC-339 WrapperRuntime 归位与 wrapper/replay mechanics cutover（RFC-294 W2-D）](design/RFC-339-wrapper-runtime-cutover/proposal.md)。**
-> source pin `251b5d725ef731d15c17a01656fdc827f925e7c7` 上的 current-source 调研与 proposal/design/plan 已完成：当前恰有
-> `wrapper-loop` / `wrapper-git` / `wrapper-fanout` 三种 wrapper，真实 body 与 merge replay 仍寄居于 `services/scheduler.ts`；
-> source-lock 登记 10 个 W2-D scheduler symbol、6 条正向 bridge、17 条 scheduler→nodeMechanics reverse import 与 2 条
-> adjacent task-internal edge。目标为 closed `WrapperRuntime`、唯一 common lifecycle template、Loop/Git/Fanout strategies、
-> `ExecutionScopeIndex`、`ExecutionMergeRecovery` 与 bootstrap-only composition；逐 kind 原子 cutover 并删除 legacy owner。
-> 当前 architecture payload/provenance `15767cfc9066fcdb9f074b1e93ab182699ba4fc0` →
-> `251b5d725ef731d15c17a01656fdc827f925e7c7`，digest
-> `sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607`，backend/repo SCC=`4/6`、KNOWN=`31`；
-> task-execution-containing SCC 已为 0，故 W2-D 只按 exact edge extinction 记账，不重复领取 RFC-331 的 SCC/KNOWN credit。
-> **等待用户明确批准 D1～D10 与 T2～T11；production 尚未启动。**所有既有 wrapper/nesting/replay/merge/park/terminal/
-> error/persisted compatibility 必须保持，不新增安全策略、权限或功能限制；本 RFC 只关闭 W2-D，不自动授权 W3 以后 wave。
+> ✅ **已完成 RFC（Done，2026-08-29）：[RFC-339 WrapperRuntime 归位与 wrapper/replay mechanics cutover（RFC-294 W2-D）](design/RFC-339-wrapper-runtime-cutover/proposal.md)。**
+> 主实现 `0c9c48e68b23f15aee5e812193fd3c7c2e371345` 已把三种 wrapper、scope/progress、merge recovery 与 bootstrap
+> composition 归入 `task-execution`：closed `WrapperRuntime` 通过 Loop/Git/Fanout strategy 形成唯一生产链，
+> `ExecutionScopeIndex` 是唯一 membership/path owner，`ExecutionMergeRecovery` 保持 replay-before-frontier，REST/MCP/CLI
+> 显式消费同一 bootstrap runtime。10 个 legacy scheduler symbol、6 条正向 bridge、17 条 reverse import、2 条 adjacent
+> internal edge 与 legacy wrapper/progress/fanout owner 已归零，`services/scheduler.ts` 从 3,816 行收缩到 543 行。
+> current canonical payload/provenance `5ac1e1c6416e231e37abae4ea0b218c7f63eef52` →
+> `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，digest
+> `sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`；backend/repo SCC=`4/6`、
+> task-execution-containing SCC=`0`、KNOWN=`31`。所有 wrapper/nesting/replay/merge/park/terminal/error/persisted
+> compatibility 保持，无新增 schema、wire、安全策略、权限或功能限制。RFC-294 只关闭 W2-D；W3 是下一调研节点，尚未获生产授权。
 
 > ✅ **已完成 RFC（Done，2026-08-28）：[RFC-334 NodeExecutorRegistry（RFC-294 W2-C）](design/RFC-334-node-executor-registry/proposal.md)。**
 > source pin `0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34` 锁定 14 个 `NodeKind`；公共 abort/branch prelude、14-key closed

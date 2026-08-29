@@ -12,8 +12,8 @@
 > 七条 scheduled workflow 共 19/19 jobs 全部 success。[RFC-334](../RFC-334-node-executor-registry/proposal.md)
 > 已完成 W2-C T0～T12：production payload/pin `1271ecb20` → `cfe1326b4`，最终功能 SHA `8e58eb05f`
 > 的主 CI `33142147682` attempt 2 为 35/35 success，七条 production-equivalent scheduled workflow 为 19/19 jobs
-> success。W2-C 已关闭；[RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已完成 W2-D current-source 调研与设计，
-> 并于 2026-08-28 获批实施。
+> success。W2-C 已关闭；[RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已于 2026-08-29 完成 T0～T11、
+> canonical replay 与 hosted/scheduled closeout并关闭 W2-D。W3 是下一架构调研节点，但尚未自动获得 production 批准。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
 ## 1. 设计原则
@@ -142,26 +142,27 @@ RFC-331 前的历史基线为 `158b67296b05a11f22a92ab64b2045643f895f9f`，repor
 `sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592`。W2-C 自身 shape 由
 payload/pin `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` → `cfe1326b4e948c24772b06708f91e2526ba7022b`
 固定，digest 为 `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓 latest
-shape 已随 commit-push projection 更新为 payload/pin `15767cfc9066fcdb9f074b1e93ab182699ba4fc0` →
-`251b5d725ef731d15c17a01656fdc827f925e7c7`，digest 为
-`sha256:ee9c5632c10a4fbd6fc2460e63db8d8f2fb73b2ed2f820183b116389f4a17607`。下表是该 current shape：
+shape 已随 RFC-338/339/340 与 Windows runtime repair 更新为 payload/pin
+`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` → `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，digest 为
+`sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`。下表是该 current shape：
 
 | current module           | production TS/TSX | architecture interpretation                                                                                          |
 | ------------------------ | ----------------: | -------------------------------------------------------------------------------------------------------------------- |
-| `development-automation` |               114 | active writer/type package；aggregate、工具合同与功能闭环已落，public/required/inbound/bootstrap cutover 未完成      |
+| `development-automation` |               115 | active writer/type package；aggregate、工具合同与功能闭环已落，public/required/inbound/bootstrap cutover 未完成      |
 | `identity-access`        |                33 | role/grant/authority、presence、profile/email/Git identity slices landed；route 直读与 full Actor facade 未退役      |
 | `integration`            |                31 | webhook/code-host、adapter definition/connection + Event Center adapter；仍有 schema/inbound 装配债                  |
-| `task-execution`         |               101 | RFC-331/332 topology/TaskEngine、RFC-333 continuation 与 RFC-334 node layer 已落；wrapper mechanics 仍待 W2-D        |
+| `task-execution`         |               121 | RFC-331/332 topology/TaskEngine、RFC-333 continuation、RFC-334 node 与 RFC-339 wrapper/recovery layer 已落           |
 | `digital-employee`       |                23 | EmployeeCase/Context/Reaction/authoring/runtime + frozen adapter binding landed；TE required-port cutover 未完成     |
 | `source-control`         |                22 | candidate/commit/publication transport/credential slices；WorkspaceRef/repo/cache/worktree owner 未收口              |
 | `event-center`           |                20 | catalog/subscription/observer/delivery/automation-rule writer landed；canonical outbox/background/root 收口未完成    |
 | `code-capability`        |                19 | legacy history/template island；仅 upstream merge 为有账临时 writer，非 active execution owner                       |
 | `execution-contract`     |                 7 | executor-neutral guide/fixture/exact-output contract landed；legacy resource/script provider adapter 未退役          |
 | `task-catalog`           |                 4 | 多来源目录读模型 landed；当前仍传 full Actor/string filter 且 route 直取 composition，未达最终 public query contract |
-| `collaboration`          |                40 | RFC-333 人工门 operation/participant 已落；legacy composition bridge 仍待后续 consumer cutover                       |
+| `collaboration`          |                46 | RFC-333/340 人工门 operation/participant 与 node-scoped reviewer slice 已落；后续 public/consumer cutover 仍待 W3/W4 |
 | `intent`                 |                 1 | pure domain seed                                                                                                     |
 
-物理 module 已增至 415 个 production TS/TSX 文件，但增长没有自动形成唯一 bootstrap：当前 CLI `start.ts`、HTTP `server.ts` 与 MCP dispatch 各自装配一部分 context，
+物理 module 已增至 442 个 production TS/TSX 文件。RFC-339 已让 task-execution runtime 在 bootstrap 只构造一次并由
+REST/MCP/CLI 显式消费，但全仓仍未形成 RFC-294 终局唯一 container：当前 HTTP、CLI 与其他 context worker 仍各自装配部分 context，
 Integration 还用 deferred participant 避免重复 composition 覆盖；54 个 route/MCP 文件继续导入 `AppDeps`，15 条 route→DB 与两条
 transport→DB 继续存在。目标 `DaemonContainer/AppCompositionRoot` 仍归 W9，HTTP/MCP/Webhook/Schedule 只能是 inbound adapters，
 不得把当前多 root 形状倒签为目标已完成。
@@ -196,10 +197,9 @@ registry。global owner/symbol/edge FK、mutation/transaction/background/public-
 ambient wiring 全分母已闭合；当前 20 条 required-port `declared-debt` 与最终 consumer/provider cutover 仍归 W4/W5/W9，不能复制
 一套新 owner/debt，也不能把“已建账”误写成“已迁完”。
 
-current report 的机器分母为：940 个 backend production 文件、415 个 module 文件、18186 个 production file/top-level symbol
-owner、952 个 mutation entrypoint、264 个 transaction callback、218 个 background entry、440 个 ambient seam、1339 条 observed
-cross-context edge、64 条 target edge、23 个 required port（3 active/20 declared debt）、1304 条 exact exception、379 个 facade、
-358 个 public symbol与 5 条 edge-neutral field-growth ledger；
+current report 的机器分母为：978 个 backend production 文件、442 个 module 文件、18585 个 production file/top-level symbol
+owner、967 个 mutation entrypoint、269 个 transaction external-effect entry、263 个 background entry、445 个 ambient seam、1435 条
+observed cross-context edge、1398 条 exact exception、377 个 facade、392 个 public symbol与 5 条 edge-neutral field-growth ledger；
 target implementation SCC=0，unresolved first-party=0。数字只从 committed manifests/report 重放，不在本文另设分母。
 
 RFC-317 已落的 P1/P2 修复是目标架构的行为 oracle，但不是边界 cutover credit：
@@ -2558,8 +2558,8 @@ snippet 更精确：owner/intent/effect/attempt/fence/maintenance/lineage 八类
 `InMemoryTaskRuntimeRegistry`、closable claim→attach gate、`TaskExecutionContext` 与 lifecycle outbox 已落在
 `modules/task-execution`；`driverLease.ts` 已无 production authority consumer。目标段落继续描述终局方向，后续 RFC 不得
 按旧伪代码再造第二个 `TaskOwnershipPort`/registry/outbox。RFC-331 已完成 task↔scheduler topology，RFC-332 已完成
-task-level coordinator/TaskEngine/DAG owner，RFC-334 已完成 W2-C node mechanics；尚未完成的是 W2-D wrapper mechanics 与后续
-application/public consumer cutover。
+task-level coordinator/TaskEngine/DAG owner，RFC-334 已完成 W2-C node mechanics，RFC-339 已完成 W2-D wrapper/replay mechanics；
+尚未完成的是 W3 及后续 application/public consumer cutover。
 
 ### 5.4 Lifecycle 与事件
 
@@ -3786,8 +3786,8 @@ current 承接路径为：N1/W0-R 已落；RFC-328 已完成 P0-D、`TaskExecuti
 复用已落 authority，未新建 lease/schema/registry/outbox；A1+B1～B4 前五条与 E3 第六条 exact debt 均已从账本删除。
 RFC-331 / W2-A 与 RFC-332 / W2-B 已发布并完成 hosted closeout；RFC-333 已以 open/decision 两条原子事务合同、
 fault/restart matrix、claimed→pending handoff 与 deferred-question 交接关闭 P0-C，并完成 exact-SHA 主 CI/全部 scheduled closeout。
-RFC-334 已完成 T0～T12、关闭 W2-C 并完成 exact-SHA 主 CI/全部 scheduled closeout；RFC-339 已完成 W2-D
-current-source 调研与设计并获批实施；W3 继续另立 RFC/批准。非可选 abort reason、bootstrap fail-fast、child recovery
+RFC-334 已完成 T0～T12、关闭 W2-C 并完成 exact-SHA 主 CI/全部 scheduled closeout；RFC-339 已完成 T0～T11、关闭 W2-D
+并完成 canonical 与 hosted/scheduled closeout；W3 继续另立 RFC/批准。非可选 abort reason、bootstrap fail-fast、child recovery
 与功能保真继续作为后续 oracle。
 W9 只做全局 container/facade 清仓，不回头重做 RFC-328。
 
@@ -3862,7 +3862,7 @@ N1 已生成下列机器可复算 canonical manifests，并让 RFC-317 subset �
 | repository baseline retry / hard-fail                          | source-control repository-preparation policy                                                         | RFC-287 T12 behavior；W4-E1/W5 policy                                                                    | exact retry classifier + hot config projection                                                      |
 | task 落库后的 background repo prep + `__repo_prep__`           | task admission/normal execution owner + source-control adapter                                       | RFC-287 T13 behavior；W2-B/W4-E1/W5 迁位                                                                 | task/run claim + attempt operation journal → SC participant                                         |
 | multipart pre-materialization/upload artifact                  | task-execution direct-launch prestage                                                                | W4-E1                                                                                                    | task-owned upload journal；现有 pre-materialized 语义                                               |
-| loop/git/fanout                                                | `task-execution/engine/wrapper`                                                                      | W2-D；W8 仅可选能力                                                                                      | `WrapperRuntime`                                                                                    |
+| loop/git/fanout                                                | `task-execution/engine/wrapper`                                                                      | W2-D Done；W8 仅可选能力                                                                                 | `WrapperRuntime`                                                                                    |
 | agent/script/call/code-host kind 分发                          | `task-execution/engine/node`                                                                         | W2-C                                                                                                     | `NodeExecutorRegistry`                                                                              |
 | `activeTasks` / `driverLease` / status claim                   | `task-execution/application/ports` + infrastructure                                                  | P0-D、W2                                                                                                 | `TaskOwnershipPort` + `TaskRuntimeRegistry`                                                         |
 | lifecycle writer + hook/watch/budget/WS                        | `task-execution/domain` + `platform/events`                                                          | W3                                                                                                       | transition + classified committed events                                                            |

@@ -1,9 +1,13 @@
 # RFC-339 技术设计 — WrapperRuntime 归位与 wrapper/replay mechanics cutover
 
-- 状态：In Progress；2026-08-28 用户已批准 D1～D10 与 plan T2～T11
-- current-source：`251b5d725ef731d15c17a01656fdc827f925e7c7`
+- 状态：Done（2026-08-29）；D1～D10 与 plan T2～T11 已完整落地并完成 hosted/scheduled closeout
+- 开工 source pin：`251b5d725ef731d15c17a01656fdc827f925e7c7`
 - 对齐：RFC-294 `task-execution/engine/wrapper`（W2-D）
 - 行为原则：功能逐字保持；不新增安全策略或功能收缩
+- 主实现：`0c9c48e68b23f15aee5e812193fd3c7c2e371345`
+- current canonical payload/provenance：`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` →
+  `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`；digest
+  `sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`
 
 ## 1. 设计不变量
 
@@ -659,7 +663,22 @@ flowchart TB
 - W2-A TaskExecution topology：RFC-331 Done；
 - W2-B TaskEngine：RFC-332 Done；
 - W2-C NodeExecutorRegistry：RFC-334 Done；
-- **W2-D WrapperRuntime：RFC-339 In Progress，已批准实施**。
+- **W2-D WrapperRuntime：RFC-339 Done**。
 
-完成后 W3 才能另行启动 committed lifecycle events/common continuation；W4/W5/W6/W7/W9 仍按 RFC-294 DAG 独立批准。W8 继续可选且
-只能在 W7 后另立新号。
+W3 现在可进入 current-source 调研与独立 RFC，但尚未因 RFC-339 关闭而自动获批；W4/W5/W6/W7/W9 仍按 RFC-294 DAG 独立批准。
+W8 继续可选且只能在 W7 后另立新号。
+
+## 15. 落地后的实际边界
+
+最终源码与本设计一致：`TaskEngine application → taskDagScope → NodeExecutionGateway → WrapperRuntime →
+LoopStrategy | GitStrategy | FanoutStrategy` 是唯一 wrapper execution 链；nested scope 只经 `WrapperScopeDriverPort`
+递归回 TaskEngine，源码依赖不成环。`ExecutionMergeRecovery` 在 frontier 前按 pending merge → conflict-human resolution 顺序执行，
+不注册为第四个 wrapper kind。
+
+bootstrap 只构造一个 `TaskExecutionRuntime`，并向 REST/MCP/CLI、schedule、webhook、workgroup、fusion、development 与
+digital-employee caller 显式注入 `SchedulerDriverPort` / read models。transport 不再临时 compose runtime 或 fallback。
+`services/scheduler.ts` 仅保留 W3/W5 尚未迁移的 lifecycle/commit-push mechanics；wrapper/replay body 与相关 reverse imports 已归零。
+
+canonical closeout 保持 `KNOWN_VIOLATIONS=31`、backend/repository value SCC=`4/6`、task-execution-containing SCC=`0`；
+current denominators 为 mutation/cross-context/exception/facade/public/owner=`967/1435/1398/377/392/18585`。这些数字描述完成
+RFC-338/339/340 与 Bun 1.4/Windows relay 修复后的同一 committed source snapshot，不把相邻 RFC 的增量误算为 W2-D credit。
