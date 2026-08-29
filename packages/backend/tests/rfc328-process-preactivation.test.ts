@@ -3,10 +3,17 @@
 // barrier; delaying stdin alone would still let script nodes mutate early.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runManagedProcess } from '../src/services/execution/managedProcess'
+import {
+  MANAGED_PROCESS_LAUNCH_NONCE_FLAG,
+  MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX,
+  MANAGED_PROCESS_LAUNCH_READY_PREFIX,
+  MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
+  MANAGED_PROCESS_TARGET_SEPARATOR,
+} from '../src/services/execution/managedProcessLauncher'
 
 const roots: string[] = []
 const compiledTarget = process.env.AW_RFC328_COMPILED_TARGET ?? ''
@@ -167,6 +174,54 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
     expect(result.exitCode).toBe(0)
     expect(result.rawStdout).toBe(`${delayed}\n`)
   })
+
+  test.skipIf(process.platform !== 'win32')(
+    'activation frame retains Windows output paths when launcher argv omits them',
+    async () => {
+      const root = fixtureRoot()
+      const stdoutPath = join(root, 'stdout')
+      const stderrPath = join(root, 'stderr')
+      const controlPath = join(root, 'control')
+      for (const path of [stdoutPath, stderrPath, controlPath]) writeFileSync(path, '')
+      const launchNonce = 'activation-frame-output-paths'
+      const launcher = Bun.spawn({
+        cmd: [
+          process.execPath,
+          'run',
+          join(import.meta.dir, '..', 'src', 'services', 'execution', 'managedProcessLauncher.ts'),
+          MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
+          MANAGED_PROCESS_LAUNCH_NONCE_FLAG,
+          launchNonce,
+          MANAGED_PROCESS_TARGET_SEPARATOR,
+          process.execPath,
+          '-e',
+          "process.stdout.write('frame-stdout'); process.stderr.write('frame-stderr')",
+        ],
+        cwd: root,
+        stdin: 'pipe',
+        stdout: 'ignore',
+        stderr: 'ignore',
+      })
+      const sink = launcher.stdin as { write(data: string): void; end(): void }
+      sink.write(
+        JSON.stringify({
+          v: 1,
+          launchNonce,
+          stdin: { mode: 'ignore' },
+          windowsOutputPaths: { stdoutPath, stderrPath, controlPath },
+        }),
+      )
+      sink.end()
+
+      expect(await launcher.exited).toBe(0)
+      expect(readFileSync(stdoutPath, 'utf8')).toBe('frame-stdout')
+      expect(readFileSync(stderrPath, 'utf8')).toBe('frame-stderr')
+      const control = readFileSync(controlPath, 'utf8')
+      expect(control).toContain(`${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${launchNonce}`)
+      expect(control).toContain(`${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${launchNonce}:`)
+    },
+    10_000,
+  )
 
   test.skipIf(process.platform !== 'win32' || compiledTarget.length === 0)(
     'compiled Bun target stdout and stderr survive the Windows launcher',

@@ -531,6 +531,15 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
             req.stdin?.mode === 'pipe'
               ? { mode: 'pipe', data: req.stdin.data }
               : { mode: 'ignore' },
+          ...(outputSpool === undefined
+            ? {}
+            : {
+                windowsOutputPaths: {
+                  stdoutPath: outputSpool.stdoutPath,
+                  stderrPath: outputSpool.stderrPath,
+                  controlPath: outputSpool.controlPath,
+                },
+              }),
         }
         sink.write(JSON.stringify(frame))
         sink.end()

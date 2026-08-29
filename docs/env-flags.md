@@ -105,6 +105,13 @@ pipeline 及其编号）、`AW_CWI_ROUND_ID` / `AW_CWI_ROUND_SEQ`（本轮标识
 两者只在构建期 `AW_E2E_BUILD=true` 的 test-only artifact 中生效；正式二进制把该构建期
 define 固定为 `false`，所以同名进程变量不会暂停正式服务。
 
+### 编译产物 E2E stub 选择器（仅专用测试二进制）
+
+`AW_STUB_MODE` 由 `backend/src/main.ts` 的 `__managed-process-output-probe` 注入给
+`scripts/build-binary.ts` 生成的多模式 stub，用于在 hosted Windows 上验证
+「编译 daemon → 编译 launcher → 编译 runtime」完整链路的 stdout 传递。该 probe 先检查
+`AW_E2E_BUILD`；正式二进制拒绝进入此路径，不把该变量作为生产运行时配置。
+
 ## 同形非 env（TS 符号 / 构建期注入 / 模板哨兵——**不是**环境变量）
 
 | token                             | 位置                                                                                                                           | 实为                                                                         |

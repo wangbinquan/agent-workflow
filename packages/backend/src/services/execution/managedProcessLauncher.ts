@@ -30,16 +30,24 @@ export const MANAGED_PROCESS_LAUNCH_ERROR_PREFIX = '\u001eAW_MANAGED_PROCESS_LAU
 export const MANAGED_PROCESS_LAUNCH_READY_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_READY:'
 export const MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX = '\u001eMANAGED_PROCESS_LAUNCH_OUTPUT:'
 
-export interface ManagedProcessActivationFrame {
-  readonly v: 1
-  readonly launchNonce: string
-  readonly stdin: Readonly<{ mode: 'ignore' }> | Readonly<{ mode: 'pipe'; data: string }>
-}
-
 export interface WindowsManagedProcessOutputPaths {
   readonly stdoutPath: string
   readonly stderrPath: string
   readonly controlPath: string
+}
+
+export interface ManagedProcessActivationFrame {
+  readonly v: 1
+  readonly launchNonce: string
+  readonly stdin: Readonly<{ mode: 'ignore' }> | Readonly<{ mode: 'pipe'; data: string }>
+  /**
+   * Windows output destinations are repeated in the post-receipt frame. Bun's
+   * compiled executable argv can omit application flags before `--`; the
+   * activation pipe is the authoritative functional handoff once the durable
+   * receipt has committed. The argv copy remains available for pre-frame error
+   * reporting.
+   */
+  readonly windowsOutputPaths?: WindowsManagedProcessOutputPaths
 }
 
 function selfInvocation(): string[] {
@@ -144,6 +152,11 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
     v?: unknown
     launchNonce?: unknown
     stdin?: { mode?: unknown; data?: unknown }
+    windowsOutputPaths?: {
+      stdoutPath?: unknown
+      stderrPath?: unknown
+      controlPath?: unknown
+    } | null
   }
   if (
     value.v !== 1 ||
@@ -155,9 +168,37 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
   ) {
     throw new Error('managed process activation frame does not match launcher nonce')
   }
-  return value.stdin.mode === 'pipe'
-    ? { v: 1, launchNonce, stdin: { mode: 'pipe', data: value.stdin.data as string } }
-    : { v: 1, launchNonce, stdin: { mode: 'ignore' } }
+  const rawWindowsOutputPaths = value.windowsOutputPaths
+  if (
+    rawWindowsOutputPaths !== undefined &&
+    (rawWindowsOutputPaths === null ||
+      typeof rawWindowsOutputPaths !== 'object' ||
+      typeof rawWindowsOutputPaths.stdoutPath !== 'string' ||
+      rawWindowsOutputPaths.stdoutPath.length === 0 ||
+      typeof rawWindowsOutputPaths.stderrPath !== 'string' ||
+      rawWindowsOutputPaths.stderrPath.length === 0 ||
+      typeof rawWindowsOutputPaths.controlPath !== 'string' ||
+      rawWindowsOutputPaths.controlPath.length === 0)
+  ) {
+    throw new Error('invalid managed process activation frame Windows output paths')
+  }
+  const windowsOutputPaths =
+    rawWindowsOutputPaths === undefined
+      ? undefined
+      : {
+          stdoutPath: rawWindowsOutputPaths.stdoutPath as string,
+          stderrPath: rawWindowsOutputPaths.stderrPath as string,
+          controlPath: rawWindowsOutputPaths.controlPath as string,
+        }
+  return {
+    v: 1,
+    launchNonce,
+    stdin:
+      value.stdin.mode === 'pipe'
+        ? { mode: 'pipe', data: value.stdin.data as string }
+        : { mode: 'ignore' },
+    ...(windowsOutputPaths === undefined ? {} : { windowsOutputPaths }),
+  }
 }
 
 function requestedControlPathFromArgv(argv: readonly string[]): string | undefined {
@@ -374,6 +415,7 @@ export async function runManagedProcessLauncher(
     reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
     return 125
   }
+  const windowsOutputPaths = frame.windowsOutputPaths ?? request.windowsOutputPaths
 
   let child: Bun.Subprocess
   let outputSpool: WindowsOutputSpool | undefined
@@ -403,7 +445,7 @@ export async function runManagedProcessLauncher(
     })
   } catch (error) {
     cleanupWindowsOutputSpool(outputSpool)
-    reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
+    reportLaunchError(request.launchNonce, error, windowsOutputPaths?.controlPath)
     return 127
   }
 
@@ -418,7 +460,7 @@ export async function runManagedProcessLauncher(
   const outputRelay =
     activeOutputSpool === undefined
       ? Promise.resolve(undefined)
-      : relayWindowsOutputSpool(activeOutputSpool, outputWritersClosed, request.windowsOutputPaths)
+      : relayWindowsOutputSpool(activeOutputSpool, outputWritersClosed, windowsOutputPaths)
   // The relay can observe a broken destination before the target exits. Attach
   // a handler immediately; the same promise is awaited and reported below.
   void outputRelay.catch(() => {})
@@ -435,7 +477,7 @@ export async function runManagedProcessLauncher(
     // begin.  The parent consumes this private record instead of surfacing it as
     // runtime stderr.
     writeLaunchControlRecord(
-      request.windowsOutputPaths?.controlPath,
+      windowsOutputPaths?.controlPath,
       `${MANAGED_PROCESS_LAUNCH_READY_PREFIX}${request.launchNonce}\n`,
     )
     const exitCode = await childExited
@@ -445,13 +487,13 @@ export async function runManagedProcessLauncher(
       // tells the parent exactly how many bytes the compiled launcher observed
       // in the compiled target's private files before closing its final writers.
       writeLaunchControlRecord(
-        request.windowsOutputPaths?.controlPath,
+        windowsOutputPaths?.controlPath,
         `${MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX}${request.launchNonce}:${JSON.stringify(outputBytes)}\n`,
       )
     }
     return exitCode
   } catch (error) {
-    reportLaunchError(request.launchNonce, error, request.windowsOutputPaths?.controlPath)
+    reportLaunchError(request.launchNonce, error, windowsOutputPaths?.controlPath)
     try {
       child.kill(15)
     } catch {
