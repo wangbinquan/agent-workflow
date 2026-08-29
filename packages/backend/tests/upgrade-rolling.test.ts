@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 220 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 222 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -527,7 +527,12 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // 迁移未决 task outbox receipt，切换 task lifecycle epoch 并删除旧表。
     // RFC-341 FK convergence bump 到 220 with 0220_rfc341_committed_delivery_fk_repair：
     // 让 legacy_alter_table=ON 的增量升级与 fresh replay 收敛到同一父表引用。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(220)
+    // RFC-342 bump 到 221 with 0221_rfc342_memory_scope_move_events：scope move
+    // 与其 audit/event 在同一事务持久化。
+    // RFC-341 collaboration cutover bump 到 222 with
+    // 0222_rfc341_collaboration_committed_event_cutover：review / clarify / questions
+    // 三个 family 同步切到 dispatchable epoch 2。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(222)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

@@ -1216,6 +1216,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
+    await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
     await autoDispatchClarifyRoundWithDecision({

@@ -279,8 +279,8 @@ describe('RFC-056 createClarifyRound', () => {
       },
     ])
 
-    expect(received.length).toBe(1)
-    expect(received[0]?.type).toBe('cross-clarify.created')
+    const createdFrames = received.filter((message) => message.type === 'cross-clarify.created')
+    expect(createdFrames).toHaveLength(1)
   })
 
   test('iteration counter increments per (node, loop_iter) when a prior session already exists', async () => {

@@ -158,8 +158,8 @@ import {
   createCollaborationDurableConsumerDefinitions,
   createCollaborationWsProjector,
   collaborationCommittedEventCodec,
+  createHumanGateContinuationWorkerDefinition,
 } from '@/modules/collaboration/composition/committedEvents'
-import { createHumanGateContinuationWorkerDefinition } from '@/modules/collaboration/application/humanGateContinuationWorker'
 import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'

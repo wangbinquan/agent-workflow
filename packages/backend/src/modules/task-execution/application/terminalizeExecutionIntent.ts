@@ -3,8 +3,10 @@ import { taskExecutionIntents, taskExecutionLineageOperationRecords } from '@/db
 import type { DbTxSync } from '@/db/txSync'
 
 /**
- * Close all active intents for one task and return any unconsumed replay
+ * Close active intents for one task and return any unconsumed replay
  * authorization to requires-actor in the same control/recovery transaction.
+ * Successor-daemon recovery can fence this to the interrupted claimed epoch so
+ * a gate decision committed before the crash keeps its pending successor.
  */
 export function terminalizeTaskExecutionIntentsTx(input: {
   tx: DbTxSync
@@ -12,6 +14,7 @@ export function terminalizeTaskExecutionIntentsTx(input: {
   state: 'canceled' | 'failed'
   failureCode: string
   now: number
+  claimedOwnerEpoch?: number
 }): void {
   const activeIntentIds = input.tx
     .select({ id: taskExecutionIntents.id })
@@ -19,7 +22,12 @@ export function terminalizeTaskExecutionIntentsTx(input: {
     .where(
       and(
         eq(taskExecutionIntents.taskId, input.taskId),
-        inArray(taskExecutionIntents.state, ['pending', 'claimed']),
+        input.claimedOwnerEpoch === undefined
+          ? inArray(taskExecutionIntents.state, ['pending', 'claimed'])
+          : and(
+              eq(taskExecutionIntents.state, 'claimed'),
+              eq(taskExecutionIntents.claimedEpoch, input.claimedOwnerEpoch),
+            ),
       ),
     )
     .all()

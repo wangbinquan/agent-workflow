@@ -218,7 +218,12 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(participant).toContain('tx.insert(clarifyRounds)')
     expect(participant).toContain('tx.insert(taskQuestions)')
     expect(participant).toContain('tx.insert(nodeRunEvents)')
-    expect(participant).toContain('appendHumanGateOpenedCommittedEventTx(this.tx, {')
+    expect(
+      countNamedCalls(
+        'packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts',
+        'appendHumanGateOpenedCommittedEventTx',
+      ),
+    ).toBe(2)
     const parkTx = read(
       'packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts',
     )

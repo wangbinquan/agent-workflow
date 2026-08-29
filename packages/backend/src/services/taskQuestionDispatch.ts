@@ -111,7 +111,7 @@ import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution
 import {
   appendHumanGateDecisionCommittedEventTx,
   appendQuestionDispatchCommittedEventTx,
-} from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+} from '@/modules/collaboration/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'

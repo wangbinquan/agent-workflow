@@ -53,7 +53,7 @@ import {
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
-import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/public/participants'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 

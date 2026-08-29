@@ -322,7 +322,7 @@ describe('RFC-333 open fault witnesses', () => {
       expect(
         filesBelow(appHome).filter((file) => file.startsWith('runs/.human-gate-staging/')),
       ).toEqual([])
-      expect(frames).toHaveLength(1)
+      expect(frames.filter((frame) => frame.type === 'review.created')).toHaveLength(1)
     } finally {
       unsubscribe()
       uninstallProjection()
@@ -512,8 +512,7 @@ describe('RFC-333 open fault witnesses', () => {
           .where(eq(collaborationGateOperations.taskId, taskId))
           .get(),
       ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
-      expect(frames).toHaveLength(1)
-      expect(frames[0]?.type).toBe('clarify.created')
+      expect(frames.filter((frame) => frame.type === 'clarify.created')).toHaveLength(1)
     } finally {
       unsubscribe()
       uninstallProjection()

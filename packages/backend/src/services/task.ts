@@ -3993,6 +3993,7 @@ export async function cancelTask(
   }
 
   let stopTicket: TaskDriverStopTicket | null = null
+  const deferredStatusEventRefs: CommittedEventRef[] = []
   const committed = await withTaskReviewMutationLock(id, async () => {
     // Re-read only after acquiring the linearization point. A decision,
     // dispatch, scheduler cancel or competing terminal writer may have won
@@ -4092,6 +4093,9 @@ export async function cancelTask(
                 now,
               })
             },
+            deferCommittedEventPublication: (eventRefs) => {
+              deferredStatusEventRefs.push(...eventRefs)
+            },
             reason: 'cancelTask-fallback',
           })
         } catch (error) {
@@ -4132,7 +4136,7 @@ export async function cancelTask(
         )
     ).map((child) => child.id)
     return { task: current, childIds }
-  })
+  }).finally(() => publishCommittedEventsAfterCommit(deferredStatusEventRefs))
 
   const stopCause: TaskStopCause =
     opts.cascadeFromParent === true

@@ -791,6 +791,70 @@ describe('RFC-328 logical effect, fence, watermark and unknown closure', () => {
 })
 
 describe('RFC-328 successor-daemon effect recovery', () => {
+  test('releases only the interrupted claim and preserves its pending gate successor', async () => {
+    const database = db()
+    const taskId = 'task-gate-successor-before-restart'
+    seedTask(database, taskId)
+    const oldModule = createTaskExecutionTestModule('daemon-gate-before-restart')
+    const launch = oldModule.intents.submit({
+      db: database,
+      request: continuation(taskId),
+      intentId: 'intent-gate-old-claim',
+      now: 100,
+    })
+    const claim = oldModule.claim({ db: database, intentId: launch.intentId, now: 101 })
+    oldModule.claimGate.leave(claim.permit)
+    const successor = oldModule.intents.submit({
+      db: database,
+      admissionMode: 'successor-after-claimed',
+      request: {
+        ...continuation(taskId, 'gate-continuation'),
+        source: 'internal',
+        actorUserId: null,
+        payload: { v: 1, operationId: 'gate-decision-before-restart' },
+      },
+      intentId: 'intent-gate-pending-successor',
+      now: 102,
+    })
+
+    const lockProof = createExclusiveDaemonLockProof({
+      daemonGeneration: 'daemon-gate-after-restart',
+      acquiredAt: 200,
+      lockReceiptDigest: 'exclusive-gate-recovery-lock',
+    })
+    expect(prepareTaskExecutionRecovery({ db: database, lockProof, now: 201 })).toEqual({
+      revokedTaskIds: [taskId],
+    })
+    expect(
+      await finalizeTaskExecutionRecovery({
+        db: database,
+        lockProof,
+        processEvidence: { orphanReaperCompleted: true },
+        now: 202,
+      }),
+    ).toMatchObject({ releasedTaskIds: [taskId], outcomeUnknownTaskIds: [] })
+    expect(
+      database
+        .select({
+          state: taskExecutionIntents.state,
+          failureCode: taskExecutionIntents.failureCode,
+        })
+        .from(taskExecutionIntents)
+        .where(eq(taskExecutionIntents.id, launch.intentId))
+        .get(),
+    ).toEqual({ state: 'failed', failureCode: 'daemon-restart-recovered' })
+    expect(
+      database
+        .select({
+          state: taskExecutionIntents.state,
+          failureCode: taskExecutionIntents.failureCode,
+        })
+        .from(taskExecutionIntents)
+        .where(eq(taskExecutionIntents.id, successor.intentId))
+        .get(),
+    ).toEqual({ state: 'pending', failureCode: null })
+  })
+
   test('the orphan barrier preserves auto-resume for known process launches and non-launches', async () => {
     const database = db()
     const oldModule = createTaskExecutionTestModule('daemon-before-restart')

@@ -16,7 +16,6 @@ import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import {
   COLLABORATION_COMMITTED_EVENT_TYPES,
   decodeCollaborationCommittedEvent,
-  decodeQuestionDispatchCommittedPayload,
   type CollaborationCommittedV1,
   type CollaborationProjectionFrame,
 } from '../domain/collaborationCommittedEvent'
@@ -215,7 +214,9 @@ function clarifyDecisionFrames(
       .all()
     for (const stored of dispatchEvents) {
       try {
-        const payload = decodeQuestionDispatchCommittedPayload(JSON.parse(stored.payloadJson))
+        const dispatchEvent = decodeCollaborationCommittedEvent(JSON.parse(stored.payloadJson))
+        if (dispatchEvent.type !== 'collaboration.question-dispatch-committed.v1') continue
+        const payload = dispatchEvent.payload
         if (!payload.questionIds.some((entryId) => roundEntryIds.has(entryId))) continue
         const rerun = payload.reruns.find((candidate) =>
           candidate.entryIds.some((entryId) => roundEntryIds.has(entryId)),

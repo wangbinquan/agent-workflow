@@ -174,7 +174,7 @@ import {
   appendHumanGateDecisionCommittedEventTx,
   appendReviewCommentsChangedCommittedEventTx,
   appendReviewSelectionChangedCommittedEventTx,
-} from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+} from '@/modules/collaboration/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 

@@ -787,6 +787,11 @@ export async function setTaskStatus(args: {
   executionContext?: TaskExecutionContextRef
   committedEventIdentity?: Partial<TaskCommittedEventIdentity>
   sourceTerminationEffectRef?: string | null
+  /**
+   * Delay compatibility projection until an enclosing process-local mutation
+   * queue has released. The durable event is already committed when invoked.
+   */
+  deferCommittedEventPublication?: (eventRefs: readonly CommittedEventRef[]) => void
   /** RFC-207 — injectable clock for the run-time accounting (test determinism). */
   now?: number
   reason: string
@@ -940,7 +945,12 @@ export async function setTaskStatus(args: {
   } else {
     dbTxSync(args.db, commitTransition)
   }
-  publishCommittedEventsAfterCommit(committedEventRef === null ? [] : [committedEventRef])
+  const committedEventRefs = committedEventRef === null ? [] : [committedEventRef]
+  if (args.deferCommittedEventPublication === undefined) {
+    publishCommittedEventsAfterCommit(committedEventRefs)
+  } else {
+    args.deferCommittedEventPublication(committedEventRefs)
+  }
   return transition
 }
 

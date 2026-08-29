@@ -519,6 +519,7 @@ export class SqliteTaskOwnershipStore implements TaskOwnershipStore {
         state: 'failed',
         failureCode: 'daemon-restart-recovered',
         now: input.now,
+        claimedOwnerEpoch: input.owner.epoch,
       })
       const row = tx
         .update(taskExecutionOwners)

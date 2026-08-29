@@ -19,7 +19,7 @@ import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type { ClarifyAnswer, ClarifyDirective } from '@agent-workflow/shared'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
-import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/public/participants'
 
 const {
   canonicalHumanGateRequestHash,

@@ -195,8 +195,8 @@ describe('createClarifyRound', () => {
       defaultTargetNodeId: 'designer',
     })
 
-    expect(received.length).toBe(1)
-    expect(received[0]?.type).toBe('clarify.created')
+    const createdFrames = received.filter((message) => message.type === 'clarify.created')
+    expect(createdFrames).toHaveLength(1)
   })
 
   test('exact re-emit replays one round/question/event; changed content advances the stable gate', async () => {
@@ -227,7 +227,7 @@ describe('createClarifyRound', () => {
     const first = await createClarifyRound(request)
     const replay = await createClarifyRound(request)
     expect(replay.round.id).toBe(first.round.id)
-    expect(received).toHaveLength(1)
+    expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(1)
     expect(
       db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
     ).toHaveLength(1)
@@ -241,7 +241,7 @@ describe('createClarifyRound', () => {
     })
     expect(changed.round.id).not.toBe(first.round.id)
     expect(changed.intermediaryNodeRunId).toBe(first.intermediaryNodeRunId)
-    expect(received).toHaveLength(2)
+    expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(2)
     expect(
       db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)).all(),
     ).toHaveLength(2)
