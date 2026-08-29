@@ -124,7 +124,7 @@ function writeTextToFd(fd: 1 | 2, text: string): void {
   writeAllToFd(fd, new TextEncoder().encode(text))
 }
 
-interface WindowsOutputSpool {
+export interface WindowsOutputSpool {
   readonly root: string
   readonly stdoutPath: string
   readonly stderrPath: string
@@ -141,7 +141,7 @@ function closeSpoolFd(spool: WindowsOutputSpool, key: WindowsOutputSpoolFd): voi
   spool[key] = undefined
 }
 
-function createWindowsOutputSpool(): WindowsOutputSpool {
+export function createWindowsOutputSpool(): WindowsOutputSpool {
   const root = mkdtempSync(join(tmpdir(), 'aw-managed-process-output-'))
   const spool: WindowsOutputSpool = {
     root,
@@ -160,12 +160,12 @@ function createWindowsOutputSpool(): WindowsOutputSpool {
   }
 }
 
-function closeWindowsOutputSpoolWriters(spool: WindowsOutputSpool): void {
+export function closeWindowsOutputSpoolWriters(spool: WindowsOutputSpool): void {
   closeSpoolFd(spool, 'stdoutWriteFd')
   closeSpoolFd(spool, 'stderrWriteFd')
 }
 
-function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void {
+export function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void {
   if (spool === undefined) return
   for (const key of ['stdoutWriteFd', 'stderrWriteFd'] as const) {
     try {

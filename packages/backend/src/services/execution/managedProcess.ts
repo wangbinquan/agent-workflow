@@ -9,6 +9,7 @@
 
 import type { Logger } from '@/util/log'
 import { randomUUID } from 'node:crypto'
+import { closeSync, openSync, readSync } from 'node:fs'
 import { killProcessTree } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
@@ -16,8 +17,12 @@ import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import {
   MANAGED_PROCESS_LAUNCH_ERROR_PREFIX,
   MANAGED_PROCESS_LAUNCH_READY_PREFIX,
+  cleanupWindowsOutputSpool,
+  closeWindowsOutputSpoolWriters,
+  createWindowsOutputSpool,
   managedProcessLauncherArgv,
   type ManagedProcessActivationFrame,
+  type WindowsOutputSpool,
 } from './managedProcessLauncher'
 
 /** Per-line cap (code units)——数值单点；runner.ts 的 MAX_STREAM_LINE_CHARS 是本值的 re-export（RFC-284 §3.5）。 */
@@ -267,6 +272,74 @@ function killTree(child: Bun.Subprocess, signal: 'SIGTERM' | 'SIGKILL'): void {
   }
 }
 
+function readWindowsOutputSpoolChunk(path: string, offset: number, buffer: Uint8Array): number {
+  // Reopen on every pull. Bun 1.4 on Windows can leave a regular-file
+  // descriptor at sticky EOF while another process subsequently extends it.
+  const readFd = openSync(path, 'r')
+  try {
+    return readSync(readFd, buffer, 0, buffer.byteLength, offset)
+  } finally {
+    closeSync(readFd)
+  }
+}
+
+function windowsOutputSpoolStream(
+  path: string,
+  writersClosed: Promise<void>,
+): ReadableStream<Uint8Array> {
+  const buffer = new Uint8Array(64 * 1024)
+  let offset = 0
+  let writersAreClosed = false
+  let stablePolls = 0
+  let canceled = false
+  const observedClosure = writersClosed.then(
+    () => {
+      writersAreClosed = true
+    },
+    (error) => {
+      writersAreClosed = true
+      throw error
+    },
+  )
+  // `pull` propagates the same rejection; this prevents a temporary unhandled
+  // promise while the durable receipt callback is still running.
+  void observedClosure.catch(() => {})
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller): Promise<void> {
+      try {
+        while (!canceled) {
+          const count = readWindowsOutputSpoolChunk(path, offset, buffer)
+          if (count > 0) {
+            offset += count
+            stablePolls = 0
+            // The next pull reuses `buffer`; enqueue an owned copy.
+            controller.enqueue(buffer.slice(0, count))
+            return
+          }
+
+          if (writersAreClosed) {
+            await observedClosure
+            stablePolls += 1
+            if (stablePolls >= 2) {
+              controller.close()
+              return
+            }
+            await Bun.sleep(10)
+          } else {
+            await Promise.race([observedClosure, Bun.sleep(10)])
+          }
+        }
+      } catch (error) {
+        if (!canceled) controller.error(error)
+      }
+    },
+    cancel(): void {
+      canceled = true
+    },
+  })
+}
+
 /**
  * Run one managed subprocess to completion.
  *
@@ -330,18 +403,27 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   }
 
   let child: Bun.Subprocess
+  let outputSpool: WindowsOutputSpool | undefined
   try {
     const spawnArgv =
       launchNonce === undefined
         ? [...req.argv]
         : managedProcessLauncherArgv({ launchNonce, targetArgv: req.argv })
+    // A compiled Bun daemon reading a compiled launcher's pipe can observe an
+    // empty stream under concurrent Windows launches even when the launcher
+    // exits 0. Route this outer hop through regular files too. The launcher
+    // keeps its own inner target spool, so both Bun pipe boundaries are gone.
+    outputSpool =
+      process.platform === 'win32' && launchNonce !== undefined
+        ? createWindowsOutputSpool()
+        : undefined
     child = Bun.spawn({
       ...platformSpawnOptionsForHost(),
       cmd: spawnArgv,
       cwd: req.cwd,
       env: req.env,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      stdout: outputSpool?.stdoutWriteFd ?? 'pipe',
+      stderr: outputSpool?.stderrWriteFd ?? 'pipe',
       // A gated launcher always needs its private activation pipe. The target's
       // actual stdin mode is carried inside the post-receipt frame.
       stdin: launchNonce !== undefined || req.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
@@ -350,6 +432,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       detached: true,
     })
   } catch (err) {
+    cleanupWindowsOutputSpool(outputSpool)
     // A missing binary makes Bun.spawn THROW rather than return 127 — and Bun
     // names argv[0] in the ENOENT even when the missing path is the cwd.
     // Translate before reporting so operators see the actual missing path.
@@ -367,6 +450,13 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       }),
     }
   }
+
+  const childExited = child.exited
+  const activeOutputSpool = outputSpool
+  const outputWritersClosed =
+    activeOutputSpool === undefined
+      ? Promise.resolve()
+      : childExited.then(() => closeWindowsOutputSpoolWriters(activeOutputSpool))
 
   const pid = typeof child.pid === 'number' ? child.pid : null
   let activationFailure: string | null = null
@@ -436,7 +526,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const truncated = { stdout: false, stderr: false }
 
   const stdoutPump = pump(
-    child.stdout as ReadableStream<Uint8Array>,
+    activeOutputSpool === undefined
+      ? (child.stdout as ReadableStream<Uint8Array>)
+      : windowsOutputSpoolStream(activeOutputSpool.stdoutPath, outputWritersClosed),
     req.onStdoutLine,
     req.captureRawStdout === true
       ? (chunk) => {
@@ -449,7 +541,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     req.onStdoutChunkEnd,
   )
   const stderrPump = pump(
-    child.stderr as ReadableStream<Uint8Array>,
+    activeOutputSpool === undefined
+      ? (child.stderr as ReadableStream<Uint8Array>)
+      : windowsOutputSpoolStream(activeOutputSpool.stderrPath, outputWritersClosed),
     async (line) => {
       if (
         launchNonce !== undefined &&
@@ -571,7 +665,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     // RFC-280 impl-gate P1-A: race the exit against the reap deadline (armed on
     // escalation) so an unkillable child cannot wedge the caller forever.
     const exitResult = await Promise.race([
-      child.exited.then((code) => ({ kind: 'exited' as const, code })),
+      childExited.then((code) => ({ kind: 'exited' as const, code })),
       reapDeadline.then(() => ({ kind: 'unreaped' as const })),
     ])
     if (exitResult.kind === 'unreaped') {
@@ -603,6 +697,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     // — the exact liveness bound the pre-RFC-280 runner protected with
     // `child.unref()` and the T7 collapse dropped.
     child.unref()
+    cleanupWindowsOutputSpool(outputSpool)
     return {
       outcome,
       exitCode,
@@ -655,6 +750,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   // orchestration metadata.  Keep user/runtime diagnostics byte-for-byte while
   // removing those records from the returned tail.
   stderrTail = stripLauncherProtocol(stderrTail, launchNonce)
+
+  cleanupWindowsOutputSpool(outputSpool)
 
   return {
     outcome,
