@@ -7684,7 +7684,7 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:705",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:712",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7698,7 +7698,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:705",
+      "symbol": "$setTimeout:712",
       "targetContext": "task-execution"
     },
     {
@@ -7707,7 +7707,7 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:715",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:722",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7721,7 +7721,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:715",
+      "symbol": "$setTimeout:722",
       "targetContext": "task-execution"
     },
     {
@@ -7730,7 +7730,7 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:753",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:760",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7744,7 +7744,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:753",
+      "symbol": "$setTimeout:760",
       "targetContext": "task-execution"
     },
     {
@@ -7753,7 +7753,7 @@
       ],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:836",
+      "id": "background:packages/backend/src/services/execution/managedProcess.ts#$setTimeout:843",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7767,7 +7767,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:836",
+      "symbol": "$setTimeout:843",
       "targetContext": "task-execution"
     },
     {
@@ -10793,5 +10793,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:52ed9816958be63c549c3c73a1aa00dee70dcdf63517d154919b21703ac0215e"
+  "sourceDigest": "sha256:c1e193e5d12604df08b01d8f7bc89ff27a1ad5285cd345759885c1973b8c4880"
 }
