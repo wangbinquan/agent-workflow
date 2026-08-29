@@ -802,6 +802,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/memories' },
   { method: 'GET', path: '/api/memories/:id' },
   { method: 'PATCH', path: '/api/memories/:id' },
+  { method: 'POST', path: '/api/memories/:id/move' },
   { method: 'DELETE', path: '/api/memories/:id' },
   { method: 'POST', path: '/api/memories/:id/archive' },
   { method: 'POST', path: '/api/memories/:id/unarchive' },

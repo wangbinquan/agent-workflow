@@ -12,7 +12,6 @@ import type {
   PrincipalSource,
   QueryContext,
   RequestAuthority,
-  ResolvedDirectRequestAuthority,
   ValidatedIdempotencyKey,
 } from '../public/participants'
 
@@ -112,7 +111,7 @@ export class DirectOperationContextFactory implements DirectOperationContextFact
     return context
   }
 
-  resolveCommandContext(context: CommandContext): ResolvedDirectRequestAuthority {
+  resolveCommandContext(context: CommandContext): AuthenticatedPrincipal {
     const metadata = trustedContextMetadata(context)
     if (metadata.transport === 'delegated') throw new Error('direct-command-context-required')
     return Object.freeze({

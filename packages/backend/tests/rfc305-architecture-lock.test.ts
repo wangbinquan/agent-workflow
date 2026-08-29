@@ -382,11 +382,17 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/types',
+      // RFC-342 — memory scope moves receive only the direct context factory;
+      // request identity remains sealed inside the factory-minted context.
+      'packages/backend/src/routes/memories.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
+      // The memory command resolves the direct context inside its writer
+      // transaction, then re-reads current user/grant state before both scope gates.
+      'packages/backend/src/services/memory.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/task.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',

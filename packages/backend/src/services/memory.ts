@@ -57,14 +57,15 @@ import {
   NotFoundError,
   UnauthorizedError,
   ValidationError,
+  staleConflictError,
 } from '@/util/errors'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
 import type {
+  AuthenticatedPrincipal,
   CommandContext,
   DirectOperationContextFactory,
   PrincipalSource,
-  ResolvedDirectRequestAuthority,
 } from '@/modules/identity-access/public/participants'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
@@ -649,11 +650,10 @@ export function moveMemory(
       throw new NotFoundError('memory-not-found', `memory ${id} not found`)
     }
     if (row.version !== parsed.data.expectedVersion) {
-      throw new ConflictError(
-        'resource-operation-stale',
+      throw staleConflictError(
+        'memory',
         `memory ${id} changed since version ${parsed.data.expectedVersion}; reload and retry`,
         {
-          resource: 'memory',
           expectedVersion: parsed.data.expectedVersion,
           currentVersion: row.version,
         },
@@ -704,15 +704,10 @@ export function moveMemory(
       refreshed.scopeType !== row.scopeType ||
       refreshed.scopeId !== row.scopeId
     ) {
-      throw new ConflictError(
-        'resource-operation-stale',
-        `memory ${id} changed; reload and retry`,
-        {
-          resource: 'memory',
-          expectedVersion: row.version,
-          currentVersion: refreshed?.version,
-        },
-      )
+      throw staleConflictError('memory', `memory ${id} changed; reload and retry`, {
+        expectedVersion: row.version,
+        currentVersion: refreshed?.version,
+      })
     }
     const refreshedActor = currentMoveActorInTx(tx, authority)
     assertMemoryScopeManageableInTx(tx, refreshedActor, previousScope, 'current')
@@ -729,14 +724,9 @@ export function moveMemory(
       .where(and(eq(memories.id, id), eq(memories.version, row.version)))
       .run()
     if ((update as unknown as { changes?: number }).changes !== 1) {
-      throw new ConflictError(
-        'resource-operation-stale',
-        `memory ${id} changed; reload and retry`,
-        {
-          resource: 'memory',
-          expectedVersion: row.version,
-        },
-      )
+      throw staleConflictError('memory', `memory ${id} changed; reload and retry`, {
+        expectedVersion: row.version,
+      })
     }
     tx.insert(memoryScopeMoveEvents)
       .values({
@@ -787,7 +777,7 @@ export function moveMemory(
   return { memory: committed.memory, moved: committed.moved }
 }
 
-function currentMoveActorInTx(tx: DbTxSync, authority: ResolvedDirectRequestAuthority): Actor {
+function currentMoveActorInTx(tx: DbTxSync, authority: AuthenticatedPrincipal): Actor {
   const user = tx
     .select({
       id: users.id,

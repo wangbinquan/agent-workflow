@@ -66,7 +66,15 @@ export class ConflictError extends DomainError {
  * 不再铸新方言码。
  */
 export function staleConflictError(
-  resource: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup' | 'repo_group',
+  resource:
+    | 'agent'
+    | 'memory'
+    | 'skill'
+    | 'mcp'
+    | 'plugin'
+    | 'workflow'
+    | 'workgroup'
+    | 'repo_group',
   message: string,
   details?: Record<string, unknown>,
 ): ConflictError {
