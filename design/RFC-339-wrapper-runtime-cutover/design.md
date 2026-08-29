@@ -5,9 +5,9 @@
 - 对齐：RFC-294 `task-execution/engine/wrapper`（W2-D）
 - 行为原则：功能逐字保持；不新增安全策略或功能收缩
 - 主实现：`0c9c48e68b23f15aee5e812193fd3c7c2e371345`
-- current canonical payload/provenance：`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` →
-  `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`；digest
-  `sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`
+- current canonical payload/provenance：`98a5477955e49bb5b61bdb20fabed79d7abd439d` →
+  `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`；digest
+  `sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`
 
 ## 1. 设计不变量
 

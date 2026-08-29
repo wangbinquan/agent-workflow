@@ -4,7 +4,7 @@
 
 开工 source pin：`251b5d725ef731d15c17a01656fdc827f925e7c7`；主实现：
 `0c9c48e68b23f15aee5e812193fd3c7c2e371345`；current payload/provenance：
-`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` → `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`。
+`98a5477955e49bb5b61bdb20fabed79d7abd439d` → `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`。
 
 ## 1. 实施原则
 

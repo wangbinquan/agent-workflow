@@ -18,9 +18,9 @@
   payload/provenance 为 `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` →
   `cfe1326b4e948c24772b06708f91e2526ba7022b`，digest 为
   `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓最新 architecture
-  payload/provenance 已随 RFC-338/339/340 与 Windows runtime repair 刷新为
-  `5ac1e1c6416e231e37abae4ea0b218c7f63eef52` → `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，canonical source digest 为
-  `sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`。四份 RFC-317 artifact 用
+  payload/provenance 已随 RFC-338/339/340、Windows runtime repair 与 scheduled CI repair 刷新为
+  `98a5477955e49bb5b61bdb20fabed79d7abd439d` → `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`，canonical source digest 为
+  `sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`。四份 RFC-317 artifact 用
   `originSha + currentSnapshotSha + contentDigest` 分开记录历史 seed 与 current canonical snapshot。RFC-334 最终功能验收
   SHA `8e58eb05f987bcf08007db714119b3f46d519772` 的主 CI `33142147682` attempt 2 为 35/35 terminal
   `success`；W2-C production-equivalent SHA `0a0df74c4476355cc5d5e5f0fe289f823759a2e1` 的七条 scheduled
@@ -96,8 +96,8 @@ ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等
 “完全没有抽象”，而是抽象停在了机制层，尚未形成稳定的后台层次架构。
 
 RFC-331 前的 committed source `158b67296b05a11f22a92ab64b2045643f895f9f` 保留为历史基线；当前全仓已发布
-payload `5ac1e1c6416e231e37abae4ea0b218c7f63eef52` 的 replayed shape 如下，并由 provenance pin
-`4c8497c2af18c04540bbd6e9b5f3d887a8276a85` 固定。各已关闭 wave 的自身候选与 current 全仓 snapshot 分栏：
+payload `98a5477955e49bb5b61bdb20fabed79d7abd439d` 的 replayed shape 如下，并由 provenance pin
+`17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31` 固定。各已关闭 wave 的自身候选与 current 全仓 snapshot 分栏：
 
 | 指标                                       |                   当前值 | 说明                                                                                         |
 | ------------------------------------------ | -----------------------: | -------------------------------------------------------------------------------------------- |

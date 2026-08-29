@@ -43,8 +43,8 @@ N1 已把采集入口统一为 `bun run architecture:report` / `bun run architec
 payload/provenance 为 `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` →
 `cfe1326b4e948c24772b06708f91e2526ba7022b`，digest 为
 `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓 latest payload/pin 为
-`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` → `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，digest 为
-`sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`。四份 RFC-317 治理 artifact 另保留
+`98a5477955e49bb5b61bdb20fabed79d7abd439d` → `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`，digest 为
+`sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`。四份 RFC-317 治理 artifact 另保留
 `originSha`，并以 `provenance.currentSnapshotSha + contentDigest` 指向 current payload；因此历史 seed、current content 与 hosted
 exact-SHA verdict 已分栏，后续不得再把 ancestor-only、父提交、queued 或 cancelled CI 当作 current 证据。下列数字由已发布
 report 生成；RFC-334 最终功能验收 SHA `8e58eb05f987bcf08007db714119b3f46d519772` 的 CI `33142147682`
@@ -639,8 +639,8 @@ KNOWN 来容忍同一环换了一条报告边。
 
 **冲突面**：scheduler/task/execution/gc/workspace/shutdown，W2-A～D 严格串行且各自独立 RFC/commit/rollback。
 
-**最终证据**：主实现 `0c9c48e68`；current canonical payload/provenance `5ac1e1c64` → `4c8497c2a`，digest
-`sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`；mutation/cross-context/
+**最终证据**：主实现 `0c9c48e68`；current canonical payload/provenance `98a547795` → `17e6ded68`，digest
+`sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`；mutation/cross-context/
 exception/facade/public/owner=`967/1435/1398/377/392/18585`，backend/repository value SCC=`4/6`、
 task-execution-containing SCC=`0`、KNOWN=`31`。`services/scheduler.ts` 已从 3,816 行收缩到 543 行，W3/W5 owner 保持。
 

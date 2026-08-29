@@ -4,9 +4,9 @@
 - 发起：RFC-294 W2-D successor，2026-08-28
 - 开工 source pin：`251b5d725ef731d15c17a01656fdc827f925e7c7`
 - 主实现：`0c9c48e68b23f15aee5e812193fd3c7c2e371345`
-- current canonical architecture payload / provenance pin：`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` →
-  `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`
-- current canonical source digest：`sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`
+- current canonical architecture payload / provenance pin：`98a5477955e49bb5b61bdb20fabed79d7abd439d` →
+  `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`
+- current canonical source digest：`sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`
 - 前置：RFC-328（durable execution authority）、RFC-331（W2-A）、RFC-332（W2-B）、
   RFC-333（P0-C）、RFC-334（W2-C）均已完成
 - 授权边界：用户已批准完整实施；本 RFC 只关闭 W2-D，不自动授权 W3 以后 wave
@@ -256,9 +256,9 @@ plan.md T2～T11**。本批准只关闭 RFC-294 W2-D，不自动批准 W3、W4�
 - 10 个 legacy scheduler symbol、6 条 W2-D 正向 bridge、17 条 scheduler→nodeMechanics reverse import、2 条 adjacent
   task-internal edge、legacy `wrapperProgress` / fanout service owner 与 `createLegacyTaskExecutionTopology` 均已归零；W3/W5
   的 lifecycle/commit-push mechanics 保持原 owner。
-- current canonical payload/provenance 为 `5ac1e1c6416e231e37abae4ea0b218c7f63eef52` →
-  `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，source digest 为
-  `sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`；`KNOWN_VIOLATIONS=31`、
+- current canonical payload/provenance 为 `98a5477955e49bb5b61bdb20fabed79d7abd439d` →
+  `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`，source digest 为
+  `sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`；`KNOWN_VIOLATIONS=31`、
   backend/repository value SCC=`4/6`、task-execution-containing SCC=`0`，没有用新 exception 抵账。
 - 全部现有 wrapper、嵌套、park/revival、merge/replay、fanout、persisted codec、status/error 与用户可见能力保持；无 migration、
   wire、UI、权限或安全策略变化。Bun 1.4 同期升级暴露的 Windows compiled-runtime pipe 空输出先由

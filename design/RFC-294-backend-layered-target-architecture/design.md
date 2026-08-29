@@ -142,9 +142,9 @@ RFC-331 前的历史基线为 `158b67296b05a11f22a92ab64b2045643f895f9f`，repor
 `sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592`。W2-C 自身 shape 由
 payload/pin `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` → `cfe1326b4e948c24772b06708f91e2526ba7022b`
 固定，digest 为 `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓 latest
-shape 已随 RFC-338/339/340 与 Windows runtime repair 更新为 payload/pin
-`5ac1e1c6416e231e37abae4ea0b218c7f63eef52` → `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，digest 为
-`sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`。下表是该 current shape：
+shape 已随 RFC-338/339/340、Windows runtime repair 与 scheduled CI repair 更新为 payload/pin
+`98a5477955e49bb5b61bdb20fabed79d7abd439d` → `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`，digest 为
+`sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`。下表是该 current shape：
 
 | current module           | production TS/TSX | architecture interpretation                                                                                          |
 | ------------------------ | ----------------: | -------------------------------------------------------------------------------------------------------------------- |
