@@ -1,7 +1,7 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
-- 目标架构状态：Draft（2026-08-28 刷新；仍待用户批准 D1～D9）
-- 迁移事实：Out-of-order in progress（RFC-287、RFC-297～337 已按各自范围形成多条 production/architecture
+- 目标架构状态：Draft（2026-08-30 刷新；仍待用户批准 D1～D9）
+- 迁移事实：Out-of-order in progress（RFC-287、RFC-297～343 已按各自范围形成多条 production/architecture
   vertical slice；RFC-317/319/326～333 均已 Done。RFC-328 已完成 N2/P0-D durable execution authority，仍不领取 W2 credit；
   RFC-329/330 分别提供 W4-A route/tool inventory 与 DE/ACL 纵切，但没有完成 W4；RFC-288/289 已关闭且未实现；
   RFC-294 N1a/N1b 治理基线已落，RFC-331 / W2-A topology cut 与
@@ -9,7 +9,9 @@
   [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md) 已关闭 P0-C residual；
   [RFC-334](../RFC-334-node-executor-registry/proposal.md) 已完成 T0～T12、hosted/scheduled closeout并关闭 W2-C；
   [RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已完成 T0～T11、canonical 与 hosted/scheduled closeout并关闭 W2-D；
-  [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已形成 W3 Draft，产品口径已确认但生产实施尚未获批准）
+  [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已完成完整 W3；
+  [RFC-342](../RFC-342-memory-scope-move-correctness/proposal.md) 与
+  [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md) 已分别关闭 P0-A/P0-B。W4 以后 wave 仍未授权）
 - 性质：目标架构总纲 + 迁移治理合同；已落 wave/slice 按 exact evidence 记账，未完成 wave 不因局部模块或账本存在而倒签 Done
 - `3bfd5be87ba98e329e49432d2e59bff918a878ec` 只保留为历史 measurement seed。current shape 统一由
   `architecture/current-report.json` 与七份 canonical manifests 重放。RFC-331 前的历史 source pin 为
@@ -18,16 +20,18 @@
   payload/provenance 为 `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` →
   `cfe1326b4e948c24772b06708f91e2526ba7022b`，digest 为
   `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓最新 architecture
-  payload/provenance 已随 RFC-338/339/340、Windows runtime repair 与 scheduled CI repair 刷新为
-  `98a5477955e49bb5b61bdb20fabed79d7abd439d` → `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`，canonical source digest 为
-  `sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`。四份 RFC-317 artifact 用
+  payload/provenance/final SHA 已随 RFC-341～343 closeout 刷新为
+  `f94290d715365ee6c46e927c211a00326834157b` → `d2a4cc742c6dbb318b237ede15155b354cd79584` →
+  `67a97480c5944c723d3ee08490631e4db768a5c6`，canonical source digest 为
+  `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`。四份 RFC-317 artifact 用
   `originSha + currentSnapshotSha + contentDigest` 分开记录历史 seed 与 current canonical snapshot。RFC-334 最终功能验收
   SHA `8e58eb05f987bcf08007db714119b3f46d519772` 的主 CI `33142147682` attempt 2 为 35/35 terminal
   `success`；W2-C production-equivalent SHA `0a0df74c4476355cc5d5e5f0fe289f823759a2e1` 的七条 scheduled
-  workflow 共 19/19 jobs `success`。hosted verdict 继续只按 exact SHA 单独判定，不把 ancestor、父提交、queued 或
+  workflow 共 19/19 jobs `success`。最新 implementation exact SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 的 Main CI
+  `33268925250` 与 8 个定时 workflow 全部 terminal `success`。hosted verdict 继续只按 exact SHA 单独判定，不把 ancestor、父提交、queued 或
   cancelled run 冒充证据。量化与下一步顺序以 `plan.md` §1/§3.2 为准
 - 当前全仓 shape 的 mutation/cross-context/exception/facade/public/owner 分母为
-  `967/1435/1398/377/392/18585`，backend/repo value SCC 保持 `4/6`，task-execution-containing SCC=`0`。这些是 committed canonical
+  `1016/1504/1468/378/403/18780`，backend/repo value SCC 保持 `4/6`，task-execution-containing SCC=`0`。这些是 committed canonical
   report/manifests 的当前证据；W2-C 自身 payload 仍按 `951/1329/1297/379/354/18139` 分栏记账。
 - 架构重采触发器：后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量/行为证据，不追着重算总体架构，也不给
   W0-R～W9 credit；只有 production context owner、public/required contract、schema/single-writer、composition root、cross-context
@@ -96,23 +100,24 @@ ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等
 “完全没有抽象”，而是抽象停在了机制层，尚未形成稳定的后台层次架构。
 
 RFC-331 前的 committed source `158b67296b05a11f22a92ab64b2045643f895f9f` 保留为历史基线；当前全仓已发布
-payload `98a5477955e49bb5b61bdb20fabed79d7abd439d` 的 replayed shape 如下，并由 provenance pin
-`17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31` 固定。各已关闭 wave 的自身候选与 current 全仓 snapshot 分栏：
+payload `f94290d715365ee6c46e927c211a00326834157b` 的 replayed shape 如下，并由 provenance pin
+`d2a4cc742c6dbb318b237ede15155b354cd79584` / final SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 固定。
+各已关闭 wave 的自身候选与 current 全仓 snapshot 分栏：
 
 | 指标                                       |                   当前值 | 说明                                                                                         |
 | ------------------------------------------ | -----------------------: | -------------------------------------------------------------------------------------------- |
 | dep graph modules                          |           current replay | static depcheck：31 条 accepted known；first-party unresolved=0，module 总数不从文档常量反推 |
-| backend TypeScript 源文件                  |                      978 | `packages/backend/src/**/*.ts` production corpus                                             |
-| `services/` 内实现文件                     |                      377 | legacy 横向层仍是主要物理债                                                                  |
-| `modules/**` production TS/TSX             |  442 / 12 个非空物理模块 | `task-execution=121`、`development-automation=115`；完整分布见 `plan.md` §1                  |
-| `scheduler.ts`                             |                   543 行 | W2-C/D node/wrapper/replay body 已迁出；仅保留 W3/W5 lifecycle/commit-push mechanics         |
-| `task.ts`                                  |                 7,442 行 | admission 后执行已统一走 coordinator；W4 前仍保留一条 exact legacy composition seam          |
+| backend TypeScript 源文件                  |                      997 | `packages/backend/src/**/*.ts` production corpus                                             |
+| `services/` 内实现文件                     |                      378 | legacy 横向层仍是主要物理债                                                                  |
+| `modules/**` production TS/TSX             |  454 / 12 个非空物理模块 | `task-execution=125`、`development-automation=115`；完整分布见 `plan.md` §1                  |
+| `scheduler.ts`                             |                   523 行 | W2/W3 mechanics 已迁出；仍保留 W5 commit-push 与 compatibility mechanics                     |
+| `task.ts`                                  |                 7,396 行 | admission 后执行已统一走 coordinator；W4 前仍保留 exact legacy composition seams             |
 | route→DB / transport→DB 值级边             |                   15 / 2 | route 债未降；RFC-317 T41 把两条 WS transport→DB 显式纳入账本                                |
 | route/MCP `AppDeps` consumer 文件          |                       53 | transport 仍反向依赖 composition root                                                        |
 | 值级 SCC                                   | backend 4 个 / 全仓 6 个 | RFC-331 已落只消除 task SCC family；其他 backend/shared/frontend family 保留                 |
 | `KNOWN_VIOLATIONS`                         |                       31 | RFC-331 精确删除 task family 六条 debt；其他分类不倒签完成                                   |
-| production background / ambient census     |                263 / 445 | current exact inventory；periodic/worker/local/disabled 与 register/global setter 分栏       |
-| RFC-317 boundary census                    | inbound 90 / outbound 23 | current canonical import projection；guard 保持补充 registry                                 |
+| production background / ambient census     |                265 / 448 | current exact inventory；periodic/worker/local/disabled 与 register/global setter 分栏       |
+| RFC-317 boundary census                    | inbound 89 / outbound 23 | current canonical import projection；guard 保持补充 registry                                 |
 | TaskCatalog membership                     |    `public` / `internal` | migration `0203`；TaskExecution 单写/继承，所有 public feed 复用 `public` predicate          |
 | ACL / grant-addressable resource type 分母 |                  15 / 16 | RFC-330 新增 `employee_tool` / `employee_job_template`；grant 另含 `scheduled_task`          |
 
@@ -387,15 +392,14 @@ W7 之前继续保留 `fanout-inner-chain-unsupported` 挡板。该能力属于�
 大规模搬迁不能掩盖现有正确性缺口。下列功能正确性项必须在各自依赖的 wave 前以独立 RFC/修复批处理；
 本节不授权新增安全策略或收缩产品能力：
 
-1. **Memory scope move**：通用 PATCH 禁止改 scope；专用 command 在同一事务用 trusted current authority
+1. **Memory scope move（Done / RFC-342）**：通用 PATCH 禁止改 scope；专用 command 在同一事务用 trusted current authority
    校验旧 scope、新 scope与目标存在性。command input 不接收或持久化 Actor/权限快照；approved/archived 是否允许移动
    必须单列能力影响请批，默认 fail-closed。
-2. **Memory 提交后事件**：事务内不得同步 publish，避免 rollback 后 ghost WS。
-3. **Intent apply**：先修 lock 清理与不可恢复终态，再让 Intent 以 provider 接入 AtomicApplyEngine；
+2. **Memory 提交后事件（Done / RFC-342）**：事务内不得同步 publish，避免 rollback 后 ghost WS。
+3. **Intent apply（P0-B Done / RFC-343）**：已修 lock 清理与不可恢复终态；后续仍由 W6 让 Intent 以 provider 接入 AtomicApplyEngine；
    不继续双修两套 converger。
-4. **Human-gate 原子性 residual**：RFC-326 已把 review anchor、批量评论/选择与 decision 的 DB mutation 收进单事务；
-   仍须让 durable decision、node/task transition 与 continuation intent 同一事务提交，把 clarify/questions 归入同一合同，
-   FS/output 走 prepare+journal+roll-forward，route/MCP 不再各自拼接 resume saga。
+4. **Human-gate 原子性 residual（Done / RFC-333 + RFC-341）**：review/clarify/questions 的 durable decision、node/task
+   transition、continuation intent 与 committed event 已按适用合同同事务提交；route/MCP request-owned resume saga 已归零。
 5. **最小 durable ownership fence（Done / RFC-328）**：人工、自动与 scheduler 入口已统一到 durable intent/owner epoch；
    execution-plane DB mutation、FS/Git/process/outbound effect、runtime registry、terminal maintenance 与 lifecycle outbox 已形成
    单一权威。它是 RFC-331 的已满足前置，不再作为待办重做。
@@ -403,10 +407,9 @@ W7 之前继续保留 `fanout-inner-chain-unsupported` 挡板。该能力属于�
    identity/provenance 要求只作为 W7 后新号能力 RFC 的输入。两份 CLOSED 文档都不再充当 gate，也不再修订状态。
 
 RFC-287 已落地，旧的 P0-A/B/C/D→W1 箭头改记 prerequisite deviation，不伪造历史顺序。P0-A/B/C 分别重新绑定
-W4-E2、W6、W2-C/W3；N1/W0-R、P0-D、RFC-331 W2-A 与 RFC-332 W2-B 已落，RFC-333 已把 P0-C residual 关闭。
-W2-C 已由 RFC-334 完成并通过 hosted/scheduled closeout；W2-D 已由 RFC-339 完成并关闭。W3 已由
-[RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 承接为 Draft，产品口径已确认，
-proposal/plan 的生产实施仍须明确批准。后续 wave 仍须新 RFC 与明确批准。W7 identity/provenance 完成后才允许新号
+W4-E2、W6、W2-C/W3；RFC-342、RFC-343 与 RFC-333 已把 P0-A/B/C 全部关闭。N1/W0-R、P0-D、RFC-331 W2-A、
+RFC-332 W2-B、RFC-334 W2-C、RFC-339 W2-D 与 RFC-341 W3 也均完成 hosted/scheduled closeout。
+后续 wave 仍须新 RFC 与明确批准。W7 identity/provenance 完成后才允许新号
 fanout 能力 RFC；未获批时跳过 W8。最新 partial order 以 `plan.md` §3.1 为准。
 
 ## 7. 非目标

@@ -1,5 +1,10 @@
 # RFC-342 技术设计 — Memory scope move 事务正确性
 
+- 状态：Done（2026-08-30；D1～D7、P0-A production 实现、canonical 与 hosted closeout 已完成）
+- 实现链：`9dc7e6ea8` → `74c0e72bb` → `e0ef3e51c`
+- final implementation / Main CI：`67a97480c5944c723d3ee08490631e4db768a5c6` / `33268925250`
+- scheduled closeout：同一 exact SHA 的 8 个定时 workflow 全部 terminal success
+
 ## 1. Wire contract
 
 ```ts

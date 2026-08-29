@@ -1,6 +1,14 @@
 # RFC-343 实施计划 — Intent Apply 恢复正确性
 
-状态：In Progress（2026-08-29；本地候选完成，发布/hosted CI 未执行）。
+状态：Done（2026-08-30）；T0～T5、RFC-294 P0-B、canonical replay 与 exact-SHA hosted closeout 已完成。
+
+主实现：`f21d6142a3c15f93a51fb21dcac063f22d3a94f3`。
+
+Current canonical payload / provenance / final SHA：`f94290d715365ee6c46e927c211a00326834157b` →
+`d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6`；source digest
+`sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`。
+
+Hosted closeout：Main CI `33268925250` 与同一 exact SHA 的 8 个定时 workflow terminal success。
 
 ## 1. 任务
 
@@ -38,15 +46,15 @@
 - [x] backend typecheck（RFC-341 收口其在制诊断后全绿）；
 - [x] 按项目约定不跑本地 Bun test/gate，以最终 exact-SHA hosted CI 为准。
 
-### T5 — publication / hosted closeout（Pending）
+### T5 — publication / hosted closeout（Done）
 
-- [ ] 与 RFC-341 协调 canonical generator 和 publication critical section；
-- [ ] fetch/sync，确认 shared index 与 exact allowlist；
-- [ ] 用户授权后才可 exact-stage/commit/push；
-- [ ] 核验 remote ancestry 与 exact-SHA required CI；
-- [ ] hosted backend tests 成功后更新 RFC-294 P0-B 为 Done。
+- [x] 与 RFC-341 协调 canonical generator 和 publication critical section；
+- [x] fetch/sync，确认 shared index 与 exact allowlist；
+- [x] 用户授权后 exact-stage/commit/push；
+- [x] remote ancestry、current canonical payload/provenance 与 exact-SHA required CI 已核验；
+- [x] hosted backend、三平台 E2E 与 8 个定时 workflow 全绿，RFC-294 P0-B 已置 Done。
 
-## 2. 当前 candidate allowlist
+## 2. 最终交付路径
 
 - `packages/backend/src/services/intent/applyChangeset.ts`
 - `packages/backend/src/services/intent/journalArtifacts.ts`

@@ -1,9 +1,9 @@
 # RFC-294 技术设计：后台最终层次架构
 
 > 本文描述目标态合同，不是一次性目录搬迁清单。实施期允许旧路径 facade，但不允许旧行为内核与新行为
-> 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～337 的已发布批次已在其后
+> 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～343 的已发布批次已在其后
 > 改变 production shape，因此“当前已落事实、量化基线、前置偏差与下一步顺序”统一以 `plan.md` §1/§3.2 的
-> 2026-08-28 刷新为准。N1a/N1b、RFC-328 P0-D 与 RFC-331 W2-A topology cut 已落；
+> 2026-08-30 刷新为准。N1a/N1b、RFC-328 P0-D 与 RFC-331 W2-A topology cut 已落；
 > [RFC-332](../RFC-332-task-engine-decomposition/proposal.md) / W2-B TaskEngine 也已发布并完成 provenance/hosted closeout，
 > canonical value SCC 保持 `4/6`；最终 containing SHA `4dd30d034f1bcb0c6532301cec11bdd288702105` 的
 > CI `33052994260`（35/35）、git-protocols-e2e `33052994263`（1/1）与 integration-opencode
@@ -14,8 +14,13 @@
 > 的主 CI `33142147682` attempt 2 为 35/35 success，七条 production-equivalent scheduled workflow 为 19/19 jobs
 > success。W2-C 已关闭；[RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已于 2026-08-29 完成 T0～T11、
 > canonical replay 与 hosted/scheduled closeout并关闭 W2-D。
-> [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已承接 W3 为 Draft；产品口径已确认，
-> 但 proposal/plan 尚未获得 production 实施批准。
+> [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已完成完整 W3；
+> [RFC-342](../RFC-342-memory-scope-move-correctness/proposal.md) 与
+> [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md) 已分别关闭 P0-A/P0-B。current canonical
+> payload/provenance/final SHA 为 `f94290d715365ee6c46e927c211a00326834157b` →
+> `d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6`，source digest
+> `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`；Main CI `33268925250` 与同一 SHA 的 8 个定时 workflow
+> 全部 terminal success。W4 以后 wave 仍未授权。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
 ## 1. 设计原则
@@ -144,28 +149,29 @@ RFC-331 前的历史基线为 `158b67296b05a11f22a92ab64b2045643f895f9f`，repor
 `sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592`。W2-C 自身 shape 由
 payload/pin `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` → `cfe1326b4e948c24772b06708f91e2526ba7022b`
 固定，digest 为 `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓 latest
-shape 已随 RFC-338/339/340、Windows runtime repair 与 scheduled CI repair 更新为 payload/pin
-`98a5477955e49bb5b61bdb20fabed79d7abd439d` → `17e6ded6880273f964bb77dc6e0c6e0bc4e2bf31`，digest 为
-`sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6`。下表是该 current shape：
+shape 已随 RFC-341～343 closeout 更新为 payload/pin/final SHA
+`f94290d715365ee6c46e927c211a00326834157b` → `d2a4cc742c6dbb318b237ede15155b354cd79584` →
+`67a97480c5944c723d3ee08490631e4db768a5c6`，digest 为
+`sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`。下表是该 current shape：
 
-| current module           | production TS/TSX | architecture interpretation                                                                                          |
-| ------------------------ | ----------------: | -------------------------------------------------------------------------------------------------------------------- |
-| `development-automation` |               115 | active writer/type package；aggregate、工具合同与功能闭环已落，public/required/inbound/bootstrap cutover 未完成      |
-| `identity-access`        |                33 | role/grant/authority、presence、profile/email/Git identity slices landed；route 直读与 full Actor facade 未退役      |
-| `integration`            |                31 | webhook/code-host、adapter definition/connection + Event Center adapter；仍有 schema/inbound 装配债                  |
-| `task-execution`         |               121 | RFC-331/332 topology/TaskEngine、RFC-333 continuation、RFC-334 node 与 RFC-339 wrapper/recovery layer 已落           |
-| `digital-employee`       |                23 | EmployeeCase/Context/Reaction/authoring/runtime + frozen adapter binding landed；TE required-port cutover 未完成     |
-| `source-control`         |                22 | candidate/commit/publication transport/credential slices；WorkspaceRef/repo/cache/worktree owner 未收口              |
-| `event-center`           |                20 | catalog/subscription/observer/delivery/automation-rule writer landed；canonical outbox/background/root 收口未完成    |
-| `code-capability`        |                19 | legacy history/template island；仅 upstream merge 为有账临时 writer，非 active execution owner                       |
-| `execution-contract`     |                 7 | executor-neutral guide/fixture/exact-output contract landed；legacy resource/script provider adapter 未退役          |
-| `task-catalog`           |                 4 | 多来源目录读模型 landed；当前仍传 full Actor/string filter 且 route 直取 composition，未达最终 public query contract |
-| `collaboration`          |                46 | RFC-333/340 人工门 operation/participant 与 node-scoped reviewer slice 已落；后续 public/consumer cutover 仍待 W3/W4 |
-| `intent`                 |                 1 | pure domain seed                                                                                                     |
+| current module           | production TS/TSX | architecture interpretation                                                                                           |
+| ------------------------ | ----------------: | --------------------------------------------------------------------------------------------------------------------- |
+| `development-automation` |               115 | active writer/type package；aggregate、工具合同与功能闭环已落，public/required/inbound/bootstrap cutover 未完成       |
+| `identity-access`        |                33 | role/grant/authority、presence、profile/email/Git identity slices landed；route 直读与 full Actor facade 未退役       |
+| `integration`            |                31 | webhook/code-host、adapter definition/connection + Event Center adapter；仍有 schema/inbound 装配债                   |
+| `task-execution`         |               125 | RFC-331/332 topology/TaskEngine、RFC-333 continuation、RFC-334 node、RFC-339 wrapper 与 RFC-341 lifecycle events 已落 |
+| `digital-employee`       |                23 | EmployeeCase/Context/Reaction/authoring/runtime + frozen adapter binding landed；TE required-port cutover 未完成      |
+| `source-control`         |                22 | candidate/commit/publication transport/credential slices；WorkspaceRef/repo/cache/worktree owner 未收口               |
+| `event-center`           |                20 | catalog/subscription/observer/delivery/automation-rule writer 与 W3 committed-delivery 运维面已落；W9 root仍待收口    |
+| `code-capability`        |                19 | legacy history/template island；仅 upstream merge 为有账临时 writer，非 active execution owner                        |
+| `execution-contract`     |                 7 | executor-neutral guide/fixture/exact-output contract landed；legacy resource/script provider adapter 未退役           |
+| `task-catalog`           |                 4 | 多来源目录读模型 landed；当前仍传 full Actor/string filter 且 route 直取 composition，未达最终 public query contract  |
+| `collaboration`          |                54 | RFC-333/340 人工门与 reviewer slice、RFC-341 closed events/continuous continuation已落；其余 public cutover待 W4      |
+| `intent`                 |                 1 | pure domain seed                                                                                                      |
 
-物理 module 已增至 442 个 production TS/TSX 文件。RFC-339 已让 task-execution runtime 在 bootstrap 只构造一次并由
+物理 module 已增至 454 个 production TS/TSX 文件。RFC-339 已让 task-execution runtime 在 bootstrap 只构造一次并由
 REST/MCP/CLI 显式消费，但全仓仍未形成 RFC-294 终局唯一 container：当前 HTTP、CLI 与其他 context worker 仍各自装配部分 context，
-Integration 还用 deferred participant 避免重复 composition 覆盖；54 个 route/MCP 文件继续导入 `AppDeps`，15 条 route→DB 与两条
+Integration 还用 deferred participant 避免重复 composition 覆盖；53 个 route/MCP 文件继续导入 `AppDeps`，15 条 route→DB 与两条
 transport→DB 继续存在。目标 `DaemonContainer/AppCompositionRoot` 仍归 W9，HTTP/MCP/Webhook/Schedule 只能是 inbound adapters，
 不得把当前多 root 形状倒签为目标已完成。
 
@@ -199,9 +205,9 @@ registry。global owner/symbol/edge FK、mutation/transaction/background/public-
 ambient wiring 全分母已闭合；当前 20 条 required-port `declared-debt` 与最终 consumer/provider cutover 仍归 W4/W5/W9，不能复制
 一套新 owner/debt，也不能把“已建账”误写成“已迁完”。
 
-current report 的机器分母为：978 个 backend production 文件、442 个 module 文件、18585 个 production file/top-level symbol
-owner、967 个 mutation entrypoint、269 个 transaction external-effect entry、263 个 background entry、445 个 ambient seam、1435 条
-observed cross-context edge、1398 条 exact exception、377 个 facade、392 个 public symbol与 5 条 edge-neutral field-growth ledger；
+current report 的机器分母为：997 个 backend production 文件、454 个 module 文件、18780 个 production file/top-level symbol
+owner、1016 个 mutation entrypoint、281 个 transaction external-effect entry、265 个 background entry、448 个 ambient seam、1504 条
+observed cross-context edge、1468 条 exact exception、378 个 facade、403 个 public symbol与 5 条 edge-neutral field-growth ledger；
 target implementation SCC=0，unresolved first-party=0。数字只从 committed manifests/report 重放，不在本文另设分母。
 
 RFC-317 已落的 P1/P2 修复是目标架构的行为 oracle，但不是边界 cutover credit：

@@ -1,5 +1,10 @@
 # RFC-343 技术设计 — Intent Apply 恢复正确性
 
+- 状态：Done（2026-08-30；P0-B production 实现、canonical 与 hosted closeout 已完成）
+- 主实现：`f21d6142a3c15f93a51fb21dcac063f22d3a94f3`
+- final implementation / Main CI：`67a97480c5944c723d3ee08490631e4db768a5c6` / `33268925250`
+- scheduled closeout：同一 exact SHA 的 8 个定时 workflow 全部 terminal success
+
 ## 1. Session lock
 
 ```text

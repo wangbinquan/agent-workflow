@@ -1,8 +1,13 @@
 # RFC-342 — Memory scope move 事务正确性（RFC-294 P0-A）
 
-- 状态：In Progress（2026-08-29；本地候选已实现，待发布/hosted CI）
+- 状态：Done（2026-08-30；RFC-294 P0-A、canonical replay 与 exact-SHA hosted closeout 已完成）
 - 授权：用户于 2026-08-29 明确要求“开始落地剩余 P0”
 - 同步基线：`69eaf95488c86c5190fd7ff1360cf272b7826979`
+- 实现链：`9dc7e6ea8` → `74c0e72bb` → `e0ef3e51c`
+- current canonical：`f94290d715365ee6c46e927c211a00326834157b` →
+  `d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6`，source digest
+  `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`
+- hosted closeout：Main CI `33268925250` 与同一 exact SHA 的 8 个定时 workflow 全部 terminal success
 - 前置：RFC-041、RFC-045、RFC-099、RFC-248、RFC-294、RFC-305、RFC-324
 - 范围：content PATCH 收窄、专用 Move command、可信 request authority、双 scope 授权、OCC、
   durable move receipt、commit 后 WS、现有编辑 UI 切换到 Move、竞争/rollback/注入受众测试
@@ -100,3 +105,11 @@ transaction 只写 durable state。成功返回后才发原有 `memory.updated` 
 - **AC-9**：migration 从 fresh/upgrade journal 可应用，schema constraints 拒绝非法 scope pair、no-op 和非 +1 version。
 - **AC-10**：candidate UI scope save 先调用 Move，后续 content PATCH 不含 scope；approved/archived UI scope 不可编辑且有可见说明。
 - **AC-11**：发布 SHA 的 hosted CI 终态成功后才关闭 RFC-294 P0-A。
+
+## 7. 完成记录
+
+AC-1～AC-11 已在 final implementation exact SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 闭合。该 SHA 的
+Main CI `33268925250` terminal success；e2e-full `33268950624`（含 RFC-319 覆盖账本汇总）、e2e-webkit
+`33268950212`、evidence `33268949064`、git-protocols `33268950157`、integration-opencode `33268949548`、
+maintenance-soak `33268952181`（100-client/full/180s，同 SHA attempt 2）、visual `33268950915` 与
+windows-platform `33268951134` 也全部 terminal success。RFC-342 据此 Done，并只关闭 RFC-294 P0-A；不领取 W4-E2 credit。

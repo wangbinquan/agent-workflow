@@ -1,6 +1,14 @@
 # RFC-342 实施计划 — Memory scope move 事务正确性
 
-状态：In Progress（2026-08-29；本地候选完成，发布/hosted CI 未执行）。
+状态：Done（2026-08-30）；T0～T6、RFC-294 P0-A、canonical replay 与 exact-SHA hosted closeout 已完成。
+
+实现链：`9dc7e6ea8` → `74c0e72bb` → `e0ef3e51c`。
+
+Current canonical payload / provenance / final SHA：`f94290d715365ee6c46e927c211a00326834157b` →
+`d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6`；source digest
+`sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`。
+
+Hosted closeout：Main CI `33268925250` 与同一 exact SHA 的 8 个定时 workflow terminal success。
 
 ## 1. 任务
 
@@ -41,7 +49,7 @@
 - [x] migration `0221`、journal idx 220、Drizzle schema 与同事务 receipt insert；
 - [x] WS 只在 commit 后发布。
 
-### T4 — proof corpus（Implemented）
+### T4 — proof corpus（Done）
 
 - [x] old/new scope owner/read/write/foreign/bypass/PAT matrix tests 已写；
 - [x] stale/status/target missing/no-op tests 已写；
@@ -60,15 +68,15 @@
 - [x] backend typecheck（RFC-341 收口其在制诊断后全绿）；
 - [x] 按项目约定不跑本地 Bun test/gate，以最终 exact-SHA hosted CI 为准。
 
-### T6 — publication / hosted closeout（Pending）
+### T6 — publication / hosted closeout（Done）
 
-- [ ] 与 RFC-341 协调 canonical generator 和 publication critical section；
-- [ ] fetch/sync，确认 shared index 与 exact allowlist；
-- [ ] 用户授权后才可 exact-stage/commit/push；
-- [ ] 核验 remote ancestry 与 exact-SHA required CI；
-- [ ] hosted migration + backend suites 成功后更新 RFC-294 P0-A 为 Done。
+- [x] 与 RFC-341 协调 canonical generator 和 publication critical section；
+- [x] fetch/sync，确认 shared index 与 exact allowlist；
+- [x] 用户授权后 exact-stage/commit/push；
+- [x] remote ancestry、current canonical payload/provenance 与 exact-SHA required CI 已核验；
+- [x] hosted migration、backend、frontend、三平台 E2E 与 8 个定时 workflow 全绿，RFC-294 P0-A 已置 Done。
 
-## 2. 当前 candidate allowlist
+## 2. 最终交付路径
 
 - `packages/shared/src/schemas/memory.ts`
 - `packages/shared/tests/memory-patch-schema.test.ts`
