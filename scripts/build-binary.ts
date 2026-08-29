@@ -34,6 +34,12 @@ const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 const pluginsDir = join(backendSrc, 'services', 'runtime', 'opencode', 'plugin')
 const generatedPath = join(backendSrc, 'embed.generated.ts')
 const mainEntry = join(backendSrc, 'main.ts')
+const managedProcessLauncherEntry = join(
+  backendSrc,
+  'services',
+  'execution',
+  'managedProcessLauncher.ts',
+)
 // RFC-311 实现门 P0-1:`new Worker(new URL('./x.ts', import.meta.url))` 不被
 // bundler 追踪——worker 必须显式作为**额外入口**参与 --compile,否则发布版单
 // 二进制里它 ModuleNotFound,备份的 off-thread VACUUM 每次都落到回退路径。
@@ -132,7 +138,7 @@ async function buildFrontend(): Promise<void> {
   }
 }
 
-function renderGenerated(): {
+function renderGenerated(managedProcessLauncherSource: string): {
   readonly contents: string
   readonly counts: {
     readonly frontendCount: number
@@ -183,6 +189,10 @@ function renderGenerated(): {
   lines.push('')
   lines.push('export const IS_EMBEDDED = true')
   lines.push('')
+  lines.push(
+    `export const MANAGED_PROCESS_LAUNCHER_SOURCE = ${JSON.stringify(managedProcessLauncherSource)}`,
+  )
+  lines.push('')
 
   lines.push('export const FRONTEND_FILES: Record<string, string> = {')
   for (const [rel, id] of frontEntries) lines.push(`  ${JSON.stringify(rel)}: ${id},`)
@@ -224,6 +234,28 @@ function renderGenerated(): {
       grammarCount: grammarEntries.length,
     },
   }
+}
+
+async function buildManagedProcessLauncherSource(): Promise<string> {
+  process.stdout.write(`\n$ bun build ${managedProcessLauncherEntry} --target=bun --minify\n`)
+  const result = await Bun.build({
+    entrypoints: [managedProcessLauncherEntry],
+    target: 'bun',
+    minify: true,
+    define: {
+      // The extracted helper is ordinary bundled JavaScript executed by the
+      // containing standalone binary in Bun-CLI mode. It must never try to
+      // extract or recursively invoke another launcher.
+      AW_COMPILED_BUILD: 'false',
+    },
+  })
+  if (!result.success) {
+    for (const log of result.logs) process.stderr.write(`${String(log)}\n`)
+    throw new Error('bun build failed for managed-process launcher source')
+  }
+  const output = result.outputs[0]
+  if (output === undefined) throw new Error('managed-process launcher build produced no output')
+  return output.text()
 }
 
 async function buildDaemonBinary(input: {
@@ -292,7 +324,8 @@ async function main(): Promise<void> {
 
   // 2. Render the production embed table in memory. The source-tree stub is a
   //    watched dev dependency and must remain byte-for-byte untouched.
-  const generated = renderGenerated()
+  const managedProcessLauncherSource = await buildManagedProcessLauncherSource()
+  const generated = renderGenerated(managedProcessLauncherSource)
   const counts = generated.counts
   process.stdout.write(
     `\nprepared virtual ${generatedPath}: ${counts.frontendCount} frontend files + ${counts.migrationCount} migration files + ${counts.pluginCount} opencode-plugin files + ${counts.grammarCount} grammar wasms\n`,

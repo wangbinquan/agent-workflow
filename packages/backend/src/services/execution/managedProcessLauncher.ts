@@ -5,7 +5,7 @@
 // If the daemon dies or closes the control pipe first, EOF makes the launcher
 // exit without ever spawning the target command.
 
-import { IS_EMBEDDED } from '@/embed'
+import { MANAGED_PROCESS_LAUNCHER_SOURCE } from '@/embed.generated'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import {
   appendFileSync,
@@ -18,7 +18,9 @@ import {
   writeSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+
+declare const AW_COMPILED_BUILD: boolean | undefined
 
 export const MANAGED_PROCESS_LAUNCHER_SUBCOMMAND = '__managed-process-launcher'
 export const MANAGED_PROCESS_LAUNCH_NONCE_FLAG = '--launch-nonce'
@@ -30,6 +32,7 @@ export const MANAGED_PROCESS_TARGET_SEPARATOR = '--'
 export const MANAGED_PROCESS_LAUNCH_ERROR_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_ERROR:'
 export const MANAGED_PROCESS_LAUNCH_READY_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_READY:'
 export const MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX = '\u001eMANAGED_PROCESS_LAUNCH_OUTPUT:'
+const BUN_BE_BUN_ENV = 'BUN_BE_BUN'
 
 export interface WindowsManagedProcessOutputPaths {
   readonly stdoutPath: string
@@ -41,6 +44,7 @@ export interface ManagedProcessActivationFrame {
   readonly v: 1
   readonly launchNonce: string
   readonly targetArgv?: readonly string[]
+  readonly targetEnv?: Readonly<Record<string, string>>
   readonly stdin: Readonly<{ mode: 'ignore' }> | Readonly<{ mode: 'pipe'; data: string }>
   /**
    * Windows output destinations are repeated in the post-receipt frame. Bun's
@@ -52,13 +56,28 @@ export interface ManagedProcessActivationFrame {
   readonly windowsOutputPaths?: WindowsManagedProcessOutputPaths
 }
 
-function selfInvocation(): string[] {
-  if (IS_EMBEDDED) {
-    // In a Windows standalone executable `process.execPath` can name Bun's
-    // embedded runtime rather than the containing application. argv[0] is the
-    // executable the OS actually launched, so only it can re-enter main.ts's
-    // private launcher command.
-    return [Bun.argv[0] ?? process.execPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+function isCompiledWindowsLauncher(): boolean {
+  return process.platform === 'win32' && typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD
+}
+
+function selfInvocation(windowsOutputPaths?: WindowsManagedProcessOutputPaths): string[] {
+  if (isCompiledWindowsLauncher()) {
+    if (windowsOutputPaths === undefined || MANAGED_PROCESS_LAUNCHER_SOURCE.length === 0) {
+      throw new Error('compiled Windows managed process launcher source is missing')
+    }
+    // Bun standalone executables can lose application argv when they recursively
+    // enter their bundled main module on Windows. Execute a self-contained JS
+    // launcher through the same executable's Bun runtime instead. The helper
+    // lives in the already-private per-launch spool and is removed with it.
+    const launcherPath = join(
+      dirname(windowsOutputPaths.controlPath),
+      'managed-process-launcher.mjs',
+    )
+    writeFileSync(launcherPath, MANAGED_PROCESS_LAUNCHER_SOURCE)
+    return [process.execPath, 'run', launcherPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+  }
+  if (typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD) {
+    return [process.execPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
   }
   // Development/test launches do not need to import the daemon's complete CLI
   // graph for every runtime attempt.  Invoke this deliberately small module
@@ -75,7 +94,7 @@ export function managedProcessLauncherArgv(input: {
     throw new Error('managed process launcher requires a nonce and target argv')
   }
   return [
-    ...selfInvocation(),
+    ...selfInvocation(input.windowsOutputPaths),
     MANAGED_PROCESS_LAUNCH_NONCE_FLAG,
     input.launchNonce,
     ...(input.windowsOutputPaths === undefined
@@ -91,6 +110,17 @@ export function managedProcessLauncherArgv(input: {
     MANAGED_PROCESS_TARGET_SEPARATOR,
     ...input.targetArgv,
   ]
+}
+
+export function managedProcessLauncherEnvironment(input: {
+  env: Readonly<Record<string, string>>
+  launchNonce: string
+}): Record<string, string> {
+  return {
+    ...input.env,
+    [MANAGED_PROCESS_LAUNCH_NONCE_ENV]: input.launchNonce,
+    ...(isCompiledWindowsLauncher() ? { [BUN_BE_BUN_ENV]: '1' } : {}),
+  }
 }
 
 function parseLauncherRequest(argv: readonly string[]): {
@@ -160,6 +190,7 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
     v?: unknown
     launchNonce?: unknown
     targetArgv?: unknown
+    targetEnv?: unknown
     stdin?: { mode?: unknown; data?: unknown }
     windowsOutputPaths?: {
       stdoutPath?: unknown
@@ -184,6 +215,15 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
       value.targetArgv.some((part) => typeof part !== 'string'))
   ) {
     throw new Error('invalid managed process activation frame target argv')
+  }
+  if (
+    value.targetEnv !== undefined &&
+    (value.targetEnv === null ||
+      typeof value.targetEnv !== 'object' ||
+      Array.isArray(value.targetEnv) ||
+      Object.values(value.targetEnv).some((entry) => typeof entry !== 'string'))
+  ) {
+    throw new Error('invalid managed process activation frame target env')
   }
   const rawWindowsOutputPaths = value.windowsOutputPaths
   if (
@@ -211,6 +251,9 @@ function parseActivationFrame(raw: string, launchNonce: string): ManagedProcessA
     v: 1,
     launchNonce,
     ...(value.targetArgv === undefined ? {} : { targetArgv: value.targetArgv as string[] }),
+    ...(value.targetEnv === undefined
+      ? {}
+      : { targetEnv: value.targetEnv as Record<string, string> }),
     stdin:
       value.stdin.mode === 'pipe'
         ? { mode: 'pipe', data: value.stdin.data as string }
@@ -446,6 +489,17 @@ export async function runManagedProcessLauncher(
     return 125
   }
   const targetArgv = frame.targetArgv ?? request?.targetArgv
+  const targetEnv =
+    frame.targetEnv ??
+    Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] => {
+        return (
+          entry[0] !== MANAGED_PROCESS_LAUNCH_NONCE_ENV &&
+          entry[0] !== BUN_BE_BUN_ENV &&
+          typeof entry[1] === 'string'
+        )
+      }),
+    )
   const windowsOutputPaths = frame.windowsOutputPaths ?? request?.windowsOutputPaths
   if (targetArgv === undefined || targetArgv.length === 0) {
     reportLaunchError(
@@ -470,11 +524,7 @@ export async function runManagedProcessLauncher(
       cmd: [...targetArgv],
       ...platformSpawnOptionsForHost(),
       cwd: process.cwd(),
-      env: Object.fromEntries(
-        Object.entries(process.env).filter((entry): entry is [string, string] => {
-          return entry[0] !== MANAGED_PROCESS_LAUNCH_NONCE_ENV && typeof entry[1] === 'string'
-        }),
-      ),
+      env: targetEnv,
       stdout: outputSpool?.stdoutWriteFd ?? 'inherit',
       stderr: outputSpool?.stderrWriteFd ?? 'inherit',
       stdin: frame.stdin.mode === 'pipe' ? 'pipe' : 'ignore',

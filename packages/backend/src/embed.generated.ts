@@ -10,6 +10,13 @@
 
 export const IS_EMBEDDED = false
 
+/**
+ * Bundled, self-contained launcher source used by the Windows standalone
+ * executable. The binary build replaces this stub in memory; source execution
+ * keeps using managedProcessLauncher.ts directly.
+ */
+export const MANAGED_PROCESS_LAUNCHER_SOURCE = ''
+
 /** url-path -> embedded file path (resolves to a /$bunfs/... path at runtime). */
 export const FRONTEND_FILES: Record<string, string> = {}
 
