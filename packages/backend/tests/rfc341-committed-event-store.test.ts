@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { committedEventDeliveries, committedEvents } from '@/db/schema'
@@ -63,6 +65,12 @@ function cutover(
 }
 
 describe('RFC-341 committed-event store', () => {
+  test('Event Center maps retry CAS loss to the stable route error code', () => {
+    const route = readFileSync(resolve(import.meta.dir, '../src/routes/eventCenter.ts'), 'utf8')
+    expect(route).toContain("'committed-event-retry-conflict'")
+    expect(route).toContain('/api/event-center/committed-deliveries/:eventId/:consumerId/retry')
+  })
+
   test('keeps legacy inert, appends shadow atomically and rejects conflicting replay', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const legacy = dbTxSync(db, (tx) =>

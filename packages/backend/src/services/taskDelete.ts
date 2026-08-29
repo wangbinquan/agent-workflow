@@ -40,13 +40,7 @@ import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import {
-  taskCollaborators,
-  taskFeedback,
-  taskLifecycleEventOutbox,
-  taskRepos,
-  tasks,
-} from '@/db/schema'
+import { taskCollaborators, taskFeedback, taskRepos, tasks } from '@/db/schema'
 import { isTaskActive } from '@/services/task'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -388,15 +382,9 @@ export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTa
         }
         return { taskId: item.id, visibleUserIds }
       })
-      // Explicit task-scoped deletes; the remaining FK tables cascade with the
-      // task row. Lifecycle publication rows deliberately use a restrictive FK
-      // so no generic task deletion can silently orphan an Event Center fact.
+      // Explicit task-scoped deletes; committed lifecycle facts intentionally
+      // survive task deletion as Event Center audit records.
       tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
-      if (cascadeIds.length > 0) {
-        tx.delete(taskLifecycleEventOutbox)
-          .where(inArray(taskLifecycleEventOutbox.taskId, cascadeIds))
-          .run()
-      }
       tx.delete(tasks).where(eq(tasks.id, taskId)).run()
 
       // RFC-311 实现门 P1-6/P2-3:`branch_started_at` 是「子树 max(started_at)」的
@@ -568,9 +556,6 @@ export async function recoverInterruptedTaskDeletes(db: DbClient): Promise<Delet
             })
             if (cascadeIds.length > 0) {
               tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds)).run()
-              tx.delete(taskLifecycleEventOutbox)
-                .where(inArray(taskLifecycleEventOutbox.taskId, cascadeIds))
-                .run()
             }
             tx.delete(tasks).where(eq(tasks.id, item.rootTaskId)).run()
 

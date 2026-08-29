@@ -44,7 +44,6 @@ const RFC331_LEGACY_CONSUMERS = new Set([
 ])
 
 const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
-  'packages/backend/src/cli/start.ts:@/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher',
   // RFC-334 moved activation behind the node execution gateway; the scheduler
   // deep import is intentionally extinct rather than transferred to a new legacy consumer.
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/branchTrace',
@@ -305,17 +304,15 @@ describe('RFC-331 architecture cuts', () => {
     )
   })
 
-  test('ephemeral status publisher cannot create a second durable event path', () => {
+  test('ephemeral status projector cannot create a second durable event path', () => {
     const unit = sourceUnit(
-      'packages/backend/src/modules/task-execution/infrastructure/webSocketTaskStatusPublisher.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjector.ts',
       source(
-        'packages/backend/src/modules/task-execution/infrastructure/webSocketTaskStatusPublisher.ts',
+        'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjector.ts',
       ),
     )
     const specifiers = importEdges(unit).map((edge) => edge.specifier)
     expect(specifiers).toContain('@/ws/broadcaster')
-    expect(specifiers.some((value) => /outbox|lifecycleEvent|event-center|db\//i.test(value))).toBe(
-      false,
-    )
+    expect(specifiers.some((value) => /outbox|sqliteStore|event-center/i.test(value))).toBe(false)
   })
 })

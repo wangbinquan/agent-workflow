@@ -1,10 +1,11 @@
 // RFC-333 — infrastructure binding for the exact human-gate lifecycle port.
 
 import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
-import { notifyHumanGateTaskParkAfterCommit, transitionHumanGateTaskTx } from '@/services/lifecycle'
+import { transitionHumanGateTaskTx } from '@/services/lifecycle'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 import type { HumanGateTaskLifecycle } from '../application/ports/humanGateTaskLifecycle'
 
 export class LegacyHumanGateTaskLifecycle implements HumanGateTaskLifecycle {
@@ -31,16 +32,13 @@ export class LegacyHumanGateTaskLifecycle implements HumanGateTaskLifecycle {
 
   transitionTx(input: Parameters<HumanGateTaskLifecycle['transitionTx']>[0]): {
     readonly taskRevision: number
+    readonly eventRefs: readonly CommittedEventRef[]
   } {
     const transitioned = transitionHumanGateTaskTx(input)
-    return { taskRevision: transitioned.taskRevision }
+    return { taskRevision: transitioned.taskRevision, eventRefs: transitioned.eventRefs }
   }
 
-  notifyParkAfterCommit(
-    db: DbClient,
-    taskId: string,
-    status: 'awaiting_review' | 'awaiting_human',
-  ): void {
-    notifyHumanGateTaskParkAfterCommit(db, taskId, status)
+  publishAfterCommit(eventRefs: readonly CommittedEventRef[]): void {
+    publishCommittedEventsAfterCommit(eventRefs)
   }
 }

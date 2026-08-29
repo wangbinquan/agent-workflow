@@ -6,7 +6,6 @@ import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskExecutionReadModels } from '../public/types'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
 import { createSqliteTaskExecutionReadModels } from '../infrastructure/sqliteTaskExecutionReadModels'
-import { createWebSocketTaskStatusPublisher } from '../infrastructure/webSocketTaskStatusPublisher'
 import { composeExecutionMergeRecovery } from './executionMergeRecovery'
 import { driveTaskEngineApplication } from './taskEngineApplication'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
@@ -68,8 +67,6 @@ export function composeTaskExecutionRuntime(input: {
   }
   Object.assign(topology, {
     schedulerDriver,
-    taskStatusReadModel: readModels.statusProjection,
-    taskStatusPublisher: createWebSocketTaskStatusPublisher(),
   })
   Object.freeze(topology)
   return Object.freeze({ schedulerDriver, topology, readModels, ...runtimeComponents })

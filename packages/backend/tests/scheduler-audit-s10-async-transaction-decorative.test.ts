@@ -184,7 +184,6 @@ const RAW_TRANSACTION_SITES: Record<string, number> = {
   'modules/digital-employee/infrastructure/sqliteRuntimeStore.ts': 14,
   'modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts': 1,
   'modules/event-center/infrastructure/sqliteEventStore.ts': 4,
-  'modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts': 1,
   'routes/developmentMissions.ts': 1,
 }
 
@@ -201,7 +200,7 @@ describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必�
   }
 
   test('语料非空：确实扫得到一批站点（扫成空说明判据失效，此刻零预言力）', () => {
-    expect(Object.keys(RAW_TRANSACTION_SITES).length).toBeGreaterThanOrEqual(10)
+    expect(Object.keys(RAW_TRANSACTION_SITES).length).toBeGreaterThanOrEqual(9)
     expect(walkTsFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
   })
 

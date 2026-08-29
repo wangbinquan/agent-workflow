@@ -16,6 +16,9 @@ export interface ParkTaskAtHumanGateResult {
   readonly committedEventRef: string
 }
 
+type ParkTaskAtHumanGateInternalResult = ParkTaskAtHumanGateResult &
+  Readonly<{ eventRefs: readonly import('@/platform/events/committed/types').CommittedEventRef[] }>
+
 export class TaskParkTransaction {
   constructor(
     private readonly ownership: TaskOwnershipStore,
@@ -36,12 +39,9 @@ export class TaskParkTransaction {
       now: input.now,
       run: (tx) => this.parkInTx(tx, input.prepared, input.now),
     })
-    this.lifecycle.notifyParkAfterCommit(
-      input.db,
-      input.prepared.taskId,
-      input.prepared.gateKind === 'review' ? 'awaiting_review' : 'awaiting_human',
-    )
-    return result
+    this.lifecycle.publishAfterCommit(result.eventRefs)
+    const { eventRefs: _eventRefs, ...publicResult } = result
+    return publicResult
   }
 
   /**
@@ -59,12 +59,9 @@ export class TaskParkTransaction {
       throw new Error('ownerless-human-gate-park-refuses-durable-owner')
     }
     const result = dbTxSync(input.db, (tx) => this.parkInTx(tx, input.prepared, input.now))
-    this.lifecycle.notifyParkAfterCommit(
-      input.db,
-      input.prepared.taskId,
-      input.prepared.gateKind === 'review' ? 'awaiting_review' : 'awaiting_human',
-    )
-    return result
+    this.lifecycle.publishAfterCommit(result.eventRefs)
+    const { eventRefs: _eventRefs, ...publicResult } = result
+    return publicResult
   }
 
   private assertInput(taskId: string, prepared: PreparedHumanGateRef): void {
@@ -81,8 +78,8 @@ export class TaskParkTransaction {
     tx: DbTxSync,
     prepared: PreparedHumanGateRef,
     now: number,
-  ): ParkTaskAtHumanGateResult {
-    let result: ParkTaskAtHumanGateResult | undefined
+  ): ParkTaskAtHumanGateInternalResult {
+    let result: ParkTaskAtHumanGateInternalResult | undefined
     withExistingSQLiteTransactionScope(tx, (transactionScope): undefined => {
       const consumed = this.humanGates.consumePreparedGateTx({
         transactionScope,
@@ -105,6 +102,7 @@ export class TaskParkTransaction {
         gateRevision: consumed.gateRevision,
         nodeProjectionDigest: consumed.nodeProjectionDigest,
         committedEventRef: consumed.committedEventRef,
+        eventRefs: parked.eventRefs,
       }
       return undefined
     })

@@ -1,15 +1,15 @@
 // RFC-341 — continuous owner of already-admitted RFC-333 gate continuations.
 
-import type { DbClient } from '@/db/client'
 import {
   defineManagedWorker,
   type ManagedWorkerDefinition,
 } from '@/platform/background/definitions'
 import { createWakeLatch } from '@/platform/events/committed/workerDefinitions'
-import {
-  listPendingHumanGateContinuations,
-  type PendingHumanGateContinuation,
-} from '@/services/humanGateContinuationRecovery'
+
+export type PendingHumanGateContinuation = Readonly<{
+  taskId: string
+  continuationRef: string
+}>
 
 export interface HumanGateContinuationWorkerCycle {
   readonly attempted: number
@@ -18,7 +18,7 @@ export interface HumanGateContinuationWorkerCycle {
 }
 
 export function createHumanGateContinuationWorkerDefinition(input: {
-  readonly db: DbClient
+  readonly listPending: () => readonly PendingHumanGateContinuation[]
   readonly drive: (continuation: PendingHumanGateContinuation) => Promise<void>
   readonly reconcileMs?: number
   readonly now?: () => number
@@ -40,7 +40,7 @@ export function createHumanGateContinuationWorkerDefinition(input: {
   let lastError: string | null = null
 
   const runCycle = async (): Promise<HumanGateContinuationWorkerCycle> => {
-    const pending = listPendingHumanGateContinuations(input.db)
+    const pending = input.listPending()
     let cycleCompleted = 0
     let cycleFailed = 0
     for (const continuation of pending) {

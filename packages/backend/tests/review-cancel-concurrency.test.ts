@@ -20,7 +20,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { registerTerminalTaskHook, trySetTaskStatus } from '../src/services/lifecycle'
+import { trySetTaskStatus } from '../src/services/lifecycle'
 import {
   addReviewComment,
   deleteReviewComment,
@@ -45,6 +45,7 @@ import {
   taskBroadcaster,
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -65,7 +66,6 @@ interface Harness {
 let current: Harness | undefined
 
 afterEach(() => {
-  registerTerminalTaskHook(null)
   __setActiveTaskForTesting(undefined)
   current?.cleanup()
   current = undefined
@@ -182,8 +182,10 @@ async function seedHarness(options: { multiDoc?: boolean } = {}): Promise<Harnes
     createdAt: Date.now(),
   })
 
-  registerTerminalTaskHook((hookDb, hookTaskId, to) => {
-    sealOpenHumanGatesForTask(hookDb, hookTaskId, `task-${to}`)
+  const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+    onTerminalTask(hookDb, hookTaskId, to) {
+      sealOpenHumanGatesForTask(hookDb, hookTaskId, `task-${to}`)
+    },
   })
 
   return {
@@ -197,7 +199,10 @@ async function seedHarness(options: { multiDoc?: boolean } = {}): Promise<Harnes
     docVersionId,
     commentId,
     definition,
-    cleanup: () => rmSync(root, { recursive: true, force: true }),
+    cleanup: () => {
+      uninstallAfterCommitPump()
+      rmSync(root, { recursive: true, force: true })
+    },
   }
 }
 

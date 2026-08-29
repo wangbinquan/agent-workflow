@@ -44,6 +44,18 @@ import type {
   StoredCommittedEvent,
 } from './types'
 
+const MIGRATED_CANONICAL_HEX_DIGEST_PREFIX = 'canonical-hex-v1:'
+
+function payloadDigestMatches(payloadJson: string, payloadDigest: string): boolean {
+  if (payloadDigest.startsWith(MIGRATED_CANONICAL_HEX_DIGEST_PREFIX)) {
+    const expected = Array.from(new TextEncoder().encode(payloadJson), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('')
+    return payloadDigest === `${MIGRATED_CANONICAL_HEX_DIGEST_PREFIX}${expected}`
+  }
+  return payloadDigest === sha256Hex(payloadJson)
+}
+
 function changed(result: unknown): number {
   return (result as { changes?: number }).changes ?? 0
 }
@@ -178,6 +190,9 @@ function eventRefFromRow(row: typeof committedEvents.$inferSelect): CommittedEve
 }
 
 function storedEventFromRow(row: typeof committedEvents.$inferSelect): StoredCommittedEvent {
+  if (!payloadDigestMatches(row.payloadJson, row.payloadDigest)) {
+    throw new Error(`committed event payload digest does not match: ${row.id}`)
+  }
   let envelope: unknown
   try {
     envelope = JSON.parse(row.payloadJson) as unknown

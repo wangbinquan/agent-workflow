@@ -22,7 +22,8 @@ import {
   workflows,
 } from '../src/db/schema'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
-import { registerTerminalTaskHook, trySetTaskStatus } from '../src/services/lifecycle'
+import { trySetTaskStatus } from '../src/services/lifecycle'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { cancelTask } from '../src/services/task'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import {
@@ -119,11 +120,12 @@ async function seedClarifyRound(
 
 describe('RFC-202 T2 — terminal sweep', () => {
   let db: DbClient
+  let uninstallAfterCommitPump: (() => void) | null = null
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(async () => {
-    registerTerminalTaskHook(null)
+    uninstallAfterCommitPump?.()
   })
 
   test('mixed self+cross sweep: self→canceled, cross→abandoned (0031 CHECK safe), review parks canceled, one call', async () => {
@@ -172,9 +174,11 @@ describe('RFC-202 T2 — terminal sweep', () => {
 
   test('terminal hook fires on done/canceled, not on failed; hook failure never blocks the transition', async () => {
     const calls: Array<{ taskId: string; to: string }> = []
-    registerTerminalTaskHook((_db, taskId, to) => {
-      calls.push({ taskId, to })
-      throw new Error('hook boom — must not block')
+    uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+      onTerminalTask(_db, taskId, to) {
+        calls.push({ taskId, to })
+        throw new Error('projector boom — must not block')
+      },
     })
     const a = seedTask(db, { status: 'running' })
     const won = await trySetTaskStatus({
@@ -204,14 +208,17 @@ describe('RFC-202 T2 — terminal sweep', () => {
 
 describe('RFC-202 T3 — cancel from awaiting_*', () => {
   let db: DbClient
+  let uninstallAfterCommitPump: (() => void) | null = null
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
-    registerTerminalTaskHook((hookDb, taskId) =>
-      sealOpenHumanGatesForTask(hookDb as DbClient, taskId, 'task-canceled'),
-    )
+    uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+      onTerminalTask(hookDb, taskId) {
+        sealOpenHumanGatesForTask(hookDb, taskId, 'task-canceled')
+      },
+    })
   })
   afterEach(() => {
-    registerTerminalTaskHook(null)
+    uninstallAfterCommitPump?.()
   })
 
   test('awaiting_human task cancels via the fallback CAS and its open round is sealed', async () => {

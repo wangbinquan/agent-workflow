@@ -31,8 +31,10 @@ import { and, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { clarifyRounds, nodeRuns } from '@/db/schema'
-import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
+import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 const log = createLogger('terminal-sweep')
 
@@ -58,6 +60,7 @@ export function sealOpenHumanGatesForTask(
     canceledRuns: [],
   }
   const now = Date.now()
+  let eventRef: CommittedEventRef | null = null
   dbTxSync(db, (tx) => {
     // 1) Legacy self-clarify session rows (clarify_sessions is still the
     //    read model for parts of the self flow).
@@ -145,16 +148,22 @@ export function sealOpenHumanGatesForTask(
       .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
       .all()
     for (const s of reviews) result.canceledRuns.push({ nodeRunId: s.id, nodeId: s.nodeId })
+    if (result.canceledRuns.length > 0) {
+      eventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+        taskId,
+        reason: 'terminal-reconcile',
+        nodeChanges: result.canceledRuns.map((run) => ({
+          nodeRunId: run.nodeRunId,
+          nodeId: run.nodeId,
+          status: 'canceled',
+          cause,
+        })),
+        occurredAt: now,
+        identity: { operationRef: `terminal-sweep:${taskId}:${cause}` },
+      })
+    }
   })
-  for (const r of result.canceledRuns) {
-    taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-      id: -1,
-      type: 'node.status',
-      nodeRunId: r.nodeRunId,
-      nodeId: r.nodeId,
-      status: 'canceled',
-    })
-  }
+  publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
   if (
     result.sealedSelfRounds > 0 ||
     result.abandonedCrossRounds > 0 ||

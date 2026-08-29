@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 445,
-    "architectureExceptions": 1398,
-    "backgroundJobs": 263,
-    "crossContextImports": 1435,
+    "ambientWiring": 447,
+    "architectureExceptions": 1428,
+    "backgroundJobs": 265,
+    "crossContextImports": 1464,
     "facades": 377,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18585,
-    "mutationEntrypoints": 967,
+    "moduleSymbolOwners": 18715,
+    "mutationEntrypoints": 1007,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 392,
-    "transactionExternalEffects": 269
+    "publicSurfaces": 395,
+    "transactionExternalEffects": 270
   },
   "metrics": {
-    "ambientWiringEntries": 445,
+    "ambientWiringEntries": 447,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -70,7 +70,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 978,
+    "backendProductionFiles": 989,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -94,7 +94,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 263,
+    "backgroundEntries": 265,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -119,8 +119,8 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 24,
-    "directNativeTimers": 71,
-    "inboundBoundaryEdges": 90,
+    "directNativeTimers": 72,
+    "inboundBoundaryEdges": 89,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -129,7 +129,7 @@
       },
       {
         "context": "collaboration",
-        "files": 46
+        "files": 48
       },
       {
         "context": "development-automation",
@@ -169,10 +169,10 @@
       },
       {
         "context": "task-execution",
-        "files": 121
+        "files": 124
       }
     ],
-    "moduleFiles": 442,
+    "moduleFiles": 447,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -233,5 +233,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6"
+  "sourceDigest": "sha256:d3f4ddd882236e275b98f5b69aa98ded3d15884f8cb1b01b55d6689dba9eee61"
 }

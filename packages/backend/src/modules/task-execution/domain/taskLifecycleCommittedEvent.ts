@@ -165,12 +165,6 @@ const taskLifecycleCommittedEventSchema = z
     if (event.aggregate.id !== event.payload.taskId) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: 'task event aggregate mismatch' })
     }
-    if (
-      'lifecycleRevision' in event.payload &&
-      event.aggregate.seq !== event.payload.lifecycleRevision
-    ) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: 'task event revision mismatch' })
-    }
   })
 
 export function decodeTaskLifecycleCommittedEvent(value: unknown): TaskLifecycleCommittedV1 {

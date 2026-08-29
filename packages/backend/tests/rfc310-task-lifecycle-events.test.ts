@@ -1,20 +1,30 @@
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
-import { eventRecords, taskLifecycleEventOutbox, tasks, workflows } from '@/db/schema'
+import {
+  committedEventDeliveries,
+  committedEvents,
+  eventRecords,
+  tasks,
+  workflows,
+} from '@/db/schema'
 import { composeEventCenter } from '@/modules/event-center/composition'
-import { createSqliteTaskLifecycleEventPublisher } from '@/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher'
+import {
+  createTaskLifecycleDurableConsumerDefinitions,
+  taskLifecycleCommittedEventCodec,
+} from '@/modules/task-execution/application/taskLifecycleConsumers'
 import {
   TASK_LIFECYCLE_SOURCE_REF,
   TASK_STATUS_CHANGED_EVENT_REF,
   taskLifecycleEventCatalogJson,
 } from '@/modules/task-execution/public/events'
+import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import { setTaskStatus } from '@/services/lifecycle'
 import { MIGRATIONS } from './migration-freeze'
 
-describe('RFC-310 task lifecycle publication', () => {
-  test('commits the owner outbox with the status CAS and multicasts independent deliveries', async () => {
+describe('RFC-310 task lifecycle publication through RFC-341', () => {
+  test('commits the canonical event with the status CAS and multicasts independent deliveries', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     let now = 10_000
     let ordinal = 0
@@ -74,23 +84,47 @@ describe('RFC-310 task lifecycle publication', () => {
       status: 'failed',
       lifecycleEventRevision: 2,
     })
+    const committed = db
+      .select()
+      .from(committedEvents)
+      .where(and(eq(committedEvents.aggregateId, 'task-1'), eq(committedEvents.aggregateSeq, 2)))
+      .get()
+    expect(committed).toMatchObject({
+      id: 'task-lifecycle:task-1:2',
+      eventType: 'task.lifecycle-transitioned.v1',
+      deliveryMode: 'dispatchable',
+      producerEpoch: 2,
+    })
     expect(
       db
         .select()
-        .from(taskLifecycleEventOutbox)
-        .where(eq(taskLifecycleEventOutbox.taskId, 'task-1'))
-        .get(),
-    ).toMatchObject({ taskRevision: 2, state: 'pending', attemptCount: 0 })
+        .from(committedEventDeliveries)
+        .where(eq(committedEventDeliveries.eventId, committed!.id))
+        .all(),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          consumerId: 'event-center.task-lifecycle',
+          state: 'pending',
+          attemptCount: 0,
+        }),
+      ]),
+    )
 
-    const publisher = createSqliteTaskLifecycleEventPublisher({
+    const dispatcher = createCommittedEventDispatcher({
       db,
-      events: eventCenter.commands,
-      retryLimits: () => ({ defaultNodeRetries: 2, sessionRestartBudget: 1 }),
       workerId: 'task-lifecycle-test',
+      codecs: taskLifecycleCommittedEventCodec,
+      consumers: createTaskLifecycleDurableConsumerDefinitions({
+        events: eventCenter.commands,
+        closeTerminalGates() {},
+        notifyChildBudget() {},
+        notifyExecutionWatch() {},
+        nudgeWorkspacePrune() {},
+      }),
       now: () => now,
     })
-    expect(await publisher.runOne()).toBe('completed')
-    expect(await publisher.runOne()).toBe('idle')
+    expect((await dispatcher.drain()).madeProgress).toBeTrue()
 
     const parentDelivery = eventCenter.participant.pendingDeliveries(subscribers[0]!, 10)
     const auditDelivery = eventCenter.participant.pendingDeliveries(subscribers[1]!, 10)

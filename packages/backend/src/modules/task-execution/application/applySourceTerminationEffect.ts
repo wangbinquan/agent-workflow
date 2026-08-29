@@ -18,7 +18,7 @@ import type {
   TaskSourceTerminationParticipant,
   TaskSourceTerminationReceipt,
 } from '@/modules/task-execution/public/participants'
-import { emitTaskStatus, finalizeCanceledTaskWithoutDriver, getTask } from '@/services/task'
+import { finalizeCanceledTaskWithoutDriver } from '@/services/task'
 import { cancelOpenNodeRunsTx, setTaskStatus } from '@/services/lifecycle'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { ConflictError } from '@/util/errors'
@@ -26,6 +26,9 @@ import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { terminalizeTaskExecutionIntentsTx } from './terminalizeExecutionIntent'
 import type { RuntimeStopTicket } from '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry'
 import type { OwnershipToken } from '@/modules/task-execution/domain/ownership'
+import { appendTaskNodeStatusesCommittedEventTx } from '../infrastructure/taskLifecycleEventParticipant'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 // RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
 const CANCELABLE: readonly TaskStatus[] = CANCELABLE_TASK_STATUSES
@@ -98,15 +101,34 @@ async function applyOne(
     if ((row.effectRevision ?? -1) >= input.streamRevision) {
       const repeatedCause = terminalCause(input, row.parentTaskId)
       let canceledNodeRuns: Array<{ id: string; nodeId: string }> = []
+      let nodeEventRef: CommittedEventRef | null = null
       if (repeatedCause !== null) {
         dbTxSync(db, (tx) => {
+          const now = Date.now()
           canceledNodeRuns = cancelOpenNodeRunsTx({
             tx,
             taskId,
-            finishedAt: Date.now(),
+            finishedAt: now,
             errorMessage: taskStopProjection(repeatedCause).code,
           })
+          if (canceledNodeRuns.length > 0) {
+            nodeEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+              taskId,
+              reason: 'source-termination',
+              nodeChanges: canceledNodeRuns.map((run) => ({
+                nodeRunId: run.id,
+                nodeId: run.nodeId,
+                status: 'canceled',
+                cause: taskStopProjection(repeatedCause).code,
+              })),
+              occurredAt: now,
+              identity: {
+                operationRef: `source-termination-reconcile:${input.deliveryId}:${input.streamRevision}:${taskId}:${canceledNodeRuns.map((run) => run.id).join(',')}`,
+              },
+            })
+          }
         })
+        publishCommittedEventsAfterCommit(nodeEventRef === null ? [] : [nodeEventRef])
       }
       const owner = taskExecutionModule.ownership.read(db, taskId)
       const token =
@@ -199,13 +221,21 @@ async function applyOne(
             sourceTerminationFence: nextFence,
             sourceTerminationEffectRev: input.streamRevision,
           },
-          onTransitionTx: (tx) => {
+          onTransitionTx: (tx, _transition, collector) => {
             canceledNodeRuns = cancelOpenNodeRunsTx({
               tx,
               taskId,
               finishedAt: now,
               errorMessage: projection.code,
             })
+            collector.addNodeChanges(
+              canceledNodeRuns.map((run) => ({
+                nodeRunId: run.id,
+                nodeId: run.nodeId,
+                status: 'canceled',
+                cause: projection.code,
+              })),
+            )
             const owner = tx
               .select()
               .from(taskExecutionOwners)
@@ -230,6 +260,10 @@ async function applyOne(
               now,
             })
           },
+          sourceTerminationEffectRef: `source-termination:${input.deliveryId}:${input.streamRevision}`,
+          committedEventIdentity: {
+            operationRef: `source-termination:${input.deliveryId}:${input.streamRevision}:${taskId}`,
+          },
           reason: `source-termination-${input.kind}`,
         })
         exactToken = candidateToken
@@ -244,6 +278,7 @@ async function applyOne(
           .limit(1)
           .all()[0]
         if (winner !== undefined && CANCELABLE.includes(winner.status)) throw error
+        let nodeEventRef: CommittedEventRef | null = null
         dbTxSync(db, (tx) => {
           const now = Date.now()
           tx.update(tasks)
@@ -282,9 +317,27 @@ async function applyOne(
             finishedAt: now,
             errorMessage: projection.code,
           })
+          if (canceledNodeRuns.length > 0) {
+            nodeEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+              taskId,
+              reason: 'source-termination',
+              nodeChanges: canceledNodeRuns.map((run) => ({
+                nodeRunId: run.id,
+                nodeId: run.nodeId,
+                status: 'canceled',
+                cause: projection.code,
+              })),
+              occurredAt: now,
+              identity: {
+                operationRef: `source-termination:${input.deliveryId}:${input.streamRevision}:${taskId}`,
+              },
+            })
+          }
         })
+        publishCommittedEventsAfterCommit(nodeEventRef === null ? [] : [nodeEventRef])
       }
     } else {
+      let nodeEventRef: CommittedEventRef | null = null
       dbTxSync(db, (tx) => {
         const now = Date.now()
         tx.update(tasks)
@@ -323,7 +376,24 @@ async function applyOne(
           finishedAt: now,
           errorMessage: projection.code,
         })
+        if (canceledNodeRuns.length > 0) {
+          nodeEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+            taskId,
+            reason: 'source-termination',
+            nodeChanges: canceledNodeRuns.map((run) => ({
+              nodeRunId: run.id,
+              nodeId: run.nodeId,
+              status: 'canceled',
+              cause: projection.code,
+            })),
+            occurredAt: now,
+            identity: {
+              operationRef: `source-termination:${input.deliveryId}:${input.streamRevision}:${taskId}`,
+            },
+          })
+        }
       })
+      publishCommittedEventsAfterCommit(nodeEventRef === null ? [] : [nodeEventRef])
     }
 
     const stopTicket =
@@ -384,10 +454,6 @@ export function createTaskSourceTerminationParticipant(
           const applied = await applyOne(db, row.id, input)
           if (applied === null) continue
           let receipt = applied.receipt
-          if (applied.statusChanged || applied.canceledNodeRuns.length > 0) {
-            const task = await getTask(db, row.id)
-            if (task !== null) emitTaskStatus(task, applied.canceledNodeRuns)
-          }
           if (applied.stopTicket !== null) {
             const stopped = await taskExecutionModule.runtimeRegistry.awaitStopped(
               applied.stopTicket,

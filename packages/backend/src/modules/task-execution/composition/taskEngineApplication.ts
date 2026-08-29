@@ -26,7 +26,7 @@ import {
   resolveTaskEngineSelection,
 } from '../engine/task/taskEngineRegistry'
 import { WorkgroupTaskEngine } from '../engine/task/workgroupTaskEngine'
-import { cancelTaskRow, emitStatus, failTask, inspectReadonlyRepos } from '@/services/scheduler'
+import { cancelTaskRow, failTask, inspectReadonlyRepos } from '@/services/scheduler'
 import { runScope } from './taskDagScope'
 import { buildNodeExecutionWorkgroupHooks } from './nodeExecution'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
@@ -253,7 +253,6 @@ async function runTaskEngineOrchestratorInner(
     log.warn('runTask: task not claimable (not pending) — refusing to drive it', { taskId })
     return
   }
-  await emitStatus(topology, taskId)
 
   // RFC-333 T7: a manual question may have been created while this task was
   // pending/failed/interrupted. The exact owner consumes its durable park
@@ -265,7 +264,6 @@ async function runTaskEngineOrchestratorInner(
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
   })
   if (initialManualPark.parked) {
-    await emitStatus(topology, taskId)
     log.info('task parked for a durable manual question before drive', { taskId })
     return
   }
@@ -625,7 +623,6 @@ async function runTaskEngineOrchestratorInner(
       ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     })
     if (manualPark.parked) {
-      await emitStatus(topology, taskId)
       log.info('task parked for a durable manual question at settle', { taskId })
       return
     }
@@ -697,7 +694,7 @@ async function runTaskEngineOrchestratorInner(
               : {}),
             reason: 'active-clarify-released-before-review',
           })
-          if (unparked) await emitStatus(topology, taskId)
+          void unparked
         }
         parkedForReview = await trySetTaskStatus({
           db,
@@ -722,14 +719,12 @@ async function runTaskEngineOrchestratorInner(
             : { executionContext: opts.executionContext }),
         })
         if (manualPark.parked) {
-          await emitStatus(topology, taskId)
           log.info('task review outcome yielded to a durable manual question', { taskId })
           return
         }
       }
     }
     if (parkedForReview) {
-      await emitStatus(topology, taskId)
       log.info('task awaiting human review', { taskId })
     } else {
       const parked = db
@@ -741,7 +736,6 @@ async function runTaskEngineOrchestratorInner(
         // RFC-333: the review executor already committed TaskParkTx together
         // with the gate projection. Publish that committed status; do not issue
         // a second lifecycle write.
-        await emitStatus(topology, taskId)
         log.info('task review gate already parked atomically', { taskId })
       } else {
         log.warn('awaiting_review write lost to a concurrent transition — respecting winner', {
@@ -778,7 +772,6 @@ async function runTaskEngineOrchestratorInner(
         reason: 'scope-awaiting-human',
       })
     ) {
-      await emitStatus(topology, taskId)
       log.info('task awaiting human clarification', { taskId })
     } else {
       const parked = db
@@ -789,7 +782,6 @@ async function runTaskEngineOrchestratorInner(
       if (parked?.status === 'awaiting_human') {
         // RFC-333 T7: clarify creation already committed the node, round,
         // eager question snapshots and task park in one TaskParkTx.
-        await emitStatus(topology, taskId)
         log.info('task clarify gate already parked atomically', { taskId })
       } else {
         log.warn('awaiting_human write lost to a concurrent transition — respecting winner', {
@@ -837,7 +829,7 @@ async function runTaskEngineOrchestratorInner(
             : {}),
           reason: 'active-human-gate-released-before-complete',
         })
-        if (unparked) await emitStatus(topology, taskId)
+        void unparked
       }
       completed = await trySetTaskStatus({
         db,
@@ -859,7 +851,6 @@ async function runTaskEngineOrchestratorInner(
         ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
       })
       if (manualPark.parked) {
-        await emitStatus(topology, taskId)
         log.info('task completion yielded to a durable manual question', { taskId })
         return
       }
@@ -869,7 +860,6 @@ async function runTaskEngineOrchestratorInner(
     }
   }
   if (completed) {
-    await emitStatus(topology, taskId)
     log.info('task done', { taskId })
   } else {
     log.warn('done write lost to a concurrent transition — respecting winner', { taskId })

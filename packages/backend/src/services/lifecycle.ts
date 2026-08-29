@@ -48,7 +48,7 @@ import {
   nextNodeRunStatus,
   isTerminalNodeRunStatus,
 } from '@agent-workflow/shared'
-import { nodeRuns, taskLifecycleEventOutbox, tasks } from '@/db/schema'
+import { nodeRuns, tasks } from '@/db/schema'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
@@ -60,6 +60,13 @@ import {
   withTaskExecutionMutation,
 } from '@/services/taskExecutionParticipants'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
+import {
+  appendTaskLifecycleTransitionCommittedEventTx,
+  type TaskCommittedEventIdentity,
+  type TaskNodeChangeV1,
+} from '@/modules/task-execution/public/participants'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 const lifecycleLog = createLogger('lifecycle')
 
@@ -424,14 +431,6 @@ import {
   type TaskStatus,
   type TaskTransitionEvent,
 } from '@agent-workflow/shared'
-// RFC-243 §1.4: multicast terminal notification (executionWatch is a leaf
-// module — db schema + shared only — so this import cannot form a cycle).
-import { notifyTaskTerminal } from '@/services/execution/executionWatch'
-// RFC-243 §3.2: child-task budget bookkeeping (leaf module, no-op until a call
-// node initializes the daemon singleton).
-import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
-import { taskLifecycleObservation } from '@/modules/task-execution/public/events'
-
 // RFC-108 T2 (AR-19 / 01-LIFE-08): the terminal-task-status set now lives in
 // @agent-workflow/shared (symmetric with node_run) so the frontend imports the
 // same source instead of hand-enumerating it. Re-exported here for the many
@@ -440,32 +439,6 @@ export { TERMINAL_TASK_STATUSES }
 
 export function isTerminalTaskStatus(s: string): boolean {
   return (TERMINAL_TASK_STATUSES as readonly string[]).includes(s)
-}
-
-/** Write the public lifecycle fact in the same transaction as its owner row. */
-export function enqueueTaskLifecycleEventTx(
-  tx: DbTxSync,
-  input: {
-    readonly taskId: string
-    readonly revision: number
-    readonly previousStatus: TaskStatus | null
-    readonly status: TaskStatus
-    readonly occurredAt: number
-  },
-): void {
-  tx.insert(taskLifecycleEventOutbox)
-    .values({
-      id: `task-lifecycle:${input.taskId}:${input.revision}`,
-      taskId: input.taskId,
-      taskRevision: input.revision,
-      observationJson: JSON.stringify(taskLifecycleObservation(input)),
-      state: 'pending',
-      attemptCount: 0,
-      nextAttemptAt: input.occurredAt,
-      createdAt: input.occurredAt,
-    })
-    .onConflictDoNothing()
-    .run()
 }
 
 /** Whitelisted companion columns (mirrors NodeRunStatusUpdateExtra; explicit
@@ -546,28 +519,12 @@ export type TerminalWorkspacePrunePolicy = (
   to: TaskStatus,
 ) => TerminalWorkspacePruneDecision
 
-/** RFC-300: post-commit wake-up for an already-durable claim. It is a separate
- * multicast concern from RFC-202's human-gate sweep; failures never undo the
- * terminal transition and boot/ticker reconciliation remains the backstop. */
-export type TerminalWorkspacePruneEffect = (
-  db: DbClient,
-  taskId: string,
-  to: 'done' | 'canceled',
-) => void
-
 let terminalWorkspacePrunePolicy: TerminalWorkspacePrunePolicy | null = null
-let terminalWorkspacePruneEffect: TerminalWorkspacePruneEffect | null = null
 
 export function registerTerminalWorkspacePrunePolicy(
   provider: TerminalWorkspacePrunePolicy | null,
 ): void {
   terminalWorkspacePrunePolicy = provider
-}
-
-export function registerTerminalWorkspacePruneEffect(
-  effect: TerminalWorkspacePruneEffect | null,
-): void {
-  terminalWorkspacePruneEffect = effect
 }
 
 interface WriteTaskStatusTxInput {
@@ -581,7 +538,15 @@ interface WriteTaskStatusTxInput {
   readonly reason: string
   readonly isRevival: boolean
   readonly workspacePruneDecision: TerminalWorkspacePruneDecision
-  readonly onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  readonly previousErrorSummary: string | null
+  readonly nodeChanges?: readonly TaskNodeChangeV1[]
+  readonly committedEventIdentity?: Partial<TaskCommittedEventIdentity>
+  readonly sourceTerminationEffectRef?: string | null
+  readonly onTransitionTx?: (
+    tx: DbTxSync,
+    transition: { from: TaskStatus; to: TaskStatus },
+    collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
+  ) => void
 }
 
 /**
@@ -589,7 +554,10 @@ interface WriteTaskStatusTxInput {
  * RFC-333 in-transaction human-gate participants both enter here, so adding an
  * atomic participant does not create a second lifecycle authority.
  */
-function writeTaskStatusTx(input: WriteTaskStatusTxInput): number {
+function writeTaskStatusTx(input: WriteTaskStatusTxInput): Readonly<{
+  revision: number
+  eventRef: CommittedEventRef | null
+}> {
   // rfc097-allow-direct-task-status-write -- single allowlisted writer
   const updated = input.tx
     .update(tasks)
@@ -634,15 +602,37 @@ function writeTaskStatusTx(input: WriteTaskStatusTxInput): number {
     throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
   }
   const revision = updated[0]!.lifecycleEventRevision
-  enqueueTaskLifecycleEventTx(input.tx, {
+  const nodeChanges = [...(input.nodeChanges ?? [])]
+  input.onTransitionTx?.(
+    input.tx,
+    { from: input.from, to: input.to },
+    {
+      addNodeChanges(changes) {
+        nodeChanges.push(...changes)
+      },
+    },
+  )
+  const eventRef = appendTaskLifecycleTransitionCommittedEventTx(input.tx, {
     taskId: input.taskId,
-    revision,
+    lifecycleRevision: revision,
     previousStatus: input.from,
     status: input.to,
+    errorSummary:
+      input.extra?.errorSummary === undefined
+        ? input.previousErrorSummary
+        : (input.extra.errorSummary ?? null),
+    nodeChanges,
+    workspacePruneClaim: input.workspacePruneDecision.prune
+      ? {
+          claimedAt: new Date(input.now).toISOString(),
+          cause: input.workspacePruneDecision.cause,
+        }
+      : null,
+    sourceTerminationEffectRef: input.sourceTerminationEffectRef ?? null,
     occurredAt: input.now,
+    identity: input.committedEventIdentity,
   })
-  input.onTransitionTx?.(input.tx, { from: input.from, to: input.to })
-  return revision
+  return { revision, eventRef }
 }
 
 export type HumanGateTaskTransition =
@@ -663,11 +653,18 @@ export function transitionHumanGateTaskTx(args: {
   readonly expectedTaskRevision: number
   readonly transition: HumanGateTaskTransition
   readonly now: number
-}): { readonly from: TaskStatus; readonly to: TaskStatus; readonly taskRevision: number } {
+  readonly committedEventIdentity?: Partial<TaskCommittedEventIdentity>
+}): {
+  readonly from: TaskStatus
+  readonly to: TaskStatus
+  readonly taskRevision: number
+  readonly eventRefs: readonly CommittedEventRef[]
+} {
   const row = args.tx
     .select({
       status: tasks.status,
       lifecycleEventRevision: tasks.lifecycleEventRevision,
+      errorSummary: tasks.errorSummary,
     })
     .from(tasks)
     .where(eq(tasks.id, args.taskId))
@@ -695,6 +692,7 @@ export function transitionHumanGateTaskTx(args: {
       from: row.status,
       to: row.status,
       taskRevision: row.lifecycleEventRevision,
+      eventRefs: [],
     }
   }
 
@@ -718,7 +716,7 @@ export function transitionHumanGateTaskTx(args: {
     )
   }
   const to = targetForTaskEvent(event)
-  const taskRevision = writeTaskStatusTx({
+  const committed = writeTaskStatusTx({
     tx: args.tx,
     taskId: args.taskId,
     from,
@@ -738,22 +736,14 @@ export function transitionHumanGateTaskTx(args: {
     reason: `human-gate:${args.transition}`,
     isRevival: false,
     workspacePruneDecision: { prune: false },
+    previousErrorSummary: row.errorSummary,
+    committedEventIdentity: args.committedEventIdentity,
   })
-  return { from, to, taskRevision }
-}
-
-/** Post-commit multicast paired with the synchronous RFC-333 park participant. */
-export function notifyHumanGateTaskParkAfterCommit(
-  db: DbClient,
-  taskId: string,
-  status: 'awaiting_review' | 'awaiting_human',
-): void {
-  try {
-    notifyChildBudgetTaskStatus(db, taskId, status)
-  } catch (err) {
-    lifecycleLog.warn(
-      `child-budget notify failed for ${taskId} → ${status}: ${err instanceof Error ? err.message : String(err)}`,
-    )
+  return {
+    from,
+    to,
+    taskRevision: committed.revision,
+    eventRefs: committed.eventRef === null ? [] : [committed.eventRef],
   }
 }
 
@@ -782,13 +772,19 @@ export async function setTaskStatus(args: {
    * the task lifecycle/admission CAS. Used for decisions whose gate/config/message rows
    * would otherwise tear if resume loses or preflight fails.
    */
-  onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  onTransitionTx?: (
+    tx: DbTxSync,
+    transition: { from: TaskStatus; to: TaskStatus },
+    collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
+  ) => void
   /**
    * RFC-328 exact durable worker authority.  Control/maintenance callers omit
    * this and enter through their own revision/proof gateways; a scheduler
    * worker must pass the context created by the claim→attach handoff.
    */
   executionContext?: TaskExecutionContextRef
+  committedEventIdentity?: Partial<TaskCommittedEventIdentity>
+  sourceTerminationEffectRef?: string | null
   /** RFC-207 — injectable clock for the run-time accounting (test determinism). */
   now?: number
   reason: string
@@ -803,6 +799,7 @@ export async function setTaskStatus(args: {
       workspacePrunedAt: tasks.workspacePrunedAt,
       sourceTerminationFence: tasks.sourceTerminationFence,
       lifecycleEventRevision: tasks.lifecycleEventRevision,
+      errorSummary: tasks.errorSummary,
     })
     .from(tasks)
     .where(eq(tasks.id, args.taskId))
@@ -909,8 +906,9 @@ export async function setTaskStatus(args: {
       )
     }
   }
+  let committedEventRef: CommittedEventRef | null = null
   const commitTransition = (tx: DbTxSync): void => {
-    writeTaskStatusTx({
+    const committed = writeTaskStatusTx({
       tx,
       taskId: args.taskId,
       from,
@@ -921,8 +919,12 @@ export async function setTaskStatus(args: {
       reason: args.reason,
       isRevival,
       workspacePruneDecision,
+      previousErrorSummary: row.errorSummary,
+      committedEventIdentity: args.committedEventIdentity,
+      sourceTerminationEffectRef: args.sourceTerminationEffectRef,
       ...(args.onTransitionTx === undefined ? {} : { onTransitionTx: args.onTransitionTx }),
     })
+    committedEventRef = committed.eventRef
   }
   const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
   if (executionContext !== undefined) {
@@ -936,68 +938,8 @@ export async function setTaskStatus(args: {
   } else {
     dbTxSync(args.db, commitTransition)
   }
-  // RFC-202 T2: unrevivable terminal statuses sweep the task's open human
-  // gates (clarify rounds / review parks) so they leave the inbox for good.
-  // Registered as a callback (cli/start.ts assembly) because lifecycle.ts is
-  // the low-level primitive — importing clarify/review services here would
-  // create a module cycle (binary-build hazard). Hook failures must never
-  // undo or block the already-committed status write: warn and move on; the
-  // read-path terminal filter (RFC-202 T6) and the write-path guards
-  // (task-terminal 409s) keep the system consistent until the next sweep.
-  if (args.to === 'done' || args.to === 'canceled') {
-    try {
-      terminalTaskHook?.(args.db, args.taskId, args.to)
-    } catch (err) {
-      lifecycleLog.warn(
-        `terminal task hook failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
-    if (workspacePruneDecision.prune) {
-      try {
-        terminalWorkspacePruneEffect?.(args.db, args.taskId, args.to)
-      } catch (err) {
-        lifecycleLog.warn(
-          `terminal workspace prune effect failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
-        )
-      }
-    }
-  }
-  // RFC-243 §1.4 — executionWatch multicast, for ALL FOUR terminal statuses
-  // (the single-slot hook above deliberately stays done|canceled-only).
-  // Post-commit and best-effort: a resolver failure never undoes or blocks
-  // the already-committed status write; watchers own a poll fallback.
-  if (isTerminalTaskStatus(args.to)) {
-    try {
-      notifyTaskTerminal(args.taskId, args.to)
-    } catch (err) {
-      lifecycleLog.warn(
-        `terminal watch notify failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
-  }
-  // RFC-243 §3.2 — child-task budget bookkeeping (EVERY status, not only
-  // terminal: awaiting_* frees a unit, resume re-counts). No-op until the
-  // budget singleton exists; never blocks the committed write.
-  try {
-    notifyChildBudgetTaskStatus(args.db, args.taskId, args.to)
-  } catch (err) {
-    lifecycleLog.warn(
-      `child-budget notify failed for ${args.taskId} → ${args.to}: ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
+  publishCommittedEventsAfterCommit(committedEventRef === null ? [] : [committedEventRef])
   return transition
-}
-
-/**
- * RFC-202 T2 — terminal-task sweep hook. Wired once at daemon assembly
- * (cli/start.ts) to `sealOpenHumanGatesForTask`; kept as a registration to
- * avoid a lifecycle → clarify/review import cycle. Pass `null` to reset
- * (tests).
- */
-export type TerminalTaskHook = (db: DbClient, taskId: string, to: TaskStatus) => void
-let terminalTaskHook: TerminalTaskHook | null = null
-export function registerTerminalTaskHook(fn: TerminalTaskHook | null): void {
-  terminalTaskHook = fn
 }
 
 /**
@@ -1014,8 +956,14 @@ export async function trySetTaskStatus(args: {
   allowedFrom: readonly TaskStatus[]
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
-  onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  onTransitionTx?: (
+    tx: DbTxSync,
+    transition: { from: TaskStatus; to: TaskStatus },
+    collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
+  ) => void
   executionContext?: TaskExecutionContextRef
+  committedEventIdentity?: Partial<TaskCommittedEventIdentity>
+  sourceTerminationEffectRef?: string | null
   reason: string
 }): Promise<boolean> {
   try {
@@ -1047,8 +995,14 @@ export async function transitionTaskStatusByEvent(args: {
   event: TaskTransitionEvent
   allowTerminal?: boolean
   extra?: TaskStatusUpdateExtra
-  onTransitionTx?: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void
+  onTransitionTx?: (
+    tx: DbTxSync,
+    transition: { from: TaskStatus; to: TaskStatus },
+    collector: { addNodeChanges(changes: readonly TaskNodeChangeV1[]): void },
+  ) => void
   executionContext?: TaskExecutionContextRef
+  committedEventIdentity?: Partial<TaskCommittedEventIdentity>
+  sourceTerminationEffectRef?: string | null
   reason: string
 }): Promise<{ from: TaskStatus; to: TaskStatus }> {
   return setTaskStatus({
@@ -1060,6 +1014,12 @@ export async function transitionTaskStatusByEvent(args: {
     ...(args.extra !== undefined ? { extra: args.extra } : {}),
     ...(args.onTransitionTx !== undefined ? { onTransitionTx: args.onTransitionTx } : {}),
     ...(args.executionContext !== undefined ? { executionContext: args.executionContext } : {}),
+    ...(args.committedEventIdentity !== undefined
+      ? { committedEventIdentity: args.committedEventIdentity }
+      : {}),
+    ...(args.sourceTerminationEffectRef !== undefined
+      ? { sourceTerminationEffectRef: args.sourceTerminationEffectRef }
+      : {}),
     reason: args.reason,
   })
 }

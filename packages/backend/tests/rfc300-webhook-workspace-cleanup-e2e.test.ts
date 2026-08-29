@@ -33,17 +33,14 @@ import { composeTaskExecutionRuntime } from '../src/modules/task-execution/compo
 import { createApp } from '../src/server'
 import { cancelExecution } from '../src/services/execution/executor'
 import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
-import {
-  registerTerminalWorkspacePruneEffect,
-  registerTerminalWorkspacePrunePolicy,
-  setTaskStatus,
-} from '../src/services/lifecycle'
+import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
 import { getTask, isTaskActive } from '../src/services/task'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWebhookTerminalWorkspacePrunePolicy } from '../src/services/webhook/terminalWorkspaceCleanup'
 import { createWorkflow } from '../src/services/workflow'
 import { sha1Hex } from '../src/util/hash'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -51,10 +48,12 @@ setDefaultTimeout(30_000)
 
 let currentRoot: string | null = null
 let previousHome: string | undefined
+let uninstallAfterCommitPump: (() => void) | null = null
 
 afterEach(() => {
   registerTerminalWorkspacePrunePolicy(null)
-  registerTerminalWorkspacePruneEffect(null)
+  uninstallAfterCommitPump?.()
+  uninstallAfterCommitPump = null
   if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
   else process.env.AGENT_WORKFLOW_HOME = previousHome
   previousHome = undefined
@@ -252,9 +251,11 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   registerTerminalWorkspacePrunePolicy(
     createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
-  registerTerminalWorkspacePruneEffect((effectDb, taskId) => {
-    if (isTaskActive(taskId)) return
-    void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+  uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+    onWorkspacePrune(effectDb, taskId) {
+      if (isTaskActive(taskId)) return
+      void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+    },
   })
 
   const dispatcher = createWebhookDispatcher({
@@ -491,9 +492,11 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   registerTerminalWorkspacePrunePolicy(
     createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
-  registerTerminalWorkspacePruneEffect((effectDb, taskId) => {
-    if (isTaskActive(taskId)) return
-    void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+  uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+    onWorkspacePrune(effectDb, taskId) {
+      if (isTaskActive(taskId)) return
+      void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
+    },
   })
 
   const terminalControl = composeMrTerminalControl(db)

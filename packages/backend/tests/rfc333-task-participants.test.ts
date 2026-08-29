@@ -15,7 +15,7 @@ import {
   taskExecutionEffects,
   taskExecutionIntents,
   taskExecutionOwners,
-  taskLifecycleEventOutbox,
+  committedEvents,
   tasks,
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
@@ -293,12 +293,13 @@ describe('RFC-333 T5 TaskParkTx', () => {
       db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
     ).toHaveLength(1)
     expect(
-      db
-        .select()
-        .from(taskLifecycleEventOutbox)
-        .where(eq(taskLifecycleEventOutbox.taskRevision, 2))
-        .get(),
-    ).toMatchObject({ taskId, state: 'pending' })
+      db.select().from(committedEvents).where(eq(committedEvents.aggregateSeq, 2)).get(),
+    ).toMatchObject({
+      producer: 'task-execution',
+      family: 'task-lifecycle',
+      aggregateId: taskId,
+      deliveryMode: 'dispatchable',
+    })
   })
 
   test('task park failure rolls collaboration consumption back to prepared', () => {
@@ -648,12 +649,8 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       }),
     ])
     expect(
-      db
-        .select()
-        .from(taskLifecycleEventOutbox)
-        .where(eq(taskLifecycleEventOutbox.taskRevision, 2))
-        .get(),
-    ).toMatchObject({ taskId })
+      db.select().from(committedEvents).where(eq(committedEvents.aggregateSeq, 2)).get(),
+    ).toMatchObject({ aggregateId: taskId, eventType: 'task.lifecycle-transitioned.v1' })
 
     expect(() => dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))).toThrow()
     expect(db.select().from(taskExecutionIntents).all()).toHaveLength(1)
@@ -758,7 +755,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       if (fault === 'event') {
         db.run(sql`
           CREATE TRIGGER rfc333_fail_lifecycle_event
-          BEFORE INSERT ON task_lifecycle_event_outbox
+          BEFORE INSERT ON committed_events
           BEGIN SELECT RAISE(ABORT, 'rfc333-event-fault'); END
         `)
       }
@@ -799,7 +796,7 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
         lifecycleEventRevision: 1,
       })
       expect(db.select().from(taskExecutionIntents).all()).toHaveLength(0)
-      expect(db.select().from(taskLifecycleEventOutbox).all()).toHaveLength(0)
+      expect(db.select().from(committedEvents).all()).toHaveLength(0)
     }
   })
 

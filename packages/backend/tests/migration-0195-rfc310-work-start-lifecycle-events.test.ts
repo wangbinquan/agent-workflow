@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
-import { MIGRATIONS } from './migration-freeze'
+import { freezeAt } from './migration-freeze'
 
 describe('migration 0195 — WorkStart and owner lifecycle event outboxes', () => {
   test('adds durable task and employee event provenance without a shared consumed flag', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb(freezeAt(194))
     const tables = db.all<{ name: string }>(
       sql`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`,
     )

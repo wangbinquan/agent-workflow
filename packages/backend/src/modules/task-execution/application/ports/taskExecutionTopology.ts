@@ -1,4 +1,4 @@
-import type { Language, TaskStatus, TriggerContext } from '@agent-workflow/shared'
+import type { Language, TriggerContext } from '@agent-workflow/shared'
 import type { OwnershipToken } from '../../domain/ownership'
 
 /**
@@ -170,18 +170,4 @@ export interface SchedulerDriverPort {
     readonly runtime: ChildResumeRuntime
   }): Promise<void>
   isTaskActive(taskId: string): boolean
-}
-
-export interface TaskStatusProjection {
-  readonly taskId: string
-  readonly status: TaskStatus
-  readonly errorSummary: string | null
-  readonly canceledNodeRuns: readonly {
-    readonly id: string
-    readonly nodeId: string
-  }[]
-}
-
-export interface TaskStatusPublisher {
-  publish(event: TaskStatusProjection): void
 }

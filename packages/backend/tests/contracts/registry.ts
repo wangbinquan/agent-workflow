@@ -170,6 +170,11 @@ export const ENDPOINTS: EndpointSpec[] = [
   // mechanism.  It owns localized event catalogs, durable subscriptions and
   // on-demand observer cycles; employee types only consume these contracts.
   { method: 'GET', path: '/api/event-center/catalog' },
+  { method: 'GET', path: '/api/event-center/committed-deliveries/page' },
+  {
+    method: 'POST',
+    path: '/api/event-center/committed-deliveries/:eventId/:consumerId/retry',
+  },
   { method: 'GET', path: '/api/event-center/subscriptions' },
   { method: 'GET', path: '/api/event-center/subscriptions/page' },
   { method: 'GET', path: '/api/event-center/observers' },

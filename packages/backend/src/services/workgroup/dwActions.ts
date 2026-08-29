@@ -20,7 +20,7 @@ import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
 import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
-import { emitTaskStatus, getTask, resumeDynamicWorkflowExecution } from '@/services/task'
+import { resumeDynamicWorkflowExecution } from '@/services/task'
 import { createWorkflow } from '@/services/workflow'
 import { assertNewRefsUsable, extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import { setDwState } from '@/services/workgroup/state'
@@ -213,8 +213,6 @@ export function buildDwActions(
       // awaiting_review, so nothing re-opens; the phase is display-only on a
       // terminal task.
       await setDwState(deps.db, taskId, nextDw)
-      const failed = await getTask(deps.db, taskId)
-      if (failed !== null) emitTaskStatus(failed)
       return { decision: 'reject', exhausted: true }
     }
     const { generatedDef: _dropped, ...dwRest } = fresh.dw

@@ -52,13 +52,13 @@ import {
   type FusionDeps,
 } from '../src/services/fusion'
 import { getTask } from '../src/services/task'
-import { registerTerminalTaskHook } from '../src/services/lifecycle'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
 import { getSkillVersionContent } from '../src/services/skillVersion'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
@@ -1027,8 +1027,10 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
       decision: 'pending',
       createdAt: Date.now(),
     })
-    registerTerminalTaskHook((hookDb, hookTaskId, to) => {
-      sealOpenHumanGatesForTask(hookDb, hookTaskId, `task-${to}`)
+    const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
+      onTerminalTask(hookDb, hookTaskId, to) {
+        sealOpenHumanGatesForTask(hookDb, hookTaskId, `task-${to}`)
+      },
     })
 
     let releaseHolder: () => void = () => {}
@@ -1085,7 +1087,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     } finally {
       releaseHolder()
       await holder
-      registerTerminalTaskHook(null)
+      uninstallAfterCommitPump()
     }
   })
 

@@ -72,12 +72,15 @@ import type {
   MaintenanceMemberSnapshot,
   TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
+import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import type { RecoverableTerminalMaintenanceClaim } from '../application/ports/terminalMaintenanceStore'
-import type {
-  SchedulerDriverPort,
-  TaskStatusPublisher,
-} from '../application/ports/taskExecutionTopology'
-import type { TaskStatusProjectionReadModel } from './types'
+import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
+import {
+  appendTaskCreatedCommittedEventTx as appendTaskCreatedCommittedEventTxInternal,
+  appendTaskLifecycleTransitionCommittedEventTx as appendTaskLifecycleTransitionCommittedEventTxInternal,
+  appendTaskNodeStatusesCommittedEventTx as appendTaskNodeStatusesCommittedEventTxInternal,
+  type TaskCommittedEventIdentity,
+} from '../infrastructure/taskLifecycleEventParticipant'
 
 declare const sourceTerminationCapabilityBrand: unique symbol
 declare const workerIdentityBrand: unique symbol
@@ -93,8 +96,6 @@ export type SourceTerminationEffectCapability = Readonly<{
 /** Required runtime participants; production construction has no fallback. */
 export interface SchedulerRuntimeTopology {
   readonly schedulerDriver: SchedulerDriverPort
-  readonly taskStatusReadModel: TaskStatusProjectionReadModel
-  readonly taskStatusPublisher: TaskStatusPublisher
 }
 
 // RFC-328 — capability identities are owned by this participant entrypoint.
@@ -154,6 +155,8 @@ export type {
   HumanGateContinuationLineage,
   HumanGateNodeProjectionFence,
   HumanGateWorkspaceRollbackRef,
+  TaskCommittedEventIdentity,
+  TaskNodeChangeV1,
 }
 
 export type CodeHostSendAttemptHandle = Readonly<{
@@ -223,6 +226,10 @@ export const taskExecutionRequestHash = taskExecutionRequestHashInternal
 export const canonicalTaskExecutionJson = canonicalTaskExecutionJsonInternal
 export const decodeLineageSlotPath = decodeLineageSlotPathInternal
 export const encodeLineageSlotPath = encodeLineageSlotPathInternal
+export const appendTaskCreatedCommittedEventTx = appendTaskCreatedCommittedEventTxInternal
+export const appendTaskLifecycleTransitionCommittedEventTx =
+  appendTaskLifecycleTransitionCommittedEventTxInternal
+export const appendTaskNodeStatusesCommittedEventTx = appendTaskNodeStatusesCommittedEventTxInternal
 export const createExclusiveDaemonLockProof = createExclusiveDaemonLockProofInternal
 export const createVerifiedOutcomeUnknownClosure = createVerifiedOutcomeUnknownClosureInternal
 export const createVerifiedStopProof = createVerifiedStopProofInternal

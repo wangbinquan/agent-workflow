@@ -1,33 +1,33 @@
 {
   "ambientWiringEntries": [
     {
+      "callee": "registerAfterCommitEventPump",
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1609",
+      "kind": "register-call",
+      "line": 1609,
+      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
+      "removeAfterWave": "W6/W9",
+      "symbol": "startCommand",
+      "targetContext": "bootstrap"
+    },
+    {
+      "callee": "registerAfterCommitEventPump",
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:991",
+      "kind": "register-call",
+      "line": 991,
+      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
+      "removeAfterWave": "W6/W9",
+      "symbol": "startCommand",
+      "targetContext": "bootstrap"
+    },
+    {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1141",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1190",
       "kind": "register-call",
-      "line": 1141,
-      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
-      "removeAfterWave": "W6/W9",
-      "symbol": "startCommand",
-      "targetContext": "bootstrap"
-    },
-    {
-      "callee": "registerTerminalTaskHook",
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalTaskHook:1166",
-      "kind": "register-call",
-      "line": 1166,
-      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
-      "removeAfterWave": "W6/W9",
-      "symbol": "startCommand",
-      "targetContext": "bootstrap"
-    },
-    {
-      "callee": "registerTerminalWorkspacePruneEffect",
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePruneEffect:492",
-      "kind": "register-call",
-      "line": 492,
+      "line": 1190,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -36,9 +36,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:486",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:495",
       "kind": "register-call",
-      "line": 486,
+      "line": 495,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +47,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1154",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1203",
       "kind": "global-setter",
-      "line": 1154,
+      "line": 1203,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -1675,9 +1675,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:117",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:113",
       "kind": "register-call",
-      "line": 117,
+      "line": 113,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1686,9 +1686,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:131",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:144",
       "kind": "register-call",
-      "line": 131,
+      "line": 144,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1697,9 +1697,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:149",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:155",
       "kind": "register-call",
-      "line": 149,
+      "line": 155,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1708,9 +1708,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:160",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:180",
       "kind": "register-call",
-      "line": 160,
+      "line": 180,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1719,9 +1719,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:177",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:198",
       "kind": "register-call",
-      "line": 177,
+      "line": 198,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1730,9 +1730,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:188",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:212",
       "kind": "register-call",
-      "line": 188,
+      "line": 212,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1741,9 +1741,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:211",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:230",
       "kind": "register-call",
-      "line": 211,
+      "line": 230,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1752,9 +1752,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:222",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:241",
       "kind": "register-call",
-      "line": 222,
+      "line": 241,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1763,9 +1763,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:243",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:258",
       "kind": "register-call",
-      "line": 243,
+      "line": 258,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1774,9 +1774,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:263",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:269",
       "kind": "register-call",
-      "line": 263,
+      "line": 269,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1785,9 +1785,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:282",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:292",
       "kind": "register-call",
-      "line": 282,
+      "line": 292,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1796,9 +1796,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:294",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:303",
       "kind": "register-call",
-      "line": 294,
+      "line": 303,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1807,9 +1807,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:305",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:324",
       "kind": "register-call",
-      "line": 305,
+      "line": 324,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1818,9 +1818,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:328",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:344",
       "kind": "register-call",
-      "line": 328,
+      "line": 344,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1829,9 +1829,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:348",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:363",
       "kind": "register-call",
-      "line": 348,
+      "line": 363,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1840,9 +1840,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:370",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:375",
       "kind": "register-call",
-      "line": 370,
+      "line": 375,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1851,9 +1851,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:390",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:386",
       "kind": "register-call",
-      "line": 390,
+      "line": 386,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1862,9 +1862,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:410",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:409",
       "kind": "register-call",
-      "line": 410,
+      "line": 409,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1873,9 +1873,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:52",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:429",
       "kind": "register-call",
-      "line": 52,
+      "line": 429,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1884,9 +1884,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:63",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:451",
       "kind": "register-call",
-      "line": 63,
+      "line": 451,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1895,9 +1895,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:74",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:471",
       "kind": "register-call",
-      "line": 74,
+      "line": 471,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -1906,9 +1906,31 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/eventCenter.ts",
-      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:99",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:491",
       "kind": "register-call",
-      "line": 99,
+      "line": 491,
+      "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountEventCenterRoutes",
+      "targetContext": "event-center"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/routes/eventCenter.ts",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:58",
+      "kind": "register-call",
+      "line": 58,
+      "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountEventCenterRoutes",
+      "targetContext": "event-center"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/routes/eventCenter.ts",
+      "id": "ambient:packages/backend/src/routes/eventCenter.ts#registerRoute:69",
+      "kind": "register-call",
+      "line": 69,
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#mountEventCenterRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountEventCenterRoutes",
@@ -4913,13 +4935,13 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 445,
+    "ambientWiring": 447,
     "disabled": 7,
-    "entries": 263,
-    "executionLocal": 24,
-    "longRunning": 51,
-    "managed": 8,
-    "periodic": 181
+    "entries": 265,
+    "executionLocal": 25,
+    "longRunning": 53,
+    "managed": 11,
+    "periodic": 180
   },
   "entries": [
     {
@@ -4972,7 +4994,7 @@
       ],
       "file": "packages/backend/src/cli/start.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1291",
+      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1332",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -4986,7 +5008,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1291",
+      "symbol": "$setInterval:1332",
       "targetContext": "bootstrap"
     },
     {
@@ -5165,6 +5187,27 @@
       "phase": "unknown",
       "symbol": "WATCH_POLL_MS",
       "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/collaboration/application/humanGateContinuationWorker.ts",
+      "finalCriterion": "managed definition contract",
+      "id": "background:packages/backend/src/modules/collaboration/application/humanGateContinuationWorker.ts#createHumanGateContinuationWorkerDefinition",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": true,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "execution-local",
+      "managed": true,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/humanGateContinuationWorker.ts#createHumanGateContinuationWorkerDefinition",
+      "phase": "after-ready",
+      "symbol": "createHumanGateContinuationWorkerDefinition",
+      "targetContext": "collaboration"
     },
     {
       "dependencies": [
@@ -7044,6 +7087,73 @@
     },
     {
       "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/platform/events/committed/workerDefinitions.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/events/committed/workerDefinitions.ts#$setTimeout:36",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/workerDefinitions.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:36",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/platform/events/committed/workerDefinitions.ts",
+      "finalCriterion": "managed definition contract",
+      "id": "background:packages/backend/src/platform/events/committed/workerDefinitions.ts#createCommittedEventDispatcherWorkerDefinition",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": true,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": true,
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/workerDefinitions.ts#createCommittedEventDispatcherWorkerDefinition",
+      "phase": "after-ready",
+      "symbol": "createCommittedEventDispatcherWorkerDefinition",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/events/committed/workerDefinitions.ts",
+      "finalCriterion": "managed definition contract",
+      "id": "background:packages/backend/src/platform/events/committed/workerDefinitions.ts#startManagedWorkerDefinition",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": true,
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/workerDefinitions.ts#startManagedWorkerDefinition",
+      "phase": "unknown",
+      "symbol": "startManagedWorkerDefinition",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
         "client",
         "db",
         "runtime"
@@ -7638,7 +7748,7 @@
       ],
       "file": "packages/backend/src/services/execution/childBudget.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/childBudget.ts#$setInterval:199",
+      "id": "background:packages/backend/src/services/execution/childBudget.ts#$setInterval:198",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7652,7 +7762,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/childBudget.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:199",
+      "symbol": "$setInterval:198",
       "targetContext": "task-execution"
     },
     {
@@ -7661,7 +7771,7 @@
       ],
       "file": "packages/backend/src/services/execution/executionWatch.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/execution/executionWatch.ts#$setInterval:98",
+      "id": "background:packages/backend/src/services/execution/executionWatch.ts#$setInterval:96",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7675,7 +7785,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/execution/executionWatch.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:98",
+      "symbol": "$setInterval:96",
       "targetContext": "task-execution"
     },
     {
@@ -8418,27 +8528,6 @@
       "dependencies": [],
       "file": "packages/backend/src/services/lifecycle.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/lifecycle.ts#registerTerminalWorkspacePruneEffect",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#registerTerminalWorkspacePruneEffect",
-      "phase": "unknown",
-      "symbol": "registerTerminalWorkspacePruneEffect",
-      "targetContext": "source-control"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/lifecycle.ts",
-      "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/lifecycle.ts#registerTerminalWorkspacePrunePolicy",
       "kind": "periodic",
       "lifecycle": {
@@ -8454,27 +8543,6 @@
       "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#registerTerminalWorkspacePrunePolicy",
       "phase": "unknown",
       "symbol": "registerTerminalWorkspacePrunePolicy",
-      "targetContext": "source-control"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/lifecycle.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/lifecycle.ts#terminalWorkspacePruneEffect",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/lifecycle.ts#terminalWorkspacePruneEffect",
-      "phase": "unknown",
-      "symbol": "terminalWorkspacePruneEffect",
       "targetContext": "source-control"
     },
     {
@@ -9921,7 +9989,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:382",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:378",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9935,7 +10003,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:382",
+      "symbol": "$setTimeout:378",
       "targetContext": "task-execution"
     },
     {
@@ -9944,7 +10012,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5459",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5432",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9958,7 +10026,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5459",
+      "symbol": "$setTimeout:5432",
       "targetContext": "task-execution"
     },
     {
@@ -10793,5 +10861,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6"
+  "sourceDigest": "sha256:d3f4ddd882236e275b98f5b69aa98ded3d15884f8cb1b01b55d6689dba9eee61"
 }

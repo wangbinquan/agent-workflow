@@ -6,7 +6,6 @@
 
 import type { Server } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
@@ -15,7 +14,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/workflow'
-import { emitTaskStatus } from '../src/services/task'
+import { createTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjector'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 
@@ -212,7 +211,7 @@ describe('WebSocket channels', () => {
     expect(types).toContain('workflow.deleted')
   })
 
-  test('/ws/tasks/{id}: task.status broadcasts from emitTaskStatus', async () => {
+  test('/ws/tasks/{id}: task.status broadcasts from the committed-event projector', async () => {
     // Seed a fake task row (avoids spawning the scheduler in this test).
     const taskId = ulid()
     await h.db.insert(workflows).values({
@@ -245,48 +244,30 @@ describe('WebSocket channels', () => {
     ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
     await waitUntil(() => hasType(received, 'hello'))
 
-    // Trigger emitTaskStatus by flipping the row + invoking the helper.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
-    if (t === undefined) throw new Error('seeded task missing')
-    emitTaskStatus({
-      id: t.id,
-      name: t.name,
-      workflowId: t.workflowId,
-      workflowName: null,
-      workflowSnapshot: {},
-      workflowVersion: null,
-      repoPath: t.repoPath,
-      repoUrl: null,
-      cachedRepoId: null,
-      worktreePath: t.worktreePath,
-      baseBranch: t.baseBranch,
-      branch: t.branch,
-      baseCommit: null,
-      status: 'done',
-      inputs: {},
-      maxDurationMs: null,
-      maxTotalTokens: null,
-      startedAt: t.startedAt,
-      finishedAt: t.startedAt + 1,
-      errorSummary: null,
-      errorMessage: null,
-      failedNodeId: null,
-      expiresAt: null,
-      deletedAt: null,
+    createTaskLifecycleWsProjector(h.db).handle({
+      eventId: `task-lifecycle:${taskId}:2`,
+      eventGroupId: `task-lifecycle:${taskId}:2`,
+      eventGroupOrdinal: 0,
+      type: 'task.lifecycle-transitioned.v1',
       schemaVersion: 1,
-      gitUserName: null,
-      gitUserEmail: null,
-      // RFC-075: TaskSchema now carries the working branch + commit&push flag.
-      workingBranch: null,
-      autoCommitPush: false,
-      // RFC-120 T9: TaskSchema now carries the deferred-dispatch opt-in flag.
-      // RFC-066: TaskSchema now requires per-task repo metadata.
-      repoGroupId: null,
-      repoGroupName: null,
-      repoCount: 1,
-      spaceKind: 'remote', // RFC-165
-      sourceAgentName: null,
-      repos: [],
+      producer: 'task-execution',
+      family: 'task-lifecycle',
+      aggregate: { kind: 'task', id: taskId, seq: 2 },
+      operationRef: `task-lifecycle:${taskId}:2`,
+      correlationRef: null,
+      causationRef: null,
+      occurredAt: new Date().toISOString(),
+      payload: {
+        taskId,
+        lifecycleRevision: 2,
+        previousStatus: 'running',
+        status: 'done',
+        updatedAt: new Date().toISOString(),
+        errorSummary: null,
+        nodeChanges: [],
+        workspacePruneClaim: null,
+        sourceTerminationEffectRef: null,
+      },
     })
 
     await waitUntil(() => hasType(received, 'task.status') && hasType(received, 'task.done'))

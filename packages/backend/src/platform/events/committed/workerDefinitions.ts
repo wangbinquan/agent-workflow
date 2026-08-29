@@ -34,7 +34,6 @@ export function createWakeLatch(): WakeLatch {
           resolve()
         }
         const timer = setTimeout(settle, ms)
-        timer.unref?.()
         waiter = settle
         signal.addEventListener('abort', settle, { once: true })
       })

@@ -5810,45 +5810,6 @@ export const eventTypeCatalog = sqliteTable(
   }),
 )
 
-/**
- * Task-owned transactional publication outbox. The task status CAS and this
- * row commit together; the Event Center worker later publishes the immutable
- * observation and marks only this outbox row complete.
- */
-export const taskLifecycleEventOutbox = sqliteTable(
-  'task_lifecycle_event_outbox',
-  {
-    id: text('id').primaryKey(),
-    taskId: text('task_id')
-      .notNull()
-      .references(() => tasks.id),
-    taskRevision: integer('task_revision').notNull(),
-    observationJson: text('observation_json').notNull(),
-    state: text('state', { enum: ['pending', 'claimed', 'completed', 'dead-letter'] })
-      .notNull()
-      .default('pending'),
-    attemptCount: integer('attempt_count').notNull().default(0),
-    nextAttemptAt: integer('next_attempt_at').notNull(),
-    claimedBy: text('claimed_by'),
-    claimExpiresAt: integer('claim_expires_at'),
-    lastError: text('last_error'),
-    createdAt: integer('created_at').notNull(),
-    completedAt: integer('completed_at'),
-    deadLetterAt: integer('dead_letter_at'),
-  },
-  (t) => ({
-    taskRevisionUq: uniqueIndex('task_lifecycle_event_outbox_task_revision_unique').on(
-      t.taskId,
-      t.taskRevision,
-    ),
-    dueIdx: index('idx_task_lifecycle_event_outbox_due').on(
-      t.state,
-      t.nextAttemptAt,
-      t.claimExpiresAt,
-    ),
-  }),
-)
-
 // -----------------------------------------------------------------------------
 // RFC-341 — source-neutral committed-event ledger.
 //
@@ -5947,7 +5908,7 @@ export const committedEvents = sqliteTable(
     ),
     payloadDigestShape: check(
       'committed_events_payload_digest_shape',
-      sql`length(${t.payloadDigest}) = 64`,
+      sql`length(${t.payloadDigest}) = 64 OR ${t.payloadDigest} = 'canonical-hex-v1:' || lower(hex(${t.payloadJson}))`,
     ),
   }),
 )

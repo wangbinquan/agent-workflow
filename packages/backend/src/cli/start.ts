@@ -82,11 +82,7 @@ import {
 } from '@/services/gc'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
-import {
-  registerTerminalTaskHook,
-  registerTerminalWorkspacePruneEffect,
-  registerTerminalWorkspacePrunePolicy,
-} from '@/services/lifecycle'
+import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
 import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
 import { startBatchImportGc } from '@/services/repoBatchImport'
@@ -147,7 +143,20 @@ import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
-import { createSqliteTaskLifecycleEventPublisher } from '@/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher'
+import {
+  createTaskLifecycleDurableConsumerDefinitions,
+  createTaskLifecycleWsProjector,
+  taskLifecycleCommittedEventCodec,
+} from '@/modules/task-execution/composition/committedEvents'
+import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
+import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
+import {
+  createCommittedEventDispatcherWorkerDefinition,
+  startManagedWorkerDefinition,
+} from '@/platform/events/committed/workerDefinitions'
+import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { notifyChildBudgetTaskStatus } from '@/services/execution/childBudget'
+import { notifyTaskTerminal } from '@/services/execution/executionWatch'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
@@ -489,10 +498,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       enabled: () => loadConfig(Paths.config).webhookTaskWorkspaceAutoCleanup,
     }),
   )
-  registerTerminalWorkspacePruneEffect((effectDb, taskId) => {
-    if (isTaskActive(taskId)) return
-    void finishClaimedWebhookWorkspacePrune(effectDb, taskId)
-  })
   const dbVersion = existsSync(migrationsFolder)
     ? readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql')).length
     : 0
@@ -950,6 +955,50 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ...resolveLaunchRuntimeConfig(Paths.config),
   }
 
+  const committedEventDispatcher = createCommittedEventDispatcher({
+    db,
+    workerId: `committed-events-${DAEMON_GENERATION}`,
+    codecs: taskLifecycleCommittedEventCodec,
+    consumers: createTaskLifecycleDurableConsumerDefinitions({
+      events: employeeHttpEventCenter.commands,
+      closeTerminalGates(taskId, status) {
+        sealOpenHumanGatesForTask(db, taskId, `task-${status}`)
+      },
+      notifyChildBudget(taskId, status) {
+        notifyChildBudgetTaskStatus(db, taskId, status)
+      },
+      notifyExecutionWatch: notifyTaskTerminal,
+      nudgeWorkspacePrune(taskId) {
+        if (isTaskActive(taskId)) return
+        void finishClaimedWebhookWorkspacePrune(db, taskId)
+      },
+    }),
+    maxAttempts() {
+      const current = loadConfig(Paths.config)
+      return 1 + current.defaultNodeRetries + current.sessionRestartBudget
+    },
+  })
+  const committedEventWorkerDefinition = createCommittedEventDispatcherWorkerDefinition({
+    db,
+    dispatcher: committedEventDispatcher,
+  })
+  const committedEventPump = createAfterCommitEventPump({
+    db,
+    codecs: taskLifecycleCommittedEventCodec,
+    projectors: [createTaskLifecycleWsProjector(db)],
+    nudgeDispatcher: committedEventWorkerDefinition.nudge,
+  })
+  registerAfterCommitEventPump(committedEventPump)
+  const committedEventWorker = startManagedWorkerDefinition(
+    committedEventWorkerDefinition.definition,
+    DAEMON_GENERATION,
+  )
+  void committedEventWorker.done.catch((error) => {
+    log.error('committed-event dispatcher stopped unexpectedly', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+
   // RFC-338 — every periodic DB/FS-heavy maintenance body runs on a dedicated
   // Worker connection. Main only admits durable slots and consumes typed
   // notification/admission deltas; Worker failure never falls back to running
@@ -1157,14 +1206,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     } catch {
       return null
     }
-  })
-
-  // RFC-202 T2: when a task reaches an unrevivable terminal status
-  // (done/canceled), sweep its open clarify/review gates so they leave the
-  // inbox for good. Registered here (not imported by lifecycle.ts) to avoid
-  // a lifecycle → clarify/review module cycle.
-  registerTerminalTaskHook((hookDb, taskId, to) => {
-    sealOpenHumanGatesForTask(hookDb, taskId, `task-${to}`)
   })
 
   // RFC-041 — distill queue worker. Honors `memoryDistillerEnabled`
@@ -1434,17 +1475,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const eventCenterWorker = startEventCenterWorker({
     dependencies: {
       ...employeeEventCenter.worker,
-      runOnePublication: createSqliteTaskLifecycleEventPublisher({
-        db,
-        events: employeeEventCenter.commands,
-        retryLimits() {
-          const config = loadConfig(Paths.config)
-          return {
-            defaultNodeRetries: config.defaultNodeRetries,
-            sessionRestartBudget: config.sessionRestartBudget,
-          }
-        },
-      }).runOne,
     },
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
     onError: (err) => {
@@ -1576,6 +1606,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     scheduledTaskTicker.stop()
     employeeOsWorker.stop()
     eventCenterWorker.stop()
+    registerAfterCommitEventPump(null)
+    await committedEventWorker.stop(signal)
     clearInterval(developmentWakeTimer)
     await maintenanceService.stop()
     await webhookTerminalControl.stop()

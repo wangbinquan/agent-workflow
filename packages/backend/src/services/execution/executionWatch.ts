@@ -1,8 +1,6 @@
 // RFC-243 T5 — terminal-state observation seam (design §1.4). A multicast,
-// in-process registry resolved from the lifecycle write path for ALL FOUR task
-// terminal statuses (done/failed/canceled/interrupted) — deliberately separate
-// from `registerTerminalTaskHook` (single-slot, done|canceled-only, RFC-202
-// sweep semantics), which stays untouched.
+// in-process registry resolved by the committed task-lifecycle consumer for
+// ALL FOUR task terminal statuses (done/failed/canceled/interrupted).
 //
 // Consumers get three defenses against missed signals:
 //   1. register-then-read: an immediate DB read BEFORE and AFTER registration
@@ -30,8 +28,8 @@ type Resolver = (r: TerminalWatchResult) => void
 const watchers = new Map<string, Set<Resolver>>()
 
 /**
- * Post-commit emission point — called by `setTaskStatus` after a terminal CAS
- * write lands. Never throws; never blocks the committed status write.
+ * Durable-consumer emission point. Never throws and never blocks the already
+ * committed status write.
  */
 export function notifyTaskTerminal(taskId: string, to: TaskStatus): void {
   if (!isTerminalTaskStatus(to)) return

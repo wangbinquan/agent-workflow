@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "boundaryFacades": 97,
+    "boundaryFacades": 98,
     "serviceFiles": 377
   },
   "entries": [
@@ -2381,20 +2381,21 @@
         "import:1e146b37d4cd8c56c11e",
         "import:29768ca659a0280fda50",
         "import:38d3e819f6ca1edd6df6",
+        "import:419a31db0a26aee3fc45",
         "import:43ede18c4219b2c2d241",
         "import:49b4198c95812210b3fd",
         "import:4dae596d25d2039367af",
         "import:5129298b52a569abf355",
         "import:52b6f287fd8c62b9046f",
         "import:62f9f08e5b0378e5ee09",
+        "import:7009f70577058a303b7e",
         "import:734d51a7c868daf17204",
         "import:788945e06cec60a81ae9",
-        "import:8fb47e78c260997055a1",
         "import:9812840393d4bc9cc2bf",
         "import:9c81610564ea67f73c9a",
         "import:c01d107839e93297fc16",
-        "import:e3708cb755459a85c894",
         "import:e5197d04511404b2738a",
+        "import:e7625809470f6373d4f9",
         "import:ef6eeec71427458293af"
       ],
       "exportedSymbols": [
@@ -2405,19 +2406,13 @@
         "MergeStateUpdateExtra",
         "NodeRunStatusUpdateExtra",
         "TaskStatusUpdateExtra",
-        "TerminalTaskHook",
         "TerminalWorkspacePruneDecision",
-        "TerminalWorkspacePruneEffect",
         "TerminalWorkspacePrunePolicy",
         "WorkspacePruneCause",
         "abandonSupersededMergeStates",
         "assertNodeRunSourceTerminationAdmission",
         "cancelOpenNodeRunsTx",
-        "enqueueTaskLifecycleEventTx",
         "isTerminalTaskStatus",
-        "notifyHumanGateTaskParkAfterCommit",
-        "registerTerminalTaskHook",
-        "registerTerminalWorkspacePruneEffect",
         "registerTerminalWorkspacePrunePolicy",
         "setNodeRunStatus",
         "setNodeRunStatusTx",
@@ -5164,7 +5159,6 @@
         "import:066c853fca987668f726",
         "import:1e1e92bf881073062336",
         "import:7d98f8116ddfd3f54902",
-        "import:7fca322d3774322f4377",
         "import:8560dbf0705aecf7cb91",
         "import:95de9e8bf86b90716021",
         "import:998fd65ab077856a1a2a",
@@ -5176,7 +5170,6 @@
         "InheritableRunConfig",
         "buildContainerMap",
         "cancelTaskRow",
-        "emitStatus",
         "failTask",
         "inspectReadonlyRepos",
         "maybeRunCommitPush",
@@ -6237,13 +6230,13 @@
         "import:3bf779c696831f7e9dde",
         "import:3fa453b8e3244c836abb",
         "import:479eaa00c4b9275815fd",
+        "import:4822a4c5ffa0b6aee6ff",
         "import:52aebe854233bde53a8c",
         "import:55952bd54b5296609a05",
         "import:56a205b7e3d20934c03e",
         "import:5c4a8536ce472d4b390a",
         "import:6695adac0aea33d43c69",
         "import:73b057acfae5d225e011",
-        "import:85a3ce8baee3c25ea585",
         "import:8d868818826de17ee1d8",
         "import:90c6878410f318aef41e",
         "import:97c531fe52763d6b60f8",
@@ -6253,7 +6246,6 @@
         "import:c07d7479e713e86827ac",
         "import:d07907c42947e6c5855e",
         "import:de17d18a53431aaefb1a",
-        "import:ebed8174827bc5a4fa78",
         "import:ee07aef5f87771b4e498",
         "import:f01878cbadafc5102253",
         "import:fe30b04e89398c214603"
@@ -6281,7 +6273,6 @@
         "cancelTask",
         "cleanupMaterializedSpace",
         "computeWorkflowSyncPreview",
-        "emitTaskStatus",
         "finalizeCanceledTaskWithoutDriver",
         "getNodeRunEvents",
         "getNodeRunStdout",
@@ -6692,7 +6683,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:6a9262b355e102a81b75"
+      ],
       "exportedSymbols": [
         "TerminalSweepResult",
         "sealOpenHumanGatesForTask"
@@ -6701,7 +6694,7 @@
       "id": "facade:packages/backend/src/services/terminalSweep.ts",
       "ownerEntryId": "owner:packages/backend/src/services/terminalSweep.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -7723,5 +7716,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:083c95fc42aaff37ad12366413672ce534d45991813073e934159da147cf8ff6"
+  "sourceDigest": "sha256:d3f4ddd882236e275b98f5b69aa98ded3d15884f8cb1b01b55d6689dba9eee61"
 }

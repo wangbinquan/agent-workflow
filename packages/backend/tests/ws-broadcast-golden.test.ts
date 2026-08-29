@@ -4,7 +4,7 @@
 // LOCKS: every state transition the UI relies on emits exactly the WS
 // messages we expect, in the right order, on the right channels. Catches
 // regressions where:
-//   * a service forgets to call `emitTaskStatus` after mutating the row
+//   * a lifecycle writer forgets to publish its committed-event receipt
 //     (UI sticks on a stale state)
 //   * an extra duplicate broadcast is added (UI re-renders thrash)
 //   * a message lands on the wrong channel (per-task vs tasks-list) — the
@@ -22,7 +22,7 @@
 //
 // This test does NOT mock the broadcaster. It uses the real
 // `tasksListBroadcaster` + `taskBroadcaster` singletons (via the
-// `subscribe` callback) and drives them through the real `emitTaskStatus`
+// `subscribe` callback) and drives them through the committed-event projector
 // service function. That's the contract surface — anything below that is
 // implementation detail.
 
@@ -32,8 +32,7 @@ import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { emitTaskStatus } from '../src/services/task'
-import { createWebSocketTaskStatusPublisher } from '../src/modules/task-execution/infrastructure/webSocketTaskStatusPublisher'
+import { createTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjector'
 import {
   resetBroadcastersForTests,
   TASK_CHANNEL,
@@ -42,7 +41,7 @@ import {
   tasksListBroadcaster,
 } from '../src/ws/broadcaster'
 
-import type { TaskWsMessage, TasksListWsMessage } from '@agent-workflow/shared'
+import type { TaskStatus, TaskWsMessage, TasksListWsMessage } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -177,7 +176,7 @@ function recorded(r: Recorded): RecordedMessage[] {
  * Interleave preserving per-channel order — captures the ACTUAL order of
  * broadcasts as a single timeline. Subscribers receive synchronously, so
  * the only race is between the two channels' fire order, which is fixed
- * by emitTaskStatus's hardcoded sequence (list first, then task).
+ * by the task lifecycle projector's contract (list first, then task).
  *
  * We do this by re-running the same sequence with a single interleaved
  * recorder (instead of two per-channel arrays).
@@ -196,15 +195,61 @@ function subscribeInterleaved(taskId: string): {
   return { timeline, unsubscribe: () => (offList(), offTask()) }
 }
 
+function projectStatus(
+  db: DbClient,
+  input: {
+    taskId: string
+    revision: number
+    previousStatus: TaskStatus
+    status: TaskStatus
+    errorSummary?: string | null
+    canceledNodeRuns?: readonly { id: string; nodeId: string }[]
+  },
+): void {
+  createTaskLifecycleWsProjector(db).handle({
+    eventId: `task-lifecycle:${input.taskId}:${input.revision}`,
+    eventGroupId: `task-lifecycle:${input.taskId}:${input.revision}`,
+    eventGroupOrdinal: 0,
+    type: 'task.lifecycle-transitioned.v1',
+    schemaVersion: 1,
+    producer: 'task-execution',
+    family: 'task-lifecycle',
+    aggregate: { kind: 'task', id: input.taskId, seq: input.revision },
+    operationRef: `task-lifecycle:${input.taskId}:${input.revision}`,
+    correlationRef: null,
+    causationRef: null,
+    occurredAt: new Date().toISOString(),
+    payload: {
+      taskId: input.taskId,
+      lifecycleRevision: input.revision,
+      previousStatus: input.previousStatus,
+      status: input.status,
+      updatedAt: new Date().toISOString(),
+      errorSummary: input.errorSummary ?? null,
+      nodeChanges: (input.canceledNodeRuns ?? []).map((run) => ({
+        nodeRunId: run.id,
+        nodeId: run.nodeId,
+        status: 'canceled' as const,
+        cause: 'fixture-cancel',
+      })),
+      workspacePruneClaim: null,
+      sourceTerminationEffectRef: null,
+    },
+  })
+}
+
 beforeEach(() => resetBroadcastersForTests())
 afterEach(() => resetBroadcastersForTests())
 
 describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
-  test('RFC-331 publisher adapter preserves terminal and canceled-node ordering', () => {
+  test('RFC-341 committed-event projector preserves terminal and canceled-node ordering', () => {
     const taskId = `task_${ulid()}`
+    const db = createInMemoryDb(MIGRATIONS)
     const { received, unsubscribe } = subscribeBoth(taskId)
-    createWebSocketTaskStatusPublisher().publish({
+    projectStatus(db, {
       taskId,
+      revision: 2,
+      previousStatus: 'running',
       status: 'canceled',
       errorSummary: null,
       canceledNodeRuns: [{ id: 'run-canceled', nodeId: 'node-canceled' }],
@@ -231,18 +276,22 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
     // pending → running.
-    emitTaskStatus({
-      id: taskId,
+    projectStatus(db, {
+      taskId,
+      revision: 2,
+      previousStatus: 'pending',
       status: 'running',
       errorSummary: null,
-    } as Parameters<typeof emitTaskStatus>[0])
+    })
 
     // running → done.
-    emitTaskStatus({
-      id: taskId,
+    projectStatus(db, {
+      taskId,
+      revision: 3,
+      previousStatus: 'running',
       status: 'done',
       errorSummary: null,
-    } as Parameters<typeof emitTaskStatus>[0])
+    })
 
     unsubscribe()
     expect(timeline).toEqual([...GOLDEN_HAPPY_PATH])
@@ -258,16 +307,20 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { taskId } = await seedTask(db)
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
-    emitTaskStatus({
-      id: taskId,
+    projectStatus(db, {
+      taskId,
+      revision: 2,
+      previousStatus: 'pending',
       status: 'running',
       errorSummary: null,
-    } as Parameters<typeof emitTaskStatus>[0])
-    emitTaskStatus({
-      id: taskId,
+    })
+    projectStatus(db, {
+      taskId,
+      revision: 3,
+      previousStatus: 'running',
       status: 'failed',
       errorSummary: 'stub failure',
-    } as Parameters<typeof emitTaskStatus>[0])
+    })
 
     unsubscribe()
     expect(timeline).toEqual([...GOLDEN_FAILED_PATH])
@@ -278,16 +331,20 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { taskId } = await seedTask(db)
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
-    emitTaskStatus({
-      id: taskId,
+    projectStatus(db, {
+      taskId,
+      revision: 2,
+      previousStatus: 'pending',
       status: 'running',
       errorSummary: null,
-    } as Parameters<typeof emitTaskStatus>[0])
-    emitTaskStatus({
-      id: taskId,
+    })
+    projectStatus(db, {
+      taskId,
+      revision: 3,
+      previousStatus: 'running',
       status: 'awaiting_review',
       errorSummary: null,
-    } as Parameters<typeof emitTaskStatus>[0])
+    })
 
     unsubscribe()
     expect(timeline).toEqual([...GOLDEN_AWAITING_REVIEW_PATH])
@@ -302,11 +359,13 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { taskId } = await seedTask(db)
     const { received, unsubscribe } = subscribeBoth(taskId)
 
-    emitTaskStatus({
-      id: taskId,
+    projectStatus(db, {
+      taskId,
+      revision: 2,
+      previousStatus: 'running',
       status: 'failed',
       errorSummary: 'mock-opencode exit 1',
-    } as Parameters<typeof emitTaskStatus>[0])
+    })
 
     unsubscribe()
 

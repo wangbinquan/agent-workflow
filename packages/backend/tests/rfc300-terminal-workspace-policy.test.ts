@@ -11,10 +11,10 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import {
   ConcurrentTaskTransition,
-  registerTerminalWorkspacePruneEffect,
   registerTerminalWorkspacePrunePolicy,
   setTaskStatus,
 } from '../src/services/lifecycle'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import {
   createWebhookTerminalWorkspacePrunePolicy,
   shouldRequestWebhookWorkspacePrune,
@@ -25,9 +25,11 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let db: DbClient
 let workflowId: string
+let uninstallAfterCommitPump: (() => void) | null = null
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
+  uninstallAfterCommitPump = null
   workflowId = ulid()
   await db.insert(workflows).values({
     id: workflowId,
@@ -38,7 +40,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   registerTerminalWorkspacePrunePolicy(null)
-  registerTerminalWorkspacePruneEffect(null)
+  uninstallAfterCommitPump?.()
 })
 
 async function seedTask(
@@ -179,7 +181,11 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
     registerTerminalWorkspacePrunePolicy(
       createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
-    registerTerminalWorkspacePruneEffect((_db, id, to) => effects.push({ taskId: id, to }))
+    uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+      onWorkspacePrune(_db, id, to) {
+        effects.push({ taskId: id, to })
+      },
+    })
 
     await setTaskStatus({
       db,
@@ -241,8 +247,10 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
     registerTerminalWorkspacePrunePolicy(
       createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
-    registerTerminalWorkspacePruneEffect(() => {
-      effectCount += 1
+    uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+      onWorkspacePrune() {
+        effectCount += 1
+      },
     })
     const raced = dbWithCompetingWriter(db, () => {
       db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId)).run()
@@ -272,7 +280,11 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
     registerTerminalWorkspacePrunePolicy(
       createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
-    registerTerminalWorkspacePruneEffect((_db, id, to) => effects.push({ taskId: id, to }))
+    uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+      onWorkspacePrune(_db, id, to) {
+        effects.push({ taskId: id, to })
+      },
+    })
 
     const outcomes = await Promise.allSettled([
       setTaskStatus({
@@ -305,8 +317,10 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
       createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     let effectCount = 0
-    registerTerminalWorkspacePruneEffect(() => {
-      effectCount += 1
+    uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+      onWorkspacePrune() {
+        effectCount += 1
+      },
     })
 
     for (const to of ['failed', 'interrupted'] as const) {

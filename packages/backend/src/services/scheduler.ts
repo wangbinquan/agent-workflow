@@ -371,23 +371,6 @@ export async function maybeRunCommitPush(
   return {}
 }
 
-/**
- * RFC-210 fail-closed gate for replay: does any repo carry submodules while the
- * persisted topology for it is missing?
- *
- * Mirrors the existing `node_tree missing` refusal a few lines below — replaying
- * without the per-submodule merge bases is not a degraded merge, it is a merge
- * that silently drops work.
- */
-export async function emitStatus(
-  topology: SchedulerRuntimeTopology,
-  taskId: string,
-): Promise<void> {
-  const projection = await topology.taskStatusReadModel.find(taskId)
-  if (projection === null) return
-  topology.taskStatusPublisher.publish({ ...projection, canceledNodeRuns: [] })
-}
-
 // RFC-098 WP-10 T-a: the old `insertNodeRun` half-factory was absorbed into
 // the single mint factory — see services/nodeRunMint.ts (grep-guarded).
 
@@ -424,7 +407,6 @@ export async function failTask(
     )
     return
   }
-  await emitStatus(topology, taskId)
 }
 
 export async function cancelTaskRow(
@@ -458,7 +440,7 @@ async function cancelTaskRowUnlocked(
   // interrupted + DAEMON_RESTART_ERROR_SUMMARY so both the Resume button and
   // boot auto-resume (autoResume.ts matches exactly that summary) cover them.
   if (abortReason === DAEMON_SHUTDOWN_ABORT_REASON) {
-    const won = await trySetTaskStatus({
+    await trySetTaskStatus({
       db,
       taskId,
       to: 'interrupted',
@@ -472,7 +454,6 @@ async function cancelTaskRowUnlocked(
       ...(executionContext !== undefined ? { executionContext } : {}),
       reason: 'cancelTaskRow-shutdown',
     })
-    if (won) await emitStatus(topology, taskId)
     return
   }
   const structuredCause = taskStopCauseOf(abortReason)
@@ -505,7 +486,6 @@ async function cancelTaskRowUnlocked(
     )
     return
   }
-  await emitStatus(topology, taskId)
 }
 
 function taskStopCauseOf(value: unknown): TaskStopCause | null {

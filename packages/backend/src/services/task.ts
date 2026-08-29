@@ -141,7 +141,6 @@ import {
   transitionTaskStatusByEvent,
   setNodeRunStatusTx,
   cancelOpenNodeRunsTx,
-  enqueueTaskLifecycleEventTx,
 } from '@/services/lifecycle'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
@@ -174,12 +173,6 @@ import {
   ValidationError,
 } from '@/util/errors'
 import { readArchivedEvents } from '@/services/eventsArchive'
-import {
-  TASK_CHANNEL,
-  TASKS_LIST_CHANNEL,
-  taskBroadcaster,
-  tasksListBroadcaster,
-} from '@/ws/broadcaster'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { Paths } from '@/util/paths'
 import { createLogger, type Logger } from '@/util/log'
@@ -188,6 +181,9 @@ import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import { parseInjectedSnapshotJson } from './memoryInject'
 import { parsePortValidationFailuresJson } from './envelope'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
+import { appendTaskCreatedCommittedEventTx } from '@/modules/task-execution/public/participants'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
 import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
@@ -3148,6 +3144,7 @@ async function startTaskImpl(
 
   const now = Date.now()
   let launchIntentId: string | null = null
+  let createdEventRef: CommittedEventRef | null = null
   try {
     await deps.workflowLaunchCommitHook?.(
       workflowLaunchHookEvent('materialized-before-task-commit', workflow, space),
@@ -3485,11 +3482,10 @@ async function startTaskImpl(
         })
         .run()
 
-      enqueueTaskLifecycleEventTx(tx, {
+      createdEventRef = appendTaskCreatedCommittedEventTx(tx, {
         taskId,
-        revision: 1,
-        previousStatus: null,
         status: earlyError === null ? 'pending' : 'failed',
+        errorSummary: earlyError !== null ? `worktree creation failed: ${earlyError}` : null,
         occurredAt: now,
       })
 
@@ -3608,29 +3604,7 @@ async function startTaskImpl(
   }
 
   const task = (await getTask(deps.db, taskId)) as Task
-
-  tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-    type: 'task.created',
-    task: {
-      id: task.id,
-      name: task.name, // RFC-037
-      workflowId: task.workflowId,
-      workflowName: task.workflowName,
-      repoPath: task.repoPath,
-      repoUrl: task.repoUrl,
-      cachedRepoId: task.cachedRepoId,
-      status: task.status,
-      startedAt: task.startedAt,
-      finishedAt: task.finishedAt,
-      errorSummary: task.errorSummary,
-      // RFC-066: source of truth is the freshly-loaded Task (which read
-      // `tasks.repo_count` directly). Single-repo = 1; multi-repo = N.
-      repoCount: task.repoCount,
-      // RFC-165: execution-space kind + single-agent soft link.
-      spaceKind: task.spaceKind,
-      sourceAgentName: task.sourceAgentName ?? null,
-    },
-  })
+  publishCommittedEventsAfterCommit(createdEventRef === null ? [] : [createdEventRef])
 
   if (earlyError !== null) {
     return task
@@ -3850,8 +3824,6 @@ async function escalateSnapshotLost(
     before: { status: 'pending' },
     after: { status: 'failed' },
   })
-  const failed = await getTask(db, taskId)
-  if (failed !== null) emitTaskStatus(failed)
   throw new ConflictError(
     'snapshot-lost',
     `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} pre-snapshot is missing from the object database (pruned by gc?): ${detail}`,
@@ -3894,8 +3866,6 @@ async function escalateLiveChildSurvived(
     before: { status: 'pending' },
     after: { status: 'failed' },
   })
-  const failed = await getTask(db, taskId)
-  if (failed !== null) emitTaskStatus(failed)
   throw new ConflictError(
     'live-child-survived',
     `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} child reap is unproven (${killOutcome}, pid ${run.pid ?? '?'}); the worktree cannot be safely reset while it may still be writing`,
@@ -4023,7 +3993,6 @@ export async function cancelTask(
   }
 
   let stopTicket: TaskDriverStopTicket | null = null
-  let controlCanceledNodeRuns: Array<{ id: string; nodeId: string }> = []
   const committed = await withTaskReviewMutationLock(id, async () => {
     // Re-read only after acquiring the linearization point. A decision,
     // dispatch, scheduler cancel or competing terminal writer may have won
@@ -4062,7 +4031,7 @@ export async function cancelTask(
                   ? 'canceled-by-parent-cascade'
                   : 'no active scheduler at cancel time',
             },
-            onTransitionTx: (tx) => {
+            onTransitionTx: (tx, _transition, collector) => {
               // Once terminal control revokes the worker epoch, that worker is
               // intentionally unable to stamp its own final node status. The
               // same control transaction therefore owns the node projection;
@@ -4076,6 +4045,17 @@ export async function cancelTask(
                     ? 'canceled-by-parent-cascade'
                     : 'canceled by user',
               })
+              collector.addNodeChanges(
+                candidateCanceledNodeRuns.map((run) => ({
+                  nodeRunId: run.id,
+                  nodeId: run.nodeId,
+                  status: 'canceled',
+                  cause:
+                    opts.cascadeFromParent === true
+                      ? 'canceled-by-parent-cascade'
+                      : 'canceled-by-user',
+                })),
+              )
               const owner = tx
                 .select()
                 .from(taskExecutionOwners)
@@ -4114,7 +4094,6 @@ export async function cancelTask(
             },
             reason: 'cancelTask-fallback',
           })
-          controlCanceledNodeRuns = candidateCanceledNodeRuns
         } catch (error) {
           if (!(error instanceof ConflictError)) throw error
         }
@@ -4186,11 +4165,6 @@ export async function cancelTask(
       }
     }
   }
-
-  // Broadcasters invoke listeners synchronously. Emit only after releasing
-  // the task mutation coordinator so a listener that starts a same-task
-  // review/cancel mutation cannot re-enter (or extend) this critical section.
-  emitTaskStatus(committed.task, controlCanceledNodeRuns)
 
   // RFC-243 §4.3 — recursively cascade into the frozen child set. Depth is
   // bounded by maxInvocationDepth; already-terminal children are idempotent.
@@ -4594,7 +4568,6 @@ async function resumeKick(
 
       const next = (await getTask(db, id)) as Task
       admittedTask = next
-      emitTaskStatus(next)
 
       const controller = activeTaskDriverController(id)
       if (controller === undefined || controller.signal !== context.signal) {
@@ -6038,8 +6011,6 @@ export async function retryNode(
             // invariant violation and must not be mistaken for a clean child error.
             if (current?.status === 'pending') throw closeErr
           }
-          const failed = await getTask(db, taskId)
-          if (failed !== null) emitTaskStatus(failed)
           throw new ConflictError(
             'retry-child-cancel-failed',
             `cannot retry node '${runRow.nodeId}': superseded child task '${childTaskId}' could not be canceled (${detail})`,
@@ -6146,7 +6117,6 @@ export async function retryNode(
       // Task row already flipped pending above (RFC-097 admission winner).
       const next = (await getTask(db, taskId)) as Task
       admittedTask = next
-      emitTaskStatus(next)
 
       const controller = activeTaskDriverController(taskId)
       if (controller === undefined || controller.signal !== context.signal) {
@@ -6192,48 +6162,6 @@ function parseSnapshot(v: unknown): Record<string, unknown> | null {
     }
   }
   return null
-}
-
-/**
- * Push a task-status update onto both broadcaster channels at once.
- * Scheduler + cancel path both call this after each state change.
- */
-export function emitTaskStatus(
-  t: Task,
-  canceledNodeRuns: readonly { id: string; nodeId: string }[] = [],
-): void {
-  tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-    type: 'task.status',
-    taskId: t.id,
-    status: t.status,
-  })
-  taskBroadcaster.broadcast(TASK_CHANNEL(t.id), {
-    id: -1,
-    type: 'task.status',
-    status: t.status,
-    ...(t.errorSummary !== null ? { errorSummary: t.errorSummary } : {}),
-  })
-  if (
-    t.status === 'done' ||
-    t.status === 'failed' ||
-    t.status === 'canceled' ||
-    t.status === 'interrupted'
-  ) {
-    taskBroadcaster.broadcast(TASK_CHANNEL(t.id), {
-      id: -1,
-      type: 'task.done',
-      status: t.status,
-    })
-  }
-  for (const run of canceledNodeRuns) {
-    taskBroadcaster.broadcast(TASK_CHANNEL(t.id), {
-      id: -1,
-      type: 'node.status',
-      nodeRunId: run.id,
-      nodeId: run.nodeId,
-      status: 'canceled',
-    })
-  }
 }
 
 export async function getTask(db: DbClient, id: string): Promise<Task | null> {

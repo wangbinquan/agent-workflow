@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { createInMemoryDb } from '@/db/client'
 import { taskExecutionIntents, tasks } from '@/db/schema'
 import { createHumanGateContinuationWorkerDefinition } from '@/modules/collaboration/application/humanGateContinuationWorker'
+import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_789_488_200_000
@@ -51,7 +52,7 @@ describe('RFC-341 human-gate continuation worker', () => {
     seedPendingGate(db)
     const driven: Array<{ taskId: string; continuationRef: string }> = []
     const worker = createHumanGateContinuationWorkerDefinition({
-      db,
+      listPending: () => listPendingHumanGateContinuations(db),
       drive: async (continuation) => {
         driven.push(continuation)
         db.update(taskExecutionIntents)

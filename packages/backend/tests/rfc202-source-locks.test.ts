@@ -77,12 +77,17 @@ describe('RFC-202 source locks', () => {
     }
   })
 
-  test('terminal hook is registered exactly once, at daemon assembly', () => {
+  test('terminal sweep is owned by the committed-event consumer with no ambient hook slot', () => {
     const start = read('packages/backend/src/cli/start.ts')
-    expect(start.match(/registerTerminalTaskHook\(/g)?.length).toBe(1)
-    // lifecycle.ts must not import clarify/review/terminalSweep (module cycle
-    // → binary-build hazard); the hook stays a registration.
+    const consumers = read(
+      'packages/backend/src/modules/task-execution/application/taskLifecycleConsumers.ts',
+    )
+    expect(start).toContain('createTaskLifecycleDurableConsumerDefinitions')
+    expect(start).toContain('sealOpenHumanGatesForTask')
+    expect(consumers).toContain("id: 'task-terminal-gate-close'")
+    expect(start).not.toContain('registerTerminalTaskHook')
     const lifecycle = read('packages/backend/src/services/lifecycle.ts')
+    expect(lifecycle).not.toContain('registerTerminalTaskHook')
     expect(lifecycle).not.toContain("from '@/services/terminalSweep'")
     expect(lifecycle).not.toContain("from '@/services/review'")
     expect(lifecycle).not.toContain("from '@/services/clarify")

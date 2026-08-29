@@ -13,6 +13,9 @@ export interface ManualQuestionParkSettleResult {
   readonly parked: boolean
 }
 
+type ManualQuestionParkInternalResult = ManualQuestionParkSettleResult &
+  Readonly<{ eventRefs: readonly import('@/platform/events/committed/types').CommittedEventRef[] }>
+
 export class ManualQuestionParkRequired extends Error {
   constructor(readonly taskId: string) {
     super(`task '${taskId}' has a durable manual-question park obligation`)
@@ -33,9 +36,9 @@ export class ManualQuestionParkTransaction {
     readonly token?: OwnershipToken
     readonly now: number
   }): ManualQuestionParkSettleResult {
-    const run = (tx: DbTxSync): ManualQuestionParkSettleResult =>
+    const run = (tx: DbTxSync): ManualQuestionParkInternalResult =>
       this.settleTx(tx, input.taskId, input.now)
-    let result: ManualQuestionParkSettleResult
+    let result: ManualQuestionParkInternalResult
     if (input.token !== undefined) {
       result = this.ownership.withOwnedTaskTx({
         db: input.db,
@@ -51,22 +54,23 @@ export class ManualQuestionParkTransaction {
       result = dbTxSync(input.db, run)
     }
     if (result.parked) {
-      this.lifecycle.notifyParkAfterCommit(input.db, input.taskId, 'awaiting_human')
+      this.lifecycle.publishAfterCommit(result.eventRefs)
     }
-    return result
+    const { eventRefs: _eventRefs, ...publicResult } = result
+    return publicResult
   }
 
-  private settleTx(tx: DbTxSync, taskId: string, now: number): ManualQuestionParkSettleResult {
+  private settleTx(tx: DbTxSync, taskId: string, now: number): ManualQuestionParkInternalResult {
     const task = this.lifecycle.readManualParkCandidateTx(tx, taskId)
-    if (task === null) return { consumed: 0, parked: false }
-    let result: ManualQuestionParkSettleResult | undefined
+    if (task === null) return { consumed: 0, parked: false, eventRefs: [] }
+    let result: ManualQuestionParkInternalResult | undefined
     withExistingSQLiteTransactionScope(tx, (transactionScope): undefined => {
       const operationIds = this.humanGates.listPreparedManualQuestionParksTx({
         transactionScope,
         taskId,
       })
       if (operationIds.length === 0) {
-        result = { consumed: 0, parked: false }
+        result = { consumed: 0, parked: false, eventRefs: [] }
         return
       }
       let outstanding = false
@@ -80,17 +84,17 @@ export class ManualQuestionParkTransaction {
         outstanding ||= consumed.outstanding
       }
       if (!outstanding) {
-        result = { consumed: operationIds.length, parked: false }
+        result = { consumed: operationIds.length, parked: false, eventRefs: [] }
         return
       }
-      this.lifecycle.transitionTx({
+      const parked = this.lifecycle.transitionTx({
         tx,
         taskId,
         expectedTaskRevision: task.taskRevision,
         transition: 'park-human',
         now,
       })
-      result = { consumed: operationIds.length, parked: true }
+      result = { consumed: operationIds.length, parked: true, eventRefs: parked.eventRefs }
       return undefined
     })
     if (result === undefined) throw new Error('manual-question park returned no result')

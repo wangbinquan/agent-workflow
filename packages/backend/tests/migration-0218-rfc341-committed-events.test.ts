@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
-import { MIGRATIONS } from './migration-freeze'
+import { freezeAt } from './migration-freeze'
 
 describe('migration 0218 — RFC-341 committed-event ledger', () => {
   test('adds immutable event, ordered aggregate, delivery and cutover tables', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb(freezeAt(217))
     const tables = db.all<{ name: string }>(
       sql`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`,
     )

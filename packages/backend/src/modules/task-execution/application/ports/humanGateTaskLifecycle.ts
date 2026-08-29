@@ -2,8 +2,8 @@
 // Application orchestration owns the transaction, while infrastructure binds
 // these exact human-gate transitions to the legacy lifecycle implementation.
 
-import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 export type HumanGateTaskTransition =
   | 'park-review'
@@ -19,10 +19,6 @@ export interface HumanGateTaskLifecycle {
     readonly expectedTaskRevision: number
     readonly transition: HumanGateTaskTransition
     readonly now: number
-  }): Readonly<{ taskRevision: number }>
-  notifyParkAfterCommit(
-    db: DbClient,
-    taskId: string,
-    status: 'awaiting_review' | 'awaiting_human',
-  ): void
+  }): Readonly<{ taskRevision: number; eventRefs: readonly CommittedEventRef[] }>
+  publishAfterCommit(eventRefs: readonly CommittedEventRef[]): void
 }

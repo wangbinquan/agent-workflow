@@ -1,7 +1,7 @@
 // LOCKS: RFC-057 — R1 repair options (approved doc_version but review run not done).
 // 3 options × 3 cases = 9 tests.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import type { DbClient } from '../src/db/client'
@@ -14,7 +14,6 @@ import {
   type RepairOptionDef,
 } from '../src/services/lifecycleRepair'
 import { R1_OPTIONS } from '../src/services/lifecycleRepair/options-R1'
-import { registerTerminalTaskHook } from '../src/services/lifecycle'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { cancelTask } from '../src/services/task'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
@@ -29,6 +28,7 @@ import {
   settleResumes,
   type RepairHarness,
 } from './lifecycle-repair-harness'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 type R1WriterId = 'R1.approve-run' | 'R1.unapprove-doc'
 
@@ -459,14 +459,11 @@ describe('RFC-057 — R1.mark-task-failed', () => {
 
 describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
   let h: RepairHarness
+  let uninstallAfterCommitPump: (() => void) | null = null
 
-  beforeEach(() => {
-    registerTerminalTaskHook((db, taskId, to) => {
-      sealOpenHumanGatesForTask(db, taskId, `task-${to}`)
-    })
-  })
   afterEach(async () => {
-    registerTerminalTaskHook(null)
+    uninstallAfterCommitPump?.()
+    uninstallAfterCommitPump = null
     await settleResumes()
     h?.cleanup()
   })
@@ -476,6 +473,11 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
     async (optionId) => {
       const seeded = await seedR1WriterCase(optionId)
       h = seeded.h
+      uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
+        onTerminalTask(db, taskId, to) {
+          sealOpenHumanGatesForTask(db, taskId, `task-${to}`)
+        },
+      })
       // Preflight above deliberately happened before cancellation. Queue the
       // stale apply behind cancel to prove apply itself revalidates in-lock.
       const [cancelResult, repairResult] = await settleR1InOrder(
@@ -512,6 +514,11 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
     async (optionId) => {
       const seeded = await seedR1WriterCase(optionId)
       h = seeded.h
+      uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
+        onTerminalTask(db, taskId, to) {
+          sealOpenHumanGatesForTask(db, taskId, `task-${to}`)
+        },
+      })
       const [repairResult, cancelResult] = await settleR1InOrder(
         h.taskId,
         () => seeded.option.apply(seeded.rc, seeded.pre),

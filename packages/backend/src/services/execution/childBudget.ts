@@ -17,10 +17,9 @@
 // starve shallow waiters (>60s waits are logged; priority aging is a
 // registered follow-up, not v1).
 //
-// Bookkeeping is driven from the lifecycle write path (notifyChildBudgetTaskStatus,
-// wired next to the RFC-243 executionWatch emission) plus explicit pre-insert
-// holds around the launch window. Boot/lazy init rebuilds the counted set from
-// the DB so restarts cannot leak or double-count units.
+// Bookkeeping is driven by the committed task-lifecycle consumer plus explicit
+// pre-insert holds around the launch window. Boot/lazy init rebuilds the counted
+// set from the DB so restarts cannot leak or double-count units.
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { tasks } from '@/db/schema'
