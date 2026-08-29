@@ -3354,6 +3354,21 @@
       "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
     },
     {
+      "findingId": "TP-11",
+      "kind": "duplicate-implementation",
+      "title": "Three independent re-implementations of the claim-with-lease outbox protocol; platform/ owns no outbox kernel",
+      "anchors": [
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleEventPublisher.ts:36-100",
+        "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts:835-915",
+        "packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts:973-1032",
+        "packages/backend/src/db/schema.ts:5128-5135",
+        "packages/backend/src/db/schema.ts:5598-5600",
+        "packages/backend/src/platform/persistence/transactionScope.ts:1-9"
+      ],
+      "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
+      "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
+    },
+    {
       "findingId": "TP-12",
       "kind": "stale-assertion",
       "title": "DAEMON_CADENCE claims to be the single background-cadence registry, but ~6 loops keep their own literals and membership is unguarded",
@@ -3724,7 +3739,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d3f4ddd882236e275b98f5b69aa98ded3d15884f8cb1b01b55d6689dba9eee61",
+    "sourceDigest": "sha256:1fab367e3c7752289b4c91a3713f98c90e83472adae0d71e1aafdef349394875",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

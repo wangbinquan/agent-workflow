@@ -15,7 +15,7 @@
 //      (failed/interrupted included — the single-slot RFC-202 hook only fires
 //      for done|canceled); missing-row resolve; poll fallback catches a row
 //      deleted after registration; abort resolves 'aborted'.
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -26,6 +26,7 @@ import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
 import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
 import { startExecution } from '../src/services/execution/executor'
 import {
+  notifyTaskTerminal,
   resetTaskTerminalWatchersForTests,
   watchTaskTerminal,
 } from '../src/services/execution/executionWatch'
@@ -33,6 +34,7 @@ import { ValidationError } from '../src/util/errors'
 import type { Actor } from '../src/auth/actor'
 import type { TaskStatus } from '@agent-workflow/shared'
 import type { StartTaskDeps } from '../src/services/task'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -211,6 +213,22 @@ async function seedTask(db: DbClient, status: TaskStatus): Promise<string> {
 }
 
 describe('RFC-243 T5 — executionWatch', () => {
+  let uninstallAfterCommitPump: (() => void) | undefined
+
+  afterEach(() => {
+    uninstallAfterCommitPump?.()
+    uninstallAfterCommitPump = undefined
+    resetTaskTerminalWatchersForTests()
+  })
+
+  const installExecutionWatchPump = (db: DbClient): void => {
+    uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+      onExecutionWatch(_db, taskId, status) {
+        notifyTaskTerminal(taskId, status)
+      },
+    })
+  }
+
   test('already-terminal task resolves on the immediate read', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db, 'done')
@@ -225,6 +243,7 @@ describe('RFC-243 T5 — executionWatch', () => {
   test('lifecycle write resolves watchers for failed (a status the RFC-202 hook ignores)', async () => {
     resetTaskTerminalWatchersForTests()
     const db = createInMemoryDb(MIGRATIONS)
+    installExecutionWatchPump(db)
     const taskId = await seedTask(db, 'running')
     const watching = watchTaskTerminal(db, taskId, { pollMs: 60_000 })
     await Bun.sleep(10)
@@ -241,6 +260,7 @@ describe('RFC-243 T5 — executionWatch', () => {
   test('multicast: two watchers both resolve; interrupted counts as terminal', async () => {
     resetTaskTerminalWatchersForTests()
     const db = createInMemoryDb(MIGRATIONS)
+    installExecutionWatchPump(db)
     const taskId = await seedTask(db, 'running')
     const a = watchTaskTerminal(db, taskId, { pollMs: 60_000 })
     const b = watchTaskTerminal(db, taskId, { pollMs: 60_000 })

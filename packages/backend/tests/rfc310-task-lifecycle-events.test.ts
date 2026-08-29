@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
 import {
@@ -87,7 +87,7 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
     const committed = db
       .select()
       .from(committedEvents)
-      .where(and(eq(committedEvents.aggregateId, 'task-1'), eq(committedEvents.aggregateSeq, 2)))
+      .where(eq(committedEvents.id, 'task-lifecycle:task-1:2'))
       .get()
     expect(committed).toMatchObject({
       id: 'task-lifecycle:task-1:2',

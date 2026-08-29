@@ -15,6 +15,7 @@ import { createApp } from '../src/server'
 import { runGit } from '../src/util/git'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '../src/ws/broadcaster'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -43,6 +44,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
   const db = createInMemoryDb(MIGRATIONS)
+  const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {})
   const app = createApp({
     token: TOKEN,
     configPath: join(appHome, 'config.json'),
@@ -57,6 +59,7 @@ async function buildHarness(): Promise<Harness> {
     repoUrl: remoteUrlFor(repoPath),
     appHome,
     cleanup: () => {
+      uninstallAfterCommitPump()
       rmSync(appHome, { recursive: true, force: true })
       rmSync(repoPath, { recursive: true, force: true })
       if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME

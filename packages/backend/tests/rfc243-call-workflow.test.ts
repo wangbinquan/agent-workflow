@@ -35,7 +35,12 @@ const closureActor = buildActor({
   source: 'daemon',
 })
 import { runGit } from '../src/util/git'
+import {
+  notifyTaskTerminal,
+  resetTaskTerminalWatchersForTests,
+} from '../src/services/execution/executionWatch'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -110,6 +115,11 @@ async function buildHarness(): Promise<Harness> {
   }
   writeFileSync(mockPath, mockSource(planFile))
   const db = createInMemoryDb(MIGRATIONS)
+  const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
+    onExecutionWatch(_db, taskId, status) {
+      notifyTaskTerminal(taskId, status)
+    },
+  })
   await seedTestDefaultOpencodeRuntime(db)
   return {
     db,
@@ -118,7 +128,11 @@ async function buildHarness(): Promise<Harness> {
     worktreePath,
     mockPath,
     planFile,
-    cleanup: () => rmSync(appHome, { recursive: true, force: true }),
+    cleanup: () => {
+      uninstallAfterCommitPump()
+      resetTaskTerminalWatchersForTests()
+      rmSync(appHome, { recursive: true, force: true })
+    },
   }
 }
 

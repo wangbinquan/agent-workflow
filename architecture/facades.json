@@ -1,7 +1,7 @@
 {
   "denominator": {
     "boundaryFacades": 98,
-    "serviceFiles": 377
+    "serviceFiles": 378
   },
   "entries": [
     {
@@ -2027,6 +2027,7 @@
         "ApplyIntentFaults",
         "ApplyIntentInput",
         "IntentApplyReceipt",
+        "__intentApplyLockCountForTests",
         "activeIntentApplyJournalIds",
         "applyIntentChangeset",
         "convergeIntentApplyJournal",
@@ -2105,6 +2106,23 @@
       "file": "packages/backend/src/services/intent/iteration.ts",
       "id": "facade:packages/backend/src/services/intent/iteration.ts",
       "ownerEntryId": "owner:packages/backend/src/services/intent/iteration.ts#$file",
+      "removeAfterWave": "W4/W9",
+      "status": "legacy-owner",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
+        "INTENT_JOURNAL_ARTIFACT_VERSION",
+        "IntentJournalArtifact",
+        "IntentJournalArtifactCodecError",
+        "decodeIntentJournalArtifacts",
+        "encodeIntentJournalArtifacts"
+      ],
+      "file": "packages/backend/src/services/intent/journalArtifacts.ts",
+      "id": "facade:packages/backend/src/services/intent/journalArtifacts.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/intent/journalArtifacts.ts#$file",
       "removeAfterWave": "W4/W9",
       "status": "legacy-owner",
       "targetContext": "intent",
@@ -7716,5 +7734,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d3f4ddd882236e275b98f5b69aa98ded3d15884f8cb1b01b55d6689dba9eee61"
+  "sourceDigest": "sha256:1fab367e3c7752289b4c91a3713f98c90e83472adae0d71e1aafdef349394875"
 }

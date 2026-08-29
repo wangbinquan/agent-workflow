@@ -292,10 +292,8 @@ describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
       expect(bridge(nodeExecution, symbol)).toBeUndefined()
     }
     expect(bridge(application, 'replayPendingMerges')).toBeUndefined()
-    expect(bridge(application, 'emitStatus')).toMatchObject({
-      introducedByRFC: 'RFC-332',
-      removeAfterWave: 'W3',
-    })
+    // RFC-341 closes the W3 task-status compatibility bridge.
+    expect(bridge(application, 'emitStatus')).toBeUndefined()
     expect(bridge(scope, 'maybeRunCommitPush')).toMatchObject({
       introducedByRFC: 'RFC-332',
       removeAfterWave: 'W5',

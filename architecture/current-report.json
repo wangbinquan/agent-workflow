@@ -5,13 +5,13 @@
     "architectureExceptions": 1428,
     "backgroundJobs": 265,
     "crossContextImports": 1464,
-    "facades": 377,
+    "facades": 378,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18715,
-    "mutationEntrypoints": 1007,
+    "moduleSymbolOwners": 18727,
+    "mutationEntrypoints": 1008,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 395,
-    "transactionExternalEffects": 270
+    "transactionExternalEffects": 273
   },
   "metrics": {
     "ambientWiringEntries": 447,
@@ -70,7 +70,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 989,
+    "backendProductionFiles": 990,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -228,10 +228,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 377,
+    "serviceFiles": 378,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d3f4ddd882236e275b98f5b69aa98ded3d15884f8cb1b01b55d6689dba9eee61"
+  "sourceDigest": "sha256:1fab367e3c7752289b4c91a3713f98c90e83472adae0d71e1aafdef349394875"
 }

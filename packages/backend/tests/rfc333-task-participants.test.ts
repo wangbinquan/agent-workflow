@@ -293,7 +293,11 @@ describe('RFC-333 T5 TaskParkTx', () => {
       db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all(),
     ).toHaveLength(1)
     expect(
-      db.select().from(committedEvents).where(eq(committedEvents.aggregateSeq, 2)).get(),
+      db
+        .select()
+        .from(committedEvents)
+        .where(eq(committedEvents.id, `task-lifecycle:${taskId}:2`))
+        .get(),
     ).toMatchObject({
       producer: 'task-execution',
       family: 'task-lifecycle',
@@ -649,7 +653,11 @@ describe('RFC-333 T5 TaskDecisionParticipantInTx', () => {
       }),
     ])
     expect(
-      db.select().from(committedEvents).where(eq(committedEvents.aggregateSeq, 2)).get(),
+      db
+        .select()
+        .from(committedEvents)
+        .where(eq(committedEvents.id, `task-lifecycle:${taskId}:2`))
+        .get(),
     ).toMatchObject({ aggregateId: taskId, eventType: 'task.lifecycle-transitioned.v1' })
 
     expect(() => dbTxSync(db, (tx) => submitDecision(tx, { taskId, ...ids, module }))).toThrow()
