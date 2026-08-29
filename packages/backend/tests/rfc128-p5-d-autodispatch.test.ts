@@ -35,6 +35,7 @@ import {
   autoDispatchClarifyRoundWithDecision,
   finishCommittedClarifyAutoDispatch,
 } from '../src/services/clarifyAutoDispatch'
+import { prepareClarifyDecision } from '../src/services/clarifyDecision'
 import { createGateContinuationPreDriveStep } from '../src/services/humanGateContinuationEffects'
 import { createTaskExecutionTestModule } from '../src/modules/task-execution/composition'
 import { createTaskExecutionContext } from '../src/modules/task-execution/application/taskExecutionContext'
@@ -63,6 +64,55 @@ const CL = 'CL' // self clarify node
 const CC = 'CC' // cross-clarify node
 
 const actor = { userId: 'u1', role: 'owner' as const }
+
+async function commitClarifyDecisionThenInterrupt(input: {
+  db: DbClient
+  taskId: string
+  originNodeRunId: string
+  answers: ReturnType<typeof ans>[]
+  directive?: 'continue' | 'stop'
+  idempotencyKey: string
+}): Promise<void> {
+  const round = input.db
+    .select({ id: clarifyRounds.id })
+    .from(clarifyRounds)
+    .where(eq(clarifyRounds.intermediaryNodeRunId, input.originNodeRunId))
+    .get()!
+  const task = input.db
+    .select({ lifecycleEventRevision: tasks.lifecycleEventRevision })
+    .from(tasks)
+    .where(eq(tasks.id, input.taskId))
+    .get()!
+  const directive = input.directive ?? 'continue'
+  const prepared = prepareClarifyDecision({
+    db: input.db,
+    taskId: input.taskId,
+    originNodeRunId: input.originNodeRunId,
+    roundId: round.id,
+    actorUserId: actor.userId,
+    actorRole: actor.role,
+    answers: input.answers,
+    directive,
+    taskRevision: task.lifecycleEventRevision,
+    decision: { idempotencyKey: input.idempotencyKey },
+  })
+
+  await autoDispatchClarifyRound({
+    db: input.db,
+    originNodeRunId: input.originNodeRunId,
+    answers: input.answers,
+    directive,
+    actor,
+    committedOperationId: prepared.operationId,
+    decisionParticipant: prepared.participant,
+    // Exercise the real low-level commit-edge seam. The collaboration command wrapper owns
+    // this callback in production, so passing a second callback to that wrapper would only be
+    // shadowed by its composition barrier and would not model an interruption at all.
+    afterSealCommit: async () => {
+      throw new Error('rfc341-commit-edge-fault')
+    },
+  })
+}
 
 function liveDef(): WorkflowDefinition {
   const nodes: WorkflowNode[] = [
@@ -186,14 +236,18 @@ describe('RFC-333 clarify decision transaction', () => {
       directive: 'stop' as const,
       actor,
       decision: { idempotencyKey: 'commit-edge-convergence' },
-      afterSealCommit: async () => {
-        throw new Error('rfc341-commit-edge-fault')
-      },
     }
 
-    await expect(autoDispatchClarifyRoundWithDecision(command)).rejects.toThrow(
-      'rfc341-commit-edge-fault',
-    )
+    await expect(
+      commitClarifyDecisionThenInterrupt({
+        db,
+        taskId,
+        originNodeRunId: intermediaryNodeRunId,
+        answers: command.answers,
+        directive: command.directive,
+        idempotencyKey: command.decision.idempotencyKey,
+      }),
+    ).rejects.toThrow('rfc341-commit-edge-fault')
     const operation = db
       .select()
       .from(collaborationGateOperations)
@@ -257,15 +311,12 @@ describe('RFC-333 clarify decision transaction', () => {
     await seedTask(db, taskId)
     const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
     await expect(
-      autoDispatchClarifyRoundWithDecision({
+      commitClarifyDecisionThenInterrupt({
         db,
+        taskId,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
-        actor,
-        decision: { idempotencyKey: 'missing-durable-role' },
-        afterSealCommit: async () => {
-          throw new Error('rfc341-commit-edge-fault')
-        },
+        idempotencyKey: 'missing-durable-role',
       }),
     ).rejects.toThrow('rfc341-commit-edge-fault')
     const operation = db

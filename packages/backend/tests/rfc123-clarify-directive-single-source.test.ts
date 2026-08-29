@@ -409,17 +409,26 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     expect(crossSrc).not.toContain('function hasPersistentStop')
   })
 
-  test('clarifySeal：答 stop 的唯一写点存在（stopFinalized → askingNodeId 节点 directive）', () => {
+  test('clarifySeal：答 stop 的唯一写点在 seal tx 内原子闭合', () => {
     // RFC-132 ②b: legacy submit* 两写点随 immediate-mint 删除,统一 seal 原语
     // (sealRoundQuestions) 是唯一「答 stop → 节点 directive」写点(self 的 asking = 自身、
-    // cross 的 asking = questioner——同一字段覆盖两 kind)。prettier 可能换行,归一化匹配。
+    // cross 的 asking = questioner——同一字段覆盖两 kind)。RFC-341 将它收进同一个 seal
+    // dbTxSync，避免 answer 已提交但 stop directive 丢失。prettier 可能换行,归一化匹配。
     const norm = (s: string) => s.replace(/\s+/g, ' ')
-    expect(sealSrc).toContain('setNodeClarifyDirective')
+    const txAt = sealSrc.indexOf('const committed = dbTxSync(args.db, (tx) => {')
+    const directiveAt = sealSrc.indexOf('setNodeClarifyDirectiveTx(', txAt)
+    const afterCommitAt = sealSrc.indexOf('await args.afterCommit?.()', directiveAt)
+
+    expect(txAt).toBeGreaterThan(-1)
+    expect(directiveAt).toBeGreaterThan(txAt)
+    expect(afterCommitAt).toBeGreaterThan(directiveAt)
+    expect(sealSrc.match(/setNodeClarifyDirectiveTx\(/g)).toHaveLength(1)
     expect(norm(sealSrc)).toContain(
       // RFC-207 — the call gained a 6th arg: WHICH asker to stop. Without it a
       // workgroup stop would silence every member sharing the host node.
-      "await setNodeClarifyDirective( args.db, txResult.taskId, txResult.askingNodeId, 'stop', args.sealedBy ?? 'local', wgClarifyAskerKeyForRound(txResult.askingNodeId, txResult.askingShardKey ?? null), )",
+      "setNodeClarifyDirectiveTx( tx, round.taskId, round.askingNodeId, 'stop', args.sealedBy ?? 'local', wgClarifyAskerKeyForRound(round.askingNodeId, round.askingShardKey ?? null), ts, )",
     )
+    expect(sealSrc).not.toContain('await setNodeClarifyDirective(')
   })
 })
 
