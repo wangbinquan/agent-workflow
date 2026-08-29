@@ -336,7 +336,7 @@ describe('RFC-342 memory scope move correctness', () => {
     await promoteCandidate(db, approved.id, { action: 'approve' }, ownerId)
     expect(() =>
       moveMemory(db, contexts, contextFor(ownerId), approved.id, {
-        expectedVersion: approved.version + 1,
+        expectedVersion: approved.version,
         scopeType: 'workflow',
         scopeId: workflowId,
       }),
@@ -345,7 +345,7 @@ describe('RFC-342 memory scope move correctness', () => {
     await db.update(memories).set({ status: 'archived' }).where(eq(memories.id, approved.id))
     expect(() =>
       moveMemory(db, contexts, contextFor(ownerId), approved.id, {
-        expectedVersion: approved.version + 1,
+        expectedVersion: approved.version,
         scopeType: 'workflow',
         scopeId: workflowId,
       }),

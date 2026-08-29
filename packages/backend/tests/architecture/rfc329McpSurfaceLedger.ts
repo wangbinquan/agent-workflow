@@ -272,6 +272,7 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: "POST /api/mcps/:id/runtime-test-sessions/:id/end", group: "/api/mcps", category: "not-in-scope" },
   { leaf: "POST /api/mcps/:id/runtime-test-sessions/:id/messages", group: "/api/mcps", category: "not-in-scope" },
   { leaf: "POST /api/memories/:id/archive", group: "/api/memories", category: "not-in-scope" },
+  { leaf: "POST /api/memories/:id/move", group: "/api/memories", category: "not-in-scope" },
   { leaf: "POST /api/memories/:id/promote", group: "/api/memories", category: "not-in-scope" },
   { leaf: "POST /api/memories/:id/unarchive", group: "/api/memories", category: "not-in-scope" },
   { leaf: "POST /api/plantuml/render", group: "/api/plantuml", category: "not-in-scope" },

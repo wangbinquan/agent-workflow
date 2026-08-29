@@ -307,8 +307,11 @@
       "id": "rfc329-mcp-surface-exemptions",
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
-      "baseline": 379,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
+      "baseline": 380,
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。",
+      "allowGrowth": {
+        "why": "RFC-342 将候选记忆 scope move 明确限定为 REST/UI 命令；本 RFC 不新增 MCP move 能力，因此只登记这一条精确叶子且不扩大前缀豁免。"
+      }
     },
     {
       "id": "rfc294-mutation-entrypoints",
