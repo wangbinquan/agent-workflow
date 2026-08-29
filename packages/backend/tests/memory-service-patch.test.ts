@@ -4,8 +4,8 @@
 //   * candidate / approved / archived rows are editable
 //   * superseded / rejected → 409 memory-terminal-status
 //   * unknown id → 404 memory-not-found
-//   * synth-then-MemorySchema rejects "change scopeType to global without
-//     clearing scopeId"
+//   * service-level scope mutation attempts are rejected (route schema is not
+//     the only guard)
 //   * version bumps only when ≥1 field actually changes (idempotent re-save)
 //   * WS publish carries changedFields + version
 //   * source_* / approved_* / supersedes_* columns frozen
@@ -18,12 +18,13 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories } from '../src/db/schema'
 import {
   createManualCandidate,
+  getMemoryById,
   patchMemory,
   promoteCandidate,
   archiveMemory,
 } from '../src/services/memory'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
-import type { MemoryWsMessage } from '@agent-workflow/shared'
+import type { MemoryPatchRequest, MemoryWsMessage } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -38,7 +39,7 @@ function captureBroadcasts(): { msgs: MemoryWsMessage[]; stop: () => void } {
 async function seedCandidate(
   db: DbClient,
   overrides: Partial<{
-    scopeType: 'agent' | 'workflow' | 'repo' | 'global'
+    scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
     scopeId: string | null
     title: string
     bodyMd: string
@@ -150,19 +151,22 @@ describe('patchMemory — RFC-045', () => {
     })
   })
 
-  test('scopeType→global without clearing scopeId → 422 invalid-body', async () => {
+  test('service rejects scopeType even when a caller bypasses the wire schema', async () => {
     const seed = await seedCandidate(db, { scopeType: 'agent', scopeId: 'agent-a' })
-    await expect(patchMemory(db, seed.id, { scopeType: 'global' })).rejects.toMatchObject({
-      code: 'invalid-body',
+    await expect(
+      patchMemory(db, seed.id, {
+        scopeType: 'global',
+        scopeId: null,
+        title: 'smuggled',
+      } as unknown as MemoryPatchRequest),
+    ).rejects.toMatchObject({ code: 'memory-scope-move-required' })
+    const after = await getMemoryById(db, seed.id)
+    expect(after?.memory).toMatchObject({
+      scopeType: 'agent',
+      scopeId: 'agent-a',
+      title: seed.title,
+      version: seed.version,
     })
-  })
-
-  test('scopeType→global with explicit scopeId=null succeeds', async () => {
-    const seed = await seedCandidate(db, { scopeType: 'agent', scopeId: 'agent-a' })
-    const result = await patchMemory(db, seed.id, { scopeType: 'global', scopeId: null })
-    expect(result.memory.scopeType).toBe('global')
-    expect(result.memory.scopeId).toBeNull()
-    expect(new Set(result.changedFields)).toEqual(new Set(['scopeType', 'scopeId']))
   })
 
   test('source_* + distill_* + supersedes_id columns are frozen across PATCH', async () => {
@@ -207,15 +211,29 @@ describe('patchMemory — RFC-045', () => {
       tags: ['x'],
     })
     const result = await patchMemory(db, seed.id, {
-      scopeType: 'workflow',
-      scopeId: 'wf-1',
       title: 't2',
       bodyMd: 'b2',
       tags: ['y'],
     })
-    expect(new Set(result.changedFields)).toEqual(
-      new Set(['scopeType', 'scopeId', 'title', 'bodyMd', 'tags']),
-    )
+    expect(new Set(result.changedFields)).toEqual(new Set(['title', 'bodyMd', 'tags']))
     expect(result.memory.version).toBe(2)
+  })
+
+  test('rollback after SQL write emits no ghost memory.updated frame', async () => {
+    const seed = await seedCandidate(db)
+    const cap = captureBroadcasts()
+    await expect(
+      patchMemory(db, seed.id, { title: 'must roll back' }, 'admin', {
+        afterWriteInTx: () => {
+          throw new Error('rollback-patch')
+        },
+      }),
+    ).rejects.toThrow('rollback-patch')
+    cap.stop()
+    expect((await getMemoryById(db, seed.id))?.memory).toMatchObject({
+      title: seed.title,
+      version: seed.version,
+    })
+    expect(cap.msgs.some((message) => message.type === 'memory.updated')).toBe(false)
   })
 })

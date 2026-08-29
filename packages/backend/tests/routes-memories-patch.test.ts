@@ -1,6 +1,6 @@
 // RFC-045 — HTTP layer for PATCH /api/memories/:id.
 //
-// Covers permission gate (memory:edit on admin only), 422 / 404 / 409 /
+// Covers permission + row gate, content-only schema, 422 / 404 / 409 /
 // 200 paths, idempotent re-save, and the RFC-046 invariant: PATCH must NOT
 // touch any node_runs.injected_memories_json column (historical inject
 // snapshots are frozen; admin edits only affect future inject reads).
@@ -12,7 +12,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { agents, memoryScopeMoveEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { createManualCandidate, promoteCandidate, archiveMemory } from '../src/services/memory'
@@ -26,6 +26,7 @@ interface Harness {
   db: DbClient
   app: Hono
   daemonToken: string
+  adminUserId: string
   adminUserToken: string
   regularUserToken: string
 }
@@ -53,7 +54,14 @@ async function buildHarness(): Promise<Harness> {
   })
   const adminUserToken = (await createSession({ db, userId: admin.id })).token
   const regularUserToken = (await createSession({ db, userId: user.id })).token
-  return { db, app, daemonToken: DAEMON_TOKEN, adminUserToken, regularUserToken }
+  return {
+    db,
+    app,
+    daemonToken: DAEMON_TOKEN,
+    adminUserId: admin.id,
+    adminUserToken,
+    regularUserToken,
+  }
 }
 
 function authed(token: string, init: RequestInit & { url: string }): Request {
@@ -185,7 +193,7 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
     expect(j.memory.title).toBe('edited while archived')
   })
 
-  test('synth violates schema (scopeType→global, scopeId not cleared) → 422', async () => {
+  test('generic PATCH rejects a complete scope move payload and leaves scope/version unchanged', async () => {
     const seed = await createManualCandidate(h.db, {
       scopeType: 'agent',
       scopeId: 'agent-a',
@@ -196,10 +204,23 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
       authed(h.adminUserToken, {
         url: `/api/memories/${encodeURIComponent(seed.id)}`,
         method: 'PATCH',
-        body: JSON.stringify({ scopeType: 'global' }),
+        body: JSON.stringify({ scopeType: 'global', scopeId: null, title: 'smuggled' }),
       }),
     )
     expect(res.status).toBe(422)
+    const after = await h.app.fetch(
+      authed(h.adminUserToken, {
+        url: `/api/memories/${encodeURIComponent(seed.id)}`,
+        method: 'GET',
+      }),
+    )
+    const body = (await after.json()) as { memory: Memory }
+    expect(body.memory).toMatchObject({
+      scopeType: 'agent',
+      scopeId: 'agent-a',
+      title: 't',
+      version: seed.version,
+    })
   })
 
   test('idempotent re-save → 200 + changedFields=[] + version unchanged', async () => {
@@ -302,5 +323,89 @@ describe('PATCH /api/memories/:id — RFC-045', () => {
     expect(rows.length).toBe(1)
     // Byte-equal: the historical snapshot is frozen by RFC-046 design.
     expect(rows[0]!.injectedMemoriesJson).toBe(snapshotJsonBefore)
+  })
+})
+
+describe('POST /api/memories/:id/move — RFC-342', () => {
+  let h: Harness
+  beforeEach(async () => {
+    resetBroadcastersForTests()
+    h = await buildHarness()
+  })
+
+  test('trusted route identity moves a candidate and persists its audit receipt', async () => {
+    const agentId = ulid()
+    await h.db.insert(agents).values({
+      id: agentId,
+      name: `route-move-agent-${agentId.slice(-6)}`,
+      description: '',
+      ownerUserId: h.adminUserId,
+      visibility: 'private',
+      aclRevision: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    const seed = await createManualCandidate(h.db, {
+      scopeType: 'global',
+      scopeId: null,
+      title: 'move me',
+      bodyMd: 'body',
+    })
+    const res = await h.app.fetch(
+      authed(h.adminUserToken, {
+        url: `/api/memories/${encodeURIComponent(seed.id)}/move`,
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: seed.version,
+          scopeType: 'agent',
+          scopeId: agentId,
+        }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { memory: Memory; moved: boolean }
+    expect(body).toMatchObject({
+      moved: true,
+      memory: { scopeType: 'agent', scopeId: agentId, version: seed.version + 1 },
+    })
+    const events = await h.db
+      .select()
+      .from(memoryScopeMoveEvents)
+      .where(eq(memoryScopeMoveEvents.memoryId, seed.id))
+    expect(events).toEqual([
+      expect.objectContaining({
+        actorUserId: h.adminUserId,
+        actorSource: 'session',
+        fromScopeType: 'global',
+        toScopeType: 'agent',
+        toScopeId: agentId,
+      }),
+    ])
+  })
+
+  test('wire schema rejects injected Actor/permission snapshots', async () => {
+    const seed = await createManualCandidate(h.db, {
+      scopeType: 'global',
+      scopeId: null,
+      title: 'do not trust payload identity',
+      bodyMd: 'body',
+    })
+    const res = await h.app.fetch(
+      authed(h.adminUserToken, {
+        url: `/api/memories/${encodeURIComponent(seed.id)}/move`,
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: seed.version,
+          scopeType: 'global',
+          scopeId: null,
+          actor: {
+            user: { id: h.adminUserId, role: 'admin' },
+            permissions: ['resource-acl:bypass'],
+          },
+        }),
+      }),
+    )
+    expect(res.status).toBe(422)
+    expect(await h.db.select().from(memoryScopeMoveEvents)).toEqual([])
   })
 })

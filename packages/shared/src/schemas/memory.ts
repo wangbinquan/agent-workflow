@@ -154,59 +154,60 @@ export const MemoryCreateRequestSchema = z
   })
 export type MemoryCreateRequest = z.infer<typeof MemoryCreateRequestSchema>
 
-// RFC-045: Admin-issued in-place edit. Distinct from MemoryCreateRequestSchema
-// because every field is optional (partial PATCH) — but at least one must be
-// present, and when scopeType + scopeId are *both* in the patch they must
-// satisfy the global ↔ scopeId-null invariant on their own. The
-// "scopeType-only" case (caller changes scope_type but keeps the row's
-// existing scope_id) is allowed by the schema and re-validated against the
-// row at the service layer (§design.md §4.2 step 3).
+// RFC-342 / RFC-294 P0-A: generic PATCH is content-only. Scope movement has a
+// separate OCC + dual-authorization command below; keeping the two forbidden
+// keys in the object as `never` rejects them while preserving the historical
+// behavior of stripping unrelated server-controlled fields such as `status`.
 export const MemoryPatchRequestSchema = z
   .object({
-    scopeType: MemoryScopeSchema.optional(),
-    scopeId: z.string().nullable().optional(),
+    scopeType: z.never().optional(),
+    scopeId: z.never().optional(),
     title: z.string().trim().min(1).max(120).optional(),
     bodyMd: z.string().trim().min(1).max(4000).optional(),
     tags: tagsArraySchema.optional(),
   })
   .superRefine((v, ctx) => {
-    if (
-      v.scopeType === undefined &&
-      v.scopeId === undefined &&
-      v.title === undefined &&
-      v.bodyMd === undefined &&
-      v.tags === undefined
-    ) {
+    if (v.title === undefined && v.bodyMd === undefined && v.tags === undefined) {
       ctx.addIssue({
         code: 'custom',
-        message: 'patch must include at least one of scopeType/scopeId/title/bodyMd/tags',
+        message: 'patch must include at least one of title/bodyMd/tags',
         path: [],
       })
-    }
-    if (v.scopeType !== undefined && v.scopeId !== undefined) {
-      if (v.scopeType === 'global' && v.scopeId !== null) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'global scope must have scopeId=null',
-          path: ['scopeId'],
-        })
-      }
-      if (v.scopeType !== 'global' && (v.scopeId === null || v.scopeId === '')) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'non-global scope requires scopeId',
-          path: ['scopeId'],
-        })
-      }
     }
   })
 export type MemoryPatchRequest = z.infer<typeof MemoryPatchRequestSchema>
 
-/** Field names that PATCH /api/memories/:id may change (and that the WS
- *  `memory.updated` event reports in changedFields). Kept as a const tuple so
- *  the WS schema can derive the same enum without redeclaring it.
- *  Order is fixed so test fixtures are stable. */
-export const MEMORY_PATCH_FIELDS = ['scopeType', 'scopeId', 'title', 'bodyMd', 'tags'] as const
+/** Dedicated scope move command. It is strict so serialized Actor, permission,
+ * or other caller-supplied authority snapshots fail at the wire boundary. */
+export const MemoryMoveRequestSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    scopeType: MemoryScopeSchema,
+    scopeId: z.string().nullable(),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    if (v.scopeType === 'global' && v.scopeId !== null) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'global scope must have scopeId=null',
+        path: ['scopeId'],
+      })
+    }
+    if (v.scopeType !== 'global' && (v.scopeId === null || v.scopeId === '')) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'non-global scope requires scopeId',
+        path: ['scopeId'],
+      })
+    }
+  })
+export type MemoryMoveRequest = z.infer<typeof MemoryMoveRequestSchema>
+
+/** Content fields that PATCH /api/memories/:id may change. The WS
+ * `memory.updated` event reports this subset plus `scopeType/scopeId` for the
+ * dedicated Move command. Order is fixed so test fixtures are stable. */
+export const MEMORY_PATCH_FIELDS = ['title', 'bodyMd', 'tags'] as const
 export type MemoryPatchField = (typeof MEMORY_PATCH_FIELDS)[number]
 
 // Resolved scope set computed at enqueue time and frozen on the job row.

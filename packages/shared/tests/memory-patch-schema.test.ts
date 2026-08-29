@@ -1,13 +1,16 @@
-// RFC-045 — MemoryPatchRequestSchema unit tests.
+// RFC-045 / RFC-342 — content PATCH + dedicated scope move schemas.
 // Locks the partial-PATCH contract surfaced at PATCH /api/memories/:id:
-//   * at least one of {scopeType, scopeId, title, bodyMd, tags}
+//   * at least one of {title, bodyMd, tags}
 //   * field-level limits (title 1-120, bodyMd 1-4000, tag 1-40, max 16)
-//   * scopeType ↔ scopeId invariant only when *both* are present
-//   * scopeType-only patches are accepted (row-level synth + re-validate in
-//     service layer; see design.md §4.2 step 3)
+//   * scope fields are rejected rather than silently stripped
+// Move has its own strict expectedVersion + target scope contract.
 
 import { describe, expect, test } from 'bun:test'
-import { MEMORY_PATCH_FIELDS, MemoryPatchRequestSchema } from '../src/schemas/memory'
+import {
+  MEMORY_PATCH_FIELDS,
+  MemoryMoveRequestSchema,
+  MemoryPatchRequestSchema,
+} from '../src/schemas/memory'
 
 describe('MemoryPatchRequestSchema', () => {
   test('rejects fully empty body', () => {
@@ -20,37 +23,11 @@ describe('MemoryPatchRequestSchema', () => {
     expect(r.success).toBe(true)
   })
 
-  test('accepts scopeType=global + scopeId=null pair', () => {
-    const r = MemoryPatchRequestSchema.safeParse({ scopeType: 'global', scopeId: null })
-    expect(r.success).toBe(true)
-  })
-
-  test('rejects scopeType=global + scopeId="x"', () => {
-    const r = MemoryPatchRequestSchema.safeParse({ scopeType: 'global', scopeId: 'x' })
-    expect(r.success).toBe(false)
-    if (!r.success) {
-      expect(JSON.stringify(r.error.format())).toContain('global scope must have scopeId=null')
-    }
-  })
-
-  test('rejects scopeType=agent + scopeId=null', () => {
-    const r = MemoryPatchRequestSchema.safeParse({ scopeType: 'agent', scopeId: null })
-    expect(r.success).toBe(false)
-  })
-
-  test('rejects scopeType=agent + scopeId=""', () => {
-    const r = MemoryPatchRequestSchema.safeParse({ scopeType: 'agent', scopeId: '' })
-    expect(r.success).toBe(false)
-  })
-
-  test('accepts scopeType-only patch (scopeId not provided — service layer re-validates)', () => {
-    const r = MemoryPatchRequestSchema.safeParse({ scopeType: 'agent' })
-    expect(r.success).toBe(true)
-  })
-
-  test('accepts scopeId-only patch (scopeType not provided — service layer re-validates)', () => {
-    const r = MemoryPatchRequestSchema.safeParse({ scopeId: 'agent-x' })
-    expect(r.success).toBe(true)
+  test('rejects scopeType and scopeId even when content is also present', () => {
+    expect(MemoryPatchRequestSchema.safeParse({ scopeType: 'global', title: 'x' }).success).toBe(
+      false,
+    )
+    expect(MemoryPatchRequestSchema.safeParse({ scopeId: null, bodyMd: 'x' }).success).toBe(false)
   })
 
   test('rejects title="" (trim min 1)', () => {
@@ -100,7 +77,58 @@ describe('MemoryPatchRequestSchema', () => {
 })
 
 describe('MEMORY_PATCH_FIELDS', () => {
-  test('is the canonical 5-tuple in fixed order', () => {
-    expect(MEMORY_PATCH_FIELDS).toEqual(['scopeType', 'scopeId', 'title', 'bodyMd', 'tags'])
+  test('is the canonical content-only tuple in fixed order', () => {
+    expect(MEMORY_PATCH_FIELDS).toEqual(['title', 'bodyMd', 'tags'])
+  })
+})
+
+describe('MemoryMoveRequestSchema', () => {
+  test('accepts versioned global and resource targets', () => {
+    expect(
+      MemoryMoveRequestSchema.safeParse({
+        expectedVersion: 3,
+        scopeType: 'global',
+        scopeId: null,
+      }).success,
+    ).toBe(true)
+    expect(
+      MemoryMoveRequestSchema.safeParse({
+        expectedVersion: 3,
+        scopeType: 'workflow',
+        scopeId: 'workflow-1',
+      }).success,
+    ).toBe(true)
+  })
+
+  test('rejects invalid scope pairs and missing/invalid versions', () => {
+    expect(
+      MemoryMoveRequestSchema.safeParse({
+        expectedVersion: 1,
+        scopeType: 'global',
+        scopeId: 'not-null',
+      }).success,
+    ).toBe(false)
+    expect(
+      MemoryMoveRequestSchema.safeParse({
+        expectedVersion: 0,
+        scopeType: 'agent',
+        scopeId: 'agent-1',
+      }).success,
+    ).toBe(false)
+    expect(
+      MemoryMoveRequestSchema.safeParse({ scopeType: 'agent', scopeId: 'agent-1' }).success,
+    ).toBe(false)
+  })
+
+  test('strictly rejects caller-supplied authority snapshots', () => {
+    expect(
+      MemoryMoveRequestSchema.safeParse({
+        expectedVersion: 1,
+        scopeType: 'agent',
+        scopeId: 'agent-1',
+        actor: { user: { id: 'forged-admin' } },
+        permissions: ['resource-acl:bypass'],
+      }).success,
+    ).toBe(false)
   })
 })

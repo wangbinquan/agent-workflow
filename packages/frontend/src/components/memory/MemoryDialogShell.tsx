@@ -52,6 +52,9 @@ export interface MemoryDialogShellProps {
   /** Already-mapped mutation error message, or null when clean. */
   errorText: string | null
   onSubmit: () => void
+  /** Freeze scope independently from content fields (approved/archived edit). */
+  scopeDisabled?: boolean
+  scopeDisabledReason?: string
   /** Keeps this Dialog mounted while an edit detail request resolves. */
   contentState?: { status: 'loading' } | { status: 'error'; error: unknown; onRetry: () => void }
 }
@@ -162,6 +165,8 @@ export function MemoryDialogShell(props: MemoryDialogShellProps) {
             repos={reposToOptions(repos.data?.items)}
             repoGroups={(repoGroups.data?.items ?? []).map((g) => ({ id: g.id, label: g.name }))}
             disabled={props.pending}
+            scopeDisabled={props.scopeDisabled}
+            scopeDisabledReason={props.scopeDisabledReason}
           />
         </>
       )}

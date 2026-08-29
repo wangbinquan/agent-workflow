@@ -1,15 +1,14 @@
-// RFC-045 — admin edit memory dialog.
+// RFC-045/RFC-342 — memory content edit + candidate scope move dialog.
 //
 // Opens from row-level [Edit] buttons in Approval Queue / All / By-scope.
-// On Save: PATCH /api/memories/:id  (perm=memory:edit). Service layer
-// version-bumps + publishes memory.updated only when ≥1 field actually
-// changed; this UI also computes a client-side diff so the PATCH body
-// stays minimal.
+// On Save, content goes through PATCH while a candidate scope change goes
+// through the dedicated versioned POST /move command. Approved/archived scope
+// is visibly frozen; their content remains editable.
 //
 // RFC-151 PR-4: chrome (Dialog + footer + scope-option queries + validation
 // gate) lives in the shared <MemoryDialogShell>; this file keeps only the
-// edit-side specifics — entity-seeded form, diff → PATCH submit, the
-// stale-race eager cache writes and the terminal-status error copy.
+// edit-side specifics — entity-seeded form, Move/content command planning,
+// stale-race eager cache writes and terminal-status error copy.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLayoutEffect, useRef } from 'react'
@@ -29,35 +28,43 @@ export type MemoryEditDialogProps = MemoryEditDialogBaseProps &
   ({ memory: Memory; memoryId?: never } | { memoryId: string; memory?: never })
 
 interface PatchPayload {
-  scopeType?: MemoryFormState['scopeType']
-  scopeId?: string | null
   title?: string
   bodyMd?: string
   tags?: string[]
 }
 
-function diffAgainst(seed: Memory, draft: MemoryFormState): PatchPayload {
-  const out: PatchPayload = {}
-  if (draft.scopeType !== seed.scopeType) out.scopeType = draft.scopeType
-  // scopeId: compare nullable strings; PATCH must include it when scopeType
-  // changes too so the schema's global ↔ null pair is consistent on the wire.
+interface MovePayload {
+  expectedVersion: number
+  scopeType: MemoryFormState['scopeType']
+  scopeId: string | null
+}
+
+interface EditPlan {
+  patch: PatchPayload
+  move?: MovePayload
+}
+
+function planAgainst(seed: Memory, draft: MemoryFormState): EditPlan {
+  const patch: PatchPayload = {}
   const draftScopeId = draft.scopeType === 'global' ? null : draft.scopeId
-  if ((draftScopeId ?? null) !== (seed.scopeId ?? null)) out.scopeId = draftScopeId ?? null
-  if (out.scopeType !== undefined && out.scopeId === undefined) {
-    // Always pair them on the wire so the backend never has to "guess"
-    // intent — RFC-045 design.md §4.2 step 3 still synth-validates on the
-    // server, but sending both is the documented happy path.
-    out.scopeId = draftScopeId ?? null
-  }
-  if (draft.title.trim() !== seed.title) out.title = draft.title.trim()
-  if (draft.bodyMd.trim() !== seed.bodyMd) out.bodyMd = draft.bodyMd.trim()
+  const scopeChanged =
+    draft.scopeType !== seed.scopeType || (draftScopeId ?? null) !== (seed.scopeId ?? null)
+  const move = scopeChanged
+    ? {
+        expectedVersion: seed.version,
+        scopeType: draft.scopeType,
+        scopeId: draftScopeId ?? null,
+      }
+    : undefined
+  if (draft.title.trim() !== seed.title) patch.title = draft.title.trim()
+  if (draft.bodyMd.trim() !== seed.bodyMd) patch.bodyMd = draft.bodyMd.trim()
   // Tags compared order-independently (service layer does the same).
   const seedTags = [...seed.tags].sort()
   const draftTags = [...draft.tags].sort()
   const tagsEqual =
     seedTags.length === draftTags.length && seedTags.every((v, i) => v === draftTags[i])
-  if (!tagsEqual) out.tags = draft.tags
-  return out
+  if (!tagsEqual) patch.tags = draft.tags
+  return { patch, ...(move === undefined ? {} : { move }) }
 }
 
 export function MemoryEditDialog(props: MemoryEditDialogProps) {
@@ -102,13 +109,32 @@ export function MemoryEditDialog(props: MemoryEditDialogProps) {
     })
   }, [memory, resetForm])
 
-  const update = useMutation<{ memory: Memory; changedFields: string[] }, ApiError, PatchPayload>({
-    mutationFn: async (payload) => {
+  const update = useMutation<{ memory: Memory; changedFields: string[] }, ApiError, EditPlan>({
+    mutationFn: async (plan) => {
       if (memory === undefined) throw new Error('memory detail is not loaded')
-      return api.patch<{ memory: Memory; changedFields: string[] }>(
-        `/api/memories/${encodeURIComponent(memory.id)}`,
-        payload,
-      )
+      let current = memory
+      const changedFields: string[] = []
+      if (plan.move !== undefined) {
+        const beforeMove = current
+        const moved = await api.post<{ memory: Memory; moved: boolean }>(
+          `/api/memories/${encodeURIComponent(memory.id)}/move`,
+          plan.move,
+        )
+        current = moved.memory
+        if (moved.moved) {
+          if (beforeMove.scopeType !== current.scopeType) changedFields.push('scopeType')
+          if (beforeMove.scopeId !== current.scopeId) changedFields.push('scopeId')
+        }
+      }
+      if (Object.keys(plan.patch).length > 0) {
+        const patched = await api.patch<{ memory: Memory; changedFields: string[] }>(
+          `/api/memories/${encodeURIComponent(memory.id)}`,
+          plan.patch,
+        )
+        current = patched.memory
+        changedFields.push(...patched.changedFields)
+      }
+      return { memory: current, changedFields }
     },
     onSuccess: (resp) => {
       const next = resp.memory
@@ -145,17 +171,26 @@ export function MemoryEditDialog(props: MemoryEditDialogProps) {
       // eliminate.
       props.onClose()
     },
+    onError: () => {
+      // A combined candidate save is two explicit commands. If Move commits
+      // and the following content PATCH fails, force every consumer to refetch
+      // the durable scope instead of retaining the pre-move cache.
+      void qc.invalidateQueries({ queryKey: ['memories', 'detail', memoryId] })
+      void qc.invalidateQueries({ queryKey: ['memories', 'candidates'] })
+      void qc.invalidateQueries({ queryKey: ['memories', 'all'] })
+      void qc.invalidateQueries({ queryKey: ['memories', 'scoped'] })
+    },
   })
 
   const handleSubmit = () => {
     if (memory === undefined) return
-    const diff = diffAgainst(memory, f.state)
-    if (Object.keys(diff).length === 0) {
+    const plan = planAgainst(memory, f.state)
+    if (plan.move === undefined && Object.keys(plan.patch).length === 0) {
       // No-op locally → also no need to round-trip. Treat as close.
       props.onClose()
       return
     }
-    update.mutate(diff)
+    update.mutate(plan)
   }
 
   return (
@@ -174,6 +209,12 @@ export function MemoryEditDialog(props: MemoryEditDialogProps) {
           : null
       }
       onSubmit={handleSubmit}
+      scopeDisabled={memory !== undefined && memory.status !== 'candidate'}
+      scopeDisabledReason={
+        memory !== undefined && memory.status !== 'candidate'
+          ? t('memory.form.scopeMoveCandidateOnly')
+          : undefined
+      }
       contentState={
         memory !== undefined
           ? undefined
@@ -185,4 +226,4 @@ export function MemoryEditDialog(props: MemoryEditDialogProps) {
   )
 }
 
-export { diffAgainst as _diffAgainstForTests }
+export { planAgainst as _planAgainstForTests }

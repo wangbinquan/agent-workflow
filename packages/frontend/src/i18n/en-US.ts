@@ -8512,6 +8512,7 @@ export const enUS: Resources = {
       scopeId: 'Scope target',
       scopeIdGlobal: '(global — no target)',
       scopeIdPlaceholder: 'Choose a target…',
+      scopeMoveCandidateOnly: 'Scope can only be changed while this memory awaits approval.',
       title: 'Title',
       bodyMd: 'Body (markdown)',
       tags: 'Tags',

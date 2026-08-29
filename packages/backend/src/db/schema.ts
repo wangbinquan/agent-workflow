@@ -3480,6 +3480,66 @@ export const memories = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// RFC-342 / RFC-294 P0-A — immutable memory scope-move receipts.
+//
+// Each row is written in the same transaction as the memory version CAS.  No
+// foreign keys are intentional: audit evidence outlives later memory/user
+// deletion and stores the actor/scope identities exactly as committed.
+// -----------------------------------------------------------------------------
+export const memoryScopeMoveEvents = sqliteTable(
+  'memory_scope_move_events',
+  {
+    id: text('id').primaryKey(),
+    memoryId: text('memory_id').notNull(),
+    actorUserId: text('actor_user_id').notNull(),
+    actorSource: text('actor_source', {
+      enum: ['session', 'pat', 'daemon', 'cli', 'system'],
+    }).notNull(),
+    fromScopeType: text('from_scope_type', {
+      enum: ['agent', 'workflow', 'repo', 'repo_group', 'global'],
+    }).notNull(),
+    fromScopeId: text('from_scope_id'),
+    toScopeType: text('to_scope_type', {
+      enum: ['agent', 'workflow', 'repo', 'repo_group', 'global'],
+    }).notNull(),
+    toScopeId: text('to_scope_id'),
+    expectedVersion: integer('expected_version').notNull(),
+    resultingVersion: integer('resulting_version').notNull(),
+    correlationId: text('correlation_id').notNull(),
+    causationId: text('causation_id'),
+    occurredAt: integer('occurred_at').notNull(),
+  },
+  (t) => ({
+    memoryVersionUq: uniqueIndex('idx_memory_scope_move_events_memory_version').on(
+      t.memoryId,
+      t.resultingVersion,
+    ),
+    occurredIdx: index('idx_memory_scope_move_events_occurred').on(t.occurredAt, t.memoryId),
+    actorSourceKnown: check(
+      'memory_scope_move_events_actor_source',
+      sql`${t.actorSource} IN ('session','pat','daemon','cli','system')`,
+    ),
+    fromScopeValid: check(
+      'memory_scope_move_events_from_scope',
+      sql`(${t.fromScopeType} = 'global' AND ${t.fromScopeId} IS NULL) OR (${t.fromScopeType} IN ('agent','workflow','repo','repo_group') AND ${t.fromScopeId} IS NOT NULL AND length(${t.fromScopeId}) > 0)`,
+    ),
+    toScopeValid: check(
+      'memory_scope_move_events_to_scope',
+      sql`(${t.toScopeType} = 'global' AND ${t.toScopeId} IS NULL) OR (${t.toScopeType} IN ('agent','workflow','repo','repo_group') AND ${t.toScopeId} IS NOT NULL AND length(${t.toScopeId}) > 0)`,
+    ),
+    notNoop: check(
+      'memory_scope_move_events_not_noop',
+      sql`${t.fromScopeType} <> ${t.toScopeType} OR ${t.fromScopeId} IS NOT ${t.toScopeId}`,
+    ),
+    versionStep: check(
+      'memory_scope_move_events_version_step',
+      sql`${t.expectedVersion} > 0 AND ${t.resultingVersion} = ${t.expectedVersion} + 1`,
+    ),
+    timeNonnegative: check('memory_scope_move_events_time_nonnegative', sql`${t.occurredAt} >= 0`),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // fusions — RFC-101 memory→skill fusion record (product-level orchestration).
 // One row per fusion, spanning N engine-task iterations. The proposed skill
 // change lives in the current engine task's ephemeral worktree until the

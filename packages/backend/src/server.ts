@@ -806,7 +806,7 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   mountTaskClarifyDirectiveRoutes(app, deps)
   mountFusionRoutes(app, routeDeps)
   mountIntentSessionRoutes(app, deps) // RFC-234
-  mountMemoryRoutes(app, deps)
+  mountMemoryRoutes(app, deps, identityAccess)
   mountMemoryDistillJobRoutes(app, deps)
   mountTaskFeedbackRoutes(app, deps)
   // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always

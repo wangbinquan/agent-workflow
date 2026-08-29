@@ -1,9 +1,10 @@
-// RFC-045 — MemoryEditDialog contract.
+// RFC-045/RFC-342 — MemoryEditDialog content-edit + scope-move contract.
 //
 // Locks:
 //   * Initial state mirrors the seeded Memory (title / body / tags / scope).
 //   * Save fires PATCH /api/memories/:id with only the changed fields.
-//   * scopeType=global auto-clears scopeId on the wire.
+//   * candidate scope changes use POST /move + expectedVersion, never PATCH.
+//   * approved/archived scope controls are frozen with a visible reason.
 //   * Tags-only change PATCHes tags alone, version stays valid.
 //   * 422 response surfaces an inline ErrorBanner; dialog stays open.
 //   * 409 memory-terminal-status renders the localized friendly message.
@@ -13,7 +14,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Memory } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
-import { MemoryEditDialog, _diffAgainstForTests } from '../src/components/memory/MemoryEditDialog'
+import { MemoryEditDialog, _planAgainstForTests } from '../src/components/memory/MemoryEditDialog'
 import '../src/i18n'
 
 function mkMemory(overrides: Partial<Memory> = {}): Memory {
@@ -88,32 +89,32 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('_diffAgainstForTests — RFC-045', () => {
-  test('no-op patch returns empty object', () => {
+describe('_planAgainstForTests — RFC-342', () => {
+  test('no-op edit returns an empty content patch and no Move command', () => {
     const seed = mkMemory()
-    const out = _diffAgainstForTests(seed, {
+    const out = _planAgainstForTests(seed, {
       scopeType: seed.scopeType,
       scopeId: seed.scopeId,
       title: seed.title,
       bodyMd: seed.bodyMd,
       tags: seed.tags,
     })
-    expect(out).toEqual({})
+    expect(out).toEqual({ patch: {} })
   })
   test('title-only change yields {title}', () => {
     const seed = mkMemory()
-    const out = _diffAgainstForTests(seed, {
+    const out = _planAgainstForTests(seed, {
       scopeType: seed.scopeType,
       scopeId: seed.scopeId,
       title: 'renamed',
       bodyMd: seed.bodyMd,
       tags: seed.tags,
     })
-    expect(out).toEqual({ title: 'renamed' })
+    expect(out).toEqual({ patch: { title: 'renamed' } })
   })
-  test('scopeType→global pairs scopeId=null on wire even if state still has the old id', () => {
+  test('scopeType→global becomes a versioned Move and never enters PATCH', () => {
     const seed = mkMemory({ scopeType: 'agent', scopeId: 'agent-a' })
-    const out = _diffAgainstForTests(seed, {
+    const out = _planAgainstForTests(seed, {
       scopeType: 'global',
       // Even with a stale agent id in state, the helper forces scopeId=null
       // (form UI nulls it on scope switch, but be defensive).
@@ -122,19 +123,21 @@ describe('_diffAgainstForTests — RFC-045', () => {
       bodyMd: seed.bodyMd,
       tags: seed.tags,
     })
-    expect(out.scopeType).toBe('global')
-    expect(out.scopeId).toBeNull()
+    expect(out).toEqual({
+      patch: {},
+      move: { expectedVersion: seed.version, scopeType: 'global', scopeId: null },
+    })
   })
   test('tag reorder alone is no diff', () => {
     const seed = mkMemory({ tags: ['a', 'b', 'c'] })
-    const out = _diffAgainstForTests(seed, {
+    const out = _planAgainstForTests(seed, {
       scopeType: seed.scopeType,
       scopeId: seed.scopeId,
       title: seed.title,
       bodyMd: seed.bodyMd,
       tags: ['c', 'b', 'a'],
     })
-    expect(out).toEqual({})
+    expect(out).toEqual({ patch: {} })
   })
 })
 
@@ -222,6 +225,72 @@ describe('MemoryEditDialog — UX', () => {
     expect(body.value).toBe('orig body')
   })
 
+  test('approved scope is frozen with a visible candidate-only explanation', async () => {
+    installFetch(
+      () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
+    )
+    wrap(mkMemory({ status: 'approved' }))
+    expect(
+      (await screen.findByTestId<HTMLButtonElement>('memory-form-scope-global')).disabled,
+    ).toBe(true)
+    expect(screen.getByTestId('memory-form-scope-disabled-reason').textContent).toMatch(
+      /awaits approval|待审批/i,
+    )
+  })
+
+  test('candidate scope change POSTs the dedicated Move command and never smuggles scope into PATCH', async () => {
+    const seed = mkMemory({ status: 'candidate', approvedByUserId: null, approvedAt: null })
+    const moved: Memory = { ...seed, scopeType: 'global', scopeId: null, version: 2 }
+    const calls = installFetch((call) => {
+      if (call.method === 'POST' && call.url.endsWith('/move')) {
+        return new Response(JSON.stringify({ memory: moved, moved: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    wrap(seed)
+    fireEvent.click(await screen.findByTestId('memory-form-scope-global'))
+    fireEvent.click(screen.getByTestId('memory-edit-dialog-save'))
+    await waitFor(() => expect(calls.some((call) => call.url.endsWith('/move'))).toBe(true))
+    const move = calls.find((call) => call.url.endsWith('/move'))
+    expect(move).toMatchObject({
+      method: 'POST',
+      body: { expectedVersion: seed.version, scopeType: 'global', scopeId: null },
+    })
+    expect(calls.some((call) => call.method === 'PATCH')).toBe(false)
+  })
+
+  test('candidate scope+content save runs Move first, then PATCHes content only', async () => {
+    const seed = mkMemory({ status: 'candidate', approvedByUserId: null, approvedAt: null })
+    const moved: Memory = { ...seed, scopeType: 'global', scopeId: null, version: 2 }
+    const patched: Memory = { ...moved, title: 'renamed', version: 3 }
+    const calls = installFetch((call) => {
+      if (call.method === 'POST' && call.url.endsWith('/move')) {
+        return new Response(JSON.stringify({ memory: moved, moved: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (call.method === 'PATCH') {
+        return new Response(JSON.stringify({ memory: patched, changedFields: ['title'] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+    wrap(seed)
+    fireEvent.click(await screen.findByTestId('memory-form-scope-global'))
+    fireEvent.change(screen.getByTestId('memory-form-title'), { target: { value: 'renamed' } })
+    fireEvent.click(screen.getByTestId('memory-edit-dialog-save'))
+    await waitFor(() => expect(calls.some((call) => call.method === 'PATCH')).toBe(true))
+    const mutations = calls.filter((call) => call.method === 'POST' || call.method === 'PATCH')
+    expect(mutations.map((call) => call.method)).toEqual(['POST', 'PATCH'])
+    expect(mutations[1]?.body).toEqual({ title: 'renamed' })
+  })
+
   test('Save with no changes closes the dialog without firing PATCH', async () => {
     const calls = installFetch(
       () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
@@ -236,8 +305,9 @@ describe('MemoryEditDialog — UX', () => {
     const save = await screen.findByTestId('memory-edit-dialog-save')
     fireEvent.click(save)
     await waitFor(() => expect(closed).toBe(true))
-    // No PATCH call should have been issued (only the GET options-list pre-fetches).
+    // No mutation should have been issued (only the GET options-list pre-fetches).
     expect(calls.some((c) => c.method === 'PATCH')).toBe(false)
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
   })
 
   test('Save with title change PATCHes {title} only', async () => {

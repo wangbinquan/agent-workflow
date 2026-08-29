@@ -366,13 +366,12 @@ export const MemoryWsMessageSchema = z.discriminatedUnion('type', [
     oldId: z.string(),
     newId: z.string(),
   }),
-  // RFC-045/RFC-305: in-place permission-gated edit of candidate / approved / archived rows.
-  // changedFields is the (non-empty) subset of {scopeType, scopeId, title,
-  // bodyMd, tags} that actually changed in this PATCH; version is the
-  // resulting row.version (>= 2 since version 1 belongs to creation/promote,
-  // never to PATCH). Subscribed clients use changedFields for granular
-  // toasts; useMemoryWs already routes any 'memory.*' event to full
-  // invalidation, so this case is additive.
+  // RFC-045/RFC-305/RFC-342: permission-gated content edit or dedicated scope move.
+  // changedFields is the non-empty subset that actually changed in the PATCH
+  // or Move command; version is the resulting row.version (>= 2 since version
+  // 1 belongs to creation/promote, never to a mutation). Subscribed clients
+  // use changedFields for granular toasts; useMemoryWs already routes any
+  // 'memory.*' event to full invalidation, so this case is additive.
   z.object({
     type: z.literal('memory.updated'),
     memoryId: z.string(),

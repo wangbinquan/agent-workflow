@@ -3,7 +3,8 @@
 //   GET    /api/memories               list + filter        memory:read
 //   GET    /api/memories/:id           detail + supersede chain   memory:read
 //   POST   /api/memories               admin manual create (status=candidate)  memory:approve
-//   PATCH  /api/memories/:id           RFC-045 in-place edit                    memory:edit
+//   PATCH  /api/memories/:id           content-only in-place edit                memory:update
+//   POST   /api/memories/:id/move      candidate scope move + OCC                memory:update
 //   POST   /api/memories/:id/promote   admin approve / supersede / reject       memory:approve
 //   POST   /api/memories/:id/archive   approved → archived                       memory:archive
 //   POST   /api/memories/:id/unarchive archived → approved                       memory:archive
@@ -14,6 +15,7 @@ import {
   MemoryCreateRequestSchema,
   MemoryFacetsQuerySchema,
   MemoryListFilterSchema,
+  MemoryMoveRequestSchema,
   MemoryPatchRequestSchema,
   MemoryScopeSchema,
   MemoryStatusSchema,
@@ -34,6 +36,7 @@ import {
   deleteMemory,
   getMemoryById,
   listMemories,
+  moveMemory,
   annotateMemoryManageRights,
   canManageMemory,
   canViewMemory,
@@ -46,6 +49,7 @@ import {
 } from '@/services/memory'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
+import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
 
 /**
  * RFC-099 (D12) — load + gate one memory row for a management operation:
@@ -72,7 +76,15 @@ async function loadManagedMemory(deps: AppDeps, c: Parameters<typeof actorOf>[0]
   return found
 }
 
-export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
+interface MemoryRouteIdentityAccess {
+  readonly contexts: DirectOperationContextFactory
+}
+
+export function mountMemoryRoutes(
+  app: Hono,
+  deps: AppDeps,
+  identityAccess: MemoryRouteIdentityAccess,
+): void {
   registerRoute(
     app,
     {
@@ -284,8 +296,8 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  // RFC-045 — permission-gated in-place edit (scope_type / scope_id / title / body_md /
-  // tags) on candidate / approved / archived rows. version is bumped only
+  // RFC-045/RFC-342 — permission-gated content edit (title / body_md / tags)
+  // on candidate / approved / archived rows. version is bumped only
   // when ≥1 field actually changes (service-side idempotent semantics).
   registerRoute(
     app,
@@ -307,6 +319,32 @@ export function mountMemoryRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const result = await patchMemory(deps.db, id, parsed.data, actor.user.id)
       return c.json({ memory: result.memory, changedFields: result.changedFields })
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/memories/:id/move',
+      permissions: ['memory:update'],
+      tokenAccess: 'allow',
+      summary: 'Move a candidate memory to another scope',
+    },
+    async (c) => {
+      const id = c.req.param('id')
+      const body = await c.req.json().catch(() => ({}))
+      const parsed = MemoryMoveRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        throw new ValidationError('invalid-body', 'invalid move request', parsed.error.format())
+      }
+      const actor = actorOf(c)
+      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
+        { userId: actor.user.id, source: actor.source },
+        'http',
+      )
+      const result = moveMemory(deps.db, identityAccess.contexts, context, id, parsed.data)
+      return c.json({ memory: result.memory, moved: result.moved })
     },
   )
 

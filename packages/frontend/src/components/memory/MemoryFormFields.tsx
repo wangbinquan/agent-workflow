@@ -155,11 +155,16 @@ export interface MemoryFormFieldsProps {
   repoGroups: ScopeOption[]
   /** Disables every input (used while save is in-flight). */
   disabled?: boolean
+  /** Keeps content editable while freezing scope for non-candidate memories. */
+  scopeDisabled?: boolean
+  /** Visible explanation for a frozen scope control. */
+  scopeDisabledReason?: string
 }
 
 export function MemoryFormFields(props: MemoryFormFieldsProps) {
   const { t } = useTranslation()
   const { state, errors = {}, disabled } = props
+  const scopeDisabled = disabled === true || props.scopeDisabled === true
   const scopeIdOptions: ReadonlyArray<{ value: string; label: string }> = (() => {
     if (state.scopeType === 'agent')
       return props.agents.map((o) => ({ value: o.id, label: o.label }))
@@ -190,7 +195,7 @@ export function MemoryFormFields(props: MemoryFormFieldsProps) {
           options={SCOPE_OPTIONS.map((s) => ({ value: s, label: t(`memory.scope.${s}`) }))}
           ariaLabel={t('memory.form.scopeType')}
           className="memory-form__scope-segmented"
-          disabled={disabled}
+          disabled={scopeDisabled}
           testidPrefix="memory-form-scope"
         />
       </Field>
@@ -212,7 +217,7 @@ export function MemoryFormFields(props: MemoryFormFieldsProps) {
                 ...scopeIdOptions,
               ]}
               onChange={(v) => props.onScopeId(v === '' ? null : v)}
-              disabled={disabled}
+              disabled={scopeDisabled}
               ariaLabel={t('memory.form.scopeId')}
               placeholder={t('memory.form.scopeIdPlaceholder')}
             />
@@ -221,6 +226,11 @@ export function MemoryFormFields(props: MemoryFormFieldsProps) {
         {errors.scopeId !== undefined && (
           <span className="memory-form__error" role="alert">
             {errors.scopeId}
+          </span>
+        )}
+        {props.scopeDisabledReason !== undefined && (
+          <span className="muted" data-testid="memory-form-scope-disabled-reason">
+            {props.scopeDisabledReason}
           </span>
         )}
       </Field>

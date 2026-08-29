@@ -12,6 +12,7 @@ import type {
   PrincipalSource,
   QueryContext,
   RequestAuthority,
+  ResolvedDirectRequestAuthority,
   ValidatedIdempotencyKey,
 } from '../public/participants'
 
@@ -109,6 +110,15 @@ export class DirectOperationContextFactory implements DirectOperationContextFact
     })
     contextMetadata.set(context, { source: principal.source, transport })
     return context
+  }
+
+  resolveCommandContext(context: CommandContext): ResolvedDirectRequestAuthority {
+    const metadata = trustedContextMetadata(context)
+    if (metadata.transport === 'delegated') throw new Error('direct-command-context-required')
+    return Object.freeze({
+      userId: subjectRefOf(context.authority).userId,
+      source: metadata.source as PrincipalSource,
+    })
   }
 }
 

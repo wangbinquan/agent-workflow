@@ -25,6 +25,7 @@ import type {
   MemoryCandidatePromote,
   MemoryCreateRequest,
   MemoryListFilter,
+  MemoryMoveRequest,
   MemoryPatchField,
   MemoryPatchRequest,
   MemoryScope,
@@ -32,12 +33,39 @@ import type {
   MemorySummary,
   MemoryWsMessage,
 } from '@agent-workflow/shared'
-import { MemorySchema, matchesTagFilter } from '@agent-workflow/shared'
+import {
+  MemoryMoveRequestSchema,
+  MemoryPatchRequestSchema,
+  MemorySchema,
+  matchesTagFilter,
+  normalizeStoredAdditionalPermissions,
+} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { memories, memoryDistillJobs } from '@/db/schema'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  cachedRepos,
+  memories,
+  memoryDistillJobs,
+  memoryScopeMoveEvents,
+  repoGroups,
+  userPermissionGrants,
+  users,
+} from '@/db/schema'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '@/util/errors'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
+import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
+import type {
+  CommandContext,
+  DirectOperationContextFactory,
+  PrincipalSource,
+  ResolvedDirectRequestAuthority,
+} from '@/modules/identity-access/public/participants'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
 export interface MemoryWithChain {
@@ -48,7 +76,7 @@ export interface MemoryWithChain {
 
 interface MemoryRow {
   id: string
-  scopeType: 'agent' | 'workflow' | 'repo' | 'global'
+  scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
   scopeId: string | null
   title: string
   bodyMd: string
@@ -437,8 +465,9 @@ export async function promoteCandidate(
 }
 
 /**
- * RFC-045: in-place edit of `scope_type / scope_id / title / body_md / tags`
- * on candidate, approved, or archived rows. Terminal-status rows
+ * RFC-045/RFC-342: in-place content edit of `title / body_md / tags` on
+ * candidate, approved, or archived rows. Scope changes are rejected here and
+ * belong exclusively to {@link moveMemory}. Terminal-status rows
  * (superseded / rejected) reject with `memory-terminal-status` 409.
  *
  * Semantics (design.md §4.2):
@@ -458,15 +487,37 @@ export interface PatchMemoryResult {
   changedFields: ReadonlyArray<MemoryPatchField>
 }
 
+export interface MemoryMutationTestHooks {
+  /** Test-only fault seam after the SQL write but before transaction commit. */
+  afterWriteInTx?: (tx: DbTxSync) => void
+  /** Test-only seam for target-delete / authority-drift mutation proofs. */
+  afterMoveAuthorizationInTx?: (tx: DbTxSync) => void
+}
+
 export async function patchMemory(
   db: DbClient,
   id: string,
   input: MemoryPatchRequest,
   editorUserId?: string,
+  hooks: MemoryMutationTestHooks = {},
 ): Promise<PatchMemoryResult> {
+  const raw = input as Record<string, unknown>
+  if (
+    Object.prototype.hasOwnProperty.call(raw, 'scopeType') ||
+    Object.prototype.hasOwnProperty.call(raw, 'scopeId')
+  ) {
+    throw new ValidationError(
+      'memory-scope-move-required',
+      'scopeType and scopeId cannot be changed by generic PATCH; use the move command',
+    )
+  }
+  const parsed = MemoryPatchRequestSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('invalid-body', 'invalid patch request', parsed.error.format())
+  }
   // RFC-093: synchronous transaction (dbTxSync) — the previous async form
   // COMMITted at its first await and provided no atomicity (audit S-10).
-  return dbTxSync(db, (tx) => {
+  const committed = dbTxSync(db, (tx) => {
     const rows = tx.select().from(memories).where(eq(memories.id, id)).limit(1).all() as MemoryRow[]
     if (rows.length === 0) {
       throw new NotFoundError('memory-not-found', `memory ${id} not found`)
@@ -479,23 +530,17 @@ export async function patchMemory(
       )
     }
 
-    // Synthesize the post-PATCH shape by overlaying provided fields.
-    // scope_id is special: when scopeType changes but scopeId is *not* in
-    // input, the existing scopeId is reused — the synth then runs through
-    // MemorySchema below, which enforces the global ↔ null invariant.
-    const synthScopeType = input.scopeType ?? row.scopeType
-    const synthScopeId = input.scopeId !== undefined ? input.scopeId : row.scopeId
-    const synthTitle = input.title !== undefined ? input.title : row.title
-    const synthBody = input.bodyMd !== undefined ? input.bodyMd : row.bodyMd
-    const synthTags = input.tags !== undefined ? input.tags : parseTags(row.tags)
+    const synthTitle = parsed.data.title !== undefined ? parsed.data.title : row.title
+    const synthBody = parsed.data.bodyMd !== undefined ? parsed.data.bodyMd : row.bodyMd
+    const synthTags = parsed.data.tags !== undefined ? parsed.data.tags : parseTags(row.tags)
 
-    // Re-validate the synthesized row through the full MemorySchema so that
-    // e.g. "change scopeType to global but the row already has scopeId='x'"
-    // is caught with the same error code as a malformed POST body.
+    // Re-validate the synthesized content through the full MemorySchema so
+    // title/body/tag normalization keeps the same contract as create/read.
+    // Scope is copied unchanged; the dedicated move command owns that field.
     const synthParsed = MemorySchema.safeParse({
       id: row.id,
-      scopeType: synthScopeType,
-      scopeId: synthScopeId,
+      scopeType: row.scopeType,
+      scopeId: row.scopeId,
       title: synthTitle,
       bodyMd: synthBody,
       tags: synthTags,
@@ -523,8 +568,6 @@ export async function patchMemory(
     const synth = synthParsed.data
 
     const changed: MemoryPatchField[] = []
-    if (synth.scopeType !== row.scopeType) changed.push('scopeType')
-    if (synth.scopeId !== row.scopeId) changed.push('scopeId')
     if (synth.title !== row.title) changed.push('title')
     if (synth.bodyMd !== row.bodyMd) changed.push('bodyMd')
     if (!sameTagsJSON(synth.tags, parseTags(row.tags))) changed.push('tags')
@@ -538,8 +581,6 @@ export async function patchMemory(
     const nextVersion = row.version + 1
     tx.update(memories)
       .set({
-        scopeType: synth.scopeType,
-        scopeId: synth.scopeId,
         title: synth.title,
         bodyMd: synth.bodyMd,
         tags: JSON.stringify(synth.tags),
@@ -547,20 +588,7 @@ export async function patchMemory(
       })
       .where(eq(memories.id, id))
       .run()
-
-    publish({
-      type: 'memory.updated',
-      memoryId: id,
-      changedFields: changed,
-      version: nextVersion,
-    })
-
-    // Append an audit line in the structured log so we can ask "who edited
-    // what" without a dedicated history table (non-goal §2.2). The line is
-    // intentionally terse so log greps stay cheap.
-    console.log(
-      `[memory-edited] id=${id} editedBy=${editorUserId ?? 'unknown'} fieldsChanged=${changed.join(',')} version=${nextVersion}`,
-    )
+    hooks.afterWriteInTx?.(tx)
 
     const after = tx
       .select()
@@ -570,6 +598,322 @@ export async function patchMemory(
       .all() as MemoryRow[]
     return { memory: rowToMemory(after[0]!), changedFields: changed }
   })
+  if (committed.changedFields.length > 0) {
+    publish({
+      type: 'memory.updated',
+      memoryId: id,
+      changedFields: [...committed.changedFields],
+      version: committed.memory.version,
+    })
+    // Audit/log delivery happens only after the durable transaction returns;
+    // rollback must not leave a ghost observer record any more than ghost WS.
+    console.log(
+      `[memory-edited] id=${id} editedBy=${editorUserId ?? 'unknown'} fieldsChanged=${committed.changedFields.join(',')} version=${committed.memory.version}`,
+    )
+  }
+  return committed
+}
+
+export interface MoveMemoryResult {
+  memory: Memory
+  moved: boolean
+}
+
+/**
+ * RFC-342 / RFC-294 P0-A — the only scope mutation path.
+ *
+ * The serialized command contains only the memory target, expected memory
+ * revision and destination scope. Request identity comes from a factory-minted
+ * CommandContext; current account permissions, resource grants and both scope
+ * targets are re-read synchronously inside the same writer transaction.
+ */
+export function moveMemory(
+  db: DbClient,
+  contexts: DirectOperationContextFactory,
+  context: CommandContext,
+  id: string,
+  input: MemoryMoveRequest,
+  hooks: MemoryMutationTestHooks = {},
+): MoveMemoryResult {
+  const parsed = MemoryMoveRequestSchema.safeParse(input)
+  if (!parsed.success) {
+    throw new ValidationError('invalid-body', 'invalid move request', parsed.error.format())
+  }
+  const committed = dbTxSync(db, (tx) => {
+    const authority = contexts.resolveCommandContext(context)
+    const actor = currentMoveActorInTx(tx, authority)
+    const row = tx.select().from(memories).where(eq(memories.id, id)).limit(1).get() as
+      | MemoryRow
+      | undefined
+    if (row === undefined) {
+      throw new NotFoundError('memory-not-found', `memory ${id} not found`)
+    }
+    if (row.version !== parsed.data.expectedVersion) {
+      throw new ConflictError(
+        'resource-operation-stale',
+        `memory ${id} changed since version ${parsed.data.expectedVersion}; reload and retry`,
+        {
+          resource: 'memory',
+          expectedVersion: parsed.data.expectedVersion,
+          currentVersion: row.version,
+        },
+      )
+    }
+    if (row.status !== 'candidate') {
+      throw new ConflictError(
+        'memory-move-status-forbidden',
+        `memory ${id} is '${row.status}'; only candidate memories may move scope`,
+        { status: row.status },
+      )
+    }
+
+    const previousScope: MemoryScopeRef = {
+      scopeType: row.scopeType,
+      scopeId: row.scopeId,
+    }
+    const nextScope: MemoryScopeRef = {
+      scopeType: parsed.data.scopeType,
+      scopeId: parsed.data.scopeId,
+    }
+    assertMemoryScopeManageableInTx(tx, actor, previousScope, 'current')
+    assertMemoryScopeManageableInTx(tx, actor, nextScope, 'destination')
+
+    const scopeTypeChanged = previousScope.scopeType !== nextScope.scopeType
+    const scopeIdChanged = previousScope.scopeId !== nextScope.scopeId
+    if (!scopeTypeChanged && !scopeIdChanged) {
+      return {
+        memory: rowToMemory(row),
+        moved: false,
+        previousScope,
+        changedFields: [] as Array<'scopeType' | 'scopeId'>,
+      }
+    }
+
+    hooks.afterMoveAuthorizationInTx?.(tx)
+
+    // The write transaction already excludes an external writer, but these
+    // second reads lock the command against future same-transaction
+    // participants and make target-delete/authority-drift mutation tests real.
+    const refreshed = tx.select().from(memories).where(eq(memories.id, id)).limit(1).get() as
+      | MemoryRow
+      | undefined
+    if (
+      refreshed === undefined ||
+      refreshed.version !== row.version ||
+      refreshed.status !== row.status ||
+      refreshed.scopeType !== row.scopeType ||
+      refreshed.scopeId !== row.scopeId
+    ) {
+      throw new ConflictError(
+        'resource-operation-stale',
+        `memory ${id} changed; reload and retry`,
+        {
+          resource: 'memory',
+          expectedVersion: row.version,
+          currentVersion: refreshed?.version,
+        },
+      )
+    }
+    const refreshedActor = currentMoveActorInTx(tx, authority)
+    assertMemoryScopeManageableInTx(tx, refreshedActor, previousScope, 'current')
+    assertMemoryScopeManageableInTx(tx, refreshedActor, nextScope, 'destination')
+
+    const nextVersion = row.version + 1
+    const update = tx
+      .update(memories)
+      .set({
+        scopeType: nextScope.scopeType,
+        scopeId: nextScope.scopeId,
+        version: nextVersion,
+      })
+      .where(and(eq(memories.id, id), eq(memories.version, row.version)))
+      .run()
+    if ((update as unknown as { changes?: number }).changes !== 1) {
+      throw new ConflictError(
+        'resource-operation-stale',
+        `memory ${id} changed; reload and retry`,
+        {
+          resource: 'memory',
+          expectedVersion: row.version,
+        },
+      )
+    }
+    tx.insert(memoryScopeMoveEvents)
+      .values({
+        id: context.operationId,
+        memoryId: id,
+        actorUserId: authority.userId,
+        actorSource: authority.source,
+        fromScopeType: previousScope.scopeType,
+        fromScopeId: previousScope.scopeId,
+        toScopeType: nextScope.scopeType,
+        toScopeId: nextScope.scopeId,
+        expectedVersion: row.version,
+        resultingVersion: nextVersion,
+        correlationId: context.correlationId,
+        causationId: context.causationId ?? null,
+        occurredAt: context.now,
+      })
+      .run()
+    hooks.afterWriteInTx?.(tx)
+
+    const after = tx.select().from(memories).where(eq(memories.id, id)).limit(1).get() as
+      | MemoryRow
+      | undefined
+    if (after === undefined) throw new Error('memory disappeared after scope move')
+    return {
+      memory: rowToMemory(after),
+      moved: true,
+      actorUserId: authority.userId,
+      previousScope,
+      changedFields: [
+        ...(scopeTypeChanged ? (['scopeType'] as const) : []),
+        ...(scopeIdChanged ? (['scopeId'] as const) : []),
+      ],
+    }
+  })
+
+  if (committed.moved) {
+    publish({
+      type: 'memory.updated',
+      memoryId: id,
+      changedFields: committed.changedFields,
+      version: committed.memory.version,
+    })
+    console.log(
+      `[memory-moved] id=${id} movedBy=${committed.actorUserId} from=${_scopeKey(committed.previousScope.scopeType, committed.previousScope.scopeId)} to=${_scopeKey(committed.memory.scopeType, committed.memory.scopeId)} version=${committed.memory.version} operationId=${context.operationId}`,
+    )
+  }
+  return { memory: committed.memory, moved: committed.moved }
+}
+
+function currentMoveActorInTx(tx: DbTxSync, authority: ResolvedDirectRequestAuthority): Actor {
+  const user = tx
+    .select({
+      id: users.id,
+      username: users.username,
+      displayName: users.displayName,
+      role: users.role,
+      status: users.status,
+      accessRevision: users.accessRevision,
+    })
+    .from(users)
+    .where(eq(users.id, authority.userId))
+    .limit(1)
+    .get()
+  if (user === undefined || user.status !== 'active') {
+    throw new UnauthorizedError('request authority is no longer active')
+  }
+  const storedPermissions = tx
+    .select({ permission: userPermissionGrants.permission })
+    .from(userPermissionGrants)
+    .where(eq(userPermissionGrants.userId, user.id))
+    .all()
+    .map((row) => row.permission)
+  const additionalPermissions = normalizeStoredAdditionalPermissions({
+    role: user.role,
+    additionalPermissions: storedPermissions,
+  }).additionalPermissions
+  const source = actorSourceOf(authority.source)
+  return buildActor({
+    user,
+    source,
+    additionalPermissions,
+    // PATs never regain system-domain resource-acl:bypass from their account.
+    // The route already proved this token carries memory:update; this actor is
+    // only the fresh row-scope oracle inside the command transaction.
+    ...(source === 'pat' ? { patScopes: ['memory:update' as const] } : {}),
+    authorityRevision: user.accessRevision,
+  })
+}
+
+function actorSourceOf(source: PrincipalSource): ActorSource {
+  if (source === 'session' || source === 'pat' || source === 'daemon') return source
+  return 'daemon'
+}
+
+function assertMemoryScopeManageableInTx(
+  tx: DbTxSync,
+  actor: Actor,
+  scope: MemoryScopeRef,
+  side: 'current' | 'destination',
+): void {
+  if (scope.scopeType === 'global') {
+    if (hasResourceAclBypass(actor)) return
+    throw new ForbiddenError(
+      'memory-scope-forbidden',
+      `${side} global memory scope requires resource-acl:bypass`,
+    )
+  }
+  if (scope.scopeId === null || scope.scopeId === '') {
+    throw new ValidationError('invalid-body', `${scope.scopeType} scope requires scopeId`)
+  }
+
+  if (scope.scopeType === 'repo' || scope.scopeType === 'repo_group') {
+    const exists =
+      scope.scopeType === 'repo'
+        ? tx
+            .select({ id: cachedRepos.id })
+            .from(cachedRepos)
+            .where(eq(cachedRepos.id, scope.scopeId))
+            .get()
+        : tx
+            .select({ id: repoGroups.id })
+            .from(repoGroups)
+            .where(eq(repoGroups.id, scope.scopeId))
+            .get()
+    if (exists === undefined && !(side === 'current' && hasResourceAclBypass(actor))) {
+      throw new NotFoundError(
+        'memory-scope-target-not-found',
+        `${side} ${scope.scopeType} scope target not found`,
+      )
+    }
+    if (hasResourceAclBypass(actor)) return
+    throw new ForbiddenError(
+      'memory-scope-forbidden',
+      `${side} ${scope.scopeType} memory scope requires resource-acl:bypass`,
+    )
+  }
+
+  const row =
+    scope.scopeType === 'agent'
+      ? tx
+          .select({
+            id: agentsTable.id,
+            ownerUserId: agentsTable.ownerUserId,
+            visibility: agentsTable.visibility,
+          })
+          .from(agentsTable)
+          .where(eq(agentsTable.id, scope.scopeId))
+          .get()
+      : tx
+          .select({
+            id: workflowsTable.id,
+            ownerUserId: workflowsTable.ownerUserId,
+            visibility: workflowsTable.visibility,
+          })
+          .from(workflowsTable)
+          .where(eq(workflowsTable.id, scope.scopeId))
+          .get()
+  if (row === undefined) {
+    if (side === 'current' && hasResourceAclBypass(actor)) return
+    throw new NotFoundError(
+      'memory-scope-target-not-found',
+      `${side} ${scope.scopeType} scope target not found`,
+    )
+  }
+  if (!canViewResourceInTx(tx, actor, scope.scopeType, row)) {
+    throw new NotFoundError(
+      'memory-scope-target-not-found',
+      `${side} ${scope.scopeType} scope target not found`,
+    )
+  }
+  if (!canEditResourceInTx(tx, actor, scope.scopeType, row)) {
+    throw new ForbiddenError(
+      'memory-scope-forbidden',
+      `request authority cannot manage the ${side} ${scope.scopeType} scope`,
+    )
+  }
 }
 
 /** Tag arrays are compared order-independently: tags are a *set* of labels,
@@ -722,9 +1066,10 @@ export function _scopeKey(scope: MemoryScope, id: string | null): string {
 // injection (memoryInject.ts) is untouched — the daemon actor is `__system__`.
 // ---------------------------------------------------------------------------
 
-import type { Actor } from '@/auth/actor'
 import { agents as agentsTable, workflows as workflowsTable } from '@/db/schema'
 import {
+  canEditResourceInTx,
+  canViewResourceInTx,
   canViewResource,
   filterVisibleRows,
   hasResourceAclBypass,

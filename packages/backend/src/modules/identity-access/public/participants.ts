@@ -53,6 +53,14 @@ export interface AuthenticatedPrincipal {
   readonly source: PrincipalSource
 }
 
+/** Trusted, non-serializable projection of a direct CommandContext. Commands
+ * may use this to re-read current authority in their own transaction without
+ * accepting an Actor or permission snapshot in the command payload. */
+export interface ResolvedDirectRequestAuthority {
+  readonly userId: string
+  readonly source: PrincipalSource
+}
+
 export interface DurableSourceAttemptRef {
   readonly sourceId: string
   readonly attemptId: string
@@ -79,6 +87,7 @@ export interface DirectOperationContextFactory {
     principal: AuthenticatedPrincipal,
     transport: DirectTransport,
   ): QueryContext
+  resolveCommandContext(context: CommandContext): ResolvedDirectRequestAuthority
 }
 
 /** Credential/inherited adapters receive current account facts, never a token secret or Actor. */

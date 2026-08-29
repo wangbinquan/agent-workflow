@@ -6273,6 +6273,7 @@ export interface Resources {
       scopeId: string
       scopeIdGlobal: string
       scopeIdPlaceholder: string
+      scopeMoveCandidateOnly: string
       title: string
       bodyMd: string
       tags: string
@@ -14541,6 +14542,7 @@ export const zhCN: Resources = {
       scopeId: '作用域目标',
       scopeIdGlobal: '（global — 无目标）',
       scopeIdPlaceholder: '选择目标…',
+      scopeMoveCandidateOnly: '只有待审批的记忆可以更改作用域。',
       title: '标题',
       bodyMd: '正文（markdown）',
       tags: '标签',
