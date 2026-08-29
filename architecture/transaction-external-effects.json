@@ -1101,8 +1101,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/events/committed/sqliteStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/events/committed/sqliteStore.ts#dbTxSync:540",
-      "line": 540,
+      "id": "tx:packages/backend/src/platform/events/committed/sqliteStore.ts#dbTxSync:586",
+      "line": 586,
       "ownerEntryId": "owner:packages/backend/src/platform/events/committed/sqliteStore.ts#claimNextCommittedEventDelivery",
       "status": "clear",
       "symbol": "claimNextCommittedEventDelivery",
@@ -3474,7 +3474,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f7d9136fe9a1f4de876ee43bd9362ecbdcca9cea7104c4bbb6a969cd7a2c9033",
+  "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
