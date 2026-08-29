@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1047",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1046",
       "kind": "register-call",
-      "line": 1047,
+      "line": 1046,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1645",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1644",
       "kind": "register-call",
-      "line": 1645,
+      "line": 1644,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -25,9 +25,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1226",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1225",
       "kind": "register-call",
-      "line": 1226,
+      "line": 1225,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +47,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1239",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1238",
       "kind": "global-setter",
-      "line": 1239,
+      "line": 1238,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -5005,7 +5005,7 @@
       ],
       "file": "packages/backend/src/cli/start.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1368",
+      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1367",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -5019,7 +5019,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1368",
+      "symbol": "$setInterval:1367",
       "targetContext": "bootstrap"
     },
     {
@@ -10872,5 +10872,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:148a99a98d9a03347ba897b7eae34c6bcbd1a15810c6bbaee3a2eab7f94b036d"
+  "sourceDigest": "sha256:6f02a31c85e10fe0e3e9a9555e416cac6821a2f219dabd8617c7fd39856b5e0b"
 }
