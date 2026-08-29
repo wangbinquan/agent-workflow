@@ -3,6 +3,7 @@
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import type { OwnershipToken } from '../domain/ownership'
 import type { HumanGateOpenParticipant } from './ports/humanGateOpenParticipant'
@@ -17,7 +18,7 @@ export interface ParkTaskAtHumanGateResult {
 }
 
 type ParkTaskAtHumanGateInternalResult = ParkTaskAtHumanGateResult &
-  Readonly<{ eventRefs: readonly import('@/platform/events/committed/types').CommittedEventRef[] }>
+  Readonly<{ eventRefs: readonly CommittedEventRef[] }>
 
 export class TaskParkTransaction {
   constructor(
