@@ -18,7 +18,6 @@ import {
   MANAGED_PROCESS_LAUNCH_ERROR_PREFIX,
   MANAGED_PROCESS_LAUNCH_READY_PREFIX,
   cleanupWindowsOutputSpool,
-  closeWindowsOutputSpoolWriters,
   createWindowsOutputSpool,
   managedProcessLauncherArgv,
   type ManagedProcessActivationFrame,
@@ -411,8 +410,9 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         : managedProcessLauncherArgv({ launchNonce, targetArgv: req.argv })
     // A compiled Bun daemon reading a compiled launcher's pipe can observe an
     // empty stream under concurrent Windows launches even when the launcher
-    // exits 0. Route this outer hop through regular files too. The launcher
-    // keeps its own inner target spool, so both Bun pipe boundaries are gone.
+    // exits 0. Route this outer hop through Bun-owned regular files too. The
+    // launcher does the same for its target, so neither compiled boundary
+    // inherits a pipe or a numeric descriptor.
     outputSpool =
       process.platform === 'win32' && launchNonce !== undefined
         ? createWindowsOutputSpool()
@@ -422,8 +422,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       cmd: spawnArgv,
       cwd: req.cwd,
       env: req.env,
-      stdout: outputSpool?.stdoutWriteFd ?? 'pipe',
-      stderr: outputSpool?.stderrWriteFd ?? 'pipe',
+      stdout: outputSpool === undefined ? 'pipe' : Bun.file(outputSpool.stdoutPath),
+      stderr: outputSpool === undefined ? 'pipe' : Bun.file(outputSpool.stderrPath),
       // A gated launcher always needs its private activation pipe. The target's
       // actual stdin mode is carried inside the post-receipt frame.
       stdin: launchNonce !== undefined || req.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
@@ -454,9 +454,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const childExited = child.exited
   const activeOutputSpool = outputSpool
   const outputWritersClosed =
-    activeOutputSpool === undefined
-      ? Promise.resolve()
-      : childExited.then(() => closeWindowsOutputSpoolWriters(activeOutputSpool))
+    activeOutputSpool === undefined ? Promise.resolve() : childExited.then(() => {})
 
   const pid = typeof child.pid === 'number' ? child.pid : null
   let activationFailure: string | null = null

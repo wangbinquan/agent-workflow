@@ -7,7 +7,15 @@
 
 import { IS_EMBEDDED } from '@/embed'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { closeSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from 'node:fs'
+import {
+  closeSync,
+  mkdtempSync,
+  openSync,
+  readSync,
+  rmSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -128,17 +136,6 @@ export interface WindowsOutputSpool {
   readonly root: string
   readonly stdoutPath: string
   readonly stderrPath: string
-  stdoutWriteFd: number | undefined
-  stderrWriteFd: number | undefined
-}
-
-type WindowsOutputSpoolFd = 'stdoutWriteFd' | 'stderrWriteFd'
-
-function closeSpoolFd(spool: WindowsOutputSpool, key: WindowsOutputSpoolFd): void {
-  const value = spool[key]
-  if (typeof value !== 'number') return
-  closeSync(value)
-  spool[key] = undefined
 }
 
 export function createWindowsOutputSpool(): WindowsOutputSpool {
@@ -147,12 +144,13 @@ export function createWindowsOutputSpool(): WindowsOutputSpool {
     root,
     stdoutPath: join(root, 'stdout'),
     stderrPath: join(root, 'stderr'),
-    stdoutWriteFd: undefined,
-    stderrWriteFd: undefined,
   }
   try {
-    spool.stdoutWriteFd = openSync(spool.stdoutPath, 'w')
-    spool.stderrWriteFd = openSync(spool.stderrPath, 'w')
+    // Create both paths before the relay can poll. Bun.file below owns the
+    // actual child redirection handles; no numeric descriptor crosses a
+    // compiled Windows process boundary.
+    writeFileSync(spool.stdoutPath, '')
+    writeFileSync(spool.stderrPath, '')
     return spool
   } catch (error) {
     cleanupWindowsOutputSpool(spool)
@@ -160,20 +158,8 @@ export function createWindowsOutputSpool(): WindowsOutputSpool {
   }
 }
 
-export function closeWindowsOutputSpoolWriters(spool: WindowsOutputSpool): void {
-  closeSpoolFd(spool, 'stdoutWriteFd')
-  closeSpoolFd(spool, 'stderrWriteFd')
-}
-
 export function cleanupWindowsOutputSpool(spool: WindowsOutputSpool | undefined): void {
   if (spool === undefined) return
-  for (const key of ['stdoutWriteFd', 'stderrWriteFd'] as const) {
-    try {
-      closeSpoolFd(spool, key)
-    } catch {
-      // Best effort during launcher teardown; the process is already terminal.
-    }
-  }
   try {
     rmSync(spool.root, { recursive: true, force: true })
   } catch {
@@ -294,8 +280,8 @@ export async function runManagedProcessLauncher(
           return typeof entry[1] === 'string'
         }),
       ),
-      stdout: outputSpool?.stdoutWriteFd ?? 'inherit',
-      stderr: outputSpool?.stderrWriteFd ?? 'inherit',
+      stdout: outputSpool === undefined ? 'inherit' : Bun.file(outputSpool.stdoutPath),
+      stderr: outputSpool === undefined ? 'inherit' : Bun.file(outputSpool.stderrPath),
       stdin: frame.stdin.mode === 'pipe' ? 'pipe' : 'ignore',
       // The launcher is already the detached process-group leader. The target
       // deliberately stays in that group so TERM→KILL reaches the whole tree.
@@ -309,15 +295,10 @@ export async function runManagedProcessLauncher(
 
   const childExited = child.exited
   const activeOutputSpool = outputSpool
-  // Do not close these numeric descriptors immediately after Bun.spawn on
-  // Windows. Under concurrent compiled launches Bun 1.4 can finish handle
-  // inheritance asynchronously; closing here races the target and produces a
-  // successful exit with empty stdout. Keep the parent copies until the child
-  // is terminal, then make their closure the relay's final-drain boundary.
-  const outputWritersClosed =
-    activeOutputSpool === undefined
-      ? Promise.resolve()
-      : childExited.then(() => closeWindowsOutputSpoolWriters(activeOutputSpool))
+  // `Bun.file(path)` makes Bun own the redirection handle at spawn time. This
+  // avoids both the nested pipe loss and numeric-fd inheritance loss observed
+  // in compiled Windows daemons; child terminal is the final-flush boundary.
+  const outputWritersClosed = childExited.then(() => {})
   const outputRelay =
     activeOutputSpool === undefined
       ? Promise.resolve()
