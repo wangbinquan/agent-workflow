@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
 import { taskExecutionIntents, tasks } from '@/db/schema'
@@ -9,24 +10,28 @@ import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_789_488_200_000
 
-function seedPendingGate(db: ReturnType<typeof createInMemoryDb>): void {
+function seedTask(db: ReturnType<typeof createInMemoryDb>, taskId: string): void {
   db.insert(tasks)
     .values({
-      id: 'task-gate',
-      name: 'task-gate',
+      id: taskId,
+      name: taskId,
       workflowId: 'workflow-gate',
       workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
       repoPath: '/tmp/rfc341',
       worktreePath: '/tmp/rfc341',
       baseBranch: 'main',
-      branch: 'agent-workflow/task-gate',
+      branch: `agent-workflow/${taskId}`,
       status: 'pending',
       inputs: '{}',
       startedAt: NOW,
-      executionLineageId: 'task-gate',
+      executionLineageId: taskId,
       lineageSlotPathJson: '[]',
     })
     .run()
+}
+
+function seedPendingGate(db: ReturnType<typeof createInMemoryDb>): void {
+  seedTask(db, 'task-gate')
   db.insert(taskExecutionIntents)
     .values({
       id: 'intent-gate',
@@ -35,7 +40,13 @@ function seedPendingGate(db: ReturnType<typeof createInMemoryDb>): void {
       state: 'pending',
       source: 'internal',
       requestHash: 'a'.repeat(64),
-      payloadJson: '{"v":1}',
+      payloadJson: JSON.stringify({
+        v: 1,
+        gate: { kind: 'review', ref: 'review:task-gate:0' },
+        operationId: 'operation-gate',
+        expectedNodeProjection: { digest: 'a'.repeat(64), memberCount: 0 },
+        continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds: [] },
+      }),
       executionLineageId: 'task-gate',
       continuationSlotKey: 'task-gate:root',
       slotPathJson: '[]',
@@ -47,10 +58,33 @@ function seedPendingGate(db: ReturnType<typeof createInMemoryDb>): void {
     .run()
 }
 
+function seedLegacyTaskGate(db: ReturnType<typeof createInMemoryDb>): void {
+  seedTask(db, 'task-legacy-gate')
+  db.insert(taskExecutionIntents)
+    .values({
+      id: 'intent-legacy-gate',
+      taskId: 'task-legacy-gate',
+      kind: 'gate-continuation',
+      state: 'pending',
+      source: 'internal',
+      requestHash: 'b'.repeat(64),
+      payloadJson: '{"event":"resume","v":1}',
+      executionLineageId: 'task-legacy-gate',
+      continuationSlotKey: 'task-legacy-gate:root',
+      slotPathJson: '[]',
+      operationGeneration: 0,
+      expectedTaskRevision: 1,
+      createdAt: NOW - 1,
+      updatedAt: NOW - 1,
+    })
+    .run()
+}
+
 describe('RFC-341 human-gate continuation worker', () => {
-  test('initial/reconcile scan owns exact pending refs without requiring a request nudge', async () => {
+  test('initial/reconcile scan owns RFC-333 refs without stealing legacy task gates', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedPendingGate(db)
+    seedLegacyTaskGate(db)
     const driven: Array<{ taskId: string; continuationRef: string }> = []
     const worker = createHumanGateContinuationWorkerDefinition({
       listPending: () => listPendingHumanGateContinuations(db),
@@ -58,6 +92,7 @@ describe('RFC-341 human-gate continuation worker', () => {
         driven.push(continuation)
         db.update(taskExecutionIntents)
           .set({ state: 'completed', completedAt: NOW + 1, updatedAt: NOW + 1 })
+          .where(eq(taskExecutionIntents.id, continuation.continuationRef))
           .run()
       },
       now: () => NOW,
@@ -67,6 +102,13 @@ describe('RFC-341 human-gate continuation worker', () => {
     expect(await worker.runCycle()).toEqual({ attempted: 1, completed: 1, failed: 0 })
     expect(driven).toEqual([{ taskId: 'task-gate', continuationRef: 'intent-gate' }])
     expect(await worker.runCycle()).toEqual({ attempted: 0, completed: 0, failed: 0 })
+    expect(
+      db
+        .select({ state: taskExecutionIntents.state })
+        .from(taskExecutionIntents)
+        .where(eq(taskExecutionIntents.id, 'intent-legacy-gate'))
+        .get(),
+    ).toEqual({ state: 'pending' })
   })
 
   test('a nudge wakes the continuous owner without carrying the durable work identity', async () => {

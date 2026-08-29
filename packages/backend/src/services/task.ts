@@ -4275,6 +4275,17 @@ export async function wakeHumanGateContinuation(
   }
 }
 
+/** Bootstrap-owned adapter used by collaboration's continuous continuation
+ * worker. Keeping this beside the legacy drive implementation avoids a
+ * task-execution composition -> task service initialization cycle. */
+export function composeHumanGateContinuationDriver(
+  deps: StartTaskDeps,
+): (continuation: Readonly<{ taskId: string; continuationRef: string }>) => Promise<void> {
+  return async (continuation) => {
+    await wakeHumanGateContinuation(continuation.taskId, continuation.continuationRef, deps)
+  }
+}
+
 /**
  * Resume while committing synchronous companion rows inside the same task
  * continuation-admission CAS transaction. Gate decisions use this instead of "write gate,

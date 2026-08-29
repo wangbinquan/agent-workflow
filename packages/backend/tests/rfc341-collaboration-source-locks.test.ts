@@ -49,6 +49,14 @@ describe('RFC-341 collaboration owner source locks', () => {
     expect(service).not.toContain('onHumanGateContinuations')
   })
 
+  test('continuation drive composition does not create a task service initialization cycle', () => {
+    const taskService = source('services/task.ts')
+    const taskExecutionComposition = source('modules/task-execution/composition/humanGate.ts')
+    expect(taskService).toContain('export function composeHumanGateContinuationDriver')
+    expect(taskExecutionComposition).not.toContain("from '@/services/task'")
+    expect(taskExecutionComposition).not.toContain('wakeHumanGateContinuation')
+  })
+
   test('task lifecycle legacy outbox publisher and duplicate WS publisher remain extinct', () => {
     expect(
       existsSync(

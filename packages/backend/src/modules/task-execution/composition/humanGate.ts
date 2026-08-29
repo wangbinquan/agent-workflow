@@ -4,7 +4,6 @@
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
-import { wakeHumanGateContinuation, type StartTaskDeps } from '@/services/task'
 import {
   bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal,
   type TaskDecisionParticipantInTx,
@@ -88,16 +87,6 @@ export function assertNoManualQuestionParkObligationTx(
   humanGates: HumanGateOpenParticipant,
 ): void {
   assertNoManualQuestionParkObligationTxInternal(tx, taskId, humanGates)
-}
-
-/** Bootstrap-owned adapter used by collaboration's continuous continuation
- * worker. Request handlers never receive or invoke this drive capability. */
-export function composeHumanGateContinuationDriver(
-  deps: StartTaskDeps,
-): (continuation: Readonly<{ taskId: string; continuationRef: string }>) => Promise<void> {
-  return async (continuation) => {
-    await wakeHumanGateContinuation(continuation.taskId, continuation.continuationRef, deps)
-  }
 }
 
 export { ManualQuestionParkRequired }

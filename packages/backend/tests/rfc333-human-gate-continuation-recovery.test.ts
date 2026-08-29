@@ -41,6 +41,7 @@ function seedIntent(
     kind: 'gate-continuation' | 'resume'
     state: 'pending' | 'claimed'
     createdAt: number
+    payloadJson?: string
   },
 ): void {
   seedTask(db, input.taskId)
@@ -52,7 +53,7 @@ function seedIntent(
       state: input.state,
       source: 'internal',
       requestHash: input.id.padEnd(64, '0').slice(0, 64),
-      payloadJson: '{"v":1}',
+      payloadJson: input.payloadJson ?? '{"v":1}',
       executionLineageId: input.taskId,
       continuationSlotKey: `${input.taskId}:root`,
       slotPathJson: '[]',
@@ -110,7 +111,7 @@ describe('RFC-333 pending human-gate continuation recovery', () => {
     ).toEqual({ state: 'pending' })
   })
 
-  test('wakes each exact pending gate ref in deterministic order and mints nothing', async () => {
+  test('wakes each RFC-333 pending gate ref but leaves legacy task gates request-owned', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedIntent(db, {
       id: 'intent-gate-b',
@@ -139,6 +140,14 @@ describe('RFC-333 pending human-gate continuation recovery', () => {
       kind: 'gate-continuation',
       state: 'pending',
       createdAt: NOW + 1,
+    })
+    seedIntent(db, {
+      id: 'intent-legacy-task-gate',
+      taskId: 'task-legacy-task-gate',
+      kind: 'gate-continuation',
+      state: 'pending',
+      createdAt: NOW,
+      payloadJson: '{"event":"resume","v":1}',
     })
     const before = db.select().from(taskExecutionIntents).all()
     const calls: PendingHumanGateContinuation[] = []

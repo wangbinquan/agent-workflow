@@ -29,7 +29,6 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
-import { composeHumanGateContinuationDriver } from '@/modules/task-execution/composition/humanGate'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { ulid } from 'ulid'
@@ -64,7 +63,12 @@ import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
 import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { isTaskActive, resumeTask, retryRepositoryPreparation } from '@/services/task'
+import {
+  composeHumanGateContinuationDriver,
+  isTaskActive,
+  resumeTask,
+  retryRepositoryPreparation,
+} from '@/services/task'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'

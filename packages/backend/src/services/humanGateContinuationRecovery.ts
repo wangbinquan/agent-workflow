@@ -6,6 +6,7 @@ import { and, asc, eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { taskExecutionIntents } from '@/db/schema'
+import { isLegacyTaskGateContinuationPayload } from '@/modules/task-execution/public/participants'
 
 export type PendingHumanGateContinuation = Readonly<{
   taskId: string
@@ -25,20 +26,28 @@ export type HumanGateContinuationRecoveryResult = Readonly<{
 export function listPendingHumanGateContinuations(
   db: DbClient,
 ): readonly PendingHumanGateContinuation[] {
-  return db
-    .select({
-      taskId: taskExecutionIntents.taskId,
-      continuationRef: taskExecutionIntents.id,
-    })
-    .from(taskExecutionIntents)
-    .where(
-      and(
-        eq(taskExecutionIntents.kind, 'gate-continuation'),
-        eq(taskExecutionIntents.state, 'pending'),
-      ),
-    )
-    .orderBy(asc(taskExecutionIntents.createdAt), asc(taskExecutionIntents.id))
-    .all()
+  return (
+    db
+      .select({
+        taskId: taskExecutionIntents.taskId,
+        continuationRef: taskExecutionIntents.id,
+        payloadJson: taskExecutionIntents.payloadJson,
+      })
+      .from(taskExecutionIntents)
+      .where(
+        and(
+          eq(taskExecutionIntents.kind, 'gate-continuation'),
+          eq(taskExecutionIntents.state, 'pending'),
+        ),
+      )
+      .orderBy(asc(taskExecutionIntents.createdAt), asc(taskExecutionIntents.id))
+      .all()
+      // Dynamic-workflow/workgroup gates keep request-owned drive and use this
+      // exact legacy payload. All other rows remain visible so malformed RFC-333
+      // payloads reach the canonical decoder and fail closed instead of vanishing.
+      .filter((row) => !isLegacyTaskGateContinuationPayload(row.payloadJson))
+      .map(({ taskId, continuationRef }) => ({ taskId, continuationRef }))
+  )
 }
 
 export async function recoverPendingHumanGateContinuations(input: {
