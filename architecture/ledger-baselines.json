@@ -406,10 +406,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18766,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-341 新增两个 context-local post-commit receipt domain types，以拆除 collaboration 与 task-execution 的循环公共类型；新增的六个 owner entries 均来自精确生成清点。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -426,8 +423,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "329beb28cc4e17d90f6cac1afb8ff93b20d30743",
-    "contentDigest": "sha256:cea1ed59d54c6bfeb99d2f316cf8dbc621e175ce2bd191c5da02c4cceb3bb1fd",
+    "currentSnapshotSha": "2aa13f6919575a13db5016c4d88110627288c02f",
+    "contentDigest": "sha256:a0187b521b1975ee984aaa25918c3b96d29a676d559851d2d69ecbc660a1d16e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
