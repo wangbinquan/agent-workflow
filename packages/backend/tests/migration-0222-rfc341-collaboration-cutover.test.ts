@@ -7,18 +7,23 @@ import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 
 import { freezeAt } from './migration-freeze'
 
-function migrationSql(): string {
+function migrationStatements(): string[] {
   return readFileSync(
     resolve(
       import.meta.dir,
       '../db/migrations/0222_rfc341_collaboration_committed_event_cutover.sql',
     ),
     'utf8',
-  ).replaceAll('--> statement-breakpoint', '')
+  )
+    .split('--> statement-breakpoint')
+    .map((statement) => statement.trim())
+    .filter((statement) => statement !== '')
 }
 
 function applyCutover(raw: Database): void {
-  raw.exec(`BEGIN;\n${migrationSql()}\nCOMMIT;`)
+  raw.exec('BEGIN')
+  for (const statement of migrationStatements()) raw.exec(statement)
+  raw.exec('COMMIT')
 }
 
 describe('migration 0222 — RFC-341 collaboration cutover', () => {

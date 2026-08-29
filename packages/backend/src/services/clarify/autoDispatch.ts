@@ -264,6 +264,9 @@ export interface AutoDispatchClarifyRoundArgs {
   actor: { userId: string; role: TaskActorRole }
   /** RFC-333 T9 internal seam; public route callers use the collaboration command wrapper. */
   decisionParticipant?: ClarifySealDecisionParticipantInTx
+  /** RFC-341 compiled-E2E seam. Runs immediately after the seal transaction commits and before
+   * any nested question dispatch can publish an event that nudges the global dispatcher. */
+  afterSealCommit?: () => Promise<void>
   now?: () => number
 }
 
@@ -604,17 +607,23 @@ export async function autoDispatchClarifyRoundWithDecision(
       ...args,
       directive,
       decisionParticipant: prepared.participant,
-    })
-  } finally {
-    if (prepared.capture.eventRefs !== undefined) {
-      const committed = prepared.capture.envelope
-      if (committed !== undefined) {
+      afterSealCommit: async () => {
+        const committed = prepared.capture.envelope
+        if (committed === undefined) {
+          throw new ConflictError(
+            'clarify-decision-conflict',
+            `clarify decision for ${args.originNodeRunId} did not commit a durable receipt`,
+          )
+        }
         await waitAtHumanGateDecisionCommitBarrier({
           kind: 'clarify',
           taskId: committed.result.taskId,
           operationId: committed.decision.operationId,
         })
-      }
+      },
+    })
+  } finally {
+    if (prepared.capture.eventRefs !== undefined) {
       publishCommittedEventsAfterCommit(prepared.capture.eventRefs)
     }
   }
@@ -712,6 +721,7 @@ export async function autoDispatchClarifyRound(
     round,
     originNodeRunId,
   )
+  await args.afterSealCommit?.()
 
   // 4. Collect the round's SELF/QUESTIONER entries to auto-dispatch (sealed, not yet dispatched,
   //    still open). Designer entries are intentionally excluded (see the module header). The dispatch

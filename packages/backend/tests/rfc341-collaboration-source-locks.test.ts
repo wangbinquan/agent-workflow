@@ -54,6 +54,36 @@ describe('RFC-341 collaboration owner source locks', () => {
     }
   })
 
+  test('clarify commit barrier precedes nested dispatch and replay never enters the seam', () => {
+    const value = source('services/clarify/autoDispatch.ts')
+    const wrapperAt = value.indexOf('export async function autoDispatchClarifyRoundWithDecision')
+    const replayAt = value.indexOf('if (replay !== null)', wrapperAt)
+    const replayReturnAt = value.indexOf('return {', replayAt)
+    const barrierBindingAt = value.indexOf('afterSealCommit: async () =>', replayReturnAt)
+    const barrierWaitAt = value.indexOf('waitAtHumanGateDecisionCommitBarrier', barrierBindingAt)
+    const wrapperFinallyAt = value.indexOf('} finally {', barrierWaitAt)
+    const roundAt = value.indexOf(
+      'export async function autoDispatchClarifyRound(',
+      wrapperFinallyAt,
+    )
+    const sealAt = value.indexOf('await sealRoundAsWholeFinalize(', roundAt)
+    const postSealAt = value.indexOf('await args.afterSealCommit?.()', sealAt)
+    const askerReadAt = value.indexOf('const askerRows =', postSealAt)
+    const nestedDispatchAt = value.indexOf('dispatchTaskQuestions(', askerReadAt)
+
+    expect(wrapperAt).toBeGreaterThan(-1)
+    expect(replayReturnAt).toBeGreaterThan(replayAt)
+    expect(barrierBindingAt).toBeGreaterThan(replayReturnAt)
+    expect(barrierWaitAt).toBeGreaterThan(barrierBindingAt)
+    expect(wrapperFinallyAt).toBeGreaterThan(barrierWaitAt)
+    expect(value.slice(wrapperFinallyAt, roundAt)).not.toContain(
+      'waitAtHumanGateDecisionCommitBarrier',
+    )
+    expect(postSealAt).toBeGreaterThan(sealAt)
+    expect(askerReadAt).toBeGreaterThan(postSealAt)
+    expect(nestedDispatchAt).toBeGreaterThan(postSealAt)
+  })
+
   test('covered collaboration writers have no legacy direct broadcaster', () => {
     for (const path of [
       'services/review.ts',
