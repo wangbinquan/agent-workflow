@@ -1,12 +1,23 @@
 # RFC-341 — 生命周期已提交事件与协作命令收口（RFC-294 W3）
 
-- 状态：Draft（2026-08-29；五项产品口径已由用户按推荐确认，生产实施仍待本 RFC 明确批准）
+- 状态：Done（2026-08-30；完整 W3、canonical replay 与 exact-SHA hosted closeout 已完成）
 - 发起：RFC-294 W3 successor，2026-08-29
-- current-source pin：`1947e1ad02d3eb3f8a0c062f2a2f42a1ce5f61ce`
+- 开工 source pin：`1947e1ad02d3eb3f8a0c062f2a2f42a1ce5f61ce`
+- committed-event foundation / task cutover / collaboration cutover：`19fba75442786210b0a0deab3f7795a8e1e0196f` →
+  `3bfa9d447e9d61d6dc4336771f093bd06055c066` → `5318db02d18ce321ed37317d1265020e1feab687`
+- durable clarify convergence / recovery lock：`275f661b73495971864bfd12d22707ab5466d3ef` →
+  `acb518f81337b19633b39081265ad75259baea51`
+- idle dispatcher contention repair / published exact SHA：`8f95c423fb594105cc136324e3b2f20397a465ed` →
+  `67a97480c5944c723d3ee08490631e4db768a5c6`
+- current canonical payload / provenance：`f94290d715365ee6c46e927c211a00326834157b` →
+  `d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6`
+- current canonical source digest：`sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`
+- published exact SHA / Main CI：`67a97480c5944c723d3ee08490631e4db768a5c6` /
+  `33268925250`（terminal success）
 - 前置：RFC-328、RFC-331、RFC-332、RFC-333、RFC-334、RFC-339 均已完成
 - 范围：task lifecycle committed events、review / clarify / questions collaboration committed events、
   内部 consumer、持续 continuation、Event Center 运维可见性
-- 授权边界：本文件只形成可批准设计；在用户明确回复批准实施前，不修改生产代码、schema 或行为
+- 授权边界：用户已明确批准完整实施并提交上库；本 RFC 只关闭 RFC-294 W3，不自动授权 W4 以后 wave
 
 ## 0. 终态一句话
 
@@ -29,29 +40,29 @@ Event Center 继续作为唯一运维入口，增加 producer publication、内�
 
 当前代码已经有一条可用 pilot：
 
-| 事实 | current source |
-| --- | --- |
-| task status 单写 | `services/lifecycle.ts` 的 `writeTaskStatusTx` 递增 `lifecycleEventRevision` |
-| 同事务 append | `enqueueTaskLifecycleEventTx` 写 `task_lifecycle_event_outbox`，唯一键为 `(taskId, revision)` |
-| durable publisher | `sqliteTaskLifecycleEventPublisher.ts` 已有 claim、lease、retry、dead-letter |
-| closed public event | `task-execution/public/events.ts` 已定义 `platform.task-lifecycle` / `platform.task.status-changed` v1 |
-| Event Center | publisher 把 observation 送入 Event Center，后者已有 per-subscription delivery 状态 |
-| 原子性证明 | `rfc310-task-lifecycle-events.test.ts` 与 `rfc333-task-participants.test.ts` 已锁 status / gate transition 与 outbox 同事务 |
+| 事实                | current source                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| task status 单写    | `services/lifecycle.ts` 的 `writeTaskStatusTx` 递增 `lifecycleEventRevision`                                                |
+| 同事务 append       | `enqueueTaskLifecycleEventTx` 写 `task_lifecycle_event_outbox`，唯一键为 `(taskId, revision)`                               |
+| durable publisher   | `sqliteTaskLifecycleEventPublisher.ts` 已有 claim、lease、retry、dead-letter                                                |
+| closed public event | `task-execution/public/events.ts` 已定义 `platform.task-lifecycle` / `platform.task.status-changed` v1                      |
+| Event Center        | publisher 把 observation 送入 Event Center，后者已有 per-subscription delivery 状态                                         |
+| 原子性证明          | `rfc310-task-lifecycle-events.test.ts` 与 `rfc333-task-participants.test.ts` 已锁 status / gate transition 与 outbox 同事务 |
 
 因此 RFC-341 的工作是把 pilot 提升为 canonical committed-event chain，补齐 consumer、协作事件、切换与恢复；
 不能另起第二套“全能事件总线”，也不能把现有 outbox 当作不存在。
 
 ### 1.2 task lifecycle 仍有 ambient side channel
 
-| 当前路径 | 问题 | W3 归宿 |
-| --- | --- | --- |
-| `services/task.ts::emitTaskStatus` | transaction 外直接发 task list、task status/done、node canceled frames | task committed event 的 WebSocket projection |
-| `webSocketTaskStatusPublisher.ts` | 与前者存在第二套 task-status WS producer | 删除，统一消费 committed event |
-| `registerTerminalTaskHook` / `notifyTaskTerminal` | 单进程 callback；终态推进依赖 ambient wiring | critical durable consumer |
-| `executionWatch.ts` | 进程内 watcher map，虽有 DB poll fallback但不是事件 consumer | rebuildable consumer + DB reconcile |
-| `childBudget.ts` | 进程内 singleton 由 post-commit hook 更新 | rebuildable consumer + boot/periodic rebuild |
-| workspace prune post-commit callback | CAS claim 已 durable，但物理执行只靠本次 callback 被及时唤醒 | rebuildable wake + existing claim reconcile |
-| `terminalSweep.ts` | DB sweep 后 direct node-status WS | durable repair consumer，WS 仍由 event projector 发 |
+| 当前路径                                          | 问题                                                                   | W3 归宿                                             |
+| ------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
+| `services/task.ts::emitTaskStatus`                | transaction 外直接发 task list、task status/done、node canceled frames | task committed event 的 WebSocket projection        |
+| `webSocketTaskStatusPublisher.ts`                 | 与前者存在第二套 task-status WS producer                               | 删除，统一消费 committed event                      |
+| `registerTerminalTaskHook` / `notifyTaskTerminal` | 单进程 callback；终态推进依赖 ambient wiring                           | critical durable consumer                           |
+| `executionWatch.ts`                               | 进程内 watcher map，虽有 DB poll fallback但不是事件 consumer           | rebuildable consumer + DB reconcile                 |
+| `childBudget.ts`                                  | 进程内 singleton 由 post-commit hook 更新                              | rebuildable consumer + boot/periodic rebuild        |
+| workspace prune post-commit callback              | CAS claim 已 durable，但物理执行只靠本次 callback 被及时唤醒           | rebuildable wake + existing claim reconcile         |
+| `terminalSweep.ts`                                | DB sweep 后 direct node-status WS                                      | durable repair consumer，WS 仍由 event projector 发 |
 
 ### 1.3 RFC-333 已完成事务，但 continuation 仍由请求拥有
 
@@ -171,11 +182,11 @@ request 的 pump 只能 nudge，不能 claim intent、调用 task driver 或等�
 
 ### D6 — 三类 consumer
 
-| 类别 | 语义 | 代表 consumer |
-| --- | --- | --- |
-| critical durable | 必须有 delivery row，失败 retry/dead-letter/replay | Event Center publication、terminal gate close、必要领域 effect |
-| rebuildable durable | event 触发加 periodic/boot reconcile；失败不能丢 durable claim | child budget、execution watch、workspace prune wake、review distill enqueue、continuation nudge |
-| ephemeral projection | 正常路径立即发；崩溃后可由 DB/refetch 或 worker补发 | task list/task/node/review/clarify/questions WebSocket |
+| 类别                 | 语义                                                           | 代表 consumer                                                                                   |
+| -------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| critical durable     | 必须有 delivery row，失败 retry/dead-letter/replay             | Event Center publication、terminal gate close、必要领域 effect                                  |
+| rebuildable durable  | event 触发加 periodic/boot reconcile；失败不能丢 durable claim | child budget、execution watch、workspace prune wake、review distill enqueue、continuation nudge |
+| ephemeral projection | 正常路径立即发；崩溃后可由 DB/refetch 或 worker补发            | task list/task/node/review/clarify/questions WebSocket                                          |
 
 consumer 的分类是闭合 registry；新增 consumer 必须明确类别、dedupe key、reconcile 与完成条件。
 human-gate continuation 的 critical work identity 仍是 RFC-333 durable intent；event consumer 只负责可重建 nudge，不能再造第二份
@@ -208,24 +219,26 @@ human-gate continuation 的 critical work identity 仍是 RFC-333 durable intent
 Event Center 的 event/delivery 页面增加 stage、producer family、aggregate/sequence、consumer、state、attempt、last error、
 next retry 和 Retry action。Retry 只允许 dead-letter 或明确 failed 的当前 delivery；成功项不重跑，shadow row 不可投递。
 
-### D12 — 分事件族 shadow / cutover / cleanup
+### D12 — task 独立切换，三个 collaboration family 原子共切
 
-切换顺序固定为 task lifecycle → review → clarify → questions。每族先 characterise、shadow compare，再数据库原子翻
-`legacy → dispatchable`；历史 shadow 永不 claim。族切换完成后立即删除该族 legacy direct broadcast/wake，全部族完成后再删
-共享 legacy facade。不能一次打开 dispatcher 扫全表当作 cutover。
+task lifecycle 先完成 legacy inventory、未决 outbox 迁移与独立 cutover。Review / clarify / questions 共用同一份 RFC-333
+continuation ownership；若分三次启停，会在过渡期形成 request owner 与 continuous worker 的双 active 窗口。因此三个
+collaboration family 先以 closed codec、transaction participant、source lock 与 fault fixture 完成 characterization，再由
+migration `0222` 在同一数据库事务把三行从 `legacy/epoch=1` 一起翻到 `dispatchable/epoch=2`，并同步删除三类 request wake 与
+covered direct broadcaster。历史 shadow row 仍不可 claim；dispatcher 也只能 claim current dispatchable epoch。
 
 ## 5. 能力影响清单
 
-| 能力 | RFC-341 目标影响 |
-| --- | --- |
-| task 创建、运行、终态、取消与 node canceled 投影 | 行为与 frame shape 不变；可靠恢复增强 |
-| review open/comment/selection/decision | 输入输出与页面行为不变；广播改由 committed event projection |
-| clarify open/answer/defer | 输入输出与页面行为不变；continuation 改由 worker 持续接管 |
-| questions dispatch/answer | manual/auto-dispatch-deferred 行为不变；广播与 continuation 改由 event/worker |
-| HTTP command latency/顺序 | 保持 commit 后、响应前的轻量即时 projection/nudge；不等待实际 task drive 完成 |
-| daemon restart | pending event/intent 自动续跑，不依赖请求重发 |
-| Event Center | 原页面新增 producer/internal delivery/错误/重试；不新增入口 |
-| REST/MCP/shared schema | 现有用户 wire 不变；只可新增内部运维 DTO |
+| 能力                                             | RFC-341 目标影响                                                              |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| task 创建、运行、终态、取消与 node canceled 投影 | 行为与 frame shape 不变；可靠恢复增强                                         |
+| review open/comment/selection/decision           | 输入输出与页面行为不变；广播改由 committed event projection                   |
+| clarify open/answer/defer                        | 输入输出与页面行为不变；continuation 改由 worker 持续接管                     |
+| questions dispatch/answer                        | manual/auto-dispatch-deferred 行为不变；广播与 continuation 改由 event/worker |
+| HTTP command latency/顺序                        | 保持 commit 后、响应前的轻量即时 projection/nudge；不等待实际 task drive 完成 |
+| daemon restart                                   | pending event/intent 自动续跑，不依赖请求重发                                 |
+| Event Center                                     | 原页面新增 producer/internal delivery/错误/重试；不新增入口                   |
+| REST/MCP/shared schema                           | 现有用户 wire 不变；只可新增内部运维 DTO                                      |
 
 ## 6. 验收标准
 
@@ -256,18 +269,60 @@ next retry 和 Retry action。Retry 只允许 dead-letter 或明确 failed 的�
 
 ## 7. 风险与控制
 
-| 风险 | 控制 |
-| --- | --- |
-| 两套 event path 同时发造成重复 | durable family cutover ledger；同一 epoch 只允许一个 active owner |
-| 为保持即时性把长 effect 又塞回 request | AfterCommitEventPump 只允许 projection/nudge，有 source guard 和 latency test |
-| collaboration batch 产生半组 event | transaction 内 event-group builder，一次编码/append，失败整体回滚 |
-| poison event 阻断全局 | per aggregate FIFO、跨 aggregate并行、per consumer dead-letter |
+| 风险                                           | 控制                                                                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| 两套 event path 同时发造成重复                 | durable family cutover ledger；同一 epoch 只允许一个 active owner                                                                |
+| 为保持即时性把长 effect 又塞回 request         | AfterCommitEventPump 只允许 projection/nudge，有 source guard 和 latency test                                                    |
+| collaboration batch 产生半组 event             | transaction 内 event-group builder，一次编码/append，失败整体回滚                                                                |
+| poison event 阻断全局                          | per aggregate FIFO、跨 aggregate并行、per consumer dead-letter                                                                   |
 | continuation worker 与旧 request wake 抢 claim | 三个collaboration family shadow就绪后，在review cutover stage一次启worker并删除三类request wake；intent claim继续用durable fence |
-| Event Center 把 producer 与 consumer 状态混淆 | UI/DTO 显式 `stage=producer-publication|consumer-delivery` |
-| 旧 outbox pending/dead-letter 被遗忘 | migration/drain inventory、row-count invariant、cutover 前后对账 |
+| Event Center 把 producer 与 consumer 状态混淆  | UI/DTO 显式 `stage=producer-publication                                                                                          | consumer-delivery` |
+| 旧 outbox pending/dead-letter 被遗忘           | migration/drain inventory、row-count invariant、cutover 前后对账                                                                 |
 
-## 8. 批准门
+## 8. 批准记录
 
-本 Draft 已把用户确认的五项推荐口径展开为 D1～D12 与 AC-1～AC-14。生产实施需要一次新的明确批准，
-批准范围应同时覆盖：schema/codec、shadow/cutover、task/collaboration consumer、持续 continuation worker、Event Center 原页扩展、
-legacy 删除与 hosted closeout。未获批准前只允许继续修订 RFC 文档与做只读核验。
+2026-08-29，用户在确认推荐方案后明确要求“批准实施并完整实现，然后提交上库”，据此批准 D1～D12、design §4～§13 与
+plan T3～T14：包括 schema/codec、task/collaboration cutover、durable consumer、持续 continuation worker、Event Center 原页扩展、
+legacy 删除与 hosted closeout。该授权只覆盖 RFC-341 / RFC-294 W3，不自动授权 W4、W5、W6、W7、W8 或 W9。
+
+## 9. 落地与关闭记录
+
+2026-08-30，RFC-341 已按批准范围完整落地并关闭：
+
+- `19fba75442786210b0a0deab3f7795a8e1e0196f` 通过 migration `0218` 建立 immutable committed-event ledger、aggregate
+  head、逐 consumer delivery 与 family cutover；task/collaboration closed codecs、bounded dispatcher、持续 continuation worker
+  definition，以及 Event Center producer/consumer 查询、错误与单项 retry 都已接入。四个 family 此时保持 legacy，不提前切流量。
+- `3bfa9d447e9d61d6dc4336771f093bd06055c066` 通过 migration `0219` 把 task lifecycle 切到
+  `dispatchable/epoch=2`，把 unresolved legacy publication 连 attempt/error 状态迁入 canonical delivery，删除旧
+  `sqliteTaskLifecycleEventPublisher`、duplicate task WS publisher 与 terminal-hook active path；`6fac0b5bc97f57d0905b7b81c893d464c0bb6ce4`
+  再以 migration `0220` 修复 rolling-upgrade FK rename 并保留 delivery receipts。
+- `5318db02d18ce321ed37317d1265020e1feab687` 通过 migration `0222` 原子切换 review/clarify/questions，接入
+  collaboration-owned transaction participants、closed events、durable consumers、synchronous WS projector 与唯一 continuous
+  `HumanGateContinuationWorker`；route/composition 的 request-owned wake 和 covered direct broadcaster 均已归零。
+- hosted 回归修复链 `9382d225481f525b7ade2f5c7141523287060090` →
+  `a7677cf428ca1fcf187329b12d431ea48f54e2df` → `f52d274aca6f80f47e7b3f9afec49dd8424c47c2` →
+  `853985bbf9f84c1f9c9e9cd3ed284a2b1ecf7a18` → `1bf179b3fbeb055dce28cd27cf57260b10114e07`
+  闭合了初始化环、legacy gate scan 边界、rolling upgrade、stale cutover、pending successor 保留，以及 dispatcher/continuation
+  nudge 的单一 ownership。
+- commit-before-wake fault 最终证明：seal transaction 已 durable，但早期 post-seal functional dispatch 尚未 durable。
+  `890c3ad402c8b3cc5a9fdff38d77086532e1a6e7` 与 `fed0e04ce26416f22e3ab8512a47806581da4411`
+  把 compiled barrier 固定在 seal `dbTxSync` 返回后的真实 commit edge；`275f661b73495971864bfd12d22707ab5466d3ef`
+  新增幂等 `finishCommittedClarifyAutoDispatch`，由 fresh request、receipt replay 与 claimed pre-drive 共用。actor user/role、答案归属与
+  stop directive 在 seal transaction 内持久化；pre-drive 必须校验 exact intent/operation/manifest，convergence 成功才 drive，失败则把
+  exact intent 保持为可周期重试的 pending，不会重复 mint rerun/intent，也不会返回伪造的 empty dispatch。
+- `75cfadfa85dd3cdd1de269b7dedf700e27c02f8b` 把 exact claimed-intent retry writer 归入 worker-epoch authority；
+  `acb518f81337b19633b39081265ad75259baea51` 随后关闭 RFC-128 commit-edge fixture 与 RFC-123 transaction source lock。
+- `8f95c423fb594105cc136324e3b2f20397a465ed` 为 continuous dispatcher 增加与 transaction 完全同形的只读 due preflight：
+  空队列不再每秒进入 `BEGIN IMMEDIATE`，有 candidate 时仍在 transaction 内重查并以 lease CAS claim；after-commit nudge 与
+  一秒 reconcile 继续覆盖 read-false 后的新 event。最终 canonical payload / initial pin / forward repin 为
+  `f94290d715365ee6c46e927c211a00326834157b` → `d2a4cc742c6dbb318b237ede15155b354cd79584` →
+  `67a97480c5944c723d3ee08490631e4db768a5c6`，source digest 为
+  `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`。
+- exact SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 的 Main CI run `33268925250` terminal success：static、build、
+  frontend、全部 backend shard、三平台全部 Playwright shard与 `CI required` 全绿；RFC-294 restart / SIGKILL case 继续在三平台
+  通过。该 SHA 上 8 个定时 workflow 也全部终态 success：e2e-full `33268950624`（含 RFC-319 覆盖账本汇总）、e2e-webkit
+  `33268950212`、evidence `33268949064`、git-protocols `33268950157`、integration-opencode `33268949548`、maintenance-soak
+  `33268952181`（100-client/full/180s，同 SHA attempt 2）、visual `33268950915`、windows-platform `33268951134`；maintenance
+  通过期间未修改阈值或 RFC-341 源码。
+
+RFC-294 只据此关闭 W3。W4 及后续 wave 仍须独立 successor、重新调研与明确批准。

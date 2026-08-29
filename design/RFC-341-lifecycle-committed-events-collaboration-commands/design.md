@@ -1,9 +1,19 @@
 # RFC-341 技术设计 — 生命周期已提交事件与协作命令收口
 
-- 状态：Draft（2026-08-29；生产实施待批准）
-- current-source pin：`1947e1ad02d3eb3f8a0c062f2a2f42a1ce5f61ce`
+- 状态：Done（2026-08-30；D1～D12、完整 W3 cutover、canonical replay 与 hosted closeout 已完成）
+- 开工 source pin：`1947e1ad02d3eb3f8a0c062f2a2f42a1ce5f61ce`
 - 对齐：RFC-294 W3；复用 RFC-328 durable ownership、RFC-333 human-gate transaction、RFC-310 Event Center
 - 行为原则：保持现有功能、frame 与正常路径顺序；commit 后故障由 durable worker 补偿
+- foundation / task / collaboration cutover：`19fba75442786210b0a0deab3f7795a8e1e0196f` →
+  `3bfa9d447e9d61d6dc4336771f093bd06055c066` → `5318db02d18ce321ed37317d1265020e1feab687`
+- durable clarify convergence / recovery lock：`275f661b73495971864bfd12d22707ab5466d3ef` →
+  `acb518f81337b19633b39081265ad75259baea51`
+- idle dispatcher repair / published exact SHA：`8f95c423fb594105cc136324e3b2f20397a465ed` →
+  `67a97480c5944c723d3ee08490631e4db768a5c6`
+- canonical payload / provenance / digest：`f94290d715365ee6c46e927c211a00326834157b` →
+  `d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6` /
+  `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`
+- hosted closeout：Main CI `33268925250` 与 8 个定时 workflow terminal success
 
 ## 1. 设计不变量
 
@@ -197,11 +207,11 @@ bootstrap/source test失败；不得通过“谁先执行谁拿下一个号”�
 
 新增中性 `committed_event_aggregate_heads`：
 
-| 列 | 语义 |
-| --- | --- |
-| `producer/family/aggregate_kind/aggregate_id` | aggregate key |
-| `last_seq` | 最后成功分配序号 |
-| `updated_at` | 诊断时间 |
+| 列                                            | 语义             |
+| --------------------------------------------- | ---------------- |
+| `producer/family/aggregate_kind/aggregate_id` | aggregate key    |
+| `last_seq`                                    | 最后成功分配序号 |
+| `updated_at`                                  | 诊断时间         |
 
 `allocateNextCommittedEventSeqTx` 在领域 transaction 内做 `last_seq + 1` 的原子 upsert/CAS。task lifecycle 切换时用
 `tasks.lifecycle_event_revision` seed，确保新 seq 不倒退；collaboration 用已有 operation journal 顺序回填 head，不改现有 public receipt。
@@ -212,17 +222,17 @@ bootstrap/source test失败；不得通过“谁先执行谁拿下一个号”�
 
 #### `committed_events`
 
-| 列 | 要求 |
-| --- | --- |
-| `id` | stable eventId primary key |
-| `event_group_id/event_group_ordinal` | operation 内事件组与稳定投影顺序；组内ordinal唯一 |
-| `producer/family/type/schema_version` | closed registry identity |
-| `aggregate_kind/aggregate_id/aggregate_seq` | FIFO key；unique |
-| `operation_ref/correlation_ref/causation_ref` | trace refs |
-| `payload_json/payload_digest` | immutable canonical bytes + digest |
-| `delivery_mode` | `shadow \| dispatchable`，append 后不可变 |
-| `producer_epoch` | cutover epoch |
-| `created_at` | commit fact time |
+| 列                                            | 要求                                              |
+| --------------------------------------------- | ------------------------------------------------- |
+| `id`                                          | stable eventId primary key                        |
+| `event_group_id/event_group_ordinal`          | operation 内事件组与稳定投影顺序；组内ordinal唯一 |
+| `producer/family/type/schema_version`         | closed registry identity                          |
+| `aggregate_kind/aggregate_id/aggregate_seq`   | FIFO key；unique                                  |
+| `operation_ref/correlation_ref/causation_ref` | trace refs                                        |
+| `payload_json/payload_digest`                 | immutable canonical bytes + digest                |
+| `delivery_mode`                               | `shadow \| dispatchable`，append 后不可变         |
+| `producer_epoch`                              | cutover epoch                                     |
+| `created_at`                                  | commit fact time                                  |
 
 唯一约束至少包含 `(producer, family, aggregate_kind, aggregate_id, aggregate_seq)`、
 `(event_group_id, event_group_ordinal)` 与 `id`。相同 id/digest insert 可按幂等
@@ -230,15 +240,15 @@ receipt 返回；相同 id 不同 digest 或相同 aggregate seq 不同 id 必�
 
 #### `committed_event_deliveries`
 
-| 列 | 要求 |
-| --- | --- |
-| `event_id/consumer_id` | composite primary key |
-| `class` | `critical \| rebuildable`；ephemeral 不建 durable row |
-| `state` | `pending \| claimed \| accepted \| dead-letter` |
-| `attempt_count/next_attempt_at` | bounded retry |
-| `claimed_by/lease_epoch/claim_expires_at` | fenced claim |
-| `last_error_code/last_error_summary/updated_at` | Event Center 诊断 |
-| `accepted_at` | terminal success |
+| 列                                              | 要求                                                  |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| `event_id/consumer_id`                          | composite primary key                                 |
+| `class`                                         | `critical \| rebuildable`；ephemeral 不建 durable row |
+| `state`                                         | `pending \| claimed \| accepted \| dead-letter`       |
+| `attempt_count/next_attempt_at`                 | bounded retry                                         |
+| `claimed_by/lease_epoch/claim_expires_at`       | fenced claim                                          |
+| `last_error_code/last_error_summary/updated_at` | Event Center 诊断                                     |
+| `accepted_at`                                   | terminal success                                      |
 
 critical/rebuildable delivery row在event append transaction中按producer manifest一次生成；ephemeral只保留manifest映射、不建row。
 不能由dispatcher运行时“发现” durable consumer后补写。
@@ -246,12 +256,12 @@ critical/rebuildable delivery row在event append transaction中按producer manif
 
 #### `committed_event_family_cutovers`
 
-| 列 | 要求 |
-| --- | --- |
-| `producer/family` | primary key |
-| `mode` | `legacy \| shadow \| dispatchable` |
-| `epoch` | 每次切换递增 |
-| `changed_at/change_ref` | rollout receipt |
+| 列                      | 要求                               |
+| ----------------------- | ---------------------------------- |
+| `producer/family`       | primary key                        |
+| `mode`                  | `legacy \| shadow \| dispatchable` |
+| `epoch`                 | 每次切换递增                       |
+| `changed_at/change_ref` | rollout receipt                    |
 
 writer 在领域 transaction 中读取该 family row：`legacy` 不写新 store；`shadow` 写 immutable shadow event 但继续 legacy
 after-commit；`dispatchable` 写可投递 event 且只走新 pump。历史 shadow 永远不能由 dispatcher claim。
@@ -278,39 +288,48 @@ critical/rebuildable 没有 dedupe/settle，或 ephemeral 声明 dead-letter 都
 
 ```ts
 type TaskLifecycleCommittedV1 =
-  | CommittedEventEnvelopeV1<'task.created.v1', {
-      taskId: string
-      status: 'pending'
-      createdAt: string
-    }>
-  | CommittedEventEnvelopeV1<'task.lifecycle-transitioned.v1', {
-      taskId: string
-      lifecycleRevision: number
-      previousStatus: TaskStatus
-      status: TaskStatus
-      updatedAt: string
-      errorSummary: string | null
-      nodeChanges: readonly {
-        nodeRunId: string
-        status: NodeRunStatus
-        cause: string | null
-      }[]
-      workspacePruneClaim: null | {
-        claimedAt: string
-        cause: string
+  | CommittedEventEnvelopeV1<
+      'task.created.v1',
+      {
+        taskId: string
+        status: 'pending'
+        createdAt: string
       }
-      sourceTerminationEffectRef: string | null
-    }>
-  | CommittedEventEnvelopeV1<'task.node-statuses-transitioned.v1', {
-      taskId: string
-      reason: TaskNodeTransitionReasonV1
-      nodeChanges: readonly {
-        nodeRunId: string
-        status: NodeRunStatus
-        cause: string | null
-      }[]
-      updatedAt: string
-    }>
+    >
+  | CommittedEventEnvelopeV1<
+      'task.lifecycle-transitioned.v1',
+      {
+        taskId: string
+        lifecycleRevision: number
+        previousStatus: TaskStatus
+        status: TaskStatus
+        updatedAt: string
+        errorSummary: string | null
+        nodeChanges: readonly {
+          nodeRunId: string
+          status: NodeRunStatus
+          cause: string | null
+        }[]
+        workspacePruneClaim: null | {
+          claimedAt: string
+          cause: string
+        }
+        sourceTerminationEffectRef: string | null
+      }
+    >
+  | CommittedEventEnvelopeV1<
+      'task.node-statuses-transitioned.v1',
+      {
+        taskId: string
+        reason: TaskNodeTransitionReasonV1
+        nodeChanges: readonly {
+          nodeRunId: string
+          status: NodeRunStatus
+          cause: string | null
+        }[]
+        updatedAt: string
+      }
+    >
 ```
 
 `nodeChanges` 只包含同一 transaction 实际改动的 node rows，不把全量 node snapshot 塞进 event；size gate 超限时
@@ -353,14 +372,14 @@ participant，不复制 insert SQL。
 
 ### 5.4 consumers
 
-| consumer id | class | accepted 条件 | reconcile |
-| --- | --- | --- | --- |
-| `event-center.task-lifecycle` | critical | EventRecord observation + delivery receipt 同事务 | Event Center existing retry |
-| `task-terminal-gate-close` | critical | durable close/effect receipt recorded | terminal reconcile |
-| `task-child-budget` | rebuildable | projection revision applied or already newer | boot + periodic rebuild |
-| `task-execution-watch` | rebuildable | local waiters notified；无 waiter 也成功 | DB terminal poll |
-| `task-workspace-prune-nudge` | rebuildable | durable prune claim 可见并已 nudge | existing claim scan |
-| `task-ws-projector` | ephemeral | current frame projection attempted | reconnect/refetch；worker best effort补投 |
+| consumer id                   | class       | accepted 条件                                     | reconcile                                 |
+| ----------------------------- | ----------- | ------------------------------------------------- | ----------------------------------------- |
+| `event-center.task-lifecycle` | critical    | EventRecord observation + delivery receipt 同事务 | Event Center existing retry               |
+| `task-terminal-gate-close`    | critical    | durable close/effect receipt recorded             | terminal reconcile                        |
+| `task-child-budget`           | rebuildable | projection revision applied or already newer      | boot + periodic rebuild                   |
+| `task-execution-watch`        | rebuildable | local waiters notified；无 waiter 也成功          | DB terminal poll                          |
+| `task-workspace-prune-nudge`  | rebuildable | durable prune claim 可见并已 nudge                | existing claim scan                       |
+| `task-ws-projector`           | ephemeral   | current frame projection attempted                | reconnect/refetch；worker best effort补投 |
 
 物理 workspace deletion 的成功不作为 event delivery accepted 条件；event 只保证 durable claim 已存在且执行器被唤醒。
 
@@ -384,34 +403,49 @@ type GateRef = Readonly<{
 
 ```ts
 type CollaborationCommittedV1 =
-  | CommittedEventEnvelopeV1<'collaboration.human-gate-opened.v1', {
-      gate: GateRef
-      gateStatus: HumanGateStatusV1
-    }>
-  | CommittedEventEnvelopeV1<'collaboration.human-gate-decision-committed.v1', {
-      gate: GateRef
-      decision:
-        | { gateKind: 'review'; kind: ReviewDecisionKind }
-        | { gateKind: 'clarify'; kind: ClarifyDecisionKind }
-        | { gateKind: 'questions'; kind: QuestionDecisionKind }
-      gateStatus: HumanGateStatusV1
-      continuationRef: string
-      commentChanges: readonly ReviewCommentProjection[]
-      selectionChanges: readonly ReviewSelectionProjection[]
-    }>
-  | CommittedEventEnvelopeV1<'collaboration.review-comments-changed.v1', {
-      gate: GateRef
-      changes: readonly ReviewCommentProjection[]
-    }>
-  | CommittedEventEnvelopeV1<'collaboration.review-selection-changed.v1', {
-      gate: GateRef
-      changes: readonly ReviewSelectionProjection[]
-    }>
-  | CommittedEventEnvelopeV1<'collaboration.question-dispatch-committed.v1', {
-      gate: GateRef
-      questionIds: readonly string[]
-      dispatchMode: QuestionDispatchModeV1
-    }>
+  | CommittedEventEnvelopeV1<
+      'collaboration.human-gate-opened.v1',
+      {
+        gate: GateRef
+        gateStatus: HumanGateStatusV1
+      }
+    >
+  | CommittedEventEnvelopeV1<
+      'collaboration.human-gate-decision-committed.v1',
+      {
+        gate: GateRef
+        decision:
+          | { gateKind: 'review'; kind: ReviewDecisionKind }
+          | { gateKind: 'clarify'; kind: ClarifyDecisionKind }
+          | { gateKind: 'questions'; kind: QuestionDecisionKind }
+        gateStatus: HumanGateStatusV1
+        continuationRef: string
+        commentChanges: readonly ReviewCommentProjection[]
+        selectionChanges: readonly ReviewSelectionProjection[]
+      }
+    >
+  | CommittedEventEnvelopeV1<
+      'collaboration.review-comments-changed.v1',
+      {
+        gate: GateRef
+        changes: readonly ReviewCommentProjection[]
+      }
+    >
+  | CommittedEventEnvelopeV1<
+      'collaboration.review-selection-changed.v1',
+      {
+        gate: GateRef
+        changes: readonly ReviewSelectionProjection[]
+      }
+    >
+  | CommittedEventEnvelopeV1<
+      'collaboration.question-dispatch-committed.v1',
+      {
+        gate: GateRef
+        questionIds: readonly string[]
+        dispatchMode: QuestionDispatchModeV1
+      }
+    >
 ```
 
 约束：
@@ -444,12 +478,12 @@ composition 不再注入 task driver。
 
 ### 6.4 consumers
 
-| consumer id | class | accepted 条件 | reconcile |
-| --- | --- | --- | --- |
-| `event-center.collaboration` | critical | internal event 已形成 EventRecord/diagnostic record | Event Center retry |
-| `collaboration-continuation-nudge` | rebuildable | exact pending intent 已确认并 nudge worker | continuous pending-intent scan |
-| `review-distill-enqueue` | rebuildable | deduped durable distill job inserted/already exists | decision/event scan |
-| `collaboration-ws-projector` | ephemeral | current review/clarify/question/node frames attempted | reconnect/refetch；worker best effort补投 |
+| consumer id                        | class       | accepted 条件                                         | reconcile                                 |
+| ---------------------------------- | ----------- | ----------------------------------------------------- | ----------------------------------------- |
+| `event-center.collaboration`       | critical    | internal event 已形成 EventRecord/diagnostic record   | Event Center retry                        |
+| `collaboration-continuation-nudge` | rebuildable | exact pending intent 已确认并 nudge worker            | continuous pending-intent scan            |
+| `review-distill-enqueue`           | rebuildable | deduped durable distill job inserted/already exists   | decision/event scan                       |
+| `collaboration-ws-projector`       | ephemeral   | current review/clarify/question/node frames attempted | reconnect/refetch；worker best effort补投 |
 
 continuation 的业务完成由 intent ledger/worker 记录，不把 task drive 完成绑成 event-delivery FIFO 的前序；否则一个长任务会阻塞
 同 gate aggregate 的后续观察事件。
@@ -562,15 +596,15 @@ task event projector是W3-covered task/node frame唯一owner。`task.lifecycle-t
 
 ### 9.2 collaboration frames
 
-| committed event | current projection |
-| --- | --- |
-| human-gate-opened(review) | `review.created` |
-| review-comments-changed | current comment add/update/delete frame |
-| review-selection-changed | current selection frame |
-| human-gate-decision-committed(review) | comments/selections（若有）→ decision |
-| human-gate-decision-committed(clarify) | current `clarify.answered` / defer |
-| question-dispatch-committed | current question-domain dispatch/pending projection |
-| human-gate-decision-committed(questions) | current answer/decision |
+| committed event                          | current projection                                  |
+| ---------------------------------------- | --------------------------------------------------- |
+| human-gate-opened(review)                | `review.created`                                    |
+| review-comments-changed                  | current comment add/update/delete frame             |
+| review-selection-changed                 | current selection frame                             |
+| human-gate-decision-committed(review)    | comments/selections（若有）→ decision               |
+| human-gate-decision-committed(clarify)   | current `clarify.answered` / defer                  |
+| question-dispatch-committed              | current question-domain dispatch/pending projection |
+| human-gate-decision-committed(questions) | current answer/decision                             |
 
 Projector 不在投影时重新构造领域决定；全部 frame data 来自 committed payload 或现有 read model exact lookup。
 同一transaction产生的task/node frame由同组task event唯一投影，collaboration projector不得重复发送。
@@ -628,12 +662,15 @@ manual replay generation；不重写 event payload、seq 或 operation receipt�
 2. 建 codec/manifest/source-lock/fault tests；
 3. production path仍完全 legacy，无新 event append。
 
-### 11.2 phase B — shadow producer
+### 11.2 phase B — characterization 与 shadow contract
 
-逐 family 翻 `legacy → shadow`；writer 在同 transaction append shadow event，after-commit 经typed legacy projection port保持current path。Shadow comparator
-按 operationRef 对拍领域 row、legacy frame fixture 与新 payload；dispatcher SQL 必须结构上排除 shadow。
+Closed codec、writer participant、legacy frame fixture、same-operation replay 与 dispatcher shadow exclusion 先由 contract/fault tests
+完成对拍。最终 publication 没有让 production family 长时间停留在 shadow：四个 family 在 foundation commit 后保持
+`legacy/epoch=1`，shadow append/non-delivery 由 store tests证明；只有达到 migration precondition 的 family 才在数据库 migration 中
+原子切到 dispatchable。这样既保留 shadow contract 与历史 row 不可 claim 的约束，也不制造跨 commit 的 dual owner 窗口。
 
-task pilot 特例：既有 `task_lifecycle_event_outbox` 继续是 active public Event Center publisher；new task event是 shadow。
+task pilot 在 cutover 前继续由既有 `task_lifecycle_event_outbox` active publication；migration `0219` 同时迁移 unresolved 状态并切换
+owner，不把 legacy outbox 与 canonical publisher 并行留在 production。
 
 ### 11.3 phase C — pre-cutover drain
 
@@ -649,19 +686,15 @@ task family切换还必须把当前collaboration legacy broadcaster中的task/no
 
 collaboration family 没有旧 outbox，但必须证明 legacy callback没有 in-flight transaction，并在短 publication critical section切换。
 
-### 11.4 phase D — atomic family cutover
+### 11.4 phase D — atomic cutover
 
-在数据库 transaction 中翻 `shadow → dispatchable` 并递增 epoch。之后的新 command receipt 只走 AfterCommitEventPump；旧 direct
-broadcast/wake 由 mode gate 不可达。同一 family 不允许 legacy与dispatchable双 active。
+migration `0219` 先把 task lifecycle 从 `legacy/epoch=1` 切到 `dispatchable/epoch=2`，并把 unresolved legacy publication 的
+attempt/error 迁入 canonical delivery。之后的新 task receipt 只走 AfterCommitEventPump；旧 publisher与 duplicate WS owner 同批退出。
 
-切换顺序：
-
-1. task lifecycle；
-2. review；
-3. clarify；
-4. questions。
-
-每族通过 hosted fault/order evidence 后再切下一族。
+Review / clarify / questions 共用一份 RFC-333 continuation ownership，不能在三个 family 之间留下 request wake 与 continuous worker
+并存的过渡态。migration `0222` 因而在一个 database transaction 中先验证三行都精确处于 `legacy/epoch=1`，再一起切为
+`dispatchable/epoch=2`；任一 missing/stale/partial input 在任何 UPDATE 前失败并保持三行原状。切换 commit 同时删除三类 request-owned
+claim/drive 与 covered direct broadcaster，三个 family 从第一刻起只有一个 active delivery/continuation owner。
 
 ### 11.5 phase E — legacy extinction
 
@@ -682,18 +715,18 @@ forward fix/consumer replay，不通过恢复旧 direct broadcaster绕开 event�
 
 ## 12. failure matrix
 
-| 故障点 | 已提交事实 | 恢复 |
-| --- | --- | --- |
-| transaction 内 event insert失败 | 无 | 全事务回滚 |
-| commit 后、pump 前 crash | event/intent 有 | dispatcher/continuation scan |
-| WS projector 抛错 | event/intent 有 | worker best effort + client refetch |
-| consumer 执行前 crash | pending/claimed | lease expiry re-claim |
-| consumer effect已写、accepted前crash | effect dedupe有 | 同事务 settle或按 eventId no-op后accepted |
-| 同 aggregate前序 poison | 后序 durable但不可claim | dead-letter可见/人工retry；其他 aggregate继续 |
-| continuation nudge丢失 | intent pending | periodic continuous scan |
-| workspace delete失败 | terminal+prune claim有 | claim reconcile重试，不回滚终态 |
-| daemon shutdown during task drive | intent/owner fence有 | legal handoff/lease recovery |
-| manual retry并发 | dead-letter receipt有 | observed epoch CAS只允许一个成功 |
+| 故障点                               | 已提交事实              | 恢复                                          |
+| ------------------------------------ | ----------------------- | --------------------------------------------- |
+| transaction 内 event insert失败      | 无                      | 全事务回滚                                    |
+| commit 后、pump 前 crash             | event/intent 有         | dispatcher/continuation scan                  |
+| WS projector 抛错                    | event/intent 有         | worker best effort + client refetch           |
+| consumer 执行前 crash                | pending/claimed         | lease expiry re-claim                         |
+| consumer effect已写、accepted前crash | effect dedupe有         | 同事务 settle或按 eventId no-op后accepted     |
+| 同 aggregate前序 poison              | 后序 durable但不可claim | dead-letter可见/人工retry；其他 aggregate继续 |
+| continuation nudge丢失               | intent pending          | periodic continuous scan                      |
+| workspace delete失败                 | terminal+prune claim有  | claim reconcile重试，不回滚终态               |
+| daemon shutdown during task drive    | intent/owner fence有    | legal handoff/lease recovery                  |
+| manual retry并发                     | dead-letter receipt有   | observed epoch CAS只允许一个成功              |
 
 ## 13. test strategy
 
@@ -742,3 +775,45 @@ RFC-341 只有同时满足以下条件才可把 RFC-294 W3 标 Done：
 7. shadow/cutover/legacy extinction完成，旧 task outbox不再是第二 active system；
 8. W3-owned workers符合 managed definitions，但不倒签 W9全局 registry；
 9. exact-SHA hosted required jobs terminal success并回填 proposal/plan/STATE/RFC-294。
+
+## 15. 落地后的实际边界
+
+最终 production topology 与本设计的 owner 方向一致：
+
+```text
+task-execution / collaboration transaction participant
+  → committed_events + committed_event_deliveries（same dbTxSync）
+  → AfterCommitEventPump（exact refs、同步 projection、只 nudge dispatcher）
+  → CommittedEventDispatcherWorker（per-consumer claim/FIFO/retry/dead-letter）
+  → HumanGateContinuationWorker（只扫描/claim RFC-333 durable intents）
+```
+
+- migration `0218` 建立 neutral store 与四个 `legacy/epoch=1` family；`0219` 独立完成 task lifecycle cutover；`0220` 修复
+  rolling-upgrade 中 rename table 的 delivery FK 并保留 receipts；`0222` 在 UPDATE 前验证三条 collaboration family 的完整
+  PK/precondition，再原子共切 review/clarify/questions。旧 task outbox publisher、duplicate task WS publisher、terminal hook、boot-only
+  human-gate recovery、三类 request wake 与 covered broadcaster 均由 source locks 固定为 extinct。
+- `AfterCommitEventPump` 只精确读取 receipt refs、按 group ordinal/aggregate seq 投影并 nudge dispatcher；它不 claim delivery、
+  不 drive task，也不直接 nudge continuation。`collaboration-continuation-nudge` durable consumer 是 event→worker wake 的唯一 owner，
+  continuation intent 本身仍是唯一 durable work identity。
+- clarify 的真实 crash edge 比初稿更深：decision transaction 已提交时，asker/designer dispatch、stop directive与 attribution 不能只依赖
+  原 HTTP stack。最终 `finishCommittedClarifyAutoDispatch` 由 fresh、receipt replay 与 exact claimed pre-drive 共用；seal transaction 同步
+  持久化 submitter user/role、answer attribution 与 stop directive。Pre-drive 对 intent id、operation id、manifest、task/gate ref 与 claim epoch
+  fail closed；finish 成功才进入 effect/engine，失败把同一 intent 退回 pending，周期扫描可重试且不会二次 mint rerun/intent。
+- compiled restart barrier 固定在 seal `dbTxSync` 返回后的第一同步 edge、任何 post-seal await/yield/nested dispatch 之前；replay 不进入
+  fault seam。E2E 保持真正的 SIGKILL commit-before-wake 窗口，没有通过缩短窗口或改预期绕过 durable convergence。
+- Event Center 原页面现有 committed-delivery view 支持 producer/consumer stage、family、aggregate/seq、consumer、attempt、error、next retry、
+  shadow badge与 dead-letter observed-state CAS retry；成功、非 current epoch与 shadow delivery不能误重跑。
+- continuous dispatcher 的空队列 reconcile 由 `8f95c423fb594105cc136324e3b2f20397a465ed` 改为 exact predicate 的只读
+  preflight；只有 candidate 才进入 `BEGIN IMMEDIATE`，transaction 内仍重查并 CAS。有 event 在 read-false 后提交时，由 after-commit
+  nudge 与一秒周期 reconcile 收敛，不拿耐久性换写锁吞吐。
+- final canonical payload / initial pin / forward repin 为 `f94290d715365ee6c46e927c211a00326834157b` →
+  `d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6`，source digest 为
+  `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`。
+- exact SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 的 Main CI `33268925250` terminal success。
+  Backend durable convergence / transaction source locks 与 RFC-294 restart spec 三条 case 均通过；全 run 的 static、build、frontend、
+  backend、三平台 Playwright 与 required aggregator 全绿。该 SHA 的 e2e-full `33268950624`、e2e-webkit `33268950212`、
+  evidence `33268949064`、git-protocols `33268950157`、integration-opencode `33268949548`、maintenance-soak `33268952181`、
+  visual `33268950915` 与 windows-platform `33268951134` 也全部终态 success；maintenance 以 100-client/full/180s 同 SHA
+  attempt 2 通过，未调整阈值或源码。
+
+这些结果完整满足 §14 的 W3 architecture exit；只关闭 RFC-294 W3，不改变 W4/W5/W9 的独立 successor 与批准门。
