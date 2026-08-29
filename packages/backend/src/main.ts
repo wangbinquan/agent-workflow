@@ -118,7 +118,6 @@ async function main(): Promise<void> {
       console.log(
         JSON.stringify({
           standaloneHost: {
-            isStandaloneExecutable: Bun.isStandaloneExecutable,
             processExecPath: process.execPath,
             argv0: Bun.argv[0],
             argv1: Bun.argv[1],
