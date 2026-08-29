@@ -594,6 +594,13 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       } catch {
         launcherSpawnError = encoded
       }
+      // A launcher-side failure may happen before any target exists, so there
+      // is no later OUTPUT record. ERROR is the terminal 0-byte barrier for
+      // that path; any bytes already observed by a post-spawn failure remain
+      // retained by the pumps before they close.
+      const noTargetOutput = { stdoutBytes: 0, stderrBytes: 0 }
+      launcherOutputResolve?.(noTargetOutput)
+      launcherOutputSeenResolve?.()
       return true
     }
     if (
