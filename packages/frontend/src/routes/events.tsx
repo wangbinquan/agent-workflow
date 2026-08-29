@@ -146,6 +146,26 @@ interface EventDeliveryStatus {
   createdAt: number
 }
 
+interface CommittedEventDeliveryStatus {
+  eventId: string
+  stage: 'producer-publication' | 'consumer-delivery'
+  producer: 'task-execution' | 'collaboration'
+  family: 'task-lifecycle' | 'review' | 'clarify' | 'questions'
+  eventType: string
+  aggregateKind: 'task' | 'review-round' | 'clarify-round' | 'question-gate'
+  aggregateId: string
+  aggregateSeq: number
+  consumerId: string
+  mode: 'shadow' | 'dispatchable'
+  state: 'pending' | 'claimed' | 'accepted' | 'dead-letter'
+  attemptCount: number
+  nextAttemptAt: string | null
+  leaseEpoch: number
+  lastErrorSummary: string | null
+  updatedAt: string
+  canRetry: boolean
+}
+
 interface EventRecordAudit {
   eventId: string
   eventTypeRef: ExactRef
@@ -158,8 +178,10 @@ interface EventRecordAudit {
 }
 
 type SubscriptionView = 'rules' | 'audit'
-type DeliveryView = 'consumer' | 'source' | 'webhook'
+type DeliveryView = 'consumer' | 'committed' | 'source' | 'webhook'
 type DeliveryStateFilter = 'all' | EventDeliveryStatus['state']
+type CommittedDeliveryStageFilter = 'all' | CommittedEventDeliveryStatus['stage']
+type CommittedDeliveryFamilyFilter = 'all' | CommittedEventDeliveryStatus['family']
 const EVENT_AUDIT_PAGE_SIZE = 50
 
 interface ObserverHealth {
@@ -371,6 +393,14 @@ function EventsPage(): ReactElement {
   const [deliveryPage, setDeliveryPage] = useState(1)
   const [deliveryState, setDeliveryState] = useState<DeliveryStateFilter>('all')
   const [deliverySubscriber, setDeliverySubscriber] = useState('')
+  const [committedDeliveryPage, setCommittedDeliveryPage] = useState(1)
+  const [committedDeliveryState, setCommittedDeliveryState] = useState<DeliveryStateFilter>('all')
+  const [committedDeliveryStage, setCommittedDeliveryStage] =
+    useState<CommittedDeliveryStageFilter>('all')
+  const [committedDeliveryFamily, setCommittedDeliveryFamily] =
+    useState<CommittedDeliveryFamilyFilter>('all')
+  const [committedDeliveryAggregate, setCommittedDeliveryAggregate] = useState('')
+  const [committedDeliveryConsumer, setCommittedDeliveryConsumer] = useState('')
   const [sourceAuditPage, setSourceAuditPage] = useState(1)
   const [sourceAuditSource, setSourceAuditSource] = useState('')
 
@@ -419,6 +449,44 @@ function EventsPage(): ReactElement {
     placeholderData: keepPreviousData,
     refetchInterval: 5_000,
   })
+  const committedDeliveries = useQuery<EventPage<CommittedEventDeliveryStatus>>({
+    queryKey: [
+      'event-center',
+      'committed-deliveries',
+      committedDeliveryPage,
+      committedDeliveryState,
+      committedDeliveryStage,
+      committedDeliveryFamily,
+      committedDeliveryAggregate.trim(),
+      committedDeliveryConsumer.trim(),
+    ],
+    queryFn: ({ signal }) => {
+      const parameters = new URLSearchParams({
+        page: String(committedDeliveryPage),
+        limit: String(EVENT_AUDIT_PAGE_SIZE),
+      })
+      if (committedDeliveryState !== 'all') {
+        parameters.set('state', committedDeliveryState)
+      }
+      if (committedDeliveryStage !== 'all') {
+        parameters.set('stage', committedDeliveryStage)
+      }
+      if (committedDeliveryFamily !== 'all') {
+        parameters.set('family', committedDeliveryFamily)
+      }
+      const aggregateId = committedDeliveryAggregate.trim()
+      if (aggregateId !== '') parameters.set('aggregateId', aggregateId)
+      const consumerId = committedDeliveryConsumer.trim()
+      if (consumerId !== '') parameters.set('consumerId', consumerId)
+      return api.get(
+        `/api/event-center/committed-deliveries/page?${parameters.toString()}`,
+        undefined,
+        signal,
+      )
+    },
+    placeholderData: keepPreviousData,
+    refetchInterval: 5_000,
+  })
   const sourceEvents = useQuery<EventPage<EventRecordAudit>>({
     queryKey: ['event-center', 'events', sourceAuditPage, sourceAuditSource],
     queryFn: ({ signal }) =>
@@ -436,6 +504,19 @@ function EventsPage(): ReactElement {
       await qc.invalidateQueries({ queryKey: ['event-center'] })
     },
   })
+  const retryCommittedDelivery = useMutation({
+    mutationFn: (delivery: CommittedEventDeliveryStatus) =>
+      api.post(
+        `/api/event-center/committed-deliveries/${encodeURIComponent(delivery.eventId)}/${encodeURIComponent(delivery.consumerId)}/retry`,
+        {
+          observedLeaseEpoch: delivery.leaseEpoch,
+          observedUpdatedAt: Date.parse(delivery.updatedAt),
+        },
+      ),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['event-center', 'committed-deliveries'] })
+    },
+  })
 
   useEffect(() => {
     if (subscriptions.data !== undefined && subscriptionPage > subscriptions.data.pageCount) {
@@ -448,6 +529,14 @@ function EventsPage(): ReactElement {
     }
   }, [deliveries.data, deliveryPage])
   useEffect(() => {
+    if (
+      committedDeliveries.data !== undefined &&
+      committedDeliveryPage > committedDeliveries.data.pageCount
+    ) {
+      setCommittedDeliveryPage(committedDeliveries.data.pageCount)
+    }
+  }, [committedDeliveries.data, committedDeliveryPage])
+  useEffect(() => {
     if (sourceEvents.data !== undefined && sourceAuditPage > sourceEvents.data.pageCount) {
       setSourceAuditPage(sourceEvents.data.pageCount)
     }
@@ -459,6 +548,7 @@ function EventsPage(): ReactElement {
     subscriptions.isPending ||
     observers.isPending ||
     deliveries.isPending ||
+    committedDeliveries.isPending ||
     sourceEvents.isPending ||
     actor.isLoading
   ) {
@@ -470,6 +560,7 @@ function EventsPage(): ReactElement {
     subscriptions.error ??
     observers.error ??
     deliveries.error ??
+    committedDeliveries.error ??
     sourceEvents.error
   if (error !== null) return <ErrorBanner error={error} />
   if (
@@ -478,6 +569,7 @@ function EventsPage(): ReactElement {
     subscriptions.data === undefined ||
     observers.data === undefined ||
     deliveries.data === undefined ||
+    committedDeliveries.data === undefined ||
     sourceEvents.data === undefined
   ) {
     return <LoadingState />
@@ -1016,6 +1108,7 @@ function EventsPage(): ReactElement {
                   testidPrefix="event-delivery-view"
                   options={[
                     { value: 'consumer', label: zh ? '投递记录' : 'Delivery records' },
+                    { value: 'committed', label: zh ? '已提交事件' : 'Committed events' },
                     { value: 'source', label: zh ? '事件记录' : 'Source events' },
                     { value: 'webhook', label: zh ? 'Webhook事件' : 'Webhook events' },
                   ]}
@@ -1127,6 +1220,237 @@ function EventsPage(): ReactElement {
                       pageCount={deliveries.data.pageCount}
                       onPageChange={setDeliveryPage}
                       data-testid="event-delivery-pagination"
+                    />
+                  ) : null}
+                </section>
+              ) : deliveryView === 'committed' ? (
+                <section className="employee-node-panel">
+                  <header>
+                    <div>
+                      <span className="employee-node-panel__eyebrow">
+                        {zh ? '已提交事件' : 'Committed events'}
+                      </span>
+                      <h2>
+                        {zh
+                          ? '生产者发布与消费者投递状态'
+                          : 'Producer publication and consumer delivery state'}
+                      </h2>
+                      <p>
+                        {zh
+                          ? '按同一份已提交事实定位影子记录、积压、重试与死信；人工重试使用当前行版本做冲突保护。'
+                          : 'Inspect shadow records, backlog, retries, and dead letters against the same committed fact. Manual retry uses the observed row version for conflict protection.'}
+                      </p>
+                    </div>
+                  </header>
+                  <FilterBar ariaLabel={zh ? '已提交事件筛选' : 'Committed event filters'}>
+                    <Segmented<DeliveryStateFilter>
+                      value={committedDeliveryState}
+                      onChange={(value) => {
+                        setCommittedDeliveryState(value)
+                        setCommittedDeliveryPage(1)
+                      }}
+                      ariaLabel={zh ? '按处理状态筛选' : 'Filter by delivery state'}
+                      options={[
+                        { value: 'all', label: zh ? '全部' : 'All' },
+                        { value: 'pending', label: zh ? '待处理' : 'Pending' },
+                        { value: 'claimed', label: zh ? '处理中' : 'Processing' },
+                        { value: 'accepted', label: zh ? '已确认' : 'Accepted' },
+                        { value: 'dead-letter', label: zh ? '死信' : 'Dead letter' },
+                      ]}
+                    />
+                    <FilterField label={zh ? '阶段' : 'Stage'}>
+                      <Select
+                        value={committedDeliveryStage}
+                        onChange={(value) => {
+                          setCommittedDeliveryStage(value)
+                          setCommittedDeliveryPage(1)
+                        }}
+                        options={[
+                          { value: 'all', label: zh ? '全部阶段' : 'All stages' },
+                          {
+                            value: 'producer-publication',
+                            label: zh ? '生产者发布' : 'Producer publication',
+                          },
+                          {
+                            value: 'consumer-delivery',
+                            label: zh ? '消费者投递' : 'Consumer delivery',
+                          },
+                        ]}
+                        ariaLabel={zh ? '按阶段筛选' : 'Filter by stage'}
+                        data-testid="committed-delivery-stage-filter"
+                      />
+                    </FilterField>
+                    <FilterField label={zh ? '事件族' : 'Family'}>
+                      <Select
+                        value={committedDeliveryFamily}
+                        onChange={(value) => {
+                          setCommittedDeliveryFamily(value)
+                          setCommittedDeliveryPage(1)
+                        }}
+                        options={[
+                          { value: 'all', label: zh ? '全部事件族' : 'All families' },
+                          { value: 'task-lifecycle', label: 'task-lifecycle' },
+                          { value: 'review', label: 'review' },
+                          { value: 'clarify', label: 'clarify' },
+                          { value: 'questions', label: 'questions' },
+                        ]}
+                        ariaLabel={zh ? '按事件族筛选' : 'Filter by event family'}
+                        data-testid="committed-delivery-family-filter"
+                      />
+                    </FilterField>
+                    <FilterField label={zh ? '聚合标识' : 'Aggregate ID'}>
+                      <TextInput
+                        type="search"
+                        value={committedDeliveryAggregate}
+                        onChange={(value) => {
+                          setCommittedDeliveryAggregate(value)
+                          setCommittedDeliveryPage(1)
+                        }}
+                        placeholder={zh ? '精确输入聚合标识' : 'Exact aggregate ID'}
+                        aria-label={zh ? '按聚合标识筛选' : 'Filter by aggregate ID'}
+                        data-testid="committed-delivery-aggregate-filter"
+                      />
+                    </FilterField>
+                    <FilterField label={zh ? '消费者标识' : 'Consumer ID'}>
+                      <TextInput
+                        type="search"
+                        value={committedDeliveryConsumer}
+                        onChange={(value) => {
+                          setCommittedDeliveryConsumer(value)
+                          setCommittedDeliveryPage(1)
+                        }}
+                        placeholder={zh ? '精确输入消费者标识' : 'Exact consumer ID'}
+                        aria-label={zh ? '按消费者标识筛选' : 'Filter by consumer ID'}
+                        data-testid="committed-delivery-consumer-filter"
+                      />
+                    </FilterField>
+                  </FilterBar>
+                  {retryCommittedDelivery.error === null ? null : (
+                    <ErrorBanner error={retryCommittedDelivery.error} />
+                  )}
+                  <p className="event-center-audit__total">
+                    {zh
+                      ? `共 ${committedDeliveries.data.total} 条投递状态`
+                      : `${committedDeliveries.data.total} delivery states`}
+                  </p>
+                  <div className="node-tool-list" data-testid="committed-delivery-list">
+                    {committedDeliveries.data.items.length === 0 ? (
+                      <p className="node-tool-list__empty">
+                        {zh
+                          ? '当前筛选下还没有已提交事件。'
+                          : 'No committed events match these filters.'}
+                      </p>
+                    ) : (
+                      committedDeliveries.data.items.map((delivery) => (
+                        <article
+                          key={`${delivery.eventId}:${delivery.consumerId}`}
+                          className="node-tool-row"
+                        >
+                          <div>
+                            <strong>{delivery.eventType}</strong>
+                            <span>
+                              {delivery.producer}/{delivery.family} · {delivery.aggregateKind}/
+                              {delivery.aggregateId} #{delivery.aggregateSeq}
+                            </span>
+                            <small>
+                              {delivery.stage === 'producer-publication'
+                                ? zh
+                                  ? '生产者发布'
+                                  : 'Producer publication'
+                                : zh
+                                  ? '消费者投递'
+                                  : 'Consumer delivery'}{' '}
+                              · {delivery.consumerId} · {zh ? '尝试' : 'attempts'}{' '}
+                              {delivery.attemptCount} · {zh ? '更新于' : 'updated'}{' '}
+                              {new Date(delivery.updatedAt).toLocaleString()}
+                              {delivery.nextAttemptAt === null
+                                ? ''
+                                : ` · ${zh ? '下次重试' : 'next retry'} ${new Date(delivery.nextAttemptAt).toLocaleString()}`}
+                            </small>
+                            {delivery.lastErrorSummary === null ? null : (
+                              <details className="event-center-committed-error">
+                                <summary>{zh ? '查看最近错误' : 'Show latest error'}</summary>
+                                <p>{delivery.lastErrorSummary}</p>
+                              </details>
+                            )}
+                          </div>
+                          <div className="employee-summary-card__actions">
+                            {delivery.mode === 'shadow' ? (
+                              <StatusChip kind="info" size="sm">
+                                {zh ? '影子' : 'Shadow'}
+                              </StatusChip>
+                            ) : null}
+                            <StatusChip
+                              kind={
+                                delivery.state === 'accepted'
+                                  ? 'success'
+                                  : delivery.state === 'dead-letter'
+                                    ? 'danger'
+                                    : delivery.state === 'claimed'
+                                      ? 'warn'
+                                      : 'neutral'
+                              }
+                            >
+                              {delivery.state === 'accepted'
+                                ? zh
+                                  ? '已确认'
+                                  : 'Accepted'
+                                : delivery.state === 'dead-letter'
+                                  ? zh
+                                    ? '死信'
+                                    : 'Dead letter'
+                                  : delivery.state === 'claimed'
+                                    ? zh
+                                      ? '处理中'
+                                      : 'Processing'
+                                    : zh
+                                      ? '待处理'
+                                      : 'Pending'}
+                            </StatusChip>
+                            {delivery.canRetry ? (
+                              <button
+                                type="button"
+                                className="btn btn--sm"
+                                disabled={
+                                  !canUpdateSource ||
+                                  (retryCommittedDelivery.isPending &&
+                                    retryCommittedDelivery.variables?.eventId ===
+                                      delivery.eventId &&
+                                    retryCommittedDelivery.variables.consumerId ===
+                                      delivery.consumerId)
+                                }
+                                title={
+                                  canUpdateSource
+                                    ? undefined
+                                    : zh
+                                      ? '需要事件来源更新权限'
+                                      : 'Event-source update permission required'
+                                }
+                                onClick={() => retryCommittedDelivery.mutate(delivery)}
+                                data-testid={`committed-delivery-retry-${delivery.eventId}-${delivery.consumerId}`}
+                              >
+                                {retryCommittedDelivery.isPending &&
+                                retryCommittedDelivery.variables?.eventId === delivery.eventId &&
+                                retryCommittedDelivery.variables.consumerId === delivery.consumerId
+                                  ? zh
+                                    ? '重试中…'
+                                    : 'Retrying…'
+                                  : zh
+                                    ? '重新投递'
+                                    : 'Retry'}
+                              </button>
+                            ) : null}
+                          </div>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                  {committedDeliveries.data.total > 0 ? (
+                    <Pagination
+                      page={committedDeliveryPage}
+                      pageCount={committedDeliveries.data.pageCount}
+                      onPageChange={setCommittedDeliveryPage}
+                      data-testid="committed-delivery-pagination"
                     />
                   ) : null}
                 </section>

@@ -2365,6 +2365,22 @@
   font-size: var(--font-sm);
 }
 
+.event-center-committed-error {
+  margin-top: var(--space-1);
+  color: var(--danger);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+
+.event-center-committed-error > summary {
+  cursor: pointer;
+}
+
+.event-center-committed-error > p {
+  margin: var(--space-1) 0 0;
+  white-space: pre-wrap;
+}
+
 .event-response-rule-sections,
 .event-response-rules,
 .event-response-rule-editor {

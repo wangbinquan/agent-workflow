@@ -5849,6 +5849,179 @@ export const taskLifecycleEventOutbox = sqliteTable(
   }),
 )
 
+// -----------------------------------------------------------------------------
+// RFC-341 — source-neutral committed-event ledger.
+//
+// Producer-owned codecs live in task-execution/collaboration.  These tables
+// deliberately know only immutable envelopes, aggregate ordering, rollout
+// epochs and independent consumer delivery receipts.
+// -----------------------------------------------------------------------------
+export const committedEventAggregateHeads = sqliteTable(
+  'committed_event_aggregate_heads',
+  {
+    producer: text('producer', { enum: ['task-execution', 'collaboration'] }).notNull(),
+    family: text('family', {
+      enum: ['task-lifecycle', 'review', 'clarify', 'questions'],
+    }).notNull(),
+    aggregateKind: text('aggregate_kind', {
+      enum: ['task', 'review-round', 'clarify-round', 'question-gate'],
+    }).notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    lastSeq: integer('last_seq').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({
+      columns: [t.producer, t.family, t.aggregateKind, t.aggregateId],
+    }),
+    lastSeqPositive: check(
+      'committed_event_aggregate_heads_last_seq_positive',
+      sql`${t.lastSeq} > 0`,
+    ),
+  }),
+)
+
+export const committedEvents = sqliteTable(
+  'committed_events',
+  {
+    id: text('id').primaryKey(),
+    eventGroupId: text('event_group_id').notNull(),
+    eventGroupOrdinal: integer('event_group_ordinal').notNull(),
+    producer: text('producer', { enum: ['task-execution', 'collaboration'] }).notNull(),
+    family: text('family', {
+      enum: ['task-lifecycle', 'review', 'clarify', 'questions'],
+    }).notNull(),
+    eventType: text('event_type').notNull(),
+    schemaVersion: integer('schema_version').notNull(),
+    aggregateKind: text('aggregate_kind', {
+      enum: ['task', 'review-round', 'clarify-round', 'question-gate'],
+    }).notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    aggregateSeq: integer('aggregate_seq').notNull(),
+    operationRef: text('operation_ref').notNull(),
+    correlationRef: text('correlation_ref'),
+    causationRef: text('causation_ref'),
+    occurredAt: integer('occurred_at').notNull(),
+    payloadJson: text('payload_json').notNull(),
+    payloadDigest: text('payload_digest').notNull(),
+    deliveryMode: text('delivery_mode', { enum: ['shadow', 'dispatchable'] }).notNull(),
+    producerEpoch: integer('producer_epoch').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    aggregateSeqUq: uniqueIndex('committed_events_aggregate_seq_unique').on(
+      t.producer,
+      t.family,
+      t.aggregateKind,
+      t.aggregateId,
+      t.aggregateSeq,
+    ),
+    groupOrdinalUq: uniqueIndex('committed_events_group_ordinal_unique').on(
+      t.eventGroupId,
+      t.eventGroupOrdinal,
+    ),
+    operationIdx: index('idx_committed_events_operation').on(t.producer, t.family, t.operationRef),
+    aggregateIdx: index('idx_committed_events_aggregate').on(
+      t.producer,
+      t.family,
+      t.aggregateKind,
+      t.aggregateId,
+      t.aggregateSeq,
+    ),
+    schemaV1: check('committed_events_schema_v1', sql`${t.schemaVersion} = 1`),
+    groupOrdinalNonNegative: check(
+      'committed_events_group_ordinal_nonnegative',
+      sql`${t.eventGroupOrdinal} >= 0`,
+    ),
+    aggregateSeqPositive: check(
+      'committed_events_aggregate_seq_positive',
+      sql`${t.aggregateSeq} > 0`,
+    ),
+    producerEpochPositive: check(
+      'committed_events_producer_epoch_positive',
+      sql`${t.producerEpoch} > 0`,
+    ),
+    payloadJsonValid: check(
+      'committed_events_payload_json_valid',
+      sql`json_valid(${t.payloadJson})`,
+    ),
+    payloadDigestShape: check(
+      'committed_events_payload_digest_shape',
+      sql`length(${t.payloadDigest}) = 64`,
+    ),
+  }),
+)
+
+export const committedEventDeliveries = sqliteTable(
+  'committed_event_deliveries',
+  {
+    eventId: text('event_id')
+      .notNull()
+      .references(() => committedEvents.id, { onDelete: 'cascade' }),
+    consumerId: text('consumer_id').notNull(),
+    deliveryClass: text('delivery_class', { enum: ['critical', 'rebuildable'] }).notNull(),
+    state: text('state', { enum: ['pending', 'claimed', 'accepted', 'dead-letter'] })
+      .notNull()
+      .default('pending'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at').notNull(),
+    claimedBy: text('claimed_by'),
+    leaseEpoch: integer('lease_epoch').notNull().default(0),
+    claimExpiresAt: integer('claim_expires_at'),
+    lastErrorCode: text('last_error_code'),
+    lastErrorSummary: text('last_error_summary'),
+    replayGeneration: integer('replay_generation').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    acceptedAt: integer('accepted_at'),
+    deadLetterAt: integer('dead_letter_at'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.eventId, t.consumerId] }),
+    dueIdx: index('idx_committed_event_deliveries_due').on(
+      t.state,
+      t.nextAttemptAt,
+      t.claimExpiresAt,
+      t.createdAt,
+    ),
+    consumerStateIdx: index('idx_committed_event_deliveries_consumer_state').on(
+      t.consumerId,
+      t.state,
+      t.updatedAt,
+    ),
+    attemptNonNegative: check(
+      'committed_event_deliveries_attempt_nonnegative',
+      sql`${t.attemptCount} >= 0`,
+    ),
+    leaseEpochNonNegative: check(
+      'committed_event_deliveries_lease_epoch_nonnegative',
+      sql`${t.leaseEpoch} >= 0`,
+    ),
+    replayGenerationNonNegative: check(
+      'committed_event_deliveries_replay_generation_nonnegative',
+      sql`${t.replayGeneration} >= 0`,
+    ),
+  }),
+)
+
+export const committedEventFamilyCutovers = sqliteTable(
+  'committed_event_family_cutovers',
+  {
+    producer: text('producer', { enum: ['task-execution', 'collaboration'] }).notNull(),
+    family: text('family', {
+      enum: ['task-lifecycle', 'review', 'clarify', 'questions'],
+    }).notNull(),
+    mode: text('mode', { enum: ['legacy', 'shadow', 'dispatchable'] }).notNull(),
+    epoch: integer('epoch').notNull(),
+    changedAt: integer('changed_at').notNull(),
+    changeRef: text('change_ref').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.producer, t.family] }),
+    epochPositive: check('committed_event_family_cutovers_epoch_positive', sql`${t.epoch} > 0`),
+  }),
+)
+
 export const eventSubscriptions = sqliteTable(
   'event_subscriptions',
   {

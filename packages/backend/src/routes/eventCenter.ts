@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { actorOf } from '@/auth/actor'
 import type { EventCenterModule } from '@/modules/event-center/composition'
 import { registerRoute } from '@/routes/registry'
-import { ForbiddenError } from '@/util/errors'
+import { ConflictError, ForbiddenError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import { jsonDocumentResponse } from '@/util/jsonDocument'
 
@@ -36,6 +36,12 @@ const observationBodySchema = z
     triggerParameters: z.record(z.string(), z.string()).nullable().optional(),
   })
   .strict()
+const committedDeliveryRetryBodySchema = z
+  .object({
+    observedLeaseEpoch: z.number().int().nonnegative(),
+    observedUpdatedAt: z.number().int().nonnegative(),
+  })
+  .strict()
 
 function pageNumber(value: string | undefined, fallback: number, maximum?: number): number {
   const parsed = Math.trunc(Number(value))
@@ -59,6 +65,81 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       summary: 'List localized event types and observation sources',
     },
     () => jsonDocumentResponse(module.queries.catalog.catalogJson()),
+  )
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/event-center/committed-deliveries/page',
+      permissions: ['event-sources:read'],
+      tokenAccess: 'allow',
+      summary: 'List committed producer and consumer delivery state',
+    },
+    (c) => {
+      const state = z
+        .enum(['pending', 'claimed', 'accepted', 'dead-letter'])
+        .nullable()
+        .catch(null)
+        .parse(c.req.query('state'))
+      const stage = z
+        .enum(['producer-publication', 'consumer-delivery'])
+        .nullable()
+        .catch(null)
+        .parse(c.req.query('stage'))
+      const producer = z
+        .enum(['task-execution', 'collaboration'])
+        .nullable()
+        .catch(null)
+        .parse(c.req.query('producer'))
+      const family = z
+        .enum(['task-lifecycle', 'review', 'clarify', 'questions'])
+        .nullable()
+        .catch(null)
+        .parse(c.req.query('family'))
+      return c.json(
+        module.committedEvents.queries.deliveryPage({
+          page: pageNumber(c.req.query('page'), 1),
+          limit: pageNumber(c.req.query('limit'), 50, 200),
+          stage,
+          state,
+          producer,
+          family,
+          aggregateId: optionalQuery(c.req.query('aggregateId')),
+          consumerId: optionalQuery(c.req.query('consumerId')),
+        }),
+      )
+    },
+  )
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/event-center/committed-deliveries/:eventId/:consumerId/retry',
+      permissions: ['event-sources:update'],
+      tokenAccess: 'never',
+      summary: 'Retry one dead-letter committed-event delivery with an observed-state CAS',
+    },
+    async (c) => {
+      const body = committedDeliveryRetryBodySchema.parse(await safeJsonOrEmpty(c.req.raw))
+      try {
+        return c.json(
+          module.committedEvents.commands.retry({
+            eventId: c.req.param('eventId'),
+            consumerId: c.req.param('consumerId'),
+            observedLeaseEpoch: body.observedLeaseEpoch,
+            observedUpdatedAt: body.observedUpdatedAt,
+          }),
+        )
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('retry lost CAS')) {
+          throw new ConflictError(
+            'committed-event-retry-conflict',
+            'the committed-event delivery changed before retry; refresh and try again',
+          )
+        }
+        throw error
+      }
+    },
   )
   registerRoute(
     app,

@@ -21,6 +21,18 @@ import { createSqliteEventResponseRuleStore } from './infrastructure/sqliteEvent
 import type { EventObservationCommandPort } from './public/commands'
 import type { EventCenterParticipant, EventObserverControlParticipant } from './public/participants'
 import type { EventCenterCatalogQueryPort, EventCenterOperationsQueryPort } from './public/queries'
+import {
+  committedEventDeliveryPage,
+  retryCommittedEventDelivery,
+} from '@/platform/events/committed/sqliteStore'
+import type {
+  CommittedEventDeliveryPage,
+  CommittedEventDeliveryState,
+  CommittedEventFamily,
+  CommittedEventProducer,
+  ManualCommittedEventRetryInput,
+  ManualCommittedEventRetryReceipt,
+} from '@/platform/events/committed/types'
 
 export { runEventCenterCycle, startEventCenterWorker } from './application/eventCenterWorker'
 
@@ -74,6 +86,23 @@ export interface EventCenterModule {
     runOneNotification(
       deliveryId?: string,
     ): Promise<'completed' | 'retried' | 'dead-letter' | 'idle'>
+  }
+  readonly committedEvents: {
+    readonly queries: {
+      deliveryPage(input: {
+        page: number
+        limit: number
+        stage: 'producer-publication' | 'consumer-delivery' | null
+        state: CommittedEventDeliveryState | null
+        producer: CommittedEventProducer | null
+        family: CommittedEventFamily | null
+        aggregateId: string | null
+        consumerId: string | null
+      }): CommittedEventDeliveryPage
+    }
+    readonly commands: {
+      retry(input: ManualCommittedEventRetryInput): ManualCommittedEventRetryReceipt
+    }
   }
 }
 
@@ -310,6 +339,14 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
     worker: {
       runOneDueObserver: () => service.runOneDueObserver(),
       runOneNotification: (deliveryId) => service.runOneNotification(deliveryId),
+    },
+    committedEvents: {
+      queries: {
+        deliveryPage: (input) => committedEventDeliveryPage(options.db, input),
+      },
+      commands: {
+        retry: (input) => retryCommittedEventDelivery(options.db, input),
+      },
     },
   }
 }
