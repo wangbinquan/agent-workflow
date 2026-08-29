@@ -53,7 +53,13 @@ export interface ManagedProcessActivationFrame {
 }
 
 function selfInvocation(): string[] {
-  if (IS_EMBEDDED) return [process.execPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+  if (IS_EMBEDDED) {
+    // In a Windows standalone executable `process.execPath` can name Bun's
+    // embedded runtime rather than the containing application. argv[0] is the
+    // executable the OS actually launched, so only it can re-enter main.ts's
+    // private launcher command.
+    return [Bun.argv[0] ?? process.execPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+  }
   // Development/test launches do not need to import the daemon's complete CLI
   // graph for every runtime attempt.  Invoke this deliberately small module
   // directly; the embedded binary keeps using main.ts's hidden subcommand.
