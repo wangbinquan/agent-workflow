@@ -1967,6 +1967,14 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'CanonicalControlTransaction',
     }
   }
+  if (/services\/humanGateContinuationEffects\.ts#releaseClarifyConvergenceForRetry/.test(value)) {
+    return {
+      authorityKind: 'worker-epoch',
+      controlSubtype: null,
+      revisionPredicate: 'exact-intent-task-kind-claimed-epoch-and-state',
+      requiredBrandedProof: 'OwnershipToken+ExactClaimedIntentFence',
+    }
+  }
   if (
     /services\/humanGateContinuationEffects\.ts#projectWorkspaceRollbackTx|modules\/task-execution\/application\/drive\/gateContinuationEffectStep\.ts#run/.test(
       value,
