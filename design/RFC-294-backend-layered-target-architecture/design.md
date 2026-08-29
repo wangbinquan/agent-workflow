@@ -13,7 +13,9 @@
 > 已完成 W2-C T0～T12：production payload/pin `1271ecb20` → `cfe1326b4`，最终功能 SHA `8e58eb05f`
 > 的主 CI `33142147682` attempt 2 为 35/35 success，七条 production-equivalent scheduled workflow 为 19/19 jobs
 > success。W2-C 已关闭；[RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已于 2026-08-29 完成 T0～T11、
-> canonical replay 与 hosted/scheduled closeout并关闭 W2-D。W3 是下一架构调研节点，但尚未自动获得 production 批准。
+> canonical replay 与 hosted/scheduled closeout并关闭 W2-D。
+> [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已承接 W3 为 Draft；产品口径已确认，
+> 但 proposal/plan 尚未获得 production 实施批准。
 > 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
 
 ## 1. 设计原则

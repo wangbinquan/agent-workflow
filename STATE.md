@@ -2,6 +2,15 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 📝 **Draft RFC（产品口径已确认，生产实施待批准，2026-08-29）：[RFC-341 生命周期已提交事件与协作命令收口（RFC-294 W3）](design/RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md)。**
+> current source `1947e1ad02d3eb3f8a0c062f2a2f42a1ce5f61ce` 证明 RFC-328/RFC-310 已有 task lifecycle
+> outbox/publisher pilot，RFC-333 已有三类人工门原子 decision + durable continuation intent；尚未收口的是 transaction 后的
+> terminal/watch/budget/prune/direct WS side channels、review/clarify/questions direct broadcasts，以及 route/request 亲自调用
+> `wakeHumanGateContinuation`。用户已按推荐确认：一份 RFC 完整关闭 task lifecycle + collaboration W3；保持
+> `DB commit → immediate WS projection/worker nudge → HTTP response`；持续 worker接管 continuation；Event Center 原页展示
+> producer/consumer failure与人工重试；本轮只做功能、恢复、顺序和用户可见行为。三件套、索引与RFC-294 successor已落，
+> proposal D1～D12 / plan T2～T14 尚待用户明确“批准实施 RFC-341”；当前没有任何production/schema改动或实施授权。
+
 > 🛠️ **进行中 RFC（候选实现完成，2026-08-28）：[RFC-340 节点级意见型评审人授权与配置](design/RFC-340-node-scoped-comment-reviewers/proposal.md)。**
 > 用户已明确 reviewer 不能删除意见、通过、重新生成、退回或逐篇取舍，只能为被指派的 review 节点新增意见并修改自己的 pending 意见；
 > 该角色不获得整任务可见性。
@@ -65,7 +74,8 @@
 > `4c8497c2af18c04540bbd6e9b5f3d887a8276a85`，digest
 > `sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7`；backend/repo SCC=`4/6`、
 > task-execution-containing SCC=`0`、KNOWN=`31`。所有 wrapper/nesting/replay/merge/park/terminal/error/persisted
-> compatibility 保持，无新增 schema、wire、安全策略、权限或功能限制。RFC-294 只关闭 W2-D；W3 是下一调研节点，尚未获生产授权。
+> compatibility 保持，无新增 schema、wire、安全策略、权限或功能限制。RFC-294 只关闭 W2-D；W3 successor 已起草为
+> RFC-341，产品口径已确认但生产实施仍待明确批准。
 
 > ✅ **已完成 RFC（Done，2026-08-28）：[RFC-334 NodeExecutorRegistry（RFC-294 W2-C）](design/RFC-334-node-executor-registry/proposal.md)。**
 > source pin `0d296ff1bd72a7bf1e3fef8bcc506fa511e11b34` 锁定 14 个 `NodeKind`；公共 abort/branch prelude、14-key closed
