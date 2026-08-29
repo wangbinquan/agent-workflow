@@ -3,7 +3,7 @@
     "consumers": 295,
     "exactEntrypointFiles": 37,
     "governedFieldSurfaces": 5,
-    "methods": 200,
+    "methods": 196,
     "opaqueTypeRefs": 5,
     "recursiveFields": 1741,
     "symbols": 403
@@ -2155,14 +2155,8 @@
       "file": "packages/backend/src/modules/collaboration/public/participants.ts",
       "id": "public:collaboration:participants:appendHumanGateDecisionCommittedEventTx",
       "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:e5d0b587bb76fb70f0e15c629b83c8f4b7136d002ce861d20698c209d894dbb2"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx",
       "productionConsumers": [
         {
           "context": "legacy",
@@ -2191,7 +2185,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:4bfc58d337c32a9721c53330315a134120eb15e6d09e554ccf9e4ce6e5ac187f",
+      "signatureDigest": "sha256:de5874eaa62adec534ad9a970072b7c45258ed6538c35ecba558662e7c4a840d",
       "status": "target-context-current-surface",
       "symbol": "appendHumanGateDecisionCommittedEventTx",
       "transaction": "caller-tx",
@@ -2217,14 +2211,8 @@
       "file": "packages/backend/src/modules/collaboration/public/participants.ts",
       "id": "public:collaboration:participants:appendQuestionDispatchCommittedEventTx",
       "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:4a1ff6a5a2d150bccb74f6913868197a6ff01db76e9d88f22374d7b630d2ee7f"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendQuestionDispatchCommittedEventTx",
       "productionConsumers": [
         {
           "context": "legacy",
@@ -2235,7 +2223,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:cd151acc8098a20d498ce6c0a0f893246dd16f3681ea714f579532ba396a1899",
+      "signatureDigest": "sha256:3b8a8e4260eb7ecdd5e4f716c4e2b0e9c4e49892020ccf182453dda90f3f9645",
       "status": "target-context-current-surface",
       "symbol": "appendQuestionDispatchCommittedEventTx",
       "transaction": "caller-tx",
@@ -2261,14 +2249,8 @@
       "file": "packages/backend/src/modules/collaboration/public/participants.ts",
       "id": "public:collaboration:participants:appendReviewCommentsChangedCommittedEventTx",
       "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:0f73451154c41a95707df272837445487002941563bd33ecac1d290e81dd95d3"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewCommentsChangedCommittedEventTx",
       "productionConsumers": [
         {
           "context": "legacy",
@@ -2279,7 +2261,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:d99f054c2962f2e5820209314fd7d9fdccf406ded2da769a8d50ec385351626c",
+      "signatureDigest": "sha256:c7820f2d70894c1b21c7d7bd6c30af4bc5a2f983e0266e3c2d5ac2358c21199c",
       "status": "target-context-current-surface",
       "symbol": "appendReviewCommentsChangedCommittedEventTx",
       "transaction": "caller-tx",
@@ -2305,14 +2287,8 @@
       "file": "packages/backend/src/modules/collaboration/public/participants.ts",
       "id": "public:collaboration:participants:appendReviewSelectionChangedCommittedEventTx",
       "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:2c17a5f0f7e8c97533873634675d2acf19d33f8de2ebb797a4d841221a8a207c"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewSelectionChangedCommittedEventTx",
       "productionConsumers": [
         {
           "context": "legacy",
@@ -2323,7 +2299,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:391e41167153266bcdaf3b1f6a83f8cfab4048dc5929bf7f2815b62a551c0001",
+      "signatureDigest": "sha256:cf8f878e6a9e266690b82871b4e3991fb1ce27ea390c5f40b2bf83d5fab5af15",
       "status": "target-context-current-surface",
       "symbol": "appendReviewSelectionChangedCommittedEventTx",
       "transaction": "caller-tx",
@@ -25697,7 +25673,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8ee1ff56be0646a7ea04f6944df72df4634f04ddc347bb044b65c69d73a72bce",
+  "sourceDigest": "sha256:148a99a98d9a03347ba897b7eae34c6bcbd1a15810c6bbaee3a2eab7f94b036d",
   "targetContexts": [
     "collaboration",
     "development-automation",

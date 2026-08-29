@@ -2732,7 +2732,7 @@
       "owner": "collaboration",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx",
       "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toSymbol": "appendHumanGateDecisionCommittedEventTx",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -6149,7 +6149,7 @@
       "owner": "collaboration",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx",
       "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toSymbol": "appendHumanGateDecisionCommittedEventTx",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -7900,7 +7900,7 @@
       "owner": "collaboration",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewSelectionChangedCommittedEventTx",
       "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toSymbol": "appendReviewSelectionChangedCommittedEventTx",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -17063,7 +17063,7 @@
       "owner": "collaboration",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx",
       "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toSymbol": "appendHumanGateDecisionCommittedEventTx",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -18253,7 +18253,7 @@
       "owner": "collaboration",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewCommentsChangedCommittedEventTx",
       "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toSymbol": "appendReviewCommentsChangedCommittedEventTx",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -18831,7 +18831,7 @@
       "owner": "collaboration",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendQuestionDispatchCommittedEventTx",
       "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toSymbol": "appendQuestionDispatchCommittedEventTx",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -23319,7 +23319,7 @@
       "owner": "collaboration",
       "removeAfterWave": "W4/W9",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx",
       "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
       "toSymbol": "appendHumanGateDecisionCommittedEventTx",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -27075,7 +27075,7 @@
       "targetSymbol": "appendHumanGateDecisionCommittedEventTx",
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx"
     },
     {
       "edgeKind": "value",
@@ -30355,7 +30355,7 @@
       "targetSymbol": "appendHumanGateDecisionCommittedEventTx",
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx"
     },
     {
       "edgeKind": "value",
@@ -32035,7 +32035,7 @@
       "targetSymbol": "appendReviewSelectionChangedCommittedEventTx",
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewSelectionChangedCommittedEventTx"
     },
     {
       "edgeKind": "type",
@@ -41187,7 +41187,7 @@
       "targetSymbol": "appendHumanGateDecisionCommittedEventTx",
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx"
     },
     {
       "edgeKind": "value",
@@ -42403,7 +42403,7 @@
       "targetSymbol": "appendReviewCommentsChangedCommittedEventTx",
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewCommentsChangedCommittedEventTx"
     },
     {
       "edgeKind": "value",
@@ -42947,7 +42947,7 @@
       "targetSymbol": "appendQuestionDispatchCommittedEventTx",
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendQuestionDispatchCommittedEventTx"
     },
     {
       "edgeKind": "value",
@@ -47395,7 +47395,7 @@
       "targetSymbol": "appendHumanGateDecisionCommittedEventTx",
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx"
     },
     {
       "edgeKind": "value",
@@ -49344,7 +49344,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8ee1ff56be0646a7ea04f6944df72df4634f04ddc347bb044b65c69d73a72bce",
+  "sourceDigest": "sha256:148a99a98d9a03347ba897b7eae34c6bcbd1a15810c6bbaee3a2eab7f94b036d",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -6,7 +6,7 @@
     "moduleFiles": 454,
     "productionFiles": 1771,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 18765
+    "symbolsIncludingFileRoots": 18769
   },
   "entries": [
     {
@@ -15577,9 +15577,61 @@
       "file": "packages/backend/src/modules/collaboration/public/participants.ts",
       "id": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:596b6cc9a051f35875276186163d1aae5bb321b476cf6ff56c6c3e1256fd19db",
+      "signatureDigest": "sha256:978cf9fde70f0afe7bf239ac6543a04c51e573a5b3614f4ec9feda86cd8b75ac",
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "collaboration",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendHumanGateDecisionCommittedEventTx",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:de5874eaa62adec534ad9a970072b7c45258ed6538c35ecba558662e7c4a840d",
+      "status": "current-module",
+      "symbol": "appendHumanGateDecisionCommittedEventTx",
+      "targetContext": "collaboration",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendQuestionDispatchCommittedEventTx",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:3b8a8e4260eb7ecdd5e4f716c4e2b0e9c4e49892020ccf182453dda90f3f9645",
+      "status": "current-module",
+      "symbol": "appendQuestionDispatchCommittedEventTx",
+      "targetContext": "collaboration",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewCommentsChangedCommittedEventTx",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:c7820f2d70894c1b21c7d7bd6c30af4bc5a2f983e0266e3c2d5ac2358c21199c",
+      "status": "current-module",
+      "symbol": "appendReviewCommentsChangedCommittedEventTx",
+      "targetContext": "collaboration",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/public/participants.ts#appendReviewSelectionChangedCommittedEventTx",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:cf8f878e6a9e266690b82871b4e3991fb1ce27ea390c5f40b2bf83d5fab5af15",
+      "status": "current-module",
+      "symbol": "appendReviewSelectionChangedCommittedEventTx",
       "targetContext": "collaboration",
       "targetLayer": "public"
     },
@@ -95059,7 +95111,7 @@
       "file": "packages/backend/src/services/orphans.ts",
       "id": "owner:packages/backend/src/services/orphans.ts#$file",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:99d9b62b89dc41307c8511bf1de237b247f1f99b2527d6b286ccd78a6edb91a0",
+      "signatureDigest": "sha256:069b9edc396e568314418232a4c01d13f7dd668f5c27b399a4bccc7a55bf1e1b",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "task-execution",
@@ -95085,7 +95137,7 @@
       "file": "packages/backend/src/services/orphans.ts",
       "id": "owner:packages/backend/src/services/orphans.ts#reapOrphanRuns",
       "removeAfterWave": "W4/W9",
-      "signatureDigest": "sha256:87fc168d340358aa6c8d4c1434660e38e33a1929d7c2f237d1f6a6684c55f52a",
+      "signatureDigest": "sha256:d2fd25be7738bd105916945c91f3705d5de9a59c5445b25f75700adb77cf0808",
       "status": "legacy-target",
       "symbol": "reapOrphanRuns",
       "targetContext": "task-execution",
@@ -243958,5 +244010,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8ee1ff56be0646a7ea04f6944df72df4634f04ddc347bb044b65c69d73a72bce"
+  "sourceDigest": "sha256:148a99a98d9a03347ba897b7eae34c6bcbd1a15810c6bbaee3a2eab7f94b036d"
 }
