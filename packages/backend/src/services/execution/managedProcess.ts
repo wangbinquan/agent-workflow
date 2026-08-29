@@ -427,9 +427,11 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       // A gated launcher always needs its private activation pipe. The target's
       // actual stdin mode is carried inside the post-receipt frame.
       stdin: launchNonce !== undefined || req.stdin?.mode === 'pipe' ? 'pipe' : 'ignore',
-      // Own process group so the whole descendant tree can be signalled.
-      // Without it a fork()ed grandchild survives every kill we send.
-      detached: true,
+      // POSIX needs a detached process-group leader so -pid reaches every
+      // descendant. Windows has no POSIX process groups and its tree kill is
+      // already owned by Job Object/taskkill; Bun's detached Windows spawn can
+      // lose compiled-child output, so keep that host flat.
+      detached: process.platform !== 'win32',
     })
   } catch (err) {
     cleanupWindowsOutputSpool(outputSpool)

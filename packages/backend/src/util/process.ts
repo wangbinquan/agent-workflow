@@ -52,13 +52,14 @@ export function isProcessAlive(pid: number, opts: ProcessLivenessOptions = {}): 
 }
 
 /**
- * Best-effort kill of `pid`'s WHOLE process group. The runner spawns opencode
- * with `detached: true` (POSIX `setsid()` → the child is its own group
- * leader), so `process.kill(-pid, sig)` reaches grandchildren too — the
- * docker-MCP / shell-tool descendants that a single-pid SIGKILL would orphan.
- * Falls back to a single-pid kill when the group signal fails (ESRCH after
- * exit, EPERM, or a pre-RFC-098 pid that is not a group leader). Returns
- * false when no signal could be delivered at all.
+ * Best-effort kill of `pid`'s WHOLE process tree. POSIX managed processes use
+ * `detached: true` (`setsid()` → the child is its own group leader), so
+ * `process.kill(-pid, sig)` reaches grandchildren too — the docker-MCP /
+ * shell-tool descendants that a single-pid SIGKILL would orphan. Windows
+ * deliberately stays non-detached and uses the Job Object / taskkill branch
+ * below. POSIX falls back to a single-pid kill when the group signal fails
+ * (ESRCH after exit, EPERM, or a pre-RFC-098 pid that is not a group leader).
+ * Returns false when no signal could be delivered at all.
  */
 export function killProcessTree(pid: number, signal: KillTreeSignal): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false

@@ -7,11 +7,10 @@
 // original header the assertions are now POSITIVE source-text guards for the
 // mechanisms that replaced them:
 //
-//   1. Kill escalation — runner spawns `detached: true` (child = its own
-//      process-group leader), `killTree` group-kills via `process.kill(-pid)`
-//      with a `safeKill` single-pid fallback, and `armKillEscalation` fires
-//      SIGTERM now → unref'd grace timer → SIGKILL. Both the abort and the
-//      timeout paths route through it (`startKill`).
+//   1. Kill escalation — POSIX spawns detached (child = its own process-group
+//      leader), while Windows stays flat because its tree kill uses Job
+//      Object/taskkill and detached Bun children can lose output. `killTree`
+//      delegates both host shapes to the same SIGTERM → grace → SIGKILL chain.
 //   2. Bounded reaping — `child.exited` and the stdout/stderr pumps race a
 //      final reap deadline (grace + margin, armed at first kill / at exit);
 //      overrun ⟹ status='failed' + errorMessage='child-unkillable' (with
@@ -69,10 +68,11 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
   const mpSrc = readFileSync(MANAGED_PROCESS, 'utf8')
   const runnerSrc = readFileSync(RUNNER, 'utf8')
 
-  test('spawn is detached and killTree group-kills with a single-pid fallback', () => {
-    // detached: true ⟹ the child is its own process-group leader, the
-    // precondition for `-pid` group signals reaching grandchildren.
-    expect(countNonCommentMatches(mpSrc, /detached: true/g)).toBe(1)
+  test('spawn uses POSIX groups, keeps Windows flat, and delegates tree kill', () => {
+    // POSIX needs a process-group leader for `-pid`; Windows has no such group
+    // and uses Job Object/taskkill. Keeping the predicate explicit also locks
+    // the Windows output fix shared with spawnVersionProbe.
+    expect(countNonCommentMatches(mpSrc, /detached: process\.platform !== 'win32'/g)).toBe(1)
     // killTree delegates the group signal to killProcessTree (util/process),
     // keeping the single-process `child.kill` fallback.
     expect(countNonCommentMatches(mpSrc, /killProcessTree\(pid, signal\)/g)).toBe(1)
