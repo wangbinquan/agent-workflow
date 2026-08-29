@@ -1480,7 +1480,11 @@
         "MANAGED_PROCESS_LAUNCH_NONCE_FLAG",
         "MANAGED_PROCESS_LAUNCH_READY_PREFIX",
         "MANAGED_PROCESS_TARGET_SEPARATOR",
+        "MANAGED_PROCESS_WINDOWS_CONTROL_FLAG",
+        "MANAGED_PROCESS_WINDOWS_STDERR_FLAG",
+        "MANAGED_PROCESS_WINDOWS_STDOUT_FLAG",
         "ManagedProcessActivationFrame",
+        "WindowsManagedProcessOutputPaths",
         "WindowsOutputSpool",
         "cleanupWindowsOutputSpool",
         "createWindowsOutputSpool",
@@ -7716,5 +7720,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e2497caf4f0efe2980051a7502d9f45560be21ba10bd88acac9810a3d9482f1c"
+  "sourceDigest": "sha256:07a219d3e0281d89c3788b4f217ea59103191a105a2e38350eede534539ecd25"
 }
