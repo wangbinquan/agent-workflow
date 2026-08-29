@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 281,
-    "exactEntrypointFiles": 36,
+    "consumers": 288,
+    "exactEntrypointFiles": 37,
     "governedFieldSurfaces": 5,
-    "methods": 195,
+    "methods": 197,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1738,
-    "symbols": 395
+    "recursiveFields": 1747,
+    "symbols": 400
   },
   "entries": [
     {
@@ -2038,6 +2038,137 @@
       "version": 1
     },
     {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "events",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/events.ts",
+      "id": "public:collaboration:events:COLLABORATION_COMMITTED_EVENT_REF",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#COLLABORATION_COMMITTED_EVENT_REF",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "durable",
+      "signatureDigest": "sha256:ce544d74bc6c925afe263335ab33a3c1cab39eb1609e432b722a4958060b753e",
+      "status": "target-context-current-surface",
+      "symbol": "COLLABORATION_COMMITTED_EVENT_REF",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "events",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/events.ts",
+      "id": "public:collaboration:events:COLLABORATION_COMMITTED_SOURCE_REF",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#COLLABORATION_COMMITTED_SOURCE_REF",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "durable",
+      "signatureDigest": "sha256:debdd1aa4769444dcd618433b76bd5436bab7cf35b119c113140e4e58a62cea8",
+      "status": "target-context-current-surface",
+      "symbol": "COLLABORATION_COMMITTED_SOURCE_REF",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:eae3397ec8e57076d8ba"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "events",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/events.ts",
+      "id": "public:collaboration:events:collaborationCommittedEventCatalogJson",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#collaborationCommittedEventCatalogJson",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:eae3397ec8e57076d8ba",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "durable",
+      "signatureDigest": "sha256:145ad6e81c8ca14b7a82b34413bcaae3fe2b4cc32d5ca82a2fc1fb7e82fd044d",
+      "status": "target-context-current-surface",
+      "symbol": "collaborationCommittedEventCatalogJson",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "events",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/events.ts",
+      "id": "public:collaboration:events:collaborationCommittedObservation",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:2f7bd52556193f5f7b1efd6751ac8f33f8ac3c9d68b1d20bae04a9d13b4981f5"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#collaborationCommittedObservation",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "durable",
+      "signatureDigest": "sha256:2f7bd52556193f5f7b1efd6751ac8f33f8ac3c9d68b1d20bae04a9d13b4981f5",
+      "status": "target-context-current-surface",
+      "symbol": "collaborationCommittedObservation",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
       "authority": "context-bound",
       "budget": {
         "maxMethods": 5,
@@ -2055,6 +2186,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "committedEventRef",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "eventRefs",
+          "type": "readonly CommittedEventRef[]"
         },
         {
           "consumerEdgeIds": [],
@@ -2801,7 +2937,9 @@
         },
         {
           "consumerEdgeIds": [
-            "import:e7dae2614e7fadd00cae"
+            "import:4a9db5b7723cce546d2e",
+            "import:e7dae2614e7fadd00cae",
+            "import:ec58f14a48b44f06f4ae"
           ],
           "fieldPath": "payload.$variant:2.roundId",
           "type": "string"
@@ -3584,7 +3722,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:6b9464bcfd67243aadd0"
+            "import:6b9464bcfd67243aadd0",
+            "import:fb9c68fb9f2703487f59"
           ],
           "fieldPath": "operationId",
           "type": "string"
@@ -9206,6 +9345,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:684aa46213f801e4f931",
         "import:7ee3c1c323363482f6ab"
       ],
       "context": "event-center",
@@ -9221,6 +9361,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
+            "import:684aa46213f801e4f931",
             "import:7ee3c1c323363482f6ab"
           ],
           "name": "observe",
@@ -9229,6 +9370,12 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/public/participants.ts#EventObservationParticipant",
       "productionConsumers": [
+        {
+          "context": "collaboration",
+          "edgeId": "import:684aa46213f801e4f931",
+          "file": "packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts#$file"
+        },
         {
           "context": "task-execution",
           "edgeId": "import:7ee3c1c323363482f6ab",
@@ -9819,6 +9966,7 @@
       "consumerEdgeIds": [
         "import:1ee7bd03fabec51fdd22",
         "import:672a4e3d7be3a9592ba1",
+        "import:76073850aa2259e4e7a3",
         "import:7db2493a31e56d0426ba",
         "import:c64e5a4e25ac3e23398c"
       ],
@@ -9831,6 +9979,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9841,6 +9990,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9851,6 +10001,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9861,6 +10012,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9891,6 +10043,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9901,6 +10054,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9911,6 +10065,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9921,6 +10076,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9931,6 +10087,7 @@
           "consumerEdgeIds": [
             "import:1ee7bd03fabec51fdd22",
             "import:672a4e3d7be3a9592ba1",
+            "import:76073850aa2259e4e7a3",
             "import:7db2493a31e56d0426ba",
             "import:c64e5a4e25ac3e23398c"
           ],
@@ -9975,6 +10132,12 @@
           "edgeId": "import:672a4e3d7be3a9592ba1",
           "file": "packages/backend/src/modules/digital-employee/public/events.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/public/events.ts#$file"
+        },
+        {
+          "context": "collaboration",
+          "edgeId": "import:76073850aa2259e4e7a3",
+          "file": "packages/backend/src/modules/collaboration/public/events.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/events.ts#$file"
         },
         {
           "context": "digital-employee",
@@ -13401,29 +13564,39 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:6743c9c44ccd788a69c6"
+      ],
       "context": "identity-access",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "participants",
       "fields": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:6743c9c44ccd788a69c6"
+          ],
           "fieldPath": "causationId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:6743c9c44ccd788a69c6"
+          ],
           "fieldPath": "correlationId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:6743c9c44ccd788a69c6"
+          ],
           "fieldPath": "now",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:6743c9c44ccd788a69c6"
+          ],
           "fieldPath": "operationId",
           "type": "string"
         }
@@ -13439,7 +13612,14 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#CommandContext",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:6743c9c44ccd788a69c6",
+          "file": "packages/backend/src/services/memory.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
+        }
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:5748351342ea5927526a677940fc66a5c0e89eaad9243c87eb48b861b1ce2fdc",
@@ -13683,7 +13863,9 @@
       },
       "consumerEdgeIds": [
         "import:5301263b73da31c26c24",
-        "import:5a4e4edbb6afcc3e931b"
+        "import:5a4e4edbb6afcc3e931b",
+        "import:bc0ac2093611bbcf5b73",
+        "import:dea03385f4ecc1079bd5"
       ],
       "context": "identity-access",
       "dataClass": "confidential",
@@ -13695,13 +13877,15 @@
       "members": [
         "fromAuthenticatedPrincipal",
         "fromAuthenticatedPrincipalWithIdempotency",
-        "queryFromAuthenticatedPrincipal"
+        "queryFromAuthenticatedPrincipal",
+        "resolveCommandContext"
       ],
       "methods": [
         {
           "consumerEdgeIds": [
             "import:5301263b73da31c26c24",
-            "import:5a4e4edbb6afcc3e931b"
+            "import:5a4e4edbb6afcc3e931b",
+            "import:dea03385f4ecc1079bd5"
           ],
           "name": "fromAuthenticatedPrincipal",
           "signatureDigest": "sha256:9c9851f63b44d71084f7263acc0ae0acbff2f632480b32f8193f08e56f7e2dba"
@@ -13717,6 +13901,13 @@
           ],
           "name": "queryFromAuthenticatedPrincipal",
           "signatureDigest": "sha256:30451080ce423ffee055f380c5fd94cd95963d262ab7dd435e195b7c51d2c00c"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:bc0ac2093611bbcf5b73"
+          ],
+          "name": "resolveCommandContext",
+          "signatureDigest": "sha256:aaa6bb521d611a105b4e08ea8335e1349543a80c38c4c6e7bd921d053f9936da"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectOperationContextFactory",
@@ -13732,11 +13923,23 @@
           "edgeId": "import:5a4e4edbb6afcc3e931b",
           "file": "packages/backend/src/routes/users.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/users.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:bc0ac2093611bbcf5b73",
+          "file": "packages/backend/src/services/memory.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:dea03385f4ecc1079bd5",
+          "file": "packages/backend/src/routes/memories.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file"
         }
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:9e6c5071d7930de0919c061fa1413234825517773b90433c65f35e9db7418c9e",
+      "signatureDigest": "sha256:3e90040b0c74af538766dce573934f0749d4e1d24cbdace5e407b1e2cd2c81d0",
       "status": "target-context-current-surface",
       "symbol": "DirectOperationContextFactory",
       "transaction": "caller-tx",
@@ -13896,7 +14099,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:34b99426a71bb0ef33d9"
+      ],
       "context": "identity-access",
       "dataClass": "metadata",
       "direction": "offered",
@@ -13933,7 +14138,14 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#PrincipalSource",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:34b99426a71bb0ef33d9",
+          "file": "packages/backend/src/services/memory.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
+        }
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:68c3c02fbd81394964be086fb677b529cbf235c6d7cff1f2a1f82ca14f903f71",
@@ -14014,6 +14226,80 @@
       "signatureDigest": "sha256:3a70513596b5efd10408434b6a182c64ab8f1be2cb4f7d8856656a7d0c5c31e9",
       "status": "target-context-current-surface",
       "symbol": "RequestAuthority",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:fb0547bd7cf5b5803e62"
+      ],
+      "context": "identity-access",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "source.$variant:0",
+          "type": "'session'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "source.$variant:1",
+          "type": "'pat'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "source.$variant:2",
+          "type": "'daemon'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "source.$variant:3",
+          "type": "'cli'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "source.$variant:4",
+          "type": "'system'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:fb0547bd7cf5b5803e62"
+          ],
+          "fieldPath": "userId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "public:identity-access:participants:ResolvedDirectRequestAuthority",
+      "members": [
+        "source",
+        "userId"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#ResolvedDirectRequestAuthority",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:fb0547bd7cf5b5803e62",
+          "file": "packages/backend/src/services/memory.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5a0c272fc7b1c5f1328a5234ed3880cd0c6ce62f30fff19d1a790c8d7f332ac6",
+      "status": "target-context-current-surface",
+      "symbol": "ResolvedDirectRequestAuthority",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -17042,16 +17328,13 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:063af6550703f316e5f3",
         "import:2421ab252a99c5d2915a",
         "import:4cf3b92ff2341b8311eb",
-        "import:4e0e2226f6953ec2518f",
         "import:71c4bdb921b1873ce84f",
         "import:8132f13d50796c2c0267",
         "import:9fb94658c07e4bc6792b",
         "import:c1bbd33580802c4df386",
         "import:cf874ab134b6f5de464c",
-        "import:dca4a7f5bf4f5c77cee0",
         "import:e94ce69a37e26b3d19e1",
         "import:ee2f998010e260fd3354"
       ],
@@ -17074,12 +17357,6 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:063af6550703f316e5f3",
-          "file": "packages/backend/src/routes/taskQuestions.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/taskQuestions.ts#$file"
-        },
-        {
-          "context": "legacy",
           "edgeId": "import:2421ab252a99c5d2915a",
           "file": "packages/backend/src/routes/tasks.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file"
@@ -17089,12 +17366,6 @@
           "edgeId": "import:4cf3b92ff2341b8311eb",
           "file": "packages/backend/src/routes/workgroups.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/workgroups.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:4e0e2226f6953ec2518f",
-          "file": "packages/backend/src/routes/clarify.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/clarify.ts#$file"
         },
         {
           "context": "legacy",
@@ -17125,12 +17396,6 @@
           "edgeId": "import:cf874ab134b6f5de464c",
           "file": "packages/backend/src/routes/fusions.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:dca4a7f5bf4f5c77cee0",
-          "file": "packages/backend/src/routes/reviews.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/reviews.ts#$file"
         },
         {
           "context": "legacy",
@@ -18233,6 +18498,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "eventRefs",
+          "type": "readonly CommittedEventRef[]"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "taskRevision",
           "type": "number"
         }
@@ -18309,6 +18579,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "gate.ref",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nodeChanges",
+          "type": "readonly TaskNodeChangeV1[]"
         },
         {
           "consumerEdgeIds": [],
@@ -18458,7 +18733,9 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
-        "import:6a9262b355e102a81b75"
+        "import:6a9262b355e102a81b75",
+        "import:f7838d4a34b04133bc33",
+        "import:f9e68e3831ab20c4de98"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -18482,6 +18759,18 @@
           "edgeId": "import:6a9262b355e102a81b75",
           "file": "packages/backend/src/services/terminalSweep.ts",
           "ownerEntryId": "owner:packages/backend/src/services/terminalSweep.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f7838d4a34b04133bc33",
+          "file": "packages/backend/src/services/taskQuestionDispatch.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f9e68e3831ab20c4de98",
+          "file": "packages/backend/src/services/clarify/seal.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#$file"
         }
       ],
       "removeAfterWave": null,
@@ -25287,7 +25576,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1fab367e3c7752289b4c91a3713f98c90e83472adae0d71e1aafdef349394875",
+  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac",
   "targetContexts": [
     "collaboration",
     "development-automation",

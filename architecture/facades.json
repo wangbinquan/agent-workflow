@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "boundaryFacades": 98,
+    "boundaryFacades": 100,
     "serviceFiles": 378
   },
   "entries": [
@@ -520,7 +520,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:0f89e950bb712ef5a5bd",
+        "import:f9e68e3831ab20c4de98"
+      ],
       "exportedSymbols": [
         "ClarifySealDecisionParticipantInTx",
         "SealRoundQuestionsArgs",
@@ -531,7 +534,7 @@
       "id": "facade:packages/backend/src/services/clarify/seal.ts",
       "ownerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -554,7 +557,6 @@
         "DesignerRerunReadinessSource",
         "DispatchCrossClarifyResult",
         "EvaluateDesignerRerunReadinessArgs",
-        "broadcastClarifyAnsweredForRound",
         "createClarifyRound",
         "dispatchCrossClarifyNode",
         "evaluateDesignerRerunReadiness",
@@ -589,6 +591,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:49b2507d071d69bc2cdd",
         "import:dace83c20633fe685860",
         "import:e7dae2614e7fadd00cae"
       ],
@@ -2117,6 +2120,7 @@
         "INTENT_JOURNAL_ARTIFACT_VERSION",
         "IntentJournalArtifact",
         "IntentJournalArtifactCodecError",
+        "IntentJournalArtifactV1",
         "decodeIntentJournalArtifacts",
         "encodeIntentJournalArtifacts"
       ],
@@ -2993,10 +2997,17 @@
       "targetLayer": "inbound"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:34b99426a71bb0ef33d9",
+        "import:6743c9c44ccd788a69c6",
+        "import:bc0ac2093611bbcf5b73",
+        "import:fb0547bd7cf5b5803e62"
+      ],
       "exportedSymbols": [
+        "MemoryMutationTestHooks",
         "MemoryScopeRef",
         "MemoryWithChain",
+        "MoveMemoryResult",
         "PatchMemoryResult",
         "_scopeKey",
         "annotateMemoryManageRights",
@@ -3011,6 +3022,7 @@
         "listMemories",
         "listMemories",
         "listMemories",
+        "moveMemory",
         "patchMemory",
         "promoteCandidate",
         "toSummary",
@@ -3021,7 +3033,7 @@
       "id": "facade:packages/backend/src/services/memory.ts",
       "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "memory",
       "targetLayer": "application"
     },
@@ -4228,9 +4240,12 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:00f748542bfe5f291cf6",
+        "import:01ff29418e20be6f6d16",
         "import:03c5c5821dbc66ecef64",
         "import:0825e82d89022ff83e73",
         "import:15d52dbcc5e457a912cd",
+        "import:174db1d47e3e15fee9e5",
         "import:1b8b9bd4a0795b55fa3e",
         "import:30a6613c0e08ce11c0b2",
         "import:5fb92fc1db85b1e884ac",
@@ -4272,10 +4287,6 @@
         "deleteReviewComment",
         "dispatchReviewNode",
         "docVersionRelativePath",
-        "emitReviewCommentAddedEvent",
-        "emitReviewCommentDeletedEvent",
-        "emitReviewCommentUpdatedEvent",
-        "emitReviewDecisionEvent",
         "getDocVersion",
         "getDocVersionDetail",
         "getReviewDetail",
@@ -6261,7 +6272,9 @@
         "import:9fabe1c5d40f0886cfef",
         "import:b0bb0b43a43c37e8e8df",
         "import:b20c5073febb0f2fcfbe",
+        "import:b54d7b1f4233e55b634a",
         "import:c07d7479e713e86827ac",
+        "import:cf4075013df911f6c143",
         "import:d07907c42947e6c5855e",
         "import:de17d18a53431aaefb1a",
         "import:ee07aef5f87771b4e498",
@@ -6608,10 +6621,13 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0d21a736d367b3af3826",
         "import:4a9db5b7723cce546d2e",
+        "import:6264829d2c40262f5841",
         "import:720ba8368de50257733e",
         "import:aa1f1e81ea971445e394",
-        "import:b65d58a8c413859166ba"
+        "import:b65d58a8c413859166ba",
+        "import:f7838d4a34b04133bc33"
       ],
       "exportedSymbols": [
         "DispatchTaskQuestionsActor",
@@ -7734,5 +7750,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1fab367e3c7752289b4c91a3713f98c90e83472adae0d71e1aafdef349394875"
+  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac"
 }

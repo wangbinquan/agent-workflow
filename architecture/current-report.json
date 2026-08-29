@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 447,
-    "architectureExceptions": 1428,
+    "ambientWiring": 448,
+    "architectureExceptions": 1470,
     "backgroundJobs": 265,
-    "crossContextImports": 1464,
+    "crossContextImports": 1508,
     "facades": 378,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18727,
-    "mutationEntrypoints": 1008,
+    "moduleSymbolOwners": 18759,
+    "mutationEntrypoints": 1015,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 395,
-    "transactionExternalEffects": 273
+    "publicSurfaces": 400,
+    "transactionExternalEffects": 280
   },
   "metrics": {
-    "ambientWiringEntries": 447,
+    "ambientWiringEntries": 448,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -70,12 +70,19 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 990,
+    "backendProductionFiles": 995,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
         "packages/backend/src/mcp/server.ts",
         "packages/backend/src/server.ts"
+      ],
+      [
+        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+        "packages/backend/src/modules/task-execution/public/commands.ts",
+        "packages/backend/src/services/humanGateComposition.ts",
+        "packages/backend/src/services/humanGateContinuationEffects.ts",
+        "packages/backend/src/services/task.ts"
       ],
       [
         "packages/backend/src/services/agent.ts",
@@ -120,7 +127,7 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 72,
-    "inboundBoundaryEdges": 89,
+    "inboundBoundaryEdges": 94,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -129,7 +136,7 @@
       },
       {
         "context": "collaboration",
-        "files": 48
+        "files": 53
       },
       {
         "context": "development-automation",
@@ -172,7 +179,7 @@
         "files": 124
       }
     ],
-    "moduleFiles": 447,
+    "moduleFiles": 452,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -187,8 +194,8 @@
       {
         "file": "packages/backend/src/services/taskQuestionDispatch.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1447",
-        "line": 1447,
+        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1486",
+        "line": 1486,
         "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
         "removeAfterWave": "W2/W7",
         "status": "reviewed-dispatch-exception",
@@ -201,6 +208,13 @@
         "packages/backend/src/mcp/dispatch.ts",
         "packages/backend/src/mcp/server.ts",
         "packages/backend/src/server.ts"
+      ],
+      [
+        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+        "packages/backend/src/modules/task-execution/public/commands.ts",
+        "packages/backend/src/services/humanGateComposition.ts",
+        "packages/backend/src/services/humanGateContinuationEffects.ts",
+        "packages/backend/src/services/task.ts"
       ],
       [
         "packages/backend/src/services/agent.ts",
@@ -233,5 +247,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1fab367e3c7752289b4c91a3713f98c90e83472adae0d71e1aafdef349394875"
+  "sourceDigest": "sha256:07ede87677f4cc78b24d885b68e360f08d52414f0a1071a3864df576d96d52ac"
 }
