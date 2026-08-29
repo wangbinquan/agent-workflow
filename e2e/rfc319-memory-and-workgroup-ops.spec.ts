@@ -1479,8 +1479,11 @@ test('RFC-319 WG-39: awaiting_human 的成因卡把「等回答」和「触顶�
   const taskId = await launchGroupTask(lwGroupId, `rfc319-wg39-${Date.now()}`, WG_GOAL_OPEN)
   const parked = await waitRoom(
     taskId,
-    (r) => r.taskStatus === 'awaiting_human',
-    'WG-39 的任务没有停在 awaiting_human',
+    // RFC-333 的 TaskParkTx 会先原子提交 clarify + task awaiting_human；工作组引擎
+    // 随后在对外发布稳定停机前补上精确成因。只等 status 会撞中这个短暂可读窗口，
+    // 把一个最终完整的停机态误报成失败；成对等待仍会在 reason 永远不落库时超时变红。
+    (r) => r.taskStatus === 'awaiting_human' && r.pauseReason === 'leader-clarify',
+    'WG-39 的任务没有停在 awaiting_human / leader-clarify 稳定态',
   )
   expect(
     parked.pauseReason,
