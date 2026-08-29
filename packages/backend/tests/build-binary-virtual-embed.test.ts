@@ -10,7 +10,15 @@ describe('binary build virtual embed isolation', () => {
     const source = readFileSync(resolve(repoRoot, 'scripts', 'build-binary.ts'), 'utf8')
 
     expect(source).toContain('files: { [generatedPath]: input.generatedContents }')
-    expect(source).toContain('const generated = renderGenerated()')
+    expect(source).toContain(
+      'const managedProcessLauncherSource = await buildManagedProcessLauncherSource()',
+    )
+    expect(source).toContain(
+      'const gitCredentialHelperSource = await buildGitCredentialHelperSource()',
+    )
+    expect(source).toContain(
+      'const generated = renderGenerated(managedProcessLauncherSource, gitCredentialHelperSource)',
+    )
     expect(source).not.toMatch(/writeFileSync\s*\(\s*generatedPath/)
   })
 })

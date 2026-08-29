@@ -291,12 +291,15 @@ function readWindowsOutputSpoolChunk(path: string, offset: number, buffer: Uint8
 function windowsOutputSpoolStream(
   path: string,
   writersClosed: Promise<void>,
-  completion?: { expectedBytes: Promise<number> } | { completionSeen: Promise<void> },
+  completion?:
+    | { expectedBytes: Promise<number>; interrupted: Promise<void> }
+    | { completionSeen: Promise<void> },
 ): ReadableStream<Uint8Array> {
   const buffer = new Uint8Array(64 * 1024)
   let offset = 0
   let writersAreClosed = false
   let expectedBytes: number | undefined
+  let interruptionWasSeen = false
   let completionWasSeen = completion === undefined
   let stablePolls = 0
   let canceled = false
@@ -316,6 +319,9 @@ function windowsOutputSpoolStream(
     if ('expectedBytes' in completion) {
       void completion.expectedBytes.then((value) => {
         expectedBytes = value
+      })
+      void completion.interrupted.then(() => {
+        interruptionWasSeen = true
       })
     } else {
       void completion.completionSeen.then(() => {
@@ -344,7 +350,21 @@ function windowsOutputSpoolStream(
                 controller.close()
                 return
               }
-              await Promise.race([completion.expectedBytes, Bun.sleep(10)])
+              if (interruptionWasSeen) {
+                // Timeout/cancel kills the launcher before it can write its
+                // ordinary OUTPUT byte-count record. Once that launcher handle
+                // is closed, two empty polls are the terminal barrier for the
+                // bytes it managed to relay; do not wait a full drain grace for
+                // a record that can no longer be produced.
+                stablePolls += 1
+                if (stablePolls >= 2) {
+                  controller.close()
+                  return
+                }
+                await Bun.sleep(10)
+                continue
+              }
+              await Promise.race([completion.expectedBytes, completion.interrupted, Bun.sleep(10)])
               continue
             }
             if (!completionWasSeen) {
@@ -584,6 +604,10 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const launcherOutputSeen = new Promise<void>((resolve) => {
     launcherOutputSeenResolve = resolve
   })
+  let launcherInterruptedResolve: (() => void) | undefined
+  const launcherInterrupted = new Promise<void>((resolve) => {
+    launcherInterruptedResolve = resolve
+  })
   let launcherReadyResolve: (() => void) | undefined
   const launcherReady = new Promise<void>((resolve) => {
     launcherReadyResolve = resolve
@@ -656,6 +680,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       ? (child.stdout as ReadableStream<Uint8Array>)
       : windowsOutputSpoolStream(activeOutputSpool.stdoutPath, outputWritersClosed, {
           expectedBytes: launcherOutput.then((value) => value.stdoutBytes),
+          interrupted: launcherInterrupted,
         }),
     req.onStdoutLine,
     req.captureRawStdout === true
@@ -673,6 +698,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       ? (child.stderr as ReadableStream<Uint8Array>)
       : windowsOutputSpoolStream(activeOutputSpool.stderrPath, outputWritersClosed, {
           expectedBytes: launcherOutput.then((value) => value.stderrBytes),
+          interrupted: launcherInterrupted,
         }),
     async (line) => {
       if (consumeLauncherControlLine(line)) return
@@ -723,6 +749,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     // the grace window) used to overwrite `killTimer`, leaving the first timer
     // to fire later at a pid that may already be recycled.
     if (killTimer !== undefined) return
+    launcherInterruptedResolve?.()
+    launcherOutputSeenResolve?.()
     killTree(child, 'SIGTERM')
     killTimer = setTimeout(() => {
       log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', { pid, graceMs })

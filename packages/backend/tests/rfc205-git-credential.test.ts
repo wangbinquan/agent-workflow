@@ -148,16 +148,19 @@ describe('leaseGitCredential', () => {
     expect(value).toMatch(/^!'.*'/)
   })
 
-  test('boot cleanup removes only an old owner-controlled RFC-321 lease file', () => {
+  test('boot cleanup removes only old owner-controlled RFC-321 lease/helper files', () => {
     const home = tmp()
     const now = 2_000_000
     const old = join(home, '.gitcred-01ARZ3NDEKTSV4RRFFQ69G5FAV')
+    const oldHelper = join(home, '.gitcred-helper-01ARZ3NDEKTSV4RRFFQ69G5FAV.mjs')
     const young = join(home, '.gitcred-01ARZ3NDEKTSV4RRFFQ69G5FAW')
     const directory = join(home, '.gitcred-01ARZ3NDEKTSV4RRFFQ69G5FAY')
     const unrelated = join(home, '.gitcred-not-a-ulid')
-    for (const path of [old, young, unrelated]) writeFileSync(path, '{}', { mode: 0o600 })
+    for (const path of [old, oldHelper, young, unrelated]) {
+      writeFileSync(path, '{}', { mode: 0o600 })
+    }
     mkdirSync(directory)
-    for (const path of [old, directory]) {
+    for (const path of [old, oldHelper, directory]) {
       utimesSync(path, new Date(now - 120_000), new Date(now - 120_000))
     }
 
@@ -169,8 +172,9 @@ describe('leaseGitCredential', () => {
       utimesSync(wrongMode, new Date(now - 120_000), new Date(now - 120_000))
     }
 
-    expect(cleanupOrphanedGitCredentialLeases(home, { now, minAgeMs: 60_000 })).toBe(1)
+    expect(cleanupOrphanedGitCredentialLeases(home, { now, minAgeMs: 60_000 })).toBe(2)
     expect(existsSync(old)).toBe(false)
+    expect(existsSync(oldHelper)).toBe(false)
     expect(existsSync(young)).toBe(true)
     expect(existsSync(directory)).toBe(true)
     expect(existsSync(unrelated)).toBe(true)

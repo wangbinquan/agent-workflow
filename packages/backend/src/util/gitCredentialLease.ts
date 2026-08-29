@@ -10,10 +10,13 @@ import { chmodSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync 
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { IS_EMBEDDED } from '@/embed'
+import { GIT_CREDENTIAL_HELPER_SOURCE } from '@/embed.generated'
 import { Paths } from '@/util/paths'
 
-const GIT_CREDENTIAL_SUBCOMMAND = '__git-credential'
+export const GIT_CREDENTIAL_SUBCOMMAND = '__git-credential'
 const LEASE_NAME_RE = /^\.gitcred-[0-9A-HJKMNP-TV-Z]{26}$/
+const HELPER_NAME_RE = /^\.gitcred-helper-[0-9A-HJKMNP-TV-Z]{26}\.mjs$/
+const BUN_BE_BUN_ENV = 'BUN_BE_BUN'
 
 export interface GitCredentialLeasePayloadV1 {
   readonly version: 1
@@ -42,6 +45,10 @@ function shQuote(value: string): string {
 
 export function gitCredentialHelperValue(): string {
   return `!${gitCredentialSelfArgv().map(shQuote).join(' ')}`
+}
+
+function extractedGitCredentialHelperValue(path: string): string {
+  return `!${[process.execPath, 'run', path, GIT_CREDENTIAL_SUBCOMMAND].map(shQuote).join(' ')}`
 }
 
 export function parseGitCredentialRequest(stdin: string): Record<string, string> {
@@ -159,31 +166,54 @@ export function leaseTargetBoundGitCredential(input: {
 }): GitCredentialLease | null {
   const target = targetOf(input.endpointUrl)
   if (target === null || input.username === '' || input.password === '') return null
-  const credFile = join(input.appHome ?? Paths.root, `.gitcred-${ulid()}`)
+  const id = ulid()
+  const credFile = join(input.appHome ?? Paths.root, `.gitcred-${id}`)
+  const helperFile =
+    IS_EMBEDDED && process.platform === 'win32'
+      ? join(input.appHome ?? Paths.root, `.gitcred-helper-${id}.mjs`)
+      : null
   const lease: GitCredentialLeasePayloadV1 = {
     version: 1,
     ...target,
     username: input.username,
     password: input.password,
   }
-  let created = false
+  let credentialCreated = false
+  let helperCreated = false
   try {
     // `wx` refuses an existing path (including a pre-planted symlink) instead
     // of following it. A chmod failure removes the just-written secret before
     // reporting the lease as unavailable.
     writeFileSync(credFile, JSON.stringify(lease), { mode: 0o600, flag: 'wx' })
-    created = true
+    credentialCreated = true
     chmodSync(credFile, 0o600)
+    if (helperFile !== null) {
+      if (GIT_CREDENTIAL_HELPER_SOURCE.length === 0) {
+        throw new Error('compiled Git credential helper source is missing')
+      }
+      writeFileSync(helperFile, GIT_CREDENTIAL_HELPER_SOURCE, { mode: 0o600, flag: 'wx' })
+      helperCreated = true
+      chmodSync(helperFile, 0o600)
+    }
   } catch {
-    if (created) {
+    if (credentialCreated) {
       try {
         rmSync(credFile, { force: true })
       } catch {
         // The caller still receives no usable lease; boot cleanup remains narrow.
       }
     }
+    if (helperCreated && helperFile !== null) {
+      try {
+        rmSync(helperFile, { force: true })
+      } catch {
+        // The helper contains no credential; a later boot can remove the orphan.
+      }
+    }
     return null
   }
+  const helperValue =
+    helperFile === null ? gitCredentialHelperValue() : extractedGitCredentialHelperValue(helperFile)
   return {
     leadingArgs: [
       '-c',
@@ -199,10 +229,11 @@ export function leaseTargetBoundGitCredential(input: {
       '-c',
       `http.${input.endpointUrl}.sslVerify=${input.rejectUnauthorized === false ? 'false' : 'true'}`,
       '-c',
-      `credential.helper=${gitCredentialHelperValue()}`,
+      `credential.helper=${helperValue}`,
     ],
     env: {
       AW_GIT_CRED_FILE: credFile,
+      ...(helperFile === null ? {} : { [BUN_BE_BUN_ENV]: '1' }),
       GIT_TERMINAL_PROMPT: '0',
       // An inherited debug setting must not print the Authorization exchange
       // before Git's own redactor gets a chance to protect it.
@@ -217,6 +248,13 @@ export function leaseTargetBoundGitCredential(input: {
         rmSync(credFile, { force: true })
       } catch {
         // Best effort: boot cleanup handles a crash between creation and finally.
+      }
+      if (helperFile !== null) {
+        try {
+          rmSync(helperFile, { force: true })
+        } catch {
+          // It contains no credential and remains scoped to this lease id.
+        }
       }
     },
   }
@@ -261,7 +299,7 @@ export function leaseGitCredential(
   return leaseTargetBoundGitCredential({ endpointUrl, ...info, appHome })
 }
 
-/** Remove only old, owner-controlled RFC-321 lease files after an unclean daemon exit. */
+/** Remove only old, owner-controlled RFC-321 lease/helper files after an unclean daemon exit. */
 export function cleanupOrphanedGitCredentialLeases(
   appHome: string = Paths.root,
   input: { readonly now?: number; readonly minAgeMs?: number } = {},
@@ -276,7 +314,7 @@ export function cleanupOrphanedGitCredentialLeases(
     return 0
   }
   for (const name of names) {
-    if (!LEASE_NAME_RE.test(name)) continue
+    if (!LEASE_NAME_RE.test(name) && !HELPER_NAME_RE.test(name)) continue
     const path = join(appHome, name)
     let stat: ReturnType<typeof lstatSync>
     try {

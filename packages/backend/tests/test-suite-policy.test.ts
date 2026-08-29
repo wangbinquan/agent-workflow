@@ -53,9 +53,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/rfc254-process-tree-ownership.test.ts#skipIf': 2,
   // Bun's detached `.cmd` pipe behaviour requires a real Windows kernel.
   'packages/backend/tests/rfc254-version-probe-cmd-wrapper.test.ts#skipIf': 1,
-  // The compiled Bun target/output relay regression requires a real Windows
-  // kernel and compiled artifact; the source-launcher cases still run everywhere.
-  'packages/backend/tests/rfc328-process-preactivation.test.ts#skipIf': 1,
+  // The activation-frame and compiled Bun target/output relay regressions require
+  // a real Windows kernel; the latter also requires a compiled artifact.
+  'packages/backend/tests/rfc328-process-preactivation.test.ts#skipIf': 2,
   'packages/backend/tests/rfc135-runtimes-status.test.ts#skipIf': 2,
   // The live icacls/whoami round-trip requires a Windows kernel.
   'packages/backend/tests/rfc254-win32-acl-integration.test.ts#skipIf': 1,

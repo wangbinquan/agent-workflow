@@ -321,4 +321,26 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
     expect(result.stderrTail).toContain('runtime-stderr')
     expect(result.stderrTail).not.toContain('AW_MANAGED_PROCESS_LAUNCH_')
   })
+
+  test('timeout closes an interrupted launcher output barrier without waiting for drain grace', async () => {
+    const root = fixtureRoot()
+    const startedAt = Date.now()
+    const result = await runManagedProcess({
+      argv: [process.execPath, '-e', 'await Bun.sleep(30_000)'],
+      cwd: root,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => {
+          return typeof entry[1] === 'string'
+        }),
+      ),
+      timeoutMs: 100,
+      killEscalationGraceMs: 5_000,
+      requireSpawnReceipt: true,
+      captureRawStdout: true,
+      onSpawned: () => {},
+    })
+
+    expect(result.outcome).toBe('timeout')
+    expect(Date.now() - startedAt).toBeLessThan(4_000)
+  }, 10_000)
 })

@@ -40,6 +40,7 @@ const managedProcessLauncherEntry = join(
   'execution',
   'managedProcessLauncher.ts',
 )
+const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.ts')
 // RFC-311 实现门 P0-1:`new Worker(new URL('./x.ts', import.meta.url))` 不被
 // bundler 追踪——worker 必须显式作为**额外入口**参与 --compile,否则发布版单
 // 二进制里它 ModuleNotFound,备份的 off-thread VACUUM 每次都落到回退路径。
@@ -138,7 +139,10 @@ async function buildFrontend(): Promise<void> {
   }
 }
 
-function renderGenerated(managedProcessLauncherSource: string): {
+function renderGenerated(
+  managedProcessLauncherSource: string,
+  gitCredentialHelperSource: string,
+): {
   readonly contents: string
   readonly counts: {
     readonly frontendCount: number
@@ -191,6 +195,10 @@ function renderGenerated(managedProcessLauncherSource: string): {
   lines.push('')
   lines.push(
     `export const MANAGED_PROCESS_LAUNCHER_SOURCE = ${JSON.stringify(managedProcessLauncherSource)}`,
+  )
+  lines.push('')
+  lines.push(
+    `export const GIT_CREDENTIAL_HELPER_SOURCE = ${JSON.stringify(gitCredentialHelperSource)}`,
   )
   lines.push('')
 
@@ -255,6 +263,22 @@ async function buildManagedProcessLauncherSource(): Promise<string> {
   }
   const output = result.outputs[0]
   if (output === undefined) throw new Error('managed-process launcher build produced no output')
+  return output.text()
+}
+
+async function buildGitCredentialHelperSource(): Promise<string> {
+  process.stdout.write(`\n$ bun build ${gitCredentialHelperEntry} --target=bun --minify\n`)
+  const result = await Bun.build({
+    entrypoints: [gitCredentialHelperEntry],
+    target: 'bun',
+    minify: true,
+  })
+  if (!result.success) {
+    for (const log of result.logs) process.stderr.write(`${String(log)}\n`)
+    throw new Error('bun build failed for Git credential helper source')
+  }
+  const output = result.outputs[0]
+  if (output === undefined) throw new Error('Git credential helper build produced no output')
   return output.text()
 }
 
@@ -325,7 +349,8 @@ async function main(): Promise<void> {
   // 2. Render the production embed table in memory. The source-tree stub is a
   //    watched dev dependency and must remain byte-for-byte untouched.
   const managedProcessLauncherSource = await buildManagedProcessLauncherSource()
-  const generated = renderGenerated(managedProcessLauncherSource)
+  const gitCredentialHelperSource = await buildGitCredentialHelperSource()
+  const generated = renderGenerated(managedProcessLauncherSource, gitCredentialHelperSource)
   const counts = generated.counts
   process.stdout.write(
     `\nprepared virtual ${generatedPath}: ${counts.frontendCount} frontend files + ${counts.migrationCount} migration files + ${counts.pluginCount} opencode-plugin files + ${counts.grammarCount} grammar wasms\n`,

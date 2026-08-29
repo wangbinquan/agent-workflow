@@ -17,6 +17,13 @@ export const IS_EMBEDDED = false
  */
 export const MANAGED_PROCESS_LAUNCHER_SOURCE = ''
 
+/**
+ * Bundled, self-contained Git credential helper source for compiled Windows.
+ * The binary build replaces this stub in memory; source execution continues to
+ * invoke main.ts's hidden subcommand directly.
+ */
+export const GIT_CREDENTIAL_HELPER_SOURCE = ''
+
 /** url-path -> embedded file path (resolves to a /$bunfs/... path at runtime). */
 export const FRONTEND_FILES: Record<string, string> = {}
 
