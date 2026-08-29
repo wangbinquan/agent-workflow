@@ -405,12 +405,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 18564,
+      "baseline": 18561,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e760a936fe0f2ee3d1669e23467817f5d4d7971090ccd6364f91b5e6d7190886",
+    "sourceDigest": "sha256:9a69d9a688e23f34628a72ff9bcef8ecfaa2477bb95495c69bd66fd0ce7e18f9",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
