@@ -47,9 +47,6 @@ export interface MaintenanceServiceOptions {
     delta: Extract<MaintenanceWorkerDelta, { kind: 'lifecycle-alerts' }>,
   ) => void
   readonly onIntentQueued?: (sessionIds: readonly string[]) => void
-  readonly onHumanGateContinuations?: (
-    continuations: readonly { readonly taskId: string; readonly continuationRef: string }[],
-  ) => void
 }
 
 export interface MaintenanceService {
@@ -242,9 +239,6 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
   ): void => {
     if (delta.kind === 'lifecycle-alerts') options.onLifecycleDelta?.(delta)
     else if (delta.kind === 'intent-queued') options.onIntentQueued?.(delta.sessionIds)
-    else if (delta.kind === 'human-gate-continuations') {
-      options.onHumanGateContinuations?.(delta.continuations)
-    }
   }
   const observeWorkerEvent = (event: MaintenanceWorkerEvent): void => {
     if (

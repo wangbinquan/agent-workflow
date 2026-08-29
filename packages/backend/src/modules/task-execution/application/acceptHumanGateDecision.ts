@@ -19,6 +19,9 @@ import {
 } from '../domain/humanGateContinuation'
 import type { TaskExecutionEffectStore } from './ports/taskExecutionEffectStore'
 import type { HumanGateTaskLifecycle } from './ports/humanGateTaskLifecycle'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
+import { committedEventGroupId } from '@/platform/events/committed/types'
+import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import { submitTaskContinuationTx } from './submitTaskContinuation'
 import { TaskExecutionError } from './taskExecutionError'
 
@@ -31,11 +34,13 @@ export interface AcceptHumanGateDecisionInput {
   readonly workspaceRollbackPlan?: HumanGateWorkspaceRollbackRef
   readonly operationId: string
   readonly now: number
+  readonly nodeChanges?: readonly TaskNodeChangeV1[]
 }
 
 export interface AcceptedHumanGateDecision {
   readonly taskRevision: number
   readonly continuationRef: string
+  readonly eventRefs: readonly CommittedEventRef[]
 }
 
 export interface TaskDecisionParticipantInTx {
@@ -143,6 +148,12 @@ export class SqliteTaskDecisionParticipantInTx implements TaskDecisionParticipan
       expectedTaskRevision: input.expectedTaskRevision,
       transition: input.gate.kind === 'review' ? 'release-review' : 'release-human',
       now: input.now,
+      nodeChanges: input.nodeChanges,
+      committedEventIdentity: {
+        operationRef: input.operationId,
+        eventGroupId: committedEventGroupId('collaboration', input.operationId),
+        eventGroupOrdinal: 0,
+      },
     })
     const payload = {
       v: 1 as const,
@@ -215,6 +226,7 @@ export class SqliteTaskDecisionParticipantInTx implements TaskDecisionParticipan
     return {
       taskRevision: transition.taskRevision,
       continuationRef: submitted.intentId,
+      eventRefs: transition.eventRefs,
     }
   }
 }

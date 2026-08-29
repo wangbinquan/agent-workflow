@@ -4,6 +4,7 @@
 
 import type { DbTxSync } from '@/db/txSync'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
+import type { TaskNodeChangeV1 } from '../../domain/taskLifecycleCommittedEvent'
 
 export type HumanGateTaskTransition =
   | 'park-review'
@@ -19,6 +20,14 @@ export interface HumanGateTaskLifecycle {
     readonly expectedTaskRevision: number
     readonly transition: HumanGateTaskTransition
     readonly now: number
+    readonly nodeChanges?: readonly TaskNodeChangeV1[]
+    readonly committedEventIdentity?: Readonly<{
+      operationRef: string
+      eventGroupId?: string
+      eventGroupOrdinal?: number
+      correlationRef?: string | null
+      causationRef?: string | null
+    }>
   }): Readonly<{ taskRevision: number; eventRefs: readonly CommittedEventRef[] }>
   publishAfterCommit(eventRefs: readonly CommittedEventRef[]): void
 }

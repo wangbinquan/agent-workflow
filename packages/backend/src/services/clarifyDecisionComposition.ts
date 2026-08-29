@@ -9,16 +9,12 @@ import type {
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { autoDispatchClarifyRoundWithDecision } from '@/services/clarify/autoDispatch'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
-import { createLogger } from '@/util/log'
 import type { TaskActorRole } from '@agent-workflow/shared'
-
-const log = createLogger('clarify-decision-composition')
 
 export function createClarifyDecisionCommandContext(input: {
   readonly db: DbClient
   readonly actor: Actor
   readonly role: TaskActorRole
-  readonly wake: (taskId: string, continuationRef: string) => Promise<void>
 }): CollaborationCommandContext {
   const clarifyDecisions: ClarifyDecisionCommandPort = {
     async submit(command) {
@@ -48,15 +44,6 @@ export function createClarifyDecisionCommandContext(input: {
         taskId: decided.taskId,
         operationId: decided.receipt.operationId,
       })
-      try {
-        await input.wake(decided.taskId, decided.continuationRef)
-      } catch (error) {
-        log.warn('clarify decision committed; durable continuation wake deferred', {
-          taskId: decided.taskId,
-          operationId: decided.receipt.operationId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
       return {
         taskId: decided.taskId,
         roundKind: decided.kind,

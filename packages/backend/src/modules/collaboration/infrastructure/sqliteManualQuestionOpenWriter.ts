@@ -23,6 +23,8 @@ import {
   type ManualQuestionOpenManifest,
   type ManualQuestionProjection,
 } from '../domain/manualQuestionOpen'
+import { appendHumanGateOpenedCommittedEventTx } from './collaborationCommittedEventParticipant'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
 export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter {
   constructor(
@@ -35,7 +37,7 @@ export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter 
     const operationId = ulid(at)
     const questionId = ulid(at)
     const originNodeRunId = ulid(at)
-    return dbTxSync(this.db, (tx) => {
+    const created = dbTxSync(this.db, (tx) => {
       const task = tx
         .select({
           status: tasks.status,
@@ -138,7 +140,26 @@ export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter 
         manifestJson,
         now: at,
       })
-      return { id: question.id, operation, manifest }
+      const eventRef = appendHumanGateOpenedCommittedEventTx(tx, {
+        family: 'questions',
+        gate: {
+          taskId: input.taskId,
+          nodeRunId: question.originNodeRunId,
+          gateKind: 'questions',
+          gateId: gateRef,
+          roundId: null,
+        },
+        occurredAt: at,
+        identity: { operationRef: operationId },
+      })
+      return {
+        id: question.id,
+        operation,
+        manifest,
+        eventRefs: eventRef === null ? [] : [eventRef],
+      }
     })
+    publishCommittedEventsAfterCommit(created.eventRefs)
+    return created
   }
 }

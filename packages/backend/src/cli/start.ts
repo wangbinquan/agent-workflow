@@ -29,6 +29,7 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import { composeHumanGateContinuationDriver } from '@/modules/task-execution/composition/humanGate'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { ulid } from 'ulid'
@@ -63,12 +64,7 @@ import { startAutoRepairLoop } from '@/services/autoRepair'
 import { startHeartbeatKillLoop } from '@/services/autoKill'
 import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import {
-  isTaskActive,
-  resumeTask,
-  retryRepositoryPreparation,
-  wakeHumanGateContinuation,
-} from '@/services/task'
+import { isTaskActive, resumeTask, retryRepositoryPreparation } from '@/services/task'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -89,6 +85,7 @@ import { startBatchImportGc } from '@/services/repoBatchImport'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import {
+  enqueueDistillJob,
   setMemoryDistillLangProvider,
   startMemoryDistillLoop,
 } from '@/services/memoryDistillScheduler'
@@ -143,13 +140,25 @@ import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
+import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
   createTaskLifecycleWsProjector,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/composition/committedEvents'
-import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
+import {
+  combineCommittedEventCodecRegistries,
+  createCommittedEventDispatcher,
+} from '@/platform/events/committed/dispatcherWorker'
+import {
+  createCollaborationDurableConsumerDefinitions,
+  createCollaborationWsProjector,
+  collaborationCommittedEventCodec,
+} from '@/modules/collaboration/composition/committedEvents'
+import { createHumanGateContinuationWorkerDefinition } from '@/modules/collaboration/application/humanGateContinuationWorker'
+import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
+import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
 import {
   createCommittedEventDispatcherWorkerDefinition,
   startManagedWorkerDefinition,
@@ -894,6 +903,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       developmentEmployeeTypePackage.descriptorJson,
       codeHostEventCatalogJson,
       taskLifecycleEventCatalogJson,
+      collaborationCommittedEventCatalogJson,
       digitalEmployeeLifecycleEventCatalogJson,
     ],
     observer: composeDevelopmentEmployeeEventObserver({
@@ -947,6 +957,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const gateContinuationDeps = {
     db,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
+    appHome: Paths.root,
     configPath: Paths.config,
     ...(secretBox !== undefined ? { secretBox } : {}),
     ...(config.subagentLiveCapture !== undefined
@@ -955,24 +966,63 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ...resolveLaunchRuntimeConfig(Paths.config),
   }
 
+  const humanGateContinuationWorkerDefinition = createHumanGateContinuationWorkerDefinition({
+    listPending: () => listPendingHumanGateContinuations(db),
+    drive: composeHumanGateContinuationDriver(gateContinuationDeps),
+    onError: (continuation) => {
+      log.warn('pending human-gate continuation drive failed', {
+        taskId: continuation.taskId,
+        continuationRef: continuation.continuationRef,
+        error:
+          continuation.error instanceof Error
+            ? continuation.error.message
+            : String(continuation.error),
+      })
+    },
+  })
+  const committedEventCodecs = combineCommittedEventCodecRegistries(
+    taskLifecycleCommittedEventCodec,
+    collaborationCommittedEventCodec,
+  )
+  const committedEventProjectors = [
+    createTaskLifecycleWsProjector(db),
+    createCollaborationWsProjector(db),
+  ]
+  const committedEventProjectionLedger = createCommittedEventProjectionLedger()
+
   const committedEventDispatcher = createCommittedEventDispatcher({
     db,
     workerId: `committed-events-${DAEMON_GENERATION}`,
-    codecs: taskLifecycleCommittedEventCodec,
-    consumers: createTaskLifecycleDurableConsumerDefinitions({
-      events: employeeHttpEventCenter.commands,
-      closeTerminalGates(taskId, status) {
-        sealOpenHumanGatesForTask(db, taskId, `task-${status}`)
-      },
-      notifyChildBudget(taskId, status) {
-        notifyChildBudgetTaskStatus(db, taskId, status)
-      },
-      notifyExecutionWatch: notifyTaskTerminal,
-      nudgeWorkspacePrune(taskId) {
-        if (isTaskActive(taskId)) return
-        void finishClaimedWebhookWorkspacePrune(db, taskId)
-      },
-    }),
+    codecs: committedEventCodecs,
+    consumers: [
+      ...createTaskLifecycleDurableConsumerDefinitions({
+        events: employeeHttpEventCenter.commands,
+        closeTerminalGates(taskId, status) {
+          sealOpenHumanGatesForTask(db, taskId, `task-${status}`)
+        },
+        notifyChildBudget(taskId, status) {
+          notifyChildBudgetTaskStatus(db, taskId, status)
+        },
+        notifyExecutionWatch: notifyTaskTerminal,
+        nudgeWorkspacePrune(taskId) {
+          if (isTaskActive(taskId)) return
+          void finishClaimedWebhookWorkspacePrune(db, taskId)
+        },
+      }),
+      ...createCollaborationDurableConsumerDefinitions({
+        events: employeeHttpEventCenter.commands,
+        nudgeContinuation: humanGateContinuationWorkerDefinition.nudge,
+        async enqueueReviewDistill(input) {
+          await enqueueDistillJob(db, {
+            sourceKind: 'review',
+            sourceEventId: input.sourceEventId,
+            taskId: input.taskId,
+          })
+        },
+      }),
+      ...committedEventProjectors,
+    ],
+    projectionLedger: committedEventProjectionLedger,
     maxAttempts() {
       const current = loadConfig(Paths.config)
       return 1 + current.defaultNodeRetries + current.sessionRestartBudget
@@ -984,11 +1034,22 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   const committedEventPump = createAfterCommitEventPump({
     db,
-    codecs: taskLifecycleCommittedEventCodec,
-    projectors: [createTaskLifecycleWsProjector(db)],
+    codecs: committedEventCodecs,
+    projectors: committedEventProjectors,
+    projectionLedger: committedEventProjectionLedger,
     nudgeDispatcher: committedEventWorkerDefinition.nudge,
+    nudgeContinuation: humanGateContinuationWorkerDefinition.nudge,
   })
   registerAfterCommitEventPump(committedEventPump)
+  const humanGateContinuationWorker = startManagedWorkerDefinition(
+    humanGateContinuationWorkerDefinition.definition,
+    DAEMON_GENERATION,
+  )
+  void humanGateContinuationWorker.done.catch((error) => {
+    log.error('human-gate continuation worker stopped unexpectedly', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
   const committedEventWorker = startManagedWorkerDefinition(
     committedEventWorkerDefinition.definition,
     DAEMON_GENERATION,
@@ -1031,35 +1092,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           err: err instanceof Error ? err.message : String(err),
         }),
       )
-    },
-    onHumanGateContinuations: (continuations) => {
-      void (async () => {
-        let woken = 0
-        let failed = 0
-        for (const continuation of continuations) {
-          try {
-            await wakeHumanGateContinuation(
-              continuation.taskId,
-              continuation.continuationRef,
-              gateContinuationDeps,
-            )
-            woken += 1
-          } catch (error) {
-            failed += 1
-            log.warn('pending human-gate continuation wake failed', {
-              ...continuation,
-              error: error instanceof Error ? error.message : String(error),
-            })
-          }
-        }
-        if (continuations.length > 0) {
-          log.info('pending human-gate continuation recovery on boot', {
-            attempted: continuations.length,
-            woken,
-            failed,
-          })
-        }
-      })()
     },
   })
 
@@ -1608,6 +1640,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     eventCenterWorker.stop()
     registerAfterCommitEventPump(null)
     await committedEventWorker.stop(signal)
+    await humanGateContinuationWorker.stop(signal)
     clearInterval(developmentWakeTimer)
     await maintenanceService.stop()
     await webhookTerminalControl.stop()

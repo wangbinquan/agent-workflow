@@ -4203,6 +4203,8 @@ export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps):
   })
 }
 
+const pendingHumanGateContinuationHandoffs = new Map<string, Promise<void>>()
+
 /**
  * RFC-333: wake an intent that was already admitted atomically by a human-gate
  * decision.  Unlike `resumeTask`, this performs no second lifecycle transition
@@ -4237,13 +4239,22 @@ export async function wakeHumanGateContinuation(
     await submitExact()
   }
   const deferBehindCurrentOwner = (): void => {
-    void submitAfterCurrentOwner().catch((error) => {
-      log.warn('human-gate continuation handoff wake failed', {
-        taskId,
-        continuationRef,
-        error: error instanceof Error ? error.message : String(error),
+    const handoffKey = `${taskId}\u0000${continuationRef}`
+    if (pendingHumanGateContinuationHandoffs.has(handoffKey)) return
+    const handoff = submitAfterCurrentOwner()
+      .catch((error) => {
+        log.warn('human-gate continuation handoff wake failed', {
+          taskId,
+          continuationRef,
+          error: error instanceof Error ? error.message : String(error),
+        })
       })
-    })
+      .finally(() => {
+        if (pendingHumanGateContinuationHandoffs.get(handoffKey) === handoff) {
+          pendingHumanGateContinuationHandoffs.delete(handoffKey)
+        }
+      })
+    pendingHumanGateContinuationHandoffs.set(handoffKey, handoff)
   }
 
   if (isTaskDriverActive(taskId)) {

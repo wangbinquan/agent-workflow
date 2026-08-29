@@ -41,6 +41,7 @@ export type CollaborationProjectionFrame = Extract<
       | 'clarify.answered'
       | 'cross-clarify.created'
       | 'cross-clarify.answered'
+      | 'cross-clarify.rejected'
   }
 >
 
@@ -66,6 +67,7 @@ export type HumanGateDecisionCommittedPayloadV1 = Readonly<{
     | Readonly<{ gateKind: 'questions'; kind: 'dispatched' }>
   gateStatus: Exclude<HumanGateStatusV1, 'open'>
   continuationRef: string | null
+  distillSourceEventId: string | null
   projectionFrames: readonly CollaborationProjectionFrame[]
 }>
 
@@ -91,6 +93,11 @@ export type QuestionDispatchCommittedPayloadV1 = Readonly<{
   gate: CollaborationGateRefV1
   questionIds: readonly string[]
   dispatchMode: QuestionDispatchModeV1
+  reruns: readonly Readonly<{
+    nodeRunId: string
+    nodeId: string
+    entryIds: readonly string[]
+  }>[]
   projectionFrames: readonly CollaborationProjectionFrame[]
 }>
 
@@ -124,6 +131,7 @@ const ALLOWED_COLLABORATION_FRAME_TYPES: ReadonlySet<string> = new Set([
   'clarify.answered',
   'cross-clarify.created',
   'cross-clarify.answered',
+  'cross-clarify.rejected',
 ])
 
 const collaborationProjectionFrameSchema = TaskWsMessageSchema.refine(
@@ -189,6 +197,7 @@ const humanGateDecisionSchema = collaborationEnvelopeBase
         ]),
         gateStatus: z.enum(['committed', 'deferred', 'closed']),
         continuationRef: z.string().min(1).nullable(),
+        distillSourceEventId: z.string().min(1).nullable(),
         projectionFrames: z.array(collaborationProjectionFrameSchema),
       })
       .strict(),
@@ -246,6 +255,15 @@ const questionDispatchCommittedSchema = collaborationEnvelopeBase
         gate: gateRefSchema,
         questionIds: z.array(z.string().min(1)),
         dispatchMode: z.enum(['immediate', 'deferred', 'mixed', 'none']),
+        reruns: z.array(
+          z
+            .object({
+              nodeRunId: z.string().min(1),
+              nodeId: z.string().min(1),
+              entryIds: z.array(z.string().min(1)),
+            })
+            .strict(),
+        ),
         projectionFrames: z.array(collaborationProjectionFrameSchema),
       })
       .strict(),
@@ -265,11 +283,42 @@ const collaborationCommittedEventSchema = z
     if (event.family !== expectedFamily) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: 'collaboration family mismatch' })
     }
+    const expectedAggregate =
+      event.family === 'review'
+        ? {
+            kind: 'review-round' as const,
+            id: event.payload.gate.roundId ?? event.payload.gate.gateId,
+          }
+        : event.family === 'clarify'
+          ? {
+              kind: 'clarify-round' as const,
+              id: event.payload.gate.roundId ?? event.payload.gate.gateId,
+            }
+          : { kind: 'question-gate' as const, id: event.payload.gate.gateId }
+    if (
+      event.aggregate.kind !== expectedAggregate.kind ||
+      event.aggregate.id !== expectedAggregate.id
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'collaboration event aggregate mismatch',
+      })
+    }
     if (
       event.type === 'collaboration.human-gate-decision-committed.v1' &&
       event.payload.decision.gateKind !== event.payload.gate.gateKind
     ) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: 'collaboration decision mismatch' })
+    }
+    if (
+      event.type === 'collaboration.human-gate-decision-committed.v1' &&
+      event.family !== 'review' &&
+      event.payload.distillSourceEventId !== null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'collaboration distill source is review-only',
+      })
     }
     if (
       (event.type === 'collaboration.review-comments-changed.v1' ||
@@ -288,6 +337,14 @@ const collaborationCommittedEventSchema = z
 
 export function decodeCollaborationCommittedEvent(value: unknown): CollaborationCommittedV1 {
   return collaborationCommittedEventSchema.parse(value) as CollaborationCommittedV1
+}
+
+export function decodeQuestionDispatchCommittedPayload(
+  value: unknown,
+): QuestionDispatchCommittedPayloadV1 {
+  return questionDispatchCommittedSchema.shape.payload.parse(
+    value,
+  ) as QuestionDispatchCommittedPayloadV1
 }
 
 export const COLLABORATION_DURABLE_CONSUMER_MANIFEST = [

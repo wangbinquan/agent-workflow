@@ -30,6 +30,8 @@ import {
   type ManualQuestionOpenManifest,
 } from '../domain/manualQuestionOpen'
 import { decodeReviewGateOpenManifest, type ReviewGateOpenManifest } from '../domain/reviewGateOpen'
+import { appendHumanGateOpenedCommittedEventTx } from './collaborationCommittedEventParticipant'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 interface PreparedOpenManifest {
   readonly schemaVersion: 1
@@ -571,6 +573,7 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
         { operationId: operation.id },
       )
     }
+    let collaborationEventRef: CommittedEventRef | null = null
     if (manifest.kind === 'review-open') {
       const reviewManifest = decodeReviewGateOpenManifest(operation.manifestJson)
       if (
@@ -599,6 +602,21 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
         }
       }
       projectReviewGateOpenTx(this.tx, reviewManifest)
+      collaborationEventRef = appendHumanGateOpenedCommittedEventTx(this.tx, {
+        family: 'review',
+        gate: {
+          taskId: operation.taskId,
+          nodeRunId: reviewManifest.node.id,
+          gateKind: 'review',
+          gateId: operation.gateRef,
+          roundId: reviewManifest.node.id,
+        },
+        occurredAt: input.now,
+        identity: {
+          operationRef: operation.id,
+          eventGroupOrdinal: 1,
+        },
+      })
     } else if (manifest.kind === 'clarify-open') {
       const clarifyManifest = decodeClarifyGateOpenManifest(operation.manifestJson)
       if (
@@ -613,6 +631,21 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
         )
       }
       projectClarifyGateOpenTx(this.tx, clarifyManifest)
+      collaborationEventRef = appendHumanGateOpenedCommittedEventTx(this.tx, {
+        family: 'clarify',
+        gate: {
+          taskId: operation.taskId,
+          nodeRunId: clarifyManifest.node.id,
+          gateKind: 'clarify',
+          gateId: operation.gateRef,
+          roundId: clarifyManifest.round.id,
+        },
+        occurredAt: input.now,
+        identity: {
+          operationRef: operation.id,
+          eventGroupOrdinal: 1,
+        },
+      })
     }
     const receiptJson = JSON.stringify({
       v: 1,
@@ -645,6 +678,7 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
       gateRevision: committed.resultGateRevision,
       nodeProjectionDigest: manifest.nodeProjectionDigest,
       committedEventRef: manifest.committedEventRef,
+      eventRefs: collaborationEventRef === null ? [] : [collaborationEventRef],
     }
   }
 }

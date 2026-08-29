@@ -3,6 +3,7 @@
 // SQLite handle stays inside the two persistence adapters.
 
 import type { HumanGateIdentity, PreparedHumanGateRef } from '@/modules/collaboration/public/types'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 import type { TransactionScope } from '@/platform/persistence/transactionScope'
 
 export interface HumanGateOpenParticipantResult {
@@ -10,6 +11,7 @@ export interface HumanGateOpenParticipantResult {
   readonly gateRevision: number
   readonly nodeProjectionDigest: string
   readonly committedEventRef: string
+  readonly eventRefs: readonly CommittedEventRef[]
 }
 
 export interface HumanGateOpenParticipant {

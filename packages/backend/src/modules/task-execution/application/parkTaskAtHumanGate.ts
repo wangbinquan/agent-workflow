@@ -3,7 +3,7 @@
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
+import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import type { OwnershipToken } from '../domain/ownership'
 import type { HumanGateOpenParticipant } from './ports/humanGateOpenParticipant'
@@ -97,13 +97,18 @@ export class TaskParkTransaction {
         expectedTaskRevision: prepared.expectedTaskRevision,
         transition: consumed.gate.kind === 'review' ? 'park-review' : 'park-human',
         now,
+        committedEventIdentity: {
+          operationRef: prepared.operationId,
+          eventGroupId: committedEventGroupId('collaboration', prepared.operationId),
+          eventGroupOrdinal: 0,
+        },
       })
       result = {
         taskRevision: parked.taskRevision,
         gateRevision: consumed.gateRevision,
         nodeProjectionDigest: consumed.nodeProjectionDigest,
         committedEventRef: consumed.committedEventRef,
-        eventRefs: parked.eventRefs,
+        eventRefs: [...parked.eventRefs, ...consumed.eventRefs],
       }
       return undefined
     })

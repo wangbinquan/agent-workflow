@@ -653,6 +653,7 @@ export function transitionHumanGateTaskTx(args: {
   readonly expectedTaskRevision: number
   readonly transition: HumanGateTaskTransition
   readonly now: number
+  readonly nodeChanges?: readonly TaskNodeChangeV1[]
   readonly committedEventIdentity?: Partial<TaskCommittedEventIdentity>
 }): {
   readonly from: TaskStatus
@@ -737,6 +738,7 @@ export function transitionHumanGateTaskTx(args: {
     isRevival: false,
     workspacePruneDecision: { prune: false },
     previousErrorSummary: row.errorSummary,
+    nodeChanges: args.nodeChanges,
     committedEventIdentity: args.committedEventIdentity,
   })
   return {

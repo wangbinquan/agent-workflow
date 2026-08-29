@@ -60,8 +60,6 @@ import {
   type ClarifyNode,
   type ClarifyQuestion,
   type ClarifyRoundStatus,
-  type ClarifySession,
-  type ClarifySessionSummary,
   type ClarifyTerminatedAs,
   type ClarifyTruncationWarning,
   type WorkflowDefinition,
@@ -79,7 +77,6 @@ import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import { ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
-import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 
 const log = createLogger('clarify')
 
@@ -378,15 +375,6 @@ export async function createClarifyRound(
     })
   }
 
-  if (committedHere && args.kind === 'self') {
-    // RFC-037: created-event enrichment — taskName + clarify node title, so
-    // WS subscribers don't re-fetch the list to learn them. Missing task
-    // (hard-delete race) degrades to ''; missing title stays null.
-    const title = resolveNodeTitleFromSnapshot(taskRow.workflowSnapshot, args.intermediaryNodeId)
-    broadcastSelfCreated(round, taskRow.name, title)
-  } else if (committedHere) {
-    broadcastCrossCreated(round)
-  }
   return { round, intermediaryNodeRunId }
 }
 
@@ -421,169 +409,6 @@ async function findSelfGateRunForShard(
   if (owningRunId === undefined) return undefined
   const runRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, owningRunId)).limit(1)
   return runRows[0]
-}
-
-/** Parse one node's title out of a task workflowSnapshot; undefined when absent. */
-function resolveNodeTitleFromSnapshot(
-  workflowSnapshotJson: string | undefined,
-  nodeId: string,
-): string | undefined {
-  if (workflowSnapshotJson === undefined) return undefined
-  try {
-    const def = JSON.parse(workflowSnapshotJson) as WorkflowDefinition
-    for (const node of def.nodes ?? []) {
-      if (node.id !== nodeId) continue
-      const title =
-        typeof (node as Record<string, unknown>).title === 'string'
-          ? ((node as Record<string, unknown>).title as string).trim()
-          : ''
-      return title.length > 0 ? title : undefined
-    }
-  } catch {
-    // corrupt snapshot — degrade to no title.
-  }
-  return undefined
-}
-
-// ---------------------------------------------------------------------------
-// WS broadcasts — wire shapes FROZEN (legacy event types + legacy field names),
-// produced from the unified DTO by these private adapters.
-// ---------------------------------------------------------------------------
-
-function toLegacySelfSession(round: ClarifyRoundDto): ClarifySession {
-  const out: ClarifySession = {
-    id: round.id,
-    taskId: round.taskId,
-    sourceAgentNodeId: round.askingNodeId,
-    sourceAgentNodeRunId: round.askingNodeRunId,
-    sourceShardKey: round.askingShardKey,
-    clarifyNodeId: round.intermediaryNodeId,
-    clarifyNodeRunId: round.intermediaryNodeRunId,
-    iterationIndex: round.iteration,
-    questions: round.questions,
-    status: round.status as ClarifySession['status'],
-    createdAt: round.createdAt,
-    answeredAt: round.answeredAt,
-    answeredBy: round.answeredBy,
-    directive: round.directive,
-  }
-  if (round.answers !== undefined) out.answers = round.answers
-  if (round.truncationWarnings !== undefined) out.truncationWarnings = round.truncationWarnings
-  return out
-}
-
-function toLegacySelfSummary(
-  round: ClarifyRoundDto,
-  taskName: string,
-  clarifyNodeTitle: string | undefined,
-): ClarifySessionSummary {
-  return {
-    id: round.id,
-    taskId: round.taskId,
-    taskName,
-    sourceAgentNodeId: round.askingNodeId,
-    sourceAgentNodeTitle: null,
-    sourceShardKey: round.askingShardKey,
-    clarifyNodeId: round.intermediaryNodeId,
-    clarifyNodeTitle: clarifyNodeTitle ?? null,
-    clarifyNodeRunId: round.intermediaryNodeRunId,
-    iterationIndex: round.iteration,
-    questionCount: round.questions.length,
-    status: round.status as ClarifySessionSummary['status'],
-    createdAt: round.createdAt,
-    answeredAt: round.answeredAt,
-  }
-}
-
-function broadcastSelfCreated(
-  round: ClarifyRoundDto,
-  taskName: string,
-  clarifyNodeTitle: string | undefined,
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(round.taskId), {
-    id: -1,
-    type: 'clarify.created',
-    nodeRunId: round.intermediaryNodeRunId,
-    clarifyNodeId: round.intermediaryNodeId,
-    sourceShardKey: round.askingShardKey,
-    iterationIndex: round.iteration,
-    session: toLegacySelfSummary(round, taskName, clarifyNodeTitle),
-  })
-}
-
-function broadcastCrossCreated(round: ClarifyRoundDto): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(round.taskId), {
-    id: -1,
-    type: 'cross-clarify.created',
-    nodeRunId: round.intermediaryNodeRunId,
-    crossClarifyNodeId: round.intermediaryNodeId,
-    sessionId: round.id,
-    iteration: round.iteration,
-    sourceQuestionerNodeId: round.askingNodeId,
-    targetDesignerNodeId: round.targetConsumerNodeId,
-  })
-}
-
-/**
- * RFC-128 P5-D — re-emit the legacy answered WS event(s) for a (now-answered)
- * round so OTHER clients invalidate clarify list/detail/pending-count +
- * node-runs after a DEFERRED quick answer (autoDispatchClarifyRound reuses the
- * legacy quick path's notification, which it otherwise bypasses). No-op unless
- * the round exists AND is answered.
- *
- * kind='self': emits 'clarify.answered' with `rerunNodeRunId` (the dispatched
- * self rerun, or '' when deferred to manual — the invalidation still fires).
- * kind='cross': emits 'cross-clarify.answered'; pass
- * `rejectedQuestionerNodeRunId` ONLY for a stop round to also fire
- * 'cross-clarify.rejected'.
- */
-export async function broadcastClarifyAnsweredForRound(
-  db: DbClient,
-  kind: ClarifyRoundKind,
-  intermediaryNodeRunId: string,
-  opts: { rerunNodeRunId?: string; rejectedQuestionerNodeRunId?: string } = {},
-): Promise<void> {
-  const raw = (
-    await db
-      .select()
-      .from(clarifyRounds)
-      .where(and(kindIs(kind), eq(clarifyRounds.intermediaryNodeRunId, intermediaryNodeRunId)))
-      .orderBy(desc(clarifyRounds.createdAt))
-      .limit(1)
-  )[0]
-  if (raw === undefined) return
-  const round = rowToRound(raw)
-  if (round.status !== 'answered') return
-  if (kind === 'self') {
-    taskBroadcaster.broadcast(TASK_CHANNEL(round.taskId), {
-      id: -1,
-      type: 'clarify.answered',
-      nodeRunId: round.intermediaryNodeRunId,
-      clarifyNodeId: round.intermediaryNodeId,
-      sourceShardKey: round.askingShardKey,
-      iterationIndex: round.iteration,
-      rerunNodeRunId: opts.rerunNodeRunId ?? '',
-      session: toLegacySelfSession(round),
-    })
-    return
-  }
-  taskBroadcaster.broadcast(TASK_CHANNEL(round.taskId), {
-    id: -1,
-    type: 'cross-clarify.answered',
-    nodeRunId: round.intermediaryNodeRunId,
-    sessionId: round.id,
-    iteration: round.iteration,
-    directive: round.directive ?? 'continue',
-  })
-  if (opts.rejectedQuestionerNodeRunId !== undefined) {
-    taskBroadcaster.broadcast(TASK_CHANNEL(round.taskId), {
-      id: -1,
-      type: 'cross-clarify.rejected',
-      nodeRunId: round.intermediaryNodeRunId,
-      sessionId: round.id,
-      questionerNodeRunId: opts.rejectedQuestionerNodeRunId,
-    })
-  }
 }
 
 // ---------------------------------------------------------------------------

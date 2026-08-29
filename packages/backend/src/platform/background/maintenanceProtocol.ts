@@ -63,18 +63,10 @@ const IntentQueuedDeltaSchema = z
   })
   .strict()
 
-const HumanGateContinuationsDeltaSchema = z
-  .object({
-    kind: z.literal('human-gate-continuations'),
-    continuations: z.array(z.object({ taskId: z.string(), continuationRef: z.string() }).strict()),
-  })
-  .strict()
-
 export const MaintenanceWorkerDeltaSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('none') }).strict(),
   LifecycleDeltaSchema,
   IntentQueuedDeltaSchema,
-  HumanGateContinuationsDeltaSchema,
 ])
 export type MaintenanceWorkerDelta = z.infer<typeof MaintenanceWorkerDeltaSchema>
 

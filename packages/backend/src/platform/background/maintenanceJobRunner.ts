@@ -25,7 +25,6 @@ import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { runRetentionSweepSlice } from '@/services/maintenanceRetention'
 import { runPluginGenerationGc } from '@/services/pluginGenerationGc'
 import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
-import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { runTaskArchiveSweep } from '@/services/taskArchive'
 import { pruneTokenAuditSlice } from '@/services/tokenAudit'
 import { runDeliveryGcSlice } from '@/services/webhook/webhookGc'
@@ -499,12 +498,11 @@ export async function runMaintenanceJob(input: {
       return { counters: { checkpointed: 1 }, delta: NONE }
     }
     case 'humanGateRecovery': {
+      // Historical durable rows may survive an in-place upgrade. The active
+      // owner is now collaboration's continuous worker, so an old queued slot
+      // settles as a no-op instead of creating a second continuation driver.
       parseMaintenanceJobPayload(job, input.payload)
-      const continuations = listPendingHumanGateContinuations(db)
-      return {
-        counters: { attempted: continuations.length },
-        delta: { kind: 'human-gate-continuations', continuations: [...continuations] },
-      }
+      return { counters: { retired: 1 }, delta: NONE }
     }
   }
 }

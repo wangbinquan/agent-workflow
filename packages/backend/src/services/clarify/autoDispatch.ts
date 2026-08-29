@@ -53,6 +53,7 @@ import {
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { buildFrozenAttributionSet } from './rounds'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import {
@@ -596,11 +597,18 @@ export async function autoDispatchClarifyRoundWithDecision(
     taskRevision: task.lifecycleEventRevision,
     decision,
   })
-  const result = await autoDispatchClarifyRound({
-    ...args,
-    directive,
-    decisionParticipant: prepared.participant,
-  })
+  let result: AutoDispatchClarifyRoundResult
+  try {
+    result = await autoDispatchClarifyRound({
+      ...args,
+      directive,
+      decisionParticipant: prepared.participant,
+    })
+  } finally {
+    if (prepared.capture.eventRefs !== undefined) {
+      publishCommittedEventsAfterCommit(prepared.capture.eventRefs)
+    }
+  }
   const envelope = prepared.capture.envelope
   if (envelope === undefined) {
     throw new ConflictError(

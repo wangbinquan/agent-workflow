@@ -87,7 +87,6 @@ import { pickFreshestRun } from '@/services/freshness'
 import { abandonSupersededMergeStates } from '@/services/lifecycle'
 import { nextRetryIndex, buildMintNodeRunValues } from '@/services/nodeRunMint'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
-import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import {
   assertTaskAcceptsQuestions,
   taskNodeHasRun,
@@ -108,6 +107,13 @@ import {
   type QuestionDispatchManifestBridge as QuestionDispatchManifest,
   type QuestionDispatchReceiptEnvelopeBridge as QuestionDispatchReceiptEnvelope,
 } from '@/services/humanGateComposition'
+import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
+import {
+  appendHumanGateDecisionCommittedEventTx,
+  appendQuestionDispatchCommittedEventTx,
+} from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import {
   isClarifyChannelEdge,
   isTurnEngineWorkgroupTask,
@@ -1209,9 +1215,42 @@ async function commitDispatchPlan(
   const plannedByEntry = new Map(
     dispatchEntries.map((e) => [e.id, { target: effectiveTarget(e), origin: e.originNodeRunId }]),
   )
+  const gateNodeRunId =
+    dispatchEntries[0]?.originNodeRunId ??
+    (deferredEntries[0] === undefined
+      ? undefined
+      : (
+          await db
+            .select({ originNodeRunId: taskQuestions.originNodeRunId })
+            .from(taskQuestions)
+            .where(eq(taskQuestions.id, deferredEntries[0].entryId))
+            .limit(1)
+        )[0]?.originNodeRunId) ??
+    `questions:${taskId}`
+  const pendingProjectionNodeChanges = mintPlans
+    .filter(
+      (plan) =>
+        plan.values.nodeId === WG_LEADER_NODE_ID || plan.values.nodeId === WG_MEMBER_NODE_ID,
+    )
+    .map((plan) => ({
+      nodeRunId: plan.values.id,
+      nodeId: plan.values.nodeId,
+      status: 'pending' as const,
+      cause: plan.values.rerunCause ?? null,
+    }))
+  const dispatchedReruns: DispatchedRerun[] = mintPlans.map((plan) => ({
+    targetNodeId: plan.nodeId,
+    nodeRunId: plan.preId,
+    // RFC-172 (route 2, S2a): one node may have multiple shard reruns. Keep
+    // each committed question-dispatch fact bound to its exact minted run.
+    entryIds: dispatchEntries
+      .filter((entry) => effectiveTarget(entry) === plan.nodeId && shardOf(entry) === plan.shardKey)
+      .map((entry) => entry.id),
+  }))
   const now = Date.now()
   let committed = false
   let replayed = false
+  let committedEventRefs: readonly CommittedEventRef[] = []
   try {
     // RFC-128 §5.2.14 final-gate (user-authorized): the per-task QUESTION-WRITE lock (B) protects
     // this stamp+mint tx from a clarify/cross-clarify SUBMIT's {precheck→rollback→tx} interleave —
@@ -1485,17 +1524,8 @@ async function commitDispatchPlan(
               continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
               operationId: begun.operation.id,
               now,
+              nodeChanges: pendingProjectionNodeChanges,
             })
-          const reruns: DispatchedRerun[] = mintPlans.map((plan) => ({
-            targetNodeId: plan.nodeId,
-            nodeRunId: plan.preId,
-            entryIds: dispatchEntries
-              .filter(
-                (entry) =>
-                  effectiveTarget(entry) === plan.nodeId && shardOf(entry) === plan.shardKey,
-              )
-              .map((entry) => entry.id),
-          }))
           const envelope: QuestionDispatchReceiptEnvelope = {
             schemaVersion: 1,
             kind: 'question-dispatch',
@@ -1510,7 +1540,7 @@ async function commitDispatchPlan(
             result: {
               taskId,
               continuationRef: accepted.continuationRef,
-              reruns,
+              reruns: dispatchedReruns,
               dispatchedEntryIds: dispatchIds,
               deferred: deferredEntries,
             },
@@ -1528,7 +1558,108 @@ async function commitDispatchPlan(
             expectedClaimEpoch: begun.operation.claimEpoch,
             now,
           })
+          const gate = {
+            taskId,
+            nodeRunId: gateNodeRunId,
+            gateKind: 'questions' as const,
+            gateId: decision.gateRef,
+            roundId: null,
+          }
+          const eventGroupId = committedEventGroupId('collaboration', begun.operation.id)
+          const decisionEventRef = appendHumanGateDecisionCommittedEventTx(tx, {
+            family: 'questions',
+            gate,
+            decision: { gateKind: 'questions', kind: 'dispatched' },
+            gateStatus: 'committed',
+            continuationRef: accepted.continuationRef,
+            occurredAt: now,
+            identity: {
+              operationRef: begun.operation.id,
+              eventGroupId,
+              eventGroupOrdinal: 1,
+              correlationRef: `human-gate-node-run:${gateNodeRunId}`,
+            },
+          })
+          const questionEventRef = appendQuestionDispatchCommittedEventTx(tx, {
+            gate,
+            questionIds: [...dispatchIds, ...deferredEntries.map((entry) => entry.entryId)],
+            reruns: dispatchedReruns.map((rerun) => ({
+              nodeRunId: rerun.nodeRunId,
+              nodeId: rerun.targetNodeId,
+              entryIds: rerun.entryIds,
+            })),
+            dispatchMode:
+              dispatchIds.length > 0 && deferredEntries.length > 0
+                ? 'mixed'
+                : dispatchIds.length > 0
+                  ? 'immediate'
+                  : deferredEntries.length > 0
+                    ? 'deferred'
+                    : 'none',
+            occurredAt: now,
+            identity: {
+              operationRef: begun.operation.id,
+              eventGroupId,
+              eventGroupOrdinal: 2,
+              correlationRef: `human-gate-node-run:${gateNodeRunId}`,
+            },
+          })
+          committedEventRefs = [
+            ...accepted.eventRefs,
+            ...(decisionEventRef === null ? [] : [decisionEventRef]),
+            ...(questionEventRef === null ? [] : [questionEventRef]),
+          ]
           decision.capture.envelope = envelope
+        } else if (dispatchIds.length > 0 || deferredEntries.length > 0) {
+          const operationRef = `question-dispatch:${taskId}:${ulid(now)}`
+          const eventGroupId = committedEventGroupId('collaboration', operationRef)
+          const taskEventRef =
+            pendingProjectionNodeChanges.length === 0
+              ? null
+              : appendTaskNodeStatusesCommittedEventTx(tx, {
+                  taskId,
+                  reason: 'human-gate',
+                  nodeChanges: pendingProjectionNodeChanges,
+                  occurredAt: now,
+                  identity: {
+                    operationRef,
+                    eventGroupId,
+                    eventGroupOrdinal: 0,
+                    correlationRef: `human-gate-node-run:${gateNodeRunId}`,
+                  },
+                })
+          const questionEventRef = appendQuestionDispatchCommittedEventTx(tx, {
+            gate: {
+              taskId,
+              nodeRunId: gateNodeRunId,
+              gateKind: 'questions',
+              gateId: `questions:${taskId}`,
+              roundId: null,
+            },
+            questionIds: [...dispatchIds, ...deferredEntries.map((entry) => entry.entryId)],
+            reruns: dispatchedReruns.map((rerun) => ({
+              nodeRunId: rerun.nodeRunId,
+              nodeId: rerun.targetNodeId,
+              entryIds: rerun.entryIds,
+            })),
+            dispatchMode:
+              dispatchIds.length > 0 && deferredEntries.length > 0
+                ? 'mixed'
+                : dispatchIds.length > 0
+                  ? 'immediate'
+                  : 'deferred',
+            occurredAt: now,
+            identity: {
+              operationRef,
+              eventGroupId,
+              eventGroupOrdinal: 1,
+              correlationRef: `human-gate-node-run:${gateNodeRunId}`,
+            },
+          })
+          committedEventRefs = [
+            ...(taskEventRef === null ? [] : [taskEventRef]),
+            ...(questionEventRef === null ? [] : [questionEventRef]),
+          ]
         }
         // RFC-162: the asker-echo (roleKind='echo') materialization is DELETED. Reassign no
         // longer MOVES the asker's entry (it keeps it + ADDS a designer handler), so the asker
@@ -1558,6 +1689,7 @@ async function commitDispatchPlan(
     throw e
   }
   if (!committed) return EMPTY_RESULT
+  publishCommittedEventsAfterCommit(committedEventRefs)
   if (replayed && decision?.capture.envelope !== undefined) {
     const envelope = decision.capture.envelope
     return {
@@ -1570,35 +1702,7 @@ async function commitDispatchPlan(
     }
   }
 
-  // RFC-182 D6 (design-gate P2) — a clarify-answer HOST rerun is minted here
-  // (outside the engine) and later ADOPTED via adoptedRunId, so the engine's
-  // own mint-time pending frame never fires for it; `clarify.answered` also
-  // does not invalidate the room key. Without this post-commit frame the
-  // resumed member looks idle in the room until the run actually starts.
-  // Same frame shape as the engine's broadcastPendingMint (workgroupRunner).
-  for (const p of mintPlans) {
-    if (p.values.nodeId === WG_LEADER_NODE_ID || p.values.nodeId === WG_MEMBER_NODE_ID) {
-      taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-        id: -1,
-        type: 'node.status',
-        nodeRunId: p.values.id,
-        nodeId: p.values.nodeId,
-        status: 'pending',
-      })
-    }
-  }
-
-  const reruns: DispatchedRerun[] = mintPlans.map((p) => ({
-    targetNodeId: p.nodeId,
-    nodeRunId: p.preId,
-    // RFC-172 (route 2, S2a): a node may now have MULTIPLE reruns (one per shard) — map each
-    // entry to its OWN shard's rerun, else member B's entryId rides member A's rerun. `p.shardKey`
-    // is null for every non-workgroup plan and `shardOf` is null for every non-member entry, so
-    // this collapses to today's `effectiveTarget === p.nodeId` filter (golden-lock).
-    entryIds: dispatchEntries
-      .filter((e) => effectiveTarget(e) === p.nodeId && shardOf(e) === p.shardKey)
-      .map((e) => e.id),
-  }))
+  const reruns = dispatchedReruns
   log.info('task questions dispatched', {
     taskId,
     actorUserId: actor.userId,

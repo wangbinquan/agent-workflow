@@ -147,7 +147,6 @@ import {
   transitionNodeRunStatusTx,
 } from '@/services/lifecycle'
 import { snapshotNodeAgentWhere } from '@/services/agent'
-import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
 import { nextRetryIndex, mintNodeRun, mintNodeRunTx } from '@/services/nodeRunMint'
 import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
 import {
@@ -171,7 +170,12 @@ import { hasActingMembership, hasActingMembershipTx } from '@/services/taskColla
 import { resolveTaskRole } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
-import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+import {
+  appendHumanGateDecisionCommittedEventTx,
+  appendReviewCommentsChangedCommittedEventTx,
+  appendReviewSelectionChangedCommittedEventTx,
+} from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
 const {
   canonicalHumanGateRequestHash,
@@ -1074,7 +1078,6 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     if (docs.length !== prepared.documentIds.length) {
       throw new Error('review-open-committed-document-projection-missing')
     }
-    broadcastReviewCreated(taskId, prepared.nodeRunId, node.id, docs[0]!)
     return {
       kind: 'awaiting_review',
       summary: isMultiDoc
@@ -1307,9 +1310,6 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         message: 'review-auto-approved',
       }
     }
-    // One broadcast is enough — the WS event just triggers an inbox/detail
-    // refetch that pulls the whole document set.
-    broadcastReviewCreated(taskId, reviewNodeRunId, node.id, docs[0]!)
     return {
       kind: 'awaiting_review',
       summary: `review node ${node.id} awaiting decision (${docs.length} document${
@@ -1320,11 +1320,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   }
 
   // Single-document (unchanged).
-  let docVersion: DocVersion
-  if (pendingDocVersions.length > 0) {
-    docVersion = rowToDocVersion(pendingDocVersions[0]!)
-  } else {
-    docVersion = await createDocVersion({
+  if (pendingDocVersions.length === 0) {
+    await createDocVersion({
       db,
       appHome,
       taskId,
@@ -1338,7 +1335,6 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     })
   }
 
-  broadcastReviewCreated(taskId, reviewNodeRunId, node.id, docVersion)
   return {
     kind: 'awaiting_review',
     summary: `review node ${node.id} awaiting decision`,
@@ -2457,23 +2453,6 @@ async function addReviewCommentUnlocked(
 
   const id = ulid()
   const now = Date.now()
-  await args.db.insert(reviewComments).values({
-    id,
-    docVersionId: dv.id,
-    anchorSectionPath: canonical.sectionPath,
-    anchorParagraphIdx: canonical.paragraphIdx,
-    anchorOffsetStart: canonical.offsetStart,
-    anchorOffsetEnd: canonical.offsetEnd,
-    selectedText: canonical.selectedText,
-    contextBefore: canonical.contextBefore,
-    contextAfter: canonical.contextAfter,
-    occurrenceIndex: canonical.occurrenceIndex,
-    commentText: args.commentText,
-    author: args.author ?? LOCAL_DECIDER,
-    authorRole: args.authorRole ?? null,
-    createdAt: now,
-  })
-
   const comment: ReviewComment = {
     id,
     docVersionId: dv.id,
@@ -2483,7 +2462,48 @@ async function addReviewCommentUnlocked(
     authorRole: args.authorRole ?? null,
     createdAt: now,
   }
-  emitReviewCommentAddedEvent(dv.taskId, args.nodeRunId, dv.id, comment)
+  const eventRefs = dbTxSync(args.db, (tx) => {
+    tx.insert(reviewComments)
+      .values({
+        id,
+        docVersionId: dv.id,
+        anchorSectionPath: canonical.sectionPath,
+        anchorParagraphIdx: canonical.paragraphIdx,
+        anchorOffsetStart: canonical.offsetStart,
+        anchorOffsetEnd: canonical.offsetEnd,
+        selectedText: canonical.selectedText,
+        contextBefore: canonical.contextBefore,
+        contextAfter: canonical.contextAfter,
+        occurrenceIndex: canonical.occurrenceIndex,
+        commentText: args.commentText,
+        author: args.author ?? LOCAL_DECIDER,
+        authorRole: args.authorRole ?? null,
+        createdAt: now,
+      })
+      .run()
+    const eventRef = appendReviewCommentsChangedCommittedEventTx(tx, {
+      gate: {
+        taskId: dv.taskId,
+        nodeRunId: args.nodeRunId,
+        gateKind: 'review',
+        gateId: `review:${args.nodeRunId}`,
+        roundId: args.nodeRunId,
+      },
+      occurredAt: now,
+      projectionFrames: [
+        {
+          id: -1,
+          type: 'review.comment_added',
+          nodeRunId: args.nodeRunId,
+          docVersionId: dv.id,
+          comment,
+        },
+      ],
+      identity: { operationRef: `review-comment:add:${id}` },
+    })
+    return eventRef === null ? [] : [eventRef]
+  })
+  publishCommittedEventsAfterCommit(eventRefs)
   return { ...comment, warnings }
 }
 
@@ -2572,8 +2592,6 @@ async function updateReviewCommentTextUnlocked(
     )
   }
   assertCommentWriteAllowed(row.author, authz)
-  await db.update(reviewComments).set({ commentText }).where(eq(reviewComments.id, commentId))
-
   const updated: ReviewComment = {
     id: row.id,
     docVersionId: row.docVersionId,
@@ -2592,7 +2610,33 @@ async function updateReviewCommentTextUnlocked(
     authorRole: (row.authorRole ?? null) as ReviewComment['authorRole'],
     createdAt: row.createdAt,
   }
-  emitReviewCommentUpdatedEvent(dv.taskId, nodeRunId, dv.id, updated)
+  const now = Date.now()
+  const operationRef = `review-comment:update:${commentId}:${ulid(now)}`
+  const eventRefs = dbTxSync(db, (tx) => {
+    tx.update(reviewComments).set({ commentText }).where(eq(reviewComments.id, commentId)).run()
+    const eventRef = appendReviewCommentsChangedCommittedEventTx(tx, {
+      gate: {
+        taskId: dv.taskId,
+        nodeRunId,
+        gateKind: 'review',
+        gateId: `review:${nodeRunId}`,
+        roundId: nodeRunId,
+      },
+      occurredAt: now,
+      projectionFrames: [
+        {
+          id: -1,
+          type: 'review.comment_updated',
+          nodeRunId,
+          docVersionId: dv.id,
+          comment: updated,
+        },
+      ],
+      identity: { operationRef },
+    })
+    return eventRef === null ? [] : [eventRef]
+  })
+  publishCommittedEventsAfterCommit(eventRefs)
   return updated
 }
 
@@ -2652,8 +2696,32 @@ async function deleteReviewCommentUnlocked(
     )
   }
   assertCommentWriteAllowed(row.author, authz)
-  await db.delete(reviewComments).where(eq(reviewComments.id, commentId))
-  emitReviewCommentDeletedEvent(dv.taskId, nodeRunId, row.docVersionId, commentId)
+  const now = Date.now()
+  const eventRefs = dbTxSync(db, (tx) => {
+    tx.delete(reviewComments).where(eq(reviewComments.id, commentId)).run()
+    const eventRef = appendReviewCommentsChangedCommittedEventTx(tx, {
+      gate: {
+        taskId: dv.taskId,
+        nodeRunId,
+        gateKind: 'review',
+        gateId: `review:${nodeRunId}`,
+        roundId: nodeRunId,
+      },
+      occurredAt: now,
+      projectionFrames: [
+        {
+          id: -1,
+          type: 'review.comment_deleted',
+          nodeRunId,
+          docVersionId: row.docVersionId,
+          commentId,
+        },
+      ],
+      identity: { operationRef: `review-comment:delete:${commentId}:${ulid(now)}` },
+    })
+    return eventRef === null ? [] : [eventRef]
+  })
+  publishCommittedEventsAfterCommit(eventRefs)
 }
 
 // ---------------------------------------------------------------------------
@@ -3699,6 +3767,14 @@ async function submitReviewDecisionUnlocked(
           }),
       operationId: begun.operation.id,
       now: decidedAt,
+      nodeChanges: [
+        {
+          nodeRunId: args.nodeRunId,
+          nodeId: run.nodeId,
+          status: targetSelfStatus,
+          cause: `review-${args.decision}`,
+        },
+      ],
     })
     const receipt: ReviewDecisionReceiptEnvelope = {
       schemaVersion: 1,
@@ -3734,7 +3810,61 @@ async function submitReviewDecisionUnlocked(
       now: decidedAt,
     })
 
-    return { kind: 'committed' as const, inserted, skipped, selectionsApplied, receipt }
+    const collaborationEventRef = appendHumanGateDecisionCommittedEventTx(tx, {
+      family: 'review',
+      gate: {
+        taskId: taskRow.id,
+        nodeRunId: args.nodeRunId,
+        gateKind: 'review',
+        gateId: gateRef,
+        roundId: args.nodeRunId,
+      },
+      decision: { gateKind: 'review', kind: args.decision },
+      gateStatus: 'committed',
+      continuationRef: accepted.continuationRef,
+      distillSourceEventId,
+      occurredAt: decidedAt,
+      projectionFrames: [
+        ...selections.map((selection) => ({
+          id: -1,
+          type: 'review.selection_changed' as const,
+          nodeRunId: args.nodeRunId,
+          docVersionId: selection.docVersionId,
+          selection: selection.selection,
+        })),
+        ...inserted.map(({ docVersion, comment }) => ({
+          id: -1,
+          type: 'review.comment_added' as const,
+          nodeRunId: args.nodeRunId,
+          docVersionId: docVersion.id,
+          comment,
+        })),
+        {
+          id: -1,
+          type: 'review.decision_made',
+          nodeRunId: args.nodeRunId,
+          decision: args.decision,
+          reviewIteration: nextIter,
+          docVersionDecision: args.decision,
+        },
+      ],
+      identity: {
+        operationRef: begun.operation.id,
+        eventGroupOrdinal: 1,
+      },
+    })
+
+    return {
+      kind: 'committed' as const,
+      inserted,
+      skipped,
+      selectionsApplied,
+      receipt,
+      eventRefs:
+        collaborationEventRef === null
+          ? accepted.eventRefs
+          : [...accepted.eventRefs, collaborationEventRef],
+    }
   })
 
   if (committed.kind === 'replayed') {
@@ -3744,24 +3874,7 @@ async function submitReviewDecisionUnlocked(
     )
   }
 
-  // ── after commit: events + best-effort distill ────────────────────────────
-  for (const s of selections) {
-    emitReviewSelectionChanged(dv.taskId, args.nodeRunId, s.docVersionId, s.selection)
-  }
-  for (const { docVersion, comment } of committed.inserted) {
-    emitReviewCommentAddedEvent(dv.taskId, args.nodeRunId, docVersion.id, comment)
-  }
-  emitReviewDecisionEvent(dv.taskId, args.nodeRunId, args.decision, nextIter, args.decision)
-  // RFC-041: feed the decision into the memory distill queue. Best-effort by
-  // design (N10 / P14): its own write, after the decision committed; a failure
-  // here never blocks or reverts the decision.
-  await enqueueDistillJob(db, {
-    sourceKind: 'review',
-    sourceEventId: distillSourceEventId,
-    taskId: dv.taskId,
-  }).catch(() => {
-    /* swallow — distill is async, downstream broken queue must not affect decision */
-  })
+  publishCommittedEventsAfterCommit(committed.eventRefs)
 
   const hasBatch = args.comments !== undefined || args.selections !== undefined
   return {
@@ -4067,29 +4180,40 @@ async function setDocumentSelectionUnlocked(args: {
       `doc_version ${args.docVersionId} already decided (${dvRow.decision})`,
     )
   }
-  await args.db
-    .update(docVersions)
-    // RFC-129: a human judging the CURRENT content clears the inherited-stale
-    // flag (the sole clear path; see loadPriorRoundMembers stale propagation).
-    .set({ selection: args.selection, selectionStale: false })
-    .where(eq(docVersions.id, args.docVersionId))
-  emitReviewSelectionChanged(dvRow.taskId, args.nodeRunId, args.docVersionId, args.selection)
-  return { taskId: dvRow.taskId, docVersionId: args.docVersionId, selection: args.selection }
-}
-
-function emitReviewSelectionChanged(
-  taskId: string,
-  nodeRunId: string,
-  docVersionId: string,
-  selection: 'unselected' | 'accepted' | 'not_accepted',
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-    id: -1,
-    type: 'review.selection_changed',
-    nodeRunId,
-    docVersionId,
-    selection,
+  const now = Date.now()
+  const eventRefs = dbTxSync(args.db, (tx) => {
+    tx.update(docVersions)
+      // RFC-129: a human judging the CURRENT content clears the inherited-stale
+      // flag (the sole clear path; see loadPriorRoundMembers stale propagation).
+      .set({ selection: args.selection, selectionStale: false })
+      .where(eq(docVersions.id, args.docVersionId))
+      .run()
+    const eventRef = appendReviewSelectionChangedCommittedEventTx(tx, {
+      gate: {
+        taskId: dvRow.taskId,
+        nodeRunId: args.nodeRunId,
+        gateKind: 'review',
+        gateId: `review:${args.nodeRunId}`,
+        roundId: args.nodeRunId,
+      },
+      occurredAt: now,
+      projectionFrames: [
+        {
+          id: -1,
+          type: 'review.selection_changed',
+          nodeRunId: args.nodeRunId,
+          docVersionId: args.docVersionId,
+          selection: args.selection,
+        },
+      ],
+      identity: {
+        operationRef: `review-selection:${args.docVersionId}:${ulid(now)}`,
+      },
+    })
+    return eventRef === null ? [] : [eventRef]
   })
+  publishCommittedEventsAfterCommit(eventRefs)
+  return { taskId: dvRow.taskId, docVersionId: args.docVersionId, selection: args.selection }
 }
 
 async function iterateSiblingCascadeApplies(args: {
@@ -4450,93 +4574,6 @@ export async function buildSiblingOutputsBlock(
   }
   if (sections.length === 0) return undefined
   return `${SIBLING_OUTPUTS_INSTRUCTION}\n\n${sections.join('\n')}`
-}
-
-// ---------------------------------------------------------------------------
-// WS broadcast helpers.
-// ---------------------------------------------------------------------------
-
-function broadcastReviewCreated(
-  taskId: string,
-  nodeRunId: string,
-  reviewNodeId: string,
-  dv: DocVersion,
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-    id: -1,
-    type: 'review.created',
-    nodeRunId,
-    reviewNodeId,
-    docVersionId: dv.id,
-    versionIndex: dv.versionIndex,
-    reviewIteration: dv.reviewIteration,
-  })
-}
-
-/**
- * Broadcast a review.decision_made event — called from a context that has
- * the taskId directly (REST decision handler).
- */
-export function emitReviewDecisionEvent(
-  taskId: string,
-  nodeRunId: string,
-  decision: ReviewDecisionKind,
-  reviewIteration: number,
-  docVersionDecision: DocVersionDecision,
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-    id: -1,
-    type: 'review.decision_made',
-    nodeRunId,
-    decision,
-    reviewIteration,
-    docVersionDecision,
-  })
-}
-
-export function emitReviewCommentAddedEvent(
-  taskId: string,
-  nodeRunId: string,
-  docVersionId: string,
-  comment: ReviewComment,
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-    id: -1,
-    type: 'review.comment_added',
-    nodeRunId,
-    docVersionId,
-    comment,
-  })
-}
-
-export function emitReviewCommentDeletedEvent(
-  taskId: string,
-  nodeRunId: string,
-  docVersionId: string,
-  commentId: string,
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-    id: -1,
-    type: 'review.comment_deleted',
-    nodeRunId,
-    docVersionId,
-    commentId,
-  })
-}
-
-export function emitReviewCommentUpdatedEvent(
-  taskId: string,
-  nodeRunId: string,
-  docVersionId: string,
-  comment: ReviewComment,
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-    id: -1,
-    type: 'review.comment_updated',
-    nodeRunId,
-    docVersionId,
-    comment,
-  })
 }
 
 // ---------------------------------------------------------------------------

@@ -24,7 +24,6 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import { broadcastClarifyAnsweredForRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/services/clarifySeal'
 import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
 import { createClarifyDecisionCommandContext } from '@/services/clarifyDecisionComposition'
@@ -36,15 +35,7 @@ import {
 } from '@/services/clarifyRounds'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
 import { visibleTaskIdsOf } from '@/services/taskAuthorization'
-import { wakeHumanGateContinuation } from '@/services/task'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
-import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
-import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
-
-const log = createLogger('clarify-route')
 
 /**
  * RFC-099 (D5/D7) — answer-rights gate for clarify writes: any task member
@@ -300,39 +291,8 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
           sealedBy: actor.user.id,
         })
         // NB: no resumeTask — the whole point of defer is to NOT advance execution; the
-        // user dispatches later from the board (P3 designer 借壳 / P5 self·questioner rerun).
-        // RFC-161: the defer control channel emits no answered WS event (unlike the quick
-        // channel's emitAutoAnswered). On a FULL seal the intermediary clarify/cross-clarify
-        // node_run flips awaiting_human → done (clarifySeal.ts) — broadcast node.status so
-        // open task canvases refresh node-runs (the RFC-161 clarifyNavKind click target) +
-        // the board, via useTaskSync's existing node.status rule. Best-effort: a broadcast
-        // failure must not affect the seal outcome. Partial seals keep the round
-        // awaiting_human → no event (canvas nav stays 'awaiting').
-        if (sealResult.roundFullySealed) {
-          try {
-            const nrRow = (
-              await deps.db
-                .select({ taskId: nodeRuns.taskId, nodeId: nodeRuns.nodeId })
-                .from(nodeRuns)
-                .where(eq(nodeRuns.id, nodeRunId))
-                .limit(1)
-            )[0]
-            if (nrRow !== undefined) {
-              taskBroadcaster.broadcast(TASK_CHANNEL(nrRow.taskId), {
-                id: -1,
-                type: 'node.status',
-                nodeRunId,
-                nodeId: nrRow.nodeId,
-                status: 'done',
-              })
-            }
-          } catch (err) {
-            log.warn('clarify defer full-seal node.status broadcast threw', {
-              nodeRunId,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }
-        }
+        // user dispatches later from the board. A full seal's node + collaboration frames
+        // are projected from the same-transaction RFC-341 committed-event group.
         return c.json({ ok: true, kind: 'seal' as const, ...sealResult })
       }
 
@@ -345,87 +305,21 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       // round.kind internally + dispatches the round's self/questioner AND designer entries (designer
       // aggregates its siblings; multi-source not-ready parks 等齐 until the last sibling answers).
       {
-        const nrRow = (
-          await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-        )[0]
-        // RFC-128 P5-D (Codex round-6/7): re-emit the legacy answered WS event(s) the deferred quick
-        // branch otherwise skips, so OTHER clients (a mounted board / a collaborator) invalidate clarify
-        // list/detail/pending-count + node-runs + the directive toggle (the submitting client navigates +
-        // invalidates). The helpers are NO-OP unless the round is ANSWERED, so this is safe to call on
-        // BOTH the success AND the error paths: autoDispatchClarifyRound seals (commits answered) BEFORE
-        // it may RETHROW a non-recoverable dispatch conflict — round-7: without broadcasting on the error
-        // path the committed answer would be hidden behind a failed response with no invalidation. A
-        // 'stop' cross round also fires the rejected event (parity with submitCrossClarifyAnswers).
-        // Best-effort — a broadcast failure must not affect the answer/error outcome.
-        // RFC-217 T7（消灭双盲调）：kind 由统一表 clarify_rounds 精确判定（本行
-        // 就是这轮的 intermediary run id），不再「两个 no-op-safe 的都调一遍」——
-        // 那是数据模型二分时代 snapshot 判 kind 不可靠逼出来的防御式浪费；统一
-        // 表的 kind 列是权威判别。stop 的 rejected 事件仍只属 cross。
-        const emitAutoAnswered = async (rerunId: string): Promise<void> => {
-          const kindRow = (
-            await deps.db
-              .select({ kind: clarifyRounds.kind })
-              .from(clarifyRounds)
-              .where(eq(clarifyRounds.intermediaryNodeRunId, nodeRunId))
-              .orderBy(desc(clarifyRounds.createdAt))
-              .limit(1)
-          )[0]
-          try {
-            // RFC-217 T9: single kind-routed re-emit (was the self/cross pair).
-            await broadcastClarifyAnsweredForRound(
-              deps.db,
-              kindRow?.kind === 'cross' ? 'cross' : 'self',
-              nodeRunId,
-              kindRow?.kind === 'cross'
-                ? parsed.data.directive === 'stop'
-                  ? { rejectedQuestionerNodeRunId: rerunId }
-                  : {}
-                : { rerunNodeRunId: rerunId },
-            )
-          } catch (err) {
-            log.warn('clarify autodispatch answered-broadcast threw', {
-              taskId: nrRow?.taskId,
-              kind: kindRow?.kind ?? 'unknown',
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }
-        }
         const commandContext = createClarifyDecisionCommandContext({
           db: deps.db,
           actor,
           role,
-          wake: async (taskId, continuationRef) => {
-            await wakeHumanGateContinuation(taskId, continuationRef, {
-              db: deps.db,
-              schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-              appHome: Paths.root,
-              configPath: deps.configPath,
-              ...resolveLaunchRuntimeConfig(deps.configPath),
-            })
-          },
         })
-        let auto: Awaited<ReturnType<typeof submitClarifyDecision>>
-        try {
-          auto = await submitClarifyDecision(commandContext, {
-            nodeRunId,
-            answers: parsed.data.answers,
-            directive: parsed.data.directive,
-            // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
-            ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
-            ...(c.req.header('Idempotency-Key') === undefined
-              ? {}
-              : { idempotencyKey: c.req.header('Idempotency-Key')! }),
-          })
-        } catch (err) {
-          // A NON-recoverable dispatch conflict (terminal/snapshot/...) rethrown AFTER the seal committed:
-          // the round IS answered (the helper checks status), so broadcast the answered event (other
-          // clients invalidate) BEFORE surfacing the failure. Errors BEFORE the seal (iteration-mismatch,
-          // not-deferred, round-not-found) leave the round un-answered → the helper no-ops. Then rethrow.
-          await emitAutoAnswered('')
-          throw err
-        }
-        // Success: the dispatched rerun id (or '' when dispatch was deferred to the board).
-        await emitAutoAnswered(auto.reruns[0]?.nodeRunId ?? '')
+        const auto = await submitClarifyDecision(commandContext, {
+          nodeRunId,
+          answers: parsed.data.answers,
+          directive: parsed.data.directive,
+          // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
+          ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
+          ...(c.req.header('Idempotency-Key') === undefined
+            ? {}
+            : { idempotencyKey: c.req.header('Idempotency-Key')! }),
+        })
         return c.json({
           ok: true,
           kind: 'autodispatch' as const,

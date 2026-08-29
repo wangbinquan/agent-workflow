@@ -60,14 +60,6 @@ export const FIXED_MAINTENANCE_JOB_SPECS = [
     // Existing semantics: no boot pass; first scan after one full interval.
     phaseOffsetMs: DAEMON_CADENCE.stuckTaskScan,
   },
-  {
-    key: 'humanGateRecovery',
-    class: 'recovery',
-    schedule: 'fixed',
-    // Existing semantics are boot-only; the durable continuation remains
-    // pending for the normal post-commit wake path after startup.
-    bootDelayMs: 0,
-  },
 ] as const satisfies readonly MaintenanceJobSpec[]
 
 export const MAINTENANCE_JOB_CATALOG: readonly MaintenanceJobSpec[] = [

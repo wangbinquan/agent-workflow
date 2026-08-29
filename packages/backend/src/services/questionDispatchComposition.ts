@@ -10,16 +10,12 @@ import type {
 import { humanGateComposition } from '@/services/humanGateComposition'
 import { dispatchTaskQuestionsWithDecision } from '@/services/taskQuestionDispatch'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
-import { createLogger } from '@/util/log'
 import type { TaskActorRole } from '@agent-workflow/shared'
-
-const log = createLogger('question-dispatch-composition')
 
 export function createQuestionDispatchCommandContext(input: {
   readonly db: DbClient
   readonly actor: Actor
   readonly role: TaskActorRole
-  readonly wake: (taskId: string, continuationRef: string) => Promise<void>
 }): CollaborationCommandContext {
   const questionDispatches: QuestionDispatchCommandPort = {
     async dispatch(command) {
@@ -46,15 +42,6 @@ export function createQuestionDispatchCommandContext(input: {
           taskId: dispatched.taskId,
           operationId: dispatched.receipt.operationId,
         })
-        try {
-          await input.wake(dispatched.taskId, dispatched.continuationRef)
-        } catch (error) {
-          log.warn('question dispatch committed; durable continuation wake deferred', {
-            taskId: dispatched.taskId,
-            operationId: dispatched.receipt.operationId,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
       }
       return {
         taskId: dispatched.taskId,

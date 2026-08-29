@@ -7,8 +7,10 @@ import { getStoredCommittedEvents } from './sqliteStore'
 import type {
   CommittedEventConsumerDefinition,
   CommittedEventEnvelopeV1,
+  CommittedEventProjectionLedger,
   CommittedEventRef,
 } from './types'
+import { createCommittedEventProjectionLedger } from './types'
 
 const log = createLogger('after-commit-event-pump')
 
@@ -28,6 +30,7 @@ export function createAfterCommitEventPump(input: {
     consumerId: string
     error: unknown
   }) => void
+  readonly projectionLedger?: CommittedEventProjectionLedger
   readonly dedupeLimit?: number
 }): AfterCommitEventPump {
   const projectors = input.projectors.filter((projector) => projector.deliveryClass === 'ephemeral')
@@ -35,22 +38,8 @@ export function createAfterCommitEventPump(input: {
     throw new Error('after-commit event pump accepts ephemeral projectors only')
   }
   const dedupeLimit = input.dedupeLimit ?? 2_048
-  const projected = new Map<string, string>()
-
-  const remember = (eventId: string, digest: string): boolean => {
-    const previous = projected.get(eventId)
-    if (previous !== undefined) {
-      if (previous !== digest) throw new Error(`committed event digest changed in pump: ${eventId}`)
-      return false
-    }
-    projected.set(eventId, digest)
-    while (projected.size > dedupeLimit) {
-      const oldest = projected.keys().next().value as string | undefined
-      if (oldest === undefined) break
-      projected.delete(oldest)
-    }
-    return true
-  }
+  const projectionLedger =
+    input.projectionLedger ?? createCommittedEventProjectionLedger(dedupeLimit)
 
   const nudge = (): void => {
     input.nudgeDispatcher()
@@ -72,10 +61,18 @@ export function createAfterCommitEventPump(input: {
         return a.envelope.eventGroupOrdinal - b.envelope.eventGroupOrdinal
       })
       for (const event of stored) {
-        if (!remember(event.envelope.eventId, event.payloadDigest)) continue
         const envelope = input.codecs.decode(event.envelope)
         for (const projector of projectors) {
           if (!projector.eventTypes.includes(envelope.type)) continue
+          if (
+            !projectionLedger.begin({
+              eventId: envelope.eventId,
+              consumerId: projector.id,
+              payloadDigest: event.payloadDigest,
+            })
+          ) {
+            continue
+          }
           try {
             const result = projector.handle(envelope)
             if (result instanceof Promise) {

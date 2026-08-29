@@ -12,10 +12,7 @@
 // per-round single path (auto and manual never double-dispatch); RFC-125 single-path invariant
 // (flag never flipped); lock non-reentry; the P5-0 guard (RFC-132: lifted universally).
 
-import {
-  broadcastClarifyAnsweredForRound,
-  createClarifyRound,
-} from '../src/services/clarify/service'
+import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve } from 'node:path'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -49,6 +46,7 @@ import { getTaskQuestionWriteSem } from '../src/services/taskWriteLocks'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -363,8 +361,23 @@ function entriesByOrigin(db: DbClient, originNodeRunId: string) {
   return db.select().from(taskQuestions).where(eq(taskQuestions.originNodeRunId, originNodeRunId))
 }
 
-beforeEach(() => resetBroadcastersForTests())
-afterAll(() => resetBroadcastersForTests())
+let uninstallProjection = (): void => {}
+
+function createProjectionDb(): DbClient {
+  const db = createInMemoryDb(MIGRATIONS)
+  uninstallProjection = installCommittedEventProjectionHarness(db)
+  return db
+}
+
+beforeEach(() => {
+  uninstallProjection()
+  uninstallProjection = (): void => {}
+  resetBroadcastersForTests()
+})
+afterAll(() => {
+  uninstallProjection()
+  resetBroadcastersForTests()
+})
 
 // ===========================================================================
 // 快通道 seal → 自动续跑（autodispatch）
@@ -694,12 +707,16 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
   // Codex impl-gate (high) — a round FULLY sealed via the CONTROL channel (staged for explicit manual
   // board dispatch) must NOT be hijacked into an auto-dispatch by a stale defer=false submit.
   test('a control-channel fully-sealed round → a stale quick submit is REJECTED (clarify-already-answered), entries NOT auto-dispatched', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
       mkQ('q1', 't'),
     ])
+    const received: Array<{ type: string }> = []
+    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (message) =>
+      received.push(message as { type: string }),
+    )
     // Control channel: FULLY seal the round (defer=true equivalent), leaving it staged for MANUAL
     // dispatch (no autodispatch).
     const sealed = await sealRoundQuestions({
@@ -708,6 +725,8 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
       answers: [ans('q1')],
     })
     expect(sealed.roundFullySealed).toBe(true)
+    expect(received.find((message) => message.type === 'node.status')).toBeDefined()
+    expect(received.find((message) => message.type === 'clarify.answered')).toBeUndefined()
     const selfEntryBefore = (await entriesByOrigin(db, clarifyNodeRunId)).find(
       (e) => e.roleKind === 'self',
     )!
@@ -1175,31 +1194,30 @@ describe('RFC-128 P5-D post-seal dispatch conflict → deferred to manual (idemp
 // ===========================================================================
 describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
   test('self autodispatch → broadcastSelfClarifyAnsweredForRound emits clarify.answered (other clients invalidate)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
       mkQ('q1', 't'),
     ])
-    const res = await autoDispatchClarifyRound({
+    const received: Array<{ type: string }> = []
+    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
+    await autoDispatchClarifyRound({
       db,
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
     })
-    const received: Array<{ type: string }> = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, {
-      rerunNodeRunId: res.dispatch.reruns[0]?.nodeRunId ?? '',
-    })
     expect(received.find((m) => m.type === 'clarify.answered')).toBeDefined()
   })
 
   test('cross autodispatch → broadcastCrossClarifyAnsweredForRound emits cross-clarify.answered; stop also emits rejected', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
+    const received: Array<{ type: string }> = []
+    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
     await autoDispatchClarifyRound({
       db,
       originNodeRunId: crossNodeRunId,
@@ -1207,40 +1225,31 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
       directive: 'stop',
       actor,
     })
-    const received: Array<{ type: string }> = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastClarifyAnsweredForRound(db, 'cross', crossNodeRunId, {
-      rejectedQuestionerNodeRunId: '',
-    })
     expect(received.find((m) => m.type === 'cross-clarify.answered')).toBeDefined()
     expect(received.find((m) => m.type === 'cross-clarify.rejected')).toBeDefined()
   })
 
   test('broadcast helper is a NO-OP for a still-awaiting (un-answered) round', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
-      mkQ('q1', 't'),
-    ])
+    await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
     // NOT answered (no autodispatch / seal).
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, { rerunNodeRunId: '' })
     expect(received.find((m) => m.type === 'clarify.answered')).toBeUndefined()
   })
 
-  test('source — the route autodispatch branch emits the answered broadcast for both self and cross', () => {
-    // RFC-217 T9: the self/cross pair merged into ONE kind-routed re-emit.
+  test('source — the route has no request-owned answered broadcaster', () => {
     const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
-    expect(src).toContain('await broadcastClarifyAnsweredForRound(')
-    expect(src).toContain("kindRow?.kind === 'cross' ? 'cross' : 'self'")
+    expect(src).not.toContain('broadcastClarifyAnsweredForRound')
+    expect(src).not.toContain('taskBroadcaster.broadcast')
   })
 })
 
 describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex round-6 finding 2)', () => {
   test('a NON-recoverable dispatch conflict (unparseable snapshot) is RETHROWN, not masked as a deferred success', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createProjectionDb()
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
@@ -1249,6 +1258,8 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     // Corrupt the snapshot AFTER seeding (worktreePath stays '' so the rollback path is skipped and
     // only dispatchTaskQuestions' parseDefinition hits it → task-question-snapshot-unparseable).
     await db.update(tasks).set({ workflowSnapshot: 'not json{' }).where(eq(tasks.id, taskId))
+    const received: Array<{ type: string }> = []
+    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
     let caught: unknown
     try {
       await autoDispatchClarifyRound({
@@ -1266,21 +1277,18 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     // route's error-path broadcast (emitAutoAnswered on catch) WILL fire clarify.answered (other
     // clients invalidate) before surfacing the failure. Prove the round is answered + the helper fires.
     expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('answered')
-    const received: Array<{ type: string }> = []
-    taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, { rerunNodeRunId: '' })
     expect(received.find((m) => m.type === 'clarify.answered')).toBeDefined()
   })
 
-  test('source — the route broadcasts the answered event on the autodispatch ERROR path too (catch → emit → rethrow), so a committed answer is never hidden behind a failed response', () => {
+  test('source — the decision service pumps committed refs from a finally path on dispatch error', () => {
     const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
-    // The autodispatch is wrapped in try/catch; the catch emits the answered broadcast then rethrows.
-    const autoIdx = src.indexOf('auto = await submitClarifyDecision(commandContext, {')
-    const catchIdx = src.indexOf("await emitAutoAnswered('')")
-    const throwIdx = src.indexOf('throw err', catchIdx)
-    expect(autoIdx).toBeGreaterThan(0)
-    expect(catchIdx).toBeGreaterThan(autoIdx) // emit AFTER the try
-    expect(throwIdx).toBeGreaterThan(catchIdx) // rethrow AFTER the emit
+    const service = readFileSync(
+      resolve(import.meta.dir, '../src/services/clarify/autoDispatch.ts'),
+      'utf8',
+    )
+    expect(src).not.toContain('emitAutoAnswered')
+    expect(service).toContain('finally {')
+    expect(service).toContain('publishCommittedEventsAfterCommit(prepared.capture.eventRefs)')
   })
 })
 

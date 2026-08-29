@@ -35,9 +35,6 @@ import { registerRoute } from '@/routes/registry'
 import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
 import { requireTaskMember } from '@/services/taskCollab'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
-import { wakeHumanGateContinuation } from '@/services/task'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { submitReviewDecision } from '@/modules/collaboration/public/commands'
 import { createReviewDecisionCommandContext } from '@/services/reviewDecisionComposition'
 import {
@@ -348,15 +345,6 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         appHome: appHomeFor(deps),
         actor,
         authorRole: role,
-        wake: async (taskId, continuationRef) => {
-          await wakeHumanGateContinuation(taskId, continuationRef, {
-            db: deps.db,
-            schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-            appHome: appHomeFor(deps),
-            configPath: deps.configPath,
-            ...resolveLaunchRuntimeConfig(deps.configPath),
-          })
-        },
       })
       const result = await submitReviewDecision(commandContext, {
         nodeRunId,

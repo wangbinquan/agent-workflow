@@ -2,6 +2,7 @@
 
 import type { HumanGateOperationSnapshot } from '../../domain/humanGateOperation'
 import type { ManualQuestionOpenManifest } from '../../domain/manualQuestionOpen'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 export interface CreateManualQuestionOpenInput {
   readonly taskId: string
@@ -16,6 +17,7 @@ export interface CreatedManualQuestionOpen {
   readonly id: string
   readonly operation: HumanGateOperationSnapshot
   readonly manifest: ManualQuestionOpenManifest
+  readonly eventRefs: readonly CommittedEventRef[]
 }
 
 export interface ManualQuestionOpenWriter {

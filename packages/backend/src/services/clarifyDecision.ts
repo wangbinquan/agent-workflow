@@ -18,6 +18,8 @@ import type { ClarifySealDecisionParticipantInTx } from '@/services/clarify/seal
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type { ClarifyAnswer, ClarifyDirective } from '@agent-workflow/shared'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
+import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
 
 const {
   canonicalHumanGateRequestHash,
@@ -38,7 +40,10 @@ export interface ClarifyDecisionArgs {
 
 export interface PreparedClarifyDecision {
   readonly participant: ClarifySealDecisionParticipantInTx
-  readonly capture: { envelope?: ClarifyDecisionReceiptEnvelope }
+  readonly capture: {
+    envelope?: ClarifyDecisionReceiptEnvelope
+    eventRefs?: readonly CommittedEventRef[]
+  }
 }
 
 function clarifyDecisionPayload(input: {
@@ -324,6 +329,12 @@ export function prepareClarifyDecision(input: {
           },
           operationId: begun.operation.id,
           now: sealed.now,
+          nodeChanges: sourceRows.map((row) => ({
+            nodeRunId: row.id,
+            nodeId: row.nodeId,
+            status: 'done' as const,
+            cause: 'clarify-answered',
+          })),
         })
       const envelope: ClarifyDecisionReceiptEnvelope = {
         schemaVersion: 1,
@@ -357,7 +368,30 @@ export function prepareClarifyDecision(input: {
         expectedClaimEpoch: begun.operation.claimEpoch,
         now: sealed.now,
       })
+      const collaborationEventRef = appendHumanGateDecisionCommittedEventTx(sealed.tx, {
+        family: 'clarify',
+        gate: {
+          taskId: input.taskId,
+          nodeRunId: input.originNodeRunId,
+          gateKind: 'clarify',
+          gateId: gateRef,
+          roundId: input.roundId,
+        },
+        decision: { gateKind: 'clarify', kind: input.directive },
+        gateStatus: 'committed',
+        continuationRef: accepted.continuationRef,
+        occurredAt: sealed.now,
+        identity: {
+          operationRef: begun.operation.id,
+          eventGroupOrdinal: 1,
+          correlationRef: `human-gate-node-run:${input.originNodeRunId}`,
+        },
+      })
       capture.envelope = envelope
+      capture.eventRefs =
+        collaborationEventRef === null
+          ? accepted.eventRefs
+          : [...accepted.eventRefs, collaborationEventRef]
     },
   }
   return { participant, capture }

@@ -107,6 +107,41 @@ export type StoredCommittedEvent = Readonly<{
   createdAt: number
 }>
 
+/** Process-local attempt ledger shared by the immediate pump and durable
+ * dispatcher. It suppresses normal-path duplicate WS invalidations while a
+ * new process can still retry an ephemeral projection after a crash. */
+export interface CommittedEventProjectionLedger {
+  begin(input: Readonly<{ eventId: string; consumerId: string; payloadDigest: string }>): boolean
+}
+
+export function createCommittedEventProjectionLedger(
+  limit = 4_096,
+): CommittedEventProjectionLedger {
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    throw new Error('committed event projection ledger limit must be a positive integer')
+  }
+  const attempted = new Map<string, string>()
+  return {
+    begin(input) {
+      const key = `${input.eventId}\u0000${input.consumerId}`
+      const previous = attempted.get(key)
+      if (previous !== undefined) {
+        if (previous !== input.payloadDigest) {
+          throw new Error(`committed event digest changed in projection ledger: ${input.eventId}`)
+        }
+        return false
+      }
+      attempted.set(key, input.payloadDigest)
+      while (attempted.size > limit) {
+        const oldest = attempted.keys().next().value as string | undefined
+        if (oldest === undefined) break
+        attempted.delete(oldest)
+      }
+      return true
+    },
+  }
+}
+
 export type ClaimedCommittedEventDelivery = Readonly<{
   event: StoredCommittedEvent
   consumerId: string

@@ -29,11 +29,7 @@ import {
 import { dispatchTaskQuestions } from '@/modules/collaboration/public/commands'
 import { createQuestionDispatchCommandContext } from '@/services/questionDispatchComposition'
 import { canViewTask, requireTaskMember } from '@/services/taskCollab'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
-import { wakeHumanGateContinuation } from '@/services/task'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { Paths } from '@/util/paths'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 
 async function loadVisibleTask(deps: AppDeps, taskId: string, actor: Actor) {
@@ -238,15 +234,6 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
         db: deps.db,
         actor,
         role,
-        wake: async (committedTaskId, continuationRef) => {
-          await wakeHumanGateContinuation(committedTaskId, continuationRef, {
-            db: deps.db,
-            schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-            appHome: Paths.root,
-            configPath: deps.configPath,
-            ...resolveLaunchRuntimeConfig(deps.configPath),
-          })
-        },
       })
       const result = await dispatchTaskQuestions(commandContext, {
         taskId,

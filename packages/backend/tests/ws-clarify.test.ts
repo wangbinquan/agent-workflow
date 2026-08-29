@@ -7,9 +7,8 @@
 //     payload includes sourceShardKey + iterationIndex + a compact summary.
 //   - answering the round dispatches a `clarify.answered` event whose
 //     payload includes the rerunNodeRunId so subscribers can switch focus.
-//     RFC-132: the unified driver (autoDispatchClarifyRound) broadcasts
-//     nothing itself — the ROUTE re-emits the answered event via
-//     broadcastSelfClarifyAnsweredForRound; this test mirrors the route.
+//     RFC-341: the collaboration committed-event projector emits it from the
+//     same durable decision/question facts the production route commits.
 //
 // If the WS endpoint regresses, the broader integration tests (and the
 // frontend's useClarifyWs hook tests landing in PR-C) catch that — here
@@ -20,13 +19,11 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import {
-  broadcastClarifyAnsweredForRound,
-  createClarifyRound,
-} from '../src/services/clarify/service'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { createClarifyRound } from '../src/services/clarify/service'
+import { autoDispatchClarifyRoundWithDecision } from '../src/services/clarifyAutoDispatch'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import type { TaskWsMessage, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -92,12 +89,16 @@ beforeEach(() => {
   resetBroadcastersForTests()
 })
 afterEach(() => {
+  installCleanup()
   resetBroadcastersForTests()
 })
+
+let installCleanup = (): void => {}
 
 describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
   test('createClarifyRound dispatches clarify.created with sourceShardKey + iterationIndex + session summary', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    installCleanup = installCommittedEventProjectionHarness(db)
     const { taskId, sourceRunId } = await seedTask(db)
 
     const received: TaskWsMessage[] = []
@@ -127,6 +128,7 @@ describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
 
   test('answering the round dispatches clarify.answered with rerunNodeRunId so subscribers can refocus', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    installCleanup = installCommittedEventProjectionHarness(db)
     const { taskId, sourceRunId } = await seedTask(db)
     const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
       kind: 'self',
@@ -143,7 +145,7 @@ describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
-    const res = await autoDispatchClarifyRound({
+    const res = await autoDispatchClarifyRoundWithDecision({
       db,
       originNodeRunId: clarifyNodeRunId,
       answers: [
@@ -158,10 +160,6 @@ describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
     })
     expect(res.dispatch.reruns).toHaveLength(1)
     const rerunNodeRunId = res.dispatch.reruns[0]!.nodeRunId
-    // Mirror the route (RFC-132): re-emit clarify.answered with the dispatched rerun id.
-    await broadcastClarifyAnsweredForRound(db, 'self', clarifyNodeRunId, {
-      rerunNodeRunId: rerunNodeRunId,
-    })
     const answered = received.find((m) => m.type === 'clarify.answered')
     expect(answered).toBeDefined()
     if (answered?.type !== 'clarify.answered') throw new Error('type narrowing')

@@ -1,18 +1,59 @@
 // RFC-341 — bounded durable committed-event delivery driver.
 
 import type { DbClient } from '@/db/client'
+import { createLogger } from '@/util/log'
 import {
   acceptCommittedEventDelivery,
   claimNextCommittedEventDelivery,
   rejectCommittedEventDelivery,
 } from './sqliteStore'
-import type { CommittedEventConsumerDefinition, CommittedEventEnvelopeV1 } from './types'
+import {
+  createCommittedEventProjectionLedger,
+  type CommittedEventConsumerDefinition,
+  type CommittedEventEnvelopeV1,
+  type CommittedEventProjectionLedger,
+} from './types'
+
+const log = createLogger('committed-event-dispatcher')
 
 export type CommittedEventDeliveryOutcome = 'completed' | 'retried' | 'dead-letter' | 'idle'
 
 export interface CommittedEventCodecRegistry {
   readonly eventTypes: readonly string[]
   decode(envelope: unknown): CommittedEventEnvelopeV1
+}
+
+/** Bootstrap helper for joining producer-owned closed codecs without leaking a
+ * catch-all decoder into either bounded context. Duplicate ownership fails at
+ * composition time; unknown types fail before any consumer is invoked. */
+export function combineCommittedEventCodecRegistries(
+  ...registries: readonly CommittedEventCodecRegistry[]
+): CommittedEventCodecRegistry {
+  const ownerByType = new Map<string, CommittedEventCodecRegistry>()
+  for (const registry of registries) {
+    for (const eventType of registry.eventTypes) {
+      if (ownerByType.has(eventType)) {
+        throw new Error(`committed event codec type has multiple owners: ${eventType}`)
+      }
+      ownerByType.set(eventType, registry)
+    }
+  }
+  return Object.freeze({
+    eventTypes: Object.freeze([...ownerByType.keys()]),
+    decode(envelope: unknown): CommittedEventEnvelopeV1 {
+      const eventType =
+        envelope !== null &&
+        typeof envelope === 'object' &&
+        typeof (envelope as { type?: unknown }).type === 'string'
+          ? (envelope as { type: string }).type
+          : null
+      const owner = eventType === null ? undefined : ownerByType.get(eventType)
+      if (owner === undefined) {
+        throw new Error(`committed event codec type is unknown: ${eventType ?? '<missing>'}`)
+      }
+      return owner.decode(envelope)
+    },
+  })
 }
 
 export function assertCommittedEventRegistry(input: {
@@ -79,6 +120,12 @@ export function createCommittedEventDispatcher(input: {
   readonly maxAttempts?: () => number
   readonly now?: () => number
   readonly leaseMs?: number
+  readonly projectionLedger?: CommittedEventProjectionLedger
+  readonly onProjectionError?: (input: {
+    event: CommittedEventEnvelopeV1
+    consumerId: string
+    error: unknown
+  }) => void
 }): CommittedEventDispatcher {
   assertCommittedEventRegistry({ codecs: input.codecs, consumers: input.consumers })
   const now = input.now ?? Date.now
@@ -87,6 +134,37 @@ export function createCommittedEventDispatcher(input: {
       .filter((consumer) => consumer.deliveryClass !== 'ephemeral')
       .map((consumer) => [consumer.id, consumer] as const),
   )
+  const ephemeralProjectors = input.consumers.filter(
+    (consumer) => consumer.deliveryClass === 'ephemeral',
+  )
+  const projectionLedger = input.projectionLedger ?? createCommittedEventProjectionLedger()
+  const projectEphemeral = (envelope: CommittedEventEnvelopeV1, payloadDigest: string): void => {
+    for (const projector of ephemeralProjectors) {
+      if (!projector.eventTypes.includes(envelope.type)) continue
+      try {
+        if (
+          !projectionLedger.begin({
+            eventId: envelope.eventId,
+            consumerId: projector.id,
+            payloadDigest,
+          })
+        ) {
+          continue
+        }
+        const result = projector.handle(envelope)
+        if (result instanceof Promise) {
+          throw new Error(`ephemeral projector returned Promise: ${projector.id}`)
+        }
+      } catch (error) {
+        input.onProjectionError?.({ event: envelope, consumerId: projector.id, error })
+        log.warn('committed event recovery projection failed', {
+          eventId: envelope.eventId,
+          consumerId: projector.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+  }
   return {
     async runOne() {
       const claim = claimNextCommittedEventDelivery({
@@ -98,6 +176,7 @@ export function createCommittedEventDispatcher(input: {
       if (claim === null) return 'idle'
       try {
         const envelope = input.codecs.decode(claim.event.envelope)
+        projectEphemeral(envelope, claim.event.payloadDigest)
         const consumer = durableConsumers.get(claim.consumerId)
         if (consumer === undefined) {
           throw Object.assign(

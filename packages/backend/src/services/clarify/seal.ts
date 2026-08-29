@@ -51,6 +51,11 @@ import {
   type ClarifyDirective,
   type ClarifyQuestion,
 } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
+import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
+import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
+import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
 export interface SealRoundQuestionsArgs {
   db: DbClient
@@ -434,6 +439,53 @@ export async function sealRoundQuestions(
           .run()
       }
 
+      const eventRefs: CommittedEventRef[] = []
+      if (flipNow && args.decisionParticipant === undefined) {
+        const operationRef = `clarify-seal:${round.id}:${ulid(ts)}`
+        const eventGroupId = committedEventGroupId('collaboration', operationRef)
+        const taskEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+          taskId: round.taskId,
+          reason: 'human-gate',
+          nodeChanges: [
+            {
+              nodeRunId: args.originNodeRunId,
+              nodeId: round.intermediaryNodeId,
+              status: 'done',
+              cause: 'clarify-deferred-answer',
+            },
+          ],
+          occurredAt: ts,
+          identity: {
+            operationRef,
+            eventGroupId,
+            eventGroupOrdinal: 0,
+            correlationRef: `human-gate-node-run:${args.originNodeRunId}`,
+          },
+        })
+        if (taskEventRef !== null) eventRefs.push(taskEventRef)
+        const collaborationEventRef = appendHumanGateDecisionCommittedEventTx(tx, {
+          family: 'clarify',
+          gate: {
+            taskId: round.taskId,
+            nodeRunId: args.originNodeRunId,
+            gateKind: 'clarify',
+            gateId: `clarify:${args.originNodeRunId}`,
+            roundId: round.id,
+          },
+          decision: { gateKind: 'clarify', kind: effectiveDirective },
+          gateStatus: 'deferred',
+          continuationRef: null,
+          occurredAt: ts,
+          identity: {
+            operationRef,
+            eventGroupId,
+            eventGroupOrdinal: 1,
+            correlationRef: `human-gate-node-run:${args.originNodeRunId}`,
+          },
+        })
+        if (collaborationEventRef !== null) eventRefs.push(collaborationEventRef)
+      }
+
       args.decisionParticipant?.acceptTx({
         tx,
         taskId: round.taskId,
@@ -460,6 +512,7 @@ export async function sealRoundQuestions(
         taskId: round.taskId,
         askingNodeId: round.askingNodeId,
         askingShardKey: round.askingShardKey,
+        eventRefs,
       }
     })
   // Run the seal tx UNDER the per-task question-write lock B (finding 2). If the round is missing the
@@ -488,6 +541,7 @@ export async function sealRoundQuestions(
       wgClarifyAskerKeyForRound(txResult.askingNodeId, txResult.askingShardKey ?? null),
     )
   }
+  publishCommittedEventsAfterCommit(txResult.eventRefs)
   return {
     sealedQuestionIds: txResult.sealedQuestionIds,
     resealedQuestionIds: txResult.resealedQuestionIds,
