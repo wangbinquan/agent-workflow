@@ -1477,6 +1477,7 @@
       "exportedSymbols": [
         "MANAGED_PROCESS_LAUNCHER_SUBCOMMAND",
         "MANAGED_PROCESS_LAUNCH_ERROR_PREFIX",
+        "MANAGED_PROCESS_LAUNCH_NONCE_ENV",
         "MANAGED_PROCESS_LAUNCH_NONCE_FLAG",
         "MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX",
         "MANAGED_PROCESS_LAUNCH_READY_PREFIX",
@@ -1490,6 +1491,7 @@
         "cleanupWindowsOutputSpool",
         "createWindowsOutputSpool",
         "managedProcessLauncherArgv",
+        "managedProcessLauncherEnvironment",
         "runManagedProcessLauncher"
       ],
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
@@ -7721,5 +7723,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c1e193e5d12604df08b01d8f7bc89ff27a1ad5285cd345759885c1973b8c4880"
+  "sourceDigest": "sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7"
 }

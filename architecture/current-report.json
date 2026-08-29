@@ -7,7 +7,7 @@
     "crossContextImports": 1435,
     "facades": 377,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18573,
+    "moduleSymbolOwners": 18585,
     "mutationEntrypoints": 967,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 392,
@@ -70,7 +70,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 977,
+    "backendProductionFiles": 978,
     "backendValueSccs": [
       [
         "packages/backend/src/mcp/dispatch.ts",
@@ -233,5 +233,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c1e193e5d12604df08b01d8f7bc89ff27a1ad5285cd345759885c1973b8c4880"
+  "sourceDigest": "sha256:a0fd3ea96e78ccc5f0070b377394cc63e9d85d26be2ce33bc6cce443384d79d7"
 }
