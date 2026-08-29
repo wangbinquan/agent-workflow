@@ -238,7 +238,8 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       return eventRef
     })
     const projected: string[] = []
-    let nudges = 0
+    let dispatcherNudges = 0
+    let continuationNudges = 0
     const projector: CommittedEventConsumerDefinition = {
       id: 'collaboration-test-projector',
       eventTypes: COLLABORATION_COMMITTED_EVENT_TYPES,
@@ -249,14 +250,22 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       },
     }
     const projectionLedger = createCommittedEventProjectionLedger()
+    const legacyContinuationWake = {
+      nudgeContinuation() {
+        continuationNudges += 1
+      },
+    }
     const pump = createAfterCommitEventPump({
       db,
       codecs: collaborationCommittedEventCodec,
       projectors: [projector],
       projectionLedger,
       nudgeDispatcher() {
-        nudges += 1
+        dispatcherNudges += 1
       },
+      // A committed event may carry this legacy-shaped extra property at runtime. The pump must
+      // ignore it: only the exact durable human-gate decision consumer owns continuation wakes.
+      ...legacyContinuationWake,
     })
     pump.publishNow([second, first])
     pump.publishNow([first, second])
@@ -264,7 +273,8 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       '0:collaboration.human-gate-opened.v1',
       '1:collaboration.review-selection-changed.v1',
     ])
-    expect(nudges).toBe(2)
+    expect(dispatcherNudges).toBe(2)
+    expect(continuationNudges).toBe(0)
 
     const durable = createCollaborationDurableConsumerDefinitions({
       events: {
@@ -272,9 +282,41 @@ describe('RFC-341 collaboration committed-event contracts', () => {
           return { eventId: input.dedupeKey, duplicate: false, deliveryCount: 0, deliveryIds: [] }
         },
       },
-      nudgeContinuation() {},
+      nudgeContinuation() {
+        continuationNudges += 1
+      },
       enqueueReviewDistill() {},
     })
+    const continuationConsumer = durable.find(
+      (definition) => definition.id === 'collaboration-continuation-nudge',
+    )
+    if (continuationConsumer === undefined) {
+      throw new Error('expected collaboration continuation consumer')
+    }
+    expect(continuationConsumer.eventTypes).toEqual([
+      'collaboration.human-gate-decision-committed.v1',
+    ])
+    continuationConsumer.handle({
+      ...reviewEnvelope(),
+      eventId: 'event-review-decision',
+      type: 'collaboration.human-gate-decision-committed.v1',
+      payload: {
+        gate: {
+          taskId: 'task-review',
+          nodeRunId: 'review-run-1',
+          gateKind: 'review',
+          gateId: 'review:review-run-1',
+          roundId: 'review-run-1',
+        },
+        decision: { gateKind: 'review', kind: 'approved' },
+        gateStatus: 'committed',
+        continuationRef: 'intent-review',
+        distillSourceEventId: null,
+        projectionFrames: [],
+      },
+    })
+    expect(continuationNudges).toBe(1)
+
     const dispatcher = createCommittedEventDispatcher({
       db,
       workerId: 'rfc341-dispatcher',

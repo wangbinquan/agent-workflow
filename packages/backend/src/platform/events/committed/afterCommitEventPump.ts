@@ -24,7 +24,6 @@ export function createAfterCommitEventPump(input: {
   readonly codecs: CommittedEventCodecRegistry
   readonly projectors: readonly CommittedEventConsumerDefinition[]
   readonly nudgeDispatcher: () => void
-  readonly nudgeContinuation?: () => void
   readonly onProjectionError?: (input: {
     event: CommittedEventEnvelopeV1
     consumerId: string
@@ -43,7 +42,6 @@ export function createAfterCommitEventPump(input: {
 
   const nudge = (): void => {
     input.nudgeDispatcher()
-    input.nudgeContinuation?.()
   }
 
   return {

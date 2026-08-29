@@ -1042,7 +1042,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     projectors: committedEventProjectors,
     projectionLedger: committedEventProjectionLedger,
     nudgeDispatcher: committedEventWorkerDefinition.nudge,
-    nudgeContinuation: humanGateContinuationWorkerDefinition.nudge,
   })
   registerAfterCommitEventPump(committedEventPump)
   const humanGateContinuationWorker = startManagedWorkerDefinition(

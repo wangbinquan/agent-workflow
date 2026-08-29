@@ -2,23 +2,21 @@
 -- request-wake owner, so they become dispatchable in the same migration that
 -- activates the continuous continuation worker in the matching binary.
 CREATE TABLE `__rfc341_collaboration_cutover_guard` (
-	`legacy_family_count` integer NOT NULL
+	`singleton` integer PRIMARY KEY
 );
 --> statement-breakpoint
-CREATE TRIGGER `__rfc341_collaboration_cutover_precondition`
-BEFORE INSERT ON `__rfc341_collaboration_cutover_guard`
-WHEN NEW.`legacy_family_count` <> 3
-BEGIN
-	SELECT RAISE(ABORT, 'rfc341 collaboration cutover precondition failed');
-END;
+INSERT INTO `__rfc341_collaboration_cutover_guard` (`singleton`) VALUES (1);
 --> statement-breakpoint
-INSERT INTO `__rfc341_collaboration_cutover_guard` (`legacy_family_count`)
-SELECT COUNT(*)
-FROM `committed_event_family_cutovers`
-WHERE `producer` = 'collaboration'
-	AND `family` IN ('review', 'clarify', 'questions')
-	AND `mode` = 'legacy'
-	AND `epoch` = 1;
+INSERT INTO `__rfc341_collaboration_cutover_guard` (`singleton`)
+SELECT 1
+WHERE (
+	SELECT COUNT(*)
+	FROM `committed_event_family_cutovers`
+	WHERE `producer` = 'collaboration'
+		AND `family` IN ('review', 'clarify', 'questions')
+		AND `mode` = 'legacy'
+		AND `epoch` = 1
+) <> 3;
 --> statement-breakpoint
 DROP TABLE `__rfc341_collaboration_cutover_guard`;
 --> statement-breakpoint
