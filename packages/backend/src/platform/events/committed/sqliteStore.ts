@@ -523,6 +523,41 @@ function priorDeliveryBlocks(
   )
 }
 
+function dueCommittedEventDeliveryPredicate(at: number): SQL<unknown> {
+  return and(
+    eq(committedEvents.deliveryMode, 'dispatchable'),
+    eq(committedEventFamilyCutovers.mode, 'dispatchable'),
+    eq(committedEvents.producerEpoch, committedEventFamilyCutovers.epoch),
+    lte(committedEventDeliveries.nextAttemptAt, at),
+    or(
+      eq(committedEventDeliveries.state, 'pending'),
+      and(
+        eq(committedEventDeliveries.state, 'claimed'),
+        lte(committedEventDeliveries.claimExpiresAt, at),
+      ),
+    ),
+  )!
+}
+
+function hasDueCommittedEventDelivery(db: DbClient, at: number): boolean {
+  return (
+    db
+      .select({ eventId: committedEventDeliveries.eventId })
+      .from(committedEventDeliveries)
+      .innerJoin(committedEvents, eq(committedEvents.id, committedEventDeliveries.eventId))
+      .innerJoin(
+        committedEventFamilyCutovers,
+        and(
+          eq(committedEventFamilyCutovers.producer, committedEvents.producer),
+          eq(committedEventFamilyCutovers.family, committedEvents.family),
+        ),
+      )
+      .where(dueCommittedEventDeliveryPredicate(at))
+      .limit(1)
+      .get() !== undefined
+  )
+}
+
 export function claimNextCommittedEventDelivery(input: {
   readonly db: DbClient
   readonly workerId: string
@@ -536,6 +571,17 @@ export function claimNextCommittedEventDelivery(input: {
   if (input.workerId.length === 0) throw new Error('committed event claim requires workerId')
   assertPositiveInteger(leaseMs, 'leaseMs')
   assertPositiveInteger(scanLimit, 'scanLimit')
+
+  // The continuous dispatcher reconciles once per second. Entering dbTxSync on
+  // every empty cycle would issue BEGIN IMMEDIATE on the daemon's synchronous
+  // connection and wait behind an unrelated maintenance writer, freezing the
+  // HTTP/WS event loop despite there being no delivery to claim. WAL readers do
+  // not contend with that writer, so preflight with the exact dispatchability /
+  // due predicate and reserve the writer only when useful work is visible.
+  // A delivery committed after this read is covered by the after-commit nudge;
+  // the one-second reconcile remains the durable missed-wake backstop. The
+  // transaction below re-reads every field and retains the final claim CAS.
+  if (!hasDueCommittedEventDelivery(input.db, at)) return null
 
   return dbTxSync(input.db, (tx) => {
     const candidates = tx
@@ -556,21 +602,7 @@ export function claimNextCommittedEventDelivery(input: {
           eq(committedEventFamilyCutovers.family, committedEvents.family),
         ),
       )
-      .where(
-        and(
-          eq(committedEvents.deliveryMode, 'dispatchable'),
-          eq(committedEventFamilyCutovers.mode, 'dispatchable'),
-          eq(committedEvents.producerEpoch, committedEventFamilyCutovers.epoch),
-          lte(committedEventDeliveries.nextAttemptAt, at),
-          or(
-            eq(committedEventDeliveries.state, 'pending'),
-            and(
-              eq(committedEventDeliveries.state, 'claimed'),
-              lte(committedEventDeliveries.claimExpiresAt, at),
-            ),
-          ),
-        ),
-      )
+      .where(dueCommittedEventDeliveryPredicate(at))
       .orderBy(
         asc(committedEvents.createdAt),
         asc(committedEvents.eventGroupOrdinal),

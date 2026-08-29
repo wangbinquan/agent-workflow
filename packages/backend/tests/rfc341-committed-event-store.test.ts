@@ -24,6 +24,7 @@ import {
   type AppendCommittedEventInput,
   type CommittedEventEnvelopeV1,
 } from '@/platform/events/committed/types'
+import { recordStatements } from './helpers/statementRecorder'
 import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_789_488_100_000
@@ -115,6 +116,43 @@ describe('RFC-341 committed-event store', () => {
         appendCommittedEventTx(tx, eventInput({ operation: 'shadow', value: 'different' })),
       ),
     ).toThrow('conflicts with immutable event')
+  })
+
+  test('preflights an idle queue without reserving the writer and rechecks due work in the claim transaction', () => {
+    const db = createLegacyStoreDb()
+    cutover(db, 'legacy', 1, 'shadow')
+    cutover(db, 'shadow', 2, 'dispatchable')
+
+    const idleRecording = recordStatements(db.$client)
+    const idleClaim = (() => {
+      try {
+        return claimNextCommittedEventDelivery({ db, workerId: 'idle-worker', now: NOW + 100 })
+      } finally {
+        idleRecording.stop()
+      }
+    })()
+    expect(idleClaim).toBeNull()
+    expect(idleRecording.statements.filter((row) => row.sql === 'BEGIN IMMEDIATE')).toEqual([])
+    expect(
+      idleRecording.selects().filter((row) => row.sql.includes('committed_event_deliveries')),
+    ).toHaveLength(1)
+
+    const appended = dbTxSync(db, (tx) =>
+      appendCommittedEventTx(tx, eventInput({ operation: 'preflight-then-claim' })),
+    )
+    const dueRecording = recordStatements(db.$client)
+    const dueClaim = (() => {
+      try {
+        return claimNextCommittedEventDelivery({ db, workerId: 'due-worker', now: NOW + 200 })
+      } finally {
+        dueRecording.stop()
+      }
+    })()
+    expect(dueClaim?.event.envelope.eventId).toBe(appended.eventRef?.eventId)
+    expect(dueRecording.statements.filter((row) => row.sql === 'BEGIN IMMEDIATE')).toHaveLength(1)
+    expect(
+      dueRecording.selects().filter((row) => row.sql.includes('committed_event_deliveries')),
+    ).toHaveLength(2)
   })
 
   test('claims only current dispatchable epoch and preserves per-consumer aggregate FIFO', () => {

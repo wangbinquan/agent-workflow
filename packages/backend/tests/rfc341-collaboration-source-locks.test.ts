@@ -160,6 +160,26 @@ describe('RFC-341 collaboration owner source locks', () => {
     expect(service).not.toContain('onHumanGateContinuations')
   })
 
+  test('idle committed-event reconciliation stays read-only while nudge and periodic convergence remain wired', () => {
+    const store = source('platform/events/committed/sqliteStore.ts')
+    const worker = source('platform/events/committed/workerDefinitions.ts')
+    const pump = source('platform/events/committed/afterCommitEventPump.ts')
+    const claimAt = store.indexOf('export function claimNextCommittedEventDelivery')
+    const preflightAt = store.indexOf(
+      'if (!hasDueCommittedEventDelivery(input.db, at)) return null',
+      claimAt,
+    )
+    const transactionAt = store.indexOf('return dbTxSync(input.db, (tx) => {', claimAt)
+
+    expect(claimAt).toBeGreaterThan(-1)
+    expect(preflightAt).toBeGreaterThan(claimAt)
+    expect(transactionAt).toBeGreaterThan(preflightAt)
+    expect(worker).toContain('const reconcileMs = input.reconcileMs ?? 1_000')
+    expect(worker).toContain('await latch.wait(reconcileMs, context.signal)')
+    expect(worker).toContain('nudge: () => latch.wake()')
+    expect(pump).toContain('input.nudgeDispatcher()')
+  })
+
   test('continuation drive composition does not create a task service initialization cycle', () => {
     const taskService = source('services/task.ts')
     const taskExecutionComposition = source('modules/task-execution/composition/humanGate.ts')
