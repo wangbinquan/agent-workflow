@@ -55,23 +55,14 @@ import type {
   DevelopmentConfigResourceOperations,
 } from '../public/operations'
 import {
-  archiveDevelopmentAdapter,
-  createDevelopmentAdapter,
-  publishDevelopmentAdapter,
-  reviseDevelopmentAdapterDraft,
-} from '@/modules/integration/application/developmentAdapterCommands'
-import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
-import {
   assertNameUnchangedForEditor,
-  canEditResource,
   canViewResource,
   filterVisibleRows,
-  listGrantedResourceIds,
   requireResourceEdit,
   requireResourceGovern,
 } from '@/services/resourceAcl'
 import type { AclResourceType } from '@agent-workflow/shared'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 
 interface AclVisibleRow extends DevelopmentConfigAclRow {
   readonly name?: string
@@ -133,10 +124,12 @@ async function requireGovernable<T extends AclVisibleRow>(
   return row
 }
 
-export function composeDevelopmentConfigOperations(db: DbClient): DevelopmentConfigOperations {
+export function composeDevelopmentConfigOperations(
+  db: DbClient,
+  developmentAdapter: DevelopmentConfigResourceOperations,
+): DevelopmentConfigOperations {
   const templateStore = createSqliteActionTemplateStore(db)
   const profileStore = createSqliteVerificationProfileStore(db)
-  const adapterStore = createSqliteDevelopmentAdapterStore(db)
   const now = () => Date.now()
 
   const actionTemplate: DevelopmentConfigResourceOperations = {
@@ -392,106 +385,6 @@ export function composeDevelopmentConfigOperations(db: DbClient): DevelopmentCon
     },
     async loadAclRow(id) {
       return getAutomationPolicy(db, id)
-    },
-  }
-
-  const developmentAdapter: DevelopmentConfigResourceOperations = {
-    kind: 'development-adapter',
-    async list(actor) {
-      return (await filterVisibleRows(db, actor, 'development_adapter', adapterStore.list())).map(
-        (row) => ({
-          ...identityView(row),
-          purpose: (row as { readonly purpose?: unknown }).purpose,
-        }),
-      )
-    },
-    async get(actor, id) {
-      const row = adapterStore.getById(id)
-      const hasTechnicalAuthority =
-        actor.permissions.has('adapter-definitions:update') &&
-        actor.permissions.has('scripts:author')
-      if (
-        row !== null &&
-        hasTechnicalAuthority &&
-        (await canEditResource(db, actor, 'development_adapter', row))
-      ) {
-        return {
-          ...identityView(row),
-          purpose: (row as { readonly purpose?: unknown }).purpose,
-          draft: JSON.parse(row.draftJson) as unknown,
-        }
-      }
-      if (
-        row !== null &&
-        (await canViewResource(db, actor, 'development_adapter', row)) &&
-        (await listGrantedResourceIds(db, actor, 'development_adapter')).has(row.id)
-      ) {
-        return {
-          ...identityView(row),
-          purpose: (row as { readonly purpose?: unknown }).purpose,
-        }
-      }
-      throw new ForbiddenError(
-        'adapter-technical-details-forbidden',
-        'reading Adapter executable and secret projection names requires adapter-definitions:update, scripts:author, and ownership',
-      )
-    },
-    async create(actor, input) {
-      if (input.purpose === undefined) {
-        throw new ValidationError('development-adapter-purpose-required', 'purpose is required')
-      }
-      return identityView(
-        createDevelopmentAdapter(
-          adapterStore,
-          {
-            userId: actor.userId,
-            actorHasScriptsAuthor: actor.permissions.has('scripts:author'),
-          },
-          {
-            name: input.name,
-            content: {
-              ...(typeof input.draft === 'object' && input.draft !== null ? input.draft : {}),
-              purpose: input.purpose,
-            },
-            now: now(),
-          },
-        ),
-      )
-    },
-    async revise(actor, id, input) {
-      const { row, access } = await requireEditable(
-        db,
-        actor,
-        'development_adapter',
-        adapterStore.getById(id),
-      )
-      assertNameUnchangedForEditor(access, row.name, input.name)
-      reviseDevelopmentAdapterDraft(
-        adapterStore,
-        {
-          userId: actor.userId,
-          actorHasScriptsAuthor: actor.permissions.has('scripts:author'),
-        },
-        { id, content: input.draft ?? {}, now: now() },
-      )
-    },
-    async publish(actor, id) {
-      await requireEditable(db, actor, 'development_adapter', adapterStore.getById(id))
-      return publishDevelopmentAdapter(
-        adapterStore,
-        {
-          userId: actor.userId,
-          actorHasScriptsAuthor: actor.permissions.has('scripts:author'),
-        },
-        { id, now: now() },
-      )
-    },
-    async archive(actor, id) {
-      await requireGovernable(db, actor, 'development_adapter', adapterStore.getById(id))
-      archiveDevelopmentAdapter(adapterStore, { id, now: now() })
-    },
-    async loadAclRow(id) {
-      return adapterStore.getById(id)
     },
   }
 

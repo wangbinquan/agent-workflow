@@ -358,6 +358,7 @@ describe('RFC-305 identity-access architecture', () => {
       'UserAccessErrorKind',
     ])
     expect(exportedNames(resolve(publicRoot, 'participants.ts'))).toEqual([
+      'AuthenticatedAuthoritySnapshot',
       'AuthenticatedPrincipal',
       // RFC-317 T41（findings TP-03）—— 出站授权围栏的同步读契约。传输层（ws/）此前
       // 自己拼 `users` 表的 SQL；这两个名字是把那条读收进 public 面的代价，
@@ -370,7 +371,10 @@ describe('RFC-305 identity-access architecture', () => {
       'DelegatedAuthorityResolver',
       'DelegatedOperationContextFactory',
       'DelegatedSource',
-      'DirectOperationContextFactory',
+      'DirectAuthenticatedAuthority',
+      'DirectAuthenticatedAuthorityFactory',
+      'DirectCommandContextFactory',
+      'DirectQueryContextFactory',
       'DirectTransport',
       'DurableSourceAttemptRef',
       'IdempotentCommandContext',

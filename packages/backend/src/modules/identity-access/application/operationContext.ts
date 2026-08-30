@@ -5,7 +5,9 @@ import type {
   DelegatedAuthorityRef,
   DelegatedOperationContextFactory as DelegatedOperationContextFactoryPort,
   DelegatedSource,
-  DirectOperationContextFactory as DirectOperationContextFactoryPort,
+  DirectAuthenticatedAuthorityFactory,
+  DirectCommandContextFactory,
+  DirectQueryContextFactory,
   AuthenticatedAuthoritySnapshot,
   DirectAuthenticatedAuthority,
   DirectTransport,
@@ -71,7 +73,12 @@ export interface OperationContextFactoryDeps {
   readonly now: () => number
 }
 
-export class DirectOperationContextFactory implements DirectOperationContextFactoryPort {
+export class DirectOperationContextFactory
+  implements
+    DirectCommandContextFactory,
+    DirectQueryContextFactory,
+    DirectAuthenticatedAuthorityFactory
+{
   constructor(private readonly deps: OperationContextFactoryDeps) {}
 
   fromAuthenticatedPrincipal(
@@ -118,7 +125,7 @@ export class DirectOperationContextFactory implements DirectOperationContextFact
   authorityFromAuthenticatedPrincipal(
     authority: AuthenticatedAuthoritySnapshot,
   ): DirectAuthenticatedAuthority {
-    return freezeDirectAuthority(authority)
+    return mintDirectAuthenticatedAuthority(authority)
   }
 
   resolveCommandContext(context: CommandContext): AuthenticatedPrincipal {
@@ -140,7 +147,7 @@ export class DirectOperationContextFactory implements DirectOperationContextFact
   }
 }
 
-function freezeDirectAuthority(
+function mintDirectAuthenticatedAuthority(
   authority: AuthenticatedAuthoritySnapshot,
 ): DirectAuthenticatedAuthority {
   return Object.freeze({

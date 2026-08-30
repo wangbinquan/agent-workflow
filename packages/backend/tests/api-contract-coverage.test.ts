@@ -41,6 +41,8 @@ const ROUTE_RE = /\bapp\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/g
  */
 const REGISTER_ROUTE_RE =
   /\bregisterRoute\s*\(\s*app\s*,\s*\{[^}]*?method:\s*['"](GET|POST|PUT|DELETE|PATCH)['"][^}]*?path:\s*['"]([^'"]+)['"]/gs
+const REGISTER_OPERATION_ROUTE_RE =
+  /\bregisterOperationRoute\s*\(\s*app\s*,\s*\{[^}]*?method:\s*['"](GET|POST|PUT|DELETE|PATCH)['"][^}]*?path:\s*['"]([^'"]+)['"]/gs
 
 interface DiscoveredRoute {
   method: HttpMethod
@@ -124,6 +126,14 @@ function discoverRoutes(): DiscoveredRoute[] {
         source: f,
       })
     }
+    REGISTER_OPERATION_ROUTE_RE.lastIndex = 0
+    while ((m = REGISTER_OPERATION_ROUTE_RE.exec(src)) !== null) {
+      out.push({
+        method: m[1]!.toUpperCase() as HttpMethod,
+        path: m[2]!,
+        source: f,
+      })
+    }
     out.push(...discoverAclRoutes(src, f))
   }
   return out
@@ -138,6 +148,10 @@ function discoverRoutes(): DiscoveredRoute[] {
 function discoverNonLiteralMounts(): string[] {
   const out: string[] = []
   for (const f of listRouteFiles()) {
+    // RFC-344: this is the generic adapter itself. Its non-literal
+    // `registerRoute(... binding.path ...)` is reconstructed from the literal
+    // registerOperationRoute call sites above, so it is not an uncovered mount.
+    if (basename(f) === 'operationRoute.ts') continue
     const src = stripLineComments(readFileSync(f, 'utf-8'))
     const re = /\bapp\.(get|post|put|delete|patch)\s*\(\s*([^'"\s)])/g
     let m: RegExpExecArray | null

@@ -194,6 +194,7 @@ function legacyOperationFor(method: HttpMethod, path: string): DeclaredHttpOpera
     .replace(/^\/+|\/+$/g, '')
     .replace(/^api\//, '')
     .replace(/:([A-Za-z0-9_]+)/g, 'by-$1')
+    .replace(/\*/g, 'wildcard')
     .replace(/[^A-Za-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase()
@@ -525,12 +526,6 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
       )
     }
     const dependencies = operationDependencies(tool.binding)
-    const duplicateDependencies = duplicateValues(dependencies)
-    if (duplicateDependencies.length > 0) {
-      throw new OperationCatalogError(
-        `${tool.name}: duplicate operation dependency ${duplicateDependencies.join(', ')}`,
-      )
-    }
     if (tool.binding.kind === 'mcp-parameterized') {
       const selectors = tool.binding.cases.map((entry) => entry.selector)
       const duplicateSelectors = duplicateValues(selectors)
@@ -542,6 +537,12 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
       if (selectors.some((selector) => selector === '*' || selector === 'default')) {
         throw new OperationCatalogError(`${tool.name}: wildcard/default selector is forbidden`)
       }
+    }
+    const duplicateDependencies = duplicateValues(dependencies)
+    if (duplicateDependencies.length > 0) {
+      throw new OperationCatalogError(
+        `${tool.name}: duplicate operation dependency ${duplicateDependencies.join(', ')}`,
+      )
     }
     for (const id of dependencies) {
       if (tool.binding.kind === 'mcp-local') continue

@@ -7,7 +7,7 @@ import type { AclResourceType } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type { DirectAuthenticatedAuthorityFactory } from '@/modules/identity-access/public/participants'
 import type {
   DevelopmentConfigOperations,
   DevelopmentConfigResourceKind,
@@ -70,7 +70,7 @@ function mountConfigResource(
   deps: { readonly db: DbClient },
   binding: ResourceHttpBinding,
   operations: DevelopmentConfigResourceOperations,
-  contexts: DirectOperationContextFactory,
+  contexts: DirectAuthenticatedAuthorityFactory,
 ): void {
   const descriptors = createDevelopmentConfigResourceDescriptors(operations)
   const context = (c: Parameters<typeof actorOf>[0]) =>
@@ -147,7 +147,7 @@ export function mountDevelopmentConfigRoutes(
   app: Hono,
   deps: { readonly db: DbClient },
   operations: DevelopmentConfigOperations,
-  contexts: DirectOperationContextFactory,
+  contexts: DirectAuthenticatedAuthorityFactory,
 ): void {
   for (const binding of RESOURCE_BINDINGS) {
     mountConfigResource(app, deps, binding, operations.resources[binding.kind], contexts)

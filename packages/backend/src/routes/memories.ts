@@ -49,7 +49,7 @@ import {
 } from '@/services/memory'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
-import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
 
 /**
  * RFC-099 (D12) — load + gate one memory row for a management operation:
@@ -77,7 +77,7 @@ async function loadManagedMemory(deps: AppDeps, c: Parameters<typeof actorOf>[0]
 }
 
 interface MemoryRouteIdentityAccess {
-  readonly contexts: DirectOperationContextFactory
+  readonly contexts: DirectCommandContextFactory
 }
 
 export function mountMemoryRoutes(

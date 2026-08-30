@@ -95,6 +95,10 @@ import { createSqliteMissionCodeHostEventContinuation } from './infrastructure/m
 
 export const createDevelopmentMissionCodeHostEventContinuation =
   createSqliteMissionCodeHostEventContinuation
+export {
+  createDevelopmentMissionExecutionTerminalObserver,
+  type DevelopmentMissionExecutionTerminalObserver,
+} from './composition/executionTerminalObserver'
 
 /** pipeline evidence 平台收编上限（adapter outputBudget 之外的最后防线）。 */
 const PIPELINE_IMPORT_BUDGET = {

@@ -33,13 +33,32 @@ const BACKEND_ROUTES = resolve(
   'routes',
   'developmentConfig.ts',
 )
+const BACKEND_OPERATIONS = resolve(
+  import.meta.dirname,
+  '..',
+  '..',
+  'backend',
+  'src',
+  'modules',
+  'development-automation',
+  'application',
+  'configOperations.ts',
+)
 
-/** 后端 `mountConfigResource(..., { base: '...', permissionPrefix: '...' })` 的实参对。 */
+/** RFC-344 后端 route binding 与 application-owned descriptor presentation 的机械联结。 */
 function backendResources(): { base: string; permissionPrefix: string }[] {
-  const src = readFileSync(BACKEND_ROUTES, 'utf8')
+  const routes = readFileSync(BACKEND_ROUTES, 'utf8')
+  const operations = readFileSync(BACKEND_OPERATIONS, 'utf8')
+  const permissionByKind = new Map<string, string>()
+  for (const match of operations.matchAll(
+    /'([^']+)':\s*\{[\s\S]{0,240}?permissionPrefix:\s*'([^']+)'/g,
+  )) {
+    permissionByKind.set(match[1]!, match[2]!)
+  }
   const out: { base: string; permissionPrefix: string }[] = []
-  for (const m of src.matchAll(/base:\s*'([^']+)',\s*\n\s*permissionPrefix:\s*'([^']+)'/g)) {
-    out.push({ base: m[1]!, permissionPrefix: m[2]! })
+  for (const match of routes.matchAll(/kind:\s*'([^']+)',[\s\S]{0,120}?base:\s*'([^']+)'/g)) {
+    const permissionPrefix = permissionByKind.get(match[1]!)
+    if (permissionPrefix !== undefined) out.push({ base: match[2]!, permissionPrefix })
   }
   return out
 }

@@ -76,21 +76,21 @@ describe('RFC-333 T2 current human-gate inventory', () => {
       command: 'submitReviewDecision',
       path: "path: '/api/reviews/:nodeRunId/decision'",
       tool: 'submit_review',
-      toolPath: 'path: `/api/reviews/${enc(args.nodeRunId)}/decision`',
+      toolPath: 'ctx.operations.reviewSubmit({',
     },
     {
       file: 'packages/backend/src/routes/clarify.ts',
       command: 'submitClarifyDecision',
       path: "path: '/api/clarify/:nodeRunId/answers'",
       tool: 'answer_clarify',
-      toolPath: 'path: `/api/clarify/${enc(args.nodeRunId)}/answers`',
+      toolPath: 'ctx.operations.clarifyAnswer({',
     },
     {
       file: 'packages/backend/src/routes/taskQuestions.ts',
       command: 'dispatchTaskQuestions',
       path: "path: '/api/tasks/:id/questions/dispatch'",
       tool: 'dispatch_task_questions',
-      toolPath: 'path: `/api/tasks/${enc(args.id)}/questions/dispatch`',
+      toolPath: 'ctx.operations.taskQuestionsDispatch({',
     },
   ] as const
 

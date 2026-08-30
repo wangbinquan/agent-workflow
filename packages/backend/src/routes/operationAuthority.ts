@@ -3,7 +3,7 @@
 import type { Actor } from '@/auth/actor'
 import type {
   DirectAuthenticatedAuthority,
-  DirectOperationContextFactory,
+  DirectAuthenticatedAuthorityFactory,
 } from '@/modules/identity-access/public/participants'
 
 /**
@@ -12,7 +12,7 @@ import type {
  * application descriptor can observe it.
  */
 export function directOperationAuthority(
-  factory: DirectOperationContextFactory,
+  factory: DirectAuthenticatedAuthorityFactory,
   actor: Actor,
 ): DirectAuthenticatedAuthority {
   return factory.authorityFromAuthenticatedPrincipal({
@@ -33,7 +33,7 @@ export function directOperationAuthority(
  * the shared route gate; account permissions and token identity remain exact.
  */
 export function directMcpOperationAuthority(
-  factory: DirectOperationContextFactory,
+  factory: DirectAuthenticatedAuthorityFactory,
   actor: Actor,
 ): DirectAuthenticatedAuthority {
   return factory.authorityFromAuthenticatedPrincipal({

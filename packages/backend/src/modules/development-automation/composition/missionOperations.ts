@@ -3,7 +3,6 @@
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import {
@@ -16,7 +15,7 @@ import {
   selectMissionRequirementSource,
   type LaunchDeps,
 } from '../application/commands/launchMission'
-import { composeDevelopmentAutomation, type DevelopmentAutomationModule } from '../composition'
+import type { DevelopmentAutomationModule } from '../composition'
 import { runCutoverCommand, adoptActiveMr } from '../application/cutover'
 import { readEvidenceFileRange, EVIDENCE_READ_MAX_BYTES } from '../application/pipelineEvidenceRead'
 import { projectMissionJourney } from '../domain/journeyProjection'
@@ -38,10 +37,7 @@ import {
   listMissionTerminalOutcomeGroups,
   type MissionPageCursor,
 } from '../infrastructure/missionReadModels'
-import {
-  createSqliteFactSnapshotReader,
-  missionIdOfExecutionRef,
-} from '../infrastructure/sqliteReconcilerReaders'
+import { createSqliteFactSnapshotReader } from '../infrastructure/sqliteReconcilerReaders'
 import { createSqliteAdmissionLookup } from '../infrastructure/sqliteAdmissionLookup'
 import { createSqliteCutoverStore } from '../infrastructure/sqliteCutoverStore'
 import { createSqliteMissionStore } from '../infrastructure/sqliteMissionStore'
@@ -51,24 +47,10 @@ import type {
   DevelopmentMissionListInput,
   DevelopmentMissionOperations,
 } from '../public/operations'
-import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
-import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import {
-  bindCandidateDeliveryParticipant,
-  bindChangeCandidateParticipant,
-  bindConflictMergeParticipant,
-} from '@/modules/source-control/composition'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
-import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
-import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
-import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import {
   buildDevelopmentDeliveryDeps,
-  buildDevelopmentMrFactsDeps,
-  buildDevelopmentPipelineDeps,
   resolveRepoClaimKey,
 } from '@/services/developmentDeliveryDeps'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -121,17 +103,9 @@ function decodeMissionCursor(raw: string): MissionPageCursor | null {
 
 export interface DevelopmentMissionOperationCompositionDeps {
   readonly db: DbClient
-  readonly configPath: string
-  readonly appHome: string
   readonly secretBox?: SecretBox
-  readonly schedulerDriver: SchedulerDriverPort
-  readonly repositoryPublicationTransport: RepositoryPublicationTransport
-  /**
-   * Bootstrap-owned daemon participant. Production injects the same instance
-   * that owns recovery and wake sweeps; isolated route tests omit it and get
-   * one local composition for that app.
-   */
-  readonly automation?: DevelopmentAutomationModule
+  /** Bootstrap-owned daemon participant shared by REST, MCP and recovery. */
+  readonly automation: DevelopmentAutomationModule
   readonly legacyAdmissionsEnabled: () => boolean
 }
 
@@ -142,66 +116,7 @@ export function composeDevelopmentMissionOperations(
   const snapshots = createSqliteFactSnapshotReader(deps.db)
   const missionStore = createSqliteMissionStore(deps.db)
   let fireReconcile: (missionId: string) => void = () => undefined
-  const automation =
-    deps.automation ??
-    composeDevelopmentAutomation({
-      db: deps.db,
-      appHome: deps.appHome,
-      requirementSource: composeRequirementSourceRunner(deps.db),
-      changeCandidate: bindChangeCandidateParticipant(),
-      candidateDelivery: bindCandidateDeliveryParticipant({
-        publicationTransport: deps.repositoryPublicationTransport,
-      }),
-      conflictMerge: bindConflictMergeParticipant(),
-      ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
-      ...buildDevelopmentPipelineDeps(deps.db),
-      ...buildDevelopmentMrFactsDeps(deps.db, deps.secretBox),
-      agentLauncher: composeAgentActionExecution({
-        db: deps.db,
-        startDeps: buildStartTaskDeps(
-          deps.db,
-          deps.schedulerDriver,
-          deps.configPath,
-          SYSTEM_USER_ID,
-          deps.secretBox,
-        ),
-        onTerminal: (executionRef) => {
-          const missionId = missionIdOfExecutionRef(deps.db, executionRef)
-          if (missionId === null) return
-          missionStore.recordWakeHint({
-            id: ulid(),
-            missionId,
-            source: 'agent-execution',
-            deliveryKey: `agent-exec:${executionRef}`,
-            now: Date.now(),
-          })
-          fireReconcile(missionId)
-        },
-      }),
-      scriptLauncher: composeScriptActionExecution({
-        db: deps.db,
-        startDeps: buildStartTaskDeps(
-          deps.db,
-          deps.schedulerDriver,
-          deps.configPath,
-          SYSTEM_USER_ID,
-          deps.secretBox,
-        ),
-        onTerminal: (executionRef) => {
-          const missionId = missionIdOfExecutionRef(deps.db, executionRef)
-          if (missionId === null) return
-          missionStore.recordWakeHint({
-            id: ulid(),
-            missionId,
-            source: 'agent-execution',
-            deliveryKey: `script-exec:${executionRef}`,
-            now: Date.now(),
-          })
-          fireReconcile(missionId)
-        },
-      }),
-      approvalGateway: composeApprovalGatewayRunner(deps.db),
-    })
+  const automation = deps.automation
   const launchDeps: LaunchDeps = {
     store: missionStore,
     lookup: createSqliteAdmissionLookup(deps.db),

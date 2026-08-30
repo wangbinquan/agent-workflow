@@ -15,12 +15,15 @@ import { listAllPats } from '@/auth/patStore'
 import { listTokenAudit } from '@/services/tokenAudit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
-import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type {
+  DirectCommandContextFactory,
+  DirectQueryContextFactory,
+} from '@/modules/identity-access/public/participants'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 
 interface UserRouteIdentityAccess {
-  readonly contexts: DirectOperationContextFactory
+  readonly contexts: DirectCommandContextFactory & DirectQueryContextFactory
   readonly operations: IdentityUserOperations
 }
 
@@ -212,14 +215,14 @@ export function mountUserRoutes(
   })
 }
 
-function queryContext(factory: DirectOperationContextFactory, actor: Actor) {
+function queryContext(factory: DirectQueryContextFactory, actor: Actor) {
   return factory.queryFromAuthenticatedPrincipal(
     { userId: actor.user.id, source: actor.source },
     'http',
   )
 }
 
-function commandContext(factory: DirectOperationContextFactory, actor: Actor) {
+function commandContext(factory: DirectCommandContextFactory, actor: Actor) {
   return factory.fromAuthenticatedPrincipal({ userId: actor.user.id, source: actor.source }, 'http')
 }
 

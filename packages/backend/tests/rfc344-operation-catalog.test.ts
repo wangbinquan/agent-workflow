@@ -13,6 +13,7 @@ import {
   operationDependencies,
   operationId,
   lookupDeclaredHttpOperation,
+  registerHttpOperationProjection,
   validateOperationCatalogSnapshot,
   type DeclaredHttpOperation,
   type OperationCatalogRouteProjection,
@@ -32,6 +33,7 @@ import {
 import { registerRoute, registerRouteMiddleware } from '../src/routes/registry'
 import { DirectOperationContextFactory } from '../src/modules/identity-access/application/operationContext'
 import { directMcpOperationAuthority } from '../src/routes/operationAuthority'
+import { createDevelopmentActivityWorkerBinding } from '../src/modules/development-automation/composition/activityOperations'
 
 const ROOT = join(import.meta.dir, '..')
 
@@ -170,7 +172,9 @@ describe('RFC-344 closed operation catalog', () => {
     ).toThrow(/unknown public errors/)
     expect(() =>
       validateOperationCatalogSnapshot(
-        described({ descriptors: [{ ...descriptor, id: operationId('rfc344.orphan.v1') }] }),
+        described({
+          descriptors: [descriptor, { ...descriptor, id: operationId('rfc344.orphan.v1') }],
+        }),
       ),
     ).toThrow(/orphan operation descriptor/)
     expect(() =>
@@ -193,6 +197,28 @@ describe('RFC-344 closed operation catalog', () => {
       expect(selectors).not.toContain('*')
       expect(selectors).not.toContain('default')
     }
+  })
+
+  test('legacy declarations keep exact and wildcard route identities distinct', () => {
+    const exact = registerHttpOperationProjection({
+      method: 'GET',
+      path: '/api/rfc344-legacy/:id',
+      permissions: [],
+      tokenAccess: 'allow',
+      summary: 'Read one legacy probe',
+    })
+    const wildcard = registerHttpOperationProjection({
+      method: 'GET',
+      path: '/api/rfc344-legacy/:id/*',
+      permissions: [],
+      tokenAccess: 'allow',
+      summary: 'Read a legacy probe path',
+    })
+
+    expect(wildcard.operationId).not.toBe(exact.operationId)
+    expect(wildcard.operationId).toBe(
+      operationId('legacy-http.read-rfc344-legacy-by-id-wildcard.v1'),
+    )
   })
 })
 
@@ -405,6 +431,37 @@ describe('RFC-344 direct bound handler invocation', () => {
   })
 })
 
+describe('RFC-344 bootstrap-owned development activity participant', () => {
+  test('fails closed before binding and accepts exactly one runtime worker', async () => {
+    const binding = createDevelopmentActivityWorkerBinding()
+    await expect(binding.operations.runOneWorkerCycle()).rejects.toThrow(
+      'development-activity-worker-not-bound',
+    )
+
+    binding.bind({
+      publishOneChannelResult: () => 'idle',
+      runOneOutbox: async () => 'idle',
+      pumpOneDelivery: () => false,
+      planOneReaction: () => null,
+      inspectOneExecution: async () => 'completed',
+    })
+
+    await expect(binding.operations.runOneWorkerCycle()).resolves.toEqual({
+      activity: 'execution',
+      state: 'completed',
+    })
+    expect(() =>
+      binding.bind({
+        publishOneChannelResult: () => 'idle',
+        runOneOutbox: async () => 'idle',
+        pumpOneDelivery: () => false,
+        planOneReaction: () => null,
+        inspectOneExecution: async () => 'idle',
+      }),
+    ).toThrow('development-activity-worker-already-bound')
+  })
+})
+
 describe('RFC-344 single inbound root source locks', () => {
   test('the legacy dispatcher and private Hono root cannot return', () => {
     expect(existsSync(join(ROOT, 'src/mcp/dispatch.ts'))).toBe(false)
@@ -465,13 +522,40 @@ describe('RFC-344 single inbound root source locks', () => {
     expect(start.match(/composeDevelopmentAutomation\s*\(/g)).toHaveLength(1)
     expect(start).toContain('developmentAutomation,')
 
-    expect(server).toContain('{ automation: deps.developmentAutomation }')
+    expect(server).toContain('automation: developmentAutomation')
 
     const missionComposition = readFileSync(
       join(ROOT, 'src/modules/development-automation/composition/missionOperations.ts'),
       'utf8',
     )
-    expect(missionComposition).toContain('deps.automation ??')
+    expect(missionComposition).toContain('readonly automation: DevelopmentAutomationModule')
+    expect(missionComposition).toContain('const automation = deps.automation')
+    expect(missionComposition).not.toContain('composeDevelopmentAutomation(')
+    expect(missionComposition).not.toMatch(
+      /from '@\/modules\/(?:integration|source-control|task-execution)\//,
+    )
+
+    const configComposition = readFileSync(
+      join(ROOT, 'src/modules/development-automation/composition/configOperations.ts'),
+      'utf8',
+    )
+    expect(configComposition).toContain('developmentAdapter: DevelopmentConfigResourceOperations')
+    expect(configComposition).not.toContain("from '@/modules/integration/")
+
+    const terminalObserver = readFileSync(
+      join(ROOT, 'src/modules/development-automation/composition/executionTerminalObserver.ts'),
+      'utf8',
+    )
+    expect(terminalObserver).toContain('missionIdOfExecutionRef')
+    expect(terminalObserver).toContain('recordWakeHint')
+    expect(terminalObserver).not.toContain("from '@/modules/task-execution/")
+
+    const adapterComposition = readFileSync(
+      join(ROOT, 'src/modules/integration/composition/developmentAdapterConfigOperations.ts'),
+      'utf8',
+    )
+    expect(adapterComposition).toContain('composeDevelopmentAdapterConfigOperations')
+    expect(adapterComposition).not.toContain("from '@/modules/development-automation/")
   })
 
   test('pilot transport adapters depend on the narrow database port, not the composition root', () => {

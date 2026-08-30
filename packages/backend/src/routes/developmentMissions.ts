@@ -3,7 +3,7 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
 import { actorOf } from '@/auth/actor'
-import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type { DirectAuthenticatedAuthorityFactory } from '@/modules/identity-access/public/participants'
 import {
   createDevelopmentMissionDescriptors,
   type DevelopmentMissionOperations,
@@ -19,7 +19,7 @@ const recordBody = async (request: Request): Promise<Record<string, unknown>> =>
 export function mountDevelopmentMissionRoutes(
   app: Hono,
   operations: DevelopmentMissionOperations,
-  contexts: DirectOperationContextFactory,
+  contexts: DirectAuthenticatedAuthorityFactory,
 ): void {
   const descriptor = createDevelopmentMissionDescriptors(operations)
   const context = (c: Parameters<typeof actorOf>[0]) =>
@@ -240,7 +240,7 @@ export function mountDevelopmentMissionRoutes(
     }),
     context,
     encode: (c, read) =>
-      c.body(read.bytes.slice().buffer as ArrayBuffer, 200, {
+      c.body(Uint8Array.from(read.bytes), 200, {
         'content-type': read.mediaType,
         'content-length': String(read.bytes.byteLength),
         'x-evidence-total-bytes': String(read.totalBytes),

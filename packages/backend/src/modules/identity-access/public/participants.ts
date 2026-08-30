@@ -91,7 +91,7 @@ export interface DelegatedAuthorityRef {
   readonly revision: number
 }
 
-export interface DirectOperationContextFactory {
+export interface DirectCommandContextFactory {
   fromAuthenticatedPrincipal(
     principal: AuthenticatedPrincipal,
     transport: DirectTransport,
@@ -102,15 +102,21 @@ export interface DirectOperationContextFactory {
     transport: DirectTransport,
     key: ValidatedIdempotencyKey,
   ): IdempotentCommandContext
+  resolveCommandContext(context: CommandContext): AuthenticatedPrincipal
+}
+
+export interface DirectQueryContextFactory {
   queryFromAuthenticatedPrincipal(
     principal: AuthenticatedPrincipal,
     transport: DirectTransport,
   ): QueryContext
+  resolveQueryContext(context: QueryContext): AuthenticatedPrincipal
+}
+
+export interface DirectAuthenticatedAuthorityFactory {
   authorityFromAuthenticatedPrincipal(
     authority: AuthenticatedAuthoritySnapshot,
   ): DirectAuthenticatedAuthority
-  resolveCommandContext(context: CommandContext): AuthenticatedPrincipal
-  resolveQueryContext(context: QueryContext): AuthenticatedPrincipal
 }
 
 /** Credential/inherited adapters receive current account facts, never a token secret or Actor. */

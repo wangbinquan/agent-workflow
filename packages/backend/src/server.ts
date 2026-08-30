@@ -110,7 +110,15 @@ import {
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
-import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
+import {
+  createDevelopmentActivityWorkerBinding,
+  type DevelopmentActivityWorkerBinding,
+} from '@/modules/development-automation/composition/activityOperations'
+import type {
+  DevelopmentActivityOperations,
+  DevelopmentConfigOperations,
+  DevelopmentMissionOperations,
+} from '@/modules/development-automation/public/operations'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
@@ -133,11 +141,15 @@ import {
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
+  composeDevelopmentAutomation,
+  createDevelopmentMissionExecutionTerminalObserver,
   createDevelopmentMissionCodeHostEventContinuation,
   type DevelopmentAutomationModule,
 } from '@/modules/development-automation/composition'
 import {
   buildDevelopmentDeliveryDeps,
+  buildDevelopmentMrFactsDeps,
+  buildDevelopmentPipelineDeps,
   buildDevelopmentWorkspaceRepositoryPreparation,
   resolveDevelopmentRepoBinding,
 } from '@/services/developmentDeliveryDeps'
@@ -147,6 +159,8 @@ import {
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeDevelopmentAdapterConfigOperations } from '@/modules/integration/composition/developmentAdapterConfigOperations'
+import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import {
   createCodeHostWebhookDeliveryConsumer,
@@ -169,6 +183,8 @@ import {
   type RepositoryTransportCredentialModule,
 } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
+import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 
 /**
@@ -325,11 +341,26 @@ export interface AppDeps {
  * entry point (including direct dispatcher tests) choose an explicit bootstrap
  * composition instead of discovering a missing driver only on first request.
  */
-export type ComposedAppDeps = AppDeps & {
+type RuntimeComposedAppDeps = AppDeps & {
   readonly schedulerDriver: SchedulerDriverPort
   readonly taskExecutionReadModels: TaskExecutionReadModels
   readonly collaborationContext: CollaborationCommandContext
 }
+
+interface RepositoryBootstrap {
+  readonly repositoryTransport: RepositoryTransportCredentialModule | null
+  readonly codeHostConnections: ReturnType<typeof createCodeHostConnectionsService> | null
+  readonly repositoryPublicationTransport: ReturnType<typeof createRepositoryPublicationTransport>
+}
+
+export type ComposedAppDeps = RuntimeComposedAppDeps &
+  RepositoryBootstrap & {
+    readonly developmentAutomation: DevelopmentAutomationModule
+    readonly developmentActivityOperations: DevelopmentActivityOperations
+    readonly developmentActivityWorker: DevelopmentActivityWorkerBinding
+    readonly developmentConfigOperations: DevelopmentConfigOperations
+    readonly developmentMissionOperations: DevelopmentMissionOperations
+  }
 
 function composeApplicationEventCenter(deps: AppDeps): EventCenterModule {
   const approvalGateway = composeApprovalGatewayRunner(deps.db)
@@ -388,6 +419,121 @@ function composeApplicationEventCenter(deps: AppDeps): EventCenterModule {
   })
 }
 
+function composeRepositoryBootstrap(
+  deps: RuntimeComposedAppDeps,
+  appHome: string,
+): RepositoryBootstrap {
+  const repositoryTransport =
+    deps.repositoryTransport ??
+    (deps.secretBox === undefined
+      ? null
+      : composeRepositoryTransportCredentials(deps.db, deps.secretBox))
+  const repositoryTransportCoordinator =
+    repositoryTransport === null
+      ? null
+      : {
+          participant: repositoryTransport.adminConnections,
+          project: buildRepositoryTransportConnectionProjection,
+        }
+  if (repositoryTransport !== null) {
+    reconcileRepositoryTransportConnectionProjections(deps.db, repositoryTransport.adminConnections)
+  }
+  const codeHostConnections =
+    deps.secretBox === undefined || repositoryTransportCoordinator === null
+      ? null
+      : createCodeHostConnectionsService({
+          db: deps.db,
+          secretBox: deps.secretBox,
+          repositoryTransport: repositoryTransportCoordinator,
+        })
+  const repositoryEndpointDiscovery =
+    codeHostConnections === null
+      ? undefined
+      : createRepositoryEndpointDiscovery({
+          resolveConnection(provider) {
+            const connection = codeHostConnections.resolve(provider)
+            if (connection?.connectionGeneration === undefined) return null
+            return {
+              provider: connection.provider,
+              apiBaseUrl: connection.baseUrl,
+              connectionGeneration: connection.connectionGeneration,
+              token: connection.token,
+              rejectUnauthorized: connection.rejectUnauthorized,
+            }
+          },
+          ...(deps.codeHostFetch === undefined ? {} : { fetchImpl: deps.codeHostFetch }),
+        })
+  return Object.freeze({
+    repositoryTransport,
+    codeHostConnections,
+    repositoryPublicationTransport:
+      deps.repositoryPublicationTransport ??
+      createRepositoryPublicationTransport({
+        db: deps.db,
+        ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+        appHome,
+        ...(repositoryEndpointDiscovery === undefined
+          ? {}
+          : { endpointDiscovery: repositoryEndpointDiscovery }),
+      }),
+  })
+}
+
+function composeFallbackDevelopmentAutomation(
+  deps: RuntimeComposedAppDeps & RepositoryBootstrap,
+  appHome: string,
+): DevelopmentAutomationModule {
+  const automationRef: { current: DevelopmentAutomationModule | null } = { current: null }
+  const terminalObserver = createDevelopmentMissionExecutionTerminalObserver({
+    db: deps.db,
+    drive: (missionId) => {
+      const automation = automationRef.current
+      if (automation === null) {
+        return Promise.reject(new Error('development-automation-not-composed'))
+      }
+      return automation.drive(missionId)
+    },
+  })
+  const automation = composeDevelopmentAutomation({
+    db: deps.db,
+    appHome,
+    requirementSource: composeRequirementSourceRunner(deps.db),
+    changeCandidate: bindChangeCandidateParticipant(),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      publicationTransport: deps.repositoryPublicationTransport,
+    }),
+    conflictMerge: bindConflictMergeParticipant(),
+    ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
+    ...buildDevelopmentPipelineDeps(deps.db),
+    ...buildDevelopmentMrFactsDeps(deps.db, deps.secretBox),
+    agentLauncher: composeAgentActionExecution({
+      db: deps.db,
+      startDeps: buildStartTaskDeps(
+        deps.db,
+        deps.schedulerDriver,
+        deps.configPath,
+        SYSTEM_USER_ID,
+        deps.secretBox,
+      ),
+      onTerminal: terminalObserver.agent,
+    }),
+    scriptLauncher: composeScriptActionExecution({
+      db: deps.db,
+      startDeps: buildStartTaskDeps(
+        deps.db,
+        deps.schedulerDriver,
+        deps.configPath,
+        SYSTEM_USER_ID,
+        deps.secretBox,
+      ),
+      onTerminal: terminalObserver.script,
+    }),
+    approvalGateway: composeApprovalGatewayRunner(deps.db),
+  })
+  automationRef.current = automation
+  return automation
+}
+
 export function createApp(deps: AppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
@@ -408,17 +554,10 @@ export function createApp(deps: AppDeps): Hono {
   if (taskExecutionReadModels === undefined) {
     throw new Error('task-execution-read-models-not-composed')
   }
-  const effectiveDeps: ComposedAppDeps = {
+  const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
       : deps),
-    // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
-    // 拿到的是**同一个**实例；MCP 不再另建 route table。
-    repositoryTransport:
-      deps.repositoryTransport ??
-      (deps.secretBox === undefined
-        ? null
-        : composeRepositoryTransportCredentials(deps.db, deps.secretBox)),
     digitalEmployeeCaseDetailProjection:
       deps.digitalEmployeeCaseDetailProjection ??
       composeDevelopmentEmployeeCaseDetailProjection(
@@ -433,6 +572,34 @@ export function createApp(deps: AppDeps): Hono {
         appHome: deps.appHome ?? dirname(deps.configPath),
         taskExecutionReadModels,
       }),
+  }
+  const appHome = runtimeDeps.appHome ?? dirname(runtimeDeps.configPath)
+  const repositoryBootstrap = composeRepositoryBootstrap(runtimeDeps, appHome)
+  const developmentConfigOperations = composeDevelopmentConfigOperations(
+    runtimeDeps.db,
+    composeDevelopmentAdapterConfigOperations(runtimeDeps.db),
+  )
+  const developmentActivityWorker = createDevelopmentActivityWorkerBinding()
+  const developmentAutomation =
+    runtimeDeps.developmentAutomation ??
+    composeFallbackDevelopmentAutomation({ ...runtimeDeps, ...repositoryBootstrap }, appHome)
+  const developmentMissionOperations = composeDevelopmentMissionOperations({
+    db: runtimeDeps.db,
+    ...(runtimeDeps.secretBox === undefined ? {} : { secretBox: runtimeDeps.secretBox }),
+    automation: developmentAutomation,
+    legacyAdmissionsEnabled: () =>
+      readDigitalEmployeeWriterState(runtimeDeps.db).legacyAdmissionsEnabled,
+  })
+  const effectiveDeps: ComposedAppDeps = {
+    ...runtimeDeps,
+    ...repositoryBootstrap,
+    // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
+    // 拿到的是**同一个**实例；MCP 不再另建 route table。
+    developmentAutomation,
+    developmentActivityOperations: developmentActivityWorker.operations,
+    developmentActivityWorker,
+    developmentConfigOperations,
+    developmentMissionOperations,
   }
 
   app.use('*', async (c, next) => {
@@ -608,60 +775,10 @@ export function mountApiRoutes(
     join(appHome, 'artifacts', 'employee-inputs'),
   )
   const developmentDelivery = buildDevelopmentDeliveryDeps(deps.db, deps.secretBox)
-  // 装配已上移到 `createApp`（RFC-317 T54）。本函数每进程只运行一次。
-  const repositoryTransportModule = deps.repositoryTransport ?? null
-  const repositoryTransportCoordinator =
-    repositoryTransportModule === null
-      ? null
-      : {
-          participant: repositoryTransportModule.adminConnections,
-          project: buildRepositoryTransportConnectionProjection,
-        }
-  if (repositoryTransportModule !== null) {
-    reconcileRepositoryTransportConnectionProjections(
-      deps.db,
-      repositoryTransportModule.adminConnections,
-    )
-  }
-  const codeHostConnections =
-    deps.secretBox === undefined || repositoryTransportCoordinator === null
-      ? null
-      : createCodeHostConnectionsService({
-          db: deps.db,
-          secretBox: deps.secretBox,
-          repositoryTransport: repositoryTransportCoordinator,
-        })
-  const repositoryEndpointDiscovery =
-    codeHostConnections === null
-      ? undefined
-      : createRepositoryEndpointDiscovery({
-          resolveConnection(provider) {
-            const connection = codeHostConnections.resolve(provider)
-            if (connection?.connectionGeneration === undefined) return null
-            return {
-              provider: connection.provider,
-              apiBaseUrl: connection.baseUrl,
-              connectionGeneration: connection.connectionGeneration,
-              token: connection.token,
-              rejectUnauthorized: connection.rejectUnauthorized,
-            }
-          },
-          ...(deps.codeHostFetch === undefined ? {} : { fetchImpl: deps.codeHostFetch }),
-        })
-  const repositoryPublicationTransport =
-    deps.repositoryPublicationTransport ??
-    createRepositoryPublicationTransport({
-      db: deps.db,
-      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-      appHome,
-      ...(repositoryEndpointDiscovery === undefined
-        ? {}
-        : { endpointDiscovery: repositoryEndpointDiscovery }),
-    })
-  const schedulerDriver = requireSchedulerDriver(deps.schedulerDriver)
-  if (deps.taskExecutionReadModels === undefined) {
-    throw new Error('task-execution-read-models-not-composed')
-  }
+  const repositoryTransportModule = deps.repositoryTransport
+  const codeHostConnections = deps.codeHostConnections
+  const repositoryPublicationTransport = deps.repositoryPublicationTransport
+  const schedulerDriver = deps.schedulerDriver
   const routeDeps: ComposedAppDeps = {
     ...deps,
     repositoryPublicationTransport,
@@ -773,26 +890,16 @@ export function mountApiRoutes(
   if (digitalEmployee.runtime === null) {
     throw new Error('task catalog requires the digital employee runtime')
   }
+  deps.developmentActivityWorker.bind(digitalEmployee.runtime.worker)
   const taskCatalog = composeTaskCatalog({
     sources: [
       ...composeTaskExecutionCatalogSources(deps.db),
       composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
     ],
   })
-  const developmentActivityOperations = composeDevelopmentActivityOperations(
-    digitalEmployee.runtime.worker,
-  )
-  const developmentConfigOperations = composeDevelopmentConfigOperations(deps.db)
-  const developmentMissionOperations = composeDevelopmentMissionOperations({
-    db: deps.db,
-    configPath: deps.configPath,
-    appHome: Paths.root,
-    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
-    schedulerDriver,
-    repositoryPublicationTransport,
-    ...(deps.developmentAutomation === undefined ? {} : { automation: deps.developmentAutomation }),
-    legacyAdmissionsEnabled: () => readDigitalEmployeeWriterState(deps.db).legacyAdmissionsEnabled,
-  })
+  const developmentActivityOperations = deps.developmentActivityOperations
+  const developmentConfigOperations = deps.developmentConfigOperations
+  const developmentMissionOperations = deps.developmentMissionOperations
 
   mountConfigRoutes(app, deps)
   mountMaintenanceRoutes(app, deps)

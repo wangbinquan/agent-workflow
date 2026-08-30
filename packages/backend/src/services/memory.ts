@@ -64,7 +64,7 @@ import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
 import type {
   AuthenticatedPrincipal,
   CommandContext,
-  DirectOperationContextFactory,
+  DirectCommandContextFactory,
   PrincipalSource,
 } from '@/modules/identity-access/public/participants'
 
@@ -630,7 +630,7 @@ export interface MoveMemoryResult {
  */
 export function moveMemory(
   db: DbClient,
-  contexts: DirectOperationContextFactory,
+  contexts: DirectCommandContextFactory,
   context: CommandContext,
   id: string,
   input: MemoryMoveRequest,

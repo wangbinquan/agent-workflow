@@ -103,6 +103,7 @@ interface ImportBinding {
 }
 
 interface SurfaceRoot {
+  publicUnit: SourceUnit
   unit: SourceUnit
   declaration: ts.Declaration
   symbol: string
@@ -512,12 +513,17 @@ function publicSurfaceRoots(units: readonly SourceUnit[]): SurfaceRoot[] {
           ts.isEnumDeclaration(statement)
         ) {
           if (statement.name !== undefined) {
-            roots.push({ unit, declaration: statement, symbol: statement.name.text })
+            roots.push({
+              publicUnit: unit,
+              unit,
+              declaration: statement,
+              symbol: statement.name.text,
+            })
           }
         } else if (ts.isVariableStatement(statement)) {
           for (const declaration of statement.declarationList.declarations) {
             if (ts.isIdentifier(declaration.name)) {
-              roots.push({ unit, declaration, symbol: declaration.name.text })
+              roots.push({ publicUnit: unit, unit, declaration, symbol: declaration.name.text })
             }
           }
         }
@@ -537,6 +543,7 @@ function publicSurfaceRoots(units: readonly SourceUnit[]): SurfaceRoot[] {
           const resolved = resolveNamedDeclaration(units, target, importedName)
           if (resolved !== undefined) {
             roots.push({
+              publicUnit: unit,
               unit: resolved.unit,
               declaration: resolved.declaration,
               symbol: element.name.text,
@@ -721,7 +728,7 @@ function publicSurfaceViolations(units: readonly SourceUnit[]): string[] {
   // member as the old open-public-type debt would reject the operation model
   // by construction. Filename/export-shape checks above still apply.
   for (const root of publicSurfaceRoots(units).filter(
-    (entry) => moduleLocation(entry.unit.path)?.rest !== 'public/operations',
+    (entry) => moduleLocation(entry.publicUnit.path)?.rest !== 'public/operations',
   )) {
     visitDeclaration(
       root.unit,
@@ -1201,7 +1208,7 @@ function godSurfaceViolations(
   // RFC-344 operation descriptor sets are a closed catalog, not one callable
   // god service. Their method/dependency closure has its own catalog guard.
   for (const root of publicSurfaceRoots(units).filter(
-    (entry) => moduleLocation(entry.unit.path)?.rest !== 'public/operations',
+    (entry) => moduleLocation(entry.publicUnit.path)?.rest !== 'public/operations',
   )) {
     const stats = shapeStats(units, root.unit, root.declaration)
     const label = `${canonicalModulePath(root.unit.path)}#${root.symbol}`
@@ -1305,6 +1312,20 @@ const BARE_TYPEOF_FIXTURE = sourceUnits({
   `,
 })
 
+const OPERATION_REEXPORT_FIXTURE = sourceUnits({
+  'packages/backend/src/modules/probe/application/operations.ts': `
+    export interface ProbeOperations {
+      one(): void; two(): void; three(): void; four(): void; five(): void; six(): void
+    }
+    export function createProbeDescriptors(operations: ProbeOperations): unknown {
+      return operations
+    }
+  `,
+  'packages/backend/src/modules/probe/public/operations.ts': `
+    export { createProbeDescriptors, type ProbeOperations } from '../application/operations'
+  `,
+})
+
 describe('RFC-317 T25 —— 解析扩面与 typeof 豁免的正反 fixture', () => {
   test('shared 的类型确实被解析并计入叶子数（撤掉扩面 ⇒ 这条红）', () => {
     // 27 个字段的 shared DTO 嵌进 public 合同：解析得到 ⇒ 超出 24 片叶子的预算 ⇒ 报违规。
@@ -1330,6 +1351,11 @@ describe('RFC-317 T25 —— 解析扩面与 typeof 豁免的正反 fixture', ()
       '裸 typeof 才是真正开放的形态：类型等于某个值恰好是什么，消费者在编译期说不出它的形状。' +
         '豁免一旦放宽成「任何 typeof 都放行」，这条就会漏',
     ).toEqual(['modules/probe/public/types.ts#RepositoryGit: unsafe/open type TypeQuery'])
+  })
+
+  test('public/operations 的 re-export 保留 operation-catalog 专属射程', () => {
+    expect(publicSurfaceViolations(OPERATION_REEXPORT_FIXTURE)).toEqual([])
+    expect(godSurfaceViolations(OPERATION_REEXPORT_FIXTURE)).toEqual([])
   })
 })
 

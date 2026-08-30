@@ -13,7 +13,7 @@ import {
   type UserPublic,
 } from '@agent-workflow/shared'
 import type { CreateManagedUser, UpdateUserAccess } from './commands'
-import type { DirectOperationContextFactory } from './participants'
+import type { DirectCommandContextFactory } from './participants'
 import type { CommandContext, QueryContext } from './participants'
 import type { GetUserAccess } from './queries'
 import type { AdminUserAccessView } from './types'
@@ -34,7 +34,9 @@ const PUBLIC_ERRORS = Object.freeze([
   'internal-error',
 ] as const)
 
-const exactAdminUserViewSchema = AdminUserViewSchema.strict()
+const exactAdminUserViewSchema = AdminUserViewSchema.extend({
+  username: UserSchema.shape.username.or(z.literal('__system__')),
+}).strict()
 const exactUserPublicSchema = UserPublicSchema.strict()
 const emptyInputSchema = z.object({}).strict()
 const getUserInputSchema = z.object({ userId: z.string().min(1) }).strict()
@@ -81,7 +83,7 @@ const softDeleteSchema = z
   .strict()
 
 export interface IdentityUserOperationDeps {
-  readonly contexts: DirectOperationContextFactory
+  readonly contexts: DirectCommandContextFactory
   readonly createManagedUser: CreateManagedUser
   readonly updateUserAccess: UpdateUserAccess
   readonly getUserAccess: GetUserAccess

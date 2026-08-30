@@ -53,12 +53,12 @@ import {
 } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type { UpdateOwnProfile } from '@/modules/identity-access/public/commands'
-import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
 import type { GetUserProfile } from '@/modules/identity-access/public/queries'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 
 interface AuthRouteIdentityAccess {
-  readonly contexts: DirectOperationContextFactory
+  readonly contexts: DirectCommandContextFactory
   readonly getUserProfile: GetUserProfile
   readonly updateOwnProfile: UpdateOwnProfile
 }
