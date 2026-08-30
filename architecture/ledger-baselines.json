@@ -357,10 +357,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1104,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-346/347 已批准的 system-operations descriptors 与 identity-access authority commands 新增 13 个受管 mutation entrypoint；逐项纳入同一 owner/control 分母而非隐藏写入口。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -388,20 +385,14 @@
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 457,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-346 的 system-operations composition 增加 1 个已审计 bootstrap wiring entry；该实例化装配必须进入 exact census，未新增 ambient singleton 债。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 1803,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-346/347 将 system-operations 与 identity-access consumers 改接 exact public contracts，新增 55 条逐 symbol observed edge；全部已分类且 new R1=0。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -415,20 +406,14 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
       "baseline": 25,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
-      "allowGrowth": {
-        "why": "RFC-346/347 新增 2 个 consumer-owned typed authority/operation required ports，并已闭合 provider 与 composition liveness；不是未分类跨域依赖。"
-      }
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 1759,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-346/347 的 47 条新增 exact public-contract edge 均生成逐 path/symbol 的 reviewed classification；本次增长记录分类分母，不新增 wildcard 或 unresolved first-party edge。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -442,10 +427,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 541,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-346/347 新增 12 个 system-operations 与 identity-access exact public symbols；authority、consumer、transaction 与 data-class 递归面已全部纳入 canonical surface。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -466,10 +448,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 19677,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-346/347 的 approved source stack 新增或显式化 68 个 top-level symbols；本次为每个 symbol 登记唯一 current/target owner，而非增加架构债。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -487,7 +466,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "c5aa01711744896917e1cdf755e61cd36a7386af",
-    "contentDigest": "sha256:98f3679848cb06a95582e4e544aad8165ff8d64d56f499b0b846029e52d20236",
+    "contentDigest": "sha256:3a73ad41981edc99524d1f238c5d0fdd91ce6841521e900271ed4e5d36e7973c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
