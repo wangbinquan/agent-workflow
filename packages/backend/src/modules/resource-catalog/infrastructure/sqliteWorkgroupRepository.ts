@@ -38,8 +38,9 @@ import {
 } from '../domain/resourceAccess'
 import { listResourceGrantUserIdsInTx } from './sqliteResourceGrantRepository'
 import type { WorkgroupOperationContext } from '../public/participants'
-import type { DeleteWorkgroupCatalogInput, UpdateWorkgroupCatalogInput } from '../public/types'
+import type { UpdateWorkgroupCatalogInput } from '../public/types'
 import type {
+  ValidatedWorkgroupDeleteInput,
   WorkgroupDeleteResult,
   WorkgroupProjection,
   WorkgroupRepository,
@@ -828,7 +829,7 @@ export function createSqliteWorkgroupRepository(
     },
     async delete(
       authority: WorkgroupOperationContext,
-      input: DeleteWorkgroupCatalogInput,
+      input: ValidatedWorkgroupDeleteInput,
     ): Promise<WorkgroupDeleteResult> {
       return dbTxSync(db, (tx) => {
         const row = tx.select().from(workgroups).where(eq(workgroups.id, input.id)).get()

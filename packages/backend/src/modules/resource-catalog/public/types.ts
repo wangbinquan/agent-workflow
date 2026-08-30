@@ -23,7 +23,6 @@ import type {
   UpdateResourceAclBody,
   CopyWorkgroupRequest,
   CreateWorkgroup,
-  DeleteWorkgroup,
   RenameWorkgroup,
   SaveWorkgroupReceipt,
   UpdateWorkgroup,
@@ -218,7 +217,12 @@ export interface UpdateWorkgroupCatalogInput {
 
 export interface DeleteWorkgroupCatalogInput {
   readonly id: string
-  readonly deletion: DeleteWorkgroup
+  /**
+   * Transport submission validated by the application only after its govern
+   * gate. Keeping this opaque here preserves authorization-before-validation
+   * without allowing unvalidated data to reach the repository.
+   */
+  readonly deletion: unknown
 }
 
 export interface RenameWorkgroupCatalogInput {

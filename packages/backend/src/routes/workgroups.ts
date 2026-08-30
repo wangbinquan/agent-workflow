@@ -15,7 +15,6 @@
 import {
   CopyWorkgroupRequestSchema,
   CreateWorkgroupSchema,
-  DeleteWorkgroupSchema,
   rejectRetiredStartTaskKeys,
   RenameWorkgroupSchema,
   StartWorkgroupTaskSchema,
@@ -234,15 +233,10 @@ export function mountWorkgroupRoutes(
       const id = c.req.param('id')
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      const parsed = DeleteWorkgroupSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
-          issues: parsed.error.issues,
-        })
-      }
+      const deletion = await safeJsonOrEmpty(c.req.raw)
       await commands.delete(module.authorityFor(actor), {
         id: existing.id,
-        deletion: parsed.data,
+        deletion,
       })
       captureDeleteSnapshot(c, actor, existing)
       return c.body(null, 204)

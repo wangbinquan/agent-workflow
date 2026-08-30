@@ -1,5 +1,6 @@
 import type {
   CreateWorkgroup,
+  DeleteWorkgroup,
   SaveWorkgroupReceipt,
   Workgroup,
   WorkgroupDetail,
@@ -8,7 +9,6 @@ import type {
 import type { WorkgroupOperationContext } from '../../public/participants'
 import type {
   CopyWorkgroupCatalogInput,
-  DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   UpdateWorkgroupCatalogInput,
   WorkgroupCatalogResource,
@@ -31,6 +31,11 @@ export interface WorkgroupDeletedAudience {
 export interface WorkgroupSaveResult {
   readonly receipt: SaveWorkgroupReceipt
   readonly committed: boolean
+}
+
+export interface ValidatedWorkgroupDeleteInput {
+  readonly id: string
+  readonly deletion: DeleteWorkgroup
 }
 
 export interface WorkgroupDeleteResult {
@@ -61,7 +66,7 @@ export interface WorkgroupRepository {
   ): Promise<WorkgroupSaveResult>
   delete(
     authority: WorkgroupOperationContext,
-    input: DeleteWorkgroupCatalogInput,
+    input: ValidatedWorkgroupDeleteInput,
   ): Promise<WorkgroupDeleteResult>
 }
 

@@ -4,6 +4,7 @@ import {
   DeleteWorkgroupSchema,
   RenameWorkgroupSchema,
   UpdateWorkgroupSchema,
+  type DeleteWorkgroup,
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
@@ -47,15 +48,15 @@ function notFound(id: string): NotFoundError {
   return new NotFoundError('workgroup-not-found', `workgroup '${id}' not found`)
 }
 
-function assertDeleteConfirm(input: DeleteWorkgroupCatalogInput, expectedName: string): void {
-  if (typeof input.deletion.confirm !== 'string') {
+function assertDeleteConfirm(input: DeleteWorkgroup, expectedName: string): void {
+  if (typeof input.confirm !== 'string') {
     throw new ValidationError(
       'delete-confirm-required',
       'type the workgroup name to confirm deletion',
       { resourceType: 'workgroup' },
     )
   }
-  if (input.deletion.confirm !== expectedName) {
+  if (input.confirm !== expectedName) {
     throw new ValidationError(
       'delete-confirm-mismatch',
       'the entered name does not match this workgroup',
@@ -136,10 +137,16 @@ export function createWorkgroupApplication(
       return result.receipt
     },
     async delete(authority: WorkgroupOperationContext, input: DeleteWorkgroupCatalogInput) {
-      const deletion = DeleteWorkgroupSchema.parse(input.deletion)
       const current = await loadVisible(authority, input.id)
       await deps.access.requireResourceGovern(authority, current)
-      assertDeleteConfirm({ id: input.id, deletion }, current.name)
+      const parsed = DeleteWorkgroupSchema.safeParse(input.deletion)
+      if (!parsed.success) {
+        throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
+          issues: parsed.error.issues,
+        })
+      }
+      const deletion = parsed.data
+      assertDeleteConfirm(deletion, current.name)
       const result = await deps.repository.delete(authority, { id: input.id, deletion })
       deps.events.deleted(result)
       return result.receipt

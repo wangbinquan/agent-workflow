@@ -266,7 +266,6 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
     ['skills.ts', deleteHandlerRe('/api/skills/:id')],
     ['mcps.ts', deleteHandlerRe('/api/mcps/:id')],
     ['plugins.ts', deleteHandlerRe('/api/plugins/:id')],
-    ['workgroups.ts', deleteHandlerRe('/api/workgroups/:id')],
     ['workflows.ts', deleteHandlerRe('/api/workflows/:id')],
     ['tasks.ts', deleteHandlerRe('/api/tasks/:id')], // PR-3 lights this up
   ]
@@ -286,4 +285,27 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
       expect(src.includes('assertDeleteConfirm')).toBe(true)
     })
   }
+
+  test('workgroups DELETE delegates to the application-owned confirm gate', () => {
+    const route = readFileSync(resolve(ROUTES_DIR, 'workgroups.ts'), 'utf8')
+    expect(deleteHandlerRe('/api/workgroups/:id').test(route)).toBe(true)
+    expect(route).toContain('commands.delete(')
+    expect(route).not.toContain('assertDeleteConfirm')
+
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'application',
+        'workgroups',
+        'workgroupApplication.ts',
+      ),
+      'utf8',
+    )
+    expect(application).toContain('function assertDeleteConfirm(')
+    expect(application).toContain('assertDeleteConfirm(deletion, current.name)')
+  })
 })
