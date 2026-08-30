@@ -555,8 +555,15 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
 })
 
 describe('RFC-294 N1a content-addressed current artifact provenance', () => {
+  // RFC-294 review 2026-08-30 §A3：不再要求 `git show <currentSnapshotSha>:<path>` 与当前
+  // 文件 byte-equal。那条断言只证明「pin 指向的提交里有一份一样的文件」，而四份治理账本各自
+  // 已被更强的判据钉在源码上（commons R1/R2 exact equality、guard-manifest 两向钉死、
+  // ledger-baselines「与源码逐字相等」+ T17），它带来的只是每次刷新都要多一笔 repin 提交
+  // （自 2026-08-13 起 142/1313 个 commit 是 `chore(architecture)` refresh/pin）。现在
+  // `currentSnapshotSha` 的语义是「生成器运行时所对照的已提交祖先」：仍必须是 40 位 SHA、
+  // 仍必须在 HEAD 历史上可达，contentDigest 仍必须与当前 payload 相等。
   for (const path of PROVENANCE_ARTIFACTS) {
-    test(`${path} replays byte-equivalent payload from its full published snapshot`, () => {
+    test(`${path} carries content-addressed provenance reachable from HEAD`, () => {
       const current = readJson(path)
       const provenance = current.provenance as Record<string, unknown>
       const originSha = String(provenance.originSha)
@@ -568,12 +575,6 @@ describe('RFC-294 N1a content-addressed current artifact provenance', () => {
       expect(provenance.contentDigest).toBe(artifactContentDigest(current))
       expect(git('merge-base', '--is-ancestor', originSha, 'HEAD').ok).toBe(true)
       expect(git('merge-base', '--is-ancestor', currentSnapshotSha, 'HEAD').ok).toBe(true)
-
-      const replay = git('show', `${currentSnapshotSha}:${path}`)
-      expect(replay.ok, replay.err).toBe(true)
-      const replayValue = JSON.parse(replay.out) as Record<string, unknown>
-      expect(artifactPayload(replayValue)).toEqual(artifactPayload(current))
-      expect(artifactContentDigest(replayValue)).toBe(String(provenance.contentDigest))
     })
   }
 

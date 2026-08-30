@@ -2,6 +2,29 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 📋 **RFC-294 架构设计与实现现状 review 已落地（2026-08-30）：[review-2026-08-30.md](design/RFC-294-backend-layered-target-architecture/review-2026-08-30.md)。**
+> 已同批落地：RFC-294 标 Approved（A1）、生成式 `status.md` + `bun run architecture:status`（A2）、N1a 去掉 byte-replay 让账本刷新不再需要 repin 提交（A3）、
+> `composition/` 层裁决写进 design §2（C1）、四个新守卫（observed offered 边 ⊆ 设计 DAG / 模块内分层规则 / 零 consumer public symbol 与死 required port 账本 /
+> status 投影）。因共享树里 RFC-345/346 在制品而**推迟**的项：`plan.md`/`design/plan.md` 状态与 W4-E0 排期（含未提交 RFC 链接）、账本按 W4 子波重分桶（B3）、
+> `KNOWN_VIOLATIONS` 的 `removeWave`（B4，`scripts/depcheck.ts` 有他人在制品）。主 CI 在 HEAD `625017c08` 已因 RFC-344 落地提交的 duplicate operation id 全面红，非本批引入。
+
+> 🚧 **RFC 实施中（Approved / In Progress，2026-08-30）：[RFC-346 System Operations 管理编排与 adapter cutover（RFC-294 W4-E7）](design/RFC-346-system-operations-adapter-cutover/proposal.md)。**
+> current-source 核查确认可作为 344/345 之外的第三条开发线：范围只含 backup/restore/recovery diagnostic 的 typed
+> command/query、窄 platform coordinator 与现有 mechanism adapter；maintenance/doctor/migrate/GC/readiness 及 physical restore
+> generation 均排除。D1～D12、实现、提交与 push 已获用户明确批准；RFC-344 hosted closeout 前只允许 additive module、legacy adapter 与
+> CLI cohort，HTTP descriptor/catalog/root/canonical 切换必须等待 344 发布，RFC-345 路径全程不触碰。
+
+> 🚧 **RFC 实施中（Approved / In Progress，2026-08-30）：[RFC-345 Resource Catalog 与 ResourcePackage 合同归位（RFC-294 W4-C）](design/RFC-345-resource-catalog-contract-cutover/proposal.md)。**
+> current source 已确认 ACL / grant / package / Intent-selector 四个 roster 分别为 15 / 16 / 7 / 6，RFC-294 W4-C 原“13 类
+> ACL / 六类 package participant”已漂移；Intent selector 与 dump 仍各自装载同一经典六类，`ACL_TABLES` 仍向 package/Intent/ref
+> consumer 暴露，ResourcePackage current engine 已实际覆盖 capability template 在内的七类 writer。D1～D10 已获用户明确批准：建立
+> `modules/resource-catalog`、四个 named participant 与七类 package participant，同时保留现有 BundleApply lifecycle 给 W6；
+> T1 contracts 已落。T2 已把纯 policy、grant/ACL application、SQLite registry/repository 与 WS effect 分层，`ACL_TABLES` 生产外部
+> importer **13→0**，1,064 行旧 service 收成薄 facade；剩余 48 个 legacy import 按 T4/T5/T7/T8 caller cohort 继续切换。T3 已落
+> SQLite visibility/search/cursor 下推的 classic-six catalog，selector 与 dump 两份六路 loader 归零；dump 只按 mount/closure 命中加载 typed
+> detail，full-list adapter 逐页读完无新增 cap。backend TypeScript 在本批代码上通过，exact ESLint 静态校验继续执行；按用户规则不跑本地
+> Bun。RFC-344 hosted closeout 前不动 operation binding；commit/push 尚未获授权。
+
 > 🚧 **RFC 实施候选（Approved / In Progress，2026-08-30）：[RFC-344 OperationCatalog 与 transport cutover（RFC-294 W4-A）](design/RFC-344-operation-catalog-transport-cutover/proposal.md)。**
 > D1～D10、完整实施与提交上库已获批准。当前候选已让 472 条 HTTP route 获得 stable operation identity，52/52 MCP tool 进入
 > direct/parameterized/composite/local-introspection closed binding 并只调用同一已挂载 handler chain；`mcp/dispatch.ts`、第二套 Hono 与

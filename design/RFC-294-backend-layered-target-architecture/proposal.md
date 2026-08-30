@@ -1,6 +1,6 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
-- 目标架构状态：Draft（2026-08-30 刷新；仍待用户批准 D1～D9）
+- 目标架构状态：Approved（2026-08-30 review 记账：D1～D9 已由 RFC-328/331/332/333/334/339/341/342/343/344/345/346 的逐 RFC 用户批准实质确认，见 `review-2026-08-30.md` §A1；本总纲不因 Approved 而自动授权任何未立项 wave）
 - 迁移事实：Out-of-order in progress（RFC-287、RFC-297～343 已按各自范围形成多条 production/architecture
   vertical slice；RFC-317/319/326～333 均已 Done。RFC-328 已完成 N2/P0-D durable execution authority，仍不领取 W2 credit；
   RFC-329/330 分别提供 W4-A route/tool inventory 与 DE/ACL 纵切，但没有完成 W4；RFC-288/289 已关闭且未实现；
@@ -105,6 +105,10 @@ RFC-331 前的 committed source `158b67296b05a11f22a92ab64b2045643f895f9f` 保�
 payload `f94290d715365ee6c46e927c211a00326834157b` 的 replayed shape 如下，并由 provenance pin
 `d2a4cc742c6dbb318b237ede15155b354cd79584` / final SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 固定。
 各已关闭 wave 的自身候选与 current 全仓 snapshot 分栏：
+
+> **指标只在生成文件里维护（2026-08-30 review §A2）**：下表的「当前值」列是 2026-08-30 前的手抄快照，已**冻结不再更新**；
+> 当前值以 [`status.md`](./status.md)（`bun run architecture:status` 从 committed `architecture/*.json` 渲染，守卫
+> `rfc294-review-status-projection.test.ts` 钉死投影相等）为唯一事实源。「说明」列仍有效。
 
 | 指标                                       |                   当前值 | 说明                                                                                         |
 | ------------------------------------------ | -----------------------: | -------------------------------------------------------------------------------------------- |

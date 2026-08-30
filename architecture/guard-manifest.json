@@ -960,7 +960,55 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 588
+      "lines": 589
+    },
+    {
+      "id": "rfc294-review-module-layer-rules",
+      "file": "packages/backend/tests/architecture/rfc294-review-module-layer-rules.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 363
+    },
+    {
+      "id": "rfc294-review-offered-edge-dag",
+      "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 300,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 250
+    },
+    {
+      "id": "rfc294-review-public-consumer-ledger",
+      "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 413
+    },
+    {
+      "id": "rfc294-review-status-projection",
+      "file": "packages/backend/tests/architecture/rfc294-review-status-projection.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 49
     },
     {
       "id": "rfc301-task-launch-origin-architecture",
@@ -1954,8 +2002,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "e7f40619c0a621e0fd6a8508a010134573f8f080",
-    "contentDigest": "sha256:05f86cf62e94dcf559ddab232b77ce15a4be792e98c62a8a1d4b870f6c58891b",
+    "currentSnapshotSha": "4a1c739351f27847ffb3554869e7f613ab8e1eef",
+    "contentDigest": "sha256:2860a043f55139c561ddecefa06c2f4c769081e8c4e1096f108df548bed8ec20",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

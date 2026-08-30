@@ -6,7 +6,7 @@
       "id": "depcheck-known-violations",
       "file": "scripts/depcheck.ts",
       "symbol": "KNOWN_VIOLATIONS",
-      "baseline": 31,
+      "baseline": 29,
       "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。"
     },
     {
@@ -174,7 +174,7 @@
       "id": "routes-cast-file-line-allowlist",
       "file": "packages/backend/tests/routes-no-cast.test.ts",
       "symbol": "FILE_LINE_ALLOWLIST",
-      "baseline": 2,
+      "baseline": 1,
       "why": "routes/ 下按 file:line 豁免的 cast 存量。目标终值 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
@@ -311,6 +311,34 @@
       "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
     },
     {
+      "id": "rfc294-review-off-dag-offered-edges",
+      "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
+      "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
+      "baseline": 9,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。"
+    },
+    {
+      "id": "rfc294-review-module-layer-rules",
+      "file": "packages/backend/tests/architecture/rfc294-review-module-layer-rules.test.ts",
+      "symbol": "MODULE_LAYER_RULE_DEBT",
+      "baseline": 26,
+      "why": "RFC-294 review 2026-08-30 §B2：design §3 常驻规则 1～3 的存量违规（domain 导 adapter、application/engine 导 @/db/schema、fenced 层导 infrastructure/**），按 rule|file|specifier 逐条入账；只许降。"
+    },
+    {
+      "id": "rfc294-review-unconsumed-public-symbols",
+      "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
+      "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
+      "baseline": 207,
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。additive contract 允许先落，但必须同批入账并点名清偿波次；被消费后同批销账。只许降。"
+    },
+    {
+      "id": "rfc294-review-dead-required-ports",
+      "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
+      "symbol": "DEAD_REQUIRED_PORT_DEBT",
+      "baseline": 8,
+      "why": "RFC-294 review 2026-08-30 §C2：provider adapter=0 且 consumer=0 的 required SPI 死声明（全部在 development-automation）；W4-E8 接线或删除。只许降。"
+    },
+    {
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
@@ -423,8 +451,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e7f40619c0a621e0fd6a8508a010134573f8f080",
-    "contentDigest": "sha256:5733766089883dd4b013c1fd2063b56e3b449c53341bc27b96da9fc2d6c2ea7d",
+    "currentSnapshotSha": "4a1c739351f27847ffb3554869e7f613ab8e1eef",
+    "contentDigest": "sha256:334f5005e0a6d26588c106b7cf1351fffcc426226b2cd4188c6c2f6707b582bc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

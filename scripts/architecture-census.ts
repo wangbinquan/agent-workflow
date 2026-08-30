@@ -20,6 +20,11 @@ import {
   negativeFixtureAssertions,
   sourceUnit,
 } from '../packages/backend/tests/architecture/census'
+import {
+  ARCHITECTURE_STATUS_PATH,
+  readArchitectureStatusInputs,
+  renderArchitectureStatus,
+} from '../packages/backend/tests/architecture/rfc294Status'
 
 const REPO_ROOT = resolve(import.meta.dir, '..')
 const args = new Set(process.argv.slice(2))
@@ -169,9 +174,17 @@ if (requestedSnapshot !== undefined) {
   }
 }
 
+// RFC-294 review 2026-08-30 §A2：status.md 是 committed 账本的只读投影，随每次
+// canonical 重生成同步刷新，三件套散文不再手抄指标。
+writeFileSync(
+  resolve(REPO_ROOT, ARCHITECTURE_STATUS_PATH),
+  renderArchitectureStatus(readArchitectureStatusInputs(REPO_ROOT)),
+)
+
 process.stdout.write(
   `${Object.keys(CANONICAL_MANIFEST_PATHS).length} architecture artifacts written` +
     (requestedSnapshot === undefined
-      ? '\n'
-      : `; provenance pinned to ${fullSha(requestedSnapshot)}\n`),
+      ? ''
+      : `; provenance pinned to ${fullSha(requestedSnapshot)}`) +
+    `; ${ARCHITECTURE_STATUS_PATH} refreshed\n`,
 )

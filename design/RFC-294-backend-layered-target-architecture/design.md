@@ -138,6 +138,19 @@ infrastructure，但不得 query DB、做业务 if/switch 或翻译 DTO。Concre
 bootstrap 也不能任意 deep import `modules/*/infrastructure/**`。Composition entrypoint 进入 public-surface ledger，
 category=`composition`、allowed consumer 只能是 bootstrap。
 
+**`composition/` 层裁决（2026-08-30 review §C1）**：上一段定义的 composition 是**装配层**，不是「凡是要 import legacy
+`services/*` 的业务代码」的落脚点。当前 `task-execution/composition/`（11,886 行，`nodeMechanics.ts` 5,522 行、108 个
+`@/services/*` import）与 `development-automation/composition/`（10,734 行，`employeeTypePackage.ts` 5,388 行）承载的是
+node/wrapper/DAG 机制与员工类型包的业务实现，`engine/` 只剩 1,394 行按 port 委托的壳；owner 账本却把这些文件记成
+`currentLayer=targetLayer=composition, removeAfterWave=null`，没有任何棘轮会推它们归位。裁决：
+
+1. `composition.ts` 与 `composition/required-ports.ts` 是**仅有**的装配文件；`composition/` 下其余文件一律视为**待归位实现**，
+   目标层按内容判定——node/wrapper/DAG mechanics → `engine/{node,wrapper,task}`，员工类型包与 work item → `application/`；
+2. 这些文件的目标层与清偿波次必须进入 `module-symbol-owners.json`（`targetLayer` ≠ `composition`、`removeAfterWave` 非空），
+   与它们身上的 legacy outbound 边同波清偿（task-execution → W4-E1，development-automation → W4-E8）；
+3. legacy `routes/` / `services/` / `cli/` 直接 import `composition*` 的 98 条深层边是 W4-D/W9 债，不是 composition 的合法 consumer；
+4. 生成器把 `composition/` 下非装配文件记成目标态属于账本缺口，下一次 canonical 重生成时修正分类，不另建平行账本。
+
 当前 committed tree 另有 `modules/code-capability/` 19 个 production 文件。它不是目标态 active execution context：RFC-310
 已把五条 code capability 的写模型、执行编排与新配置 owner 切到 `development-automation`。这 19 个文件按
 legacy history/query + capability-template compatibility island 入 `facades/module-symbol-owners` 账本。唯一仍活跃的写例外是
@@ -205,10 +218,10 @@ registry。global owner/symbol/edge FK、mutation/transaction/background/public-
 ambient wiring 全分母已闭合；当前 20 条 required-port `declared-debt` 与最终 consumer/provider cutover 仍归 W4/W5/W9，不能复制
 一套新 owner/debt，也不能把“已建账”误写成“已迁完”。
 
-current report 的机器分母为：997 个 backend production 文件、454 个 module 文件、18780 个 production file/top-level symbol
-owner、1016 个 mutation entrypoint、281 个 transaction external-effect entry、265 个 background entry、448 个 ambient seam、1504 条
-observed cross-context edge、1468 条 exact exception、378 个 facade、403 个 public symbol与 5 条 edge-neutral field-growth ledger；
-target implementation SCC=0，unresolved first-party=0。数字只从 committed manifests/report 重放，不在本文另设分母。
+current report 的机器分母（backend production 文件、module 文件、symbol owner、mutation entrypoint、transaction external-effect、
+background、ambient、observed cross-context edge、exact exception、facade、public symbol、edge-neutral field-growth ledger、target
+implementation SCC、unresolved first-party）一律见生成文件 [`status.md`](./status.md)（2026-08-30 review §A2）；本文不再手抄任何数字，
+避免再次与 committed manifests/report 漂移。
 
 RFC-317 已落的 P1/P2 修复是目标架构的行为 oracle，但不是边界 cutover credit：
 
@@ -615,7 +628,7 @@ Prepared payload 在 enqueue/act 前还要重算 canonical hash，不能只相�
 | development-automation   | `Launch/Retry/Cancel/Resume/HandoffMission`、`SubmitMissionAnswers/ConfirmNoChange/AttachMergeRequest` 与四类 config 的 typed commands | actor-filtered `PreviewMissionAdmission` 与 mission/activity/config/readiness/evidence projections             | required `AgentActionExecutionPort` / `RequirementAcquisitionPort` / `RequirementInteractionPort` / `MergeRequestFactsPort` / `PipelineEvidencePort` / `RepositoryDeliveryPort` 等 use-case-specific SPI；provider adapter 只实现自己的一小面                                                                                                                                                                                               | `DevelopmentMissionRef/ActionRunRef/AgentAttemptRef`；`MissionInvalidated` 与 effect receipt/invalidate，正文/日志不进 event       | Task/NodeRun row、Git/code-host credential、absolute path/URL、raw prompt/log、provider SDK、legacy code-round writer、26-option service locator                                                              |
 | resource-catalog/core    | 无 universal CRUD；各 aggregate 自己 typed command                                                                                     | 横向 `ResourceCatalogQuery` 只返 summary；完整查询归六子模块                                                   | purpose-specific `TaskExecutionResourceSnapshotInTx` / `IntentApplyResourceParticipantInTx` / `IntegrationTriggerResourceSnapshotInTx`、actor-filtered `ResourceAccessQuery` / `ResourceBlockerQuery` / `SkillProvenanceVisibilityQuery`；统一判据只返 `none/read/write/own`                                                                                                                                                                | internal receipt events / public invalidate；`ResourceRef/VersionedResourceRef/ResourceSummary`                                    | `ACL_TABLES`、owner/grant row、generic repository、六类 detail union；第 14 grant kind 不授权 generic writer                                                                                                  |
 | resource 子模块          | 每类明确 `Create/Update/Rename/Delete/UpdateAcl` 的实际集合                                                                            | 每类 typed list/detail/filter                                                                                  | 仅真实跨域需要的 participant，如 `SkillVersionParticipantInTx`                                                                                                                                                                                                                                                                                                                                                                              | kind-specific DTO/event payload                                                                                                    | 其他资源的不变量、`switch(resourceType)` CRUD                                                                                                                                                                 |
-| resource-catalog/package | typed package inspect/admit/apply command；不是六类 universal CRUD                                                                     | package preview/receipt                                                                                        | `ResourcePackageApplyProvider` 消费六子模块 typed package mutation participants                                                                                                                                                                                                                                                                                                                                                             | package ref/version/opaque receipt                                                                                                 | resource row、generic repository、AtomicApply journal/claim                                                                                                                                                   |
+| resource-catalog/package | typed package inspect/admit/apply command；不是 universal CRUD                                                                         | package preview/receipt                                                                                        | `ResourcePackageApplyProvider` 消费七类 typed package mutation participants                                                                                                                                                                                                                                                                                                                                                                 | package ref/version/opaque receipt                                                                                                 | resource row、generic repository、AtomicApply journal/claim                                                                                                                                                   |
 | collaboration            | `SubmitClarifyAnswers/SubmitReviewDecision/SubmitQuestionAnswers`                                                                      | `GetGateView/ListPendingGateSummaries`                                                                         | implements task required preparation/open ports；consumes task-offered `TaskDecisionParticipantInTx`；module transaction port internal                                                                                                                                                                                                                                                                                                      | `GateDecisionCommitted` / `GateInvalidated`；公开 view 不含 continuation                                                           | document row、ContinuationIntent、resume failure、worker id、terminal closer command                                                                                                                          |
 | knowledge-evolution      | `StartFusion/ApproveFusion/RejectFusion/RetryFusion/RestoreSkillVersion`                                                               | `GetFusionView/ListFusionSummaries/GetSkillProvenance`                                                         | consumes task launch + skill/memory tx participants；对外仅 versioned recovery/provenance query                                                                                                                                                                                                                                                                                                                                             | internal apply/provenance receipt / `FusionInvalidated`；`FusionRef/FusionProvenanceRef`                                           | memory/skill row、task internal、raw artifact/journal、module transaction scope                                                                                                                               |
 | memory                   | `Create/PatchContent/Move/Promote/Archive/Unarchive/Delete/RetryFailedDistill/CancelPendingDistill`                                    | typed visible list/detail + distill list/job/session view（注入正文不是 public query）                         | implements task required `TaskMemoryInjectionPort`；offered、KE-only `MemoryMembershipParticipantInTx` / `MemoryProvenanceVisibilityQuery`；consumes RC/SC scope visibility filters + task/collaboration distillation snapshots + memory-required distiller execution                                                                                                                                                                       | internal membership receipt / `MemoryInvalidated` / `DistillJobInvalidated`；exact v1 injection snapshot 只给 task port            | prompt consumer list、author/ACL row、fusion engine、raw distill queue/runtime handle                                                                                                                         |
@@ -2938,7 +2951,7 @@ scope filter 与 pagination 下推 SQLite，不先拉全 memory 再 JS 过滤；
 
 ### 7.2 ResourcePackage 与 MCP diagnostics 子模块
 
-ResourcePackage 不是“六资源万能 CRUD”，而是有自己 manifest/admission/receipt 的跨聚合 use case；它是
+ResourcePackage 不是“资源万能 CRUD”，而是有自己 manifest/admission/receipt 的跨聚合 use case；它是
 `resource-catalog/package` 的 application 子模块，AtomicApply 只驱动生命周期：
 
 ```ts
@@ -2967,6 +2980,7 @@ interface ResourcePackageApplyTx extends ApplyScenarioTx {
   readonly plugins: PluginPackageMutationParticipantInTx
   readonly workflows: WorkflowPackageMutationParticipantInTx
   readonly workgroups: WorkgroupPackageMutationParticipantInTx
+  readonly capabilityTemplates: CapabilityTemplatePackageMutationParticipantInTx
   readonly events: ResourcePackageEventsInTx
   readonly audit: ResourcePackageAuditInTx
 }
@@ -2982,11 +2996,11 @@ interface ResourcePackageApplyProvider extends ApplyScenarioProvider<
 > {}
 ```
 
-六个 mutation participant 各自只接受本 aggregate 的 exact versioned package mutation + expected revision，并在同一 tx
+七个 mutation participant 各自只接受本 aggregate 的 exact versioned package mutation + expected revision，并在同一 tx
 执行授权/不变量/CAS；不得合并成 `ResourceRepository<T>`、`apply(kind,payload)` 或公开给 package provider 以外的 consumer。
 Scenario 只能使用继承自 `ApplyScenarioTx.currentAuthority` 的唯一 authority；不得再加同义 `authority` 字段。Composition
-变异必须证明无法把 journal/receipt actor A 与六 resource participant actor B 错绑。
-这是有明确跨六聚合业务事务的例外，methods/fields 仍逐 consumer 记账。Untrusted package artifact 先 inspect/exact-codec
+变异必须证明无法把 journal/receipt actor A 与七 resource participant actor B 错绑。
+这是有明确跨七类 participant 业务事务的例外，methods/fields 仍逐 consumer 记账。Untrusted package artifact 先 inspect/exact-codec
 parse；secret input 只进 one-shot sink，不进 preview/journal/event。Public event 只含 package operation aggregate + phase/status/
 safe code，receipt 不含 resource row 或 AtomicApply claim/artifact。
 
@@ -3808,6 +3822,9 @@ aggregator feedback 明确拒绝或纳入 topology，validator 只表达真实�
 不阻塞核心 W9 清仓。
 
 ## 17. 架构不变量与终局指标
+
+> 「当前基线」列是 2026-08-30 前的手抄快照，已**冻结不再更新**（2026-08-30 review §A2）；当前值以生成文件
+> [`status.md`](./status.md) 为唯一事实源，本表只保留「不变量 → 终局」合同。
 
 | 不变量                                                     |                           当前基线 |                                     终局 |
 | ---------------------------------------------------------- | ---------------------------------: | ---------------------------------------: |

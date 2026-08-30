@@ -506,7 +506,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 | 1   | 新 RFC 同时有 AC 列表和证据表                                                            | `tests/rfc-index-status-drift.test.ts` 的 `AC_EVIDENCE_GAP`                       | 「AC 证据索引的缺口逐字相等」红。**缺口为 0 也必须登记**——它按「measured 与台账逐字相等」判定，漏登记 = 台账少一个键                                                                                                               |
 | 2   | 新增守卫测试文件                                                                         | `architecture/guard-manifest.json` 的 `guards[]`                                  | 「清单与磁盘逐条相等」红。字段值不是随便填：`assertsAbsence` / `negativeFixture` / `corpusScanner` 都由 `census.ts` 从源码**检测**出来，账本要与检测结果相等                                                                       |
 | 3   | 新增/修改任何 `.ts` 源码                                                                 | 全部 12 份 `architecture/*.json` 的 `sourceDigest`                                | RFC-294 N1b「seven canonical manifests are exact generated projections」红。这是**全局**digest（`allUnits` 路径+内容），12 处共用一个值                                                                                            |
-| 4   | 改了 `architecture/{commons-manifest,commons-debt,guard-manifest,ledger-baselines}.json` | 这四份的 `provenance`                                                             | RFC-294 N1a「replays byte-equivalent payload」红。**必须两笔提交**：`currentSnapshotSha` 要指向一个**已提交**的 commit，且 `git show <sha>:<path>` 的 payload 与当前文件逐字相等——所以内容先落一笔，再用那笔的 sha 回填 provenance |
+| 4   | 改了 `architecture/{commons-manifest,commons-debt,guard-manifest,ledger-baselines}.json` | 这四份的 `provenance`                                                             | RFC-294 N1a「carries content-addressed provenance reachable from HEAD」红。**一笔提交即可**（2026-08-30 review §A3 起）：`contentDigest` 必须等于当前 payload 的 digest，`currentSnapshotSha` 必须是 HEAD 历史上可达的 40 位 SHA（语义是「生成器对照的已提交祖先」，直接用 `--snapshot-sha HEAD`）；此前「`git show <sha>:<path>` 与当前文件 byte-equal、内容先落一笔再回填 sha」的两笔协议已作废 |
 | 5   | 往 `ledger-baselines.json` 加条目                                                        | 条目**位置**                                                                      | N1b 红。`projectGovernanceArtifacts` 投影成「非-N1-spec（原序）+ `n1LedgerSpecs`（末尾）」，而 `toEqual` 对数组顺序敏感。append 到最末尾会落在四条 `rfc294-*` spec 之后                                                            |
 | 6   | 改了任何生产 `.ts` 文件                                                                  | `architecture/module-symbol-owners.json` 里**该文件每个符号**的 `signatureDigest` | N1b 红。改一个函数体就会让 `$file` 与它所在的那几个 top-level 符号的签名全变                                                                                                                                                       |
 | 7   | **新增一条路由**（`registerRoute`） | `packages/backend/tests/contracts/registry.ts` 的 `ENDPOINTS` | RFC-317 T52「运行期预言」+ `api-contract-coverage` 双红。RFC-329 PR-B 实撞：加了 `GET /api/workgroup-tasks/pending` 忘了登记，backend shard 2/4 双 OS 红 |
@@ -3198,23 +3198,25 @@ tracked = {x.split('/')[1] for x in git('ls-files','design').split() if x.starts
 同族的还有「凡是 `readdirSync` / `glob` 语料的守卫」：语料面越接近文件系统，越容易被共享
 工作树污染；`git ls-files` 才是与 CI 同构的那一面。
 
-## N1 账本（`rfc294-*`）涨了要**三笔**提交，不是两笔（RFC-330 实撞，2026-08-27）
+## N1 账本（`rfc294-*`）涨了要**两笔**提交（2026-08-30 review §A3 起；此前是三笔）
 
-`ledger-baselines.json` 里 `rfc294-*` 这几条是 canonical 投影（`n1LedgerSpecs`）**逐字生成**的，
-不接受手写字段——往它们身上加 `allowGrowth` 会让 N1b「subset ledgers project into canonical truth」
-红；而不加，RFC-317 T17「只降不升」在涨账那笔上红。两个守卫在**同一笔提交里不可能同时绿**，
-只能靠 CI 只评估 push 顶端的那一笔来消化（一次 `git push` 推多笔只跑一个 run）：
+`ledger-baselines.json` 里 `rfc294-*` 这几条是 canonical 投影（`n1LedgerSpecs`）逐字生成的；
+`projectGovernanceArtifacts` 现在会把 current 文件里同 id 条目上的 `allowGrowth` 原样带进投影，所以
+涨账那笔可以同时让 N1b「subset ledgers project into canonical truth」与 RFC-317 T17「只降不升」都绿：
 
-1. **内容笔**：代码 + 再生成的 8 份 canonical artifact + 涨账的 `allowGrowth`（含 N1 条目；
-   T17 绿、N1b 红，不单独评估）；
-2. **归一笔**：`bun run architecture:write --snapshot-sha <内容笔>` 再生成——N1 条目上的
-   `allowGrowth` 被投影抹掉；再手动删掉非 N1 条目（如 `rfc329-mcp-surface-exemptions`）上的
-   `allowGrowth`——因为下一笔 repin 相对这一笔零增长，任何残留都会被 T17「无过期条目」判红；
-   这一笔的 provenance 指向内容笔、payload 却已不同 ⇒ N1a 红，也不单独评估；
-3. **repin 笔**：`architecture:write --snapshot-sha <归一笔>`，只改四份治理文件的 provenance
-   ⇒ N1a / N1b / T17 全绿。
+1. **内容笔**：代码 + `bun run architecture:write --snapshot-sha HEAD` 再生成的全部 artifact + 涨账条目上的
+   `allowGrowth`（N1 条目也可以直接写在 `ledger-baselines.json` 上，生成器保留它）；
+2. **退许可笔**：把 `allowGrowth` 删掉再 `architecture:write --snapshot-sha HEAD` 一次——T17 要求「本 commit 未涨
+   就必须删」，所以它必须是**紧接着**的下一笔（两笔一次 `git push`，CI 只评估推送顶端）。
 
-三笔一次 `git push`。RFC-328 的 `b0aa3fadb → cc29ecc6d（normalize）→ 8fa602a5f（pin）` 是同一形状。
+不涨的刷新只要**一笔**：N1a 已不再要求 `git show <currentSnapshotSha>:<path>` 与当前文件 byte-equal（四份治理账本各自
+已被更强的判据钉在源码上：commons R1/R2 exact equality、guard-manifest 两向钉死、ledger-baselines「与源码逐字相等」+ T17），
+`currentSnapshotSha` 只须是 HEAD 历史上可达的已提交祖先，`contentDigest` 与当前 payload 相等即可。RFC-328 时代的
+`b0aa3fadb → cc29ecc6d（normalize）→ 8fa602a5f（pin）` 三笔形状不再需要。
+
+历史记录（2026-08-27，RFC-330 实撞）：当时 N1 条目不接受手写 `allowGrowth`，两个守卫在同一笔里不可能同时绿，只能靠
+「内容 / 归一 / repin」三笔并一次 push 消化；这个形状自 2026-08-13 起让 142/1313 个 commit 变成 `chore(architecture)`
+refresh/pin，是 review §A3 改协议的直接理由。
 
 ## 只有 `owner_user_id` 的表不是权限（RFC-330，2026-08-26）
 
