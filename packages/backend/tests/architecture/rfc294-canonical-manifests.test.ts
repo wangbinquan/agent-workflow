@@ -173,6 +173,17 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       ),
     ].sort()
     expect(observed).toEqual([...PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST].sort())
+    expect(observed).toContain('Pick')
+    expect(observed).not.toContain('K')
+    expect(observed.some((value) => value.startsWith('$cycle:'))).toBe(false)
+
+    const resourceRef = entries.find(
+      (entry) => entry.id === 'public:resource-catalog:types:ResourceRef',
+    )!
+    expect(resourceRef.unresolvedTypeRefs).toEqual([])
+    expect(resourceRef.publicTypeConsumerIds).toContain(
+      'public:resource-catalog:types:GetResourceAclRequest',
+    )
 
     const unknown = cloneArtifacts(generated)
     ;(
@@ -259,6 +270,81 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
           typeof entry.mutationTest === 'string',
       ),
     ).toBe(true)
+  })
+
+  test('off-DAG public imports, composition debt, facade shape and owner digests follow the review projection', () => {
+    const observed = generated.crossContextImports.observedEdges as Array<Record<string, unknown>>
+    const offeredPairs = new Set(
+      (generated.crossContextImports.targetEdges as Array<Record<string, unknown>>)
+        .filter((edge) => edge.role === 'offered-consumption')
+        .map((edge) => `${String(edge.fromContext)}->${String(edge.toContext)}`),
+    )
+    expect(
+      observed
+        .filter((edge) => edge.role === 'offered-consumption')
+        .filter(
+          (edge) =>
+            !offeredPairs.has(`${String(edge.fromContext)}->${String(edge.toContext)}`),
+        ),
+    ).toEqual([])
+    const offDag = observed.filter((edge) => edge.role === 'off-dag-offered')
+    expect(offDag.length).toBeGreaterThanOrEqual(9)
+    expect(offDag.every((edge) => typeof edge.removeAfterWave === 'string')).toBe(true)
+    expect(
+      offDag.some(
+        (edge) =>
+          edge.fromContext === 'task-execution' &&
+          edge.toContext === 'collaboration' &&
+          edge.removeAfterWave === 'W4',
+      ),
+    ).toBe(true)
+
+    const facades = generated.facades.entries as Array<Record<string, unknown>>
+    expect(facades.map((entry) => entry.status).every((status) =>
+      status === 'thin-facade' || status === 'legacy-implementation',
+    )).toBe(true)
+    expect(
+      facades.filter((entry) => entry.status === 'thin-facade').map((entry) => entry.file),
+    ).toEqual([
+      'packages/backend/src/services/clarifyAutoDispatch.ts',
+      'packages/backend/src/services/clarifyQueue.ts',
+      'packages/backend/src/services/clarifyRerunLedger.ts',
+      'packages/backend/src/services/clarifyRounds.ts',
+      'packages/backend/src/services/clarifySeal.ts',
+      'packages/backend/src/services/protocol.ts',
+      'packages/backend/src/services/resourceAccessPolicy.ts',
+    ])
+
+    const owners = generated.moduleSymbolOwners.entries as Array<Record<string, unknown>>
+    const digested = owners.filter((entry) => typeof entry.signatureDigest === 'string')
+    expect(digested.length).toBeLessThan(owners.length)
+    expect(
+      digested.every(
+        (entry) =>
+          String(entry.file).startsWith('external:') ||
+          /\/modules\/[^/]+\/public\/(?:commands|events|participants|queries|types)\.ts$/.test(
+            String(entry.file),
+          ),
+      ),
+    ).toBe(true)
+    const owner = (file: string, symbol = '$file'): Record<string, unknown> =>
+      owners.find((entry) => entry.file === file && entry.symbol === symbol)!
+    expect(owner('packages/backend/src/services/isolatedAgentRun.ts')).toMatchObject({
+      targetContext: 'platform',
+      removeAfterWave: 'W9',
+    })
+    expect(
+      owner('packages/backend/src/modules/task-execution/composition/nodeMechanics.ts'),
+    ).toMatchObject({ targetLayer: 'engine', removeAfterWave: 'W4-E1' })
+    expect(
+      owner(
+        'packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts',
+      ),
+    ).toMatchObject({ targetLayer: 'application', removeAfterWave: 'W4-E8' })
+    expect(owner('packages/backend/src/modules/task-execution/composition.ts')).toMatchObject({
+      targetLayer: 'composition',
+      removeAfterWave: null,
+    })
   })
 
   test('node_runs INSERT and transaction callback denominators are source-complete', () => {
@@ -494,6 +580,18 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
         error.includes('missing public consumer edge'),
       ),
     ).toBe(true)
+
+    const danglingTypeConsumer = cloneArtifacts(generated)
+    const nested = (
+      danglingTypeConsumer.publicSurfaces.entries as Array<Record<string, unknown>>
+    ).find(
+      (entry) =>
+        Array.isArray(entry.publicTypeConsumerIds) && entry.publicTypeConsumerIds.length > 0,
+    )!
+    nested.publicTypeConsumerIds = ['public:does-not-exist:types:Missing']
+    expect(validateCanonicalArtifacts(danglingTypeConsumer)).toContain(
+      `missing public type consumer: ${String(nested.id)}`,
+    )
 
     const danglingPort = cloneArtifacts(generated)
     const port = (

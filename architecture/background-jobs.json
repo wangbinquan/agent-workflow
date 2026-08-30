@@ -4315,9 +4315,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:111",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:114",
       "kind": "register-call",
-      "line": 111,
+      "line": 114,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4326,9 +4326,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:122",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:125",
       "kind": "register-call",
-      "line": 122,
+      "line": 125,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4337,9 +4337,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:138",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:141",
       "kind": "register-call",
-      "line": 138,
+      "line": 141,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4348,9 +4348,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:161",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:164",
       "kind": "register-call",
-      "line": 161,
+      "line": 164,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4359,9 +4359,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:184",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:187",
       "kind": "register-call",
-      "line": 184,
+      "line": 187,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4370,9 +4370,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:195",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:198",
       "kind": "register-call",
-      "line": 195,
+      "line": 198,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4381,9 +4381,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:34",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:37",
       "kind": "register-call",
-      "line": 34,
+      "line": 37,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4392,9 +4392,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:60",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:63",
       "kind": "register-call",
-      "line": 60,
+      "line": 63,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4403,9 +4403,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:83",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:100",
       "kind": "register-call",
-      "line": 83,
+      "line": 100,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4414,9 +4414,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:97",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:86",
       "kind": "register-call",
-      "line": 97,
+      "line": 86,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4953,9 +4953,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:817",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:924",
       "kind": "register-call",
-      "line": 817,
+      "line": 924,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -4964,9 +4964,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:483",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:650",
       "kind": "register-call",
-      "line": 483,
+      "line": 650,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createApp",
@@ -5036,11 +5036,11 @@
   "denominator": {
     "ambientWiring": 456,
     "disabled": 7,
-    "entries": 267,
+    "entries": 272,
     "executionLocal": 25,
-    "longRunning": 53,
+    "longRunning": 57,
     "managed": 11,
-    "periodic": 182
+    "periodic": 183
   },
   "entries": [
     {
@@ -5434,6 +5434,27 @@
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/missionWakeSweep.ts#sweepMissionWakes",
       "phase": "unknown",
       "symbol": "sweepMissionWakes",
+      "targetContext": "development-automation"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/development-automation/composition/activityOperations.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/development-automation/composition/activityOperations.ts#createDevelopmentActivityWorkerBinding",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/activityOperations.ts#createDevelopmentActivityWorkerBinding",
+      "phase": "unknown",
+      "symbol": "createDevelopmentActivityWorkerBinding",
       "targetContext": "development-automation"
     },
     {
@@ -6010,6 +6031,27 @@
       "targetContext": "integration"
     },
     {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/public/types.ts#resourceCatalogCursorBrand",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#resourceCatalogCursorBrand",
+      "phase": "unknown",
+      "symbol": "resourceCatalogCursorBrand",
+      "targetContext": "resource-catalog"
+    },
+    {
       "dependencies": [
         "db"
       ],
@@ -6031,6 +6073,71 @@
       "phase": "unknown",
       "symbol": "reconcileRepositoryTransportConnectionProjections",
       "targetContext": "source-control"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/system-operations/domain/recovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/system-operations/domain/recovery.ts#projectAdminRecoveryStatus",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/domain/recovery.ts#projectAdminRecoveryStatus",
+      "phase": "unknown",
+      "symbol": "projectAdminRecoveryStatus",
+      "targetContext": "system-operations"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts#createLegacyPlatformRecoveryAdapter",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts#createLegacyPlatformRecoveryAdapter",
+      "phase": "unknown",
+      "symbol": "createLegacyPlatformRecoveryAdapter",
+      "targetContext": "system-operations"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/system-operations/public/types.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/system-operations/public/types.ts#recoveryStatusViewSchema",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#recoveryStatusViewSchema",
+      "phase": "unknown",
+      "symbol": "recoveryStatusViewSchema",
+      "targetContext": "system-operations"
     },
     {
       "dependencies": [
@@ -7950,7 +8057,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:755",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -7973,7 +8080,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:765",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -7996,7 +8103,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:803",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -8019,7 +8126,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:886",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -11002,5 +11109,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959"
+  "sourceDigest": "sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06"
 }

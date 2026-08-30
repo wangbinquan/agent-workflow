@@ -328,7 +328,7 @@
       "id": "rfc294-review-unconsumed-public-symbols",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 207,
+      "baseline": 141,
       "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。additive contract 允许先落，但必须同批入账并点名清偿波次；被消费后同批销账。只许降。"
     },
     {
@@ -342,8 +342,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1027,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1067,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-344/345/346 已提交的 catalog、resource-catalog 与 system-operations additive contracts 新增了受管 mutation entrypoint；本次 canonical 重生成将它们逐项纳入同一 owner/control 分母。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -363,8 +366,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 267,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 272,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-344/345/346 已提交 source 增加了可扫描的 lifecycle/background participants；本次 canonical 重生成首次把这些 exact entries 纳入分母。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -377,8 +383,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1504,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 1768,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-344/345/346 已提交的新增模块与 adapter 边，以及 RFC-294 review 的 symbol-level/off-DAG 精确分类，使 observed import census 覆盖新增 committed source。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -398,8 +407,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1462,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 1731,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-344/345/346 已提交 source 的新增 legacy↔module edges 与 RFC-294 review 的 exact off-DAG 重分类需要逐边登记 owner、role 和清偿波次，不能继续隐藏在粗桶。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -412,15 +424,21 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 405,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 531,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-344/345/346 已提交的 catalog、resource-catalog 与 system-operations public contracts 是经 RFC 明确批准的 additive surface；本次同时补齐递归 public-type consumer 外键。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
       "file": "packages/backend/tests/architecture/rfc294Canonical.ts",
       "symbol": "PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST",
-      "baseline": 5,
-      "why": "RFC-294 N1：递归 public surface 仍无法在仓内解析的精确 opaque type reference；每一项必须有意保留且不得静默扩张。"
+      "baseline": 6,
+      "why": "RFC-294 N1：递归 public surface 仍无法在仓内解析的精确 opaque type reference；每一项必须有意保留且不得静默扩张。",
+      "allowGrowth": {
+        "why": "RFC-345 committed public contracts use TypeScript Pick shapes；scanner 将该 utility type 作为逐字 opaque ref 显式入账，而不是把未解析成员静默当作已消费。"
+      }
     },
     {
       "id": "rfc294-governed-field-surfaces",
@@ -433,12 +451,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 18991,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 19309,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-344/345/346 已提交的新 catalog、resource-catalog 与 system-operations production files/symbols 必须进入唯一 owner root；同时只为 exact public symbols保留 signature digest。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959",
+    "sourceDigest": "sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -451,8 +472,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5cdb65246ee113ddae6739dd7b619aa870b8ac4f",
-    "contentDigest": "sha256:6b17460da758ed225b0ebc12db097bf296a4a13a3784ee8ea7b94c4d7cb79036",
+    "currentSnapshotSha": "85781a87fdd2c6fb0981ae9db298db56789da800",
+    "contentDigest": "sha256:3269127fce51112ab8c8a163027bffe46c64af345798d2dea24f4aa61a513535",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

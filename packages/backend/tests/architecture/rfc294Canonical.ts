@@ -52,6 +52,7 @@ const BACKEND_PREFIX = 'packages/backend/src/'
 export const PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST = [
   'AbortSignal',
   'Extract',
+  'Pick',
   'Record',
   'extends:Error',
   'z.infer',
@@ -126,6 +127,10 @@ const OFFERED_CONTEXT_EDGES: ReadonlyArray<readonly [TargetContext, TargetContex
   ['integration', 'event-center'],
   ['integration', 'development-automation'],
 ]
+
+const OFFERED_CONTEXT_PAIRS = new Set(
+  OFFERED_CONTEXT_EDGES.map(([fromContext, toContext]) => `${fromContext}->${toContext}`),
+)
 
 const REQUIRED_CONTEXT_EDGES: ReadonlyArray<readonly [TargetContext, TargetContext, string]> = [
   ['integration', 'source-control', 'RepositoryProviderEndpointDiscoveryPort'],
@@ -360,6 +365,13 @@ export function targetContextFor(path: string, symbol = ''): TargetOwner {
   if (path === 'packages/backend/src/server.ts' || path === 'packages/backend/src/cli/start.ts') {
     return 'bootstrap'
   }
+  if (
+    /^(?:packages\/backend\/src\/services\/(?:isolatedAgentRun|nodeIsolation|runner)\.ts|packages\/backend\/src\/services\/execution\/managedProcess(?:Launcher)?\.ts)$/.test(
+      path,
+    )
+  ) {
+    return 'platform'
+  }
   const value = `${path}#${symbol}`.toLowerCase()
   if (/identity|auth|user|permission|grant|oidc|presence/.test(value)) return 'identity-access'
   if (/memory|distill/.test(value)) return 'memory'
@@ -432,12 +444,45 @@ export function targetRemoveAfterWaveFor(
     if (SCHEDULER_W5_SYMBOLS.has(symbol)) return 'W5'
     return 'W2-D/W3/W5'
   }
-  return targetContext === 'source-control' ? 'W5' : 'W4/W9'
+  const physicalContext = moduleLocation(path)?.context
+  if (physicalContext === 'code-capability') return 'W4-E8'
+  const waves: Readonly<Record<TargetOwner, string>> = {
+    bootstrap: 'W9',
+    collaboration: 'W4',
+    'development-automation': 'W4-E8',
+    'digital-employee': 'W4-E9',
+    'event-center': 'W4-E9',
+    'execution-contract': 'W4-E9',
+    frontend: 'W9',
+    'identity-access': 'W4-E0',
+    integration: 'W4-B',
+    intent: 'W4-E4a',
+    'knowledge-evolution': 'W4-E3',
+    memory: 'W4-E2',
+    platform: 'W9',
+    'resource-catalog': 'W4-C',
+    'runtime-management': 'W4-E4b',
+    'shared-contracts': 'W9',
+    'source-control': 'W5',
+    'system-operations': 'W4-E7',
+    'task-catalog': 'W4-E10',
+    'task-execution': 'W4-E1',
+    'workspace-insight': 'W4-E5',
+  }
+  return waves[targetContext]
 }
 
 function targetLayerFor(path: string, symbol: string): string {
   const location = moduleLocation(path)
-  if (location !== null) return location.rest.split('/')[0] ?? 'application'
+  if (location !== null) {
+    if (
+      location.rest.startsWith('composition/') &&
+      location.rest !== 'composition/required-ports'
+    ) {
+      return location.context === 'task-execution' ? 'engine' : 'application'
+    }
+    return location.rest.split('/')[0] ?? 'application'
+  }
   if (path.startsWith('packages/frontend/src/')) {
     return path.slice('packages/frontend/src/'.length).split('/')[0] ?? 'frontend'
   }
@@ -472,7 +517,7 @@ interface OwnerEntry {
     | 'external-contract'
     | 'legacy-target'
   readonly removeAfterWave: string | null
-  readonly signatureDigest: string
+  readonly signatureDigest?: string
 }
 
 function buildOwnerEntries(units: readonly SourceUnit[]): OwnerEntry[] {
@@ -487,9 +532,15 @@ function buildOwnerEntries(units: readonly SourceUnit[]): OwnerEntry[] {
           ? 'shared'
           : 'legacy')
     const currentLayer = physicalLayer(unit)
+    const publicEntry = publicLocation(unit.path)
     const named = topLevelNamedNodes(unit)
     const nodes = [{ name: '$file', node: unit.source as ts.Node, exported: false }, ...named]
     for (const item of nodes) {
+      const targetContext = targetContextFor(unit.path, item.name)
+      const compositionDebt =
+        location !== null &&
+        location.rest.startsWith('composition/') &&
+        location.rest !== 'composition/required-ports'
       entries.push({
         id: ownerEntryId(unit.path, item.name),
         file: unit.path,
@@ -497,7 +548,7 @@ function buildOwnerEntries(units: readonly SourceUnit[]): OwnerEntry[] {
         exported: item.exported,
         currentContext,
         currentLayer,
-        targetContext: targetContextFor(unit.path, item.name),
+        targetContext,
         targetLayer: targetLayerFor(unit.path, item.name),
         status:
           unit.path.startsWith('packages/frontend/src/') ||
@@ -507,10 +558,16 @@ function buildOwnerEntries(units: readonly SourceUnit[]): OwnerEntry[] {
               ? 'legacy-target'
               : 'current-module',
         removeAfterWave:
-          unit.path.startsWith(BACKEND_PREFIX) && location === null
-            ? targetRemoveAfterWaveFor(unit.path, item.name)
+          unit.path.startsWith(BACKEND_PREFIX) && (location === null || compositionDebt)
+            ? targetRemoveAfterWaveFor(unit.path, item.name, targetContext)
             : null,
-        signatureDigest: digestText(item.node.getText(unit.source).replace(/\s+/g, ' ').trim()),
+        ...(publicEntry !== null && item.exported
+          ? {
+              signatureDigest: digestText(
+                item.node.getText(unit.source).replace(/\s+/g, ' ').trim(),
+              ),
+            }
+          : {}),
       })
     }
   }
@@ -695,6 +752,7 @@ type ObservedEdgeRole =
   | ContextEdgeRole
   | 'external-layer-debt'
   | 'temporary-internal-debt'
+  | 'off-dag-offered'
   | 'legacy-inbound'
   | 'legacy-outbound'
 
@@ -713,6 +771,18 @@ interface ObservedContextEdge {
   readonly role: ObservedEdgeRole
   readonly owner: string
   readonly removeAfterWave: string | null
+}
+
+function offDagOfferedRemoveAfterWave(fromContext: string, toContext: string): string {
+  const pair = new Set([fromContext, toContext])
+  if (pair.has('collaboration') && pair.has('task-execution')) return 'W4'
+  if (pair.has('digital-employee') && pair.has('task-execution')) return 'W4-E9'
+  if (pair.has('development-automation') || pair.has('code-capability')) return 'W4-E8'
+  return targetRemoveAfterWaveFor(
+    `packages/backend/src/modules/${toContext}/public/types.ts`,
+    '$file',
+    toContext as TargetContext,
+  )
 }
 
 function observedContextEdges(
@@ -742,7 +812,11 @@ function observedContextEdges(
           item.toFile ===
             'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts'
             ? 'W4'
-            : 'W4/W9'
+            : targetRemoveAfterWaveFor(
+                item.toFile,
+                item.importedName,
+                toLocation!.context as TargetContext,
+              )
       } else if (toLocation === null) {
         role = 'legacy-outbound'
         removeAfterWave = targetRemoveAfterWaveFor(item.toFile, item.importedName)
@@ -751,7 +825,7 @@ function observedContextEdges(
         const requiredPort = requiredPortLocation(item.toFile)
         if (
           toLocation.context === 'identity-access' &&
-          publicEntry?.entrypoint === 'types' &&
+          (publicEntry?.entrypoint === 'types' || publicEntry?.entrypoint === 'participants') &&
           item.edgeKind === 'type'
         ) {
           role = 'authority-type-only'
@@ -762,10 +836,22 @@ function observedContextEdges(
         ) {
           role = 'required-implementation'
         } else if (publicEntry !== null) {
-          role = 'offered-consumption'
+          if (OFFERED_CONTEXT_PAIRS.has(`${fromLocation.context}->${toLocation.context}`)) {
+            role = 'offered-consumption'
+          } else {
+            role = 'off-dag-offered'
+            removeAfterWave = offDagOfferedRemoveAfterWave(
+              fromLocation.context,
+              toLocation.context,
+            )
+          }
         } else {
           role = 'temporary-internal-debt'
-          removeAfterWave = 'W4/W5'
+          removeAfterWave = targetRemoveAfterWaveFor(
+            item.fromFile,
+            item.importedName,
+            fromLocation.context as TargetContext,
+          )
         }
       }
 
@@ -819,7 +905,11 @@ function observedContextEdges(
           syntax: item.syntax,
           role: 'external-layer-debt',
           owner: fromLocation.context,
-          removeAfterWave: 'W4/W9',
+          removeAfterWave: targetRemoveAfterWaveFor(
+            unit.path,
+            '$file',
+            fromLocation.context as TargetContext,
+          ),
         })
       }
     }
@@ -878,10 +968,52 @@ interface MutableShape {
   readonly methods: Array<{ name: string; signatureDigest: string }>
   unionVariants: number
   readonly unresolvedRefs: string[]
+  readonly resolvedRefs: string[]
 }
 
 function shapePath(prefix: string, name: string): string {
   return prefix === '' ? name : `${prefix}.${name}`
+}
+
+function collectSignatureShape(
+  node: ts.SignatureDeclarationBase,
+  source: ts.SourceFile,
+  shape: MutableShape,
+  resolver: ShapeResolver,
+  prefix: string,
+  visited: ReadonlySet<string>,
+  depth: number,
+  inheritedTypeParameters: ReadonlySet<string>,
+): void {
+  const typeParameters = new Set([
+    ...inheritedTypeParameters,
+    ...(node.typeParameters?.map((parameter) => parameter.name.text) ?? []),
+  ])
+  for (const parameter of node.parameters) {
+    if (parameter.type === undefined) continue
+    collectTypeShape(
+      parameter.type,
+      source,
+      shape,
+      resolver,
+      shapePath(prefix, `$parameter:${parameter.name.getText(source)}`),
+      visited,
+      depth + 1,
+      typeParameters,
+    )
+  }
+  if (node.type !== undefined) {
+    collectTypeShape(
+      node.type,
+      source,
+      shape,
+      resolver,
+      shapePath(prefix, '$return'),
+      visited,
+      depth + 1,
+      typeParameters,
+    )
+  }
 }
 
 function collectNodeShape(
@@ -892,7 +1024,16 @@ function collectNodeShape(
   prefix: string,
   visited: ReadonlySet<string>,
   depth: number,
+  inheritedTypeParameters: ReadonlySet<string> = new Set(),
 ): void {
+  const typeParameters = new Set([
+    ...inheritedTypeParameters,
+    ...((
+      node as ts.Node & {
+        readonly typeParameters?: ts.NodeArray<ts.TypeParameterDeclaration>
+      }
+    ).typeParameters?.map((parameter) => parameter.name.text) ?? []),
+  ])
   if (ts.isInterfaceDeclaration(node) || ts.isClassDeclaration(node)) {
     for (const member of node.members) {
       if (ts.isCallSignatureDeclaration(member)) {
@@ -900,6 +1041,16 @@ function collectNodeShape(
           name: '$call',
           signatureDigest: digestText(member.getText(source).replace(/\s+/g, ' ').trim()),
         })
+        collectSignatureShape(
+          member,
+          source,
+          shape,
+          resolver,
+          shapePath(prefix, '$call'),
+          visited,
+          depth + 1,
+          typeParameters,
+        )
         continue
       }
       const name = propertyName(member.name)
@@ -909,6 +1060,16 @@ function collectNodeShape(
           name,
           signatureDigest: digestText(member.getText(source).replace(/\s+/g, ' ').trim()),
         })
+        collectSignatureShape(
+          member,
+          source,
+          shape,
+          resolver,
+          shapePath(prefix, `$method:${name}`),
+          visited,
+          depth + 1,
+          typeParameters,
+        )
       } else if (
         (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) &&
         member.type !== undefined
@@ -921,6 +1082,7 @@ function collectNodeShape(
           shapePath(prefix, name),
           visited,
           depth + 1,
+          typeParameters,
         )
       }
     }
@@ -928,6 +1090,7 @@ function collectNodeShape(
       for (const heritage of clause.types) {
         const name = heritage.expression.getText(source)
         const resolved = ts.isIdentifier(heritage.expression) ? resolver(source, name) : null
+        if (resolved !== null) shape.resolvedRefs.push(resolved.key)
         if (resolved !== null && !visited.has(resolved.key)) {
           collectNodeShape(
             resolved.node,
@@ -938,18 +1101,37 @@ function collectNodeShape(
             new Set([...visited, resolved.key]),
             depth + 1,
           )
-        } else {
-          shape.unresolvedRefs.push(resolved === null ? `extends:${name}` : `$cycle:${name}`)
+        } else if (resolved === null) {
+          shape.unresolvedRefs.push(`extends:${name}`)
         }
       }
     }
   } else if (ts.isTypeAliasDeclaration(node)) {
-    collectTypeShape(node.type, source, shape, resolver, prefix, visited, depth + 1)
+    collectTypeShape(
+      node.type,
+      source,
+      shape,
+      resolver,
+      prefix,
+      visited,
+      depth + 1,
+      typeParameters,
+    )
   } else if (ts.isFunctionDeclaration(node)) {
     shape.methods.push({
       name: '$call',
       signatureDigest: digestText(node.getText(source).replace(/\s+/g, ' ').trim()),
     })
+    collectSignatureShape(
+      node,
+      source,
+      shape,
+      resolver,
+      shapePath(prefix, '$call'),
+      visited,
+      depth + 1,
+      typeParameters,
+    )
   }
 }
 
@@ -961,6 +1143,7 @@ function collectTypeShape(
   prefix = '',
   visited: ReadonlySet<string> = new Set(),
   depth = 0,
+  typeParameters: ReadonlySet<string> = new Set(),
 ): void {
   if (depth > 20) {
     shape.unresolvedRefs.push('$depth-limit')
@@ -973,6 +1156,16 @@ function collectTypeShape(
           name: '$call',
           signatureDigest: digestText(member.getText(source).replace(/\s+/g, ' ').trim()),
         })
+        collectSignatureShape(
+          member,
+          source,
+          shape,
+          resolver,
+          shapePath(prefix, '$call'),
+          visited,
+          depth + 1,
+          typeParameters,
+        )
         continue
       }
       const name = propertyName(member.name)
@@ -982,6 +1175,16 @@ function collectTypeShape(
           name,
           signatureDigest: digestText(member.getText(source).replace(/\s+/g, ' ').trim()),
         })
+        collectSignatureShape(
+          member,
+          source,
+          shape,
+          resolver,
+          shapePath(prefix, `$method:${name}`),
+          visited,
+          depth + 1,
+          typeParameters,
+        )
       } else if (ts.isPropertySignature(member) && member.type !== undefined) {
         collectTypeShape(
           member.type,
@@ -991,6 +1194,7 @@ function collectTypeShape(
           shapePath(prefix, name),
           visited,
           depth + 1,
+          typeParameters,
         )
       }
     }
@@ -1007,39 +1211,103 @@ function collectTypeShape(
         shapePath(prefix, `$variant:${index}`),
         visited,
         depth + 1,
+        typeParameters,
       ),
     )
     return
   }
   if (ts.isIntersectionTypeNode(type)) {
     for (const member of type.types) {
-      collectTypeShape(member, source, shape, resolver, prefix, visited, depth + 1)
+      collectTypeShape(
+        member,
+        source,
+        shape,
+        resolver,
+        prefix,
+        visited,
+        depth + 1,
+        typeParameters,
+      )
     }
     return
   }
   if (ts.isParenthesizedTypeNode(type)) {
-    collectTypeShape(type.type, source, shape, resolver, prefix, visited, depth + 1)
+    collectTypeShape(
+      type.type,
+      source,
+      shape,
+      resolver,
+      prefix,
+      visited,
+      depth + 1,
+      typeParameters,
+    )
     return
   }
   if (ts.isArrayTypeNode(type)) {
-    collectTypeShape(type.elementType, source, shape, resolver, `${prefix}[]`, visited, depth + 1)
+    collectTypeShape(
+      type.elementType,
+      source,
+      shape,
+      resolver,
+      `${prefix}[]`,
+      visited,
+      depth + 1,
+      typeParameters,
+    )
+    return
+  }
+  if (ts.isFunctionTypeNode(type) || ts.isConstructorTypeNode(type)) {
+    collectSignatureShape(
+      type,
+      source,
+      shape,
+      resolver,
+      prefix,
+      visited,
+      depth + 1,
+      typeParameters,
+    )
     return
   }
   if (ts.isTypeReferenceNode(type)) {
     const name = type.typeName.getText(source)
     const argument = type.typeArguments?.[0]
+    if (typeParameters.has(name)) {
+      shape.fields.push({ fieldPath: prefix === '' ? '$value' : prefix, type: type.getText(source) })
+      return
+    }
     if (argument !== undefined && ['Array', 'ReadonlyArray', 'Set', 'ReadonlySet'].includes(name)) {
-      collectTypeShape(argument, source, shape, resolver, `${prefix}[]`, visited, depth + 1)
+      collectTypeShape(
+        argument,
+        source,
+        shape,
+        resolver,
+        `${prefix}[]`,
+        visited,
+        depth + 1,
+        typeParameters,
+      )
       return
     }
     if (
       argument !== undefined &&
       ['Readonly', 'Required', 'Partial', 'Promise', 'Awaited', 'NonNullable'].includes(name)
     ) {
-      collectTypeShape(argument, source, shape, resolver, prefix, visited, depth + 1)
+      collectTypeShape(
+        argument,
+        source,
+        shape,
+        resolver,
+        prefix,
+        visited,
+        depth + 1,
+        typeParameters,
+      )
       return
     }
     const resolved = resolver(source, name)
+    if (resolved !== null) shape.resolvedRefs.push(resolved.key)
     if (resolved !== null && !visited.has(resolved.key)) {
       collectNodeShape(
         resolved.node,
@@ -1053,7 +1321,7 @@ function collectTypeShape(
       return
     }
     shape.fields.push({ fieldPath: prefix === '' ? '$value' : prefix, type: type.getText(source) })
-    shape.unresolvedRefs.push(resolved === null ? name : `$cycle:${name}`)
+    if (resolved === null) shape.unresolvedRefs.push(name)
     return
   }
   shape.fields.push({ fieldPath: prefix === '' ? '$value' : prefix, type: type.getText(source) })
@@ -1068,8 +1336,15 @@ function nodeShape(
   methods: Array<{ name: string; signatureDigest: string }>
   unionVariants: number
   unresolvedRefs: string[]
+  resolvedRefs: string[]
 } {
-  const shape: MutableShape = { fields: [], methods: [], unionVariants: 0, unresolvedRefs: [] }
+  const shape: MutableShape = {
+    fields: [],
+    methods: [],
+    unionVariants: 0,
+    unresolvedRefs: [],
+    resolvedRefs: [],
+  }
   collectNodeShape(
     node,
     source,
@@ -1088,6 +1363,7 @@ function nodeShape(
     ),
     unionVariants: shape.unionVariants,
     unresolvedRefs: [...new Set(shape.unresolvedRefs)].sort(),
+    resolvedRefs: [...new Set(shape.resolvedRefs)].sort(),
   }
 }
 
@@ -1136,6 +1412,14 @@ function createShapeResolver(units: readonly SourceUnit[]): ShapeResolver {
         if (targetNode !== undefined) {
           return { key: `${unit.path}#${sourceName}`, node: targetNode, source: unit.source }
         }
+        const imported = imports
+          .get(unit.path)
+          ?.find((entry) => entry.localName === sourceName && entry.importedName !== '*')
+        const importedUnit = imported === undefined ? undefined : byPath.get(imported.toFile)
+        if (imported !== undefined && importedUnit !== undefined) {
+          const resolved = resolveExported(importedUnit, imported.importedName, nextVisited)
+          if (resolved !== null) return resolved
+        }
         continue
       }
       const resolved = resolveExported(targetUnit, sourceName, nextVisited)
@@ -1181,6 +1465,7 @@ interface PublicSurfaceEntry {
   readonly methods: readonly SurfaceMember[]
   readonly fields: readonly SurfaceField[]
   readonly unresolvedTypeRefs: readonly string[]
+  readonly publicTypeConsumerIds: readonly string[]
   readonly direction: 'offered'
   readonly authority: 'context-bound' | 'none' | 'request-authority'
   readonly transaction: 'caller-tx' | 'none' | 'own-tx'
@@ -1214,6 +1499,8 @@ function buildPublicSurfaces(
   observedEdges: readonly ObservedContextEdge[],
 ): PublicSurfaceEntry[] {
   const entries: PublicSurfaceEntry[] = []
+  const dependencyKeysById = new Map<string, readonly string[]>()
+  const declarationKeyById = new Map<string, string>()
   const resolver = createShapeResolver(allUnits)
   const unitsByPath = new Map(backend.map((unit) => [unit.path, unit]))
   const consumersFor = (
@@ -1275,11 +1562,14 @@ function buildPublicSurfaces(
     const location = publicLocation(unit.path)
     if (location === null) continue
     for (const item of topLevelNamedNodes(unit).filter((node) => node.exported)) {
+      const id = `public:${location.context}:${location.entrypoint}:${item.name}`
       const consumers = consumersFor(unit, item.name)
       const shape = nodeShape(item.node, unit.source, resolver)
       const consumerEdgeIds = consumers.edges.map((edge) => edge.id).sort()
+      dependencyKeysById.set(id, shape.resolvedRefs)
+      declarationKeyById.set(id, `${unit.path}#${item.name}`)
       entries.push({
-        id: `public:${location.context}:${location.entrypoint}:${item.name}`,
+        id,
         context: location.context,
         entrypoint: location.entrypoint,
         symbol: item.name,
@@ -1305,6 +1595,7 @@ function buildPublicSurfaces(
           ),
         })),
         unresolvedTypeRefs: shape.unresolvedRefs,
+        publicTypeConsumerIds: [],
         direction: 'offered',
         ...classification(location, item.name),
         version: 1,
@@ -1325,6 +1616,7 @@ function buildPublicSurfaces(
       if (!ts.isNamedExports(statement.exportClause)) continue
       for (const element of statement.exportClause.elements) {
         const symbol = element.name.text
+        const id = `public:${location.context}:${location.entrypoint}:${symbol}`
         const sourceSymbol = element.propertyName?.text ?? element.name.text
         const targetUnit =
           statement.moduleSpecifier !== undefined &&
@@ -1335,11 +1627,19 @@ function buildPublicSurfaces(
         const shape =
           targetNode !== null
             ? nodeShape(targetNode.node, targetNode.source, resolver)
-            : { fields: [], methods: [], unionVariants: 0, unresolvedRefs: ['$re-export'] }
+            : {
+                fields: [],
+                methods: [],
+                unionVariants: 0,
+                unresolvedRefs: ['$re-export'],
+                resolvedRefs: [],
+              }
         const consumers = consumersFor(unit, symbol)
         const consumerEdgeIds = consumers.edges.map((edge) => edge.id).sort()
+        dependencyKeysById.set(id, shape.resolvedRefs)
+        if (targetNode !== null) declarationKeyById.set(id, targetNode.key)
         entries.push({
-          id: `public:${location.context}:${location.entrypoint}:${symbol}`,
+          id,
           context: location.context,
           entrypoint: location.entrypoint,
           symbol,
@@ -1365,6 +1665,7 @@ function buildPublicSurfaces(
             ),
           })),
           unresolvedTypeRefs: shape.unresolvedRefs,
+          publicTypeConsumerIds: [],
           direction: 'offered',
           ...classification(location, symbol),
           version: 1,
@@ -1383,7 +1684,26 @@ function buildPublicSurfaces(
     }
   }
   const unique = new Map(entries.map((entry) => [entry.id, entry]))
-  return [...unique.values()].sort((left, right) => left.id.localeCompare(right.id))
+  const publicIdsByDeclarationKey = new Map<string, string[]>()
+  for (const [id, key] of declarationKeyById) {
+    const ids = publicIdsByDeclarationKey.get(key) ?? []
+    ids.push(id)
+    publicIdsByDeclarationKey.set(key, ids)
+  }
+  const consumersById = new Map([...unique.keys()].map((id) => [id, new Set<string>()]))
+  for (const [consumerId, dependencyKeys] of dependencyKeysById) {
+    for (const key of dependencyKeys) {
+      for (const targetId of publicIdsByDeclarationKey.get(key) ?? []) {
+        if (targetId !== consumerId) consumersById.get(targetId)?.add(consumerId)
+      }
+    }
+  }
+  return [...unique.values()]
+    .map((entry) => ({
+      ...entry,
+      publicTypeConsumerIds: [...(consumersById.get(entry.id) ?? [])].sort(),
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id))
 }
 
 interface SourceAnchorSpec {
@@ -2627,7 +2947,7 @@ interface FacadeEntry {
   readonly ownerEntryId: string
   readonly targetContext: TargetOwner
   readonly targetLayer: string
-  readonly status: 'boundary-facade' | 'legacy-owner'
+  readonly status: 'legacy-implementation' | 'thin-facade'
   readonly boundaryEdgeIds: readonly string[]
   readonly exportedSymbols: readonly string[]
   readonly removeAfterWave: string
@@ -2640,6 +2960,11 @@ function buildFacades(
   return backend
     .filter((unit) => unit.path.startsWith(`${BACKEND_PREFIX}services/`))
     .map((unit) => {
+      const thinFacade =
+        topLevelNamedNodes(unit).length === 0 &&
+        unit.source.statements.every(
+          (statement) => ts.isExportDeclaration(statement) || ts.isEmptyStatement(statement),
+        )
       const boundaryEdgeIds = observedEdges
         .filter((edge) => edge.fromFile === unit.path || edge.toFile === unit.path)
         .map((edge) => edge.id)
@@ -2653,15 +2978,13 @@ function buildFacades(
           unit.path === `${BACKEND_PREFIX}services/startTaskDeps.ts`
             ? 'composition'
             : targetLayerFor(unit.path, '$file'),
-        status:
-          boundaryEdgeIds.length > 0 ? ('boundary-facade' as const) : ('legacy-owner' as const),
+        status: thinFacade ? ('thin-facade' as const) : ('legacy-implementation' as const),
         boundaryEdgeIds,
         exportedSymbols: topLevelNamedNodes(unit)
           .filter((entry) => entry.exported)
           .map((entry) => entry.name)
           .sort(),
-        removeAfterWave:
-          targetContextFor(unit.path) === 'source-control' ? 'W5' : 'W4/W9',
+        removeAfterWave: targetRemoveAfterWaveFor(unit.path, '$file'),
       }
     })
     .sort((left, right) => left.id.localeCompare(right.id))
@@ -2713,6 +3036,8 @@ function buildArchitectureExceptions(
           ? 'Legacy inbound caller reaches a module boundary before its W4 public use-case cutover.'
           : edge.role === 'legacy-outbound'
             ? 'A module still reaches a legacy implementation before its owner adapter cutover.'
+            : edge.role === 'off-dag-offered'
+              ? 'A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover.'
             : 'Current module edge reaches a non-public internal entrypoint and must not become precedent.',
       introducedByRFC: isRfc332CompatibilityEdge(edge)
         ? 'RFC-332'
@@ -3009,10 +3334,10 @@ export function buildCanonicalArtifacts(repoRoot: string): CanonicalArtifacts {
     kind: 'facades',
     denominator: {
       serviceFiles: facades.length,
-      boundaryFacades: facades.filter((entry) => entry.status === 'boundary-facade').length,
+      thinFacades: facades.filter((entry) => entry.status === 'thin-facade').length,
     },
     finalCriterion:
-      'Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.',
+      'Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.',
     entries: facades,
   }
   const publicSurfaceManifest = {
@@ -3363,8 +3688,11 @@ export function validateCanonicalArtifacts(artifacts: CanonicalArtifacts): strin
   for (const edge of crossObserved) {
     if (!ownerSet.has(String(edge.fromOwnerEntryId))) errors.push(`missing from owner: ${edge.id}`)
     if (!ownerSet.has(String(edge.toOwnerEntryId))) errors.push(`missing to owner: ${edge.id}`)
-    if (edge.role === 'temporary-internal-debt' && edge.removeAfterWave === null) {
-      errors.push(`unowned temporary debt: ${edge.id}`)
+    if (
+      (edge.role === 'temporary-internal-debt' || edge.role === 'off-dag-offered') &&
+      edge.removeAfterWave === null
+    ) {
+      errors.push(`unowned ${String(edge.role)} debt: ${String(edge.id)}`)
     }
   }
 
@@ -3464,7 +3792,8 @@ export function validateCanonicalArtifacts(artifacts: CanonicalArtifacts): strin
 
   const surfaces = recordArray(artifacts.publicSurfaces, 'entries')
   const surfaceIds = surfaces.map((entry) => String(entry.id))
-  if (surfaceIds.length !== new Set(surfaceIds).size) errors.push('duplicate public surface id')
+  const surfaceSet = new Set(surfaceIds)
+  if (surfaceIds.length !== surfaceSet.size) errors.push('duplicate public surface id')
   if (stableJson(artifacts.publicSurfaces.targetContexts) !== stableJson(TARGET_PUBLIC_CONTEXTS)) {
     errors.push('public surface target contexts differ from RFC-294 table')
   }
@@ -3499,6 +3828,13 @@ export function validateCanonicalArtifacts(artifacts: CanonicalArtifacts): strin
         !ownerSet.has(String((consumer as Record<string, unknown>).ownerEntryId))
       ) {
         errors.push(`missing public consumer owner: ${String(surface.id)}`)
+      }
+    }
+    for (const consumerId of Array.isArray(surface.publicTypeConsumerIds)
+      ? surface.publicTypeConsumerIds
+      : []) {
+      if (!surfaceSet.has(String(consumerId))) {
+        errors.push(`missing public type consumer: ${String(surface.id)}`)
       }
     }
     if (surface.status === 'legacy-context-debt' && surface.removeAfterWave === null) {
