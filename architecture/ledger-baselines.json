@@ -342,7 +342,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1067,
+      "baseline": 1072,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -356,7 +356,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 281,
+      "baseline": 285,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -377,7 +377,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1768,
+      "baseline": 1776,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -398,7 +398,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1731,
+      "baseline": 1737,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -433,12 +433,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 19309,
+      "baseline": 19338,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06",
+    "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -451,8 +451,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "593e760dbc4ba4ddac5dd7ec3831b2181f4b4c86",
-    "contentDigest": "sha256:ac5d9b6f041da9c6c9629c9afb145c30ad5c8230f9c8dab37dee93b838d1d8ef",
+    "currentSnapshotSha": "5125949a9a8f3378b00a5822260670598334b3c2",
+    "contentDigest": "sha256:c66ba67c712ed07faeae73078e2b9d585655ef71d48b0f523fc53f6e4d9f76d7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

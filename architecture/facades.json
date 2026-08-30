@@ -315,11 +315,11 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0ffd9aadf37dd07f3459",
-        "import:88f58f76df92b49a8c57",
-        "import:a543ee39f8d89fe091a7",
-        "import:cbc41cd0df0dd9f1efa7",
-        "import:d1ba3825d58d9adc03ba"
+        "import:6b85bf49d05c573d7559",
+        "import:c191432e5c761f2e1ffa",
+        "import:cf8b61f3ce7604223d56",
+        "import:d6e31abc3891d37e6840",
+        "import:fb93eb69d998eba241bf"
       ],
       "exportedSymbols": [
         "BundleApplyDeps",
@@ -2091,8 +2091,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:37eee2e913a3011f0cea",
-        "import:56efc01d4cf00e3c2615"
+        "import:56efc01d4cf00e3c2615",
+        "import:ffbcdf1a4176cb553d2b"
       ],
       "exportedSymbols": [
         "INTENT_INVENTORY_CAP",
@@ -2253,7 +2253,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:989d76c51d4f44242876"
+        "import:062fe7f46bfc38c837ad"
       ],
       "exportedSymbols": [
         "IntentVisibleResource",
@@ -3951,20 +3951,20 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:10b4e216243f44283b9d",
-        "import:12996937f1ada0358df4",
-        "import:1327a07b3e5e9e567168",
-        "import:320b14f877d4dca49e5f",
-        "import:78eff4aaaaa1b7c45a11",
-        "import:8cdee0d2e7f61dbe08bb",
-        "import:8f155c6dfecf2444921c",
-        "import:91a533f95b343fc1185e",
-        "import:a86ea4bdfd9cfd98aa9d",
-        "import:a95146034073c8f06abf",
-        "import:b5d648f704d68e9584fc",
-        "import:c461c8d3732fb5c46047",
-        "import:e239ecfc636529575674",
-        "import:ea9c8fe074c3f368fa8e"
+        "import:3b2e8823dbaee1e03079",
+        "import:40383b137cb5d30687ba",
+        "import:53da59aadb6594a4e66f",
+        "import:562b3e412dbf923b7ae2",
+        "import:5f9fb0db6c59150fa4b3",
+        "import:60423174be0641bf52a5",
+        "import:8cb9bec532f23680b12c",
+        "import:9f089b1ad9d19b92df65",
+        "import:b0963c605e862ef1dcfb",
+        "import:b9ce73c0769c463cb379",
+        "import:ba40366417a36d6d5561",
+        "import:c2ec2301837f859c3cbb",
+        "import:e9c887fda3c99114aa17",
+        "import:ee0f6603747830930c64"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/resourceAccessPolicy.ts",
@@ -3977,91 +3977,93 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:01c764fbb0f9ba37f3ad",
-        "import:03d71e7bfc124f5bf0c4",
-        "import:043784b537f04abeab50",
-        "import:050ac220d0358868fc12",
-        "import:06c007333d72b7c1b8e6",
-        "import:099e968df83e4e3e9ad9",
+        "import:009d09208870e7c68a08",
+        "import:01915a093c6e9629b365",
+        "import:01c31094e8e04997964d",
+        "import:05acdf2f3811e67b22a8",
+        "import:05fb97c5afb29ff90e44",
+        "import:09329b6bab1d6ac66d30",
         "import:0a2b9e6a20d4608387fa",
-        "import:0c62573c5fae0aad9222",
-        "import:0df3b289c9068bf97ed3",
-        "import:1068987ac96eaa123461",
-        "import:108362885291645bea03",
-        "import:11a8baa70b21cdeb6a3c",
-        "import:1444285b2a236bd005e4",
-        "import:162dd20106a7f35d35dd",
-        "import:1a9b863b81638ccd1753",
+        "import:0bdd5872f51b9d36bc8c",
         "import:1c52de161937aac851f9",
         "import:1d93f24706f4767d9822",
-        "import:1e050fbbbc3781e46c0d",
+        "import:1eb562451b46af717bc5",
         "import:203f0b3f9ebdda2ab76f",
-        "import:2275e0de2fa376e905a2",
-        "import:25deaaafbd1db91d2ad5",
+        "import:204d6f5f730c5f944e6e",
+        "import:25b2e8a87308c2a20bbb",
+        "import:263fb8263a627d99d00b",
         "import:27be6a45db0a1ad7d08a",
-        "import:29992f40a0ba83c6d347",
-        "import:29bb120db34bcf6fa8ea",
-        "import:2d09b8b47cc2de192282",
-        "import:2d63b721547484271a65",
-        "import:300fb5168a8ae731395f",
-        "import:36208ac1b75a47c06dbc",
-        "import:3f35d2c9577e6f3f0408",
-        "import:4670e3e0fba296cd1cca",
-        "import:46e2602d1af24bf64501",
-        "import:4981c30efb0814a80a82",
+        "import:3682a114e191182382c3",
+        "import:38a9f5b1778d4e7fb02b",
+        "import:3990aecbf366990bfcc1",
+        "import:41208b1c266c2422edec",
+        "import:424972a34b0254cff865",
+        "import:44846e4eaaa6a27b7183",
+        "import:4a33f6f3fae3faad6208",
         "import:4c4c9108499cf3711b0b",
-        "import:5699b094e3f16fefbf5e",
-        "import:5e3c73beac359f1fc7d3",
-        "import:62f60319640475124d8e",
-        "import:6c3ec33a8e3fa135a9a6",
-        "import:6cee441cb150cfaa0ed2",
-        "import:6ddc62a9fefbc7c3d891",
-        "import:71341ca5313111cdd068",
+        "import:4d041f8fb942966a4892",
+        "import:5517eca55e204bbf767a",
+        "import:5698d52682aa97116f48",
+        "import:56e69ecf2b57b5986d65",
+        "import:576ad4de0294a1a62055",
+        "import:58d223334585e11ce445",
+        "import:5c1571913e02a61544c2",
+        "import:6012a9ea0249984384e1",
+        "import:63036822c155a308b849",
+        "import:63393e4afe17cf731b56",
+        "import:6bbbe5aec89dba912d0a",
+        "import:6dc3cc98e819a54b368a",
+        "import:6edeb303b3c2c4fd303c",
+        "import:764e09199ce835ec4730",
+        "import:76b61a201c705ae412c0",
         "import:76d369094d0908d86848",
+        "import:770398043ec38da7d894",
         "import:778999c72af36b0c8c1d",
-        "import:78ba0e1338e0bb07f986",
-        "import:793297c65f3e0c421e42",
-        "import:795b00b862e9e2d43be0",
-        "import:7de09167af179b9b2b6d",
-        "import:7ebc9bd371c4267a1109",
-        "import:7fb9b068d5e0f33e647f",
-        "import:8056e972026f8e50e20d",
-        "import:8242c0ae9b6bc71a577b",
+        "import:7a348cfb57cbb202029e",
+        "import:7de0da9ccf75dabb3e95",
+        "import:7eb456e07848cccfa9ee",
+        "import:7f0c518f4b0e5246e4c4",
         "import:86bd1c2c65fa665ae247",
-        "import:898de106e1ff1bb50c84",
-        "import:964ca11c3a092b7fc36a",
-        "import:a0f6a8a791ba51bf8992",
-        "import:a19de9cc3d0e12408567",
+        "import:8740894da82f2ba007a7",
+        "import:88de22278d8c231c3c54",
+        "import:8c9b0d2c39d5bceddf6d",
+        "import:94592d5f9df486c25dc2",
+        "import:94a4678432464a63702c",
+        "import:95228329939a2e00ff16",
+        "import:a12aa63d67008efd13be",
         "import:a26c78ca846808ec0b85",
-        "import:ab80bba35e5406b134f1",
+        "import:a5a40a82219640dbe154",
+        "import:a6afc0fe5ceee6675db1",
+        "import:a81a9b548927dc7be749",
+        "import:ab2198d0cb877716e45e",
         "import:acf21ec1235a5ca37829",
-        "import:ad5464d851d372699f57",
-        "import:adfc32c0927f61bcd76d",
-        "import:ae12296fc6c285c2e6de",
-        "import:ae48cd6c106cefb2dac2",
-        "import:b041e50fc58a5c117699",
-        "import:b0ecdcab33388947972c",
         "import:b14bf1a16c2513285844",
-        "import:b4a9de4fed53d8d7b7af",
-        "import:b7b21e97abbd88e6b9b3",
+        "import:b57cc44edd6569febe5a",
+        "import:bc809a57145822a4699d",
         "import:bf21c5a41170506373ae",
-        "import:d11c975a40eefe2d6536",
+        "import:bfb6a48a49540a526f53",
+        "import:c03cbec96ac178cdfc18",
+        "import:c0f076f663549fe626ff",
+        "import:c15fbdc17cbb56b43a97",
+        "import:c9955e68ed1697edbff4",
         "import:d1d661916b08b704035f",
-        "import:d2264035da535d3e17b2",
-        "import:d22b0e1611484dc669d9",
-        "import:d3068c88753231fb992a",
+        "import:d2127746f2dc82033220",
+        "import:d21e5ef24119fffed223",
+        "import:d260cfc9d1657af19b83",
         "import:d40a389b51aa196c3d24",
-        "import:d4695af9b1d63c7ef100",
-        "import:d61db9afaac323f54865",
-        "import:da26c20081e8834470a8",
-        "import:e0d02b584a36e509ea01",
-        "import:e4c6021b1ddc631c65df",
-        "import:e75f3c8f17af00cf4c71",
-        "import:e8bf5cfe8823f67269f8",
+        "import:d50842228258d8e86ecb",
+        "import:d72903e56fbea87b0556",
+        "import:dd850692ab3f080f7fd2",
+        "import:de415b39c3d99153404a",
+        "import:df36457757d026629bdf",
+        "import:e28932aa9270d944ec3d",
         "import:e8fba83e4ca4f70404c9",
+        "import:efe33003ec194c07484b",
         "import:f12806b23de998fea707",
+        "import:f1e12fc81876c5112e9a",
+        "import:f3190ee9f59a1baeeedb",
         "import:f44739b4981515ebb48b",
-        "import:f9631de376eaa015b4a2"
+        "import:f8bbc03ce015e5e6a19d"
       ],
       "exportedSymbols": [
         "updateResourceAcl"
@@ -4105,8 +4107,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:2bac2b2b48ec9be41857",
-        "import:6d313f8b8f5edb6de13b"
+        "import:4aa885c208e069be83dc",
+        "import:a625ec8948c8e8e4943d"
       ],
       "exportedSymbols": [
         "ClosureCallRef",
@@ -4131,11 +4133,11 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:1c0202e4278180699051",
         "import:2914c7a6d43d74a31ea1",
-        "import:2c5bc17519ac162b2719",
-        "import:33162f38e4f4e6dc5c80",
-        "import:e2e07234b411b6a9d864",
-        "import:f4013d40780b4b4c121a"
+        "import:35a3d82e8d99cb01c5f1",
+        "import:77b5be3513e1cd3da8e8",
+        "import:a663e15ba4ed755fe21f"
       ],
       "exportedSymbols": [
         "CommitPackageDeps",
@@ -4157,8 +4159,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:6c6aa7be0815d130f758",
-        "import:d4f0ffc84643141b7f4a"
+        "import:81d748a3533d0e81c335",
+        "import:f95971308d0abf61f667"
       ],
       "exportedSymbols": [
         "ExportedPackage",
@@ -4212,7 +4214,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:5c718263210387180994"
+        "import:c5591ff6057a9c6d8a8b"
       ],
       "exportedSymbols": [
         "HumanMemberBaselineEntry",
@@ -7910,5 +7912,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06"
+  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6"
 }

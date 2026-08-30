@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1054,
+    "backendFiles": 1058,
     "frontendFiles": 620,
     "legacyFiles": 553,
-    "moduleFiles": 501,
-    "productionFiles": 1828,
+    "moduleFiles": 505,
+    "productionFiles": 1832,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 19309
+    "symbolsIncludingFileRoots": 19338
   },
   "entries": [
     {
@@ -1959,6 +1959,18 @@
       "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/backup.ts",
+      "id": "owner:packages/backend/src/cli/backup.ts#BackupCommandDeps",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "BackupCommandDeps",
+      "targetContext": "system-operations",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/backup.ts",
       "id": "owner:packages/backend/src/cli/backup.ts#BackupCommandResult",
       "removeAfterWave": "W4-E7",
       "status": "legacy-target",
@@ -2479,6 +2491,18 @@
       "removeAfterWave": "W4-E7",
       "status": "legacy-target",
       "symbol": "restoreCommand",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/restore.ts",
+      "id": "owner:packages/backend/src/cli/restore.ts#RestoreCommandDeps",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "RestoreCommandDeps",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -31626,6 +31650,42 @@
       "currentContext": "digital-employee",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#adapt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "adapt",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#createDigitalEmployeeResourceCatalogAclAdapters",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createDigitalEmployeeResourceCatalogAclAdapters",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/digital-employee/application/adapters/task-catalog-adapter.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/application/adapters/task-catalog-adapter.ts#$file",
       "removeAfterWave": null,
@@ -32075,6 +32135,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/ports/authoringStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/ports/authoringStore.ts#DigitalEmployeeAclIdentityMutation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeAclIdentityMutation",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/ports/authoringStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/ports/authoringStore.ts#DigitalEmployeeAclIdentityMutationRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeAclIdentityMutationRow",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/ports/authoringStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/ports/authoringStore.ts#DigitalEmployeeAclIdentityPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeAclIdentityPersistence",
       "targetContext": "digital-employee",
       "targetLayer": "application"
     },
@@ -35039,6 +35135,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createSqliteDigitalEmployeeAuthoringStore",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#employeeDefinitionAclIdentity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "employeeDefinitionAclIdentity",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#employeeJobTemplateAclIdentity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "employeeJobTemplateAclIdentity",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#employeeToolAclIdentity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "employeeToolAclIdentity",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -41304,6 +41436,30 @@
       "currentContext": "integration",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#createDevelopmentAdapterResourceCatalogAclAdapter",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createDevelopmentAdapterResourceCatalogAclAdapter",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/integration/application/developmentAdapterCommands.ts",
       "id": "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#$file",
       "removeAfterWave": null,
@@ -41357,6 +41513,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createDevelopmentAdapter",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/developmentAdapterCommands.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#DevelopmentAdapterAclIdentityMutation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DevelopmentAdapterAclIdentityMutation",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/developmentAdapterCommands.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#DevelopmentAdapterAclIdentityPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DevelopmentAdapterAclIdentityPersistence",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -44051,6 +44231,18 @@
     {
       "currentContext": "integration",
       "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
+      "id": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createDevelopmentAdapterAclIdentity",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
       "id": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
@@ -44892,10 +45084,58 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#ForeignResourceAclType",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ForeignResourceAclType",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#ResourceAccessRowReadPort",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ResourceAccessRowReadPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#ResourceAclIdentityMutation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ResourceAclIdentityMutation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#ResourceAclIdentityMutationRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ResourceAclIdentityMutationRow",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/ports/resourceAclPersistence.ts#ResourceAclIdentityPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ResourceAclIdentityPersistence",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -45162,6 +45402,18 @@
       "symbol": "resolveTaskRole",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/composition/required-ports.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/required-ports.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "composition"
     },
     {
       "currentContext": "resource-catalog",
@@ -46439,11 +46691,35 @@
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#sqliteAclTable",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "sqliteAclTable",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts#$file",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts#isSqliteAclResourceType",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isSqliteAclResourceType",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -46480,6 +46756,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "SQLITE_OWNER_NAME_UNIQUE_TYPES",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts#SqliteAclResourceType",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SqliteAclResourceType",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -46882,6 +47170,18 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts#runResourceAclMutation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "runResourceAclMutation",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts#withSqliteResourceAclMutation",
@@ -47093,6 +47393,18 @@
       "signatureDigest": "sha256:d281627e5aa4696fb5b2dfef82bbe5df515dd34c577066788963e1d617bc5207",
       "status": "current-module",
       "symbol": "ResourceAclCommands",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -50533,18 +50845,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "composeSystemOperationsWithArtifacts",
-      "targetContext": "system-operations",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "system-operations",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/system-operations/composition.ts",
-      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#LocalRestoreSession",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "LocalRestoreSession",
       "targetContext": "system-operations",
       "targetLayer": "composition"
     },
@@ -160570,6 +160870,18 @@
       "currentLayer": "components",
       "exported": true,
       "file": "packages/frontend/src/components/task-creation/TaskCreationAdvancedSettings.tsx",
+      "id": "owner:packages/frontend/src/components/task-creation/TaskCreationAdvancedSettings.tsx#TaskCreationWorkingBranchField",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "TaskCreationWorkingBranchField",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/task-creation/TaskCreationAdvancedSettings.tsx",
       "id": "owner:packages/frontend/src/components/task-creation/TaskCreationAdvancedSettings.tsx#validateTaskCreationAdvancedValues",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -189458,6 +189770,42 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "EVENT_AUDIT_PAGE_SIZE",
+      "targetContext": "frontend",
+      "targetLayer": "routes"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/frontend/src/routes/events.tsx",
+      "id": "owner:packages/frontend/src/routes/events.tsx#EventAuditDeliveryState",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "EventAuditDeliveryState",
+      "targetContext": "frontend",
+      "targetLayer": "routes"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/frontend/src/routes/events.tsx",
+      "id": "owner:packages/frontend/src/routes/events.tsx#eventAuditStateKind",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "eventAuditStateKind",
+      "targetContext": "frontend",
+      "targetLayer": "routes"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/frontend/src/routes/events.tsx",
+      "id": "owner:packages/frontend/src/routes/events.tsx#eventAuditStateLabel",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "eventAuditStateLabel",
       "targetContext": "frontend",
       "targetLayer": "routes"
     },
@@ -232089,5 +232437,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06"
+  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6"
 }

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,10 +10,10 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1054 |
+| backend production TS 文件 | 1058 |
 | `services/` 文件 | 378 |
-| `modules/**` 文件 / 非空 context | 501 / 14 |
-| backend 值级 SCC / 全仓值级 SCC | 3 / 5 |
+| `modules/**` 文件 / 非空 context | 505 / 14 |
+| backend 值级 SCC / 全仓值级 SCC | 2 / 4 |
 | `KNOWN_VIOLATIONS` | 29 |
 | route→DB / transport→DB 值级边 | 15 / 2 |
 | route/MCP `AppDeps` consumer 文件 | 48 |
@@ -21,7 +21,7 @@
 | background work entries | 272 |
 | direct native `setInterval`（call / files） | 24 / 21 |
 | direct native timers（全部） | 72 |
-| RFC-317 boundary census（inbound / outbound） | 76 / 23 |
+| RFC-317 boundary census（inbound / outbound） | 52 / 23 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 456 |
-| `architectureExceptions` | 1731 |
+| `architectureExceptions` | 1737 |
 | `backgroundJobs` | 272 |
-| `crossContextImports` | 1768 |
+| `crossContextImports` | 1776 |
 | `facades` | 378 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 19309 |
-| `mutationEntrypoints` | 1067 |
+| `moduleSymbolOwners` | 19338 |
+| `mutationEntrypoints` | 1072 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 531 |
-| `transactionExternalEffects` | 281 |
+| `transactionExternalEffects` | 285 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -59,12 +59,12 @@
 | collaboration / domain | 14 |
 | development-automation / composition | 13 |
 | code-capability / domain | 11 |
+| integration / application | 10 |
 | task-execution / infrastructure | 10 |
 | collaboration / infrastructure | 9 |
-| integration / application | 9 |
+| digital-employee / application | 9 |
 | integration / composition | 9 |
 | resource-catalog / application | 9 |
-| digital-employee / application | 8 |
 | integration / infrastructure | 8 |
 | development-automation / engine | 7 |
 | resource-catalog / infrastructure | 7 |
@@ -77,13 +77,13 @@
 | collaboration / composition | 5 |
 | collaboration / public | 5 |
 | event-center / public | 5 |
+| resource-catalog / public | 5 |
 | task-execution / public | 5 |
 | development-automation / public | 4 |
 | digital-employee / public | 4 |
 | event-center / infrastructure | 4 |
 | identity-access / infrastructure | 4 |
 | resource-catalog / domain | 4 |
-| resource-catalog / public | 4 |
 | source-control / public | 4 |
 | digital-employee / composition | 3 |
 | event-center / domain | 3 |
@@ -99,6 +99,7 @@
 | execution-contract / application | 2 |
 | execution-contract / public | 2 |
 | identity-access / composition | 2 |
+| resource-catalog / composition | 2 |
 | source-control / composition | 2 |
 | system-operations / domain | 2 |
 | system-operations / infrastructure | 2 |
@@ -108,7 +109,6 @@
 | execution-contract / domain | 1 |
 | execution-contract / infrastructure | 1 |
 | intent / domain | 1 |
-| resource-catalog / composition | 1 |
 | source-control / ports | 1 |
 | system-operations / composition | 1 |
 | task-catalog / application | 1 |
@@ -184,21 +184,21 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 1130 |
-| legacy-inbound | 475 |
+| legacy-outbound | 1128 |
+| legacy-inbound | 483 |
 | external-layer-debt | 83 |
 | offered-consumption | 48 |
 | off-dag-offered | 11 |
 | authority-type-only | 10 |
-| required-implementation | 8 |
+| required-implementation | 10 |
 | temporary-internal-debt | 3 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 1130 |
-| legacy-inbound | 475 |
+| legacy-outbound | 1128 |
+| legacy-inbound | 483 |
 | external-layer-debt | 83 |
 | no-routes-to-db | 15 |
 | off-dag-offered | 11 |
@@ -211,17 +211,17 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 795 |
-| W4-C | 182 |
+| W4-E1 | 796 |
+| W4-C | 184 |
 | W4 | 118 |
 | W5 | 105 |
 | W4-E8 | 101 |
 | W4-E0 | 96 |
 | W9 | 89 |
-| W4-E9 | 86 |
+| W4-E9 | 83 |
 | W4-B | 78 |
 | RFC-owner-cutover | 27 |
-| W4-E7 | 19 |
+| W4-E7 | 25 |
 | W4-E4b | 14 |
 | W4-E4a | 10 |
 | W4-E3 | 5 |

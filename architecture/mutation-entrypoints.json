@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1067,
+    "entries": 1072,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -586,6 +586,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/restore.ts#restoreCommand",
       "symbol": "restoreCommand",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/cli/restore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/restore.ts#RestoreCommandDeps",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/restore.ts#RestoreCommandDeps",
+      "symbol": "RestoreCommandDeps",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -5242,6 +5267,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#createDigitalEmployeeResourceCatalogAclAdapters",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#createDigitalEmployeeResourceCatalogAclAdapters",
+      "symbol": "createDigitalEmployeeResourceCatalogAclAdapters",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -6699,6 +6749,30 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#createDevelopmentAdapterResourceCatalogAclAdapter",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#createDevelopmentAdapterResourceCatalogAclAdapter",
+      "symbol": "createDevelopmentAdapterResourceCatalogAclAdapter",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -7284,6 +7358,29 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createDevelopmentAdapterAclIdentity",
+      "symbol": "createDevelopmentAdapterAclIdentity",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
@@ -7601,6 +7698,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts#createSqliteResourceCatalogQuery",
       "symbol": "createSqliteResourceCatalogQuery",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts#runResourceAclMutation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceAclRepository.ts#runResourceAclMutation",
+      "symbol": "runResourceAclMutation",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -25361,7 +25482,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06",
+  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

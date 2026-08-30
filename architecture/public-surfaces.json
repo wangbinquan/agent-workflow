@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 311,
+    "consumers": 318,
     "exactEntrypointFiles": 44,
     "governedFieldSurfaces": 5,
     "methods": 265,
@@ -33790,7 +33790,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:f4d44a4f2c6abdd0065c"
+      ],
       "context": "system-operations",
       "dataClass": "metadata",
       "direction": "offered",
@@ -33814,13 +33816,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f4d44a4f2c6abdd0065c"
+          ],
           "name": "execute",
           "signatureDigest": "sha256:f8979100ee783833f14ae9493bcb3667d4f5caf2944a0b97c34b4c89edf6f4e7"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#ActivateLocalRestoreCommand",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:f4d44a4f2c6abdd0065c",
+          "file": "packages/backend/src/cli/restore.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/restore.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:system-operations:commands:SystemOperationCommands"
       ],
@@ -33911,7 +33922,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:424172080507ad740340"
+      ],
       "context": "system-operations",
       "dataClass": "metadata",
       "direction": "offered",
@@ -33955,13 +33968,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:424172080507ad740340"
+          ],
           "name": "execute",
           "signatureDigest": "sha256:b3b9387062e255b5f3ef8efe8121dbc40a0315ec6accb58a50798b5b16b08c8d"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#RequestBackupCommand",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:424172080507ad740340",
+          "file": "packages/backend/src/cli/backup.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/backup.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:system-operations:commands:SystemOperationCommands"
       ],
@@ -33984,7 +34006,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:0e35feed5cb253c693df"
+      ],
       "context": "system-operations",
       "dataClass": "metadata",
       "direction": "offered",
@@ -34028,13 +34052,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0e35feed5cb253c693df"
+          ],
           "name": "execute",
           "signatureDigest": "sha256:f4d0ef3a3469008ef96594edee6511ae61acfa7dc392cee18766180c1c1546a9"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#StageRestoreCommand",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:0e35feed5cb253c693df",
+          "file": "packages/backend/src/cli/restore.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/restore.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:system-operations:commands:SystemOperationCommands"
       ],
@@ -34254,7 +34287,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:6b74d5f107829559cc1d"
+      ],
       "context": "system-operations",
       "dataClass": "metadata",
       "direction": "offered",
@@ -34278,13 +34313,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:6b74d5f107829559cc1d"
+          ],
           "name": "execute",
           "signatureDigest": "sha256:60afbbc729380104207fcd693189767590a6cf07528d39ecc5b615a30c0c0878"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#PlanLocalRestoreQuery",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:6b74d5f107829559cc1d",
+          "file": "packages/backend/src/cli/restore.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/restore.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:system-operations:queries:SystemOperationQueries"
       ],
@@ -34702,7 +34746,10 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:360aa4e6f0a5cadb949d",
+        "import:b34c3cea8a66f76a9bb0"
+      ],
       "context": "system-operations",
       "dataClass": "metadata",
       "direction": "offered",
@@ -34715,7 +34762,20 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#LocalSystemOperationContext",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:360aa4e6f0a5cadb949d",
+          "file": "packages/backend/src/cli/backup.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/backup.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:b34c3cea8a66f76a9bb0",
+          "file": "packages/backend/src/cli/restore.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/restore.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:system-operations:commands:ActivateLocalRestoreCommand",
         "public:system-operations:commands:RequestBackupCommand",
@@ -34927,7 +34987,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:c582a621da7248c69c03"
+      ],
       "context": "system-operations",
       "dataClass": "confidential",
       "direction": "offered",
@@ -34940,7 +35002,14 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#RestoreArtifactRef",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c582a621da7248c69c03",
+          "file": "packages/backend/src/cli/restore.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/restore.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:system-operations:commands:ActivateLocalRestoreCommand",
         "public:system-operations:commands:StageRestoreCommand",
@@ -48954,7 +49023,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7b254a55aaf708b89164123a7b6cba163e4920780c4b2a427f1d79866e991a06",
+  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6",
   "targetContexts": [
     "collaboration",
     "development-automation",
