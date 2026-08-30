@@ -5,10 +5,12 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
+  ACL_RESOURCE_TYPES,
   CODE_HOST_ACTIONS,
   CODE_HOST_METHODS,
   CODE_HOST_REDACTED_FIELDS,
   INTENT_REDACTED,
+  INTENT_RESOURCE_TYPES,
   NODE_KIND,
   SYNTHESIZED_ONLY_NODE_KINDS,
   isSynthesizedOnlyNodeKind,
@@ -809,5 +811,70 @@ describe('no omission instruction may mention an AUTHORABLE kind’s fields', ()
 
   test('fully privileged: there is no capability-limits section to leak from', () => {
     expect(docWith()).not.toContain('## Capability limits (hard)')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// RFC-348 — the doc is RENDERED from the teaching registries. These lock the
+// drifts the RFC repaired (AC-1/2/3/5/11) and the new derived sections.
+// ---------------------------------------------------------------------------
+describe('RFC-348 — registry-rendered capability teaching', () => {
+  test('repaired drifts are taught: branchPorts, permission, runtime, continueOnMaxIterations, port-inactive, branch, mcp timeoutMs/oauth', () => {
+    const doc = docWith()
+    expect(doc).toContain('branchPorts?:[port]')
+    expect(doc).toContain('permission?:{key:action}')
+    expect(doc).toContain('inventory/runtimes.md')
+    expect(doc).toContain('continueOnMaxIterations?')
+    expect(doc).toContain("'port-inactive'")
+    expect(doc).toContain('outputs?:[{name,kind?,branch?}]')
+    expect(doc).toContain('timeoutMs?')
+    expect(doc).toContain("oauth?:false|{clientId?,clientSecret?:'‹secret›',scope?,redirectUri?}")
+    // RFC-115 removed `overrides`; the doc must not resurrect it
+    expect(doc).not.toContain('overrides')
+  })
+
+  test('requested artifact type renders in three states with the D33 weak-preference wording', () => {
+    const none = docWith()
+    expect(none).toContain('## Requested artifact type')
+    expect(none).toContain(
+      'No type requested (Auto): choose the resource mix yourself from the goal.',
+    )
+    const picked = docWith({ requestedArtifactType: 'workflow' })
+    expect(picked).toContain('The user pre-selected **workflow** in the composer.')
+    expect(picked).toContain(
+      'follow the message; do not ask for confirmation just because it differs from the pre-selection.',
+    )
+    expect(docWith({ requestedArtifactType: null })).toContain('No type requested (Auto)')
+  })
+
+  test('platform capability map names the nine platform-only types and the read-only rule', () => {
+    const doc = docWith()
+    expect(doc).toContain('## Platform capability map')
+    for (const type of ACL_RESOURCE_TYPES) {
+      if ((INTENT_RESOURCE_TYPES as readonly string[]).includes(type)) continue
+      expect(doc, type).toContain(`- \`${type}\` —`)
+    }
+    expect(doc).toContain('cannot create, update, mount or reference')
+    expect(doc).toContain('inventory/platform/')
+  })
+
+  test('every input kind lists its extension fields; the Common mistakes section is present', () => {
+    const doc = docWith()
+    expect(doc).toContain('`text{multiline?,maxLength?}`')
+    expect(doc).toContain('`files{minCount?,maxCount?,accept?}`')
+    expect(doc).toContain('`enum{choices,multiSelect?,allowOther?}`')
+    expect(doc).toContain("`git{gitKind:'branch'|'commit-range'|'pr'}`")
+    expect(doc).toContain(
+      '`upload{targetDir,accept?,maxFileSize?,minCount?,maxCount?,onConflict?}`',
+    )
+    expect(doc).toContain('Root-level `outputs:[{name,bind:{nodeId,portName}}]`')
+    expect(doc).toContain('## Common mistakes')
+    expect(doc).toContain('`branchPorts` must be a subset of `outputs`')
+  })
+
+  test('size guard (AC-11): the fully privileged doc stays within the 32 KiB budget', () => {
+    // 2026-08-30 measured: 22,708 → 29,402 bytes (ALL) / 18,933 → 25,375 (NONE) after the
+    // registry rewrite — the new capability map / requested type / common mistakes sections.
+    expect(Buffer.byteLength(docWith(), 'utf8')).toBeLessThan(32 * 1024)
   })
 })
