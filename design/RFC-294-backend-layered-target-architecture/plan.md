@@ -1,6 +1,6 @@
 # RFC-294 实施路径：从散点 services 到分层 bounded contexts
 
-- 目标架构状态：Draft（2026-08-30 刷新；等待 RFC-294 D1～D9 明确批准，本文刷新不代替批准）
+- 目标架构状态：Approved（2026-08-30 review 记账：D1～D9 已由各 successor RFC 的逐项用户批准实质确认，见 `review-2026-08-30.md` §A1；本文刷新不授权任何未立项 wave）
 - 迁移进度状态：Out-of-order in progress（RFC-287、RFC-297～343 已按各自范围形成
   production/architecture vertical slices；RFC-317/319/326～330 已 Done；RFC-328 完成 N2/P0-D 但不领取 W2 credit；
   RFC-329/330 只作为 W4 输入/纵切，不抵扣整波；RFC-288/289 已关闭且未实现；RFC-294 N1a/N1b 治理基线已落，
@@ -57,6 +57,9 @@ report 生成；final implementation SHA `67a97480c5944c723d3ee08490631e4db768a5
 自本快照起采用 architecture-significance filter：只在 production context owner、public/required contract、schema/single-writer、
 composition root、cross-context edge 或 worker/lifecycle owner 发生变化时重采 architecture baseline。纯 test/e2e/fixture、文档、
 视觉原语和边角功能只更新质量/行为证据，不触发全量架构重采，也不给 W0-R～W9 wave credit。
+
+> **指标只在生成文件里维护（2026-08-30 review §A2）**：下表「基线」列是 2026-08-30 前的手抄快照，已冻结不再更新；当前值以
+> [`status.md`](./status.md)（`bun run architecture:status` 从 committed `architecture/*.json` 渲染，投影相等由守卫钉死）为唯一事实源。
 
 | 指标                                |           基线 | 采集口径                                                                 |
 | ----------------------------------- | -------------: | ------------------------------------------------------------------------ |
@@ -381,7 +384,8 @@ RFC-331 current payload `262f34bf7` 的 digest 为 `e9f8a0…`，provenance repi
 architecture counts 始终分栏，不用任一祖先结论代替当前提交的判定。
 N1/W0-R、N2/P0-D、RFC-331 W2-A、RFC-332 W2-B、RFC-333 P0-C、RFC-334 W2-C、RFC-339 W2-D、RFC-341 W3、
 RFC-342 P0-A 与 RFC-343 P0-B 均已满足并完成 exact-SHA hosted closeout。W4-A 已由 RFC-344 另立 successor、获批并进入
-implementation candidate；W4-B/C/E 与完整 W4-D 仍须另立 RFC 并单独获批。
+implementation candidate；W4-C 已由 RFC-345 另立 successor、获批并开始 additive cohort；W4-E7 已由 RFC-346 起草 successor，
+D1～D12 已于 2026-08-30 获批并开始 additive/CLI cohort。W4-B、W4-E 其余 slices 与完整 W4-D 仍须另立 RFC 并单独获批。
 RFC-288/289 只作历史输入，不是节点。W5 的每个 SCC family 需 W4 已断 transport/root 回边；W6 在 W4 +
 P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队。W8 是 post-W7 独立能力线：未获批时保留挡板并
 跳过，不阻塞 W9；若同一 release 激活，则必须在 W9 清仓前汇入。
@@ -404,6 +408,7 @@ P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队
 | N10  | RFC-342 / P0-A（Done）              | content-only PATCH、candidate Move、双 scope transaction、OCC receipt、commit 后 WS、UI cutover 与 prompt audience proof 已完成                                            | `9dc7e6ea8` → `74c0e72bb` → `e0ef3e51c`；final `67a97480` hosted closeout success                                          |
 | N11  | RFC-343 / P0-B（Done）              | actual-chain lock、retryable compensation、V1 artifact 与 prepared/committed convergence 已完成                                                                            | `f21d6142a`；final `67a97480` hosted closeout success                                                                      |
 | N12  | RFC-344 / W4-A（In Progress）       | stable OperationCatalog、52/52 MCP closed binding、single handler root、identity/development pilots 与 API docs projection 已形成 production candidate                     | 等待 canonical、push 与 published exact-SHA Main CI + 全部定时 workflows；未完成前 W4-A 不标 Done                          |
+| N13  | W4-E0 identity-access（待立项）      | trusted direct/delegated request authority factory、presence/WS 收编、full `Actor` facade 退役——E1/E2/E3/E8/E9/E10 六个子波的共同前置（review 2026-08-30 §D1） | RFC-344 hosted closeout 后立即立 successor RFC；不等 W4-C/E7 完成                                                          |
 | OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                   | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                   |
 
 P0-A、P0-B 与 W3 已关闭各自前置；它们不再被错误地用作“RFC-287 已经落地”的前置证明，也不倒签后续 wave。
@@ -765,6 +770,9 @@ workflows terminal success 后勾选。
 
 ### W4-C Resource Catalog
 
+**实施 successor**：[RFC-345 Resource Catalog 与 ResourcePackage 合同归位](../RFC-345-resource-catalog-contract-cutover/proposal.md)。
+当前为 Approved / In Progress；D1～D10 已于 2026-08-30 获用户明确批准，先实施 additive contracts/core cohort。
+
 - [ ] 六类 selector summary 收为 `ResourceCatalogQuery`，仅返回 `ResourceSummary`；每类完整 List/Get/Filter 保留
       typed QueryService，filter/pagination 下推 SQLite；
 - [ ] `ACL_TABLES` 限 infrastructure；跨模块用 resource public authorization port；
@@ -774,11 +782,11 @@ workflows terminal success 后勾选。
 - [ ] Intent 两份 catalog 改同一 query；
 - [ ] Create/Update/Delete 逐资源 command 化，不做 universal CRUD switch；
 - [ ] public DTO 与 repository row 分离。
-- [ ] `resource-catalog/package` 落 Inspect/Preview/Apply/Receipt、`ResourcePackageApplyTx`、六类 exact mutation
+- [ ] `resource-catalog/package` 落 Inspect/Preview/Apply/Receipt、`ResourcePackageApplyTx`、七类 exact mutation
       participants 与 scenario provider contract；本波只落/适配合同，W6 才切 AtomicApply admission owner；
-- [ ] catalog/ACL inventory 采用当前 13 个 resource kind；原六类 aggregate 仍归 RC，development 四类 config、
-      development adapter、capability-template 与 DE-owned `employee_definition` 分别归自己的 writer，禁止把共用 ACL 误写成
-      RC universal CRUD；
+- [ ] catalog/ACL inventory 采用当前 15 个 resource kind；原六类 aggregate 仍归 RC；capability-template、development 四类
+      config + development adapter、DE-owned `employee_definition` / `employee_tool` / `employee_job_template` 分别归自己的 writer，
+      禁止把共用 ACL 误写成 RC universal CRUD；
 
 ### W4-D 拆 `AppDeps`
 
@@ -835,6 +843,11 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
 - [ ] **E7 system-operations adapter**：只切 admin command/query 与 platform coordinator port；把 RFC-295 downgrade audit 的
       CLI 直连 DB 记为一次性兼容命令与 sunset ledger，不据此创造 generic cross-domain audit port；physical restore generation
       protocol 不在普通 context revert 内实施，留 W9-E 独立 RFC。
+
+  **实施 successor**：[RFC-346 System Operations 管理编排与 adapter cutover](../RFC-346-system-operations-adapter-cutover/proposal.md)。
+  当前为 Approved / In Progress，D1～D12 已于 2026-08-30 获用户明确批准；RFC-344 hosted closeout 前只允许 additive module、legacy adapter 与 CLI cohort，HTTP
+  descriptor/catalog/root/canonical 切换必须等待 RFC-344 发布，且全程不触碰 RFC-345 路径。
+
 - [ ] **E8 development-automation**：以 RFC-310 已落 Mission/ActionRun/AgentAttempt、四类 immutable config、fact/evidence/
       effect ledger 为行为 oracle；落真实 `public/{commands,queries,participants,events,types}`，让 mission/config/activity route
       只调用 public application surface；把零生产 consumer 的 `composition/required-ports.ts` 与 26-option
@@ -1167,6 +1180,8 @@ import=0；终局指标全绿。
 **冲突面**：start/server/ws/config/shutdown 单 owner排它。
 
 ## 14. 量化里程碑
+
+> 下表各行是各 wave 收尾时的手抄快照，2026-08-30 起冻结（review §A2）；current 值以 [`status.md`](./status.md) 为准，本表只保留「时点 → 目标」合同。
 
 | 时点                         |                         Repo SCC |                      Backend SCC |                              KNOWN | route→DB | AppDeps imports | Ambient wiring / background                                                                                      |
 | ---------------------------- | -------------------------------: | -------------------------------: | ---------------------------------: | -------: | --------------: | ---------------------------------------------------------------------------------------------------------------- |

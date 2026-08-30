@@ -2,10 +2,10 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 📋 **RFC-294 架构设计与实现现状 review 已落地（2026-08-30）：[review-2026-08-30.md](design/RFC-294-backend-layered-target-architecture/review-2026-08-30.md)。**
-> 已同批落地：RFC-294 标 Approved（A1）、生成式 `status.md` + `bun run architecture:status`（A2）、N1a 去掉 byte-replay 让账本刷新不再需要 repin 提交（A3）、
+> 📋 **RFC-294 架构设计与实现现状 review 已归档（2026-08-30）：[review-2026-08-30.md](design/RFC-294-backend-layered-target-architecture/review-2026-08-30.md)。**
+> 已同批归档：RFC-294 标 Approved / 索引改 In Progress（A1）、生成式 `status.md` + `bun run architecture:status`（A2）、N1a 去掉 byte-replay 让账本刷新不再需要 repin 提交（A3）、
 > `composition/` 层裁决写进 design §2（C1）、四个新守卫（observed offered 边 ⊆ 设计 DAG / 模块内分层规则 / 零 consumer public symbol 与死 required port 账本 /
-> status 投影）。因共享树里 RFC-345/346 在制品而**推迟**的项：`plan.md`/`design/plan.md` 状态与 W4-E0 排期（含未提交 RFC 链接）、账本按 W4 子波重分桶（B3）、
+> status 投影）。RFC-345 checkpoint（`fbc0ec093`）带入的 4 条 resource-catalog application→infrastructure import 已入 `MODULE_LAYER_RULE_DEBT`（W4-C）——工作树里已在删这些 import，**删除的那一笔请同批删掉这 4 条并把 `ledger-baselines.json` 的 `rfc294-review-module-layer-rules` 基线 29→25**（只降，无需 allowGrowth），否则该守卫按「修掉不销账」判红。因共享树里 RFC-344/345/346 在制品而**推迟**的项：账本按 W4 子波重分桶（B3）、
 > `KNOWN_VIOLATIONS` 的 `removeWave`（B4，`scripts/depcheck.ts` 有他人在制品）。主 CI 在 HEAD `625017c08` 已因 RFC-344 落地提交的 duplicate operation id 全面红，非本批引入。
 
 > 🚧 **RFC 实施中（Approved / In Progress，2026-08-30）：[RFC-346 System Operations 管理编排与 adapter cutover（RFC-294 W4-E7）](design/RFC-346-system-operations-adapter-cutover/proposal.md)。**

@@ -6,8 +6,8 @@
 // services/circular 六条规则，RFC-317 outbound census 也只盯 `@/services|@/routes|@/ws|@/mcp`
 // 与 `drizzle-orm|hono` 包——`@/db/schema`（Drizzle 表）与 `infrastructure/**` 从
 // application/engine/domain 被直接 import 无人看守：committed HEAD 上 application 有 17 个文件
-// value-import `@/db/schema`、6 个文件 import 自己的 infrastructure，task-execution/domain 还
-// import 了 `node:fs`。
+// value-import `@/db/schema`、6 个文件 import 自己的 infrastructure；domain 层当前为 0（守卫在零基线上封住）。
+// RFC-345 contract checkpoint（fbc0ec093）又带入 resource-catalog 3 个文件 / 4 条 infrastructure import，已入账、W4-C 销账。
 //
 // 三条规则（与 RFC-317 outbound census 不重叠：drizzle-orm/hono 包级导入仍由后者记账）：
 //   domain-adapter-import   domain/** 不得 import adapter / vendor / 进程全局；
@@ -93,11 +93,32 @@ export function moduleLayerViolations(units: readonly SourceUnit[]): ModuleLayer
  */
 export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = [
   {
-    rule: 'domain-adapter-import',
-    file: 'packages/backend/src/modules/task-execution/domain/digitalEmployeeHost.ts',
-    specifier: 'node:fs',
-    why: 'domain 直接读文件系统；纯 domain 不得依赖 node:fs，应移入 infrastructure 或经 application-owned port 注入。',
-    removeAfterWave: 'W4-E1',
+    rule: 'infrastructure-import',
+    file: 'packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts',
+    specifier: '../../infrastructure/sqliteAclReadRepository',
+    why: 'RFC-345 checkpoint（fbc0ec093）的 resource-catalog application 直接 new 本模块 SQLite repository；应由 composition 注入 port。RFC-345 T9（facade/imports/architecture debt closeout）销账。',
+    removeAfterWave: 'W4-C',
+  },
+  {
+    rule: 'infrastructure-import',
+    file: 'packages/backend/src/modules/resource-catalog/application/resourceAcl.ts',
+    specifier: '../infrastructure/sqliteResourceAclRepository',
+    why: 'RFC-345 checkpoint（fbc0ec093）的 resource-catalog application 直接 new 本模块 SQLite repository；应由 composition 注入 port。RFC-345 T9（facade/imports/architecture debt closeout）销账。',
+    removeAfterWave: 'W4-C',
+  },
+  {
+    rule: 'infrastructure-import',
+    file: 'packages/backend/src/modules/resource-catalog/application/resourceAcl.ts',
+    specifier: '../infrastructure/sqliteResourceGrantRepository',
+    why: 'RFC-345 checkpoint（fbc0ec093）的 resource-catalog application 直接 new 本模块 SQLite repository；应由 composition 注入 port。RFC-345 T9（facade/imports/architecture debt closeout）销账。',
+    removeAfterWave: 'W4-C',
+  },
+  {
+    rule: 'infrastructure-import',
+    file: 'packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts',
+    specifier: '../infrastructure/sqliteResourceGrantRepository',
+    why: 'RFC-345 checkpoint（fbc0ec093）的 resource-catalog application 直接 new 本模块 SQLite repository；应由 composition 注入 port。RFC-345 T9（facade/imports/architecture debt closeout）销账。',
+    removeAfterWave: 'W4-C',
   },
   {
     rule: 'infrastructure-import',
