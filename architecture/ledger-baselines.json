@@ -357,10 +357,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1149,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-WG 新增 WorkgroupCommands active command surface 与 SQLite repository 写实现；每个入口保留 module authority、ACL、OCC、事务、引用及删除 fence 分类。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -374,10 +371,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 297,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-WG 将 create/copy/update/delete 的 Workgroup aggregate 写入收进 SQLite repository 的四个同步事务回调，外部 broadcast 仍在提交后执行。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -398,10 +392,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 1898,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-WG 新增五个 resource-catalog Workgroup module files及其 exact public、bootstrap、route 与 compatibility imports；所有 37 条新增边均由 canonical owner/role 分类。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -422,10 +413,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 1853,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-WG 为新增 Workgroup module、active route/bootstrap wiring 与 expiring legacy compatibility island登记 37 条 exact path+symbol 分类；未增加 glob 或 KNOWN_VIOLATIONS。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -439,10 +427,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 581,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-WG 新增 data-only Workgroup commands、queries、ACL participant、operation context 与 resource DTO 的 15 个 exact public symbols，并由 active route真实消费。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -463,10 +448,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 19902,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-WG 为五个新增 Workgroup module文件及其 application/ports/composition/infrastructure/public symbols登记 85 个唯一 resource-catalog owner entries。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -483,8 +465,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b1a7ff29fb0a6927adef185695da3e62862f7244",
-    "contentDigest": "sha256:78953baf9bf4635ef3ca4af0374407476cbff859f106c5a77e5506bd315675c4",
+    "currentSnapshotSha": "f4788fccf38782a2368c4397cd480bf5f720d91c",
+    "contentDigest": "sha256:f2b8266a2772f00ab219e061b7572fa4dd7d9414b8c6fae2003d96659bf9eb89",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
