@@ -72,7 +72,7 @@ describe('RFC-310 global Event Center UI contract', () => {
   test('makes multicast delivery state explicit instead of consuming the event once', () => {
     expect(events).toContain('一条事件可以同时交给多个消费者')
     expect(events).toContain('每个订阅都会生成自己的投递')
-    expect(events).toContain('data-testid="event-delivery-list"')
+    expect(events).toContain("'event-delivery-list'")
     expect(events).toContain('delivery.eventId')
     expect(events).toContain('delivery.deliveryId')
   })
@@ -101,7 +101,7 @@ describe('RFC-310 global Event Center UI contract', () => {
     expect(events).toContain('Webhook 触发订阅')
     expect(events).not.toContain("zh ? '兼容配置' : 'Compatibility'")
     expect(responseRules).not.toContain('action={newAction}')
-    expect(events).toContain("label: zh ? '投递记录' : 'Delivery records'")
-    expect(events).toContain("label: zh ? 'Webhook事件' : 'Webhook events'")
+    expect(events).toContain("label: zh ? '订阅投递' : 'Subscriber deliveries'")
+    expect(events).toContain("label: zh ? 'Webhook 接入' : 'Webhook ingress'")
   })
 })

@@ -93,7 +93,10 @@ type StatusFilter = 'all' | WebhookDeliveryStatus
 const STATUS_FILTERS: StatusFilter[] = ['all', 'matched', 'ignored', 'rejected', 'failed']
 
 /** RFC-260/RFC-305：缺 replay capability 时渲染只读视图。 */
-export function DeliveriesPanel({ canReplay = false }: { canReplay?: boolean } = {}) {
+export function DeliveriesPanel({
+  canReplay = false,
+  compact = false,
+}: { canReplay?: boolean; compact?: boolean } = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [status, setStatus] = useState<StatusFilter>('all')
@@ -162,14 +165,17 @@ export function DeliveriesPanel({ canReplay = false }: { canReplay?: boolean } =
 
   return (
     <section className="webhook-panel" data-testid="webhook-deliveries-panel">
-      <div className="webhook-panel__intro">
-        <div>
-          <span className="webhook-panel__eyebrow">{t('webhookDeliveries.eyebrow')}</span>
-          <h2>{t('webhookDeliveries.title')}</h2>
-          <p>{t('webhookDeliveries.subtitle')}</p>
+      {!compact && (
+        <div className="webhook-panel__intro">
+          <div>
+            <span className="webhook-panel__eyebrow">{t('webhookDeliveries.eyebrow')}</span>
+            <h2>{t('webhookDeliveries.title')}</h2>
+            <p>{t('webhookDeliveries.subtitle')}</p>
+          </div>
         </div>
-      </div>
+      )}
       <FilterBar
+        density={compact ? 'compact' : 'default'}
         ariaLabel={t('webhookDeliveries.filtersLabel')}
         data-testid="webhook-deliveries-filters"
         trailing={

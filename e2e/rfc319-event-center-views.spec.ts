@@ -29,7 +29,7 @@
 //     服务端合并（exact 表 + 路由目录）：eventCenterService.ts:352-403
 //     SQL 侧只取 mode='exact' 且 subscriberRef 用 eq：
 //     packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts:575-597
-//   * 投递记录：状态 Segmented + 消费者筛选 + 分页：packages/frontend/src/routes/events.tsx:1030-1135
+//   * 事件流水：记录范围 / 状态筛选 + 紧凑表格 + 分页：packages/frontend/src/routes/events.tsx
 //     服务端过滤：sqliteEventStore.ts:829-868（state / subscriberRef 均为 eq）
 //   * 全局事件记录：只出 catalogVisibility='public' 的事件类型：
 //     sqliteEventStore.ts:894-937（两处 join 都带 eq(catalogVisibility,'public')）
@@ -428,29 +428,28 @@ async function openEventsTab(page: Page, tab: string): Promise<void> {
   await expect(page.getByTestId('event-center-page')).toBeVisible()
 }
 
-/** 「投递记录」（消费者视角）—— deliveries 页签的默认视图。 */
+/** 「订阅投递」（消费者视角）——事件流水页签的默认范围。 */
 async function openDeliveryRecords(page: Page): Promise<Locator> {
   await openEventsTab(page, 'deliveries')
-  await expect(page.getByTestId('event-delivery-view-consumer')).toHaveAttribute(
-    'aria-checked',
-    'true',
+  await expect(page.getByTestId('event-delivery-kind-filter')).toContainText(
+    'Subscriber deliveries',
   )
   return page.getByTestId('event-delivery-list')
 }
 
-/** 「事件记录」（全局来源视角）。 */
+/** 「来源事件」（全局来源视角）。 */
 async function openSourceEvents(page: Page): Promise<Locator> {
   await openEventsTab(page, 'deliveries')
-  await page.getByTestId('event-delivery-view-source').click()
+  await chooseOption(page, 'event-delivery-kind-filter', 'Source events')
   const list = page.getByTestId('event-source-audit-list')
   await expect(list).toBeVisible()
   return list
 }
 
-/** 「Webhook事件」—— 适配器自己的原始入站审计面板。 */
+/** 「Webhook 接入」——适配器自己的原始入站审计面板。 */
 async function openWebhookAudit(page: Page): Promise<Locator> {
   await openEventsTab(page, 'deliveries')
-  await page.getByTestId('event-delivery-view-webhook').click()
+  await chooseOption(page, 'event-delivery-kind-filter', 'Webhook ingress')
   const panel = page.getByTestId('webhook-deliveries-panel')
   await expect(panel).toBeVisible()
   await expect(panel.getByTestId('webhook-deliveries-table')).toBeVisible()
@@ -928,11 +927,11 @@ test('RFC-319 EVENT-33: 投递记录的四档处理状态各自筛出互不重�
 }) => {
   await primeAuth(page)
   const list = await openDeliveryRecords(page)
-  const rows = list.locator('article.node-tool-row')
+  const rows = list.locator('tbody > tr[data-testid^="event-delivery-row-"]')
   const total = page.locator('.event-center-audit__total')
   const subscriber = page.getByTestId('event-delivery-subscriber-filter')
   const pagination = page.getByTestId('event-delivery-pagination')
-  const stateFilter = page.getByRole('radiogroup', { name: 'Filter by processing state' })
+  const stateFilterTestid = 'event-delivery-state-filter'
 
   // 先锁定到一个消费者，让所有断言都不受别的用例新增投递的干扰。
   await subscriber.fill(ALPHA)
@@ -953,7 +952,7 @@ test('RFC-319 EVENT-33: 投递记录的四档处理状态各自筛出互不重�
   ]
   let sum = 0
   for (const [label, count] of expected) {
-    await stateFilter.getByRole('radio', { name: label, exact: true }).click()
+    await chooseOption(page, stateFilterTestid, label)
     await expect(
       total,
       `按「${label}」筛出的条数不是 ${String(count)} ⇒ 状态筛选传错了维度，` +
@@ -970,8 +969,9 @@ test('RFC-319 EVENT-33: 投递记录的四档处理状态各自筛出互不重�
   // --- (b) 筛掉的那些**真的**不在了 ------------------------------------------
   // 「已确认」只有一条。除它以外的 51 条 id 一个都不许出现在列表里——否则「筛出来还有行」
   // 这种断言就只是在证明页面还能渲染。
-  await stateFilter.getByRole('radio', { name: 'Accepted', exact: true }).click()
+  await chooseOption(page, stateFilterTestid, 'Accepted')
   await expect(rows).toHaveCount(ALPHA_ACCEPTED)
+  await page.getByTestId(`event-delivery-expand-${acceptedDeliveryId}`).click()
   await expect(list, '已确认那一条的投递 id 不在结果里 ⇒ 筛出来的根本不是它').toContainText(
     acceptedDeliveryId,
   )
@@ -984,27 +984,28 @@ test('RFC-319 EVENT-33: 投递记录的四档处理状态各自筛出互不重�
   ).toEqual([])
 
   // --- (c) 死信要带着失败原因一起显示 ---------------------------------------
-  await stateFilter.getByRole('radio', { name: 'Failed', exact: true }).click()
+  await chooseOption(page, stateFilterTestid, 'Failed')
   await expect(rows).toHaveCount(ALPHA_DEAD_LETTER)
   await expect(
     rows.locator('.status-chip'),
     '处理失败的投递没有渲染成 Failed ⇒ 一条永远不会再被处理的投递在界面上和待处理长得一样',
   ).toHaveText('Failed')
+  await page.getByTestId(`event-delivery-expand-${deadLetterDeliveryId}`).click()
   await expect(
-    rows.locator('small'),
+    list.locator('.event-center-committed-error'),
     '死信没有带出 lastError ⇒ 用户看到「失败」却没有任何可以据以修复的线索',
   ).toContainText(DEAD_LETTER_ERROR)
   await expect(list).toContainText(deadLetterDeliveryId)
 
   // --- (d) 消费者 × 状态可叠加，且叠加后的空集有明确空态 ---------------------
   await subscriber.fill(BRAVO)
-  await stateFilter.getByRole('radio', { name: 'All', exact: true }).click()
+  await chooseOption(page, stateFilterTestid, 'All')
   await expect(total).toHaveText(`${String(BRAVO_DELIVERIES)} deliveries`)
   await expect(
     list,
     `切到 ${BRAVO} 之后列表里还留着 ${ALPHA} 的投递 ⇒ 消费者筛选没生效`,
   ).not.toContainText(ALPHA)
-  await stateFilter.getByRole('radio', { name: 'Accepted', exact: true }).click()
+  await chooseOption(page, stateFilterTestid, 'Accepted')
   await expect(
     list,
     'bravo 没有任何已确认投递，界面却没有落到空态 ⇒ 两个筛选维度不是取交集',
@@ -1021,7 +1022,7 @@ test('RFC-319 EVENT-34: 全局事件记录只列公开目录里的事件、按�
 }) => {
   await primeAuth(page)
   const list = await openSourceEvents(page)
-  const rows = list.locator('article.node-tool-row')
+  const rows = list.locator('tbody > tr[data-testid^="event-source-row-"]')
   const total = page.locator('.event-center-audit__total')
   const pagination = page.getByTestId('event-source-audit-pagination')
 
@@ -1083,19 +1084,21 @@ test('RFC-319 EVENT-34: 全局事件记录只列公开目录里的事件、按�
     '切到审批来源之后列表里还留着「Branch pushed」 ⇒ 来源筛选换了总数却没换行',
   ).not.toContainText('Branch pushed')
   await expect(
-    rows.locator('small').first(),
+    rows.locator('.event-center-audit-table__path').first(),
     '事件行没有标出它来自哪个来源 ⇒ 「全部来源」视图下用户分不清每一行的出处',
   ).toContainText('External approval state observation')
 
   // --- (d) 分页：换页换的是数据 ---------------------------------------------
   await expect(rows).toHaveCount(EVENT_PAGE_SIZE)
   await expect(pagination.locator('.pagination__label')).toHaveText('Page 1 of 2')
-  // 只取行内的摘要 span（`div > span`）：状态 chip 也是 span，但它挂在 article 下，
-  // 且每行都是同一句「已入库」——把它算进去，去重断言就退化成恒假。
-  const firstPageSummaries = await rows.locator('div > span').allInnerTexts()
+  const firstPageSummaries = await rows
+    .locator('.event-center-audit-table__summary')
+    .allInnerTexts()
   await pagination.getByRole('button', { name: 'Next' }).click()
   await expect(rows).toHaveCount(APPROVAL_EVENTS - EVENT_PAGE_SIZE)
-  const secondPageSummaries = await rows.locator('div > span').allInnerTexts()
+  const secondPageSummaries = await rows
+    .locator('.event-center-audit-table__summary')
+    .allInnerTexts()
   expect(
     secondPageSummaries.filter((summary) => firstPageSummaries.includes(summary)),
     '第二页出现了第一页已经列过的事件 ⇒ 深翻页会重复计数，审计不再可信',

@@ -2304,8 +2304,7 @@
 }
 
 .event-source-tree__source-row span,
-.event-source-tree__event span,
-.event-center-view-switcher span {
+.event-source-tree__event span {
   color: var(--muted);
 }
 
@@ -2356,28 +2355,122 @@
 }
 
 .event-center-view-switcher span {
+  color: var(--muted);
   font-size: var(--font-sm);
+}
+
+.event-center-audit {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .event-center-audit__total {
   margin: 0;
   color: var(--muted);
   font-size: var(--font-sm);
+  white-space: nowrap;
 }
 
-.event-center-committed-error {
-  margin-top: var(--space-1);
-  color: var(--danger);
-  font-size: var(--font-sm);
+.event-center-audit-table {
+  table-layout: fixed;
+}
+
+/* Operations surfaces normally clip their dense, responsive grids. Event
+   Center deliberately keeps the full audit schema at narrow widths, so its
+   TableViewport must remain the horizontal scroll owner instead of silently
+   cutting off the trailing status / time / action columns. The extra page
+   selector keeps this override ahead of the later operations-surface rule. */
+.event-center-page .event-center-audit .table-viewport__scroller {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+
+.event-center-audit-table__expand-column {
+  width: 42px;
+}
+
+.event-center-audit-table__record-column {
+  width: 25%;
+}
+
+.event-center-audit-table__subject-column {
+  width: 19%;
+}
+
+.event-center-audit-table__path-column {
+  width: 27%;
+}
+
+.event-center-audit-table__status-column {
+  width: 118px;
+}
+
+.event-center-audit-table__time-column {
+  width: 108px;
+}
+
+.event-center-audit-table__action-column {
+  width: 92px;
+}
+
+.event-center-audit-table__clip {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-center-audit-table__summary,
+.event-center-audit-table__path {
+  color: var(--muted);
+}
+
+.event-center-audit-table__chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.event-center-audit-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.event-center-audit-details > div {
+  min-width: 0;
+}
+
+.event-center-audit-details dt {
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.event-center-audit-details dd {
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
-.event-center-committed-error > summary {
-  cursor: pointer;
+.event-center-audit-details__wide {
+  grid-column: 1 / -1;
 }
 
-.event-center-committed-error > p {
-  margin: var(--space-1) 0 0;
+.event-center-audit__empty {
+  padding-block: var(--space-4) !important;
+  color: var(--muted);
+  text-align: center !important;
+}
+
+.event-center-committed-error {
+  color: var(--danger);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -25915,6 +26008,17 @@ button.status-chip {
   margin: 0 22px 16px;
 }
 
+/* The TabBar viewport owns the available width. Event Center previously put
+   the 22px gutter on the inner scrolling tablist, so its right margin lived
+   outside a max-width:100% box and was clipped by `.operations-surface`. */
+.event-center-page > .operations-surface > .tabs-viewport {
+  padding-inline: clamp(16px, 3vw, 22px);
+}
+
+.event-center-page > .operations-surface > .tabs-viewport > .repo-kind-tabs {
+  margin-inline: 0;
+}
+
 .repo-kind-tabs .tabs__tab {
   min-height: 38px;
   padding: 4px 2px 8px;
@@ -28024,6 +28128,15 @@ button.status-chip {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--panel);
+}
+
+.filter-bar--compact {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.filter-bar--compact .filter-bar__controls {
+  gap: var(--space-2) var(--space-3);
 }
 
 .filter-bar__controls {

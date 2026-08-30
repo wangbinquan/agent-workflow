@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/api/client'
@@ -17,11 +17,14 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { Pagination } from '@/components/Pagination'
 import { PageHeader } from '@/components/PageHeader'
 import { FilterBar, FilterField } from '@/components/FilterBar'
+import { RelativeTime } from '@/components/RelativeTime'
 import { Segmented } from '@/components/Segmented'
 import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TabBar, tabDomIds } from '@/components/TabBar'
+import { TableViewport } from '@/components/TableViewport'
 import { WebhookEndpointCard } from '@/components/WebhookEndpointCard'
+import { OperationsExpandButton } from '@/components/operations/OperationsExpandButton'
 import { DeliveriesPanel } from '@/components/webhooks/DeliveriesPanel'
 import { TriggersPanel } from '@/components/webhooks/TriggersPanel'
 import { EventResponseRulesPanel } from '@/components/events/EventResponseRulesPanel'
@@ -183,6 +186,31 @@ type DeliveryStateFilter = 'all' | EventDeliveryStatus['state']
 type CommittedDeliveryStageFilter = 'all' | CommittedEventDeliveryStatus['stage']
 type CommittedDeliveryFamilyFilter = 'all' | CommittedEventDeliveryStatus['family']
 const EVENT_AUDIT_PAGE_SIZE = 50
+
+type EventAuditDeliveryState = EventDeliveryStatus['state']
+
+function eventAuditStateKind(
+  state: EventAuditDeliveryState,
+): 'success' | 'danger' | 'warn' | 'neutral' {
+  if (state === 'accepted') return 'success'
+  if (state === 'dead-letter') return 'danger'
+  if (state === 'claimed') return 'warn'
+  return 'neutral'
+}
+
+function eventAuditStateLabel(
+  state: EventAuditDeliveryState,
+  zh: boolean,
+  deadLetterLabel: 'failed' | 'dead-letter',
+): string {
+  if (state === 'accepted') return zh ? '已确认' : 'Accepted'
+  if (state === 'claimed') return zh ? '处理中' : 'Processing'
+  if (state === 'dead-letter') {
+    if (deadLetterLabel === 'dead-letter') return zh ? '死信' : 'Dead letter'
+    return zh ? '处理失败' : 'Failed'
+  }
+  return zh ? '待处理' : 'Pending'
+}
 
 interface ObserverHealth {
   sourceRef: ExactRef
@@ -390,6 +418,7 @@ function EventsPage(): ReactElement {
   const [subscriptionPage, setSubscriptionPage] = useState(1)
   const [subscriptionSubscriber, setSubscriptionSubscriber] = useState('')
   const [deliveryView, setDeliveryView] = useState<DeliveryView>('consumer')
+  const [expandedAuditRow, setExpandedAuditRow] = useState<string | null>(null)
   const [deliveryPage, setDeliveryPage] = useState(1)
   const [deliveryState, setDeliveryState] = useState<DeliveryStateFilter>('all')
   const [deliverySubscriber, setDeliverySubscriber] = useState('')
@@ -593,6 +622,83 @@ function EventsPage(): ReactElement {
     if (subscription.state === 'invalid') return zh ? '配置失效' : 'Invalid'
     return zh ? '已取消' : 'Cancelled'
   }
+  const deliveryViewOptions = [
+    {
+      value: 'consumer',
+      label: zh ? '订阅投递' : 'Subscriber deliveries',
+      description: zh
+        ? '一条标准事件面向每个订阅者的处理状态。'
+        : 'Per-subscriber processing state for standard events.',
+    },
+    {
+      value: 'committed',
+      label: zh ? '平台投递' : 'Platform deliveries',
+      description: zh
+        ? '平台内部已提交事实的发布、重试与死信。'
+        : 'Publication, retries, and dead letters for committed platform facts.',
+    },
+    {
+      value: 'source',
+      label: zh ? '来源事件' : 'Source events',
+      description: zh
+        ? '所有来源已经写入事件中心的标准事实。'
+        : 'Standard facts recorded by every Event Center source.',
+    },
+    {
+      value: 'webhook',
+      label: zh ? 'Webhook 接入' : 'Webhook ingress',
+      description: zh
+        ? 'Webhook 适配器的验签、归一化与重放证据。'
+        : 'Webhook verification, normalization, and replay evidence.',
+    },
+  ] as const
+  const deliveryStateOptions = [
+    { value: 'all', label: zh ? '全部' : 'All' },
+    { value: 'pending', label: zh ? '待处理' : 'Pending' },
+    { value: 'claimed', label: zh ? '处理中' : 'Processing' },
+    { value: 'accepted', label: zh ? '已确认' : 'Accepted' },
+    { value: 'dead-letter', label: zh ? '处理失败' : 'Failed' },
+  ] as const
+  const committedDeliveryStateOptions = [
+    ...deliveryStateOptions.slice(0, -1),
+    { value: 'dead-letter', label: zh ? '死信' : 'Dead letter' },
+  ] as const
+  const auditTotalLabel =
+    deliveryView === 'consumer'
+      ? zh
+        ? `共 ${deliveries.data.total} 条投递`
+        : `${deliveries.data.total} deliveries`
+      : deliveryView === 'committed'
+        ? zh
+          ? `共 ${committedDeliveries.data.total} 条平台投递`
+          : `${committedDeliveries.data.total} platform deliveries`
+        : deliveryView === 'source'
+          ? zh
+            ? `共 ${sourceEvents.data.total} 条事件`
+            : `${sourceEvents.data.total} source events`
+          : null
+  const auditTableLabel =
+    deliveryView === 'consumer'
+      ? zh
+        ? '订阅投递记录'
+        : 'Subscriber delivery records'
+      : deliveryView === 'committed'
+        ? zh
+          ? '平台投递记录'
+          : 'Platform delivery records'
+        : zh
+          ? '来源事件记录'
+          : 'Source event records'
+  const auditTableTestId =
+    deliveryView === 'consumer'
+      ? 'event-delivery-list'
+      : deliveryView === 'committed'
+        ? 'committed-delivery-list'
+        : 'event-source-audit-list'
+  const selectDeliveryView = (value: DeliveryView): void => {
+    setDeliveryView(value)
+    setExpandedAuditRow(null)
+  }
 
   return (
     <div className="page page--operations event-center-page" data-testid="event-center-page">
@@ -634,7 +740,7 @@ function EventsPage(): ReactElement {
               key: 'deliveries',
               testid: 'event-center-tab-deliveries',
               label: (
-                <span className="repo-kind-tabs__label">{zh ? '投递记录' : 'Deliveries'}</span>
+                <span className="repo-kind-tabs__label">{zh ? '事件流水' : 'Event activity'}</span>
               ),
             },
           ]}
@@ -665,17 +771,6 @@ function EventsPage(): ReactElement {
               {zh
                 ? '每个订阅都会生成自己的投递。任一数字员工或编排确认后，只完成自己的投递，不会删除事件，也不会影响其他订阅者。'
                 : 'Every subscription gets its own delivery. Acknowledging one delivery never deletes the event or changes another subscriber’s state.'}
-            </NoticeBanner>
-          ) : null}
-
-          {tab === 'deliveries' ? (
-            <NoticeBanner
-              tone="info"
-              title={zh ? '事件与投递分别追踪' : 'Events and deliveries are tracked separately'}
-            >
-              {zh
-                ? '事件 ID 表示同一次事实；投递 ID 表示某个订阅者的处理进度。重试、确认和处理失败都只作用于投递。'
-                : 'The event ID identifies one fact; each delivery ID tracks one subscriber. Retry, acknowledgement, and terminal failure are delivery-scoped.'}
             </NoticeBanner>
           ) : null}
 
@@ -1091,56 +1186,41 @@ function EventsPage(): ReactElement {
           ) : null}
 
           {tab === 'deliveries' ? (
-            <>
-              <div className="event-center-view-switcher">
-                <div>
-                  <strong>{zh ? '投递与来源审计' : 'Delivery and ingress audit'}</strong>
-                  <span>
-                    {zh
-                      ? '消费者处理状态和原始来源证据各自分页，不在同一条纵向长页中堆叠。'
-                      : 'Consumer state and raw ingress evidence are independently paged views.'}
-                  </span>
-                </div>
-                <Segmented<DeliveryView>
-                  value={deliveryView}
-                  onChange={setDeliveryView}
-                  ariaLabel={zh ? '投递页面视图' : 'Delivery page view'}
-                  testidPrefix="event-delivery-view"
-                  options={[
-                    { value: 'consumer', label: zh ? '投递记录' : 'Delivery records' },
-                    { value: 'committed', label: zh ? '已提交事件' : 'Committed events' },
-                    { value: 'source', label: zh ? '事件记录' : 'Source events' },
-                    { value: 'webhook', label: zh ? 'Webhook事件' : 'Webhook events' },
-                  ]}
-                />
-              </div>
+            <section className="event-center-audit" data-testid="event-center-audit">
+              <FilterBar
+                density="compact"
+                ariaLabel={zh ? '事件与投递流水筛选' : 'Event activity filters'}
+                trailing={
+                  auditTotalLabel === null ? undefined : (
+                    <span className="event-center-audit__total">{auditTotalLabel}</span>
+                  )
+                }
+              >
+                <FilterField label={zh ? '记录范围' : 'Record scope'}>
+                  <Select<DeliveryView>
+                    value={deliveryView}
+                    onChange={selectDeliveryView}
+                    options={deliveryViewOptions}
+                    ariaLabel={zh ? '选择事件流水范围' : 'Choose event activity scope'}
+                    data-testid="event-delivery-kind-filter"
+                  />
+                </FilterField>
 
-              {deliveryView === 'consumer' ? (
-                <section className="employee-node-panel">
-                  <header>
-                    <div>
-                      <span className="employee-node-panel__eyebrow">
-                        {zh ? '投递记录' : 'Delivery records'}
-                      </span>
-                      <h2>{zh ? '每个消费者的处理状态' : 'Processing state per consumer'}</h2>
-                    </div>
-                  </header>
-                  <FilterBar ariaLabel={zh ? '投递记录筛选' : 'Delivery record filters'}>
-                    <Segmented<DeliveryStateFilter>
-                      value={deliveryState}
-                      onChange={(value) => {
-                        setDeliveryState(value)
-                        setDeliveryPage(1)
-                      }}
-                      ariaLabel={zh ? '按处理状态筛选' : 'Filter by processing state'}
-                      options={[
-                        { value: 'all', label: zh ? '全部' : 'All' },
-                        { value: 'pending', label: zh ? '待处理' : 'Pending' },
-                        { value: 'claimed', label: zh ? '处理中' : 'Processing' },
-                        { value: 'accepted', label: zh ? '已确认' : 'Accepted' },
-                        { value: 'dead-letter', label: zh ? '处理失败' : 'Failed' },
-                      ]}
-                    />
+                {deliveryView === 'consumer' ? (
+                  <>
+                    <FilterField label={zh ? '处理状态' : 'Status'}>
+                      <Select<DeliveryStateFilter>
+                        value={deliveryState}
+                        onChange={(value) => {
+                          setDeliveryState(value)
+                          setDeliveryPage(1)
+                          setExpandedAuditRow(null)
+                        }}
+                        options={deliveryStateOptions}
+                        ariaLabel={zh ? '按处理状态筛选' : 'Filter by processing state'}
+                        data-testid="event-delivery-state-filter"
+                      />
+                    </FilterField>
                     <FilterField label={zh ? '消费者标识' : 'Subscriber ID'}>
                       <TextInput
                         type="search"
@@ -1148,6 +1228,7 @@ function EventsPage(): ReactElement {
                         onChange={(value) => {
                           setDeliverySubscriber(value)
                           setDeliveryPage(1)
+                          setExpandedAuditRow(null)
                         }}
                         placeholder={zh ? '精确输入消费者标识' : 'Exact subscriber ID'}
                         aria-label={
@@ -1156,114 +1237,29 @@ function EventsPage(): ReactElement {
                         data-testid="event-delivery-subscriber-filter"
                       />
                     </FilterField>
-                  </FilterBar>
-                  <p className="event-center-audit__total">
-                    {zh
-                      ? `共 ${deliveries.data.total} 条投递`
-                      : `${deliveries.data.total} deliveries`}
-                  </p>
-                  <div className="node-tool-list" data-testid="event-delivery-list">
-                    {deliveries.data.items.length === 0 ? (
-                      <p className="node-tool-list__empty">
-                        {zh ? '还没有事件投递。' : 'No event deliveries yet.'}
-                      </p>
-                    ) : (
-                      deliveries.data.items.map((delivery) => (
-                        <article key={delivery.deliveryId} className="node-tool-row">
-                          <div>
-                            <strong>{eventName(delivery.eventTypeRef)}</strong>
-                            <span>
-                              {delivery.subject.subjectRef} → {delivery.subscriber.kind}/
-                              {delivery.subscriber.subscriberRef}
-                            </span>
-                            <small>
-                              {zh ? '事件' : 'Event'} {delivery.eventId} ·{' '}
-                              {zh ? '投递' : 'Delivery'} {delivery.deliveryId} ·{' '}
-                              {zh ? '尝试' : 'attempts'} {delivery.attemptCount}
-                              {delivery.lastError === null ? '' : ` · ${delivery.lastError}`}
-                            </small>
-                          </div>
-                          <StatusChip
-                            kind={
-                              delivery.state === 'accepted'
-                                ? 'success'
-                                : delivery.state === 'dead-letter'
-                                  ? 'danger'
-                                  : delivery.state === 'claimed'
-                                    ? 'warn'
-                                    : 'neutral'
-                            }
-                          >
-                            {delivery.state === 'accepted'
-                              ? zh
-                                ? '已确认'
-                                : 'Accepted'
-                              : delivery.state === 'dead-letter'
-                                ? zh
-                                  ? '处理失败'
-                                  : 'Failed'
-                                : delivery.state === 'claimed'
-                                  ? zh
-                                    ? '处理中'
-                                    : 'Processing'
-                                  : zh
-                                    ? '待处理'
-                                    : 'Pending'}
-                          </StatusChip>
-                        </article>
-                      ))
-                    )}
-                  </div>
-                  {deliveries.data.total > 0 ? (
-                    <Pagination
-                      page={deliveryPage}
-                      pageCount={deliveries.data.pageCount}
-                      onPageChange={setDeliveryPage}
-                      data-testid="event-delivery-pagination"
-                    />
-                  ) : null}
-                </section>
-              ) : deliveryView === 'committed' ? (
-                <section className="employee-node-panel">
-                  <header>
-                    <div>
-                      <span className="employee-node-panel__eyebrow">
-                        {zh ? '已提交事件' : 'Committed events'}
-                      </span>
-                      <h2>
-                        {zh
-                          ? '生产者发布与消费者投递状态'
-                          : 'Producer publication and consumer delivery state'}
-                      </h2>
-                      <p>
-                        {zh
-                          ? '按同一份已提交事实定位影子记录、积压、重试与死信；人工重试使用当前行版本做冲突保护。'
-                          : 'Inspect shadow records, backlog, retries, and dead letters against the same committed fact. Manual retry uses the observed row version for conflict protection.'}
-                      </p>
-                    </div>
-                  </header>
-                  <FilterBar ariaLabel={zh ? '已提交事件筛选' : 'Committed event filters'}>
-                    <Segmented<DeliveryStateFilter>
-                      value={committedDeliveryState}
-                      onChange={(value) => {
-                        setCommittedDeliveryState(value)
-                        setCommittedDeliveryPage(1)
-                      }}
-                      ariaLabel={zh ? '按处理状态筛选' : 'Filter by delivery state'}
-                      options={[
-                        { value: 'all', label: zh ? '全部' : 'All' },
-                        { value: 'pending', label: zh ? '待处理' : 'Pending' },
-                        { value: 'claimed', label: zh ? '处理中' : 'Processing' },
-                        { value: 'accepted', label: zh ? '已确认' : 'Accepted' },
-                        { value: 'dead-letter', label: zh ? '死信' : 'Dead letter' },
-                      ]}
-                    />
+                  </>
+                ) : deliveryView === 'committed' ? (
+                  <>
+                    <FilterField label={zh ? '处理状态' : 'Status'}>
+                      <Select<DeliveryStateFilter>
+                        value={committedDeliveryState}
+                        onChange={(value) => {
+                          setCommittedDeliveryState(value)
+                          setCommittedDeliveryPage(1)
+                          setExpandedAuditRow(null)
+                        }}
+                        options={committedDeliveryStateOptions}
+                        ariaLabel={zh ? '按处理状态筛选' : 'Filter by delivery state'}
+                        data-testid="committed-delivery-state-filter"
+                      />
+                    </FilterField>
                     <FilterField label={zh ? '阶段' : 'Stage'}>
                       <Select
                         value={committedDeliveryStage}
                         onChange={(value) => {
                           setCommittedDeliveryStage(value)
                           setCommittedDeliveryPage(1)
+                          setExpandedAuditRow(null)
                         }}
                         options={[
                           { value: 'all', label: zh ? '全部阶段' : 'All stages' },
@@ -1286,6 +1282,7 @@ function EventsPage(): ReactElement {
                         onChange={(value) => {
                           setCommittedDeliveryFamily(value)
                           setCommittedDeliveryPage(1)
+                          setExpandedAuditRow(null)
                         }}
                         options={[
                           { value: 'all', label: zh ? '全部事件族' : 'All families' },
@@ -1305,6 +1302,7 @@ function EventsPage(): ReactElement {
                         onChange={(value) => {
                           setCommittedDeliveryAggregate(value)
                           setCommittedDeliveryPage(1)
+                          setExpandedAuditRow(null)
                         }}
                         placeholder={zh ? '精确输入聚合标识' : 'Exact aggregate ID'}
                         aria-label={zh ? '按聚合标识筛选' : 'Filter by aggregate ID'}
@@ -1318,236 +1316,524 @@ function EventsPage(): ReactElement {
                         onChange={(value) => {
                           setCommittedDeliveryConsumer(value)
                           setCommittedDeliveryPage(1)
+                          setExpandedAuditRow(null)
                         }}
                         placeholder={zh ? '精确输入消费者标识' : 'Exact consumer ID'}
                         aria-label={zh ? '按消费者标识筛选' : 'Filter by consumer ID'}
                         data-testid="committed-delivery-consumer-filter"
                       />
                     </FilterField>
-                  </FilterBar>
-                  {retryCommittedDelivery.error === null ? null : (
-                    <ErrorBanner error={retryCommittedDelivery.error} />
-                  )}
-                  <p className="event-center-audit__total">
-                    {zh
-                      ? `共 ${committedDeliveries.data.total} 条投递状态`
-                      : `${committedDeliveries.data.total} delivery states`}
-                  </p>
-                  <div className="node-tool-list" data-testid="committed-delivery-list">
-                    {committedDeliveries.data.items.length === 0 ? (
-                      <p className="node-tool-list__empty">
-                        {zh
-                          ? '当前筛选下还没有已提交事件。'
-                          : 'No committed events match these filters.'}
-                      </p>
-                    ) : (
-                      committedDeliveries.data.items.map((delivery) => (
-                        <article
-                          key={`${delivery.eventId}:${delivery.consumerId}`}
-                          className="node-tool-row"
-                        >
-                          <div>
-                            <strong>{delivery.eventType}</strong>
-                            <span>
-                              {delivery.producer}/{delivery.family} · {delivery.aggregateKind}/
-                              {delivery.aggregateId} #{delivery.aggregateSeq}
-                            </span>
-                            <small>
-                              {delivery.stage === 'producer-publication'
-                                ? zh
-                                  ? '生产者发布'
-                                  : 'Producer publication'
-                                : zh
-                                  ? '消费者投递'
-                                  : 'Consumer delivery'}{' '}
-                              · {delivery.consumerId} · {zh ? '尝试' : 'attempts'}{' '}
-                              {delivery.attemptCount} · {zh ? '更新于' : 'updated'}{' '}
-                              {new Date(delivery.updatedAt).toLocaleString()}
-                              {delivery.nextAttemptAt === null
-                                ? ''
-                                : ` · ${zh ? '下次重试' : 'next retry'} ${new Date(delivery.nextAttemptAt).toLocaleString()}`}
-                            </small>
-                            {delivery.lastErrorSummary === null ? null : (
-                              <details className="event-center-committed-error">
-                                <summary>{zh ? '查看最近错误' : 'Show latest error'}</summary>
-                                <p>{delivery.lastErrorSummary}</p>
-                              </details>
-                            )}
-                          </div>
-                          <div className="employee-summary-card__actions">
-                            {delivery.mode === 'shadow' ? (
-                              <StatusChip kind="info" size="sm">
-                                {zh ? '影子' : 'Shadow'}
-                              </StatusChip>
-                            ) : null}
-                            <StatusChip
-                              kind={
-                                delivery.state === 'accepted'
-                                  ? 'success'
-                                  : delivery.state === 'dead-letter'
-                                    ? 'danger'
-                                    : delivery.state === 'claimed'
-                                      ? 'warn'
-                                      : 'neutral'
-                              }
-                            >
-                              {delivery.state === 'accepted'
-                                ? zh
-                                  ? '已确认'
-                                  : 'Accepted'
-                                : delivery.state === 'dead-letter'
+                  </>
+                ) : deliveryView === 'source' ? (
+                  <FilterField label={zh ? '事件来源' : 'Event source'}>
+                    <Select
+                      value={sourceAuditSource}
+                      onChange={(value) => {
+                        setSourceAuditSource(value)
+                        setSourceAuditPage(1)
+                        setExpandedAuditRow(null)
+                      }}
+                      options={[
+                        { value: '', label: zh ? '全部来源' : 'All sources' },
+                        ...catalog.data.sources.map((source) => ({
+                          value: source.sourceRef.id,
+                          label: localized(source.displayName, language),
+                        })),
+                      ]}
+                      ariaLabel={zh ? '按事件来源筛选' : 'Filter by event source'}
+                      data-testid="event-source-audit-filter"
+                    />
+                  </FilterField>
+                ) : null}
+              </FilterBar>
+
+              {retryCommittedDelivery.error === null ? null : (
+                <ErrorBanner error={retryCommittedDelivery.error} />
+              )}
+
+              {deliveryView === 'webhook' ? (
+                <DeliveriesPanel canReplay={canManageEndpoints} compact />
+              ) : (
+                <>
+                  <TableViewport label={auditTableLabel} minWidth="lg">
+                    <table
+                      className="data-table data-table--compact event-center-audit-table"
+                      data-testid={auditTableTestId}
+                    >
+                      <colgroup>
+                        <col className="event-center-audit-table__expand-column" />
+                        <col className="event-center-audit-table__record-column" />
+                        <col className="event-center-audit-table__subject-column" />
+                        <col className="event-center-audit-table__path-column" />
+                        <col className="event-center-audit-table__status-column" />
+                        <col className="event-center-audit-table__time-column" />
+                        <col className="event-center-audit-table__action-column" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th aria-label={zh ? '展开详情' : 'Expand details'} />
+                          <th>{zh ? '记录' : 'Record'}</th>
+                          <th>{zh ? '对象' : 'Subject'}</th>
+                          <th>{zh ? '路径' : 'Path'}</th>
+                          <th>{zh ? '状态' : 'Status'}</th>
+                          <th>{zh ? '时间' : 'Time'}</th>
+                          <th aria-label={zh ? '操作' : 'Actions'} />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deliveryView === 'consumer' ? (
+                          deliveries.data.items.length === 0 ? (
+                            <tr>
+                              <td className="event-center-audit__empty" colSpan={7}>
+                                {zh ? '还没有事件投递。' : 'No event deliveries yet.'}
+                              </td>
+                            </tr>
+                          ) : (
+                            deliveries.data.items.map((delivery) => {
+                              const rowKey = `consumer:${delivery.deliveryId}`
+                              const detailsId = `event-audit-details-${encodeURIComponent(rowKey)}`
+                              const expanded = expandedAuditRow === rowKey
+                              const subject = `${delivery.subject.typeId}/${delivery.subject.subjectRef}`
+                              const subscriber = `${delivery.subscriber.kind}/${delivery.subscriber.subscriberRef}`
+                              return (
+                                <Fragment key={rowKey}>
+                                  <tr
+                                    className="data-table__row"
+                                    data-testid={`event-delivery-row-${delivery.deliveryId}`}
+                                  >
+                                    <td className="data-table__expand">
+                                      <OperationsExpandButton
+                                        expanded={expanded}
+                                        controls={detailsId}
+                                        label={
+                                          expanded
+                                            ? zh
+                                              ? '收起投递详情'
+                                              : 'Collapse delivery details'
+                                            : zh
+                                              ? '展开投递详情'
+                                              : 'Expand delivery details'
+                                        }
+                                        testid={`event-delivery-expand-${delivery.deliveryId}`}
+                                        onToggle={() =>
+                                          setExpandedAuditRow(expanded ? null : rowKey)
+                                        }
+                                      />
+                                    </td>
+                                    <td>
+                                      <span
+                                        className="event-center-audit-table__clip"
+                                        title={eventName(delivery.eventTypeRef)}
+                                      >
+                                        <strong>{eventName(delivery.eventTypeRef)}</strong>
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span
+                                        className="event-center-audit-table__clip"
+                                        title={subject}
+                                      >
+                                        {subject}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span
+                                        className="event-center-audit-table__clip event-center-audit-table__path"
+                                        title={subscriber}
+                                      >
+                                        {subscriber}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <StatusChip
+                                        kind={eventAuditStateKind(delivery.state)}
+                                        size="sm"
+                                      >
+                                        {eventAuditStateLabel(delivery.state, zh, 'failed')}
+                                      </StatusChip>
+                                    </td>
+                                    <td className="data-table__nowrap">
+                                      <RelativeTime ts={delivery.createdAt} />
+                                    </td>
+                                    <td />
+                                  </tr>
+                                  {expanded ? (
+                                    <tr id={detailsId} className="data-table__expanded-row">
+                                      <td colSpan={7}>
+                                        <dl className="event-center-audit-details">
+                                          <div>
+                                            <dt>{zh ? '事件 ID' : 'Event ID'}</dt>
+                                            <dd>
+                                              <code>{delivery.eventId}</code>
+                                            </dd>
+                                          </div>
+                                          <div>
+                                            <dt>{zh ? '投递 ID' : 'Delivery ID'}</dt>
+                                            <dd>
+                                              <code>{delivery.deliveryId}</code>
+                                            </dd>
+                                          </div>
+                                          <div>
+                                            <dt>{zh ? '订阅 ID' : 'Subscription ID'}</dt>
+                                            <dd>
+                                              <code>{delivery.subscriptionId}</code>
+                                            </dd>
+                                          </div>
+                                          <div>
+                                            <dt>{zh ? '尝试次数' : 'Attempts'}</dt>
+                                            <dd>{delivery.attemptCount}</dd>
+                                          </div>
+                                          {delivery.state === 'pending' ||
+                                          delivery.state === 'claimed' ? (
+                                            <div>
+                                              <dt>{zh ? '下次尝试' : 'Next attempt'}</dt>
+                                              <dd>
+                                                {new Date(delivery.nextAttemptAt).toLocaleString()}
+                                              </dd>
+                                            </div>
+                                          ) : null}
+                                          {delivery.lastError === null ? null : (
+                                            <div className="event-center-audit-details__wide">
+                                              <dt>{zh ? '最近错误' : 'Latest error'}</dt>
+                                              <dd className="event-center-committed-error">
+                                                {delivery.lastError}
+                                              </dd>
+                                            </div>
+                                          )}
+                                        </dl>
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </Fragment>
+                              )
+                            })
+                          )
+                        ) : deliveryView === 'committed' ? (
+                          committedDeliveries.data.items.length === 0 ? (
+                            <tr>
+                              <td className="event-center-audit__empty" colSpan={7}>
+                                {zh
+                                  ? '当前筛选下还没有平台投递。'
+                                  : 'No platform deliveries match these filters.'}
+                              </td>
+                            </tr>
+                          ) : (
+                            committedDeliveries.data.items.map((delivery) => {
+                              const rowKey = `committed:${delivery.eventId}:${delivery.consumerId}`
+                              const detailsId = `event-audit-details-${encodeURIComponent(rowKey)}`
+                              const expanded = expandedAuditRow === rowKey
+                              const aggregate = `${delivery.aggregateKind}/${delivery.aggregateId} #${delivery.aggregateSeq}`
+                              const stage =
+                                delivery.stage === 'producer-publication'
                                   ? zh
-                                    ? '死信'
-                                    : 'Dead letter'
-                                  : delivery.state === 'claimed'
-                                    ? zh
-                                      ? '处理中'
-                                      : 'Processing'
-                                    : zh
-                                      ? '待处理'
-                                      : 'Pending'}
-                            </StatusChip>
-                            {delivery.canRetry ? (
-                              <button
-                                type="button"
-                                className="btn btn--sm"
-                                disabled={
-                                  !canUpdateSource ||
-                                  (retryCommittedDelivery.isPending &&
-                                    retryCommittedDelivery.variables?.eventId ===
-                                      delivery.eventId &&
-                                    retryCommittedDelivery.variables.consumerId ===
-                                      delivery.consumerId)
-                                }
-                                title={
-                                  canUpdateSource
-                                    ? undefined
-                                    : zh
-                                      ? '需要事件来源更新权限'
-                                      : 'Event-source update permission required'
-                                }
-                                onClick={() => retryCommittedDelivery.mutate(delivery)}
-                                data-testid={`committed-delivery-retry-${delivery.eventId}-${delivery.consumerId}`}
-                              >
-                                {retryCommittedDelivery.isPending &&
-                                retryCommittedDelivery.variables?.eventId === delivery.eventId &&
-                                retryCommittedDelivery.variables.consumerId === delivery.consumerId
-                                  ? zh
-                                    ? '重试中…'
-                                    : 'Retrying…'
+                                    ? '生产者发布'
+                                    : 'Producer publication'
                                   : zh
-                                    ? '重新投递'
-                                    : 'Retry'}
-                              </button>
-                            ) : null}
-                          </div>
-                        </article>
-                      ))
-                    )}
-                  </div>
-                  {committedDeliveries.data.total > 0 ? (
+                                    ? '消费者投递'
+                                    : 'Consumer delivery'
+                              return (
+                                <Fragment key={rowKey}>
+                                  <tr
+                                    className="data-table__row"
+                                    data-testid={`committed-delivery-row-${delivery.eventId}-${delivery.consumerId}`}
+                                  >
+                                    <td className="data-table__expand">
+                                      <OperationsExpandButton
+                                        expanded={expanded}
+                                        controls={detailsId}
+                                        label={
+                                          expanded
+                                            ? zh
+                                              ? '收起平台投递详情'
+                                              : 'Collapse platform delivery details'
+                                            : zh
+                                              ? '展开平台投递详情'
+                                              : 'Expand platform delivery details'
+                                        }
+                                        testid={`committed-delivery-expand-${delivery.eventId}-${delivery.consumerId}`}
+                                        onToggle={() =>
+                                          setExpandedAuditRow(expanded ? null : rowKey)
+                                        }
+                                      />
+                                    </td>
+                                    <td>
+                                      <span
+                                        className="event-center-audit-table__clip"
+                                        title={delivery.eventType}
+                                      >
+                                        <strong>{delivery.eventType}</strong>
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span
+                                        className="event-center-audit-table__clip"
+                                        title={aggregate}
+                                      >
+                                        {aggregate}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span
+                                        className="event-center-audit-table__clip event-center-audit-table__path"
+                                        title={`${stage} · ${delivery.consumerId}`}
+                                      >
+                                        {stage} · {delivery.consumerId}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span className="event-center-audit-table__chips">
+                                        {delivery.mode === 'shadow' ? (
+                                          <StatusChip kind="info" size="sm">
+                                            {zh ? '影子' : 'Shadow'}
+                                          </StatusChip>
+                                        ) : null}
+                                        <StatusChip
+                                          kind={eventAuditStateKind(delivery.state)}
+                                          size="sm"
+                                        >
+                                          {eventAuditStateLabel(delivery.state, zh, 'dead-letter')}
+                                        </StatusChip>
+                                      </span>
+                                    </td>
+                                    <td className="data-table__nowrap">
+                                      <RelativeTime ts={delivery.updatedAt} />
+                                    </td>
+                                    <td className="data-table__actions">
+                                      {delivery.canRetry ? (
+                                        <button
+                                          type="button"
+                                          className="btn btn--xs"
+                                          disabled={
+                                            !canUpdateSource ||
+                                            (retryCommittedDelivery.isPending &&
+                                              retryCommittedDelivery.variables?.eventId ===
+                                                delivery.eventId &&
+                                              retryCommittedDelivery.variables.consumerId ===
+                                                delivery.consumerId)
+                                          }
+                                          title={
+                                            canUpdateSource
+                                              ? undefined
+                                              : zh
+                                                ? '需要事件来源更新权限'
+                                                : 'Event-source update permission required'
+                                          }
+                                          onClick={() => retryCommittedDelivery.mutate(delivery)}
+                                          data-testid={`committed-delivery-retry-${delivery.eventId}-${delivery.consumerId}`}
+                                        >
+                                          {retryCommittedDelivery.isPending &&
+                                          retryCommittedDelivery.variables?.eventId ===
+                                            delivery.eventId &&
+                                          retryCommittedDelivery.variables.consumerId ===
+                                            delivery.consumerId
+                                            ? zh
+                                              ? '重试中…'
+                                              : 'Retrying…'
+                                            : zh
+                                              ? '重新投递'
+                                              : 'Retry'}
+                                        </button>
+                                      ) : null}
+                                    </td>
+                                  </tr>
+                                  {expanded ? (
+                                    <tr id={detailsId} className="data-table__expanded-row">
+                                      <td colSpan={7}>
+                                        <dl className="event-center-audit-details">
+                                          <div>
+                                            <dt>{zh ? '事件 ID' : 'Event ID'}</dt>
+                                            <dd>
+                                              <code>{delivery.eventId}</code>
+                                            </dd>
+                                          </div>
+                                          <div>
+                                            <dt>{zh ? '生产者 / 事件族' : 'Producer / family'}</dt>
+                                            <dd>
+                                              {delivery.producer} / {delivery.family}
+                                            </dd>
+                                          </div>
+                                          <div>
+                                            <dt>{zh ? '模式' : 'Mode'}</dt>
+                                            <dd>{delivery.mode}</dd>
+                                          </div>
+                                          <div>
+                                            <dt>{zh ? '尝试次数' : 'Attempts'}</dt>
+                                            <dd>{delivery.attemptCount}</dd>
+                                          </div>
+                                          {delivery.nextAttemptAt === null ? null : (
+                                            <div>
+                                              <dt>{zh ? '下次重试' : 'Next retry'}</dt>
+                                              <dd>
+                                                {new Date(delivery.nextAttemptAt).toLocaleString()}
+                                              </dd>
+                                            </div>
+                                          )}
+                                          {delivery.lastErrorSummary === null ? null : (
+                                            <div className="event-center-audit-details__wide">
+                                              <dt>{zh ? '最近错误' : 'Latest error'}</dt>
+                                              <dd className="event-center-committed-error">
+                                                {delivery.lastErrorSummary}
+                                              </dd>
+                                            </div>
+                                          )}
+                                        </dl>
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </Fragment>
+                              )
+                            })
+                          )
+                        ) : sourceEvents.data.items.length === 0 ? (
+                          <tr>
+                            <td className="event-center-audit__empty" colSpan={7}>
+                              {zh
+                                ? '当前筛选下还没有来源事件。'
+                                : 'No source events match this filter.'}
+                            </td>
+                          </tr>
+                        ) : (
+                          sourceEvents.data.items.map((event) => {
+                            const rowKey = `source:${event.eventId}`
+                            const detailsId = `event-audit-details-${encodeURIComponent(rowKey)}`
+                            const expanded = expandedAuditRow === rowKey
+                            const subject = `${event.subject.typeId}/${event.subject.subjectRef}`
+                            const name = eventName(event.eventTypeRef)
+                            return (
+                              <Fragment key={rowKey}>
+                                <tr
+                                  className="data-table__row"
+                                  data-testid={`event-source-row-${event.eventId}`}
+                                >
+                                  <td className="data-table__expand">
+                                    <OperationsExpandButton
+                                      expanded={expanded}
+                                      controls={detailsId}
+                                      label={
+                                        expanded
+                                          ? zh
+                                            ? '收起来源事件详情'
+                                            : 'Collapse source event details'
+                                          : zh
+                                            ? '展开来源事件详情'
+                                            : 'Expand source event details'
+                                      }
+                                      testid={`event-source-expand-${event.eventId}`}
+                                      onToggle={() => setExpandedAuditRow(expanded ? null : rowKey)}
+                                    />
+                                  </td>
+                                  <td>
+                                    <span
+                                      className="event-center-audit-table__clip"
+                                      title={`${name} · ${event.summary}`}
+                                    >
+                                      <strong>{name}</strong>
+                                      <span className="event-center-audit-table__summary">
+                                        {' '}
+                                        · {event.summary}
+                                      </span>
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span
+                                      className="event-center-audit-table__clip"
+                                      title={subject}
+                                    >
+                                      {subject}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span
+                                      className="event-center-audit-table__clip event-center-audit-table__path"
+                                      title={sourceName(event.sourceRef)}
+                                    >
+                                      {sourceName(event.sourceRef)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <StatusChip kind="neutral" size="sm">
+                                      {zh ? '已记录' : 'Recorded'}
+                                    </StatusChip>
+                                  </td>
+                                  <td className="data-table__nowrap">
+                                    <RelativeTime ts={event.observedAt} />
+                                  </td>
+                                  <td />
+                                </tr>
+                                {expanded ? (
+                                  <tr id={detailsId} className="data-table__expanded-row">
+                                    <td colSpan={7}>
+                                      <dl className="event-center-audit-details">
+                                        <div>
+                                          <dt>{zh ? '事件 ID' : 'Event ID'}</dt>
+                                          <dd>
+                                            <code>{event.eventId}</code>
+                                          </dd>
+                                        </div>
+                                        <div>
+                                          <dt>{zh ? '发生时间' : 'Occurred at'}</dt>
+                                          <dd>{new Date(event.occurredAt).toLocaleString()}</dd>
+                                        </div>
+                                        <div>
+                                          <dt>{zh ? '入库时间' : 'Recorded at'}</dt>
+                                          <dd>{new Date(event.observedAt).toLocaleString()}</dd>
+                                        </div>
+                                        <div>
+                                          <dt>{zh ? '产物引用' : 'Artifact ref'}</dt>
+                                          <dd>
+                                            {event.payloadArtifactRef ?? (zh ? '无' : 'None')}
+                                          </dd>
+                                        </div>
+                                        <div className="event-center-audit-details__wide">
+                                          <dt>{zh ? '摘要' : 'Summary'}</dt>
+                                          <dd>{event.summary}</dd>
+                                        </div>
+                                      </dl>
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </Fragment>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </TableViewport>
+
+                  {deliveryView === 'consumer' && deliveries.data.total > 0 ? (
+                    <Pagination
+                      page={deliveryPage}
+                      pageCount={deliveries.data.pageCount}
+                      onPageChange={(page) => {
+                        setDeliveryPage(page)
+                        setExpandedAuditRow(null)
+                      }}
+                      data-testid="event-delivery-pagination"
+                    />
+                  ) : deliveryView === 'committed' && committedDeliveries.data.total > 0 ? (
                     <Pagination
                       page={committedDeliveryPage}
                       pageCount={committedDeliveries.data.pageCount}
-                      onPageChange={setCommittedDeliveryPage}
+                      onPageChange={(page) => {
+                        setCommittedDeliveryPage(page)
+                        setExpandedAuditRow(null)
+                      }}
                       data-testid="committed-delivery-pagination"
                     />
-                  ) : null}
-                </section>
-              ) : deliveryView === 'source' ? (
-                <section className="employee-node-panel">
-                  <header>
-                    <div>
-                      <span className="employee-node-panel__eyebrow">
-                        {zh ? '全局事件记录' : 'Global source events'}
-                      </span>
-                      <h2>{zh ? '所有来源已经发布的事实' : 'Facts published by every source'}</h2>
-                      <p>
-                        {zh
-                          ? '这里记录 Webhook、轮询、任务和数字员工发布的标准事件，不限定为代码平台。'
-                          : 'This audit contains standard events from webhooks, polling, tasks, and digital employees—not only code platforms.'}
-                      </p>
-                    </div>
-                  </header>
-                  <FilterBar ariaLabel={zh ? '事件记录筛选' : 'Source event filters'}>
-                    <FilterField label={zh ? '事件来源' : 'Event source'}>
-                      <Select
-                        value={sourceAuditSource}
-                        onChange={(value) => {
-                          setSourceAuditSource(value)
-                          setSourceAuditPage(1)
-                        }}
-                        options={[
-                          { value: '', label: zh ? '全部来源' : 'All sources' },
-                          ...catalog.data.sources.map((source) => ({
-                            value: source.sourceRef.id,
-                            label: localized(source.displayName, language),
-                          })),
-                        ]}
-                        ariaLabel={zh ? '按事件来源筛选' : 'Filter by event source'}
-                        data-testid="event-source-audit-filter"
-                      />
-                    </FilterField>
-                  </FilterBar>
-                  <p className="event-center-audit__total">
-                    {zh
-                      ? `共 ${sourceEvents.data.total} 条事件`
-                      : `${sourceEvents.data.total} source events`}
-                  </p>
-                  <div className="node-tool-list" data-testid="event-source-audit-list">
-                    {sourceEvents.data.items.length === 0 ? (
-                      <p className="node-tool-list__empty">
-                        {zh ? '当前筛选下还没有事件。' : 'No source events match this filter.'}
-                      </p>
-                    ) : (
-                      sourceEvents.data.items.map((event) => (
-                        <article key={event.eventId} className="node-tool-row">
-                          <div>
-                            <strong>{eventName(event.eventTypeRef)}</strong>
-                            <span>{event.summary}</span>
-                            <small>
-                              {sourceName(event.sourceRef)} · {event.subject.typeId}/
-                              {event.subject.subjectRef} ·{' '}
-                              {new Date(event.observedAt).toLocaleString()}
-                            </small>
-                          </div>
-                          <StatusChip kind="neutral">{zh ? '已入库' : 'Recorded'}</StatusChip>
-                        </article>
-                      ))
-                    )}
-                  </div>
-                  {sourceEvents.data.total > 0 ? (
+                  ) : deliveryView === 'source' && sourceEvents.data.total > 0 ? (
                     <Pagination
                       page={sourceAuditPage}
                       pageCount={sourceEvents.data.pageCount}
-                      onPageChange={setSourceAuditPage}
+                      onPageChange={(page) => {
+                        setSourceAuditPage(page)
+                        setExpandedAuditRow(null)
+                      }}
                       data-testid="event-source-audit-pagination"
                     />
                   ) : null}
-                </section>
-              ) : (
-                <section className="employee-node-panel">
-                  <header>
-                    <div>
-                      <span className="employee-node-panel__eyebrow">
-                        {zh ? 'Webhook事件' : 'Webhook events'}
-                      </span>
-                      <h2>
-                        {zh
-                          ? '验签、归一化与重放证据'
-                          : 'Verification, normalization, and replay evidence'}
-                      </h2>
-                      <p>
-                        {zh
-                          ? '这是 Webhook 适配器自己的原始接入证据，不代表全局事件来源。'
-                          : 'This is raw ingress evidence owned by the Webhook adapter, not the global source-event audit.'}
-                      </p>
-                    </div>
-                  </header>
-                  <DeliveriesPanel canReplay={canManageEndpoints} />
-                </section>
+                </>
               )}
-            </>
+            </section>
           ) : null}
         </div>
       </div>

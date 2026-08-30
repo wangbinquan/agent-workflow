@@ -238,10 +238,16 @@ async function openMemoryDialog(page: Page): Promise<{ overlay: Locator; panel: 
   return { overlay, panel }
 }
 
-/** /events → 投递审计 → 「Webhook事件」视图（DeliveriesPanel 的真实入口）。 */
+/** /events → 事件流水 → 「Webhook ingress」范围（DeliveriesPanel 的真实入口）。 */
 async function openWebhookDeliveries(page: Page): Promise<Locator> {
   await page.goto(`${daemon.baseUrl}/events?tab=deliveries`)
-  await page.getByTestId('event-delivery-view-webhook').click()
+  await page.getByTestId('event-delivery-kind-filter').click()
+  const scopeOptions = page.locator('ul[role="listbox"].select__listbox--portal')
+  await expect(scopeOptions).toBeVisible()
+  await scopeOptions
+    .locator('li[role="option"]')
+    .filter({ has: page.locator('.select__option-label', { hasText: 'Webhook ingress' }) })
+    .click()
   const panel = page.getByTestId('webhook-deliveries-panel')
   await expect(panel).toBeVisible()
   await expect(panel.getByTestId('webhook-deliveries-table')).toBeVisible()
@@ -289,6 +295,36 @@ test.beforeAll(async () => {
     }),
   })
   workflowId = created.id
+
+  // UX-14b：紧凑行高必须量真实的标准事件投递，不能依赖可选 demo 数据。
+  // system 消费者不会被通知 worker 认领，因此这条 pending 记录在整份 spec
+  // 运行期间保持稳定。
+  const densitySubjectRef = 'rfc319-ux-density-subject'
+  await api('/api/event-center/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({
+      eventTypeRef: { id: 'approval.status.changed', revision: 1 },
+      subject: { typeId: 'external-approval', subjectRef: densitySubjectRef },
+      subscriber: { kind: 'system', subscriberRef: 'rfc319-ux-density-consumer' },
+    }),
+  })
+  const densityObservation = await api<{ deliveryIds: string[] }>(
+    '/api/event-center/observations',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceRef: { id: 'development.approval-state', revision: 1 },
+        eventTypeRef: { id: 'approval.status.changed', revision: 1 },
+        subject: { typeId: 'external-approval', subjectRef: densitySubjectRef },
+        occurredAt: Date.now(),
+        dedupeKey: 'rfc319-ux-density-event',
+        summary: 'RFC-319 compact Event Center activity row',
+        payloadArtifactRef: null,
+        triggerParameters: { subject_ref: densitySubjectRef },
+      }),
+    },
+  )
+  expect(densityObservation.deliveryIds, '紧凑行高语料没有产生订阅投递').toHaveLength(1)
 
   // UX-15 / UX-X7：一个端点 + 58 条投递（55 合法 / 3 验签失败）。
   const endpoint = await api<MintedEndpoint>('/api/webhook-endpoints', {
@@ -474,6 +510,69 @@ test('RFC-319 UX-14b: Segmented 单选组只有选中项是 Tab 停靠点，方�
     await tabIndexes(options),
     '换了选中项但 Tab 停靠点没跟着走 ⇒ 用户 Tab 回来时会落在一个没被选中的选项上',
   ).toEqual(['-1', '0', '-1', '-1', '-1'])
+})
+
+// ---------------------------------------------------------------------------
+// UX-14b —— Event Center 事件流水的宽度与信息密度
+// ---------------------------------------------------------------------------
+
+test('RFC-319 UX-14b: 事件流水在桌面保持紧凑行，在窄屏把筛选与页签留在自己的可视宽度内 @nightly', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await primeAuth(page)
+  await page.goto(`${daemon.baseUrl}/events?tab=deliveries`)
+
+  const rows = page.locator(
+    '[data-testid="event-delivery-list"] tbody > tr[data-testid^="event-delivery-row-"]',
+  )
+  await expect(rows.first()).toBeVisible()
+  const desktopHeights = await rows.evaluateAll((elements) =>
+    elements.map((element) => element.getBoundingClientRect().height),
+  )
+  expect(
+    Math.max(...desktopHeights),
+    '紧凑表格的常态行超过 44px ⇒ 完整 ID / 错误又被塞回主行，一屏可见条数再次下降',
+  ).toBeLessThanOrEqual(44)
+
+  await page.setViewportSize({ width: 720, height: 800 })
+  const audit = page.getByTestId('event-center-audit')
+  await expect(audit).toBeVisible()
+  const [auditWidth, scrollerWidth, tabGeometry] = await Promise.all([
+    audit.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    })),
+    audit.locator('.table-viewport__scroller').evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      overflowX: getComputedStyle(element).overflowX,
+    })),
+    page
+      .locator('.event-center-page > .operations-surface > .tabs-viewport')
+      .evaluate((element) => {
+        const surface = element.parentElement?.getBoundingClientRect()
+        const viewport = element.getBoundingClientRect()
+        return {
+          surfaceRight: surface?.right ?? 0,
+          viewportRight: viewport.right,
+        }
+      }),
+  ])
+  expect(auditWidth.scrollWidth, '记录范围筛选或表格把事件流水 section 撑宽 ⇒ 整页会横向滚动').toBe(
+    auditWidth.clientWidth,
+  )
+  expect(
+    scrollerWidth.scrollWidth,
+    '完整审计列没有留在 TableViewport 里 ⇒ 右侧状态 / 时间 / 操作可能又被静默裁掉',
+  ).toBeGreaterThan(scrollerWidth.clientWidth)
+  expect(scrollerWidth.overflowX, 'TableViewport 没有成为横向滚动容器 ⇒ 窄屏无法访问右侧列').toBe(
+    'auto',
+  )
+  expect(
+    tabGeometry.viewportRight,
+    'Event Center 页签 viewport 超过 surface 右边界 ⇒ 最右页签仍然会被裁切',
+  ).toBeLessThanOrEqual(tabGeometry.surfaceRight + 0.5)
 })
 
 // ---------------------------------------------------------------------------

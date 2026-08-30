@@ -17,6 +17,8 @@ import type { ReactNode } from 'react'
 export function FilterBar(props: {
   /** 筛选栏整体的可访问名（role=group）。 */
   ariaLabel: string
+  /** Dense audit/list surfaces may trim chrome without changing control targets. */
+  density?: 'default' | 'compact'
   /** 筛选控件（Segmented / FilterField 包裹的 Select 等），左对齐成一族。 */
   children: ReactNode
   /** 右对齐动作位——典型是「清除筛选」；无激活筛选时传 undefined 即不渲染。 */
@@ -25,7 +27,7 @@ export function FilterBar(props: {
 }) {
   return (
     <div
-      className="filter-bar"
+      className={`filter-bar${props.density === 'compact' ? ' filter-bar--compact' : ''}`}
       role="group"
       aria-label={props.ariaLabel}
       data-testid={props['data-testid']}
