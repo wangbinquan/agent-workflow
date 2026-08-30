@@ -1,22 +1,29 @@
 import type { CommandContext } from '@/modules/identity-access/public/participants'
+import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
 import type {
+  AgentCatalogResource,
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,
   CreateMcpCatalogInput,
+  CreateAgentCatalogInput,
   CreatePluginCatalogInput,
   DeleteMcpCatalogInput,
+  DeleteAgentCatalogInput,
+  DeleteAgentCatalogReceipt,
   DeleteMcpCatalogReceipt,
   DeletePluginCatalogInput,
   DeletePluginCatalogReceipt,
   McpCatalogResource,
   PluginCatalogResource,
   RenameMcpCatalogInput,
+  RenameAgentCatalogInput,
   RenamePluginCatalogInput,
   ResourceAclDocument,
   UpdateMcpCatalogInput,
+  UpdateAgentCatalogInput,
   UpdatePluginCatalogInput,
   UpdateResourceAclRequest,
   UpgradePluginCatalogInput,
@@ -33,6 +40,25 @@ import type {
 
 export interface ResourceAclCommands {
   update(context: CommandContext, request: UpdateResourceAclRequest): Promise<ResourceAclDocument>
+}
+
+export interface AgentCommands {
+  create(
+    authority: AgentOperationContext,
+    input: CreateAgentCatalogInput,
+  ): Promise<AgentCatalogResource>
+  update(
+    authority: AgentOperationContext,
+    input: UpdateAgentCatalogInput,
+  ): Promise<AgentCatalogResource>
+  delete(
+    authority: AgentOperationContext,
+    input: DeleteAgentCatalogInput,
+  ): Promise<DeleteAgentCatalogReceipt>
+  rename(
+    authority: AgentOperationContext,
+    input: RenameAgentCatalogInput,
+  ): Promise<AgentCatalogResource>
 }
 
 export interface McpCommands {

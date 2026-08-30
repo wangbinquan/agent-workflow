@@ -1,10 +1,15 @@
 import type { QueryContext } from '@/modules/identity-access/public/participants'
+import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
 import type {
+  AgentCatalogResource,
+  AgentReferenceLabels,
+  AgentReferenceLabelsInput,
   CatalogResourceRef,
   GetResourceAclRequest,
+  GetAgentCatalogInput,
   GetMcpCatalogInput,
   McpCatalogResource,
   GetPluginCatalogInput,
@@ -31,6 +36,21 @@ export interface ResourceAclQuery {
 
 export interface ResourceAuthorizationQuery {
   accessOf(context: QueryContext, target: ResourceAclTarget): Promise<ResourceScopeAccess>
+}
+
+export interface AgentQueries {
+  list(authority: AgentOperationContext): Promise<readonly AgentCatalogResource[]>
+  get(
+    authority: AgentOperationContext,
+    input: GetAgentCatalogInput,
+  ): Promise<AgentCatalogResource | null>
+}
+
+export interface AgentReferenceQueries {
+  labels(
+    authority: AgentOperationContext,
+    input: AgentReferenceLabelsInput,
+  ): Promise<AgentReferenceLabels>
 }
 
 export interface McpQueries {

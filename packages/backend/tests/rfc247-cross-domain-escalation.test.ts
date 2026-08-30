@@ -53,6 +53,7 @@ const deps = {
   schedulerDriver: {},
 } as unknown as Parameters<typeof mountFusionRoutes>[1]
 const workgroupModule = {} as unknown as Parameters<typeof mountWorkgroupRoutes>[2]
+const agentModule = {} as unknown as Parameters<typeof mountAgentRoutes>[2]
 
 function mountAll(): void {
   const sink = new Hono()
@@ -68,7 +69,7 @@ function mountAll(): void {
       ),
     () =>
       mountMemoryDistillJobRoutes(sink, deps as Parameters<typeof mountMemoryDistillJobRoutes>[1]),
-    () => mountAgentRoutes(sink, deps as Parameters<typeof mountAgentRoutes>[1]),
+    () => mountAgentRoutes(sink, deps as Parameters<typeof mountAgentRoutes>[1], agentModule),
   ]
   for (const m of mounts) {
     try {

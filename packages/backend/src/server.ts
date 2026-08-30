@@ -41,10 +41,12 @@ import {
   type IdentityAccessModule,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
+import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import type {
+  AgentCatalogModule,
   McpCatalogModule,
   PluginCatalogModule,
   WorkgroupCatalogModule,
@@ -740,6 +742,7 @@ export function createApp(deps: AppDeps): Hono {
     now: effectiveDeps.mcpRuntimeTestDependencies?.now,
     capacity: effectiveDeps.mcpRuntimeTestDependencies?.capacity,
   })
+  const agentCatalog = composeAgentCatalog({ db: effectiveDeps.db })
   const mcpCatalog = composeMcpCatalog({
     db: effectiveDeps.db,
     coordinator: mcpOperationCoordinator,
@@ -775,6 +778,7 @@ export function createApp(deps: AppDeps): Hono {
     identityUserOperations,
     systemOperations,
     userRuntimeTests,
+    agentCatalog,
     mcpCatalog,
     pluginCatalog,
     workgroupCatalog,
@@ -850,6 +854,7 @@ export function mountApiRoutes(
   identityUserOperations: IdentityUserOperations,
   systemOperations: SystemOperationsModule,
   mcpRuntimeTests: McpRuntimeTestService,
+  agentCatalog: AgentCatalogModule,
   mcpCatalog: McpCatalogModule,
   pluginCatalog: PluginCatalogModule,
   workgroupCatalog: WorkgroupCatalogModule,
@@ -993,7 +998,13 @@ export function mountApiRoutes(
   mountRuntimeRoutes(app, deps)
   mountRuntimesRoutes(app, deps)
   mountOverviewRoutes(app, deps) // RFC-190
-  mountAgentRoutes(app, routeDeps)
+  mountAgentRoutes(app, routeDeps, {
+    commands: agentCatalog.commands,
+    queries: agentCatalog.queries,
+    referenceQueries: agentCatalog.referenceQueries,
+    aclIdentity: agentCatalog.participants.aclIdentity,
+    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+  })
   mountMcpRoutes(app, deps, {
     commands: mcpCatalog.commands,
     queries: mcpCatalog.queries,

@@ -4,6 +4,7 @@ import type {
 } from '@/modules/identity-access/public/participants'
 import type {
   AgentPackageMutation,
+  AgentAclIdentity,
   CapabilityTemplatePackageMutation,
   FrozenIntegrationTriggerResourceSnapshot,
   FrozenTaskExecutionResourceSnapshot,
@@ -35,6 +36,8 @@ import type {
 
 /** Opaque request context minted by identity-access; never an Actor-shaped bag. */
 export type ResourceRequestContext = RequestAuthority
+/** Branded current-user authority consumed by exact Agent aggregate operations. */
+export type AgentOperationContext = DirectAuthenticatedAuthority
 /** Branded current-user authority consumed by the exact MCP aggregate operations. */
 export type McpOperationContext = DirectAuthenticatedAuthority
 /** Branded current-user authority consumed by exact Plugin aggregate operations. */
@@ -59,12 +62,19 @@ declare const resourcePackageAuditInTxBrand: unique symbol
 declare const resourcePackageApplyScenarioTxBrand: unique symbol
 declare const resourcePackageApplyTxBrand: unique symbol
 declare const mcpAclIdentityParticipantBrand: unique symbol
+declare const agentAclIdentityParticipantBrand: unique symbol
 declare const pluginAclIdentityParticipantBrand: unique symbol
 declare const workgroupAclIdentityParticipantBrand: unique symbol
 
 export interface McpAclIdentityParticipant {
   readonly [mcpAclIdentityParticipantBrand]: 'mcp-acl-identity-participant'
   load(id: string): Promise<McpAclIdentity | null>
+  nextUpdatedAt(id: string): Promise<number>
+}
+
+export interface AgentAclIdentityParticipant {
+  readonly [agentAclIdentityParticipantBrand]: 'agent-acl-identity-participant'
+  load(id: string): Promise<AgentAclIdentity | null>
   nextUpdatedAt(id: string): Promise<number>
 }
 

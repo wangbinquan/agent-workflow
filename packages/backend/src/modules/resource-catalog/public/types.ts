@@ -1,6 +1,7 @@
 import type {
   Agent,
   BundleOp,
+  CreateAgent,
   CreatePlugin,
   CreateMcp,
   DeletePlugin,
@@ -15,6 +16,7 @@ import type {
   PluginUpgradeResult,
   RenamePluginRequest,
   RenameMcpRequest,
+  RenameAgentRequest,
   ResourceAccess,
   ResourceAcl,
   ResourceVisibility,
@@ -108,6 +110,70 @@ export interface UpdateResourceAclRequest {
 }
 
 export type ResourceAclDocument = ResourceAcl
+
+/** T5-A aggregate contract. SQLite rows and raw transport values stay private. */
+export type AgentCatalogResource = Agent
+export type CreateAgentCatalogInput = CreateAgent
+
+export interface GetAgentCatalogInput {
+  readonly id: string
+}
+
+export interface UpdateAgentCatalogInput {
+  readonly id: string
+  /**
+   * Closed transport submission. The application owns parsing so the literal
+   * submitted key set remains authoritative for the built-in runtime-only gate.
+   */
+  readonly submission: {
+    readonly kind: 'json-body'
+    readonly body: string
+  }
+}
+
+export interface DeleteAgentCatalogInput {
+  readonly id: string
+  /** Authorization precedes decoding and confirmation for this submission. */
+  readonly submission: {
+    readonly kind: 'json-body'
+    readonly body: string
+  }
+}
+
+export interface RenameAgentCatalogInput {
+  readonly id: string
+  readonly rename: RenameAgentRequest
+}
+
+export interface DeleteAgentCatalogReceipt {
+  readonly deleted: AgentCatalogResource
+}
+
+/** Purpose-specific identity used by the generic ACL transport adapter. */
+export interface AgentAclIdentity {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly aclRevision: number
+  readonly updatedAt: number
+}
+
+export interface AgentReferenceLabelsInput {
+  readonly agents: readonly AgentCatalogResource[]
+  readonly visibleAgentIds: readonly string[]
+}
+
+export interface AgentReferenceLabel {
+  readonly id: string
+  readonly name: string
+}
+
+export interface AgentReferenceLabels {
+  readonly skills: readonly AgentReferenceLabel[]
+  readonly mcps: readonly AgentReferenceLabel[]
+  readonly plugins: readonly AgentReferenceLabel[]
+}
 
 /** T5-M aggregate contract. Persistence rows and transport contexts stay private. */
 export type McpCatalogResource = McpOperationResource

@@ -9,49 +9,36 @@ import {
   type AgentClosureSummary,
   AgentNameSchema,
   CreateAgentSchema,
-  DeleteAgentSchema,
   rejectRetiredStartTaskKeys,
   ResolveAgentImportRefsRequestSchema,
   RenameAgentRequestSchema,
   ResourceRefSchema,
   StartAgentTaskSchema,
-  UpdateAgentRequestSchema,
   PREVIEW_CALL_POLICY,
   VALIDATE_CALL_POLICY,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import type { AgentCommands } from '@/modules/resource-catalog/public/commands'
+import type {
+  AgentAclIdentityParticipant,
+  AgentOperationContext,
+} from '@/modules/resource-catalog/public/participants'
+import type { AgentQueries, AgentReferenceQueries } from '@/modules/resource-catalog/public/queries'
+import type {
+  AgentCatalogResource,
+  AgentReferenceLabels,
+} from '@/modules/resource-catalog/public/types'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import {
-  loadClosureRefNames,
-  type ClosureRefNameMaps,
-  createAgent,
-  deleteAgent,
-  getAgentById,
-  listAgents,
-  renameAgent,
-  updateAgent,
-} from '@/services/agent'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
 import { resolveRefsUsableById } from '@/services/resourceRefs'
 import { resolveAgentImportRefs } from '@/services/importRefs'
-import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import {
-  canViewResource,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
-import {
-  assertNotBuiltin,
-  excludeBuiltinAgents,
-  isBuiltinRow,
-  SKILL_MERGER_AGENT_ID,
-} from '@/services/systemResources'
+import { filterVisibleRows } from '@/services/resourceAcl'
+import { SKILL_MERGER_AGENT_ID } from '@/services/systemResources'
 // RFC-243 T2: agent launches go through the unified executor facade — this
 // route must not call startAgentTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
@@ -70,32 +57,50 @@ import { getAgentResourceStatus } from '@/services/agentResourceIntegrity'
 import { safeJsonOrEmpty } from '@/util/http'
 import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
-/**
- * RFC-117: true iff the raw PUT body sets ONLY `runtime` (no other key). Lets the
- * built-in commit/merger agents (aw-skill-merger) be re-pointed at a runtime
- * profile while every OTHER built-in field stays locked (RFC-104) — "select a
- * runtime" parity with user agents, without un-hiding the infra agent from the
- * /agents list (it's reached by name from a settings picker). Keyed off the raw
- * body (not the parsed patch) so a future schema default can't widen the
- * exemption beyond a literal runtime-only request.
- */
-function isRuntimeOnlyAgentPatch(body: unknown): boolean {
-  if (typeof body !== 'object' || body === null) return false
-  const keys = Object.keys(body).filter(
-    (key) => key !== 'expectedUpdatedAt' && key !== 'expectedAclRevision',
-  )
-  return keys.length === 1 && keys[0] === 'runtime'
+export interface AgentRouteDependencies {
+  readonly commands: AgentCommands
+  readonly queries: AgentQueries
+  readonly referenceQueries: AgentReferenceQueries
+  readonly aclIdentity: AgentAclIdentityParticipant
+  readonly authorityFor: (actor: Actor) => AgentOperationContext
 }
 
-export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
+interface ClosureRefNameMaps {
+  readonly skill: ReadonlyMap<string, string>
+  readonly mcp: ReadonlyMap<string, string>
+  readonly plugin: ReadonlyMap<string, string>
+}
+
+function closureRefNameMaps(labels: AgentReferenceLabels): ClosureRefNameMaps {
+  return {
+    skill: new Map(labels.skills.map((entry) => [entry.id, entry.name])),
+    mcp: new Map(labels.mcps.map((entry) => [entry.id, entry.name])),
+    plugin: new Map(labels.plugins.map((entry) => [entry.id, entry.name])),
+  }
+}
+
+export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDependencies): void {
+  const { commands, queries, referenceQueries, aclIdentity } = module
   // RFC-099: load-or-404 that treats "missing" and "not visible" identically
   // (same code + message) so existence never leaks to non-granted users.
-  async function loadVisibleAgent(actor: Actor, id: string) {
-    const agent = await getAgentById(deps.db, id)
-    if (agent === null || !(await canViewResource(deps.db, actor, 'agent', agent))) {
+  async function loadVisibleAgent(actor: Actor, id: string): Promise<AgentCatalogResource> {
+    const agent = await queries.get(module.authorityFor(actor), { id })
+    if (agent === null) {
       throw new NotFoundError('agent-not-found', 'agent not found')
     }
     return agent
+  }
+
+  async function loadClosureNames(
+    actor: Actor,
+    closure: readonly Agent[],
+    visibleAgentIds: ReadonlySet<string>,
+  ): Promise<ClosureRefNameMaps> {
+    const labels = await referenceQueries.labels(module.authorityFor(actor), {
+      agents: closure,
+      visibleAgentIds: [...visibleAgentIds],
+    })
+    return closureRefNameMaps(labels)
   }
 
   registerRoute(
@@ -108,11 +113,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List agents visible to the caller',
     },
     async (c) => {
-      // Hide framework built-ins (RFC-101 aw-skill-merger): infrastructure, never
-      // a user-managed list row. Discriminator = reserved name AND __system__
-      // owner (see systemResources.ts) — neither half alone is safe.
-      const list = excludeBuiltinAgents(await listAgents(deps.db))
-      return c.json(await filterVisibleRows(deps.db, actorOf(c), 'agent', list))
+      return c.json(await queries.list(module.authorityFor(actorOf(c))))
     },
   )
 
@@ -168,13 +169,13 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Built-in skill-merger agent definition',
     },
     async (c) => {
-      const agent = await getAgentById(deps.db, SKILL_MERGER_AGENT_ID)
+      const actor = actorOf(c)
+      const agent = await queries.get(module.authorityFor(actor), { id: SKILL_MERGER_AGENT_ID })
       if (
         agent === null ||
         agent.id !== SKILL_MERGER_AGENT_ID ||
         agent.builtin !== true ||
-        agent.ownerUserId !== SYSTEM_USER_ID ||
-        !(await canViewResource(deps.db, actorOf(c), 'agent', agent))
+        agent.ownerUserId !== SYSTEM_USER_ID
       ) {
         throw new NotFoundError('agent-not-found', 'agent not found')
       }
@@ -239,10 +240,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       // enforced INSIDE createAgent, bound to the same single resolution that
       // produces the persisted ids (no check-then-resolve TOCTOU). On create every
       // reference is new.
-      const created = await createAgent(deps.db, parsed.data, {
-        ownerUserId: actor.user.id,
-        actor,
-      })
+      const created = await commands.create(module.authorityFor(actor), parsed.data)
       return c.json(created, 201)
     },
   )
@@ -259,36 +257,18 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
-      const parsed = UpdateAgentRequestSchema.safeParse(body)
-      if (!parsed.success) {
-        throw new ValidationError('agent-invalid', 'invalid agent patch', {
-          issues: parsed.error.issues,
-        })
-      }
       const actor = actorOf(c)
-      const existing = await loadVisibleAgent(actor, id)
-      // RFC-117: built-in framework agents (aw-skill-merger) stay read-only EXCEPT a
-      // runtime-ONLY patch — an admin may point fusion's merger at a runtime profile
-      // (the "select a runtime" parity user agents have). Any other field, or a mixed
-      // patch, on a built-in is still rejected (RFC-104). The write gate below
-      // still gates it (built-ins are SYSTEM-owned → admin only).
-      if (!(isBuiltinRow(existing) && isRuntimeOnlyAgentPatch(body))) {
-        assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-      }
-      // RFC-324: content write — an edit grantee may patch an agent's body,
-      // frontmatter and runtime. Renaming is NOT reachable from here (the patch
-      // schema carries no `name`; POST /rename is the only rename path and it
-      // stays owner-only), so no name fence is needed on this route.
-      await requireResourceEdit(deps.db, actor, 'agent', existing)
       // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
       // enforced INSIDE updateAgent, bound to the same single resolution that
       // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
       // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
       // not mis-flagged as new.
-      const { expectedUpdatedAt, expectedAclRevision, ...patch } = parsed.data
-      const updated = await updateAgent(deps.db, id, patch, actor, {
-        expectedUpdatedAt,
-        expectedAclRevision,
+      const updated = await commands.update(module.authorityFor(actor), {
+        id,
+        submission: {
+          kind: 'json-body',
+          body: JSON.stringify(body) ?? '{}',
+        },
       })
       return c.json(updated)
     },
@@ -306,21 +286,15 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const id = c.req.param('id')
       const actor = actorOf(c)
-      const existing = await loadVisibleAgent(actor, id)
-      assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-      await requireResourceGovern(deps.db, actor, 'agent', existing)
-      const deleteBody = await readDeleteBody(c)
-      // Preserve RFC-222's confirmation precedence: a missing/wrong confirm is
-      // reported before the independent revision-fence validation.
-      assertDeleteConfirm(deleteBody, existing.name, 'agent')
-      const parsed = DeleteAgentSchema.safeParse(deleteBody)
-      if (!parsed.success) {
-        throw new ValidationError('agent-delete-invalid', 'invalid agent delete payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      captureDeleteSnapshot(c, actor, existing)
-      await deleteAgent(deps.db, id, actor, parsed.data)
+      const body = await c.req.raw.text().catch(() => '')
+      const receipt = await commands.delete(module.authorityFor(actor), {
+        id,
+        submission: {
+          kind: 'json-body',
+          body,
+        },
+      })
+      captureDeleteSnapshot(c, actor, receipt.deleted)
       return c.body(null, 204)
     },
   )
@@ -441,16 +415,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const existing = await loadVisibleAgent(actor, id)
-      assertNotBuiltin('agent', existing) // RFC-104: built-ins are read-only
-      // RFC-324: renaming is governance — the owner-scoped name domain is the
-      // owner's to spend (agents_owner_name_unique).
-      await requireResourceGovern(deps.db, actor, 'agent', existing)
-      const { expectedUpdatedAt, expectedAclRevision, ...rename } = parsed.data
-      const renamed = await renameAgent(deps.db, id, rename, {
-        actor,
-        expectedUpdatedAt,
-        expectedAclRevision,
+      const renamed = await commands.rename(module.authorityFor(actor), {
+        id,
+        rename: parsed.data,
       })
       return c.json(renamed)
     },
@@ -491,7 +458,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       // private dependency's name never leaks (D1 — mirrors the "无权限占位" rule).
       const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
       const visibleAgentIds = new Set(visible.map((a) => a.id))
-      const names = await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds)
+      const names = await loadClosureNames(actor, closure.agents, visibleAgentIds)
       const masked = toAgentClosureSummaries(closure.agents, {
         names,
         visibleAgentIds,
@@ -593,7 +560,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
       return c.json({
         ok: true,
         agents: toAgentClosureSummaries(closure.agents, {
-          names: await loadClosureRefNames(deps.db, actor, closure.agents, visibleAgentIds),
+          names: await loadClosureNames(actor, closure.agents, visibleAgentIds),
           visibleAgentIds,
         }),
       })
@@ -605,7 +572,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
     type: 'agent',
     base: '/api/agents',
     param: 'id',
-    load: (db, id) => getAgentById(db, id),
+    load: (_db, id) => aclIdentity.load(id),
   })
 }
 

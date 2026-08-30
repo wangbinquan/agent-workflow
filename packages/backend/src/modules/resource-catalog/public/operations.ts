@@ -3,6 +3,9 @@
 // query and participant contracts.
 
 import {
+  AgentSchema,
+  CreateAgentSchema,
+  DeleteAgentSchema,
   McpLocalConfigSchema,
   McpLocalConfigWriteSchema,
   McpNameSchema,
@@ -15,8 +18,10 @@ import {
   PluginUpdateCheckSchema,
   PluginUpgradeResultSchema,
   RenamePluginRequestSchema,
+  RenameAgentRequestSchema,
   ResourceVisibilitySchema,
   UpdatePluginRequestSchema,
+  UpdateAgentRequestSchema,
   CopyWorkgroupRequestSchema,
   CreateWorkgroupSchema,
   DeleteWorkgroupSchema,
@@ -33,12 +38,15 @@ import type {
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
 import type {
+  AgentCommands,
   McpCommands,
   PluginCommands,
   PluginUpdateCommands,
   WorkgroupCommands,
 } from './commands'
 import type {
+  AgentAclIdentityParticipant,
+  AgentOperationContext,
   McpAclIdentityParticipant,
   McpOperationContext,
   PluginAclIdentityParticipant,
@@ -46,21 +54,32 @@ import type {
   WorkgroupAclIdentityParticipant,
   WorkgroupOperationContext,
 } from './participants'
-import type { McpQueries, PluginQueries, WorkgroupQueries } from './queries'
 import type {
+  AgentQueries,
+  AgentReferenceQueries,
+  McpQueries,
+  PluginQueries,
+  WorkgroupQueries,
+} from './queries'
+import type {
+  AgentCatalogResource,
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,
   CreateMcpCatalogInput,
+  CreateAgentCatalogInput,
   CreatePluginCatalogInput,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
+  DeleteAgentCatalogReceipt,
   DeletePluginCatalogInput,
   DeletePluginCatalogReceipt,
   GetMcpCatalogInput,
+  GetAgentCatalogInput,
   GetPluginCatalogInput,
   McpCatalogResource,
   PluginCatalogResource,
   RenameMcpCatalogInput,
+  RenameAgentCatalogInput,
   RenamePluginCatalogInput,
   UpdateMcpCatalogInput,
   UpdatePluginCatalogInput,
@@ -76,6 +95,144 @@ import type {
   WorkgroupCatalogDetail,
   WorkgroupCatalogResource,
 } from './types'
+
+const AGENT_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'resource-operation-stale',
+  'internal-error',
+] as const)
+
+const emptyAgentInputSchema = z.object({}).strict()
+const getAgentInputSchema = z.object({ id: z.string().min(1) }).strict()
+const updateAgentInputSchema = z
+  .object({ id: z.string().min(1), update: UpdateAgentRequestSchema })
+  .strict()
+const deleteAgentInputSchema = z
+  .object({ id: z.string().min(1), deletion: DeleteAgentSchema })
+  .strict()
+const renameAgentInputSchema = z
+  .object({ id: z.string().min(1), rename: RenameAgentRequestSchema })
+  .strict()
+const deleteAgentReceiptSchema = z.object({ deleted: AgentSchema }).strict()
+
+export interface AgentOperationDescriptors {
+  readonly list: QueryOperationDescriptor<
+    Record<never, never>,
+    AgentCatalogResource[],
+    AgentOperationContext
+  >
+  readonly get: QueryOperationDescriptor<
+    GetAgentCatalogInput,
+    AgentCatalogResource | null,
+    AgentOperationContext
+  >
+  readonly create: CommandOperationDescriptor<
+    CreateAgentCatalogInput,
+    AgentCatalogResource,
+    AgentOperationContext
+  >
+  readonly update: CommandOperationDescriptor<
+    z.infer<typeof updateAgentInputSchema>,
+    AgentCatalogResource,
+    AgentOperationContext
+  >
+  readonly delete: CommandOperationDescriptor<
+    z.infer<typeof deleteAgentInputSchema>,
+    DeleteAgentCatalogReceipt,
+    AgentOperationContext
+  >
+  readonly rename: CommandOperationDescriptor<
+    RenameAgentCatalogInput,
+    AgentCatalogResource,
+    AgentOperationContext
+  >
+}
+
+export interface AgentCatalogModule {
+  readonly commands: AgentCommands
+  readonly queries: AgentQueries
+  readonly referenceQueries: AgentReferenceQueries
+  readonly operations: AgentOperationDescriptors
+  readonly participants: Readonly<{
+    aclIdentity: AgentAclIdentityParticipant
+  }>
+}
+
+export function createAgentOperationDescriptors(
+  commands: AgentCommands,
+  queries: AgentQueries,
+): AgentOperationDescriptors {
+  return Object.freeze({
+    list: defineQueryOperation({
+      id: 'agent-catalog.list-agents.v1',
+      summary: 'List agents visible to the caller',
+      permissions: ['agents:read'],
+      publicErrors: AGENT_PUBLIC_ERRORS,
+      inputSchema: emptyAgentInputSchema,
+      outputSchema: z.array(AgentSchema),
+      invoke: async (authority: AgentOperationContext) => [...(await queries.list(authority))],
+    }),
+    get: defineQueryOperation({
+      id: 'agent-catalog.get-agent.v1',
+      summary: 'Get one agent',
+      permissions: ['agents:read'],
+      publicErrors: AGENT_PUBLIC_ERRORS,
+      inputSchema: getAgentInputSchema,
+      outputSchema: AgentSchema.nullable(),
+      invoke: (authority: AgentOperationContext, input: GetAgentCatalogInput) =>
+        queries.get(authority, input),
+    }),
+    create: defineCommandOperation({
+      id: 'agent-catalog.create-agent.v1',
+      summary: 'Create an agent',
+      permissions: ['agents:create'],
+      publicErrors: AGENT_PUBLIC_ERRORS,
+      inputSchema: CreateAgentSchema,
+      outputSchema: AgentSchema,
+      invoke: (authority: AgentOperationContext, input: CreateAgentCatalogInput) =>
+        commands.create(authority, input),
+    }),
+    update: defineCommandOperation({
+      id: 'agent-catalog.update-agent.v1',
+      summary: 'Replace an agent',
+      permissions: ['agents:update'],
+      publicErrors: AGENT_PUBLIC_ERRORS,
+      inputSchema: updateAgentInputSchema,
+      outputSchema: AgentSchema,
+      invoke: (authority: AgentOperationContext, input: z.infer<typeof updateAgentInputSchema>) =>
+        commands.update(authority, {
+          id: input.id,
+          submission: { kind: 'json-body', body: JSON.stringify(input.update) ?? '{}' },
+        }),
+    }),
+    delete: defineCommandOperation({
+      id: 'agent-catalog.delete-agent.v1',
+      summary: 'Delete an agent',
+      permissions: ['agents:delete'],
+      publicErrors: AGENT_PUBLIC_ERRORS,
+      inputSchema: deleteAgentInputSchema,
+      outputSchema: deleteAgentReceiptSchema,
+      invoke: (authority: AgentOperationContext, input: z.infer<typeof deleteAgentInputSchema>) =>
+        commands.delete(authority, {
+          id: input.id,
+          submission: { kind: 'json-body', body: JSON.stringify(input.deletion) ?? '{}' },
+        }),
+    }),
+    rename: defineCommandOperation({
+      id: 'agent-catalog.rename-agent.v1',
+      summary: 'Rename an agent',
+      permissions: ['agents:update'],
+      publicErrors: AGENT_PUBLIC_ERRORS,
+      inputSchema: renameAgentInputSchema,
+      outputSchema: AgentSchema,
+      invoke: (authority: AgentOperationContext, input: RenameAgentCatalogInput) =>
+        commands.rename(authority, input),
+    }),
+  })
+}
 
 const MCP_PUBLIC_ERRORS = Object.freeze([
   'not-found',

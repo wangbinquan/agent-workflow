@@ -26,6 +26,7 @@ import {
   resourceRef,
   resourceSummaryRevisionEquals,
   type AclCatalogKind,
+  type AgentCatalogResource,
   type AgentPackageMutation,
   type CapabilityTemplatePackageMutation,
   type CatalogSelectorKind,
@@ -43,6 +44,7 @@ import {
   type ResourceSummary,
   type SkillPackageMutation,
   type TaskExecutionResourceRequest,
+  type UpdateAgentCatalogInput,
   type UpdateMcpCatalogInput,
   type UpdatePluginCatalogInput,
   type UpdateWorkgroupCatalogInput,
@@ -52,17 +54,21 @@ import {
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
 import type {
+  AgentCommands,
   McpCommands,
   PluginCommands,
   PluginUpdateCommands,
   WorkgroupCommands,
 } from '../src/modules/resource-catalog/public/commands'
 import type {
+  AgentQueries,
+  AgentReferenceQueries,
   McpQueries,
   PluginQueries,
   WorkgroupQueries,
 } from '../src/modules/resource-catalog/public/queries'
 import type {
+  AgentAclIdentityParticipant,
   IntegrationTriggerResourceSnapshotInTx,
   IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
@@ -76,6 +82,8 @@ import type {
   TaskExecutionResourceSnapshotInTx,
 } from '../src/modules/resource-catalog/public/participants'
 import type {
+  AgentCatalogModule,
+  AgentOperationDescriptors,
   McpCatalogModule,
   McpOperationDescriptors,
   PluginCatalogModule,
@@ -193,6 +201,26 @@ assertType<
     'accessOf' | 'assertView' | 'assertEdit' | 'assertGovern'
   >
 >(true)
+assertType<Equal<Extract<keyof AgentCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
+  true,
+)
+assertType<Equal<Extract<keyof AgentQueries, string>, 'list' | 'get'>>(true)
+assertType<Equal<Extract<keyof AgentReferenceQueries, string>, 'labels'>>(true)
+assertType<Equal<Extract<keyof AgentAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
+  true,
+)
+assertType<
+  Equal<
+    Extract<keyof AgentOperationDescriptors, string>,
+    'list' | 'get' | 'create' | 'update' | 'delete' | 'rename'
+  >
+>(true)
+assertType<
+  Equal<
+    Extract<keyof AgentCatalogModule, string>,
+    'commands' | 'queries' | 'referenceQueries' | 'operations' | 'participants'
+  >
+>(true)
 assertType<Equal<Extract<keyof McpCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
   true,
 )
@@ -253,12 +281,16 @@ assertType<
   >
 >(true)
 
+const agentResourceTypeProbe: AgentCatalogResource | null = null
+const agentUpdateTypeProbe: UpdateAgentCatalogInput | null = null
 const mcpResourceTypeProbe: McpCatalogResource | null = null
 const mcpUpdateTypeProbe: UpdateMcpCatalogInput | null = null
 const pluginResourceTypeProbe: PluginCatalogResource | null = null
 const pluginUpdateTypeProbe: UpdatePluginCatalogInput | null = null
 const workgroupResourceTypeProbe: WorkgroupCatalogResource | null = null
 const workgroupUpdateTypeProbe: UpdateWorkgroupCatalogInput | null = null
+void agentResourceTypeProbe
+void agentUpdateTypeProbe
 void mcpResourceTypeProbe
 void mcpUpdateTypeProbe
 void pluginResourceTypeProbe
@@ -854,6 +886,162 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'services/intent/dumpBuilder.ts',
       'services/scheduledTasks.ts',
       'services/workgroup/launch.ts',
+    ])
+  })
+
+  test('T5-A active HTTP binding executes the owned aggregate and preserves exact legacy callers', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const route = readFileSync(resolve(sourceRoot, 'routes/agents.ts'), 'utf8')
+    const application = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/agents/agentApplication.ts'),
+      'utf8',
+    )
+    const repository = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteAgentRepository.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/agentOperations.ts'),
+      'utf8',
+    )
+    const operations = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
+      'utf8',
+    )
+    const publicTypes = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/types.ts'),
+      'utf8',
+    )
+    const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+
+    expect(route).not.toContain("from '@/services/agent'")
+    expect(route).toContain('AgentCommands')
+    expect(route).toContain('AgentQueries')
+    expect(route).toContain('AgentReferenceQueries')
+    expect(route).toContain('AgentAclIdentityParticipant')
+    for (const consumer of [
+      'commands.create(',
+      'commands.update(',
+      'commands.delete(',
+      'commands.rename(',
+      'queries.list(',
+      'queries.get(',
+      'referenceQueries.labels(',
+      'aclIdentity.load(',
+      'aclIdentity.nextUpdatedAt(',
+    ]) {
+      expect(route).toContain(consumer)
+    }
+    expect(publicTypes).not.toContain('readonly submission: unknown')
+    expect(publicTypes).toContain("readonly kind: 'json-body'")
+    expect(publicTypes).toContain('readonly body: string')
+    expect(route).not.toContain('UpdateAgentRequestSchema')
+    expect(route).not.toContain('DeleteAgentSchema')
+    expect(route).not.toContain('readDeleteBody')
+    expect(route).toContain("kind: 'json-body'")
+    expect(route).toContain('c.req.raw.text()')
+    expect(application).toContain('UpdateAgentRequestSchema.safeParse(body)')
+    expect(application).toContain('DeleteAgentSchema.safeParse(body)')
+    expect(application).toContain("new ValidationError('invalid-json'")
+    expect(application).toContain('requireResourceEdit')
+    expect(application).toContain('requireResourceGovern')
+    expect(application).toContain('assertDeleteConfirm(body, current.name)')
+    expect(application).toContain('const commands: AgentCommands = Object.freeze')
+    expect(application).toContain('const queries: AgentQueries = Object.freeze')
+    expect(application).toContain('const referenceQueries: AgentReferenceQueries = Object.freeze')
+    expect(application).not.toContain("from '@/db/")
+    expect(application).not.toContain('/infrastructure/')
+    expect(repository).toContain("from '@/services/agent'")
+    expect(repository).toContain('explicit compatibility island')
+    expect(repository).toContain('loadClosureRefNames(')
+    expect(composition).toContain('createSqliteAgentRepository')
+    expect(composition).toContain('createAgentApplication')
+    expect(composition).toContain('createAgentAclIdentityParticipant')
+
+    const updateCommandStart = application.indexOf('async update(')
+    const parseUpdate = application.indexOf('parseUpdateSubmission(input)', updateCommandStart)
+    const updateLoadVisible = application.indexOf(
+      'const current = await loadVisible(authority, input.id)',
+      parseUpdate,
+    )
+    const updateRequireEdit = application.indexOf(
+      'await deps.access.requireResourceEdit(authority, current)',
+      updateLoadVisible,
+    )
+    expect(updateCommandStart).toBeGreaterThanOrEqual(0)
+    expect(parseUpdate).toBeGreaterThan(updateCommandStart)
+    expect(updateLoadVisible).toBeGreaterThan(parseUpdate)
+    expect(updateRequireEdit).toBeGreaterThan(updateLoadVisible)
+
+    const deleteCommandStart = application.indexOf('async delete(')
+    const deleteLoadVisible = application.indexOf(
+      'const current = await loadVisible(authority, input.id)',
+      deleteCommandStart,
+    )
+    const deleteRequireGovern = application.indexOf(
+      'await deps.access.requireResourceGovern(authority, current)',
+      deleteLoadVisible,
+    )
+    const confirmDelete = application.indexOf(
+      'assertDeleteConfirm(body, current.name)',
+      deleteRequireGovern,
+    )
+    const parseDelete = application.indexOf('parseDeleteSubmission(body)', confirmDelete)
+    expect(deleteCommandStart).toBeGreaterThanOrEqual(0)
+    expect(deleteLoadVisible).toBeGreaterThan(deleteCommandStart)
+    expect(deleteRequireGovern).toBeGreaterThan(deleteLoadVisible)
+    expect(confirmDelete).toBeGreaterThan(deleteRequireGovern)
+    expect(parseDelete).toBeGreaterThan(confirmDelete)
+
+    for (const operationId of [
+      'agent-catalog.list-agents.v1',
+      'agent-catalog.get-agent.v1',
+      'agent-catalog.create-agent.v1',
+      'agent-catalog.update-agent.v1',
+      'agent-catalog.delete-agent.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+      expect(mcpBindings).toContain(operationId)
+    }
+    expect(operations).toContain('agent-catalog.rename-agent.v1')
+    expect(operations).toContain("submission: { kind: 'json-body'")
+    expect(server).toContain('composeAgentCatalog({ db: effectiveDeps.db })')
+    expect(server).toContain('commands: agentCatalog.commands')
+    expect(server).toContain('queries: agentCatalog.queries')
+    expect(server).toContain('referenceQueries: agentCatalog.referenceQueries')
+    expect(server).toContain('aclIdentity: agentCatalog.participants.aclIdentity')
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name)
+        return entry.isDirectory() ? walk(path) : entry.name.endsWith('.ts') ? [path] : []
+      })
+    const legacyConsumers = walk(sourceRoot)
+      .filter((path) => readFileSync(path, 'utf8').includes("@/services/agent'"))
+      .map((path) => path.slice(sourceRoot.length + 1))
+      .sort()
+    expect(legacyConsumers).toEqual([
+      'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
+      'modules/resource-catalog/infrastructure/sqliteAgentRepository.ts',
+      'modules/task-execution/composition/agentActionExecution.ts',
+      'modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts',
+      'modules/task-execution/composition/digitalEmployeeExecution.ts',
+      'services/agentLaunch.ts',
+      'services/agentResourceIntegrity.ts',
+      'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/codeReviewAgentCaller.ts',
+      'services/demoSeed.ts',
+      'services/dynamicWorkflowRunner.ts',
+      'services/fusion.ts',
+      'services/intent/applyChangeset.ts',
+      'services/intent/dumpBuilder.ts',
+      'services/ref/runtimeRef.ts',
+      'services/review.ts',
+      'services/scheduledTasks.ts',
+      'services/workflow.validator.ts',
+      'services/workgroup/memberTurns.ts',
+      'services/workgroup/state.ts',
     ])
   })
 

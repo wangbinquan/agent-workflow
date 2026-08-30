@@ -102,6 +102,8 @@ const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
 })
 
 const CONFIG_OPERATION_SOURCE = 'packages/backend/src/modules/development-automation/composition/configOperations.ts'
+const AGENT_OPERATION_SOURCE =
+  'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts'
 const MCP_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts'
 const PLUGIN_OPERATION_SOURCE =
@@ -112,6 +114,10 @@ const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = 
   'packages/backend/src/routes/developmentConfig.ts': calledIdentifierNames(
     CONFIG_OPERATION_SOURCE,
     readFileSync(resolve(REPO_ROOT, CONFIG_OPERATION_SOURCE), 'utf8'),
+  ),
+  'packages/backend/src/routes/agents.ts': calledIdentifierNames(
+    AGENT_OPERATION_SOURCE,
+    readFileSync(resolve(REPO_ROOT, AGENT_OPERATION_SOURCE), 'utf8'),
   ),
   'packages/backend/src/routes/mcps.ts': calledIdentifierNames(
     MCP_OPERATION_SOURCE,

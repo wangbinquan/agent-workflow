@@ -262,7 +262,6 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
     )
 
   const GATED: Array<[string, RegExp]> = [
-    ['agents.ts', deleteHandlerRe('/api/agents/:id')],
     ['skills.ts', deleteHandlerRe('/api/skills/:id')],
     ['mcps.ts', deleteHandlerRe('/api/mcps/:id')],
     ['plugins.ts', deleteHandlerRe('/api/plugins/:id')],
@@ -285,6 +284,29 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
       expect(src.includes('assertDeleteConfirm')).toBe(true)
     })
   }
+
+  test('agents DELETE delegates to the application-owned confirm gate', () => {
+    const route = readFileSync(resolve(ROUTES_DIR, 'agents.ts'), 'utf8')
+    expect(deleteHandlerRe('/api/agents/:id').test(route)).toBe(true)
+    expect(route).toContain('commands.delete(')
+    expect(route).not.toContain('assertDeleteConfirm')
+
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'application',
+        'agents',
+        'agentApplication.ts',
+      ),
+      'utf8',
+    )
+    expect(application).toContain('function assertDeleteConfirm(')
+    expect(application).toContain('assertDeleteConfirm(body, current.name)')
+  })
 
   test('workgroups DELETE delegates to the application-owned confirm gate', () => {
     const route = readFileSync(resolve(ROUTES_DIR, 'workgroups.ts'), 'utf8')
