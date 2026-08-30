@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ea3dbe17e3d73c766aefc27b2622adaad9b0a49f73d4e8acce027d91bc6a9521`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b4d33e32e251f6882c829c6a2fad250607d8d97d93691d57f27316c9f9182edc`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1083 |
+| backend production TS 文件 | 1088 |
 | `services/` 文件 | 381 |
-| `modules/**` 文件 / 非空 context | 527 / 14 |
+| `modules/**` 文件 / 非空 context | 532 / 14 |
 | backend 值级 SCC / 全仓值级 SCC | 3 / 5 |
 | `KNOWN_VIOLATIONS` | 29 |
 | route→DB / transport→DB 值级边 | 15 / 2 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 460 |
-| `architectureExceptions` | 1816 |
+| `architectureExceptions` | 1853 |
 | `backgroundJobs` | 273 |
-| `crossContextImports` | 1861 |
+| `crossContextImports` | 1898 |
 | `facades` | 381 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 19817 |
-| `mutationEntrypoints` | 1134 |
+| `moduleSymbolOwners` | 19902 |
+| `mutationEntrypoints` | 1149 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 566 |
-| `transactionExternalEffects` | 293 |
+| `publicSurfaces` | 581 |
+| `transactionExternalEffects` | 297 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -56,17 +56,17 @@
 | collaboration / application | 21 |
 | identity-access / application | 20 |
 | task-execution / engine | 20 |
-| resource-catalog / application | 16 |
+| resource-catalog / application | 19 |
 | collaboration / domain | 14 |
 | development-automation / composition | 13 |
 | code-capability / domain | 11 |
 | integration / application | 10 |
 | integration / composition | 10 |
+| resource-catalog / infrastructure | 10 |
 | task-execution / infrastructure | 10 |
 | collaboration / infrastructure | 9 |
 | digital-employee / application | 9 |
 | intent / domain | 9 |
-| resource-catalog / infrastructure | 9 |
 | integration / infrastructure | 8 |
 | development-automation / engine | 7 |
 | digital-employee / infrastructure | 6 |
@@ -78,6 +78,7 @@
 | collaboration / composition | 5 |
 | collaboration / public | 5 |
 | event-center / public | 5 |
+| resource-catalog / composition | 5 |
 | resource-catalog / public | 5 |
 | task-execution / public | 5 |
 | development-automation / public | 4 |
@@ -85,7 +86,6 @@
 | digital-employee / public | 4 |
 | event-center / infrastructure | 4 |
 | identity-access / infrastructure | 4 |
-| resource-catalog / composition | 4 |
 | resource-catalog / domain | 4 |
 | source-control / public | 4 |
 | system-operations / public | 4 |
@@ -184,9 +184,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 1123 |
-| legacy-inbound | 563 |
-| external-layer-debt | 87 |
+| legacy-outbound | 1150 |
+| legacy-inbound | 571 |
+| external-layer-debt | 89 |
 | offered-consumption | 48 |
 | authority-type-only | 13 |
 | required-implementation | 13 |
@@ -197,9 +197,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 1123 |
-| legacy-inbound | 563 |
-| external-layer-debt | 87 |
+| legacy-outbound | 1150 |
+| legacy-inbound | 571 |
+| external-layer-debt | 89 |
 | no-routes-to-db | 15 |
 | off-dag-offered | 11 |
 | no-circular | 10 |
@@ -211,15 +211,15 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 829 |
-| W4-C | 180 |
-| W4-E0 | 125 |
+| W4-E1 | 848 |
+| W4-C | 195 |
+| W4-E0 | 126 |
 | W4 | 118 |
 | W4-E8 | 106 |
 | W9 | 106 |
 | W5 | 94 |
 | W4-E9 | 85 |
-| W4-B | 79 |
+| W4-B | 81 |
 | RFC-owner-cutover | 27 |
 | W4-E4a | 25 |
 | W4-E4b | 14 |
@@ -234,8 +234,8 @@
 
 | context | 数量 |
 | --- | --- |
+| resource-catalog | 133 |
 | task-execution | 129 |
-| resource-catalog | 118 |
 | collaboration | 77 |
 | identity-access | 55 |
 | digital-employee | 44 |
@@ -248,7 +248,7 @@
 | integration | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 566）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 581）
 
 | context | 数量 |
 | --- | --- |

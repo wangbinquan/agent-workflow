@@ -356,8 +356,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1134,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1149,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-WG 新增 WorkgroupCommands active command surface 与 SQLite repository 写实现；每个入口保留 module authority、ACL、OCC、事务、引用及删除 fence 分类。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -370,8 +373,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 293,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 297,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-WG 将 create/copy/update/delete 的 Workgroup aggregate 写入收进 SQLite repository 的四个同步事务回调，外部 broadcast 仍在提交后执行。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -391,8 +397,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1861,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 1898,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-WG 新增五个 resource-catalog Workgroup module files及其 exact public、bootstrap、route 与 compatibility imports；所有 37 条新增边均由 canonical owner/role 分类。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -412,8 +421,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1816,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 1853,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-WG 为新增 Workgroup module、active route/bootstrap wiring 与 expiring legacy compatibility island登记 37 条 exact path+symbol 分类；未增加 glob 或 KNOWN_VIOLATIONS。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -426,8 +438,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 566,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 581,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-WG 新增 data-only Workgroup commands、queries、ACL participant、operation context 与 resource DTO 的 15 个 exact public symbols，并由 active route真实消费。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -447,12 +462,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 19817,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 19902,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-WG 为五个新增 Workgroup module文件及其 application/ports/composition/infrastructure/public symbols登记 85 个唯一 resource-catalog owner entries。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ea3dbe17e3d73c766aefc27b2622adaad9b0a49f73d4e8acce027d91bc6a9521",
+    "sourceDigest": "sha256:b4d33e32e251f6882c829c6a2fad250607d8d97d93691d57f27316c9f9182edc",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
