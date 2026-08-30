@@ -45,5 +45,22 @@ describe('RFC-294 review §A2 —— status.md 投影', () => {
     expect(renderArchitectureStatus({ ...INPUTS, facades: INPUTS.facades.slice(1) })).not.toBe(
       rendered,
     )
+
+    const typeOnlyConsumerIndex = INPUTS.publicSurfaces.findIndex(
+      (entry) =>
+        Array.isArray(entry.publicTypeConsumerIds) &&
+        entry.publicTypeConsumerIds.length > 0 &&
+        (!Array.isArray(entry.consumerEdgeIds) || entry.consumerEdgeIds.length === 0) &&
+        (!Array.isArray(entry.productionConsumers) || entry.productionConsumers.length === 0),
+    )
+    expect(typeOnlyConsumerIndex).toBeGreaterThanOrEqual(0)
+    expect(
+      renderArchitectureStatus({
+        ...INPUTS,
+        publicSurfaces: INPUTS.publicSurfaces.map((entry, index) =>
+          index === typeOnlyConsumerIndex ? { ...entry, publicTypeConsumerIds: [] } : entry,
+        ),
+      }),
+    ).not.toBe(rendered)
   })
 })

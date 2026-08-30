@@ -53,9 +53,7 @@ export const PUBLIC_ENTRYPOINTS = [
 export const TEMPORARY_PUBLIC_COMPATIBILITY_ENTRYPOINTS: ReadonlyMap<
   string,
   ReadonlySet<string>
-> = new Map([
-  ['task-execution', new Set(['topology'])],
-] as const)
+> = new Map([['task-execution', new Set(['topology'])]] as const)
 
 /**
  * RFC-294 §2 的模块内层集合。`inbound` 是 RFC-317 D3 裁决新承认的入站适配层
@@ -512,7 +510,6 @@ const CORPUS_ENUMERATION_CALLEES = new Set([
   'moduleShapes',
 ])
 
-
 function calleeName(node: ts.CallExpression): string | null {
   const target = node.expression
   if (ts.isIdentifier(target)) return target.text
@@ -725,8 +722,7 @@ function enumerationCounters(node: ts.Node, corpus: ReadonlySet<string>): Readon
     const bumped =
       ts.isPostfixUnaryExpression(child) || ts.isPrefixUnaryExpression(child)
         ? child.operand
-        : ts.isBinaryExpression(child) &&
-            child.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken
+        : ts.isBinaryExpression(child) && child.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken
           ? child.left
           : undefined
     if (bumped !== undefined && ts.isIdentifier(bumped) && numeric.has(bumped.text)) {
@@ -1028,7 +1024,8 @@ function scopeFacts(
   while (current !== undefined) {
     if (ts.isForOfStatement(current) && ts.isVariableDeclarationList(current.initializer)) {
       for (const declaration of current.initializer.declarations) {
-        if (ts.isIdentifier(declaration.name)) forOfBindings.set(declaration.name.text, current.expression)
+        if (ts.isIdentifier(declaration.name))
+          forOfBindings.set(declaration.name.text, current.expression)
       }
     }
     if (ts.isBlock(current) || ts.isSourceFile(current)) {
@@ -1160,9 +1157,14 @@ const ABSENCE_MATCHERS = new Set([
 
 function isEmptyExpectation(node: ts.CallExpression, matcher: string, negated: boolean): boolean {
   const argument = node.arguments[0]
-  if (negated) return matcher === 'toMatch' || matcher === 'toContain' || matcher === 'toContainEqual'
+  if (negated)
+    return matcher === 'toMatch' || matcher === 'toContain' || matcher === 'toContainEqual'
   if (matcher === 'toEqual' || matcher === 'toStrictEqual') {
-    return argument !== undefined && ts.isArrayLiteralExpression(argument) && argument.elements.length === 0
+    return (
+      argument !== undefined &&
+      ts.isArrayLiteralExpression(argument) &&
+      argument.elements.length === 0
+    )
   }
   if (matcher === 'toHaveLength' || matcher === 'toBe') {
     return argument !== undefined && ts.isNumericLiteral(argument) && argument.text === '0'
@@ -1239,7 +1241,9 @@ function spreadContribution(node: ts.SpreadElement): number | null {
     expression = expression.expression.expression
   }
   while (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression)) {
-    expression = ts.isParenthesizedExpression(expression) ? expression.expression : expression.expression
+    expression = ts.isParenthesizedExpression(expression)
+      ? expression.expression
+      : expression.expression
   }
   return ts.isArrayLiteralExpression(expression) ? expression.elements.length : null
 }
@@ -1363,6 +1367,45 @@ export function mintedVocabulary(unit: SourceUnit, vocabulary: readonly string[]
 export type RegistryKeyConsumption = 'string-literal' | 'property-access'
 
 /**
+ * 同一份生产语料会被多张注册表反复查询。先按「键名 → 出现文件」建一次索引，
+ * 后续查询再排除各自的声明文件；这样既保留 declaration self-reference 不算消费的
+ * 语义，也避免 T42 为每张表重新遍历整仓 AST。
+ */
+const REGISTRY_KEY_CONSUMER_FILES = new WeakMap<
+  readonly SourceUnit[],
+  ReadonlyMap<string, ReadonlySet<string>>
+>()
+
+function registryKeyConsumerFiles(
+  units: readonly SourceUnit[],
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const cached = REGISTRY_KEY_CONSUMER_FILES.get(units)
+  if (cached !== undefined) return cached
+
+  const byKey = new Map<string, Set<string>>()
+  const record = (key: string, file: string): void => {
+    const files = byKey.get(key) ?? new Set<string>()
+    files.add(file)
+    byKey.set(key, files)
+  }
+  for (const unit of units) {
+    const visit = (node: ts.Node): void => {
+      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+        record(node.text, unit.path)
+      }
+      if (ts.isPropertyAccessExpression(node)) record(node.name.text, unit.path)
+      if (ts.isBindingElement(node) && ts.isIdentifier(node.name)) {
+        record(node.name.text, unit.path)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(unit.source)
+  }
+  REGISTRY_KEY_CONSUMER_FILES.set(units, byKey)
+  return byKey
+}
+
+/**
  * 报出没有生产消费者的注册表键。
  *
  * 两种形态都算消费：
@@ -1379,28 +1422,13 @@ export function registryKeysWithoutConsumer(input: {
   readonly declaringFiles: readonly string[]
 }): string[] {
   const declaring = new Set(input.declaringFiles)
-  const wanted = new Set(input.keys)
-  const consumed = new Set<string>()
-  for (const unit of input.units) {
-    if (declaring.has(unit.path)) continue
-    const visit = (node: ts.Node): void => {
-      if (
-        (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
-        wanted.has(node.text)
-      ) {
-        consumed.add(node.text)
-      }
-      if (ts.isPropertyAccessExpression(node) && wanted.has(node.name.text)) {
-        consumed.add(node.name.text)
-      }
-      if (ts.isBindingElement(node) && ts.isIdentifier(node.name) && wanted.has(node.name.text)) {
-        consumed.add(node.name.text)
-      }
-      ts.forEachChild(node, visit)
-    }
-    visit(unit.source)
-  }
-  return input.keys.filter((key) => !consumed.has(key)).sort()
+  const consumers = registryKeyConsumerFiles(input.units)
+  return input.keys
+    .filter(
+      (key) =>
+        ![...(consumers.get(key) ?? [])].some((consumerFile) => !declaring.has(consumerFile)),
+    )
+    .sort()
 }
 
 /**

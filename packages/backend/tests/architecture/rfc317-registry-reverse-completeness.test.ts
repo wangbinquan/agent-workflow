@@ -299,7 +299,33 @@ describe('RFC-317 T42 负向 fixture —— 判据被改松时必须变红', () 
     // 「这个名字出现过」，于是只报出 beta。这就是 REF_DOMAIN_POLICIES 差点蒙混的
     // 原理——也正是两层判据顺序不能反的理由。
     expect(
-      registryKeysWithoutConsumer({ keys: ['alpha', 'beta'], units, declaringFiles: [declaringFile] }),
+      registryKeysWithoutConsumer({
+        keys: ['alpha', 'beta'],
+        units,
+        declaringFiles: [declaringFile],
+      }),
+    ).toEqual(['beta'])
+  })
+
+  test('复用同一语料索引时，每次查询仍按自己的声明文件排除 self-reference', () => {
+    const sharedUnits = [
+      DEAD_TABLE,
+      ELSEWHERE,
+      sourceUnit('packages/x/src/beta-consumer.ts', "export const consumed = 'beta'\n"),
+    ]
+    expect(
+      registryKeysWithoutConsumer({
+        keys: ['alpha', 'beta'],
+        units: sharedUnits,
+        declaringFiles: [declaringFile],
+      }),
+    ).toEqual([])
+    expect(
+      registryKeysWithoutConsumer({
+        keys: ['alpha', 'beta'],
+        units: sharedUnits,
+        declaringFiles: ['packages/x/src/beta-consumer.ts'],
+      }),
     ).toEqual(['beta'])
   })
 

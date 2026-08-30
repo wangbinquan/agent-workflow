@@ -550,7 +550,19 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
         throw new OperationCatalogError(`${tool.name}: unknown operation dependency '${id}'`)
       }
     }
-    if (tool.binding.kind === 'mcp-direct' || tool.binding.kind === 'mcp-composite') {
+    // Compatibility tools deliberately keep their existing McpToolDef admission
+    // until the owning operation is descriptor-backed. Legacy HTTP metadata may
+    // carry a different coarse read gate; the shared handler chain still applies
+    // that gate at invocation time, but it is not a second source for the MCP
+    // presentation contract. Descriptor-backed operations have no such escape
+    // hatch: their route and direct/composite tool projections must be identical.
+    const descriptorBacked = dependencies.every(
+      (id) => declaredById.get(id)?.implementation === 'descriptor',
+    )
+    if (
+      (tool.binding.kind === 'mcp-direct' || tool.binding.kind === 'mcp-composite') &&
+      descriptorBacked
+    ) {
       const expectedPermissions = [
         ...new Set(dependencies.flatMap((id) => routesById.get(id)?.permissions ?? [])),
       ]
@@ -559,7 +571,10 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
           `${tool.name}: tool admission does not match operation dependencies`,
         )
       }
-    } else if (tool.permissions.length > 0) {
+    } else if (
+      (tool.binding.kind === 'mcp-parameterized' || tool.binding.kind === 'mcp-local') &&
+      tool.permissions.length > 0
+    ) {
       throw new OperationCatalogError(
         `${tool.name}: parameterized/local tool admission must be resolved per dependency`,
       )

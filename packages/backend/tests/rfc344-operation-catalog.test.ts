@@ -184,6 +184,27 @@ describe('RFC-344 closed operation catalog', () => {
     ).toThrow(/tool admission does not match/)
   })
 
+  test('keeps compatibility MCP admission presentation-owned until descriptor cutover', () => {
+    const protectedCompatibilityRoute: OperationCatalogRouteProjection = {
+      kind: route.kind,
+      operationId: route.operationId,
+      operationKind: route.operationKind,
+      method: route.method,
+      path: route.path,
+      tokenAccess: route.tokenAccess,
+      permissions: ['tasks:read'],
+      summary: route.summary,
+      legacyHttpAdapter: route.legacyHttpAdapter,
+    }
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        snapshot({
+          routes: [protectedCompatibilityRoute],
+        }),
+      ),
+    ).not.toThrow()
+  })
+
   test('all 52 tools have one exact direct, parameterized, composite or local binding', () => {
     const toolNames = ALL_TOOLS.map((entry) => entry.name).sort()
     const bindingNames = Object.keys(MCP_TOOL_BINDINGS).sort()

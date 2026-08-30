@@ -104,7 +104,11 @@ function uniqueFiles(owners: readonly Json[]): Json[] {
 }
 
 function hasConsumers(entry: Json): boolean {
-  return list(entry.consumerEdgeIds).length > 0 || list(entry.productionConsumers).length > 0
+  return (
+    list(entry.consumerEdgeIds).length > 0 ||
+    list(entry.productionConsumers).length > 0 ||
+    list(entry.publicTypeConsumerIds).length > 0
+  )
 }
 
 export function renderArchitectureStatus(inputs: ArchitectureStatusInputs): string {
@@ -135,16 +139,31 @@ export function renderArchitectureStatus(inputs: ArchitectureStatusInputs): stri
       [
         ['backend production TS 文件', size(metrics.backendProductionFiles)],
         ['`services/` 文件', size(metrics.serviceFiles)],
-        ['`modules/**` 文件 / 非空 context', `${size(metrics.moduleFiles)} / ${size(metrics.moduleContexts)}`],
-        ['backend 值级 SCC / 全仓值级 SCC', `${size(metrics.backendValueSccs)} / ${size(metrics.repoValueSccs)}`],
+        [
+          '`modules/**` 文件 / 非空 context',
+          `${size(metrics.moduleFiles)} / ${size(metrics.moduleContexts)}`,
+        ],
+        [
+          'backend 值级 SCC / 全仓值级 SCC',
+          `${size(metrics.backendValueSccs)} / ${size(metrics.repoValueSccs)}`,
+        ],
         ['`KNOWN_VIOLATIONS`', size(metrics.knownViolations)],
-        ['route→DB / transport→DB 值级边', `${size(metrics.routeToDbEdges)} / ${size(metrics.transportToDbEdges)}`],
+        [
+          'route→DB / transport→DB 值级边',
+          `${size(metrics.routeToDbEdges)} / ${size(metrics.transportToDbEdges)}`,
+        ],
         ['route/MCP `AppDeps` consumer 文件', size(metrics.appDepsConsumers)],
         ['production ambient wiring seam', size(metrics.ambientWiringEntries)],
         ['background work entries', size(metrics.backgroundEntries)],
-        ['direct native `setInterval`（call / files）', `${size(metrics.directNativeIntervals)} / ${size(metrics.directNativeIntervalFiles)}`],
+        [
+          'direct native `setInterval`（call / files）',
+          `${size(metrics.directNativeIntervals)} / ${size(metrics.directNativeIntervalFiles)}`,
+        ],
         ['direct native timers（全部）', size(metrics.directNativeTimers)],
-        ['RFC-317 boundary census（inbound / outbound）', `${size(metrics.inboundBoundaryEdges)} / ${size(metrics.outboundBoundaryEdges)}`],
+        [
+          'RFC-317 boundary census（inbound / outbound）',
+          `${size(metrics.inboundBoundaryEdges)} / ${size(metrics.outboundBoundaryEdges)}`,
+        ],
         ['`node_runs INSERT` 站点', size(metrics.nodeRunInsertSites)],
         ['first-party unresolved import', size(metrics.unresolvedFirstParty)],
       ],
@@ -171,16 +190,40 @@ export function renderArchitectureStatus(inputs: ArchitectureStatusInputs): stri
     ),
     '## 4. Facade 账本（`facades.json`）',
     '',
-    ...tallyTable('4.1 按目标 context', inputs.facades.map((entry) => text(entry.targetContext)), 'targetContext'),
-    ...tallyTable('4.2 按清偿波次', inputs.facades.map((entry) => text(entry.removeAfterWave)), 'removeAfterWave'),
+    ...tallyTable(
+      '4.1 按目标 context',
+      inputs.facades.map((entry) => text(entry.targetContext)),
+      'targetContext',
+    ),
+    ...tallyTable(
+      '4.2 按清偿波次',
+      inputs.facades.map((entry) => text(entry.removeAfterWave)),
+      'removeAfterWave',
+    ),
     '## 5. 跨 context 边（`cross-context-imports.json`）',
     '',
-    ...tallyTable('5.1 observed edges 按 role', inputs.observedEdges.map((entry) => text(entry.role)), 'role'),
-    ...tallyTable('5.2 exact exceptions 按 rule', inputs.architectureExceptions.map((entry) => text(entry.rule)), 'rule'),
-    ...tallyTable('5.3 exact exceptions 按清偿波次', inputs.architectureExceptions.map((entry) => text(entry.removeAfterWave)), 'removeAfterWave'),
+    ...tallyTable(
+      '5.1 observed edges 按 role',
+      inputs.observedEdges.map((entry) => text(entry.role)),
+      'role',
+    ),
+    ...tallyTable(
+      '5.2 exact exceptions 按 rule',
+      inputs.architectureExceptions.map((entry) => text(entry.rule)),
+      'rule',
+    ),
+    ...tallyTable(
+      '5.3 exact exceptions 按清偿波次',
+      inputs.architectureExceptions.map((entry) => text(entry.removeAfterWave)),
+      'removeAfterWave',
+    ),
     '## 6. Public surface（`public-surfaces.json`）',
     '',
-    ...tallyTable('6.1 public symbol 按 context', inputs.publicSurfaces.map((entry) => text(entry.context)), 'context'),
+    ...tallyTable(
+      '6.1 public symbol 按 context',
+      inputs.publicSurfaces.map((entry) => text(entry.context)),
+      'context',
+    ),
     ...tallyTable(
       `6.2 零生产 consumer 的 public symbol 按 context（合计 ${unconsumed.length} / ${inputs.publicSurfaces.length}）`,
       unconsumed.map((entry) => text(entry.context)),
@@ -188,11 +231,15 @@ export function renderArchitectureStatus(inputs: ArchitectureStatusInputs): stri
     ),
     '## 7. Required ports（`cross-context-imports.json` → `requiredPorts`）',
     '',
-    ...tallyTable('7.1 按 status', inputs.requiredPorts.map((entry) => text(entry.status)), 'status'),
+    ...tallyTable(
+      '7.1 按 status',
+      inputs.requiredPorts.map((entry) => text(entry.status)),
+      'status',
+    ),
     `### 7.2 provider=0 且 consumer=0 的 required port（合计 ${deadPorts.length}）`,
     '',
     ...deadPorts.map((port) => `- \`${text(port.id)}\``),
     '',
   ]
-  return `${lines.join('\n')}\n`
+  return lines.join('\n')
 }
