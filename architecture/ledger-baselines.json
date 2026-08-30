@@ -357,10 +357,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1163,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-A 将 Agent aggregate 的 typed commands、application authority 与 SQLite repository 写入口纳入 canonical mutation 分母；十四条新增入口均保留 ACL、OCC、引用及删除 fence 分类。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -395,10 +392,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 1926,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-A 新增五个 resource-catalog Agent module files及其 exact public、bootstrap、route 与 compatibility imports；二十八条新增边均由 canonical owner/role 分类。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -419,10 +413,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 1881,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-A 为新增 Agent module、active route/bootstrap wiring 与 expiring legacy compatibility island登记二十八条 exact path+symbol 分类；未增加 glob 或 KNOWN_VIOLATIONS。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -436,10 +427,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 597,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-A 新增 data-only Agent commands、queries、reference queries、ACL participant、operation context 与 DTO 的十六个 exact public symbols，并由 active route真实消费。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -460,10 +448,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 19960,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-A 为五个新增 Agent module文件及其 application/ports/composition/infrastructure/public symbols登记五十六个唯一 resource-catalog owner entries。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -480,8 +465,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a3943257710cdaf8506cca55dde2298da19268f7",
-    "contentDigest": "sha256:4ad95da93a554983e0df92d2125ff73ca3f0df707adc532d341ccc67fd5155bd",
+    "currentSnapshotSha": "93942aaf4fae84f2a660f46b2ff24883f37afda4",
+    "contentDigest": "sha256:cd1be0e661a0b9971fe1d889cd207244742f211fa1bfd71a46bad550839024fe",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
