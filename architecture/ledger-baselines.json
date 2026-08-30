@@ -315,10 +315,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1027,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-344 把 identity 与 development 写入口登记为显式 operation descriptors；新增条目是已分类 catalog authority，而非未治理的 transport 写口。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -339,20 +336,14 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 267,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-344 新增 operation catalog 与 direct handler table 的进程级装配状态；两条均由单一 daemon bootstrap 拥有并有关闭性自检。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 456,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-344 以单一 route bootstrap 登记 descriptor、HTTP binding、MCP projection 与 route middleware；新增 wiring 是 catalog 闭包的显式组成。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
@@ -394,10 +385,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 405,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-344 新增 identity-access 与 development-automation 的 exact public operation descriptor surfaces，替代 transport 反向依赖。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -418,10 +406,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 18991,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-344 新增 operation contracts、catalog adapters 与模块 application/composition/public symbols；所有新 symbol 均由 canonical owner projection 精确分类。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
