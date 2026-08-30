@@ -5036,9 +5036,9 @@
   "denominator": {
     "ambientWiring": 456,
     "disabled": 7,
-    "entries": 272,
+    "entries": 273,
     "executionLocal": 25,
-    "longRunning": 57,
+    "longRunning": 58,
     "managed": 11,
     "periodic": 183
   },
@@ -6029,6 +6029,27 @@
       "phase": "unknown",
       "symbol": "$setTimeout:429",
       "targetContext": "integration"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/intent/domain/teaching/reconciliation.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/intent/domain/teaching/reconciliation.ts#reconcile",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/reconciliation.ts#reconcile",
+      "phase": "unknown",
+      "symbol": "reconcile",
+      "targetContext": "intent"
     },
     {
       "dependencies": [],
@@ -11109,5 +11130,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad"
+  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1"
 }

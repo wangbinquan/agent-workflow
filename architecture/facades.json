@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 380,
+    "serviceFiles": 381,
     "thinFacades": 7
   },
   "entries": [
@@ -2096,14 +2096,17 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:21272ccef069ac39b6fe",
         "import:56efc01d4cf00e3c2615",
         "import:ffbcdf1a4176cb553d2b"
       ],
       "exportedSymbols": [
+        "AgentPortNames",
         "INTENT_INVENTORY_CAP",
         "IntentDumpInput",
         "IntentDumpResult",
         "IntentMountRef",
+        "RUNTIME_INVENTORY_RULE",
         "buildIntentDump",
         "handleBasename"
       ],
@@ -2116,11 +2119,22 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:0cbafa5f986700b3a449",
+        "import:1082a5ea317ee18e524f",
+        "import:29a5299f88fddd45f841",
+        "import:58e6bc603aa51ae2aa3e",
+        "import:9cb0d0f84564cfa30b04",
+        "import:a603c46f8a525209eacb",
+        "import:af62e3ce804d9b24054c",
+        "import:b34097929752947afb99",
+        "import:b5f65e5225d84c165ea3",
+        "import:c3b212a09106908ab5c8",
+        "import:e97fbb88abbdbfffc017",
+        "import:f65398dc886db6d24a6a"
+      ],
       "exportedSymbols": [
-        "INTENT_TURN_GUIDANCE",
         "IntentDocInput",
-        "IntentDocPrivileges",
         "IntentDocTurn",
         "RECENT_TURNS_VERBATIM",
         "buildIntentDoc",
@@ -2235,8 +2249,44 @@
       "targetLayer": "application"
     },
     {
+      "boundaryEdgeIds": [
+        "import:1dec35440c7004d84afa",
+        "import:260fd075eadf151bccf7",
+        "import:3cf6082f1f4974646168",
+        "import:403a9a818191a1ceda70",
+        "import:56b9d3c34e81b924323f",
+        "import:849287b4ec2a16f76190",
+        "import:8918f6982e8df5f78af2",
+        "import:e5502edc9be74fd2f812",
+        "import:e835d5c3297f56051013",
+        "import:eb384e39216eafbcdeb9",
+        "import:f6faf3ae4e8424e19937",
+        "import:f8abbc01fc797e555789"
+      ],
+      "exportedSymbols": [
+        "IntentEmployeeAuthoringReads",
+        "IntentPlatformInventory",
+        "PLATFORM_INVENTORY_ROW_CAP",
+        "PLATFORM_ONLY_INVENTORY_LOADERS",
+        "PlatformInventoryContext",
+        "PlatformInventoryOverrides",
+        "PlatformInventoryRow",
+        "createDefaultIntentPlatformInventory",
+        "platformInventoryTypes",
+        "renderPlatformInventoryFile"
+      ],
+      "file": "packages/backend/src/services/intent/platformInventory.ts",
+      "id": "facade:packages/backend/src/services/intent/platformInventory.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "removeAfterWave": "W4-E4a",
+      "status": "legacy-implementation",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
+        "DraftValidationContext",
         "DraftValidationReport",
         "IntentDecision",
         "IntentSlot",
@@ -2335,6 +2385,7 @@
         "abortIntentTurn",
         "cancelIntentTurn",
         "classifyMissingEnvelope",
+        "requestedArtifactTypeOf",
         "resolveIntentTurnConfig",
         "runIntentTurn",
         "settleReservedIntentTurnStartFailure"
@@ -7877,5 +7928,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad"
+  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1"
 }

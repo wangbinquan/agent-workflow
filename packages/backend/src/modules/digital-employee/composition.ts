@@ -27,6 +27,7 @@ import {
   type EmployeeInputUploadRecord,
 } from './infrastructure/inputUploadStore'
 import { createSqliteDigitalEmployeeAuthoringStore } from './infrastructure/sqliteAuthoringStore'
+import type { DigitalEmployeeAuthoringStore } from './application/ports/authoringStore'
 import { withTypePackageDraftOverlay } from './application/typePackageDraftOverlay'
 import { createSqliteRuntimeStore } from './infrastructure/sqliteRuntimeStore'
 import { analyzeDigitalEmployeeMigration } from './composition/writerCutover'
@@ -374,6 +375,27 @@ export interface ComposeDigitalEmployeeOptions {
  */
 export function createEmployeeReactionRoundQueries(db: DbClient): EmployeeReactionRoundQueryPort {
   return createSqliteReactionRoundQueries(db)
+}
+
+/**
+ * RFC-348 —— intent 平台库存（`services/intent/platformInventory.ts`）列出真实数字人行时读的
+ * 授权面切片：类型包 / 工具 / 岗位模板 / 员工定义的只读 list。
+ *
+ * 同 DE-02：调用方只认这个装配工厂，不直接 import `infrastructure/sqliteAuthoringStore`
+ * 或 `application/ports/authoringStore`（RFC-310 manifest 只放行 composition / public）。
+ * 正解仍是 bootstrap 装配 `IntentPlatformInventory` 后注入，见 commons-debt.json 对应条目。
+ */
+export type DigitalEmployeeAuthoringReads = Pick<
+  DigitalEmployeeAuthoringStore,
+  | 'listTypePackages'
+  | 'listTypePackageDescriptorJsons'
+  | 'listTools'
+  | 'listJobTemplates'
+  | 'listEmployeeDefinitions'
+>
+
+export function createDigitalEmployeeAuthoringReads(db: DbClient): DigitalEmployeeAuthoringReads {
+  return createSqliteDigitalEmployeeAuthoringStore(db)
 }
 
 /**

@@ -88,7 +88,10 @@ export interface ClaudeToolGate {
 }
 
 function actionOf(rule: unknown): { action: PermissionAction; patterned: boolean } | null {
-  if (typeof rule === 'string' && (OPENCODE_PERMISSION_ACTIONS as readonly string[]).includes(rule)) {
+  if (
+    typeof rule === 'string' &&
+    (OPENCODE_PERMISSION_ACTIONS as readonly string[]).includes(rule)
+  ) {
     return { action: rule as PermissionAction, patterned: false }
   }
   if (rule !== null && typeof rule === 'object' && !Array.isArray(rule)) {

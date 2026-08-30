@@ -11,6 +11,7 @@
 // agentName || nodeId), so we match options by their nodeId-in-parens text.
 
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { LOOP_EXIT_CONDITION_KINDS } from '@agent-workflow/shared'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, test } from 'vitest'
@@ -201,16 +202,15 @@ describe('loop NodeInspector candidate-driven selects', () => {
     expect(combos.length).toBeGreaterThanOrEqual(2)
   })
 
-  test('exitCondition.kind dropdown lists all 4 built-in kinds including port-not-empty (RFC-023)', () => {
+  test('exitCondition.kind dropdown lists every LOOP_EXIT_CONDITION_KINDS roster kind (RFC-023 port-not-empty, RFC-306 port-inactive; RFC-348 derives the options from the roster)', () => {
     const def = makeDef([loop('w1', ['a1']), agentNode('a1', 'fixer')])
     render(<Host initial={def} agents={fakeAgents({ name: 'fixer', outputs: ['design'] })} />)
     // The kind dropdown is the combobox currently showing the default kind.
     expect(optionLabels(openTrigger(comboboxShowing(/port-empty/)))).toEqual([
-      'port-empty',
-      'port-not-empty',
-      'port-equals',
-      'port-count-lt',
+      ...LOOP_EXIT_CONDITION_KINDS,
     ])
+    expect(LOOP_EXIT_CONDITION_KINDS).toContain('port-not-empty')
+    expect(LOOP_EXIT_CONDITION_KINDS).toContain('port-inactive')
   })
 
   test('switching to port-not-empty persists kind in the definition', () => {

@@ -1992,6 +1992,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0cbafa5f986700b3a449",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderWorkingDirectoryLayout",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderWorkingDirectoryLayout",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts",
       "fromSymbol": "$file",
@@ -2446,6 +2463,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/committedEvents.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/composition/committedEvents.ts",
       "toSymbol": "createTaskLifecycleDurableConsumerDefinitions",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1082a5ea317ee18e524f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderDeliveryBudget",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderDeliveryBudget",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -3811,6 +3845,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1dec35440c7004d84afa",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteActionTemplateStore",
+      "toPath": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
+      "toSymbol": "createSqliteActionTemplateStore",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
       "fromSymbol": "$file",
@@ -4249,6 +4300,23 @@
       "toPath": "packages/backend/src/services/nodeIsolation.ts",
       "toSymbol": "MergeBackConflict",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/dumpBuilder.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/dumpBuilder.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:21272ccef069ac39b6fe",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/platformMap.ts",
+      "toSymbol": "platformOnlyResourceTypes",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -4797,6 +4865,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:260fd075eadf151bccf7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listDigitalEmployees",
+      "toPath": "packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts",
+      "toSymbol": "listDigitalEmployees",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/taskQuestions.ts#$file",
       "fromPath": "packages/backend/src/routes/taskQuestions.ts",
       "fromSymbol": "$file",
@@ -5286,6 +5371,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "employeeToolRegistrationRevisions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:29a5299f88fddd45f841",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderReferenceRules",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderReferenceRules",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -7347,6 +7449,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3cf6082f1f4974646168",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#createDigitalEmployeeAuthoringReads",
+      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toSymbol": "createDigitalEmployeeAuthoringReads",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file",
       "fromPath": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
       "fromSymbol": "$file",
@@ -7648,6 +7767,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
       "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toSymbol": "canGovernAccess",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:403a9a818191a1ceda70",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore",
+      "toPath": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
+      "toSymbol": "createSqliteDevelopmentAdapterStore",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -10065,6 +10201,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:56b9d3c34e81b924323f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts#developmentEmployeeTypePackage",
+      "toPath": "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts",
+      "toSymbol": "developmentEmployeeTypePackage",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#$file",
@@ -10385,6 +10538,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
       "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toSymbol": "canEditRow",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:58e6bc603aa51ae2aa3e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPlatformCapabilityMap",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderPlatformCapabilityMap",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -15099,6 +15269,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:849287b4ec2a16f76190",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listAutomationPolicies",
+      "toPath": "packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts",
+      "toSymbol": "listAutomationPolicies",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#$file",
       "fromPath": "packages/backend/src/modules/identity-access/composition.ts",
       "fromSymbol": "$file",
@@ -15758,6 +15945,23 @@
       "toPath": "packages/backend/src/services/execution/taskMechanicsState.ts",
       "toSymbol": "LegacyTaskMechanicsState",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8918f6982e8df5f78af2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#PlatformOnlyResourceType",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/platformMap.ts",
+      "toSymbol": "PlatformOnlyResourceType",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -17819,6 +18023,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9cb0d0f84564cfa30b04",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#IntentDocPrivileges",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "IntentDocPrivileges",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqlitePlaybookSagaStore.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/sqlitePlaybookSagaStore.ts",
       "fromSymbol": "$file",
@@ -18783,6 +19004,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionParticipant",
       "toPath": "packages/backend/src/modules/digital-employee/public/types.ts",
       "toSymbol": "EmployeeCaseDetailProjectionParticipant",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a603c46f8a525209eacb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#INTENT_TURN_GUIDANCE",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "INTENT_TURN_GUIDANCE",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -19791,6 +20029,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:af62e3ce804d9b24054c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderCommonMistakes",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderCommonMistakes",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts",
       "fromSymbol": "$file",
@@ -20129,6 +20384,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b34097929752947afb99",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderRequestedArtifactType",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderRequestedArtifactType",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/restore.ts#$file",
@@ -20381,6 +20653,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition.ts#$file",
       "toPath": "packages/backend/src/modules/integration/composition.ts",
       "toSymbol": "createRepositoryEndpointDiscovery",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b5f65e5225d84c165ea3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPayloadSchemas",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderPayloadSchemas",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -21827,6 +22116,23 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ne",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c3b212a09106908ab5c8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPlatformModel",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderPlatformModel",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -25724,6 +26030,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e5502edc9be74fd2f812",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteVerificationProfileStore",
+      "toPath": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
+      "toSymbol": "createSqliteVerificationProfileStore",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts",
       "fromSymbol": "$file",
@@ -25940,6 +26263,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file",
       "toPath": "packages/backend/src/modules/collaboration/public/types.ts",
       "toSymbol": "CanonicalHumanGateRequest",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e835d5c3297f56051013",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#DigitalEmployeePlatformToolCatalogParticipant",
+      "toPath": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toSymbol": "DigitalEmployeePlatformToolCatalogParticipant",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -26162,6 +26502,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ValidationError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e97fbb88abbdbfffc017",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderCapabilityLimits",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderCapabilityLimits",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -26400,6 +26757,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ValidationError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:eb384e39216eafbcdeb9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#composeDigitalEmployeeBuiltinToolCatalog",
+      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
+      "toSymbol": "composeDigitalEmployeeBuiltinToolCatalog",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -27541,6 +27915,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f65398dc886db6d24a6a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderOutputContract",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toSymbol": "renderOutputContract",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -27623,6 +28014,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toSymbol": "GateWorkspaceRollbackExecutor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f6faf3ae4e8424e19937",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "toSymbol": "filterVisibleRows",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -27811,6 +28219,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskExecutionLineageOperationRecords",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "fromPath": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f8abbc01fc797e555789",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes",
+      "toPath": "packages/backend/src/modules/intent/domain/teaching/platformMap.ts",
+      "toSymbol": "platformOnlyResourceTypes",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -28681,9 +29106,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1687,
+    "architectureExceptions": 1712,
     "implementationSccs": 0,
-    "observedEdges": 1723,
+    "observedEdges": 1748,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -30133,6 +30558,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:0cbafa5f986700b3a449",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderWorkingDirectoryLayout",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderWorkingDirectoryLayout"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts#$file",
@@ -30594,6 +31035,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/committedEvents.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/committedEvents.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:1082a5ea317ee18e524f",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderDeliveryBudget",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderDeliveryBudget"
     },
     {
       "edgeKind": "type",
@@ -31925,6 +32382,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:1dec35440c7004d84afa",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteConfigResourceStore",
+      "syntax": "static-import",
+      "targetSymbol": "createSqliteActionTemplateStore",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteActionTemplateStore"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/applySourceTerminationEffect.ts#$file",
@@ -32370,6 +32843,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/nodeIsolation.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#MergeBackConflict"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/dumpBuilder.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/dumpBuilder.ts#$file",
+      "id": "import:21272ccef069ac39b6fe",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/platformMap",
+      "syntax": "static-import",
+      "targetSymbol": "platformOnlyResourceTypes",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/platformMap.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes"
     },
     {
       "edgeKind": "type",
@@ -32886,6 +33375,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:260fd075eadf151bccf7",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore",
+      "syntax": "static-import",
+      "targetSymbol": "listDigitalEmployees",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listDigitalEmployees"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/taskQuestions.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/taskQuestions.ts#$file",
       "id": "import:261e5235aaafbb1f1458",
@@ -33346,6 +33851,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeToolRegistrationRevisions"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:29a5299f88fddd45f841",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderReferenceRules",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderReferenceRules"
     },
     {
       "edgeKind": "value",
@@ -35285,6 +35806,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:3cf6082f1f4974646168",
+      "owner": "intent",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition",
+      "syntax": "static-import",
+      "targetSymbol": "createDigitalEmployeeAuthoringReads",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#createDigitalEmployeeAuthoringReads"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "digital-employee",
       "fromFile": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file",
@@ -35602,6 +36139,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:403a9a818191a1ceda70",
+      "owner": "intent",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore",
+      "syntax": "static-import",
+      "targetSymbol": "createSqliteDevelopmentAdapterStore",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore"
     },
     {
       "edgeKind": "value",
@@ -37924,6 +38477,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#startTask"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:56b9d3c34e81b924323f",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/employeeTypePackage",
+      "syntax": "static-import",
+      "targetSymbol": "developmentEmployeeTypePackage",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts#developmentEmployeeTypePackage"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
@@ -38242,6 +38811,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:58e6bc603aa51ae2aa3e",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderPlatformCapabilityMap",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPlatformCapabilityMap"
     },
     {
       "edgeKind": "value",
@@ -42917,6 +43502,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:849287b4ec2a16f76190",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore",
+      "syntax": "static-import",
+      "targetSymbol": "listAutomationPolicies",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listAutomationPolicies"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "identity-access",
       "fromFile": "packages/backend/src/modules/identity-access/composition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#$file",
@@ -43538,6 +44139,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/execution/taskMechanicsState.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/taskMechanicsState.ts#LegacyTaskMechanicsState"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:8918f6982e8df5f78af2",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/platformMap",
+      "syntax": "static-import",
+      "targetSymbol": "PlatformOnlyResourceType",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/platformMap.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#PlatformOnlyResourceType"
     },
     {
       "edgeKind": "value",
@@ -45525,6 +46142,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:9cb0d0f84564cfa30b04",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "IntentDocPrivileges",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#IntentDocPrivileges"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/sqlitePlaybookSagaStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqlitePlaybookSagaStore.ts#$file",
@@ -46482,6 +47115,22 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#EmployeeCaseDetailProjectionParticipant"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:a603c46f8a525209eacb",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "INTENT_TURN_GUIDANCE",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#INTENT_TURN_GUIDANCE"
     },
     {
       "edgeKind": "value",
@@ -47525,6 +48174,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:af62e3ce804d9b24054c",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderCommonMistakes",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderCommonMistakes"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#$file",
@@ -47860,6 +48525,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomationMaintenanceCommands"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:b34097929752947afb99",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderRequestedArtifactType",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderRequestedArtifactType"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/restore.ts",
@@ -48162,6 +48843,22 @@
       "toContext": "integration",
       "toFile": "packages/backend/src/modules/integration/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:b5f65e5225d84c165ea3",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderPayloadSchemas",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPayloadSchemas"
     },
     {
       "edgeKind": "value",
@@ -49554,6 +50251,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:c3b212a09106908ab5c8",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderPlatformModel",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPlatformModel"
     },
     {
       "edgeKind": "value",
@@ -53429,6 +54142,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:e5502edc9be74fd2f812",
+      "owner": "intent",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteConfigResourceStore",
+      "syntax": "static-import",
+      "targetSymbol": "createSqliteVerificationProfileStore",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteVerificationProfileStore"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/acceptHumanGateDecision.ts#$file",
@@ -53634,6 +54363,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:e835d5c3297f56051013",
+      "owner": "intent",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "DigitalEmployeePlatformToolCatalogParticipant",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#DigitalEmployeePlatformToolCatalogParticipant"
     },
     {
       "edgeKind": "value",
@@ -53842,6 +54587,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:e97fbb88abbdbfffc017",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderCapabilityLimits",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderCapabilityLimits"
     },
     {
       "edgeKind": "value",
@@ -54082,6 +54843,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:eb384e39216eafbcdeb9",
+      "owner": "intent",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog",
+      "syntax": "static-import",
+      "targetSymbol": "composeDigitalEmployeeBuiltinToolCatalog",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#composeDigitalEmployeeBuiltinToolCatalog"
     },
     {
       "edgeKind": "value",
@@ -55156,6 +55933,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/intentDoc.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "id": "import:f65398dc886db6d24a6a",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "syntax": "static-import",
+      "targetSymbol": "renderOutputContract",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderOutputContract"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -55234,6 +56027,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:f6faf3ae4e8424e19937",
+      "owner": "intent",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/operations",
+      "syntax": "static-import",
+      "targetSymbol": "filterVisibleRows",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -55410,6 +56219,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionLineageOperationRecords"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/intent/platformInventory.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "id": "import:f8abbc01fc797e555789",
+      "owner": "intent",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/domain/teaching/platformMap",
+      "syntax": "static-import",
+      "targetSymbol": "platformOnlyResourceTypes",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/domain/teaching/platformMap.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes"
     },
     {
       "edgeKind": "value",
@@ -56670,7 +57495,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad",
+  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -28,7 +28,9 @@
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
         "server.ts -> public/events",
-        "server.ts -> public/types"
+        "server.ts -> public/types",
+        "services/intent/platformInventory.ts -> composition",
+        "services/intent/platformInventory.ts -> public/types"
       ]
     },
     "event-center": {

@@ -38,8 +38,7 @@ import {
 } from '@/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
-import { createSqliteDigitalEmployeeAuthoringStore } from '@/modules/digital-employee/infrastructure/sqliteAuthoringStore'
-import type { DigitalEmployeeAuthoringStore } from '@/modules/digital-employee/application/ports/authoringStore'
+import { createDigitalEmployeeAuthoringReads } from '@/modules/digital-employee/composition'
 import type { DigitalEmployeePlatformToolCatalogParticipant } from '@/modules/digital-employee/public/types'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 
@@ -56,15 +55,11 @@ export interface IntentPlatformInventory {
 
 export const PLATFORM_INVENTORY_ROW_CAP = 200
 
-/** The slice of the digital-employee authoring store the loaders read. */
-export type IntentEmployeeAuthoringReads = Pick<
-  DigitalEmployeeAuthoringStore,
-  | 'listTypePackages'
-  | 'listTypePackageDescriptorJsons'
-  | 'listTools'
-  | 'listJobTemplates'
-  | 'listEmployeeDefinitions'
->
+/**
+ * The slice of the digital-employee authoring store the loaders read — the module's
+ * composition factory owns the shape (RFC-310: outsiders see composition / public only).
+ */
+export type IntentEmployeeAuthoringReads = ReturnType<typeof createDigitalEmployeeAuthoringReads>
 
 export interface PlatformInventoryContext {
   readonly db: DbClient
@@ -321,7 +316,7 @@ export function createDefaultIntentPlatformInventory(
   db: DbClient,
   overrides: PlatformInventoryOverrides = {},
 ): IntentPlatformInventory {
-  const employeeReads = overrides.employeeReads ?? createSqliteDigitalEmployeeAuthoringStore(db)
+  const employeeReads = overrides.employeeReads ?? createDigitalEmployeeAuthoringReads(db)
   const employeeToolCatalog =
     overrides.employeeToolCatalog ??
     ((descriptorJsons: readonly string[]) =>

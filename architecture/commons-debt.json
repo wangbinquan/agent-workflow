@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-08-23",
-    "inboundEdges": 50,
+    "inboundEdges": 61,
     "outboundEdges": 23,
     "registeredFindings": 79,
     "recordedAtShaNote": "采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -1162,6 +1162,283 @@
         "owner:packages/backend/src/modules/identity-access/composition.ts#composeIdentityAccess"
       ],
       "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/dumpBuilder.ts",
+      "to": "packages/backend/src/modules/intent/domain/teaching/platformMap",
+      "specifier": "@/modules/intent/domain/teaching/platformMap",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:21272ccef069ac39b6fe"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/dumpBuilder.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/dumpBuilder.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/intentDoc.ts",
+      "to": "packages/backend/src/modules/intent/domain/teaching/render",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0cbafa5f986700b3a449",
+        "import:1082a5ea317ee18e524f",
+        "import:29a5299f88fddd45f841",
+        "import:58e6bc603aa51ae2aa3e",
+        "import:a603c46f8a525209eacb",
+        "import:af62e3ce804d9b24054c",
+        "import:b34097929752947afb99",
+        "import:b5f65e5225d84c165ea3",
+        "import:c3b212a09106908ab5c8",
+        "import:e97fbb88abbdbfffc017",
+        "import:f65398dc886db6d24a6a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#INTENT_TURN_GUIDANCE",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderCapabilityLimits",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderCommonMistakes",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderDeliveryBudget",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderOutputContract",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPayloadSchemas",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPlatformCapabilityMap",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderPlatformModel",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderReferenceRules",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderRequestedArtifactType",
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#renderWorkingDirectoryLayout"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/intentDoc.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/intentDoc.ts",
+      "to": "packages/backend/src/modules/intent/domain/teaching/render",
+      "specifier": "@/modules/intent/domain/teaching/render",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9cb0d0f84564cfa30b04"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#IntentDocPrivileges"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/intentDoc.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/development-automation/composition/employeeTypePackage",
+      "specifier": "@/modules/development-automation/composition/employeeTypePackage",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "RFC-348 平台库存（createDefaultIntentPlatformInventory）需要按 db 直接构造各 context 的 store / catalog 来列出真实行；正解是 bootstrap 装配 IntentPlatformInventory 后注入 RunIntentTurnDeps.platformInventory，但 server.ts / cli/start.ts 正被 RFC-347 并行改动，本 RFC 不碰 bootstrap，先以 debt 入账。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-347 落地后的 bootstrap 注入（RFC-294 W4-E intent/digital-employee vertical slice 前清偿）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:56b9d3c34e81b924323f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts#developmentEmployeeTypePackage"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteConfigResourceStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "RFC-348 平台库存（createDefaultIntentPlatformInventory）需要按 db 直接构造各 context 的 store / catalog 来列出真实行；正解是 bootstrap 装配 IntentPlatformInventory 后注入 RunIntentTurnDeps.platformInventory，但 server.ts / cli/start.ts 正被 RFC-347 并行改动，本 RFC 不碰 bootstrap，先以 debt 入账。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-347 落地后的 bootstrap 注入（RFC-294 W4-E intent/digital-employee vertical slice 前清偿）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:1dec35440c7004d84afa",
+        "import:e5502edc9be74fd2f812"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteActionTemplateStore",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteVerificationProfileStore"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore",
+      "specifier": "@/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "development-automation",
+      "why": "RFC-348 平台库存（createDefaultIntentPlatformInventory）需要按 db 直接构造各 context 的 store / catalog 来列出真实行；正解是 bootstrap 装配 IntentPlatformInventory 后注入 RunIntentTurnDeps.platformInventory，但 server.ts / cli/start.ts 正被 RFC-347 并行改动，本 RFC 不碰 bootstrap，先以 debt 入账。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-347 落地后的 bootstrap 注入（RFC-294 W4-E intent/digital-employee vertical slice 前清偿）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:260fd075eadf151bccf7",
+        "import:849287b4ec2a16f76190"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listAutomationPolicies",
+        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listDigitalEmployees"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore",
+      "specifier": "@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-348 平台库存（createDefaultIntentPlatformInventory）需要按 db 直接构造各 context 的 store / catalog 来列出真实行；正解是 bootstrap 装配 IntentPlatformInventory 后注入 RunIntentTurnDeps.platformInventory，但 server.ts / cli/start.ts 正被 RFC-347 并行改动，本 RFC 不碰 bootstrap，先以 debt 入账。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-347 落地后的 bootstrap 注入（RFC-294 W4-E intent/digital-employee vertical slice 前清偿）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:403a9a818191a1ceda70"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/intent/domain/teaching/platformMap",
+      "specifier": "@/modules/intent/domain/teaching/platformMap",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:f8abbc01fc797e555789"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/intent/domain/teaching/platformMap",
+      "specifier": "@/modules/intent/domain/teaching/platformMap",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:8918f6982e8df5f78af2"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#PlatformOnlyResourceType"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/digital-employee/composition",
+      "specifier": "@/modules/digital-employee/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "digital-employee",
+      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；RFC-348 平台库存按 RFC-310 manifest 改走 digital-employee 的装配工厂（createDigitalEmployeeAuthoringReads）列真实数字人行，但 server.ts / cli/start.ts 正被 RFC-347 并行改动，本 RFC 不碰 bootstrap，先以 debt 入账。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-347 落地后的 bootstrap 注入（RFC-294 W4-E intent/digital-employee vertical slice 前清偿）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:3cf6082f1f4974646168"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/digital-employee/composition.ts#createDigitalEmployeeAuthoringReads"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog",
+      "specifier": "@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-348 平台库存（createDefaultIntentPlatformInventory）需要按 db 直接构造各 context 的 store / catalog 来列出真实行；正解是 bootstrap 装配 IntentPlatformInventory 后注入 RunIntentTurnDeps.platformInventory，但 server.ts / cli/start.ts 正被 RFC-347 并行改动，本 RFC 不碰 bootstrap，先以 debt 入账。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-347 落地后的 bootstrap 注入（RFC-294 W4-E intent/digital-employee vertical slice 前清偿）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:eb384e39216eafbcdeb9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#composeDigitalEmployeeBuiltinToolCatalog"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
+      ]
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -2833,15 +3110,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad",
+    "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "9e46a4605b5459e069470fb04e625e991ac64c64",
-    "contentDigest": "sha256:f13ad953a795709ce9eba67f9adbbd04f18c689f161c716d3db599af0261fcb3",
+    "currentSnapshotSha": "9b2d185404687e09dc66e601d27ad999e53dc031",
+    "contentDigest": "sha256:344c4ce807c867b71188732d674b1f9c699df767ae298893bd11d9b99afe9388",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

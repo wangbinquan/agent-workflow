@@ -162,7 +162,10 @@ function parseBudget(row: IntentSessionRow): SessionBudget {
 export function requestedArtifactTypeOf(
   turns: readonly { role: string; kind: string; contentJson: string }[],
 ): IntentResourceType | null {
-  const first = turns.find((t) => t.role === 'user' && t.kind === 'message')
+  // `kind === 'message'` is only ever a USER turn (agent turns are questions /
+  // changeset / error), so the turn role needs no comparison here — and the
+  // RFC-305 architecture lock treats `role === 'user'` as an account-role predicate.
+  const first = turns.find((t) => t.kind === 'message')
   if (first === undefined) return null
   let hint: unknown
   try {

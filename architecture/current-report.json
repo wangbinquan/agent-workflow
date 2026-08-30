@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 456,
-    "architectureExceptions": 1687,
-    "backgroundJobs": 272,
-    "crossContextImports": 1723,
-    "facades": 380,
+    "architectureExceptions": 1712,
+    "backgroundJobs": 273,
+    "crossContextImports": 1748,
+    "facades": 381,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 19396,
-    "mutationEntrypoints": 1086,
+    "moduleSymbolOwners": 19609,
+    "mutationEntrypoints": 1091,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 529,
     "transactionExternalEffects": 285
@@ -65,7 +65,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1063,
+    "backendProductionFiles": 1072,
     "backendValueSccs": [
       [
         "packages/backend/src/services/agent.ts",
@@ -84,7 +84,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 272,
+    "backgroundEntries": 273,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -110,7 +110,7 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 72,
-    "inboundBoundaryEdges": 50,
+    "inboundBoundaryEdges": 61,
     "knownViolations": 29,
     "moduleContexts": [
       {
@@ -147,7 +147,7 @@
       },
       {
         "context": "intent",
-        "files": 1
+        "files": 9
       },
       {
         "context": "resource-catalog",
@@ -170,7 +170,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 508,
+    "moduleFiles": 516,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -221,10 +221,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 380,
+    "serviceFiles": 381,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad"
+  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1"
 }

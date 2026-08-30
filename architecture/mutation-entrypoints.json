@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1086,
+    "entries": 1091,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -5517,6 +5517,31 @@
       },
       "file": "packages/backend/src/modules/digital-employee/composition.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/composition.ts#createDigitalEmployeeAuthoringReads",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#createDigitalEmployeeAuthoringReads",
+      "symbol": "createDigitalEmployeeAuthoringReads",
+      "targetContext": "digital-employee",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/digital-employee/composition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/digital-employee/composition.ts#createEmployeeReactionRoundQueries",
       "missingControls": [
         "audit",
@@ -7471,6 +7496,56 @@
       "symbol": "createSqliteDevelopmentAdapterStore",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/domain/teaching/render.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/domain/teaching/render.ts#RUNTIMES_INVENTORY_FILE",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#RUNTIMES_INVENTORY_FILE",
+      "symbol": "RUNTIMES_INVENTORY_FILE",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/domain/teaching/workflowParts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/domain/teaching/workflowParts.ts#LAUNCH_INPUTS",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/domain/teaching/workflowParts.ts#LAUNCH_INPUTS",
+      "symbol": "LAUNCH_INPUTS",
+      "targetContext": "intent",
+      "targetLayer": "domain"
     },
     {
       "controls": {
@@ -15695,6 +15770,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/intent/dumpBuilder.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/intent/dumpBuilder.ts#RUNTIME_INVENTORY_RULE",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/intent/dumpBuilder.ts#RUNTIME_INVENTORY_RULE",
+      "symbol": "RUNTIME_INVENTORY_RULE",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -15785,6 +15885,54 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/intent/manifest.ts#createHandleAllocator",
       "symbol": "createHandleAllocator",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/intent/platformInventory.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/intent/platformInventory.ts#createDefaultIntentPlatformInventory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#createDefaultIntentPlatformInventory",
+      "symbol": "createDefaultIntentPlatformInventory",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/intent/platformInventory.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/intent/platformInventory.ts#publishState",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#publishState",
+      "symbol": "publishState",
       "targetContext": "intent",
       "targetLayer": "application"
     },
@@ -15974,7 +16122,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": true,
         "fenceOrOcc": false,
@@ -15985,7 +16133,6 @@
       "id": "mutation:packages/backend/src/services/intent/turnEngine.ts#RunIntentTurnDeps",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
         "fenceOrOcc",
         "transaction"
@@ -19517,30 +19664,6 @@
       "ownerEntryId": "owner:packages/backend/src/services/runtime/index.ts#RUNTIME_KINDS",
       "symbol": "RUNTIME_KINDS",
       "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/runtime/opencode/boundary.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/runtime/opencode/boundary.ts#OPENCODE_PERMISSION_KEYS",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/boundary.ts#OPENCODE_PERMISSION_KEYS",
-      "symbol": "OPENCODE_PERMISSION_KEYS",
-      "targetContext": "identity-access",
       "targetLayer": "application"
     },
     {
@@ -25830,7 +25953,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad",
+  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

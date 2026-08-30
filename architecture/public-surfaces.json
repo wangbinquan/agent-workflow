@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 317,
+    "consumers": 318,
     "exactEntrypointFiles": 44,
     "governedFieldSurfaces": 5,
     "methods": 265,
@@ -12322,7 +12322,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:d77f0bd6097094ec7e4d"
+        "import:d77f0bd6097094ec7e4d",
+        "import:e835d5c3297f56051013"
       ],
       "context": "digital-employee",
       "dataClass": "metadata",
@@ -12420,7 +12421,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:d77f0bd6097094ec7e4d"
+            "import:d77f0bd6097094ec7e4d",
+            "import:e835d5c3297f56051013"
           ],
           "name": "listJson",
           "signatureDigest": "sha256:70dd6435d4f9d77f3ce656ae732f7b08a475672d7980cc82083c3d3216ce8d2f"
@@ -12440,6 +12442,12 @@
           "edgeId": "import:d77f0bd6097094ec7e4d",
           "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e835d5c3297f56051013",
+          "file": "packages/backend/src/services/intent/platformInventory.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -48938,7 +48946,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad",
+  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1",
   "targetContexts": [
     "collaboration",
     "development-automation",
