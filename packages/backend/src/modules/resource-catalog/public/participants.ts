@@ -13,6 +13,7 @@ import type {
   McpPackageMutation,
   PluginPackageMutation,
   PluginAclIdentity,
+  WorkgroupAclIdentity,
   PreparedAgentPackageMutation,
   PreparedCapabilityTemplatePackageMutation,
   PreparedMcpPackageMutation,
@@ -38,6 +39,8 @@ export type ResourceRequestContext = RequestAuthority
 export type McpOperationContext = DirectAuthenticatedAuthority
 /** Branded current-user authority consumed by exact Plugin aggregate operations. */
 export type PluginOperationContext = DirectAuthenticatedAuthority
+/** Branded current-user authority consumed by exact Workgroup aggregate operations. */
+export type WorkgroupOperationContext = DirectAuthenticatedAuthority
 
 declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
 declare const intentApplyResourceParticipantInTxBrand: unique symbol
@@ -57,6 +60,7 @@ declare const resourcePackageApplyScenarioTxBrand: unique symbol
 declare const resourcePackageApplyTxBrand: unique symbol
 declare const mcpAclIdentityParticipantBrand: unique symbol
 declare const pluginAclIdentityParticipantBrand: unique symbol
+declare const workgroupAclIdentityParticipantBrand: unique symbol
 
 export interface McpAclIdentityParticipant {
   readonly [mcpAclIdentityParticipantBrand]: 'mcp-acl-identity-participant'
@@ -67,6 +71,12 @@ export interface McpAclIdentityParticipant {
 export interface PluginAclIdentityParticipant {
   readonly [pluginAclIdentityParticipantBrand]: 'plugin-acl-identity-participant'
   load(id: string): Promise<PluginAclIdentity | null>
+  nextUpdatedAt(id: string): Promise<number>
+}
+
+export interface WorkgroupAclIdentityParticipant {
+  readonly [workgroupAclIdentityParticipantBrand]: 'workgroup-acl-identity-participant'
+  load(id: string): Promise<WorkgroupAclIdentity | null>
   nextUpdatedAt(id: string): Promise<number>
 }
 

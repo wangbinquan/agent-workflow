@@ -17,6 +17,14 @@ import {
   RenamePluginRequestSchema,
   ResourceVisibilitySchema,
   UpdatePluginRequestSchema,
+  CopyWorkgroupRequestSchema,
+  CreateWorkgroupSchema,
+  DeleteWorkgroupSchema,
+  RenameWorkgroupSchema,
+  SaveWorkgroupReceiptSchema,
+  UpdateWorkgroupSchema,
+  WorkgroupSchema,
+  WorkgroupDetailSchema,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { defineCommandOperation, defineQueryOperation } from '@/platform/operations/definitions'
@@ -24,14 +32,21 @@ import type {
   CommandOperationDescriptor,
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
-import type { McpCommands, PluginCommands, PluginUpdateCommands } from './commands'
+import type {
+  McpCommands,
+  PluginCommands,
+  PluginUpdateCommands,
+  WorkgroupCommands,
+} from './commands'
 import type {
   McpAclIdentityParticipant,
   McpOperationContext,
   PluginAclIdentityParticipant,
   PluginOperationContext,
+  WorkgroupAclIdentityParticipant,
+  WorkgroupOperationContext,
 } from './participants'
-import type { McpQueries, PluginQueries } from './queries'
+import type { McpQueries, PluginQueries, WorkgroupQueries } from './queries'
 import type {
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,
@@ -51,6 +66,16 @@ import type {
   UpdatePluginCatalogInput,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
+  CopyWorkgroupCatalogInput,
+  CreateWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogReceipt,
+  GetWorkgroupCatalogInput,
+  RenameWorkgroupCatalogInput,
+  UpdateWorkgroupCatalogInput,
+  UpdateWorkgroupCatalogReceipt,
+  WorkgroupCatalogDetail,
+  WorkgroupCatalogResource,
 } from './types'
 
 const MCP_PUBLIC_ERRORS = Object.freeze([
@@ -425,6 +450,161 @@ export function createPluginOperationDescriptors(
       outputSchema: PluginUpgradeResultSchema,
       invoke: (authority: PluginOperationContext, input: UpgradePluginCatalogInput) =>
         updateCommands.upgrade(authority, input),
+    }),
+  })
+}
+
+const WORKGROUP_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'resource-operation-stale',
+  'internal-error',
+] as const)
+
+const emptyWorkgroupInputSchema = z.object({}).strict()
+const getWorkgroupInputSchema = z.object({ id: z.string().min(1) }).strict()
+const copyWorkgroupInputSchema = z
+  .object({ id: z.string().min(1), copy: CopyWorkgroupRequestSchema })
+  .strict()
+const updateWorkgroupInputSchema = z
+  .object({ id: z.string().min(1), update: UpdateWorkgroupSchema })
+  .strict()
+const deleteWorkgroupInputSchema = z
+  .object({ id: z.string().min(1), deletion: DeleteWorkgroupSchema })
+  .strict()
+const renameWorkgroupInputSchema = z
+  .object({ id: z.string().min(1), rename: RenameWorkgroupSchema })
+  .strict()
+const deleteWorkgroupReceiptSchema = z
+  .object({
+    id: z.string().min(1),
+    deletedVersion: z.number().int().positive(),
+    clientMutationId: z.string().min(1),
+  })
+  .strict()
+
+export interface WorkgroupOperationDescriptors {
+  readonly list: QueryOperationDescriptor<
+    Record<never, never>,
+    WorkgroupCatalogResource[],
+    WorkgroupOperationContext
+  >
+  readonly get: QueryOperationDescriptor<
+    GetWorkgroupCatalogInput,
+    WorkgroupCatalogDetail | null,
+    WorkgroupOperationContext
+  >
+  readonly create: CommandOperationDescriptor<
+    CreateWorkgroupCatalogInput,
+    WorkgroupCatalogDetail,
+    WorkgroupOperationContext
+  >
+  readonly copy: CommandOperationDescriptor<
+    CopyWorkgroupCatalogInput,
+    WorkgroupCatalogDetail,
+    WorkgroupOperationContext
+  >
+  readonly update: CommandOperationDescriptor<
+    UpdateWorkgroupCatalogInput,
+    UpdateWorkgroupCatalogReceipt,
+    WorkgroupOperationContext
+  >
+  readonly delete: CommandOperationDescriptor<
+    DeleteWorkgroupCatalogInput,
+    DeleteWorkgroupCatalogReceipt,
+    WorkgroupOperationContext
+  >
+  readonly rename: CommandOperationDescriptor<
+    RenameWorkgroupCatalogInput,
+    UpdateWorkgroupCatalogReceipt,
+    WorkgroupOperationContext
+  >
+}
+
+export interface WorkgroupCatalogModule {
+  readonly commands: WorkgroupCommands
+  readonly queries: WorkgroupQueries
+  readonly operations: WorkgroupOperationDescriptors
+  readonly participants: Readonly<{
+    aclIdentity: WorkgroupAclIdentityParticipant
+  }>
+}
+
+export function createWorkgroupOperationDescriptors(
+  commands: WorkgroupCommands,
+  queries: WorkgroupQueries,
+): WorkgroupOperationDescriptors {
+  return Object.freeze({
+    list: defineQueryOperation({
+      id: 'workgroup-catalog.list-workgroups.v1',
+      summary: 'List workgroups visible to the caller',
+      permissions: ['workgroups:read'],
+      publicErrors: WORKGROUP_PUBLIC_ERRORS,
+      inputSchema: emptyWorkgroupInputSchema,
+      outputSchema: z.array(WorkgroupSchema),
+      invoke: async (authority: WorkgroupOperationContext) => [...(await queries.list(authority))],
+    }),
+    get: defineQueryOperation({
+      id: 'workgroup-catalog.get-workgroup.v1',
+      summary: 'Get one workgroup',
+      permissions: ['workgroups:read'],
+      publicErrors: WORKGROUP_PUBLIC_ERRORS,
+      inputSchema: getWorkgroupInputSchema,
+      outputSchema: WorkgroupDetailSchema.nullable(),
+      invoke: (authority: WorkgroupOperationContext, input: GetWorkgroupCatalogInput) =>
+        queries.get(authority, input),
+    }),
+    create: defineCommandOperation({
+      id: 'workgroup-catalog.create-workgroup.v1',
+      summary: 'Create a workgroup',
+      permissions: ['workgroups:create'],
+      publicErrors: WORKGROUP_PUBLIC_ERRORS,
+      inputSchema: CreateWorkgroupSchema,
+      outputSchema: WorkgroupDetailSchema,
+      invoke: (authority: WorkgroupOperationContext, input: CreateWorkgroupCatalogInput) =>
+        commands.create(authority, input),
+    }),
+    copy: defineCommandOperation({
+      id: 'workgroup-catalog.copy-workgroup.v1',
+      summary: 'Copy a workgroup into a private duplicate',
+      permissions: ['workgroups:create'],
+      publicErrors: WORKGROUP_PUBLIC_ERRORS,
+      inputSchema: copyWorkgroupInputSchema,
+      outputSchema: WorkgroupDetailSchema,
+      invoke: (authority: WorkgroupOperationContext, input: CopyWorkgroupCatalogInput) =>
+        commands.copy(authority, input),
+    }),
+    update: defineCommandOperation({
+      id: 'workgroup-catalog.update-workgroup.v1',
+      summary: 'Replace a workgroup document',
+      permissions: ['workgroups:update'],
+      publicErrors: WORKGROUP_PUBLIC_ERRORS,
+      inputSchema: updateWorkgroupInputSchema,
+      outputSchema: SaveWorkgroupReceiptSchema,
+      invoke: (authority: WorkgroupOperationContext, input: UpdateWorkgroupCatalogInput) =>
+        commands.update(authority, input),
+    }),
+    delete: defineCommandOperation({
+      id: 'workgroup-catalog.delete-workgroup.v1',
+      summary: 'Delete a workgroup',
+      permissions: ['workgroups:delete'],
+      publicErrors: WORKGROUP_PUBLIC_ERRORS,
+      inputSchema: deleteWorkgroupInputSchema,
+      outputSchema: deleteWorkgroupReceiptSchema,
+      invoke: (authority: WorkgroupOperationContext, input: DeleteWorkgroupCatalogInput) =>
+        commands.delete(authority, input),
+    }),
+    rename: defineCommandOperation({
+      id: 'workgroup-catalog.rename-workgroup.v1',
+      summary: 'Rename a workgroup',
+      permissions: ['workgroups:update'],
+      publicErrors: WORKGROUP_PUBLIC_ERRORS,
+      inputSchema: renameWorkgroupInputSchema,
+      outputSchema: SaveWorkgroupReceiptSchema,
+      invoke: (authority: WorkgroupOperationContext, input: RenameWorkgroupCatalogInput) =>
+        commands.rename(authority, input),
     }),
   })
 }

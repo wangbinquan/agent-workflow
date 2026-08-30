@@ -23,26 +23,20 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
+import type { WorkgroupCommands } from '@/modules/resource-catalog/public/commands'
+import type {
+  WorkgroupAclIdentityParticipant,
+  WorkgroupOperationContext,
+} from '@/modules/resource-catalog/public/participants'
+import type { WorkgroupQueries } from '@/modules/resource-catalog/public/queries'
+import type {
+  WorkgroupCatalogDetail,
+  WorkgroupCatalogResource,
+} from '@/modules/resource-catalog/public/types'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import {
-  canViewResource,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
-import { assertDeleteConfirm } from '@/services/deleteConfirm'
-import {
-  copyWorkgroup,
-  createWorkgroup,
-  deleteWorkgroup,
-  getWorkgroupById,
-  listWorkgroups,
-  renameWorkgroup,
-  saveWorkgroup,
-} from '@/services/workgroups'
 // RFC-243 T2: workgroup launches go through the unified executor facade — this
 // route must not call startWorkgroupTask directly (source-text lock).
 import { startExecution } from '@/services/execution/executor'
@@ -57,11 +51,24 @@ import {
 } from '@/services/agentResourceIntegrity'
 import { safeJsonOrEmpty } from '@/util/http'
 
-export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
+export interface WorkgroupRouteDependencies {
+  readonly commands: WorkgroupCommands
+  readonly queries: WorkgroupQueries
+  readonly aclIdentity: WorkgroupAclIdentityParticipant
+  readonly authorityFor: (actor: Actor) => WorkgroupOperationContext
+}
+
+export function mountWorkgroupRoutes(
+  app: Hono,
+  deps: AppDeps,
+  module: WorkgroupRouteDependencies,
+): void {
+  const { commands, queries, aclIdentity } = module
+
   // RFC-099: missing and not-visible produce the identical 404 (D1).
-  async function loadVisibleWorkgroup(actor: Actor, id: string) {
-    const group = await getWorkgroupById(deps.db, id)
-    if (group === null || !(await canViewResource(deps.db, actor, 'workgroup', group))) {
+  async function loadVisibleWorkgroup(actor: Actor, id: string): Promise<WorkgroupCatalogDetail> {
+    const group = await queries.get(module.authorityFor(actor), { id })
+    if (group === null) {
       throw new NotFoundError('workgroup-not-found', 'workgroup not found')
     }
     return group
@@ -77,8 +84,11 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List workgroups visible to the caller',
     },
     async (c) => {
-      const list = await listWorkgroups(deps.db)
-      return c.json(await filterVisibleRows(deps.db, actorOf(c), 'workgroup', list))
+      const actor = actorOf(c)
+      const list: readonly WorkgroupCatalogResource[] = await queries.list(
+        module.authorityFor(actor),
+      )
+      return c.json(list)
     },
   )
 
@@ -150,10 +160,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       // RFC-223 (PR-1, Codex impl-gate P1-2): member reference ACL is enforced
       // INSIDE createWorkgroup, bound to the same single resolution that produces
       // the persisted member agentIds (no check-then-resolve TOCTOU).
-      const created = await createWorkgroup(deps.db, parsed.data, {
-        ownerUserId: actor.user.id,
-        actor,
-      })
+      const created = await commands.create(module.authorityFor(actor), parsed.data)
       return c.json(created, 201)
     },
   )
@@ -174,7 +181,14 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      return c.json(await copyWorkgroup(deps.db, c.req.param('id'), parsed.data, actorOf(c)), 201)
+      const actor = actorOf(c)
+      return c.json(
+        await commands.copy(module.authorityFor(actor), {
+          id: c.req.param('id'),
+          copy: parsed.data,
+        }),
+        201,
+      )
     },
   )
 
@@ -198,12 +212,11 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      // RFC-324: content write. Renaming through this body is refused inside the
-      // save transaction (assertNameUnchangedForEditor), not here — the fence has
-      // to see the in-transaction current name to be race-free.
-      await requireResourceEdit(deps.db, actor, 'workgroup', existing)
       return c.json(
-        await saveWorkgroup(deps.db, existing.id, parsed.data, { kind: 'actor', actor }),
+        await commands.update(module.authorityFor(actor), {
+          id: existing.id,
+          update: parsed.data,
+        }),
       )
     },
   )
@@ -221,17 +234,17 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       const id = c.req.param('id')
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      await requireResourceGovern(deps.db, actor, 'workgroup', existing)
       const parsed = DeleteWorkgroupSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
           issues: parsed.error.issues,
         })
       }
-      // RFC-222 (D5): type-to-confirm (N-5 order).
-      assertDeleteConfirm(parsed.data, existing.name, 'workgroup')
+      await commands.delete(module.authorityFor(actor), {
+        id: existing.id,
+        deletion: parsed.data,
+      })
       captureDeleteSnapshot(c, actor, existing)
-      await deleteWorkgroup(deps.db, existing.id, parsed.data, { kind: 'actor', actor })
       return c.body(null, 204)
     },
   )
@@ -256,11 +269,10 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      await requireResourceGovern(deps.db, actor, 'workgroup', existing)
       return c.json(
-        await renameWorkgroup(deps.db, existing.id, parsed.data, {
-          kind: 'actor',
-          actor,
+        await commands.rename(module.authorityFor(actor), {
+          id: existing.id,
+          rename: parsed.data,
         }),
       )
     },
@@ -341,7 +353,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
     type: 'workgroup',
     base: '/api/workgroups',
     param: 'id',
-    load: (db, id) => getWorkgroupById(db, id),
+    load: (_db, id) => aclIdentity.load(id),
     afterUpdate: (workgroupId) => {
       workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
         type: 'workgroup.acl.updated',

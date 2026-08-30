@@ -43,9 +43,11 @@ import {
 } from '@/modules/identity-access/composition'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import type {
   McpCatalogModule,
   PluginCatalogModule,
+  WorkgroupCatalogModule,
 } from '@/modules/resource-catalog/public/operations'
 import {
   composeSystemOperations,
@@ -760,6 +762,7 @@ export function createApp(deps: AppDeps): Hono {
     db: effectiveDeps.db,
     coordinator: pluginOperationCoordinator,
   })
+  const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
   const identityUserOperations = composeIdentityUserOperations({
     db: effectiveDeps.db,
     identityAccess,
@@ -774,6 +777,7 @@ export function createApp(deps: AppDeps): Hono {
     userRuntimeTests,
     mcpCatalog,
     pluginCatalog,
+    workgroupCatalog,
   )
 
   // RFC-344 — tools invoke stable operation ids on this already-mounted app.
@@ -848,6 +852,7 @@ export function mountApiRoutes(
   mcpRuntimeTests: McpRuntimeTestService,
   mcpCatalog: McpCatalogModule,
   pluginCatalog: PluginCatalogModule,
+  workgroupCatalog: WorkgroupCatalogModule,
 ): void {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -1008,7 +1013,12 @@ export function mountApiRoutes(
   mountCachedRepoRoutes(app, deps)
   mountRepoGroupRoutes(app, deps)
   mountWorkflowRoutes(app, deps)
-  mountWorkgroupRoutes(app, routeDeps) // RFC-164
+  mountWorkgroupRoutes(app, routeDeps, {
+    commands: workgroupCatalog.commands,
+    queries: workgroupCatalog.queries,
+    aclIdentity: workgroupCatalog.participants.aclIdentity,
+    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+  }) // RFC-164
   // RFC-271 配置包：导出六条 + 导入两条。需要 secretBox 来签 previewToken——
   // 缺它时**整组不挂**（与 OIDC 路由同姿势），而不是退化成一个不签名的版本：
   // 不签名的 preview→commit 绑定等于没有绑定。

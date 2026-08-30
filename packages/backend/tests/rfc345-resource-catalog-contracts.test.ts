@@ -45,7 +45,9 @@ import {
   type TaskExecutionResourceRequest,
   type UpdateMcpCatalogInput,
   type UpdatePluginCatalogInput,
+  type UpdateWorkgroupCatalogInput,
   type VersionedIntentResourceChangesetPlan,
+  type WorkgroupCatalogResource,
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
@@ -53,13 +55,19 @@ import type {
   McpCommands,
   PluginCommands,
   PluginUpdateCommands,
+  WorkgroupCommands,
 } from '../src/modules/resource-catalog/public/commands'
-import type { McpQueries, PluginQueries } from '../src/modules/resource-catalog/public/queries'
+import type {
+  McpQueries,
+  PluginQueries,
+  WorkgroupQueries,
+} from '../src/modules/resource-catalog/public/queries'
 import type {
   IntegrationTriggerResourceSnapshotInTx,
   IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
   PluginAclIdentityParticipant,
+  WorkgroupAclIdentityParticipant,
   ResourceAuthorizationInTx,
   ResourcePackageApplyScenarioProvider,
   ResourcePackageApplyTx,
@@ -72,6 +80,8 @@ import type {
   McpOperationDescriptors,
   PluginCatalogModule,
   PluginOperationDescriptors,
+  WorkgroupCatalogModule,
+  WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
 import type { LegacyResourcePackageMutationParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'
 
@@ -220,15 +230,41 @@ assertType<
     'commands' | 'updateCommands' | 'queries' | 'operations' | 'participants'
   >
 >(true)
+assertType<
+  Equal<
+    Extract<keyof WorkgroupCommands, string>,
+    'create' | 'copy' | 'update' | 'delete' | 'rename'
+  >
+>(true)
+assertType<Equal<Extract<keyof WorkgroupQueries, string>, 'list' | 'get'>>(true)
+assertType<Equal<Extract<keyof WorkgroupAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
+  true,
+)
+assertType<
+  Equal<
+    Extract<keyof WorkgroupOperationDescriptors, string>,
+    'list' | 'get' | 'create' | 'copy' | 'update' | 'delete' | 'rename'
+  >
+>(true)
+assertType<
+  Equal<
+    Extract<keyof WorkgroupCatalogModule, string>,
+    'commands' | 'queries' | 'operations' | 'participants'
+  >
+>(true)
 
 const mcpResourceTypeProbe: McpCatalogResource | null = null
 const mcpUpdateTypeProbe: UpdateMcpCatalogInput | null = null
 const pluginResourceTypeProbe: PluginCatalogResource | null = null
 const pluginUpdateTypeProbe: UpdatePluginCatalogInput | null = null
+const workgroupResourceTypeProbe: WorkgroupCatalogResource | null = null
+const workgroupUpdateTypeProbe: UpdateWorkgroupCatalogInput | null = null
 void mcpResourceTypeProbe
 void mcpUpdateTypeProbe
 void pluginResourceTypeProbe
 void pluginUpdateTypeProbe
+void workgroupResourceTypeProbe
+void workgroupUpdateTypeProbe
 
 const correlatedSummary: ResourceSummary<'agent'> = {
   ref: { kind: 'agent', id: 'agent-1' },
@@ -692,6 +728,100 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'services/intent/resourceCatalogProjections.ts',
       'services/pluginGenerationGc.ts',
       'services/workflow.validator.ts',
+    ])
+  })
+
+  test('T5-WG active HTTP binding executes the owned aggregate and preserves exact legacy callers', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const route = readFileSync(resolve(sourceRoot, 'routes/workgroups.ts'), 'utf8')
+    const application = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/resource-catalog/application/workgroups/workgroupApplication.ts',
+      ),
+      'utf8',
+    )
+    const repository = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/workgroupOperations.ts'),
+      'utf8',
+    )
+    const operations = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
+      'utf8',
+    )
+    const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+
+    expect(route).not.toContain("from '@/services/workgroups'")
+    expect(route).toContain('WorkgroupCommands')
+    expect(route).toContain('WorkgroupQueries')
+    expect(route).toContain('WorkgroupAclIdentityParticipant')
+    for (const consumer of [
+      'commands.create(',
+      'commands.copy(',
+      'commands.update(',
+      'commands.delete(',
+      'commands.rename(',
+      'queries.list(',
+      'queries.get(',
+      'aclIdentity.load(',
+    ]) {
+      expect(route).toContain(consumer)
+    }
+    expect(application).toContain('requireResourceEdit')
+    expect(application).toContain('requireResourceGovern')
+    expect(application).toContain('const commands: WorkgroupCommands = Object.freeze')
+    expect(application).toContain('const queries: WorkgroupQueries = Object.freeze')
+    expect(application).not.toContain("from '@/db/")
+    expect(application).not.toContain('/infrastructure/')
+    expect(repository).toContain('dbTxSync')
+    expect(repository).toContain('assertAgentIdsUsableInTx')
+    expect(repository).toContain('scheduledReferences')
+    expect(repository).toContain("import { sha256Hex } from '@/util/hash'")
+    expect(repository).not.toContain("from '@/services/")
+    expect(composition).toContain('createSqliteWorkgroupRepository')
+    expect(composition).toContain('createWorkgroupApplication')
+    for (const operationId of [
+      'workgroup-catalog.list-workgroups.v1',
+      'workgroup-catalog.get-workgroup.v1',
+      'workgroup-catalog.create-workgroup.v1',
+      'workgroup-catalog.update-workgroup.v1',
+      'workgroup-catalog.delete-workgroup.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+      expect(mcpBindings).toContain(operationId)
+    }
+    for (const operationId of [
+      'workgroup-catalog.copy-workgroup.v1',
+      'workgroup-catalog.rename-workgroup.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+    }
+    expect(server).toContain('composeWorkgroupCatalog({ db: effectiveDeps.db })')
+    expect(server).toContain('commands: workgroupCatalog.commands')
+    expect(server).toContain('queries: workgroupCatalog.queries')
+    expect(server).toContain('aclIdentity: workgroupCatalog.participants.aclIdentity')
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name)
+        return entry.isDirectory() ? walk(path) : entry.name.endsWith('.ts') ? [path] : []
+      })
+    const legacyConsumers = walk(sourceRoot)
+      .filter((path) => readFileSync(path, 'utf8').includes("@/services/workgroups'"))
+      .map((path) => path.slice(sourceRoot.length + 1))
+      .sort()
+    expect(legacyConsumers).toEqual([
+      'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/execution/closure.ts',
+      'services/intent/applyChangeset.ts',
+      'services/intent/dumpBuilder.ts',
+      'services/scheduledTasks.ts',
+      'services/workgroup/launch.ts',
     ])
   })
 

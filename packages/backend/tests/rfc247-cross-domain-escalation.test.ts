@@ -52,6 +52,7 @@ const deps = {
   // scheduler driver an explicit mount-time composition boundary.
   schedulerDriver: {},
 } as unknown as Parameters<typeof mountFusionRoutes>[1]
+const workgroupModule = {} as unknown as Parameters<typeof mountWorkgroupRoutes>[2]
 
 function mountAll(): void {
   const sink = new Hono()
@@ -59,7 +60,12 @@ function mountAll(): void {
     () => mountFusionRoutes(sink, deps),
     () => mountWorkgroupTaskRoutes(sink, deps as Parameters<typeof mountWorkgroupTaskRoutes>[1]),
     () => mountScheduledTaskRoutes(sink, deps as Parameters<typeof mountScheduledTaskRoutes>[1]),
-    () => mountWorkgroupRoutes(sink, deps as Parameters<typeof mountWorkgroupRoutes>[1]),
+    () =>
+      mountWorkgroupRoutes(
+        sink,
+        deps as Parameters<typeof mountWorkgroupRoutes>[1],
+        workgroupModule,
+      ),
     () =>
       mountMemoryDistillJobRoutes(sink, deps as Parameters<typeof mountMemoryDistillJobRoutes>[1]),
     () => mountAgentRoutes(sink, deps as Parameters<typeof mountAgentRoutes>[1]),

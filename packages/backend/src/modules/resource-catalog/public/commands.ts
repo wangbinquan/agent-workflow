@@ -1,6 +1,7 @@
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
+import type { WorkgroupOperationContext } from './participants'
 import type {
   CheckPluginUpdateCatalogInput,
   CheckPluginUpdateCatalogReceipt,
@@ -20,6 +21,14 @@ import type {
   UpdateResourceAclRequest,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
+  CopyWorkgroupCatalogInput,
+  CreateWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogReceipt,
+  RenameWorkgroupCatalogInput,
+  UpdateWorkgroupCatalogInput,
+  UpdateWorkgroupCatalogReceipt,
+  WorkgroupCatalogDetail,
 } from './types'
 
 export interface ResourceAclCommands {
@@ -64,4 +73,27 @@ export interface PluginUpdateCommands {
     authority: PluginOperationContext,
     input: UpgradePluginCatalogInput,
   ): Promise<UpgradePluginCatalogReceipt>
+}
+
+export interface WorkgroupCommands {
+  create(
+    authority: WorkgroupOperationContext,
+    input: CreateWorkgroupCatalogInput,
+  ): Promise<WorkgroupCatalogDetail>
+  copy(
+    authority: WorkgroupOperationContext,
+    input: CopyWorkgroupCatalogInput,
+  ): Promise<WorkgroupCatalogDetail>
+  update(
+    authority: WorkgroupOperationContext,
+    input: UpdateWorkgroupCatalogInput,
+  ): Promise<UpdateWorkgroupCatalogReceipt>
+  delete(
+    authority: WorkgroupOperationContext,
+    input: DeleteWorkgroupCatalogInput,
+  ): Promise<DeleteWorkgroupCatalogReceipt>
+  rename(
+    authority: WorkgroupOperationContext,
+    input: RenameWorkgroupCatalogInput,
+  ): Promise<UpdateWorkgroupCatalogReceipt>
 }

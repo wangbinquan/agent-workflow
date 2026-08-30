@@ -1,6 +1,7 @@
 import type { QueryContext } from '@/modules/identity-access/public/participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
+import type { WorkgroupOperationContext } from './participants'
 import type {
   CatalogResourceRef,
   GetResourceAclRequest,
@@ -14,6 +15,9 @@ import type {
   ResourceSummary,
   ResourceSummaryPage,
   ResourceSummaryQuery,
+  GetWorkgroupCatalogInput,
+  WorkgroupCatalogDetail,
+  WorkgroupCatalogResource,
 } from './types'
 
 export interface ResourceCatalogQuery {
@@ -40,4 +44,12 @@ export interface PluginQueries {
     authority: PluginOperationContext,
     input: GetPluginCatalogInput,
   ): Promise<PluginCatalogResource | null>
+}
+
+export interface WorkgroupQueries {
+  list(authority: WorkgroupOperationContext): Promise<readonly WorkgroupCatalogResource[]>
+  get(
+    authority: WorkgroupOperationContext,
+    input: GetWorkgroupCatalogInput,
+  ): Promise<WorkgroupCatalogDetail | null>
 }

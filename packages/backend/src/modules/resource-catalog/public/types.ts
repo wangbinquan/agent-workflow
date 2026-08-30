@@ -21,8 +21,15 @@ import type {
   UpdateMcpRequest,
   UpdatePluginRequest,
   UpdateResourceAclBody,
+  CopyWorkgroupRequest,
+  CreateWorkgroup,
+  DeleteWorkgroup,
+  RenameWorkgroup,
+  SaveWorkgroupReceipt,
+  UpdateWorkgroup,
   WorkflowDefinition,
   Workgroup,
+  WorkgroupDetail,
 } from '@agent-workflow/shared'
 import type { CatalogSelectorKind, PackageResourceKind } from '../domain/resourceKinds'
 import type { AclResourceRef, CatalogResourceRef } from '../domain/resourceRef'
@@ -187,6 +194,52 @@ export interface PluginAclIdentity {
   readonly ownerUserId: string | null
   readonly visibility: ResourceVisibility
   readonly aclRevision: number
+  readonly updatedAt: number
+}
+
+/** T5-WG aggregate contract. Roster persistence and SQLite rows stay private. */
+export type WorkgroupCatalogResource = Workgroup
+export type WorkgroupCatalogDetail = WorkgroupDetail
+export type CreateWorkgroupCatalogInput = CreateWorkgroup
+
+export interface GetWorkgroupCatalogInput {
+  readonly id: string
+}
+
+export interface CopyWorkgroupCatalogInput {
+  readonly id: string
+  readonly copy: CopyWorkgroupRequest
+}
+
+export interface UpdateWorkgroupCatalogInput {
+  readonly id: string
+  readonly update: UpdateWorkgroup
+}
+
+export interface DeleteWorkgroupCatalogInput {
+  readonly id: string
+  readonly deletion: DeleteWorkgroup
+}
+
+export interface RenameWorkgroupCatalogInput {
+  readonly id: string
+  readonly rename: RenameWorkgroup
+}
+
+export type UpdateWorkgroupCatalogReceipt = SaveWorkgroupReceipt
+
+export interface DeleteWorkgroupCatalogReceipt {
+  readonly id: string
+  readonly deletedVersion: number
+  readonly clientMutationId: string
+}
+
+/** Purpose-specific identity used by the generic ACL transport adapter. */
+export interface WorkgroupAclIdentity {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
   readonly updatedAt: number
 }
 
