@@ -8,10 +8,9 @@
 // 导出支持 `--id`：同一个 owner 可以有两个同名工作流（`workflows.name` 非唯一），
 // `--type --name` 在那种情况下选不中确定的一行。
 
-import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
+import type { DbClient } from '@/db/client'
 import { Paths } from '@/util/paths'
-import { buildCurrentActor, type Actor } from '@/auth/actor'
+import type { Actor } from '@/auth/actor'
 import { createSecretBox } from '@/auth/secretBox'
 import { users } from '@/db/schema'
 import { findOwnedAclResourceIdsByName } from '@/services/resourceAcl'
@@ -91,8 +90,21 @@ const RESOURCE_TYPES: readonly BundleResourceType[] = [
   'workgroup',
 ]
 
+export interface PackageCommandIdentityHandle {
+  localActorForUser(userId: string): Promise<Actor | null>
+}
+
+export interface PackageCommandBootstrap {
+  readonly db: DbClient
+  readonly identity: PackageCommandIdentityHandle
+  shutdown(): void
+}
+
+export type PackageCommandBootstrapFactory = () => Promise<PackageCommandBootstrap>
+
 export async function packageCommand(
   args: string[],
+  bootstrapFactory?: PackageCommandBootstrapFactory,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const sub = args[0]
   if (sub !== 'export' && sub !== 'import') return { output: USAGE, status: 'error' }
@@ -106,36 +118,43 @@ export async function packageCommand(
     }
   }
 
-  const db = openDb({ path: Paths.db, migrationsFolder: await resolveMigrationsFolder() })
-  const row = db.select().from(users).where(eq(users.username, username)).get()
-  if (row === undefined) return { output: `user '${username}' not found\n`, status: 'error' }
-  // ⚠️ 与 HTTP 同构的**第二半**：HTTP 侧 session lookup 对非 active 用户返回 null，
-  // 所以停用的人在网页上什么都做不了。只查「行存在」会让 CLI 给一个已停用的主体
-  // 造出可写 Actor，导入的资源归到该主体名下 —— 那正是「绕过判据」。
-  if (row.status !== 'active') {
-    return {
-      output: `user '${username}' is ${row.status}, not active: refusing to act as them\n`,
-      status: 'error',
-    }
-  }
-  // 与 HTTP 同构：从当前数据库行解析角色预设 + 显式附加权限 + access revision；
-  // 运行时消费者只读取最终 permissions，不把角色当成第二条授权轴。
-  const actor = await buildCurrentActor(db, { userId: row.id, source: 'daemon' })
-  if (actor === null) {
-    return { output: `user '${username}' is not active\n`, status: 'error' }
+  if (bootstrapFactory === undefined) {
+    return { output: 'identity-access-runtime-not-composed\n', status: 'error' }
   }
 
+  let bootstrap: PackageCommandBootstrap | undefined
   try {
+    bootstrap = await bootstrapFactory()
+    const { db, identity } = bootstrap
+    const row = db.select().from(users).where(eq(users.username, username)).get()
+    if (row === undefined) return { output: `user '${username}' not found\n`, status: 'error' }
+    // ⚠️ 与 HTTP 同构的**第二半**：HTTP 侧 session lookup 对非 active 用户返回 null，
+    // 所以停用的人在网页上什么都做不了。只查「行存在」会让 CLI 给一个已停用的主体
+    // 造出可写 Actor，导入的资源归到该主体名下 —— 那正是「绕过判据」。
+    if (row.status !== 'active') {
+      return {
+        output: `user '${username}' is ${row.status}, not active: refusing to act as them\n`,
+        status: 'error',
+      }
+    }
+    // 与 HTTP 同构：bootstrap 注入的 local participant 从当前数据库访问状态解析
+    // 最终 permissions + access revision；消费者不把角色当成第二条授权轴。
+    const actor = await identity.localActorForUser(row.id)
+    if (actor === null) {
+      return { output: `user '${username}' is not active\n`, status: 'error' }
+    }
     if (sub === 'export') return await runExport(db, actor, flags)
     return await runImport(db, actor, flags)
   } catch (err) {
     const e = err as { code?: string; message?: string }
     return { output: `${e.code ?? 'error'}: ${e.message ?? String(err)}\n`, status: 'error' }
+  } finally {
+    bootstrap?.shutdown()
   }
 }
 
 async function runExport(
-  db: ReturnType<typeof openDb>,
+  db: DbClient,
   actor: Actor,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
@@ -180,7 +199,7 @@ async function runExport(
 }
 
 async function runImport(
-  db: ReturnType<typeof openDb>,
+  db: DbClient,
   actor: Actor,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {

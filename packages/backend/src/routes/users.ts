@@ -16,14 +16,17 @@ import { listTokenAudit } from '@/services/tokenAudit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type {
+  DirectAuthorityBinding,
   DirectCommandContextFactory,
   DirectQueryContextFactory,
 } from '@/modules/identity-access/public/participants'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { UserAccessError } from '@/modules/identity-access/public/types'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
 interface UserRouteIdentityAccess {
   readonly contexts: DirectCommandContextFactory & DirectQueryContextFactory
+  readonly directAuthority: DirectAuthorityBinding
   readonly operations: IdentityUserOperations
 }
 
@@ -51,7 +54,7 @@ export function mountUserRoutes(
         status,
       }
     },
-    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => queryContext(identityAccess, actorOf(c)),
     encode: (c, output) => c.json(output),
     mapError: mapUserAccessError,
   })
@@ -72,7 +75,7 @@ export function mountUserRoutes(
         : []
       return { ids }
     },
-    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => queryContext(identityAccess, actorOf(c)),
     encode: (c, output) => c.json(output),
     mapError: mapUserAccessError,
   })
@@ -117,7 +120,7 @@ export function mountUserRoutes(
     path: '/api/users',
     tokenAccess: 'allow',
     decode: () => ({}),
-    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => queryContext(identityAccess, actorOf(c)),
     encode: (c, output) => c.json(output),
     mapError: mapUserAccessError,
   })
@@ -128,7 +131,7 @@ export function mountUserRoutes(
     path: '/api/users/:id',
     tokenAccess: 'allow',
     decode: (c) => ({ userId: c.req.param('id') }),
-    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => queryContext(identityAccess, actorOf(c)),
     encode: (c, output) => {
       if (output === null) {
         throw new NotFoundError('user-not-found', `user '${c.req.param('id')}' not found`)
@@ -156,7 +159,7 @@ export function mountUserRoutes(
       }
       return parsed.data
     },
-    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => commandContext(identityAccess, actorOf(c)),
     encode: (c, output) => c.json(output, 201),
     mapError: mapUserAccessError,
   })
@@ -179,7 +182,7 @@ export function mountUserRoutes(
       }
       return { targetUserId: c.req.param('id'), ...parsed.data }
     },
-    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => commandContext(identityAccess, actorOf(c)),
     encode: (c, output) => c.json(output),
     mapError: mapUserAccessError,
   })
@@ -190,7 +193,7 @@ export function mountUserRoutes(
     path: '/api/users/:id',
     tokenAccess: 'allow',
     decode: (c) => ({ targetUserId: c.req.param('id') }),
-    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => commandContext(identityAccess, actorOf(c)),
     encode: (c, output) => c.json(output),
     mapError: mapUserAccessError,
   })
@@ -209,21 +212,24 @@ export function mountUserRoutes(
       }
       return { targetUserId: c.req.param('id'), ...parsed.data }
     },
-    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    context: (c) => commandContext(identityAccess, actorOf(c)),
     encode: (c, output) => c.json(output),
     mapError: mapUserAccessError,
   })
 }
 
-function queryContext(factory: DirectQueryContextFactory, actor: Actor) {
-  return factory.queryFromAuthenticatedPrincipal(
-    { userId: actor.user.id, source: actor.source },
+function queryContext(factory: UserRouteIdentityAccess, actor: Actor) {
+  return factory.contexts.queryFromAuthority(
+    directRequestAuthority(factory.directAuthority, actor),
     'http',
   )
 }
 
-function commandContext(factory: DirectCommandContextFactory, actor: Actor) {
-  return factory.fromAuthenticatedPrincipal({ userId: actor.user.id, source: actor.source }, 'http')
+function commandContext(factory: UserRouteIdentityAccess, actor: Actor) {
+  return factory.contexts.fromAuthority(
+    directRequestAuthority(factory.directAuthority, actor),
+    'http',
+  )
 }
 
 function mapUserAccessError(error: unknown): never {

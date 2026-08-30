@@ -189,6 +189,8 @@ import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-wo
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import { UserAccessError } from '@/modules/identity-access/public/types'
+import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
+import type { GetUserGitCommitIdentity } from '@/modules/identity-access/public/queries'
 import { getUserGitCommitIdentity } from '@/services/users'
 import { freezeCallClosure } from '@/services/execution/closure'
 import {
@@ -447,6 +449,12 @@ export interface StartTaskDeps {
    */
   secretBox?: SecretBox
   db: DbClient
+  /** RFC-347 daemon-scoped identity query. Optional only for legacy test
+   * fixtures, which use the runtime-neutral compatibility fallback. */
+  identityAccess?: Readonly<{
+    getUserGitCommitIdentity?: GetUserGitCommitIdentity
+    delegatedRequests?: DelegatedRequestAuthorityFactory
+  }>
   /**
    * Generic TaskEngine catalog visibility for a root execution. Call children
    * ignore caller input and inherit the exact persisted parent value.
@@ -784,7 +792,9 @@ export async function resolveTaskGitCommitIdentity(
   const userId = deps.actorUserId
   if (userId === undefined || userId === SYSTEM_USER_ID) return null
   try {
-    return await getUserGitCommitIdentity(deps.db, userId)
+    return deps.identityAccess?.getUserGitCommitIdentity === undefined
+      ? await getUserGitCommitIdentity(deps.db, userId)
+      : await deps.identityAccess.getUserGitCommitIdentity.execute(userId)
   } catch (error) {
     if (!(error instanceof UserAccessError)) throw error
     switch (error.kind) {

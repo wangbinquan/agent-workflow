@@ -35,6 +35,14 @@ import {
 import type { AnyChannelParams, WsConnectionData, WsCredential } from '../src/ws/registry'
 import type { Actor } from '../src/auth/actor'
 import { triggerAuthorityRevalidation } from '../src/ws/revalidationHook'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import {
+  admitWsIdentity,
+  stubIdentityAccessWsBinding,
+  TEST_DIRECT_AUTHORITY,
+} from './helpers/identityAccessWs'
+import type { IdentityAccessWsBinding } from '../src/ws/registry'
+import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test')
@@ -46,13 +54,23 @@ interface FakeWs {
   events: string[]
 }
 
+const identityByActor = new WeakMap<
+  Actor,
+  { readonly authority: DirectRequestAuthority; readonly identityAccess: IdentityAccessWsBinding }
+>()
+
 function fakeConn(actor: Actor, credential: WsCredential, channel: AnyChannelParams): FakeWs {
   const closes: Array<{ code: number; reason: string }> = []
   const sent: unknown[] = []
   const events: string[] = []
+  const identity = identityByActor.get(actor) ?? {
+    authority: TEST_DIRECT_AUTHORITY,
+    identityAccess: stubIdentityAccessWsBinding(actor.authorityRevision ?? 0),
+  }
   const data: WsConnectionData = {
     channel,
     actor,
+    ...identity,
     credential,
     closing: false,
     revalidating: false,
@@ -88,16 +106,9 @@ async function seedUser(
     password: 'longEnoughPassword',
   })
   const { token } = await createSession({ db, userId: user.id })
-  const actor = buildActor({
-    user: {
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      role,
-      status: 'active',
-    },
-    source: 'session',
-  })
+  const identity = await admitWsIdentity(createIdentityAccessRuntime({ db }), user.id)
+  const actor = identity.actor
+  identityByActor.set(actor, identity)
   const fp = describeCredential(token)
   const credential: WsCredential =
     fp.kind === 'daemon' ? { kind: 'daemon' } : { ...fp, expiresAt: null }

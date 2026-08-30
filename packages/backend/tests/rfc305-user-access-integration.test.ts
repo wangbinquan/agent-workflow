@@ -9,7 +9,10 @@ import {
   type Permission,
 } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { composeIdentityAccess } from '../src/modules/identity-access/composition'
+import {
+  composeIdentityAccess,
+  type IdentityAccessFixtureRuntime,
+} from '../src/modules/identity-access/composition'
 import { UpdateUserAccess } from '../src/modules/identity-access/application/commands/updateUserAccess'
 import {
   subjectRefOf,
@@ -17,24 +20,37 @@ import {
 } from '../src/modules/identity-access/application/operationContext'
 import { IdentityAccessObservability } from '../src/modules/identity-access/infrastructure/identityAccessObservability'
 import { SQLiteUserAccessTransactionRunner } from '../src/modules/identity-access/infrastructure/sqliteUserAccessRepository'
-import type {
-  AuthorizationSubjectRef,
-  DelegatedAuthorityRef,
-} from '../src/modules/identity-access/public/participants'
 import { createUser, patchUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
-import { buildInheritedActor } from '../src/auth/actor'
 import { resolveActor } from '../src/auth/session'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('RFC-305 identity-access integration', () => {
   let db: DbClient
+  let identityAccess: IdentityAccessFixtureRuntime
+  let delegatedAttempt: number
 
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    identityAccess = composeIdentityAccess(db)
+    delegatedAttempt = 0
   })
+
+  async function resolveInheritedActor(userId: string) {
+    delegatedAttempt += 1
+    return (
+      (
+        await identityAccess.delegatedRequests.forCall({
+          kind: 'call-workflow',
+          ownerUserId: userId,
+          parentTaskId: 'rfc305-parent-task',
+          parentNodeRunId: `rfc305-parent-node-${delegatedAttempt}`,
+        })
+      )?.actor ?? null
+    )
+  }
 
   async function fixture(): Promise<{
     adminId: string
@@ -57,7 +73,7 @@ describe('RFC-305 identity-access integration', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
-    const module = composeIdentityAccess(db)
+    const module = identityAccess
     return {
       adminId: admin.id,
       userId: user.id,
@@ -161,7 +177,7 @@ describe('RFC-305 identity-access integration', () => {
       },
       observer,
     })
-    const context = composeIdentityAccess(db).contexts.fromAuthenticatedPrincipal(
+    const context = identityAccess.contexts.fromAuthenticatedPrincipal(
       { userId: f.adminId, source: 'session' },
       'http',
       1_500,
@@ -211,7 +227,7 @@ describe('RFC-305 identity-access integration', () => {
       )
       .run(f.userId, 'scripts:author', f.adminId, 1)
 
-    const current = await composeIdentityAccess(db).resolveAuthority.execute(f.userId)
+    const current = await identityAccess.resolveAuthority.execute(f.userId)
     // RFC-312 —— 新建 user/manager 默认拿到一条 `users:presence` grant（建号时发放，可按账号收回），故此处多一项。
     expect(current?.additionalPermissions).toEqual([
       'users:presence',
@@ -232,14 +248,14 @@ describe('RFC-305 identity-access integration', () => {
     })
     const daemon = Buffer.from('daemon-not-used')
 
-    const beforeSession = await resolveActor(db, session.token, daemon)
-    const beforePat = await resolveActor(db, pat.token, daemon)
+    const beforeSession = await resolveActor(db, session.token, daemon, identityAccess)
+    const beforePat = await resolveActor(db, pat.token, daemon, identityAccess)
     expect(beforeSession?.permissions.has('repos:update')).toBe(false)
     expect(beforePat?.permissions.has('repos:update')).toBe(false)
 
     await f.update(0, ['repos:update', 'scripts:author'])
-    const grantedSession = await resolveActor(db, session.token, daemon)
-    const grantedPat = await resolveActor(db, pat.token, daemon)
+    const grantedSession = await resolveActor(db, session.token, daemon, identityAccess)
+    const grantedPat = await resolveActor(db, pat.token, daemon, identityAccess)
     expect(grantedSession?.permissions.has('repos:update')).toBe(true)
     expect(grantedSession?.permissions.has('scripts:author')).toBe(true)
     expect(grantedPat?.permissions.has('repos:update')).toBe(true)
@@ -247,8 +263,8 @@ describe('RFC-305 identity-access integration', () => {
     expect(grantedSession?.authorityRevision).toBe(1)
 
     await f.update(1, [])
-    const revokedSession = await resolveActor(db, session.token, daemon)
-    const revokedPat = await resolveActor(db, pat.token, daemon)
+    const revokedSession = await resolveActor(db, session.token, daemon, identityAccess)
+    const revokedPat = await resolveActor(db, pat.token, daemon, identityAccess)
     expect(revokedSession?.permissions.has('repos:update')).toBe(false)
     expect(revokedPat?.permissions.has('repos:update')).toBe(false)
     expect(revokedSession?.authorityRevision).toBe(2)
@@ -271,7 +287,7 @@ describe('RFC-305 identity-access integration', () => {
     expect(grants).toHaveLength(27)
     await f.update(0, [...grants])
 
-    const actor = await buildInheritedActor(db, f.userId)
+    const actor = await resolveInheritedActor(f.userId)
     expect(actor).not.toBeNull()
     expect(actor!.user.role).toBe('user')
     for (const permission of grants) expect(actor!.permissions.has(permission)).toBe(true)
@@ -291,14 +307,14 @@ describe('RFC-305 identity-access integration', () => {
       createdBy: f.adminId,
     })
     expect(invited.status).toBe('invited')
-    expect(await buildInheritedActor(db, invited.id)).toBeNull()
+    expect(await resolveInheritedActor(invited.id)).toBeNull()
     expect(grantsFor(db, invited.id).sort()).toEqual(['scripts:author', 'users:presence'])
 
     await patchUser(db, invited.id, { status: 'active' }, 2_000, f.adminId)
-    const active = await buildInheritedActor(db, invited.id)
+    const active = await resolveInheritedActor(invited.id)
     expect(active?.permissions.has('scripts:author')).toBe(true)
     await patchUser(db, invited.id, { status: 'disabled' }, 2_001, f.adminId)
-    expect(await buildInheritedActor(db, invited.id)).toBeNull()
+    expect(await resolveInheritedActor(invited.id)).toBeNull()
     expect(grantsFor(db, invited.id).sort()).toEqual(['scripts:author', 'users:presence'])
   })
 
@@ -330,7 +346,7 @@ describe('RFC-305 identity-access integration', () => {
   test('stale access keeps the co-submitted profile patch atomic', async () => {
     const f = await fixture()
     await f.update(0, ['scripts:author'])
-    const module = composeIdentityAccess(db)
+    const module = identityAccess
     const stale = module.contexts.fromAuthenticatedPrincipal(
       { userId: f.adminId, source: 'session' },
       'http',
@@ -356,7 +372,7 @@ describe('RFC-305 identity-access integration', () => {
   test('legacy role writes replace the preset, canonicalize explicit grants and use the sole writer', async () => {
     const f = await fixture()
     await f.update(0, ['scripts:author', 'repos:update'])
-    const module = composeIdentityAccess(db)
+    const module = identityAccess
     const promote = module.contexts.fromAuthenticatedPrincipal(
       { userId: f.adminId, source: 'session' },
       'http',
@@ -377,7 +393,7 @@ describe('RFC-305 identity-access integration', () => {
       targetUserId: f.userId,
       legacyRole: 'user',
     })
-    const actor = await buildInheritedActor(db, f.userId)
+    const actor = await resolveInheritedActor(f.userId)
     expect(actor?.user.role).toBe('user')
     expect(actor?.permissions.has('scripts:author')).toBe(false)
     expect(actor?.permissions.has('repos:update')).toBe(false)
@@ -407,7 +423,7 @@ describe('RFC-305 identity-access integration', () => {
 
   test('invalid create and audit failure leave no user, grant or audit residue', async () => {
     const f = await fixture()
-    const module = composeIdentityAccess(db)
+    const module = identityAccess
     const context = module.contexts.fromAuthenticatedPrincipal(
       { userId: f.adminId, source: 'session' },
       'http',
@@ -460,51 +476,46 @@ describe('RFC-305 identity-access integration', () => {
     expect(tableCount(db, 'user_access_audit')).toBe(beforeAudits)
   })
 
-  test('delegated resolver and attempt factory mint current opaque contexts', async () => {
+  test('delegated source factory mints current opaque contexts with stable attempt identity', async () => {
     const f = await fixture()
-    const module = composeIdentityAccess(db)
-    const subject = Object.freeze({ userId: f.userId }) as AuthorizationSubjectRef
-    const authority = await module.delegatedAuthority.resolve('schedule', subject)
-    expect(authority.revision).toBe(0)
-
-    const first = module.delegatedContexts.fromDurableAttempt(authority, 'schedule', {
-      sourceId: 'schedule-1',
-      attemptId: 'attempt-1',
+    const module = identityAccess
+    const first = await module.delegatedRequests.forSchedule({
+      ownerUserId: f.userId,
+      scheduleId: 'schedule-1',
+      invocation: { kind: 'automatic', occurrenceAt: 1_700_000_000_000 },
     })
-    const retried = module.delegatedContexts.fromDurableAttempt(authority, 'schedule', {
-      sourceId: 'schedule-1',
-      attemptId: 'attempt-1',
+    const retried = await module.delegatedRequests.forSchedule({
+      ownerUserId: f.userId,
+      scheduleId: 'schedule-1',
+      invocation: { kind: 'automatic', occurrenceAt: 1_700_000_000_000 },
     })
-    expect(first.operationId).not.toBe(retried.operationId)
-    expect(first.idempotencyKey).toBe(retried.idempotencyKey)
-    expect(subjectRefOf(first.authority).userId).toBe(f.userId)
-    expect(trustedContextMetadata(first)).toEqual({
+    expect(first).not.toBeNull()
+    expect(retried).not.toBeNull()
+    expect(first!.context.operationId).not.toBe(retried!.context.operationId)
+    expect(first!.context).toHaveProperty('idempotencyKey')
+    expect(retried!.context).toHaveProperty('idempotencyKey')
+    expect((first!.context as { readonly idempotencyKey: string }).idempotencyKey).toBe(
+      (retried!.context as { readonly idempotencyKey: string }).idempotencyKey,
+    )
+    expect(subjectRefOf(first!.context.authority).userId).toBe(f.userId)
+    expect(trustedContextMetadata(first!.context)).toEqual({
       source: 'schedule',
       transport: 'delegated',
     })
-    expect(() =>
-      module.delegatedContexts.fromDurableAttempt(authority, 'webhook', {
-        sourceId: 'schedule-1',
-        attemptId: 'attempt-1',
-      }),
-    ).toThrow('untrusted-delegated-authority')
-    expect(() =>
-      module.delegatedContexts.fromDurableAttempt(
-        { subjectRef: subject, revision: 0 } as DelegatedAuthorityRef,
-        'schedule',
-        { sourceId: 'schedule-1', attemptId: 'attempt-1' },
-      ),
-    ).toThrow('untrusted-delegated-authority')
 
     await patchUser(db, f.userId, { status: 'disabled' }, 4_001, f.adminId)
-    await expect(module.delegatedAuthority.resolve('schedule', subject)).rejects.toMatchObject({
-      code: 'delegated-subject-inactive',
-    })
+    expect(
+      await module.delegatedRequests.forSchedule({
+        ownerUserId: f.userId,
+        scheduleId: 'schedule-1',
+        invocation: { kind: 'manual' },
+      }),
+    ).toBeNull()
   })
 
   test('diagnostics count update outcomes, re-resolution and invalid stored grants', async () => {
     const f = await fixture()
-    const module = composeIdentityAccess(db)
+    const module = identityAccess
     await f.update(0, ['scripts:author'])
     await f.update(1, ['scripts:author'])
     await expect(f.update(0, [])).rejects.toMatchObject({ code: 'user-access-stale' })

@@ -49,6 +49,7 @@ import {
 import { createSqliteCutoverStore } from '../src/modules/development-automation/infrastructure/sqliteCutoverStore'
 import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import type { MrEffectsPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
@@ -246,6 +247,7 @@ describe('RFC-310 PR-9 — a frozen cutover skips webhook code-round fires', () 
     })
     const dispatcher = createWebhookDispatcher({
       db,
+      identityAccess: createIdentityAccessRuntime({ db }),
       configPath: '',
       secretBox: box,
       getDefaultRuntime: async () => null,

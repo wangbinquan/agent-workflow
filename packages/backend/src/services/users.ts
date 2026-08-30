@@ -16,48 +16,26 @@ import { hashPassword } from '@/auth/passwords'
 import { revokeAllSessionsForUser } from '@/auth/sessionStore'
 import type { DbClient } from '@/db/client'
 import { users } from '@/db/schema'
-import { composeIdentityAccess } from '@/modules/identity-access/composition'
-import type {
-  SyncOidcProfileCommand,
-  SyncOidcProfileResult,
-} from '@/modules/identity-access/public/commands'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { UserAccessError } from '@/modules/identity-access/public/types'
-import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { isOidcManagedUser, writeLocalPasswordIfUnmanaged } from '@/services/accountAuthPolicy'
 
 export type UserRow = typeof users.$inferSelect
 
-/** RFC-320 legacy-service adapter: callers consume the exact identity-access
- * query while the already-reviewed users service remains the sole composition
- * edge outside the module. */
-export function getUserGitCommitIdentity(db: DbClient, userId: string): Promise<GitCommitIdentity> {
-  return composeIdentityAccess(db).getUserGitCommitIdentity.execute(userId)
-}
-
-/** Existing-identity login refresh. Domain errors intentionally remain
- * identity-access errors so the OIDC coordinator can preserve its established
- * HTTP error mapping. */
-export function syncOidcUserProfile(
+/** Legacy test/runtime-neutral fallback. Daemon task launch injects the
+ * bootstrap-owned query directly; callers without a runtime are test/setup
+ * fixtures that receive a short-lived explicit instance. */
+export async function getUserGitCommitIdentity(
   db: DbClient,
-  command: SyncOidcProfileCommand,
-): SyncOidcProfileResult {
-  return composeIdentityAccess(db).syncOidcProfile.execute(command)
-}
-
-/** Create/bind/link refresh joins the coordinator's already-open SQLite
- * transaction without putting TransactionScope on the module public surface. */
-export function syncOidcUserProfileInTransaction(
-  db: DbClient,
-  transactionScope: TransactionScope,
-  command: SyncOidcProfileCommand,
-  now?: number,
-): SyncOidcProfileResult {
-  return composeIdentityAccess(db).syncOidcProfileInTransaction(transactionScope, command, now)
-}
-
-export function mapOidcUserProfilePersistenceError(db: DbClient, error: unknown): unknown {
-  return composeIdentityAccess(db).mapOidcEmailConstraint(error)
+  userId: string,
+): Promise<GitCommitIdentity> {
+  const runtime = createIdentityAccessRuntime({ db })
+  try {
+    return await runtime.getUserGitCommitIdentity.execute(userId)
+  } finally {
+    runtime.shutdown()
+  }
 }
 
 export async function countNonSystemUsers(db: DbClient): Promise<number> {
@@ -94,30 +72,36 @@ export async function createUser(db: DbClient, input: CreateUserInput): Promise<
   const passwordHash = input.password ? await hashPassword(input.password) : null
   const status = input.status ?? (passwordHash ? 'active' : 'invited')
   const id = ulid()
-  const module = composeIdentityAccess(db)
-  const context = module.contexts.fromAuthenticatedPrincipal(
-    { userId: input.createdBy ?? SYSTEM_USER_ID, source: 'cli' },
-    'cli',
-    now,
-  )
+  // Legacy test/setup fixture. Production user commands receive the daemon or
+  // CLI bootstrap runtime through composeIdentityUserOperations.
+  const module = createIdentityAccessRuntime({ db })
   try {
-    await module.createManagedUser.execute(context, {
-      id,
-      username: input.username,
-      email: input.email ?? null,
-      displayName: input.displayName,
-      passwordHash,
-      role: input.role,
-      status,
-      forcePasswordChange: false,
-      createdBy: input.createdBy ?? null,
-      schemaVersion: 1,
-      additionalPermissions: input.additionalPermissions ?? [],
-    })
-  } catch (error) {
-    rethrowUserAccessError(error)
+    const localOperator = await module.localOperator.forUser(input.createdBy ?? SYSTEM_USER_ID)
+    if (localOperator === null) {
+      throw new ForbiddenError('user-access-actor-inactive', 'user access actor is not active')
+    }
+    const context = localOperator.commandContext(now)
+    try {
+      await module.createManagedUser.execute(context, {
+        id,
+        username: input.username,
+        email: input.email ?? null,
+        displayName: input.displayName,
+        passwordHash,
+        role: input.role,
+        status,
+        forcePasswordChange: false,
+        createdBy: input.createdBy ?? null,
+        schemaVersion: 1,
+        additionalPermissions: input.additionalPermissions ?? [],
+      })
+    } catch (error) {
+      rethrowUserAccessError(error)
+    }
+    return (await findById(db, id))!
+  } finally {
+    module.shutdown()
   }
-  return (await findById(db, id))!
 }
 
 export interface ResetPasswordInput {
@@ -191,30 +175,33 @@ export async function patchUser(
   now: number = Date.now(),
   actorId?: string,
 ): Promise<UserRow> {
-  const module = composeIdentityAccess(db)
-  const context = module.contexts.fromAuthenticatedPrincipal(
-    actorId === undefined
-      ? { userId: SYSTEM_USER_ID, source: 'cli' }
-      : { userId: actorId, source: 'session' },
-    actorId === undefined ? 'cli' : 'http',
-    now,
-  )
-  let result
+  // Legacy test/setup fixture; production routes use their injected runtime.
+  const module = createIdentityAccessRuntime({ db })
   try {
-    result = await module.updateUserAccess.execute(context, {
-      targetUserId: id,
-      displayName: patch.displayName,
-      email: patch.email,
-      status: patch.status,
-      forcePasswordChange: patch.forcePasswordChange,
-      access: patch.access,
-      legacyRole: patch.role,
-    })
-  } catch (error) {
-    rethrowUserAccessError(error)
+    const localOperator = await module.localOperator.forUser(actorId ?? SYSTEM_USER_ID)
+    if (localOperator === null) {
+      throw new ForbiddenError('user-access-actor-inactive', 'user access actor is not active')
+    }
+    const context = localOperator.commandContext(now)
+    let result
+    try {
+      result = await module.updateUserAccess.execute(context, {
+        targetUserId: id,
+        displayName: patch.displayName,
+        email: patch.email,
+        status: patch.status,
+        forcePasswordChange: patch.forcePasswordChange,
+        access: patch.access,
+        legacyRole: patch.role,
+      })
+    } catch (error) {
+      rethrowUserAccessError(error)
+    }
+    if (result.becameDisabled) await revokeAllSessionsForUser(db, id, now)
+    return (await findById(db, id))!
+  } finally {
+    module.shutdown()
   }
-  if (result.becameDisabled) await revokeAllSessionsForUser(db, id, now)
-  return (await findById(db, id))!
 }
 
 function rethrowUserAccessError(error: unknown): never {

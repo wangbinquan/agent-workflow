@@ -27,6 +27,7 @@ import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
   deps: T,
@@ -975,8 +976,11 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
         db2,
         createTaskExecutionTestTopology({ db: db2, driver: 'real' }).schedulerDriver,
         cfgPath,
+        createIdentityAccessRuntime({ db: db2 }),
       ),
       Date.now(),
+      createIdentityAccessRuntime({ db: db2 }),
+      { kind: 'manual' },
     )
     expect(taskId).toBeTruthy()
 

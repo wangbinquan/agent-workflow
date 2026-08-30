@@ -13,11 +13,12 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { userIdentities, users } from '../src/db/schema'
 import {
-  bindInvitedUserWithIdentity,
-  createIdentity,
-  createUserWithIdentity,
-  syncPreferredSnapshot,
+  bindInvitedUserWithIdentity as bindInvitedUserWithIdentityService,
+  createIdentity as createIdentityService,
+  createUserWithIdentity as createUserWithIdentityService,
+  syncPreferredSnapshot as syncPreferredSnapshotService,
 } from '../src/services/userIdentities'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { applyEmailTrust } from '../src/services/oidc/provisioning'
 import { DomainError } from '../src/util/errors'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -25,6 +26,35 @@ import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { randomBytes } from 'node:crypto'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+function identityAccessFixture(db: DbClient) {
+  return createIdentityAccessRuntime({ db })
+}
+
+function createIdentity(db: DbClient, args: Parameters<typeof createIdentityService>[1]) {
+  return createIdentityService(db, args, identityAccessFixture(db))
+}
+
+function createUserWithIdentity(
+  db: DbClient,
+  args: Parameters<typeof createUserWithIdentityService>[1],
+) {
+  return createUserWithIdentityService(db, args, identityAccessFixture(db))
+}
+
+function bindInvitedUserWithIdentity(
+  db: DbClient,
+  args: Parameters<typeof bindInvitedUserWithIdentityService>[1],
+) {
+  return bindInvitedUserWithIdentityService(db, args, identityAccessFixture(db))
+}
+
+function syncPreferredSnapshot(
+  db: DbClient,
+  args: Parameters<typeof syncPreferredSnapshotService>[0],
+) {
+  return syncPreferredSnapshotService(args, identityAccessFixture(db))
+}
 
 async function makeProvider(db: DbClient, subjectClaim: string | null = null) {
   const svc = createOidcProvidersService({ db, secretBox: createSecretBoxFromKey(randomBytes(32)) })

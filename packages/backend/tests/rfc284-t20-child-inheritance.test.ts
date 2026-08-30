@@ -42,6 +42,9 @@ const DISPOSITION = {
   // RFC-328: every child submits/claims its own intent; parent epoch authority
   // is never inherited across the call boundary.
   executionContext: 'per-task',
+  // RFC-347: the daemon driver injects the one delegated factory at every
+  // drive boundary; it is not serialized through the child run-config bag.
+  identityAccess: 'dropped-registered',
   appHome: 'inherit',
   binaryOverride: 'inherit',
   configPath: 'inherit',

@@ -329,6 +329,7 @@ export function mountWorkgroupRoutes(app: Hono, deps: AppDeps): void {
           deps.configPath,
           actor.user.id,
           undefined,
+          deps.identityAccess,
         ),
       )
       return c.json(task, 201)

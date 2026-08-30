@@ -8,16 +8,31 @@ import type { UserIdentity } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { authLoginPolicy, oidcProviders, userIdentities, users } from '@/db/schema'
-import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
-import { UserAccessError } from '@/modules/identity-access/public/types'
-import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import {
-  mapOidcUserProfilePersistenceError,
-  syncOidcUserProfile,
-  syncOidcUserProfileInTransaction,
-} from '@/services/users'
+  type SyncOidcProfileCommand,
+  type SyncOidcProfileResult,
+} from '@/modules/identity-access/public/commands'
+import type { InitialUserAccessProvisioner } from '@/modules/identity-access/public/participants'
+import { UserAccessError } from '@/modules/identity-access/public/types'
+import type { TransactionScope } from '@/platform/persistence/transactionScope'
+import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
+
+/** Bootstrap-owned OIDC profile participant.  Services receive this narrow
+ * binding instead of composing an identity-access runtime from the database. */
+export interface OidcProfileIdentityAccess {
+  readonly initialUserAccess: InitialUserAccessProvisioner
+  readonly syncOidcProfile: Readonly<{
+    execute(command: SyncOidcProfileCommand): SyncOidcProfileResult
+  }>
+  readonly syncOidcProfileInTransaction: (
+    transactionScope: TransactionScope,
+    command: SyncOidcProfileCommand,
+    now?: number,
+  ) => SyncOidcProfileResult
+  readonly mapOidcEmailConstraint: (error: unknown) => unknown
+}
 
 export async function listIdentitiesForUser(db: DbClient, userId: string): Promise<UserIdentity[]> {
   const rows = await db
@@ -165,13 +180,14 @@ function insertIdentityTx(
 export async function createIdentity(
   db: DbClient,
   args: CreateIdentityArgs,
+  identityAccess?: OidcProfileIdentityAccess,
 ): Promise<typeof userIdentities.$inferSelect> {
   // dbTxSync (not a plain insert): the duplicate check, the subjectClaim
   // revalidation, and the insert must be one serialization unit against the
   // PATCH-side namespace lock (services/oidcProviders.ts).
   return dbTxSync(db, (tx) => {
     const identity = insertIdentityTx(tx, args)
-    syncInsertedIdentityProfile(db, tx, args.userId, args, args.now ?? Date.now())
+    syncInsertedIdentityProfile(tx, args.userId, args, args.now ?? Date.now(), identityAccess)
     return identity
   })
 }
@@ -192,6 +208,7 @@ export async function createUserWithIdentity(
     identity: Omit<CreateIdentityArgs, 'userId'>
     now?: number
   },
+  identityAccess: OidcProfileIdentityAccess,
 ): Promise<{ userId: string }> {
   const now = args.now ?? Date.now()
   try {
@@ -225,7 +242,7 @@ export async function createUserWithIdentity(
       const userId = ulid()
       const operationId = ulid()
       withExistingSQLiteTransactionScope(tx, (transactionScope) => {
-        insertInitialUserAccessInTransaction(transactionScope, {
+        identityAccess.initialUserAccess.insertInTransaction(transactionScope, {
           user: {
             id: userId,
             username: args.username,
@@ -254,11 +271,11 @@ export async function createUserWithIdentity(
       })
       const identityArgs = { ...args.identity, userId, now }
       insertIdentityTx(tx, identityArgs)
-      syncInsertedIdentityProfile(db, tx, userId, identityArgs, now)
+      syncInsertedIdentityProfile(tx, userId, identityArgs, now, identityAccess)
       return { userId }
     })
   } catch (error) {
-    throw identityAccessDomainError(mapOidcUserProfilePersistenceError(db, error))
+    throw identityAccessDomainError(identityAccess.mapOidcEmailConstraint(error))
   }
 }
 
@@ -274,6 +291,7 @@ export async function bindInvitedUserWithIdentity(
     identity: Omit<CreateIdentityArgs, 'userId'>
     now?: number
   },
+  identityAccess: OidcProfileIdentityAccess,
 ): Promise<void> {
   const now = args.now ?? Date.now()
   dbTxSync(db, (tx) => {
@@ -283,17 +301,17 @@ export async function bindInvitedUserWithIdentity(
       .run()
     const identityArgs = { ...args.identity, userId: args.userId, now }
     insertIdentityTx(tx, identityArgs)
-    syncInsertedIdentityProfile(db, tx, args.userId, identityArgs, now)
+    syncInsertedIdentityProfile(tx, args.userId, identityArgs, now, identityAccess)
     return undefined
   })
 }
 
 function syncInsertedIdentityProfile(
-  db: DbClient,
   tx: DbTxSync,
   userId: string,
   identity: CreateIdentityArgs,
   now: number,
+  identityAccess?: OidcProfileIdentityAccess,
 ): void {
   // Undefined selectors are the pre-RFC direct-link API. Callback flows
   // snapshot all four selectors and carry both resolved names.
@@ -311,12 +329,14 @@ function syncInsertedIdentityProfile(
       'callback identity is missing resolved OIDC profile names',
     )
   }
+  if (identityAccess === undefined) {
+    throw new Error('identity-access-runtime-not-composed')
+  }
   const displayName = identity.displayName
   const gitName = identity.gitName
   withExistingSQLiteTransactionScope(tx, (transactionScope) => {
     try {
-      syncOidcUserProfileInTransaction(
-        db,
+      identityAccess.syncOidcProfileInTransaction(
         transactionScope,
         {
           providerId: identity.providerId,
@@ -353,7 +373,6 @@ function syncInsertedIdentityProfile(
  * names are authoritative on every callback; email retains RFC-320 semantics.
  */
 export function syncPreferredSnapshot(
-  db: DbClient,
   args: {
     providerId: string
     subject: string
@@ -370,9 +389,10 @@ export function syncPreferredSnapshot(
     expectedEmailClaim?: string | null
     now?: number
   },
+  identityAccess: OidcProfileIdentityAccess,
 ): { displayNameRefreshed: boolean; gitNameRefreshed: boolean; emailRefreshed: boolean } {
   try {
-    return syncOidcUserProfile(db, {
+    return identityAccess.syncOidcProfile.execute({
       providerId: args.providerId,
       subject: args.subject,
       userId: args.userId,

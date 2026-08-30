@@ -12,13 +12,21 @@ import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users } from '../src/db/schema'
 import { errorHandler } from '../src/util/errors'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
 
 function buildApp(db: DbClient): Hono {
   const app = new Hono()
-  app.use('/api/*', multiAuth({ db, daemonToken: DAEMON_TOKEN }))
+  app.use(
+    '/api/*',
+    multiAuth({
+      db,
+      daemonToken: DAEMON_TOKEN,
+      identityAccess: createIdentityAccessRuntime({ db }),
+    }),
+  )
   app.get('/api/whoami', (c) => {
     const a = actorOf(c)
     return c.json({

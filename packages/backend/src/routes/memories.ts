@@ -49,7 +49,11 @@ import {
 } from '@/services/memory'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
-import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
+import type {
+  DirectAuthorityBinding,
+  DirectCommandContextFactory,
+} from '@/modules/identity-access/public/participants'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
 /**
  * RFC-099 (D12) — load + gate one memory row for a management operation:
@@ -78,6 +82,7 @@ async function loadManagedMemory(deps: AppDeps, c: Parameters<typeof actorOf>[0]
 
 interface MemoryRouteIdentityAccess {
   readonly contexts: DirectCommandContextFactory
+  readonly directAuthority: DirectAuthorityBinding
 }
 
 export function mountMemoryRoutes(
@@ -339,8 +344,8 @@ export function mountMemoryRoutes(
         throw new ValidationError('invalid-body', 'invalid move request', parsed.error.format())
       }
       const actor = actorOf(c)
-      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
-        { userId: actor.user.id, source: actor.source },
+      const context = identityAccess.contexts.fromAuthority(
+        directRequestAuthority(identityAccess.directAuthority, actor),
         'http',
       )
       const result = moveMemory(deps.db, identityAccess.contexts, context, id, parsed.data)

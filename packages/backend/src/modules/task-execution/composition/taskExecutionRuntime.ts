@@ -1,4 +1,5 @@
 import type { DbClient } from '@/db/client'
+import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import { cancelTask, isTaskActive, resumeTask } from '@/services/task'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 import { humanGateComposition } from '@/services/humanGateComposition'
@@ -23,9 +24,12 @@ export interface TaskExecutionRuntime extends TaskExecutionRuntimeComponents {
 
 export function composeTaskExecutionRuntime(input: {
   readonly db: DbClient
+  readonly identityAccess?: Readonly<{
+    readonly delegatedRequests: DelegatedRequestAuthorityFactory
+  }>
   readonly repositoryPublicationTransport?: TaskRepositoryPublicationTransport
 }): TaskExecutionRuntime {
-  const { db, repositoryPublicationTransport } = input
+  const { db, identityAccess, repositoryPublicationTransport } = input
   const readModels = createSqliteTaskExecutionReadModels(db)
   const topology = {} as SchedulerRuntimeTopology
   const runtimeComponents: TaskExecutionRuntimeComponents = Object.freeze({
@@ -38,6 +42,7 @@ export function composeTaskExecutionRuntime(input: {
         {
           ...request,
           db,
+          ...(identityAccess === undefined ? {} : { identityAccess }),
           ...(repositoryPublicationTransport === undefined
             ? {}
             : { repositoryPublicationTransport }),

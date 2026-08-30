@@ -9,7 +9,7 @@ import { z } from 'zod'
 import { actorOf } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DigitalEmployeeModule } from '@/modules/digital-employee/composition'
-import type { DirectAuthenticatedAuthorityFactory } from '@/modules/identity-access/public/participants'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import {
   createDevelopmentActivityOperation,
   type DevelopmentActivityOperations,
@@ -87,7 +87,7 @@ export function mountDigitalEmployeeRoutes(
   deps: { readonly db: DbClient },
   module: DigitalEmployeeModule,
   activityOperations: DevelopmentActivityOperations,
-  contexts: DirectAuthenticatedAuthorityFactory,
+  contexts: DirectAuthorityBinding,
 ): void {
   const maxUploadBytes = 32 * 1024 * 1024
 

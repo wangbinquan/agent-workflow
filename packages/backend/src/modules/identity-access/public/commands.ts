@@ -17,7 +17,3 @@ export {
   type SyncOidcProfileCommand,
   type SyncOidcProfileResult,
 } from '../application/commands/syncOidcProfile'
-export {
-  insertInitialUserAccessInTransaction,
-  type InitialUserAccessProvision,
-} from '../infrastructure/sqliteUserAccessRepository'

@@ -397,6 +397,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           deps.configPath,
           actor.user.id,
           deps.secretBox,
+          deps.identityAccess,
         ),
         // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
         // THIS actor's visibility.

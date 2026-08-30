@@ -18,6 +18,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { checkUpgradeGate, WS_CHANNELS, type WsConnectionData } from '../src/ws/registry'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
+import { admitWsIdentity } from './helpers/identityAccessWs'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -43,11 +44,16 @@ function actorWith(role: 'admin' | 'user', id = 'u-1'): Actor {
   })
 }
 
-function fakeWs(actor: Actor): { ws: ServerWebSocket<WsConnectionData>; sent: unknown[] } {
+function fakeWs(identity: Awaited<ReturnType<typeof admitWsIdentity>>): {
+  ws: ServerWebSocket<WsConnectionData>
+  sent: unknown[]
+} {
   const sent: unknown[] = []
   const data: WsConnectionData = {
     channel: { kind: 'presence' },
-    actor,
+    actor: identity.actor,
+    authority: identity.authority,
+    identityAccess: identity.identityAccess,
     credential: { kind: 'session', hash: 'h', expiresAt: null },
     closing: false,
     revalidating: false,
@@ -84,10 +90,11 @@ describe('rfc312 /ws/presence channel', () => {
   test('连接建立即收到一次全量快照，内容 = 当前在线者', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedUser(db, 'viewer')
-    const { trackUserPresence } = composeIdentityAccess(db)
+    const identityAccess = composeIdentityAccess(db)
+    const { trackUserPresence } = identityAccess
     trackUserPresence.opened('someone-else')
 
-    const { ws, sent } = fakeWs(actorWith('admin', 'viewer'))
+    const { ws, sent } = fakeWs(await admitWsIdentity(identityAccess, 'viewer'))
     await WS_CHANNELS.presence.onOpenExtra?.(ws, { kind: 'presence' }, db)
 
     expect(sent).toHaveLength(1)
@@ -101,30 +108,32 @@ describe('rfc312 /ws/presence channel', () => {
   test('onOpenExtra 会登记本连接：登记后自己也出现在快照里，释放后消失', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedUser(db, 'me')
-    const { getUserPresence } = composeIdentityAccess(db)
-    const { ws } = fakeWs(actorWith('admin', 'me'))
+    const identityAccess = composeIdentityAccess(db)
+    const { getUserPresence } = identityAccess
+    const { ws } = fakeWs(await admitWsIdentity(identityAccess, 'me'))
 
     expect(getUserPresence.stateOf('me')).toBe('offline')
     await WS_CHANNELS.presence.onOpenExtra?.(ws, { kind: 'presence' }, db)
     expect(getUserPresence.stateOf('me')).toBe('online')
 
     // 释放句柄已装上，且只应生效一次
-    expect(typeof ws.data.releasePresence).toBe('function')
-    ws.data.releasePresence?.()
+    expect(typeof ws.data.presenceLease?.release).toBe('function')
+    ws.data.presenceLease?.release()
     // 宽限期内仍是 online——这是"刷新不闪烁"的语义，不是 bug
     expect(getUserPresence.stateOf('me')).toBe('online')
   })
 
   test('PAT 凭据不计入在线（那是脚本在跑，不是人在看）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { getUserPresence } = composeIdentityAccess(db)
     seedUser(db, 'bot')
-    const { ws, sent } = fakeWs(actorWith('admin', 'bot'))
+    const identityAccess = composeIdentityAccess(db)
+    const { getUserPresence } = identityAccess
+    const { ws, sent } = fakeWs(await admitWsIdentity(identityAccess, 'bot', 'pat'))
     ws.data.credential = { kind: 'pat', hash: 'h', expiresAt: null }
 
     await WS_CHANNELS.presence.onOpenExtra?.(ws, { kind: 'presence' }, db)
     expect(getUserPresence.stateOf('bot')).toBe('offline')
-    expect(ws.data.releasePresence).toBeUndefined()
+    expect(ws.data.presenceLease).toBeUndefined()
     // 但快照照发——它有权限看别人
     expect(sent).toHaveLength(1)
   })

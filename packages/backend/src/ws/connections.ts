@@ -23,9 +23,13 @@
 
 import type { ServerWebSocket } from 'bun'
 import type { WsControlMessage } from '@agent-workflow/shared'
-import { reresolveActor } from '@/auth/session'
+import { reresolveIdentity } from '@/auth/session'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type {
+  DirectAuthorityIdentity,
+  DirectRequestAuthority,
+} from '@/modules/identity-access/public/participants'
 import { createLogger, type Logger } from '@/util/log'
 import {
   checkUpgradeGate,
@@ -64,7 +68,9 @@ export interface RevalidateDeps {
   db: DbClient
   log: Logger
   /** Test seam for proving one credential is resolved only once per pass. */
-  resolveActor?: typeof reresolveActor
+  resolveIdentity?: typeof reresolveIdentity
+  /** Legacy test seam; production always refreshes actor + authority together. */
+  resolveActor?: (db: DbClient, credential: WsCredential, now?: number) => Promise<Actor | null>
 }
 
 export interface RevalidateStats {
@@ -165,37 +171,52 @@ export async function revalidateAllConnections(
   // carrying the same credential therefore have the same actor verdict.
   // Resolve that credential once while still running every socket's cache
   // clear, upgrade gate, notification and close decision below.
-  const actorByCredential = new Map<string, Promise<Actor | null>>()
-  const resolveActor = deps.resolveActor ?? reresolveActor
+  const identityByCredential = new Map<
+    string,
+    Promise<
+      DirectAuthorityIdentity | Readonly<{ actor: Actor; authority: DirectRequestAuthority }> | null
+    >
+  >()
   // Snapshot: closeConnection mutates `live` while we iterate.
   for (const ws of liveConnections()) {
     if (ws.data.closing) continue
     if (target !== undefined && ws.data.actor.user.id !== target.userId) continue
     stats.scanned += 1
-    let freshActor
+    let freshIdentity
     try {
       const credentialKey = credentialRevalidationKey(ws.data.credential)
-      let resolution = actorByCredential.get(credentialKey)
+      let resolution = identityByCredential.get(credentialKey)
       if (resolution === undefined) {
-        resolution = resolveActor(deps.db, ws.data.credential, now)
-        actorByCredential.set(credentialKey, resolution)
+        resolution =
+          deps.resolveActor === undefined
+            ? (deps.resolveIdentity ?? reresolveIdentity)(
+                deps.db,
+                ws.data.credential,
+                { directAuthority: ws.data.identityAccess.directAuthority },
+                now,
+              )
+            : deps
+                .resolveActor(deps.db, ws.data.credential, now)
+                .then((actor) => (actor === null ? null : { actor, authority: ws.data.authority }))
+        identityByCredential.set(credentialKey, resolution)
       }
-      freshActor = await resolution
+      freshIdentity = await resolution
     } catch (err) {
       deps.log.warn('ws-revalidate-resolve-threw', {
         reason,
         err: err instanceof Error ? err.message : String(err),
       })
-      freshActor = null
+      freshIdentity = null
     }
     if (ws.data.closing) continue // a concurrent rescan may have closed it
-    if (freshActor === null) {
+    if (freshIdentity === null) {
       closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'auth-revoked')
       stats.closedAuth += 1
       continue
     }
     // ③ actor replacement — required for every channel (see ChannelRevalidation).
-    ws.data.actor = freshActor
+    ws.data.actor = freshIdentity.actor as Actor
+    ws.data.authority = freshIdentity.authority
     stats.refreshed += 1
     // ④ cache clear — a no-op for channels that declare cache.kind === 'none'.
     const spec = erasedSpecOf(ws.data.channel.kind)
@@ -207,7 +228,7 @@ export async function revalidateAllConnections(
     // the app-wide authority socket refresh navigation and route guards even
     // when this particular business socket is about to close with 4403.
     if (reason === 'authority-changed') {
-      sendAuthorityChanged(ws, freshActor.authorityRevision ?? target?.revision ?? 0)
+      sendAuthorityChanged(ws, ws.data.actor.authorityRevision ?? target?.revision ?? 0)
       if (ws.data.closing) continue
     }
     // RFC-324 —— 授权面变了。重扫本身只做「这条连接还能不能留着」，对**降档**
@@ -221,7 +242,7 @@ export async function revalidateAllConnections(
     if (spec.revalidation.rerunUpgradeGate === true) {
       let verdict
       try {
-        verdict = await checkUpgradeGate(deps.db, freshActor, ws.data.channel)
+        verdict = await checkUpgradeGate(deps.db, ws.data.actor, ws.data.channel)
       } catch (err) {
         deps.log.warn('ws-revalidate-gate-threw', {
           reason,

@@ -39,6 +39,7 @@ async function createUserCommandFixture() {
       db,
       identity: {
         operations,
+        initialUserAccess: identityAccess.initialUserAccess,
         commandContext: () => identityAccess.contexts.fromAuthenticatedPrincipal(principal, 'cli'),
         queryContext: () =>
           identityAccess.contexts.queryFromAuthenticatedPrincipal(principal, 'cli'),

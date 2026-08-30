@@ -33,8 +33,9 @@ import { existsSync, realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
-import { buildInheritedActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import { agents, resourceGrants, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
 import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
 import {
@@ -73,6 +74,12 @@ export type ScheduleLaunch = (
   actor: Actor,
 ) => Promise<{ id: string }>
 export type BuildScheduleLaunch = (ownerUserId: string, scheduledTaskId: string) => ScheduleLaunch
+export type ScheduleAuthorityInvocation =
+  | { readonly kind: 'automatic'; readonly occurrenceAt: number }
+  | { readonly kind: 'manual' }
+export type ScheduleAuthorityRuntime = Readonly<{
+  delegatedRequests: DelegatedRequestAuthorityFactory
+}>
 
 type Row = typeof scheduledTasks.$inferSelect
 type LaunchableWorkflow = Awaited<ReturnType<typeof assertWorkflowLaunchable>>
@@ -890,6 +897,8 @@ export async function fireSchedule(
   row: Row,
   buildLaunch: BuildScheduleLaunch,
   now: number,
+  identityAccess: ScheduleAuthorityRuntime,
+  invocation: ScheduleAuthorityInvocation,
   defaultRuntime?: string | null,
 ): Promise<{ taskId: string }> {
   const parsedKind = ScheduledLaunchKindSchema.safeParse(row.launchKind ?? 'workflow')
@@ -944,10 +953,13 @@ export async function fireSchedule(
     name: decorateTaskName((body as { name: string }).name, spec, now),
   }
 
-  // RFC-285 B3：owner 重建收编 buildInheritedActor 单源（active 检查在内），
-  // 错误形态保持本臂既有的 `owner-inactive` 码不变。
-  const actor = await buildInheritedActor(db, row.ownerUserId, 'schedule')
-  if (actor === null) {
+  const delegated = await identityAccess.delegatedRequests.forSchedule({
+    ownerUserId: row.ownerUserId,
+    scheduleId: row.id,
+    invocation,
+  })
+  const actor = delegated?.actor as Actor | undefined
+  if (actor === undefined) {
     throw new ValidationError('owner-inactive', `owner '${row.ownerUserId}' is not an active user`)
   }
   // RFC-224: save-time acceptance is not a launch capability. Re-evaluate the
@@ -1241,13 +1253,22 @@ export async function runScheduleNow(
   db: DbClient,
   id: string,
   buildLaunch: BuildScheduleLaunch,
+  identityAccess: ScheduleAuthorityRuntime,
   defaultRuntime?: string | null,
 ): Promise<{ taskId: string }> {
   const row = await getScheduledTaskRow(db, id)
   if (row === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
-  const result = await fireSchedule(db, row, buildLaunch, Date.now(), defaultRuntime)
+  const result = await fireSchedule(
+    db,
+    row,
+    buildLaunch,
+    Date.now(),
+    identityAccess,
+    { kind: 'manual' },
+    defaultRuntime,
+  )
   scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
     type: 'scheduled.fired',
     id: row.id,

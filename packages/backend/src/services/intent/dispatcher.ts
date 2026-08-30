@@ -2,8 +2,12 @@
 
 import { eq } from 'drizzle-orm'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
-import { buildInheritedActor, type Actor } from '@/auth/actor'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type {
+  CurrentSubjectAccessResolver,
+  LegacyActorProjectionFactory,
+} from '@/modules/identity-access/public/participants'
 import { intentSessions, intentWorkingSetChanges } from '@/db/schema'
 import type { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
@@ -20,6 +24,10 @@ const log = createLogger('intentDispatcher')
 
 export interface IntentDispatchDeps {
   db: DbClient
+  identityAccess: Readonly<{
+    resolveAuthority: CurrentSubjectAccessResolver
+    legacyProjection: LegacyActorProjectionFactory
+  }>
   appHome: string
   configSnapshot: ReturnType<typeof loadConfig>
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
@@ -166,7 +174,13 @@ export async function resumeQueuedIntentWorkingSets(
       await deps.db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).limit(1)
     )[0]
     if (session === undefined) continue
-    const actor = await buildInheritedActor(deps.db, session.ownerUserId)
+    const current = await deps.identityAccess.resolveAuthority.resolveCurrentSubject(
+      session.ownerUserId,
+    )
+    const actor =
+      current === null
+        ? null
+        : (deps.identityAccess.legacyProjection.fromResolvedSubject(current) as unknown as Actor)
     if (actor === null) continue
     const next = activateIntentWorkingSetChange(
       deps.db,

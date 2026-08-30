@@ -3,7 +3,7 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
 import { actorOf } from '@/auth/actor'
-import type { DirectAuthenticatedAuthorityFactory } from '@/modules/identity-access/public/participants'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import {
   createDevelopmentMissionDescriptors,
   type DevelopmentMissionOperations,
@@ -19,7 +19,7 @@ const recordBody = async (request: Request): Promise<Record<string, unknown>> =>
 export function mountDevelopmentMissionRoutes(
   app: Hono,
   operations: DevelopmentMissionOperations,
-  contexts: DirectAuthenticatedAuthorityFactory,
+  contexts: DirectAuthorityBinding,
 ): void {
   const descriptor = createDevelopmentMissionDescriptors(operations)
   const context = (c: Parameters<typeof actorOf>[0]) =>

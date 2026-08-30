@@ -1,5 +1,6 @@
 import type { PatPurpose, Permission, Role } from '@agent-workflow/shared'
-import type { ResolvedAuthoritySubject } from './types'
+import type { TransactionScope } from '@/platform/persistence/transactionScope'
+import type { ManagedUserStatus, ResolvedAuthoritySubject } from './types'
 
 export type DirectTransport = 'http' | 'mcp' | 'cli'
 export type PrincipalSource = 'session' | 'pat' | 'daemon' | 'cli' | 'system'
@@ -13,9 +14,15 @@ export type DelegatedSource =
 
 declare const subjectRefBrand: unique symbol
 declare const requestAuthorityBrand: unique symbol
+declare const directRequestAuthorityBrand: unique symbol
+declare const admittedSessionCredentialBrand: unique symbol
+declare const admittedPatCredentialBrand: unique symbol
+declare const admittedDaemonCredentialBrand: unique symbol
 declare const idempotencyKeyBrand: unique symbol
 declare const delegatedAuthorityBrand: unique symbol
 declare const directAuthenticatedAuthorityBrand: unique symbol
+declare const legacyActorProjectionBrand: unique symbol
+declare const presenceLeaseBrand: unique symbol
 
 export interface AuthorizationSubjectRef {
   readonly [subjectRefBrand]: 'authorization-subject-ref'
@@ -26,6 +33,33 @@ export interface AuthorizationSubjectRef {
  * identity-access runtime registry and cannot be spread, forged or serialized. */
 export interface RequestAuthority {
   readonly [requestAuthorityBrand]: 'current-request-authority'
+}
+
+/** Opaque authority minted exactly once after a credential adapter admits a
+ * session, PAT or daemon credential.  Account facts stay in the owning runtime
+ * registry; transports pass this handle by identity. */
+export interface DirectRequestAuthority extends RequestAuthority {
+  readonly [directRequestAuthorityBrand]: 'direct-request-authority-v1'
+}
+
+/** Credential adapters freeze one of these branded facts only after the
+ * corresponding token/session check succeeds.  The authority factory never
+ * accepts a plain `{ userId, source }` mint request. */
+export interface AdmittedSessionCredential {
+  readonly [admittedSessionCredentialBrand]: 'admitted-session-credential-v1'
+  readonly userId: string
+}
+
+export interface AdmittedPatCredential {
+  readonly [admittedPatCredentialBrand]: 'admitted-pat-credential-v1'
+  readonly userId: string
+  readonly scopes: ReadonlyArray<Permission>
+  readonly purpose: PatPurpose
+  readonly patId: string
+}
+
+export interface AdmittedDaemonCredential {
+  readonly [admittedDaemonCredentialBrand]: 'admitted-daemon-credential-v1'
 }
 
 export interface CommandContext {
@@ -48,6 +82,37 @@ export type ValidatedIdempotencyKey = string & {
 
 export interface IdempotentCommandContext extends CommandContext {
   readonly idempotencyKey: ValidatedIdempotencyKey
+}
+
+export interface InitialUserAccessProvision {
+  readonly user: {
+    readonly id: string
+    readonly username: string
+    readonly email: string | null
+    readonly displayName: string
+    readonly gitName: string
+    readonly passwordHash: string | null
+    readonly role: Role
+    readonly status: ManagedUserStatus
+    readonly forcePasswordChange: boolean
+    readonly createdBy: string | null
+    readonly createdAt: number
+  }
+  readonly audit: {
+    readonly id: string
+    readonly actorUserId: string | null
+    readonly actorKind: 'session' | 'cli' | 'system'
+    readonly operationId: string
+  }
+}
+
+/** Exact synchronous participant for bootstrap/OIDC account creation that
+ * must share the caller's existing SQLite transaction. */
+export interface InitialUserAccessProvisioner {
+  insertInTransaction(
+    transactionScope: TransactionScope,
+    provision: InitialUserAccessProvision,
+  ): void
 }
 
 export interface AuthenticatedPrincipal {
@@ -75,30 +140,51 @@ export interface AuthenticatedAuthoritySnapshot {
   readonly authorityRevision?: number
 }
 
-export interface DirectAuthenticatedAuthority extends AuthenticatedAuthoritySnapshot {
-  readonly [directAuthenticatedAuthorityBrand]: 'direct-authenticated-authority'
+/** The sole compatibility projection for bounded contexts that still consume
+ * the legacy Actor shape.  It is produced from a registered authority claim,
+ * never from caller-supplied account facts. */
+export interface LegacyActorProjection extends AuthenticatedAuthoritySnapshot {
+  readonly [legacyActorProjectionBrand]: 'legacy-actor-projection-v1'
   readonly userId: string
 }
 
-export interface DurableSourceAttemptRef {
-  readonly sourceId: string
-  readonly attemptId: string
+/** Narrow compatibility participant for legacy consumers that already hold a
+ * subject resolved by identity-access. The branded projection remains owned by
+ * the runtime; consumers never import its implementation. */
+export interface LegacyActorProjectionFactory {
+  fromResolvedSubject(subject: ResolvedAuthoritySubject): LegacyActorProjection
 }
 
-export interface DelegatedAuthorityRef {
-  readonly [delegatedAuthorityBrand]: 'delegated-authority-ref'
-  readonly subjectRef: AuthorizationSubjectRef
-  readonly revision: number
+export interface DirectAuthenticatedAuthority extends LegacyActorProjection {
+  readonly [directAuthenticatedAuthorityBrand]: 'direct-authenticated-authority'
+}
+
+export interface DelegatedRequestAuthority extends RequestAuthority {
+  readonly [delegatedAuthorityBrand]: 'delegated-request-authority-v1'
+}
+
+export interface DirectAuthorityIdentity {
+  readonly authority: DirectRequestAuthority
+  readonly actor: DirectAuthenticatedAuthority
+}
+
+/** Credential adapters may supply only the admitted credential facts.  The
+ * runtime re-resolves current account state and mints the handle/projection as
+ * one indivisible result. */
+export interface DirectAuthorityAdmission {
+  fromSession(credential: AdmittedSessionCredential): Promise<DirectAuthorityIdentity | null>
+  fromPat(credential: AdmittedPatCredential): Promise<DirectAuthorityIdentity | null>
+  fromDaemon(credential: AdmittedDaemonCredential): Promise<DirectAuthorityIdentity | null>
 }
 
 export interface DirectCommandContextFactory {
-  fromAuthenticatedPrincipal(
-    principal: AuthenticatedPrincipal,
+  fromAuthority(
+    authority: DirectRequestAuthority,
     transport: DirectTransport,
     at?: number,
   ): CommandContext
-  fromAuthenticatedPrincipalWithIdempotency(
-    principal: AuthenticatedPrincipal,
+  fromAuthorityWithIdempotency(
+    authority: DirectRequestAuthority,
     transport: DirectTransport,
     key: ValidatedIdempotencyKey,
   ): IdempotentCommandContext
@@ -106,17 +192,13 @@ export interface DirectCommandContextFactory {
 }
 
 export interface DirectQueryContextFactory {
-  queryFromAuthenticatedPrincipal(
-    principal: AuthenticatedPrincipal,
-    transport: DirectTransport,
-  ): QueryContext
+  queryFromAuthority(authority: DirectRequestAuthority, transport: DirectTransport): QueryContext
   resolveQueryContext(context: QueryContext): AuthenticatedPrincipal
 }
 
-export interface DirectAuthenticatedAuthorityFactory {
-  authorityFromAuthenticatedPrincipal(
-    authority: AuthenticatedAuthoritySnapshot,
-  ): DirectAuthenticatedAuthority
+export interface DirectAuthorityBinding {
+  authorityForLegacyProjection(projection: object): DirectRequestAuthority
+  legacyProjectionForAuthority(authority: DirectRequestAuthority): DirectAuthenticatedAuthority
 }
 
 /** Credential/inherited adapters receive current account facts, never a token secret or Actor. */
@@ -124,16 +206,58 @@ export interface CurrentSubjectAccessResolver {
   resolveCurrentSubject(userId: string): Promise<ResolvedAuthoritySubject | null>
 }
 
-export interface DelegatedAuthorityResolver {
-  resolve(source: DelegatedSource, subject: AuthorizationSubjectRef): Promise<DelegatedAuthorityRef>
+export type DelegatedAuthorityAdmission = Readonly<{
+  authority: DelegatedRequestAuthority
+  actor: LegacyActorProjection
+  context: CommandContext | IdempotentCommandContext
+}>
+
+export interface DelegatedRequestAuthorityFactory {
+  forSchedule(input: {
+    readonly ownerUserId: string
+    readonly scheduleId: string
+    readonly invocation:
+      | { readonly kind: 'automatic'; readonly occurrenceAt: number }
+      | { readonly kind: 'manual' }
+  }): Promise<DelegatedAuthorityAdmission | null>
+  forWebhook(input: {
+    readonly ownerUserId: string
+    readonly triggerId: string
+    readonly deliveryId: string
+    readonly fireId: string
+  }): Promise<DelegatedAuthorityAdmission | null>
+  forCall(input: {
+    readonly kind: 'call-workflow' | 'call-workgroup'
+    readonly ownerUserId: string
+    readonly parentTaskId: string
+    readonly parentNodeRunId: string
+  }): Promise<DelegatedAuthorityAdmission | null>
 }
 
-export interface DelegatedOperationContextFactory {
-  fromDurableAttempt(
-    authority: DelegatedAuthorityRef,
-    source: DelegatedSource,
-    attempt: DurableSourceAttemptRef,
-  ): IdempotentCommandContext
+export interface PresenceLease {
+  readonly [presenceLeaseBrand]: 'presence-lease-v1'
+  release(): void
+}
+
+export interface PresenceConnectionTracker {
+  /** Returns null for PAT/daemon authorities; only a session contributes online state. */
+  open(authority: DirectRequestAuthority): PresenceLease | null
+}
+
+export interface PresenceQuery {
+  snapshot(): ReadonlyArray<string>
+}
+
+export interface IdentityAccessEventSink {
+  authorityRevisionChanged(input: {
+    readonly userId: string
+    readonly revision: number
+    readonly onFailure: (error: unknown) => void
+  }): void
+}
+
+export interface PresenceProjectionSink {
+  publish(changes: ReadonlyArray<{ readonly userId: string; readonly online: boolean }>): void
 }
 
 // RFC-317 T41（findings TP-03）—— 出站授权围栏的**同步**读契约。传输层（ws/）经这条
@@ -141,7 +265,7 @@ export interface DelegatedOperationContextFactory {
 //
 // 放在 participants 而不是 queries：本模块的约定是「可执行查询用例进 queries.ts
 // （GetUserAccess / requireUserAccess），**接口型端口**进 participants.ts
-// （DelegatedAuthorityResolver / CurrentSubjectAccessResolver …）」。RFC-294 的跨界判据
+// （CurrentSubjectAccessResolver / PresenceQuery …）」。RFC-294 的跨界判据
 // 也只允许 participants/events/types 走 type-only 边——一条被 type-only 引用的接口，
 // 放 queries.ts 会直接判违规。
 export type {

@@ -51,8 +51,15 @@ import type {
   WsControlMessage,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { composeIdentityAccess } from '@/modules/identity-access/composition'
-import type { AuthorityFenceRecord } from '@/modules/identity-access/public/participants'
+import type {
+  AuthorityFenceRecord,
+  DirectAuthorityAdmission,
+  DirectRequestAuthority,
+  PresenceConnectionTracker,
+  PresenceLease,
+  PresenceQuery,
+  UserAccessFenceReader,
+} from '@/modules/identity-access/public/participants'
 import type { DbClient } from '@/db/client'
 import { redactEventPayload } from '@/services/tokenRedaction'
 import {
@@ -74,7 +81,6 @@ import {
 import { canViewTask } from '@/services/taskCollab'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { createLogger } from '@/util/log'
-import { triggerAuthorityRevalidation } from './revalidationHook'
 import {
   AUTHORITY_CHANNEL,
   authorityBroadcaster,
@@ -204,6 +210,10 @@ export interface WsConnectionData {
    * Its only writer is that pass.
    */
   actor: Actor
+  /** Same opaque handle minted with `actor` at credential admission. */
+  authority: DirectRequestAuthority
+  /** Narrow bootstrap binding; registry never composes identity-access from DB. */
+  identityAccess: IdentityAccessWsBinding
   /** RFC-212 — credential fingerprint used by the revalidation pass. */
   credential: WsCredential
   /**
@@ -215,7 +225,7 @@ export interface WsConnectionData {
    * 结果是"关掉一个标签页，人就整体离线"。释放侧先清空本字段再调用，
    * 任何重入顺序下都只可能执行一次。
    */
-  releasePresence?: () => void
+  presenceLease?: PresenceLease
   /**
    * RFC-212 — set synchronously right before `ws.close()`, so a frame that
    * arrives between the close call and Bun's async close callback is dropped.
@@ -251,6 +261,14 @@ export interface WsConnectionData {
    * edits can move a row between scopes). Dropped with the connection.
    */
   visibilityCache: Map<string, boolean>
+}
+
+export interface IdentityAccessWsBinding {
+  readonly directAuthority: DirectAuthorityAdmission
+  readonly authorityFence: UserAccessFenceReader
+  readonly presenceConnections: PresenceConnectionTracker
+  readonly presenceQuery: PresenceQuery
+  requestAuthorityRevalidation(userId: string, revision: number): void
 }
 
 /** Upgrade-time refusal; server.ts maps it onto a 403 JSON response. */
@@ -375,9 +393,9 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
  * 清空在前、调用在后，任何重入顺序下都只可能执行一次。
  */
 export function releasePresence(ws: ServerWebSocket<WsConnectionData>): void {
-  const release = ws.data.releasePresence
-  ws.data.releasePresence = undefined
-  release?.()
+  const lease = ws.data.presenceLease
+  ws.data.presenceLease = undefined
+  lease?.release()
 }
 
 /**
@@ -387,14 +405,10 @@ export function releasePresence(ws: ServerWebSocket<WsConnectionData>): void {
  * 在这期间就关闭——此时 `handleClose` 已经跑过、句柄还不存在，等 await 回来再登记就
  * **永远不会有第二次 close 回调来释放它**，该用户会永久在线且没有任何宽限定时器能回收。
  */
-export function installPresence(
-  ws: ServerWebSocket<WsConnectionData>,
-  userId: string,
-  presence: { opened(userId: string): void; closed(userId: string): void },
-): void {
+export function installPresence(ws: ServerWebSocket<WsConnectionData>): void {
   if (ws.data.closing) return
-  presence.opened(userId)
-  ws.data.releasePresence = () => presence.closed(userId)
+  ws.data.presenceLease =
+    ws.data.identityAccess.presenceConnections.open(ws.data.authority) ?? undefined
   // 双保险：若在 opened() 与装句柄之间连接已被标记关闭，立即对消。
   if (ws.data.closing) releasePresence(ws)
 }
@@ -982,20 +996,23 @@ export const WS_CHANNELS: WsChannelRegistry = {
     //     满足"登记必须在完整鉴权之后"——否则升级途中被撤销的连接会制造一次假上线并挂满宽限期。
     // 取快照与发送之间**不得有 await**：否则会出现"增量先到被前端丢弃、旧快照后到"的永久陈旧。
     onOpenExtra: async (ws, _p, db) => {
-      const { trackUserPresence, getUserPresence } = composeIdentityAccess(db)
-      // 只认 session 凭据：PAT / daemon token 是"脚本在跑"，不是"人在看"。
-      if (ws.data.credential.kind === 'session') {
-        installPresence(ws, ws.data.actor.user.id, trackUserPresence)
-      }
-      sendJson(ws, { type: 'presence.snapshot', online: getUserPresence.snapshot() }, db)
+      installPresence(ws)
+      sendJson(
+        ws,
+        { type: 'presence.snapshot', online: [...ws.data.identityAccess.presenceQuery.snapshot()] },
+        db,
+      )
     },
     // RFC-312 实现门 P1 —— 复核冻结期间的 `presence.changed` 会被丢弃（见
     // `resync` 的类型注释），而 presence 是累积式增量流，丢一帧就永久
     // 错到该用户下次翻转。解冻后重发一次**全量快照**：它是幂等的、与开连接时走的是同一
     // 条 `applyPresenceSnapshot` 路径，因此不需要任何新的重放协议或客户端分支。
     resync: (ws, db) => {
-      const { getUserPresence } = composeIdentityAccess(db)
-      sendJson(ws, { type: 'presence.snapshot', online: getUserPresence.snapshot() }, db)
+      sendJson(
+        ws,
+        { type: 'presence.snapshot', online: [...ws.data.identityAccess.presenceQuery.snapshot()] },
+        db,
+      )
     },
   },
 }
@@ -1174,7 +1191,7 @@ function sendJson(
   msg: WsOutboundMessage,
   db: DbClient,
 ): void {
-  if (!authorityRevisionCurrent(ws, db)) return
+  if (!authorityRevisionCurrent(ws)) return
   try {
     // RFC-312 实现门 P1 —— Bun 的 `ws.send()` 用**返回 0 表示这一帧被丢弃**（背压 / 已关闭），
     // 此前这里只 catch 异常、完全忽略返回值，于是丢弃是静默的。对"收到即 refetch"的通道
@@ -1213,10 +1230,10 @@ function sendJson(
  * 的私表，那条字符串把它的两个列名硬编码进了传输层。列一改名，**这里 typecheck 全绿、
  * 运行期在授权围栏上失败**，而且它不是 import 边，本仓所有基于 import 的架构守卫都
  * 看不见它。现在走 identity-access 的同步 public 端口，SQL 回到拥有那张表的 context 里。 */
-function authorityRevisionCurrent(ws: ServerWebSocket<WsConnectionData>, db: DbClient): boolean {
+function authorityRevisionCurrent(ws: ServerWebSocket<WsConnectionData>): boolean {
   let fence: AuthorityFenceRecord | null
   try {
-    fence = composeIdentityAccess(db).authorityFence.readAuthorityFence(ws.data.actor.user.id)
+    fence = ws.data.identityAccess.authorityFence.readAuthorityFence(ws.data.actor.user.id)
   } catch (error) {
     log.warn('authority revision fence failed', {
       error: error instanceof Error ? error.message : String(error),
@@ -1233,6 +1250,6 @@ function authorityRevisionCurrent(ws: ServerWebSocket<WsConnectionData>, db: DbC
   // Drop this frame, synchronously freeze later ones, and ask the targeted
   // revalidation pass to rebuild the actor from the committed revision.
   ws.data.revalidating = true
-  triggerAuthorityRevalidation(db, ws.data.actor.user.id, fence.accessRevision)
+  ws.data.identityAccess.requestAuthorityRevalidation(ws.data.actor.user.id, fence.accessRevision)
   return false
 }

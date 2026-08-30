@@ -323,7 +323,6 @@ describe('RFC-305 identity-access architecture', () => {
       'CreateManagedUser',
       'CreateManagedUserCommand',
       'ExactAccessSnapshot',
-      'InitialUserAccessProvision',
       'SyncOidcProfile',
       'SyncOidcProfileCommand',
       'SyncOidcProfileResult',
@@ -332,7 +331,6 @@ describe('RFC-305 identity-access architecture', () => {
       'UpdateUserAccess',
       'UpdateUserAccessCommand',
       'UpdateUserAccessResult',
-      'insertInitialUserAccessInTransaction',
     ])
     expect(exportedNames(resolve(publicRoot, 'events.ts'))).toEqual([
       'AuthorityRevisionChanged',
@@ -358,6 +356,9 @@ describe('RFC-305 identity-access architecture', () => {
       'UserAccessErrorKind',
     ])
     expect(exportedNames(resolve(publicRoot, 'participants.ts'))).toEqual([
+      'AdmittedDaemonCredential',
+      'AdmittedPatCredential',
+      'AdmittedSessionCredential',
       'AuthenticatedAuthoritySnapshot',
       'AuthenticatedPrincipal',
       // RFC-317 T41（findings TP-03）—— 出站授权围栏的同步读契约。传输层（ws/）此前
@@ -367,17 +368,28 @@ describe('RFC-305 identity-access architecture', () => {
       'AuthorizationSubjectRef',
       'CommandContext',
       'CurrentSubjectAccessResolver',
-      'DelegatedAuthorityRef',
-      'DelegatedAuthorityResolver',
-      'DelegatedOperationContextFactory',
+      'DelegatedAuthorityAdmission',
+      'DelegatedRequestAuthority',
+      'DelegatedRequestAuthorityFactory',
       'DelegatedSource',
       'DirectAuthenticatedAuthority',
-      'DirectAuthenticatedAuthorityFactory',
+      'DirectAuthorityAdmission',
+      'DirectAuthorityBinding',
+      'DirectAuthorityIdentity',
       'DirectCommandContextFactory',
       'DirectQueryContextFactory',
+      'DirectRequestAuthority',
       'DirectTransport',
-      'DurableSourceAttemptRef',
       'IdempotentCommandContext',
+      'IdentityAccessEventSink',
+      'InitialUserAccessProvision',
+      'InitialUserAccessProvisioner',
+      'LegacyActorProjection',
+      'LegacyActorProjectionFactory',
+      'PresenceConnectionTracker',
+      'PresenceLease',
+      'PresenceProjectionSink',
+      'PresenceQuery',
       'PrincipalSource',
       'QueryContext',
       'RequestAuthority',
@@ -388,70 +400,63 @@ describe('RFC-305 identity-access architecture', () => {
 
   test('module composition and public contracts have only the reviewed consumers', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
-      'packages/backend/src/auth/actor.ts -> @/modules/identity-access/composition',
-      'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/types',
-      'packages/backend/src/auth/loginPolicy.ts -> @/modules/identity-access/public/commands',
-      // RFC-344 CLI/HTTP user bindings invoke the same descriptor cohort.
-      // RFC-347 moves concrete CLI assembly to the reviewed process bootstrap;
-      // userBootstrap receives only the already-composed typed handle.
+      'packages/backend/src/auth/loginPolicy.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/auth/session.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition/userOperations',
-      // RFC-344 operation descriptors receive an exact authenticated authority;
-      // application code does not reconstruct the identity shape.
       'packages/backend/src/modules/development-automation/application/activityOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/configOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/missionOperations.ts -> @/modules/identity-access/public/participants',
-      // RFC-345 resource contracts consume only identity-access public contexts.
       'packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/public/queries.ts -> @/modules/identity-access/public/participants',
-      // RFC-344 system-operation contracts share the same sealed command context.
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',
-      // RFC-320 — auth receives exact profile commands/queries through the
-      // server-composed module; it never imports module internals or storage.
+      'packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/types',
+      'packages/backend/src/routes/backup.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/developmentConfig.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/developmentMissions.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/digitalEmployees.ts -> @/modules/identity-access/public/participants',
-      // RFC-342 — memory scope moves receive only the direct context factory;
-      // request identity remains sealed inside the factory-minted context.
       'packages/backend/src/routes/memories.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/operationAuthority.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/routes/restore.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/userOperations',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/operations',
-      // The memory command resolves the direct context inside its writer
-      // transaction, then re-reads current user/grant state before both scope gates.
+      'packages/backend/src/services/execution/taskEngineRuntimeOptions.ts -> @/modules/identity-access/public/participants',
+      // Explicit E9/intent compatibility projections consume a narrow public
+      // participant; schedule/webhook/call E0 use the closed delegated factory.
+      'packages/backend/src/services/intent/dispatcher.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/memory.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/services/scheduledTasks.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/services/task.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/services/task.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/services/task.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/commands',
+      'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/userIdentities.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/composition',
-      'packages/backend/src/services/users.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/services/users.ts -> @/modules/identity-access/public/types',
-      // RFC-312 —— presence 通道的 onOpenExtra 需要 presence 的 command/query。
-      // 与既有三处（auth/actor.ts、server.ts、services/users.ts）同型：composeIdentityAccess
-      // 按 db 实例缓存，取到的是 public 用例而非模块内部。
-      // 更干净的做法是把实例经 adapter deps 注入，但 `onOpenExtra(ws, params, db)` 的签名是
-      // 注册表全局的，为一个通道改它会波及所有通道——留作后续 seam，不在本 RFC 承担。
-      'packages/backend/src/ws/registry.ts -> @/modules/identity-access/composition',
-      // RFC-317 T41（findings TP-03）—— 出站授权围栏改走 public 端口。这条边是
-      // **净收益**：它替换掉的是同一文件里一条手写的
-      // `SELECT status, access_revision FROM users WHERE id = ?`——那条 SQL 把本模块的
-      // 两个列名硬编码在传输层里，列改名时 typecheck 全绿、运行期在授权围栏上失败，
-      // 而且它不是 import 边，本条账本连同所有基于 import 的守卫都对它失明。
+      'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/services/webhook/webhookDispatch.ts -> @/modules/identity-access/public/queries',
+      // WS receives only injected public ports; it no longer composes an
+      // identity-access runtime from DB or creates a reverse dependency cycle.
+      'packages/backend/src/ws/connections.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/ws/registry.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/ws/server.ts -> @/modules/identity-access/public/participants',
     ])
   })
 
@@ -754,7 +759,6 @@ describe('RFC-305 reusable-authority fences', () => {
       resolve(IDENTITY_ROOT, 'application', 'operationContext.ts'),
       'utf8',
     )
-    const actor = readFileSync(resolve(BACKEND_SRC, 'auth', 'actor.ts'), 'utf8')
     const nodeMechanics = readFileSync(
       resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
       'utf8',
@@ -765,14 +769,16 @@ describe('RFC-305 reusable-authority fences', () => {
       'utf8',
     )
 
-    expect(composition).toContain('new ResolveDelegatedAuthority(resolveAuthority)')
-    expect(composition).toContain('new DelegatedOperationContextFactory(factoryDeps)')
+    expect(composition).toContain('new DelegatedOperationContextFactory(')
     expect(contexts).toContain('new WeakMap<')
-    expect(contexts).toContain("throw new Error('untrusted-delegated-authority')")
-    expect(actor).toContain('.delegatedAuthority.resolve(')
+    expect(contexts).toContain("throw new Error('foreign-delegated-request-authority')")
+    expect(nodeMechanics).toContain('.delegatedRequests')
+    expect(nodeMechanics).toContain('.forCall({')
     expect(nodeMechanics).toContain("'call-workflow'")
     expect(nodeMechanics).toContain("'call-workgroup'")
+    expect(scheduled).toContain('.delegatedRequests.forSchedule({')
     expect(scheduled).toContain("'schedule'")
+    expect(webhook).toContain('.delegatedRequests.forWebhook({')
     expect(webhook).toContain("'webhook'")
   })
 

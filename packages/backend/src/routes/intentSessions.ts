@@ -59,7 +59,7 @@ import { projectIntentJourney } from '@/services/intent/journey'
 import { listVisibleIntentResources } from '@/services/intent/resourceCatalog'
 import { canAuditIntentSessions } from '@/services/resourceAcl'
 import { cancelIntentTurn } from '@/services/intent/turnEngine'
-import { dispatchIntentTurn } from '@/services/intent/dispatcher'
+import { dispatchIntentTurn, type IntentDispatchDeps } from '@/services/intent/dispatcher'
 import { getIntentTurnSession, projectIntentTurnExecution } from '@/services/intent/turnSession'
 import {
   addIntentMount,
@@ -145,7 +145,10 @@ function encodeIntentListCursor(row: { updatedAt: number; id: string }): string 
   return Buffer.from(JSON.stringify(row), 'utf8').toString('base64url')
 }
 
-export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
+export function mountIntentSessionRoutes(
+  app: Hono,
+  deps: AppDeps & { readonly identityAccess: IntentDispatchDeps['identityAccess'] },
+): void {
   const appHome = Paths.root
 
   function fireTurn(
@@ -157,6 +160,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: AppDeps): void {
     return dispatchIntentTurn(
       {
         db: deps.db,
+        identityAccess: deps.identityAccess,
         appHome,
         configSnapshot,
         ...(deps.intentTestDependencies?.runFn === undefined

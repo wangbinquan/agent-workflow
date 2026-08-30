@@ -14,9 +14,14 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { type Actor } from '@/auth/actor'
-import { buildInheritedActor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
+import type {
+  CurrentSubjectAccessResolver,
+  DelegatedRequestAuthorityFactory,
+  LegacyActorProjectionFactory,
+} from '@/modules/identity-access/public/participants'
+import type { GetUserGitCommitIdentity } from '@/modules/identity-access/public/queries'
 import {
   cachedRepos,
   tasks,
@@ -102,6 +107,12 @@ const log = createLogger('webhook-dispatch')
 
 export type WebhookDispatchDeps = {
   db: DbClient
+  identityAccess: Readonly<{
+    delegatedRequests: DelegatedRequestAuthorityFactory
+    resolveAuthority: CurrentSubjectAccessResolver
+    legacyProjection: LegacyActorProjectionFactory
+    getUserGitCommitIdentity: GetUserGitCommitIdentity
+  }>
   configPath: string
   secretBox: SecretBox
   schedulerDriver?: SchedulerDriverPort
@@ -638,6 +649,7 @@ async function launchViaExecutor(
       deps.configPath,
       actor.user.id,
       deps.secretBox,
+      deps.identityAccess,
     ),
     // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
     launchActor: actor,
@@ -990,8 +1002,14 @@ async function fireTrigger(
     }
 
     // owner 重建 + 目标可用性重校验（每次触发评估，AC-13；照抄 fireSchedule 骨架）。
-    const actor = await buildInheritedActor(db, fresh.ownerUserId, 'webhook')
-    if (actor === null) {
+    const delegated = await deps.identityAccess.delegatedRequests.forWebhook({
+      ownerUserId: fresh.ownerUserId,
+      triggerId,
+      deliveryId: input.deliveryId,
+      fireId,
+    })
+    const actor = delegated?.actor as Actor | undefined
+    if (actor === undefined) {
       launchGuard?.failed('owner-invalid')
       launchGuard?.release()
       deps.terminalControl?.wake()
@@ -1337,7 +1355,13 @@ export function createWebhookDispatcher(
       }
     },
     async dispatchEventTarget(input) {
-      const actor = await buildInheritedActor(deps.db, input.ownerUserId, 'event')
+      const current = await deps.identityAccess.resolveAuthority.resolveCurrentSubject(
+        input.ownerUserId,
+      )
+      const actor =
+        current === null
+          ? null
+          : (deps.identityAccess.legacyProjection.fromResolvedSubject(current) as unknown as Actor)
       if (actor === null) {
         throw new ValidationError(
           'event-response-owner-invalid',

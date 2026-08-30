@@ -53,12 +53,19 @@ import {
 } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type { UpdateOwnProfile } from '@/modules/identity-access/public/commands'
-import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
+import type {
+  DirectAuthorityBinding,
+  DirectCommandContextFactory,
+  InitialUserAccessProvisioner,
+} from '@/modules/identity-access/public/participants'
 import type { GetUserProfile } from '@/modules/identity-access/public/queries'
 import { UserAccessError } from '@/modules/identity-access/public/types'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
 interface AuthRouteIdentityAccess {
   readonly contexts: DirectCommandContextFactory
+  readonly directAuthority: DirectAuthorityBinding
+  readonly initialUserAccess: InitialUserAccessProvisioner
   readonly getUserProfile: GetUserProfile
   readonly updateOwnProfile: UpdateOwnProfile
 }
@@ -162,12 +169,16 @@ export function mountAuthRoutes(
         })
       }
       const passwordHash = await hashPassword(parsed.data.password)
-      const created = completeBootstrapWithAdmin(deps.db, {
-        username: parsed.data.username,
-        displayName: parsed.data.displayName,
-        ...(parsed.data.email !== undefined ? { email: parsed.data.email } : {}),
-        passwordHash,
-      })
+      const created = completeBootstrapWithAdmin(
+        deps.db,
+        {
+          username: parsed.data.username,
+          displayName: parsed.data.displayName,
+          ...(parsed.data.email !== undefined ? { email: parsed.data.email } : {}),
+          passwordHash,
+        },
+        identityAccess.initialUserAccess,
+      )
       return c.json(
         {
           id: created.id,
@@ -256,8 +267,8 @@ export function mountAuthRoutes(
         })
       }
       const actor = actorOf(c)
-      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
-        { userId: actor.user.id, source: actor.source },
+      const context = identityAccess.contexts.fromAuthority(
+        directRequestAuthority(identityAccess.directAuthority, actor),
         'http',
       )
       const profile = accessCall(() =>

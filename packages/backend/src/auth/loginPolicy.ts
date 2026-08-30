@@ -15,7 +15,7 @@ import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from '@/auth/
 import type { DbClient } from '@/db/client'
 import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
-import { insertInitialUserAccessInTransaction } from '@/modules/identity-access/public/commands'
+import type { InitialUserAccessProvisioner } from '@/modules/identity-access/public/participants'
 import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
@@ -184,6 +184,7 @@ export interface PreparedBootstrapAdmin extends Omit<CreateBootstrapAdminBody, '
 export function completeBootstrapWithAdmin(
   db: DbClient,
   input: PreparedBootstrapAdmin,
+  initialUserAccess: InitialUserAccessProvisioner,
   now: number = Date.now(),
 ): typeof users.$inferSelect {
   const id = input.id ?? ulid()
@@ -225,7 +226,7 @@ export function completeBootstrapWithAdmin(
       }
     }
     withExistingSQLiteTransactionScope(tx, (transactionScope) => {
-      insertInitialUserAccessInTransaction(transactionScope, {
+      initialUserAccess.insertInTransaction(transactionScope, {
         user: {
           id,
           username: input.username,

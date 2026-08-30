@@ -29,6 +29,7 @@ import { createUser } from '../src/services/users'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { WS_CHANNEL_KINDS } from '../src/ws/registry'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 type AnyServer = Server<unknown>
 
@@ -93,7 +94,11 @@ async function buildHarness(): Promise<Harness> {
     ownerUserId: owner.id,
   })
 
-  const ws = buildWebSocketAdapter({ daemonToken: DAEMON_TOKEN, db })
+  const ws = buildWebSocketAdapter({
+    daemonToken: DAEMON_TOKEN,
+    db,
+    identityAccess: createIdentityAccessRuntime({ db }),
+  })
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',

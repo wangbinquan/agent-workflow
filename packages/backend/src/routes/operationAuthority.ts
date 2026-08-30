@@ -3,28 +3,27 @@
 import type { Actor } from '@/auth/actor'
 import type {
   DirectAuthenticatedAuthority,
-  DirectAuthenticatedAuthorityFactory,
+  DirectAuthorityBinding,
+  DirectRequestAuthority,
 } from '@/modules/identity-access/public/participants'
 
 /**
- * Authentication has already resolved and narrowed the Actor at the transport
- * edge. The identity-access factory brands a frozen snapshot before an
- * application descriptor can observe it.
+ * Authentication already registered this exact compatibility projection at
+ * the credential edge. Resolve the original handle/projection pair by object
+ * identity; never copy a plain snapshot at the route.
  */
 export function directOperationAuthority(
-  factory: DirectAuthenticatedAuthorityFactory,
+  factory: DirectAuthorityBinding,
   actor: Actor,
 ): DirectAuthenticatedAuthority {
-  return factory.authorityFromAuthenticatedPrincipal({
-    user: Object.freeze({ ...actor.user }),
-    source: actor.source,
-    permissions: actor.permissions,
-    ...(actor.purpose === undefined ? {} : { purpose: actor.purpose }),
-    ...(actor.patId === undefined ? {} : { patId: actor.patId }),
-    ...(actor.authorityRevision === undefined
-      ? {}
-      : { authorityRevision: actor.authorityRevision }),
-  })
+  return factory.legacyProjectionForAuthority(factory.authorityForLegacyProjection(actor))
+}
+
+export function directRequestAuthority(
+  factory: DirectAuthorityBinding,
+  actor: Actor,
+): DirectRequestAuthority {
+  return factory.authorityForLegacyProjection(actor)
 }
 
 /**
@@ -33,16 +32,8 @@ export function directOperationAuthority(
  * the shared route gate; account permissions and token identity remain exact.
  */
 export function directMcpOperationAuthority(
-  factory: DirectAuthenticatedAuthorityFactory,
+  factory: DirectAuthorityBinding,
   actor: Actor,
 ): DirectAuthenticatedAuthority {
-  return factory.authorityFromAuthenticatedPrincipal({
-    user: Object.freeze({ ...actor.user }),
-    source: actor.source,
-    permissions: actor.permissions,
-    ...(actor.patId === undefined ? {} : { patId: actor.patId }),
-    ...(actor.authorityRevision === undefined
-      ? {}
-      : { authorityRevision: actor.authorityRevision }),
-  })
+  return directOperationAuthority(factory, actor)
 }

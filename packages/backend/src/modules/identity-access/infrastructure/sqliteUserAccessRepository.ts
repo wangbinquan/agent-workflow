@@ -30,6 +30,7 @@ import type {
 } from '../application/ports/userAccessTransaction'
 import type { UserAccessAuditRecord } from '../application/ports/userAccessAuditRepository'
 import type { ManagedUserStatus } from '../public/types'
+import type { InitialUserAccessProvision } from '../public/participants'
 import { appendUserAccessAudit } from './sqliteUserAccessAuditRepository'
 import {
   mapOidcEmailConstraint,
@@ -143,28 +144,6 @@ export class SQLiteUserAccessTransactionRunner implements UserAccessTransactionR
 
   run<T>(body: (transaction: UserAccessTransaction) => NotPromise<T>): T {
     return dbTxSync(this.db, (transaction) => body(new SQLiteUserAccessTransaction(transaction)))
-  }
-}
-
-export interface InitialUserAccessProvision {
-  readonly user: {
-    readonly id: string
-    readonly username: string
-    readonly email: string | null
-    readonly displayName: string
-    readonly gitName: string
-    readonly passwordHash: string | null
-    readonly role: Role
-    readonly status: ManagedUserStatus
-    readonly forcePasswordChange: boolean
-    readonly createdBy: string | null
-    readonly createdAt: number
-  }
-  readonly audit: {
-    readonly id: string
-    readonly actorUserId: string | null
-    readonly actorKind: 'session' | 'cli' | 'system'
-    readonly operationId: string
   }
 }
 

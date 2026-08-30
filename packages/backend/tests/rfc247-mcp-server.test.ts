@@ -35,6 +35,7 @@ import { MATRIX_RESOURCES } from '@agent-workflow/shared'
 import { KINDS_WITH_BODY_SCHEMAS } from '../src/mcp/resourceSchemas'
 import { createApp } from '../src/server'
 import { directMcpOperationAuthority } from '../src/routes/operationAuthority'
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { createRouteOperationDispatcher as createDispatcher } from './helpers/routeOperationDispatcher'
 import {
   forwardingOperationInvoker,
@@ -261,11 +262,24 @@ describe('RFC-247 D2 — the purpose gate does not fire on its own channel', () 
   test('the trusted MCP authority clears purpose and NOTHING else', async () => {
     const h = await harness()
     const actor = tokenActor(h, ['agents:create'])
-    const dispatchActor = directMcpOperationAuthority(composeIdentityAccess(h.db).contexts, actor)
-    expect(dispatchActor.purpose).toBeUndefined()
+    const identityAccess = composeIdentityAccess(h.db)
+    const identity = await admitTestDirectAuthority(identityAccess.directAuthority, {
+      userId: actor.user.id,
+      source: 'pat',
+      patScopes: [...actor.permissions],
+      patPurpose: actor.purpose,
+      patId: actor.patId,
+    })
+    expect(identity).not.toBeNull()
+    const dispatchActor = directMcpOperationAuthority(
+      identityAccess.directAuthority,
+      identity!.actor as Actor,
+    )
+    expect(dispatchActor.purpose).toBe('mcp_only')
     expect(Object.isFrozen(dispatchActor)).toBe(true)
     expect(dispatchActor.source).toBe('pat')
     expect(dispatchActor.user).toEqual(actor.user)
+    expect(dispatchActor).toBe(identity!.actor)
     // The authority is identical — this is the line that would turn a channel
     // adapter into a privilege escalation if someone "fixed" it later.
     expect([...dispatchActor.permissions].sort()).toEqual([...actor.permissions].sort())

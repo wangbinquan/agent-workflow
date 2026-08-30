@@ -44,6 +44,7 @@ import {
   type WsChannelKind,
   type WsConnectionData,
 } from '../src/ws/registry'
+import { stubIdentityAccessWsBinding, TEST_DIRECT_AUTHORITY } from './helpers/identityAccessWs'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -66,6 +67,8 @@ function makeFakeWs(actor: Actor): {
   const data: WsConnectionData = {
     channel: { kind: 'tasks-list' },
     actor,
+    authority: TEST_DIRECT_AUTHORITY,
+    identityAccess: stubIdentityAccessWsBinding(actor.authorityRevision ?? 0),
     // RFC-212 — the registry never reads these; they exist so the fixture stays
     // structurally identical to a real connection.
     credential: { kind: 'daemon' },

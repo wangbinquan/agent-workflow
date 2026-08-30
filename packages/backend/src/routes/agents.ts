@@ -415,6 +415,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps): void {
           deps.configPath,
           actor.user.id,
           deps.secretBox,
+          deps.identityAccess,
         ),
       )
       return c.json(task, 201)

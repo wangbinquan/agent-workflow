@@ -20,6 +20,10 @@ import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { runDueSchedulesOnce } from '../src/services/scheduledTaskScheduler'
 import { createUser } from '../src/services/users'
 import { createWorkflow } from '../src/services/workflow'
+import {
+  createIdentityAccessRuntime,
+  type IdentityAccessRuntime,
+} from '../src/modules/identity-access/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAILY = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
@@ -55,9 +59,11 @@ describe('RFC-159 scheduled-task scheduler', () => {
   let db: DbClient
   let wfId = ''
   let ownerId = ''
+  let identityAccess: IdentityAccessRuntime
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    identityAccess = createIdentityAccessRuntime({ db })
     const owner = await createUser(db, {
       username: 'owner',
       displayName: 'O',
@@ -107,7 +113,11 @@ describe('RFC-159 scheduled-task scheduler', () => {
     await seed('s1')
     const calls: LaunchCall[] = []
     const now = Date.now()
-    const claimed = await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls), now })
+    const claimed = await runDueSchedulesOnce(db, {
+      buildLaunch: fakeLaunch(calls),
+      identityAccess,
+      now,
+    })
 
     expect(claimed.map((r) => r.id)).toEqual(['s1'])
     expect(calls).toHaveLength(1)
@@ -127,7 +137,10 @@ describe('RFC-159 scheduled-task scheduler', () => {
     await seed('disabled', { enabled: false })
     await seed('future', { nextRunAt: Date.now() + 60 * 60 * 1000 })
     const calls: LaunchCall[] = []
-    const claimed = await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls) })
+    const claimed = await runDueSchedulesOnce(db, {
+      buildLaunch: fakeLaunch(calls),
+      identityAccess,
+    })
     expect(claimed.map((r) => r.id)).toEqual(['due'])
     expect(calls.map((c) => c.scheduledTaskId)).toEqual(['due'])
   })
@@ -138,6 +151,7 @@ describe('RFC-159 scheduled-task scheduler', () => {
     const calls: LaunchCall[] = []
     await runDueSchedulesOnce(db, {
       buildLaunch: fakeLaunch(calls, { throwFor: new Set(['s1']) }),
+      identityAccess,
       now: Date.now(),
     })
     const after = await rowOf('s1')
@@ -150,7 +164,7 @@ describe('RFC-159 scheduled-task scheduler', () => {
     await seed('s1')
     await db.update(users).set({ status: 'disabled' }).where(eq(users.id, ownerId))
     const calls: LaunchCall[] = []
-    await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls) })
+    await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls), identityAccess })
     expect(calls).toHaveLength(0)
     const row = await rowOf('s1')
     expect(row.lastStatus).toBe('failed')
@@ -162,7 +176,7 @@ describe('RFC-159 scheduled-task scheduler', () => {
     await seed('s1')
     await db.delete(workflows).where(eq(workflows.id, wfId))
     const calls: LaunchCall[] = []
-    await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls) })
+    await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls), identityAccess })
     expect(calls).toHaveLength(0)
     expect((await rowOf('s1')).lastStatus).toBe('failed')
   })
@@ -174,6 +188,7 @@ describe('RFC-159 scheduled-task scheduler', () => {
     // maxFailures=3: this failing fire takes cf 2→3 ⇒ auto-disable, event once.
     await runDueSchedulesOnce(db, {
       buildLaunch: fakeLaunch(calls, { throwFor: new Set(['s1']) }),
+      identityAccess,
       maxFailures: 3,
       onAutoDisable: (id) => disabled.push(id),
     })
@@ -187,7 +202,10 @@ describe('RFC-159 scheduled-task scheduler', () => {
   test('corrupt schedule_spec → disabled, not hot-looped', async () => {
     await seed('s1', { scheduleSpec: '{bad json' })
     const calls: LaunchCall[] = []
-    const claimed = await runDueSchedulesOnce(db, { buildLaunch: fakeLaunch(calls) })
+    const claimed = await runDueSchedulesOnce(db, {
+      buildLaunch: fakeLaunch(calls),
+      identityAccess,
+    })
     expect(claimed).toHaveLength(0)
     expect(calls).toHaveLength(0)
     const row = await rowOf('s1')

@@ -17,6 +17,7 @@ import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/
 import { createTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjector'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -37,7 +38,11 @@ async function buildHarness(): Promise<Harness> {
     dbVersion: 1,
     db,
   })
-  const ws = buildWebSocketAdapter({ daemonToken: TOKEN, db })
+  const ws = buildWebSocketAdapter({
+    daemonToken: TOKEN,
+    db,
+    identityAccess: createIdentityAccessRuntime({ db }),
+  })
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',

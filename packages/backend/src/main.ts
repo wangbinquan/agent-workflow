@@ -22,12 +22,16 @@ import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
-import { packageCommand } from './cli/package'
+import {
+  packageCommand,
+  type PackageCommandBootstrap,
+  type PackageCommandIdentityHandle,
+} from './cli/package'
 import { runUserCommand, type UserCommandIdentityHandle } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 import { openDb } from './db/client'
-import { composeIdentityAccess } from './modules/identity-access/composition'
+import { createIdentityAccessRuntime } from './modules/identity-access/composition'
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
 import { composeLocalSystemOperations } from './modules/system-operations/composition'
 import {
@@ -70,16 +74,33 @@ function readPortFlag(argv: string[]): number | undefined {
 async function composeUserCommandBootstrap() {
   const migrationsFolder = await resolveMigrationsFolder()
   const db = openDb({ path: Paths.db, migrationsFolder })
-  const identityAccess = composeIdentityAccess(db)
+  const identityAccess = createIdentityAccessRuntime({ db })
   const operations = composeIdentityUserOperations({ db, identityAccess })
-  const principal = { userId: SYSTEM_USER_ID, source: 'cli' } as const
+  const localOperator = await identityAccess.localOperator.forUser(SYSTEM_USER_ID)
+  if (localOperator === null) {
+    identityAccess.shutdown()
+    throw new Error('local-system-operator-not-active')
+  }
   const identity = Object.freeze({
     operations,
-    commandContext: () => identityAccess.contexts.fromAuthenticatedPrincipal(principal, 'cli'),
-    queryContext: () => identityAccess.contexts.queryFromAuthenticatedPrincipal(principal, 'cli'),
+    initialUserAccess: identityAccess.initialUserAccess,
+    commandContext: () => localOperator.commandContext(),
+    queryContext: () => localOperator.queryContext(),
   }) satisfies UserCommandIdentityHandle
 
-  return { db, identity }
+  return { db, identity, shutdown: () => identityAccess.shutdown() }
+}
+
+async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap> {
+  const migrationsFolder = await resolveMigrationsFolder()
+  const db = openDb({ path: Paths.db, migrationsFolder })
+  const identityAccess = createIdentityAccessRuntime({ db })
+  const identity = Object.freeze({
+    async localActorForUser(userId: string) {
+      return (await identityAccess.localOperator.forUser(userId))?.actor ?? null
+    },
+  }) satisfies PackageCommandIdentityHandle
+  return { db, identity, shutdown: () => identityAccess.shutdown() }
 }
 
 async function main(): Promise<void> {
@@ -287,7 +308,7 @@ async function main(): Promise<void> {
     }
 
     case 'package': {
-      const result = await packageCommand(Bun.argv.slice(3))
+      const result = await packageCommand(Bun.argv.slice(3), composePackageCommandBootstrap)
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(1)
       break

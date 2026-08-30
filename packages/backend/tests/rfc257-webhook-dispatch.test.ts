@@ -22,6 +22,7 @@ import {
   webhookTriggerStreams,
   workflows,
 } from '../src/db/schema'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
   createWebhookDispatcher,
   migrateTriggerRowTemplateToV2,
@@ -110,6 +111,7 @@ async function harness(): Promise<Harness> {
   const launchError: Harness['launchError'] = { current: null }
   const deps: WebhookDispatchDeps = {
     db,
+    identityAccess: createIdentityAccessRuntime({ db }),
     configPath: '/nonexistent/config.json',
     secretBox: box,
     getDefaultRuntime: async () => null,

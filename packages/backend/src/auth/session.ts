@@ -13,7 +13,15 @@ import { getAuthLoginPolicy, isBootstrapRequired } from '@/auth/loginPolicy'
 import { ForbiddenError } from '@/util/errors'
 import { UnauthorizedError } from '@/util/errors'
 import { createInFlightCoalescer } from '@/util/inFlight'
-import { buildCurrentActor, SYSTEM_USER_ID, type Actor } from './actor'
+import type {
+  AdmittedDaemonCredential,
+  AdmittedPatCredential,
+  AdmittedSessionCredential,
+  DirectAuthorityAdmission,
+  DirectAuthorityIdentity,
+  DirectRequestAuthority,
+} from '@/modules/identity-access/public/participants'
+import type { Actor } from './actor'
 import { hashToken as hashPatToken, lookupActivePat, lookupActivePatByHash } from './patStore'
 import {
   hashToken as hashSessionToken,
@@ -24,9 +32,30 @@ import {
 export interface MultiAuthDeps {
   db: DbClient
   daemonToken: string
+  /** Bootstrap-owned runtime shared by HTTP, MCP and WS. */
+  identityAccess: DirectAuthorityAdmissionRuntime
   /** Override for tests that want a fixed clock. */
   now?: () => number
 }
+
+export type DirectAuthorityAdmissionRuntime = Readonly<{
+  directAuthority: DirectAuthorityAdmission
+}>
+
+function admittedSessionCredential(userId: string): AdmittedSessionCredential {
+  return Object.freeze({ userId }) as AdmittedSessionCredential
+}
+
+function admittedPatCredential(input: {
+  readonly userId: string
+  readonly scopes: ReadonlyArray<Permission>
+  readonly purpose: AdmittedPatCredential['purpose']
+  readonly patId: string
+}): AdmittedPatCredential {
+  return Object.freeze(input) as AdmittedPatCredential
+}
+
+const ADMITTED_DAEMON_CREDENTIAL = Object.freeze({}) as AdmittedDaemonCredential
 
 // RFC-036 — public paths that bypass multiAuth entirely. The OIDC login flow
 // must be reachable before the user has a session token (they are obtaining
@@ -58,7 +87,7 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
   // status, grants and authority revision exactly as before.
   const resolveInFlight = createInFlightCoalescer<
     string,
-    { actor: Actor | null; bootstrapRequired: boolean }
+    { identity: DirectAuthorityIdentity | null; bootstrapRequired: boolean }
   >()
   return async (c, next) => {
     if (isPublicAuthPath(c.req.path)) {
@@ -69,14 +98,14 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
     if (!raw) throw new UnauthorizedError()
     const now = deps.now ? deps.now() : Date.now()
     const resolved = await resolveInFlight(hashSessionToken(raw), async () => {
-      const actor = await resolveActor(deps.db, raw, daemonBuf, now)
+      const identity = await resolveIdentity(deps.db, raw, daemonBuf, deps.identityAccess, now)
       return {
-        actor,
-        bootstrapRequired: actor?.source === 'daemon' && isBootstrapRequired(deps.db),
+        identity,
+        bootstrapRequired: identity?.actor.source === 'daemon' && isBootstrapRequired(deps.db),
       }
     })
-    const { actor } = resolved
-    if (!actor) throw new UnauthorizedError()
+    const actor = resolved.identity?.actor as Actor | undefined
+    if (actor === undefined) throw new UnauthorizedError()
     c.set('actor', actor)
     if (
       actor.source === 'daemon' &&
@@ -129,6 +158,7 @@ export type WsCredentialWithExpiry =
  */
 export interface ResolvedUpgradeIdentity {
   readonly actor: Actor | null
+  readonly authority: DirectRequestAuthority | null
   readonly credential: WsCredentialWithExpiry
 }
 
@@ -136,6 +166,7 @@ export async function resolveActorWithWsCredential(
   db: DbClient,
   raw: string,
   daemonTokenBuf: Buffer,
+  identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
 ): Promise<ResolvedUpgradeIdentity> {
   if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
@@ -145,9 +176,13 @@ export async function resolveActorWithWsCredential(
       hash: hashSessionToken(raw),
       expiresAt: resolved?.session.expiresAt ?? null,
     }
-    if (!resolved) return { actor: null, credential }
+    if (!resolved) return { actor: null, authority: null, credential }
+    const identity = await identityAccess.directAuthority.fromSession(
+      admittedSessionCredential(resolved.user.id),
+    )
     return {
-      actor: await buildCurrentActor(db, { userId: resolved.user.id, source: 'session' }),
+      actor: (identity?.actor as Actor | undefined) ?? null,
+      authority: identity?.authority ?? null,
       credential,
     }
   }
@@ -158,55 +193,59 @@ export async function resolveActorWithWsCredential(
       hash: hashPatToken(raw),
       expiresAt: resolved?.expiresAt ?? null,
     }
-    if (!resolved) return { actor: null, credential }
-    return {
-      actor: await buildCurrentActor(db, {
+    if (!resolved) return { actor: null, authority: null, credential }
+    const identity = await identityAccess.directAuthority.fromPat(
+      admittedPatCredential({
         userId: resolved.user.id,
-        source: 'pat',
-        patScopes: resolved.scopes as ReadonlyArray<Permission>,
-        patPurpose: resolved.purpose,
+        scopes: resolved.scopes as ReadonlyArray<Permission>,
+        purpose: resolved.purpose,
         patId: resolved.patId,
       }),
+    )
+    return {
+      actor: (identity?.actor as Actor | undefined) ?? null,
+      authority: identity?.authority ?? null,
       credential,
     }
   }
   // Legacy daemon token —— 与 resolveActor 同判据，凭据无需查库。
   if (!safeEqual(Buffer.from(raw, 'utf8'), daemonTokenBuf)) {
-    return { actor: null, credential: { kind: 'daemon' } }
+    return { actor: null, authority: null, credential: { kind: 'daemon' } }
   }
   if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db)) {
-    return { actor: null, credential: { kind: 'daemon' } }
+    return { actor: null, authority: null, credential: { kind: 'daemon' } }
   }
+  const identity = await identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
   return {
-    actor: await buildCurrentActor(db, { userId: SYSTEM_USER_ID, source: 'daemon' }),
+    actor: (identity?.actor as Actor | undefined) ?? null,
+    authority: identity?.authority ?? null,
     credential: { kind: 'daemon' },
   }
 }
 
-export async function resolveActor(
+export async function resolveIdentity(
   db: DbClient,
   raw: string,
   daemonTokenBuf: Buffer,
+  identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
-): Promise<Actor | null> {
+): Promise<DirectAuthorityIdentity | null> {
   if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
     const resolved = await lookupActiveSession(db, raw, now)
     if (!resolved) return null
-    return buildCurrentActor(db, {
-      userId: resolved.user.id,
-      source: 'session',
-    })
+    return identityAccess.directAuthority.fromSession(admittedSessionCredential(resolved.user.id))
   }
   if (raw.startsWith(PAT_TOKEN_PREFIX)) {
     const resolved = await lookupActivePat(db, raw, now)
     if (!resolved) return null
-    return buildCurrentActor(db, {
-      userId: resolved.user.id,
-      source: 'pat',
-      patScopes: resolved.scopes as ReadonlyArray<Permission>,
-      patPurpose: resolved.purpose,
-      patId: resolved.patId,
-    })
+    return identityAccess.directAuthority.fromPat(
+      admittedPatCredential({
+        userId: resolved.user.id,
+        scopes: resolved.scopes as ReadonlyArray<Permission>,
+        purpose: resolved.purpose,
+        patId: resolved.patId,
+      }),
+    )
   }
   // Legacy daemon token: any opaque string the daemon was launched with.
   // The 64-hex shape is what `generateToken()` produces but we accept the
@@ -215,7 +254,18 @@ export async function resolveActor(
   if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
     return null
 
-  return buildCurrentActor(db, { userId: SYSTEM_USER_ID, source: 'daemon' })
+  return identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
+}
+
+export async function resolveActor(
+  db: DbClient,
+  raw: string,
+  daemonTokenBuf: Buffer,
+  identityAccess: DirectAuthorityAdmissionRuntime,
+  now: number = Date.now(),
+): Promise<Actor | null> {
+  const identity = await resolveIdentity(db, raw, daemonTokenBuf, identityAccess, now)
+  return (identity?.actor as Actor | undefined) ?? null
 }
 
 /**
@@ -227,35 +277,45 @@ export async function resolveActor(
  * stored token row; it re-reads the __system__ user so a deleted system user
  * still closes the socket.
  */
-export async function reresolveActor(
+export async function reresolveIdentity(
   db: DbClient,
   credential: WsCredentialFingerprint,
+  identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
-): Promise<Actor | null> {
+): Promise<DirectAuthorityIdentity | null> {
   if (credential.kind === 'session') {
     const resolved = await lookupActiveSessionByHash(db, credential.hash, now, { touch: false })
     if (!resolved) return null
-    return buildCurrentActor(db, {
-      userId: resolved.user.id,
-      source: 'session',
-    })
+    return identityAccess.directAuthority.fromSession(admittedSessionCredential(resolved.user.id))
   }
   if (credential.kind === 'pat') {
     const resolved = await lookupActivePatByHash(db, credential.hash, now, { touch: false })
     if (!resolved) return null
-    return buildCurrentActor(db, {
-      userId: resolved.user.id,
-      source: 'pat',
-      patScopes: resolved.scopes as ReadonlyArray<Permission>,
-      patPurpose: resolved.purpose,
-    })
+    return identityAccess.directAuthority.fromPat(
+      admittedPatCredential({
+        userId: resolved.user.id,
+        scopes: resolved.scopes as ReadonlyArray<Permission>,
+        purpose: resolved.purpose,
+        patId: resolved.patId,
+      }),
+    )
   }
   // daemon: RFC-221 makes this a one-way bootstrap credential. Revalidation
   // closes every existing daemon socket immediately after the first admin
   // transaction commits.
   if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
     return null
-  return buildCurrentActor(db, { userId: SYSTEM_USER_ID, source: 'daemon' })
+  return identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
+}
+
+export async function reresolveActor(
+  db: DbClient,
+  credential: WsCredentialFingerprint,
+  identityAccess: DirectAuthorityAdmissionRuntime,
+  now: number = Date.now(),
+): Promise<Actor | null> {
+  const identity = await reresolveIdentity(db, credential, identityAccess, now)
+  return (identity?.actor as Actor | undefined) ?? null
 }
 
 /**

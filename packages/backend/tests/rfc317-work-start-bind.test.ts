@@ -63,7 +63,7 @@ describe('RFC-344 —— MCP 不再拥有第二个进程级绑定入口', () => 
     const { resolve } = await import('node:path')
     expect(existsSync(resolve(import.meta.dir, '..', 'src', 'mcp', 'dispatch.ts'))).toBe(false)
     const server = readFileSync(resolve(import.meta.dir, '..', 'src', 'server.ts'), 'utf8')
-    expect(server).toContain('directMcpOperationAuthority(identityAccess.contexts, actor)')
+    expect(server).toContain('directMcpOperationAuthority(identityAccess.directAuthority, actor)')
     expect(server).not.toContain('app.request(')
   })
 })

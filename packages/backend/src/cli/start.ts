@@ -29,6 +29,10 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import {
+  createIdentityAccessRuntime,
+  type IdentityAccessRuntime,
+} from '@/modules/identity-access/composition'
 import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { ulid } from 'ulid'
@@ -94,7 +98,13 @@ import {
   startMemoryDistillLoop,
 } from '@/services/memoryDistillScheduler'
 import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
-import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
+import {
+  PRESENCE_CHANNEL,
+  presenceBroadcaster,
+  tasksListBroadcaster,
+  TASKS_LIST_CHANNEL,
+} from '@/ws/broadcaster'
+import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
@@ -566,8 +576,27 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     endpointDiscovery: repositoryEndpointDiscovery,
   })
+  const identityAccess: IdentityAccessRuntime = createIdentityAccessRuntime({
+    db,
+    events: {
+      authorityRevisionChanged({ userId, revision, onFailure }) {
+        triggerAuthorityRevalidation(db, userId, revision, onFailure)
+      },
+    },
+    presenceProjection: {
+      publish(changes) {
+        const [head, ...rest] = changes
+        if (head === undefined) return
+        presenceBroadcaster.broadcast(PRESENCE_CHANNEL, {
+          type: 'presence.changed',
+          changes: [head, ...rest],
+        })
+      },
+    },
+  })
   const taskExecutionRuntime = composeTaskExecutionRuntime({
     db,
+    identityAccess,
     repositoryPublicationTransport,
   })
   const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
@@ -887,6 +916,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const digitalEmployeeWorkStart = createDeferredDigitalEmployeeWorkStart()
   const webhookDispatcher = createWebhookDispatcher({
     db,
+    identityAccess,
     configPath: Paths.config,
     secretBox,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
@@ -926,6 +956,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         Paths.config,
         SYSTEM_USER_ID,
         secretBox,
+        identityAccess,
       ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(db, executionRef)
@@ -963,6 +994,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         Paths.config,
         SYSTEM_USER_ID,
         secretBox,
+        identityAccess,
       ),
       onTerminal: (executionRef) => {
         const missionId = missionIdOfExecutionRef(db, executionRef)
@@ -1169,6 +1201,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       void resumeQueuedIntentWorkingSets(
         {
           db,
+          identityAccess,
           appHome: Paths.root,
           configSnapshot: loadConfig(Paths.config),
         },
@@ -1192,6 +1225,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     opencodeVersion: null,
     dbVersion,
     db,
+    identityAccess,
     maintenanceStatus: maintenanceService.status,
     secretBox,
     repositoryPublicationTransport,
@@ -1208,7 +1242,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   const bindHost = opts.host ?? config.bindHost
   const bindPort = opts.port ?? config.bindPort ?? 0
-  const ws = buildWebSocketAdapter({ daemonToken: token, db })
+  const ws = buildWebSocketAdapter({ daemonToken: token, db, identityAccess })
   const server = Bun.serve({
     port: bindPort,
     hostname: bindHost,
@@ -1464,6 +1498,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
             Paths.config,
             SYSTEM_USER_ID,
             secretBox,
+            identityAccess,
           ),
           workspace: employeeWorkspace,
           executionContracts: employeeExecutionContracts,
@@ -1557,8 +1592,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // building deps live (buildStartTaskDeps) so scheduled launches match manual ones.
   const scheduledTaskTicker = startScheduledTaskLoop({
     db,
+    identityAccess,
     loadConfig: () => loadConfig(Paths.config),
-    buildLaunch: buildScheduleLaunch(db, taskExecutionRuntime.schedulerDriver, Paths.config),
+    buildLaunch: buildScheduleLaunch(
+      db,
+      taskExecutionRuntime.schedulerDriver,
+      Paths.config,
+      identityAccess,
+    ),
   })
 
   // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
@@ -1648,6 +1689,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     clearInterval(developmentWakeTimer)
     await maintenanceService.stop()
     await webhookTerminalControl.stop()
+    identityAccess.shutdown()
     removeDaemonInfo()
     server.stop(true)
     try {

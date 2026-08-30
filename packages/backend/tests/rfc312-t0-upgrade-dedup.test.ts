@@ -21,6 +21,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createSession } from '../src/auth/sessionStore'
 import { resolveActorWithWsCredential } from '../src/auth/session'
 import { userSessions } from '../src/db/schema'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -63,6 +64,7 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
       db,
       token,
       Buffer.from('daemon-token'),
+      createIdentityAccessRuntime({ db }),
       2_000,
     )
 
@@ -84,7 +86,13 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
     seedUser(db, 'u-2')
     const { token, session } = await createSession({ db, userId: 'u-2', now: 1_000 })
 
-    await resolveActorWithWsCredential(db, token, Buffer.from('daemon-token'), 999_000)
+    await resolveActorWithWsCredential(
+      db,
+      token,
+      Buffer.from('daemon-token'),
+      createIdentityAccessRuntime({ db }),
+      999_000,
+    )
     const after = db.$client
       .query('SELECT last_used_at AS t FROM user_sessions WHERE id = ?')
       .get(session.id) as { t: number }
@@ -95,7 +103,12 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
   test('无效 token：actor 为 null，凭据仍带指纹（调用方据 actor 判 401）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const bogus = `aws_s_${randomBytes(32).toString('hex')}`
-    const resolved = await resolveActorWithWsCredential(db, bogus, Buffer.from('daemon-token'))
+    const resolved = await resolveActorWithWsCredential(
+      db,
+      bogus,
+      Buffer.from('daemon-token'),
+      createIdentityAccessRuntime({ db }),
+    )
     expect(resolved.actor).toBeNull()
     expect(resolved.credential.kind).toBe('session')
     expect(resolved.credential.kind === 'session' ? resolved.credential.expiresAt : 0).toBeNull()
@@ -108,6 +121,7 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
       db,
       'daemon-token',
       Buffer.from('daemon-token'),
+      createIdentityAccessRuntime({ db }),
     )
     expect(resolved.credential).toEqual({ kind: 'daemon' })
     expect(counter.writes()).toBe(0)

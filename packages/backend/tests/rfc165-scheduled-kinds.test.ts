@@ -43,6 +43,7 @@ import { createUser } from '../src/services/users'
 import { createWorkflow } from '../src/services/workflow'
 import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -61,6 +62,7 @@ function buildRealScheduleLaunch(db: DbClient, configPath: string) {
     db,
     createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
     configPath,
+    createIdentityAccessRuntime({ db }),
   )
 }
 
@@ -450,6 +452,8 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       row,
       buildRealScheduleLaunch(db, join(appHome, 'config.json')),
       Date.now(),
+      createIdentityAccessRuntime({ db }),
+      { kind: 'manual' },
     )
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(task.sourceAgentName).toBe('solo')
@@ -496,6 +500,8 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
         (await getScheduledTaskRow(db, created.id))!,
         buildRealScheduleLaunch(db, join(appHome, 'config.json')),
         Date.now(),
+        createIdentityAccessRuntime({ db }),
+        { kind: 'manual' },
       ),
     ).rejects.toMatchObject({ code: 'schedule-payload-invalid' })
     expect(await db.select().from(tasks).where(eq(tasks.scheduledTaskId, created.id))).toEqual([])
@@ -545,6 +551,8 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       row,
       buildRealScheduleLaunch(db, join(appHome, 'config.json')),
       Date.now(),
+      createIdentityAccessRuntime({ db }),
+      { kind: 'manual' },
     )
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     expect(task.workgroupId).not.toBe(null)

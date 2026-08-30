@@ -21,6 +21,7 @@ import {
   createIdentity,
   createUserWithIdentity,
   findByProviderSubject,
+  type OidcProfileIdentityAccess,
   syncPreferredSnapshot,
 } from '@/services/userIdentities'
 import {
@@ -37,7 +38,11 @@ import { DomainError } from '@/util/errors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
 import { safeJsonOrEmpty } from '@/util/http'
 
-export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
+export function mountOidcAuthRoutes(
+  app: Hono,
+  deps: AppDeps,
+  identityAccess: OidcProfileIdentityAccess,
+): void {
   registerRoute(
     app,
     {
@@ -189,20 +194,24 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
 
       if (flow.linkUserId) {
         try {
-          await createIdentity(deps.db, {
-            userId: flow.linkUserId,
-            providerId: provider.id,
-            subject: claims.sub,
-            email: claims.email ?? null,
-            emailVerified: !!claims.email_verified,
-            displayName,
-            gitName,
-            preferredSnapshot: snapshotInit,
-            expectedSubjectClaim: provider.subjectClaim,
-            expectedUsernameClaim: provider.usernameClaim,
-            expectedGitNameClaim: provider.gitNameClaim,
-            expectedEmailClaim: provider.emailClaim,
-          })
+          await createIdentity(
+            deps.db,
+            {
+              userId: flow.linkUserId,
+              providerId: provider.id,
+              subject: claims.sub,
+              email: claims.email ?? null,
+              emailVerified: !!claims.email_verified,
+              displayName,
+              gitName,
+              preferredSnapshot: snapshotInit,
+              expectedSubjectClaim: provider.subjectClaim,
+              expectedUsernameClaim: provider.usernameClaim,
+              expectedGitNameClaim: provider.gitNameClaim,
+              expectedEmailClaim: provider.emailClaim,
+            },
+            identityAccess,
+          )
         } catch (err) {
           if (isDomainCode(err, 'provider-config-changed')) {
             return c.html(friendly('provider-config-changed'), 400)
@@ -247,40 +256,51 @@ export function mountOidcAuthRoutes(app: Hono, deps: AppDeps): void {
           case 'login':
             userId = decision.userId
             // RFC-335 — both names reconcile on every successful callback.
-            syncPreferredSnapshot(deps.db, {
-              providerId: provider.id,
-              subject: claims.sub,
-              userId,
-              displayName,
-              gitName,
-              email: claims.email ?? null,
-              emailVerified: !!claims.email_verified,
-              expectedSubjectClaim: provider.subjectClaim,
-              expectedUsernameClaim: provider.usernameClaim,
-              expectedGitNameClaim: provider.gitNameClaim,
-              expectedEmailClaim: provider.emailClaim,
-            })
+            syncPreferredSnapshot(
+              {
+                providerId: provider.id,
+                subject: claims.sub,
+                userId,
+                displayName,
+                gitName,
+                email: claims.email ?? null,
+                emailVerified: !!claims.email_verified,
+                expectedSubjectClaim: provider.subjectClaim,
+                expectedUsernameClaim: provider.usernameClaim,
+                expectedGitNameClaim: provider.gitNameClaim,
+                expectedEmailClaim: provider.emailClaim,
+              },
+              identityAccess,
+            )
             break
           case 'create': {
             // OIDC auto-provisioning: the IdP verified the identity, so the user
             // lands as `active` immediately. User row + identity row commit in
             // ONE transaction — a subjectClaim race must roll back both instead
             // of leaving an identity-less active account (design §6.2).
-            const created = await createUserWithIdentity(deps.db, {
-              username: await pickUniqueUsername(deps, claims),
-              displayName,
-              gitName,
-              email: claims.email ?? null,
-              identity: identitySeed,
-            })
+            const created = await createUserWithIdentity(
+              deps.db,
+              {
+                username: await pickUniqueUsername(deps, claims),
+                displayName,
+                gitName,
+                email: claims.email ?? null,
+                identity: identitySeed,
+              },
+              identityAccess,
+            )
             userId = created.userId
             break
           }
           case 'bindInvited':
-            await bindInvitedUserWithIdentity(deps.db, {
-              userId: decision.userId,
-              identity: identitySeed,
-            })
+            await bindInvitedUserWithIdentity(
+              deps.db,
+              {
+                userId: decision.userId,
+                identity: identitySeed,
+              },
+              identityAccess,
+            )
             userId = decision.userId
             break
         }

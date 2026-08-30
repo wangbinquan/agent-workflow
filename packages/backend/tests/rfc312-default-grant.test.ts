@@ -15,6 +15,7 @@ import { randomBytes } from 'node:crypto'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createUserWithIdentity } from '../src/services/userIdentities'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { initialGrantsForRole } from '../src/modules/identity-access/domain/initialGrants'
@@ -78,22 +79,26 @@ describe('rfc312 默认授权覆盖 OIDC 自助建号', () => {
 
   async function provisionViaOidc(subject: string): Promise<string> {
     const provider = await makeProvider()
-    const { userId } = await createUserWithIdentity(db, {
-      username: 'oidc-user',
-      displayName: 'OIDC User',
-      gitName: 'OIDC Git User',
-      email: null,
-      identity: {
-        providerId: provider.id,
-        subject,
-        email: null,
-        emailVerified: false,
+    const { userId } = await createUserWithIdentity(
+      db,
+      {
+        username: 'oidc-user',
         displayName: 'OIDC User',
         gitName: 'OIDC Git User',
-        preferredSnapshot: '',
-        expectedSubjectClaim: null,
+        email: null,
+        identity: {
+          providerId: provider.id,
+          subject,
+          email: null,
+          emailVerified: false,
+          displayName: 'OIDC User',
+          gitName: 'OIDC Git User',
+          preferredSnapshot: '',
+          expectedSubjectClaim: null,
+        },
       },
-    })
+      createIdentityAccessRuntime({ db }),
+    )
     return userId
   }
 

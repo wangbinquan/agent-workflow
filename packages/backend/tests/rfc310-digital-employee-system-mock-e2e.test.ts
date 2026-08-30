@@ -7,6 +7,7 @@
 // production participants.
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import {
   existsSync,
@@ -284,6 +285,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     }
     const webhookDispatcher = createWebhookDispatcher({
       db,
+      identityAccess: createIdentityAccessRuntime({ db }),
       configPath: join(appHome, 'config.json'),
       secretBox: webhookSecretBox,
       getDefaultRuntime: async () => null,

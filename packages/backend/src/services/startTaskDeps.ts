@@ -40,12 +40,15 @@ export function buildStartTaskDeps(
   actorUserId: string,
   /** RFC-204: needed to unseal a cached repo for a reuse-by-id launch. */
   secretBox?: SecretBox,
+  /** RFC-347: daemon/bootstrap-owned identity query; omitted only by legacy tests. */
+  identityAccess?: StartTaskDeps['identityAccess'],
 ): StartTaskDeps {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
   return {
     db,
     schedulerDriver,
     actorUserId,
+    ...(identityAccess === undefined ? {} : { identityAccess }),
     ...(secretBox !== undefined ? { secretBox } : {}),
     // RFC-282 C1-2: the scheduler resolves config.opencodePath itself.
     configPath,

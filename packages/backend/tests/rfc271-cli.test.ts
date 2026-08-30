@@ -42,11 +42,16 @@ describe('① --as-user 强制', () => {
     expect(out.output).toContain('--as-user is required')
   })
 
-  test('构造的是与 HTTP 同构的 Actor（源码层）', () => {
-    // CLI 与 HTTP 都从当前数据库访问状态解析最终 permissions；不能自己拼集合，
-    // 更不能在消费者里把 account role 当作第二条授权轴。
-    expect(SRC).toContain('buildCurrentActor(')
-    expect(SRC).toContain("source: 'daemon'")
+  test('通过 composition-only local operator 解析与 HTTP 同源的访问投影（源码层）', () => {
+    // CLI 与 HTTP 都从当前数据库访问状态解析最终 permissions；CLI 使用独立
+    // local participant，不伪装成 daemon/session/PAT direct authority；具体
+    // runtime 只由 main bootstrap 装配，package consumer 收窄 handle。
+    expect(SRC).not.toContain('identity-access/composition')
+    expect(SRC).toContain('identity.localActorForUser(row.id)')
+    expect(MAIN).toContain('composePackageCommandBootstrap')
+    expect(MAIN).toContain('identityAccess.localOperator.forUser(userId)')
+    expect(SRC).not.toContain('buildCurrentActor(')
+    expect(SRC).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(SRC).toContain('access revision')
   })
 })
@@ -88,7 +93,7 @@ describe('② 同名多行不猜 / ③ 两个决策来源互斥', () => {
 describe('注册与帮助', () => {
   test('main.ts 挂了 package 命令', () => {
     expect(MAIN).toContain("case 'package':")
-    expect(MAIN).toContain('packageCommand(')
+    expect(MAIN).toContain('packageCommand(Bun.argv.slice(3), composePackageCommandBootstrap)')
   })
 
   test('--help 写明 break-glass 边界（不是绕过判据的通道）', () => {

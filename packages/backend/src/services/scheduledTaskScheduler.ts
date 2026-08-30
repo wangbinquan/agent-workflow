@@ -12,7 +12,11 @@ import { and, asc, eq, isNotNull, lte, sql } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { scheduledTasks } from '@/db/schema'
-import { fireSchedule, type BuildScheduleLaunch } from '@/services/scheduledTasks'
+import {
+  fireSchedule,
+  type BuildScheduleLaunch,
+  type ScheduleAuthorityRuntime,
+} from '@/services/scheduledTasks'
 import { createLogger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
@@ -160,13 +164,22 @@ async function fireClaimed(
   db: DbClient,
   row: Row,
   buildLaunch: BuildScheduleLaunch,
+  identityAccess: ScheduleAuthorityRuntime,
   maxFailures: number,
   onAutoDisable?: (id: string) => void,
   defaultRuntime?: string | null,
 ): Promise<void> {
   const firedAt = row.nextRunAt ?? Date.now() // the claimed slot (pre-advance)
   try {
-    const { taskId } = await fireSchedule(db, row, buildLaunch, Date.now(), defaultRuntime)
+    const { taskId } = await fireSchedule(
+      db,
+      row,
+      buildLaunch,
+      Date.now(),
+      identityAccess,
+      { kind: 'automatic', occurrenceAt: firedAt },
+      defaultRuntime,
+    )
     await recordSuccess(db, row.id, taskId, firedAt)
     scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
       type: 'scheduled.fired',
@@ -189,6 +202,7 @@ export async function runDueSchedulesOnce(
   db: DbClient,
   opts: {
     buildLaunch: BuildScheduleLaunch
+    identityAccess: ScheduleAuthorityRuntime
     now?: number
     maxFailures?: number
     limit?: number
@@ -206,6 +220,7 @@ export async function runDueSchedulesOnce(
       db,
       row,
       opts.buildLaunch,
+      opts.identityAccess,
       opts.maxFailures ?? DEFAULT_MAX_CONSECUTIVE_FAILURES,
       opts.onAutoDisable,
       opts.defaultRuntime,
@@ -219,6 +234,7 @@ export function startScheduledTaskLoop(opts: {
   db: DbClient
   loadConfig: () => Config
   buildLaunch: BuildScheduleLaunch
+  identityAccess: ScheduleAuthorityRuntime
   intervalMs?: number
   onAutoDisable?: (id: string) => void
 }): { stop: () => void } {
@@ -244,6 +260,7 @@ export function startScheduledTaskLoop(opts: {
                 opts.db,
                 row,
                 opts.buildLaunch,
+                opts.identityAccess,
                 maxFailures,
                 opts.onAutoDisable,
                 cfg.defaultRuntime,

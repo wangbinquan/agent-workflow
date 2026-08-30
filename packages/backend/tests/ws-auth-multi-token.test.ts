@@ -27,6 +27,7 @@ import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -40,7 +41,11 @@ interface Harness {
 
 async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
-  const ws = buildWebSocketAdapter({ daemonToken: DAEMON_TOKEN, db })
+  const ws = buildWebSocketAdapter({
+    daemonToken: DAEMON_TOKEN,
+    db,
+    identityAccess: createIdentityAccessRuntime({ db }),
+  })
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',

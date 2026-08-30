@@ -27,9 +27,10 @@
 import type { ServerWebSocket } from 'bun'
 import { type WsControlMessage, WsClientControlMessageSchema } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
+import type { DirectRequestAuthority } from '@/modules/identity-access/public/participants'
 import {
   extractUpgradeToken,
-  reresolveActor,
+  reresolveIdentity,
   resolveActorWithWsCredential,
   type WsCredentialWithExpiry,
 } from '@/auth/session'
@@ -39,9 +40,11 @@ import {
   checkUpgradeGate,
   openWsChannel,
   parseWsChannel,
+  type IdentityAccessWsBinding,
   type WsConnectionData,
   type WsChannelKind,
 } from './registry'
+import { triggerAuthorityRevalidation } from './revalidationHook'
 import {
   closeConnection,
   currentRevalidationEpoch,
@@ -70,6 +73,11 @@ export interface WebSocketAdapterDeps {
    */
   daemonToken: string
   db: DbClient
+  /** One bootstrap-owned identity-access runtime shared with HTTP and MCP. */
+  identityAccess: Pick<
+    IdentityAccessWsBinding,
+    'directAuthority' | 'authorityFence' | 'presenceConnections' | 'presenceQuery'
+  >
 }
 
 export interface WebSocketAdapter {
@@ -101,6 +109,21 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   // length-check + timing-safe equality, so we avoid Buffer.from() per
   // upgrade attempt.
   const daemonTokenBuf = Buffer.from(deps.daemonToken, 'utf-8')
+  const identityAccess: IdentityAccessWsBinding = Object.freeze({
+    directAuthority: deps.identityAccess.directAuthority,
+    authorityFence: deps.identityAccess.authorityFence,
+    presenceConnections: deps.identityAccess.presenceConnections,
+    presenceQuery: deps.identityAccess.presenceQuery,
+    requestAuthorityRevalidation(userId: string, revision: number) {
+      triggerAuthorityRevalidation(deps.db, userId, revision, (error) => {
+        log.warn('targeted authority revalidation failed', {
+          userId,
+          revision,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    },
+  })
 
   async function tryUpgrade(
     req: Request,
@@ -138,20 +161,27 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // awaits below) is detectable at open time.
     const upgradeEpoch = currentRevalidationEpoch()
     let actor: Actor | null = null
+    let authority: DirectRequestAuthority | null = null
     // RFC-312 T0 —— 一次解析同时拿到 actor 与凭据指纹。此前这里解析一遍、下面
     // `buildWsCredential` 对同一个 token 再解析一遍，于是每次升级查 5 次、**写两次**
     // `last_used_at`（rolling renewal 被执行了两遍）。合并后 3 读 1 写，对所有 WS 连接生效。
     let credential: WsCredentialWithExpiry = { kind: 'daemon' }
     try {
-      const resolved = await resolveActorWithWsCredential(deps.db, queryToken, daemonTokenBuf)
+      const resolved = await resolveActorWithWsCredential(
+        deps.db,
+        queryToken,
+        daemonTokenBuf,
+        deps.identityAccess,
+      )
       actor = resolved.actor
+      authority = resolved.authority
       credential = resolved.credential
     } catch (err) {
       log.warn('upgrade-token-resolve-threw', {
         err: err instanceof Error ? err.message : String(err),
       })
     }
-    if (actor === null) {
+    if (actor === null || authority === null) {
       return wsError('auth-required', 'invalid or missing token', 401)
     }
     if (actor.source === 'daemon' && !allowsLegacyDaemonTestAccess(deps.db)) {
@@ -207,6 +237,8 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     const data: ConnectionData = {
       channel,
       actor,
+      authority,
+      identityAccess,
       // RFC-212 — fingerprint (never the raw token) so a live socket can be
       // re-checked when a credential is revoked; also carries the credential's
       // expiry for the zero-DB frame-path expiry check. Computed from the same
@@ -242,15 +274,21 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // frame — close it if the credential was revoked, refresh the actor otherwise
     // (an access change). The subscribe below then runs under the fresh actor.
     if (currentRevalidationEpoch() !== ws.data.upgradeEpoch) {
-      const fresh = await reresolveActor(deps.db, ws.data.credential, Date.now()).catch(() => null)
+      const fresh = await reresolveIdentity(
+        deps.db,
+        ws.data.credential,
+        deps.identityAccess,
+        Date.now(),
+      ).catch(() => null)
       if (fresh === null) {
         closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'auth-revoked-mid-upgrade')
         return
       }
-      ws.data.actor = fresh
+      ws.data.actor = fresh.actor as Actor
+      ws.data.authority = fresh.authority
       // RFC-312 —— epoch 变了意味着复核期间权限可能已经变化，只重解析 actor 不够：
       // 必须用新 actor 重跑本通道的完整升级门，否则"已失权但恰好卡在升级中"的连接会漏网。
-      const verdict = await checkUpgradeGate(deps.db, fresh, ch)
+      const verdict = await checkUpgradeGate(deps.db, ws.data.actor, ch)
       if (verdict !== true) {
         closeConnection(ws, WS_CLOSE_NOT_VISIBLE, verdict.code)
         return

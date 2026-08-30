@@ -33,6 +33,13 @@ import type { WsCredential } from '../src/ws/registry'
 import { createLogger } from '../src/util/log'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { PerformanceMonotonicClock } from '../src/modules/identity-access/infrastructure/inMemoryPresence'
+import {
+  admitWsIdentity,
+  stubIdentityAccessWsBinding,
+  TEST_DIRECT_AUTHORITY,
+} from './helpers/identityAccessWs'
+import type { IdentityAccessWsBinding } from '../src/ws/registry'
+import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -57,11 +64,19 @@ function actorWith(role: 'admin' | 'user', id = 'u-1'): Actor {
 function fakeWs(
   actor: Actor,
   sendReturns: (payload: string) => number = (p) => p.length,
+  identity: {
+    readonly authority: DirectRequestAuthority
+    readonly identityAccess: IdentityAccessWsBinding
+  } = {
+    authority: TEST_DIRECT_AUTHORITY,
+    identityAccess: stubIdentityAccessWsBinding(actor.authorityRevision ?? 0),
+  },
 ): { ws: ServerWebSocket<WsConnectionData>; sent: unknown[] } {
   const sent: unknown[] = []
   const data: WsConnectionData = {
     channel: { kind: 'presence' },
     actor,
+    ...identity,
     credential: { kind: 'session', hash: 'h', expiresAt: null },
     closing: false,
     revalidating: false,
@@ -86,27 +101,33 @@ describe('RFC-312 实现门 —— presence 计数不得因关闭时序泄漏', 
   // P1-1 的**核心**：真正走一遍 `handleClose`，断言它置了 `closing`。
   // 这一条才锁得住修复本身——若只自己把 `closing` 置真再调 installPresence，锁的是那个
   // 早已存在的守卫，而不是"标志有没有被置上"，删掉修复照样绿（我第一版就写错成那样）。
-  test('handleClose 置 closing ⇒ 随后迟到的 installPresence 不再登记', () => {
+  test('handleClose 置 closing ⇒ 随后迟到的 installPresence 不再登记', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { trackUserPresence, getUserPresence } = composeIdentityAccess(db)
-    const adapter = buildWebSocketAdapter({ daemonToken: 'dt', db })
-    const { ws } = fakeWs(actorWith('admin', 'ghost'))
+    seedUser(db, 'ghost')
+    const identityAccess = composeIdentityAccess(db)
+    const { getUserPresence } = identityAccess
+    const adapter = buildWebSocketAdapter({ daemonToken: 'dt', db, identityAccess })
+    const identity = await admitWsIdentity(identityAccess, 'ghost')
+    const { ws } = fakeWs(identity.actor, undefined, identity)
 
     // 客户端在 handleOpen 的 epoch 复核 await 期间断开：Bun 回调 handleClose。
     adapter.handlers.close(ws as never)
     expect(ws.data.closing).toBe(true)
 
     // await 回来了，才轮到登记——此时必须是空操作，否则永远等不到第二次 close 回调。
-    installPresence(ws, 'ghost', trackUserPresence)
+    installPresence(ws)
     expect(getUserPresence.stateOf('ghost')).toBe('offline')
     expect(getUserPresence.snapshot()).not.toContain('ghost')
   })
 
-  test('未关闭时正常登记，仍是在线（守卫没有误杀正向路径）', () => {
+  test('未关闭时正常登记，仍是在线（守卫没有误杀正向路径）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { trackUserPresence, getUserPresence } = composeIdentityAccess(db)
-    const { ws } = fakeWs(actorWith('admin', 'alive'))
-    installPresence(ws, 'alive', trackUserPresence)
+    seedUser(db, 'alive')
+    const identityAccess = composeIdentityAccess(db)
+    const { getUserPresence } = identityAccess
+    const identity = await admitWsIdentity(identityAccess, 'alive')
+    const { ws } = fakeWs(identity.actor, undefined, identity)
+    installPresence(ws)
     expect(getUserPresence.stateOf('alive')).toBe('online')
   })
 })
@@ -240,19 +261,14 @@ describe('RFC-312 实现门 —— 撤权拒绝链必须有行为锁', () => {
     const credential: WsCredential =
       fp.kind === 'daemon' ? { kind: 'daemon' } : { ...fp, expiresAt: null }
 
+    const identityAccess = composeIdentityAccess(db)
+    const identity = await admitWsIdentity(identityAccess, user.id)
     const closes: Array<{ code: number; reason: string }> = []
     const data: WsConnectionData = {
       channel: { kind: 'presence' },
-      actor: buildActor({
-        user: {
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName,
-          role: 'user',
-          status: 'active',
-        },
-        source: 'session',
-      }),
+      actor: identity.actor,
+      authority: identity.authority,
+      identityAccess: identity.identityAccess,
       credential,
       closing: false,
       revalidating: false,

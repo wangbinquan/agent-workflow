@@ -25,6 +25,7 @@ import {
   createWebhookDispatcher,
   renderedLaunchPayload,
 } from '../src/services/webhook/webhookDispatch'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -89,6 +90,7 @@ async function harness() {
   // 让归属列与 supersede 走真实查询面）。
   const dispatcher = createWebhookDispatcher({
     db,
+    identityAccess: createIdentityAccessRuntime({ db }),
     configPath: '/nonexistent/config.json',
     secretBox: box,
     getDefaultRuntime: async () => null,

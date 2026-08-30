@@ -2,7 +2,7 @@
 // Per-kind selection lives in the closed registry; wrapper bodies are owned by
 // the RFC-339 WrapperRuntime and consume this file only through typed ports.
 
-import { buildInheritedActor } from '@/auth/actor'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns, taskCollaborators, tasks } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
@@ -185,6 +185,7 @@ import {
   scriptOutputMode,
   TERMINAL_TASK_STATUSES,
   type ScriptLanguage,
+  type Permission,
   type StartTask,
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, notLike, sql } from 'drizzle-orm'
@@ -216,6 +217,40 @@ type NodeStatus =
   | 'awaiting_human'
 
 export type SchedulerState = LegacyTaskMechanicsState
+
+/** D6/Q5 compatibility: a historical NULL owner is deliberately not the
+ * literal system account and therefore carries no permissions. */
+const OWNERLESS_SYSTEM_USER_ID = '__system__'
+const OWNERLESS_LEGACY_ACTOR: Actor = Object.freeze({
+  user: Object.freeze({
+    id: OWNERLESS_SYSTEM_USER_ID,
+    username: OWNERLESS_SYSTEM_USER_ID,
+    displayName: OWNERLESS_SYSTEM_USER_ID,
+    role: 'user',
+    status: 'active',
+  }),
+  source: 'daemon',
+  permissions: new Set<Permission>(),
+  authorityRevision: 0,
+})
+
+async function delegatedCallActor(
+  state: SchedulerState,
+  kind: 'call-workflow' | 'call-workgroup',
+  ownerUserId: string | null,
+  parentNodeRunId: string,
+): Promise<Actor | null> {
+  if (ownerUserId === null) return OWNERLESS_LEGACY_ACTOR
+  const delegated = state.opts.identityAccess?.delegatedRequests
+  if (delegated === undefined) throw new Error('identity-access-runtime-not-composed')
+  const admission = await delegated.forCall({
+    kind,
+    ownerUserId,
+    parentTaskId: state.taskId,
+    parentNodeRunId,
+  })
+  return (admission?.actor as unknown as Actor | undefined) ?? null
+}
 
 /** RFC-282 C1-2 — config binary fallbacks for the mint-time freeze. Read at
  *  freeze time (same read-current family as the old per-entry resolution),
@@ -2060,11 +2095,16 @@ async function launchCallChild(
   } as StartTask
 
   const { startExecution } = await import('@/services/execution/executor')
-  // RFC-285 B3（D7/E4）：显式 buildInheritedActor 取代 `as unknown as` 伪造幽灵。
-  // owner 失活/缺行 → 子任务拒启（外层 catch 把 code 直通 failCallRow →
-  // 节点以 call-owner-inactive 失败）；NULL owner legacy 行按 Q5 放行
-  // （__system__ 幽灵，空权限，语义与历史伪造一致）。
-  const actor = await buildInheritedActor(db, taskRow.ownerUserId ?? null, 'call-workflow')
+  // RFC-285 B3 + RFC-347：closed delegated factory 取代伪造幽灵与
+  // central inherited-Actor facade。owner 失活/缺行 → 子任务拒启（外层
+  // catch 把 code 直通 failCallRow → 节点以 call-owner-inactive 失败）；
+  // NULL owner legacy 行按 Q5 的 pure projection 放行。
+  const actor = await delegatedCallActor(
+    state,
+    'call-workflow',
+    taskRow.ownerUserId ?? null,
+    nodeRunId,
+  )
   if (actor === null) {
     throw new ValidationError(
       'call-owner-inactive',
@@ -2261,9 +2301,13 @@ async function launchCallWorkgroupChild(
   }
 
   const { startWorkgroupTaskFromFrozen } = await import('@/services/workgroup/launch')
-  // RFC-285 B3（D7/E4）：本臂不构造 actor（冻结面内部装配），但同受 owner
-  // 失活拒启约束——preflight 判定，失败经外层 catch 落 call-owner-inactive。
-  if ((await buildInheritedActor(db, taskRow.ownerUserId ?? null, 'call-workgroup')) === null) {
+  // RFC-285 B3 + RFC-347：本臂不消费 legacy projection，但同经 closed
+  // delegated factory 做 owner preflight；失败经外层 catch 落
+  // call-owner-inactive。
+  if (
+    (await delegatedCallActor(state, 'call-workgroup', taskRow.ownerUserId ?? null, nodeRunId)) ===
+    null
+  ) {
     throw new ValidationError(
       'call-owner-inactive',
       `task owner '${taskRow.ownerUserId}' is not an active user; refusing to start call child`,

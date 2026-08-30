@@ -17,6 +17,7 @@ import { __resetBatchImportForTests, startBatchImport } from '../src/services/re
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 type AnyServer = Server<unknown>
 
@@ -39,7 +40,11 @@ async function buildHarness(): Promise<Harness> {
     dbVersion: 1,
     db,
   })
-  const ws = buildWebSocketAdapter({ daemonToken: TOKEN, db })
+  const ws = buildWebSocketAdapter({
+    daemonToken: TOKEN,
+    db,
+    identityAccess: createIdentityAccessRuntime({ db }),
+  })
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',

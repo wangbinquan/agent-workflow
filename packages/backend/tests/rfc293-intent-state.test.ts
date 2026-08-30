@@ -32,6 +32,7 @@ import {
 } from '../src/services/intent/workingSet'
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 
@@ -446,6 +447,7 @@ describe('RFC-293 Intent working state', () => {
     expect(
       await resumeQueuedIntentWorkingSets({
         db,
+        identityAccess: createIdentityAccessRuntime({ db }),
         appHome: '/tmp',
         configSnapshot: DEFAULT_CONFIG,
         runFn,

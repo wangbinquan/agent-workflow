@@ -24,6 +24,7 @@ import { pollAndClaim, runDueSchedulesOnce } from '@/services/scheduledTaskSched
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { createUser } from '@/services/users'
 import { createWorkflow } from '@/services/workflow'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -189,7 +190,11 @@ describe('RFC-294 managed background compatibility', () => {
     }
     // Daemon B re-runs the due scan at the same logical time.  The prior slot
     // was at-most-once claimed, so it must not be fired twice.
-    const claimedByB = await runDueSchedulesOnce(db, { now, buildLaunch })
+    const claimedByB = await runDueSchedulesOnce(db, {
+      now,
+      buildLaunch,
+      identityAccess: createIdentityAccessRuntime({ db }),
+    })
     expect(claimedByB).toEqual([])
     expect(launches).toEqual([])
     db.$client.close()

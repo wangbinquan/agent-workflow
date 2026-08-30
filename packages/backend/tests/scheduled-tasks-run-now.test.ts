@@ -26,6 +26,10 @@ import { createWorkflow } from '../src/services/workflow'
 import { NotFoundError } from '../src/util/errors'
 import type { CreateWorkflow, StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import {
+  createIdentityAccessRuntime,
+  type IdentityAccessRuntime,
+} from '../src/modules/identity-access/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -75,8 +79,10 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
   let db: DbClient
   let wfId = ''
   let bobId = ''
+  let identityAccess: IdentityAccessRuntime
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    identityAccess = createIdentityAccessRuntime({ db })
     const bob = await createUser(db, {
       username: 'bob',
       displayName: 'B',
@@ -119,7 +125,7 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
   test('fires + returns taskId; stamps scheduled_task_id; decorates name', async () => {
     const id = await makeSchedule(true)
     const { build, captured } = stubLaunch()
-    const res = await runScheduleNow(db, id, build)
+    const res = await runScheduleNow(db, id, build, identityAccess)
     expect(res.taskId).toBe(STUB_TASK_ID)
     // Attribution: the launch is closed over the owner + this schedule's id, so the
     // spawned task carries scheduled_task_id and shows up in run history.
@@ -132,7 +138,7 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
     const id = await makeSchedule(true)
     const before = await getScheduledTask(db, id)
     const { build } = stubLaunch()
-    await runScheduleNow(db, id, build)
+    await runScheduleNow(db, id, build, identityAccess)
     const after = await getScheduledTask(db, id)
     expect(after?.nextRunAt).toBe(before?.nextRunAt ?? null)
     expect(after?.lastRunAt).toBe(before?.lastRunAt ?? null) // still null — never fired on cadence
@@ -146,7 +152,7 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
     const before = await getScheduledTask(db, id)
     expect(before?.enabled).toBe(false)
     const { build } = stubLaunch()
-    const res = await runScheduleNow(db, id, build)
+    const res = await runScheduleNow(db, id, build, identityAccess)
     expect(res.taskId).toBe(STUB_TASK_ID)
     const after = await getScheduledTask(db, id)
     expect(after?.enabled).toBe(false) // still disabled — run-now never flips it
@@ -159,7 +165,7 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
     await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, wfId))
     const before = await getScheduledTask(db, id)
     const { build } = stubLaunch()
-    await expect(runScheduleNow(db, id, build)).rejects.toThrow()
+    await expect(runScheduleNow(db, id, build, identityAccess)).rejects.toThrow()
     const after = await getScheduledTask(db, id)
     expect(after?.consecutiveFailures).toBe(before?.consecutiveFailures ?? 0)
     expect(after?.lastStatus).toBe(before?.lastStatus ?? null)
@@ -172,7 +178,7 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
       .set({ definition: JSON.stringify(TRIGGER_DEF) })
       .where(eq(workflows.id, wfId))
     const { build, captured } = stubLaunch()
-    await expect(runScheduleNow(db, id, build)).rejects.toMatchObject({
+    await expect(runScheduleNow(db, id, build, identityAccess)).rejects.toMatchObject({
       code: 'trigger-context-missing',
     })
     expect(captured.body).toBeUndefined()
@@ -180,7 +186,9 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
 
   test('unknown id → NotFoundError', async () => {
     const { build } = stubLaunch()
-    await expect(runScheduleNow(db, 'nope', build)).rejects.toBeInstanceOf(NotFoundError)
+    await expect(runScheduleNow(db, 'nope', build, identityAccess)).rejects.toBeInstanceOf(
+      NotFoundError,
+    )
   })
 
   test('corrupt launch kind is rejected before a payload is dispatched through the wrong launcher', async () => {
@@ -200,7 +208,7 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
       })
       .where(eq(scheduledTasks.id, id))
     const { build } = stubLaunch()
-    await expect(runScheduleNow(db, id, build)).rejects.toMatchObject({
+    await expect(runScheduleNow(db, id, build, identityAccess)).rejects.toMatchObject({
       code: 'schedule-kind-invalid',
     })
   })

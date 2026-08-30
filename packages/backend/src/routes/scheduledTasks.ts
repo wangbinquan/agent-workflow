@@ -33,6 +33,7 @@ import {
   runScheduleNow,
   updateScheduleAcl,
   updateScheduledTask,
+  type ScheduleAuthorityRuntime,
 } from '@/services/scheduledTasks'
 import { canEditAccess, canGovernAccess } from '@/services/resourceAcl'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
@@ -102,7 +103,10 @@ function requireLaunchPermission(actor: Actor): void {
   }
 }
 
-export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
+export function mountScheduledTaskRoutes(
+  app: Hono,
+  deps: AppDeps & { readonly identityAccess: ScheduleAuthorityRuntime },
+): void {
   registerRoute(
     app,
     {
@@ -284,11 +288,17 @@ export function mountScheduledTaskRoutes(app: Hono, deps: AppDeps): void {
       await requireScheduleEdit(deps, actor, existing)
       const launch =
         deps.buildScheduleLaunch ??
-        buildScheduleLaunch(deps.db, requireSchedulerDriver(deps.schedulerDriver), deps.configPath)
+        buildScheduleLaunch(
+          deps.db,
+          requireSchedulerDriver(deps.schedulerDriver),
+          deps.configPath,
+          deps.identityAccess,
+        )
       const result = await runScheduleNow(
         deps.db,
         existing.id,
         launch,
+        deps.identityAccess,
         loadConfig(deps.configPath).defaultRuntime,
       )
       return c.json(result, 201)
