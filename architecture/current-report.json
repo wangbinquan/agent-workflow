@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 456,
-    "architectureExceptions": 1737,
+    "architectureExceptions": 1693,
     "backgroundJobs": 272,
-    "crossContextImports": 1776,
-    "facades": 378,
+    "crossContextImports": 1730,
+    "facades": 381,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 19338,
-    "mutationEntrypoints": 1072,
+    "moduleSymbolOwners": 19402,
+    "mutationEntrypoints": 1086,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 531,
     "transactionExternalEffects": 285
@@ -65,34 +65,12 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1058,
+    "backendProductionFiles": 1066,
     "backendValueSccs": [
       [
-        "packages/backend/src/auth/actor.ts",
-        "packages/backend/src/modules/identity-access/composition.ts",
-        "packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts",
-        "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts",
-        "packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts",
-        "packages/backend/src/modules/resource-catalog/public/operations.ts",
         "packages/backend/src/services/agent.ts",
         "packages/backend/src/services/agentDeps.ts",
-        "packages/backend/src/services/agentRefs.ts",
-        "packages/backend/src/services/agentResourceIntegrity.ts",
-        "packages/backend/src/services/execution/closure.ts",
-        "packages/backend/src/services/mcp.ts",
-        "packages/backend/src/services/mcpRuntimeTestTransitions.ts",
-        "packages/backend/src/services/memory.ts",
-        "packages/backend/src/services/plugin.ts",
-        "packages/backend/src/services/resourceAcl.ts",
-        "packages/backend/src/services/resourceRefs.ts",
-        "packages/backend/src/services/runtimeRegistry.ts",
-        "packages/backend/src/services/skill.ts",
-        "packages/backend/src/services/skillDeleteOp.ts",
-        "packages/backend/src/services/skillReferenceGuard.ts",
-        "packages/backend/src/services/skillVersion.ts",
-        "packages/backend/src/services/workflow.ts",
-        "packages/backend/src/services/workflow.validator.ts",
-        "packages/backend/src/services/workgroups.ts"
+        "packages/backend/src/services/agentResourceIntegrity.ts"
       ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -100,6 +78,10 @@
         "packages/backend/src/services/gitVersion.ts",
         "packages/backend/src/services/repoGroup.ts",
         "packages/backend/src/util/git.ts"
+      ],
+      [
+        "packages/backend/src/services/workflow.ts",
+        "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
     "backgroundEntries": 272,
@@ -128,7 +110,7 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 72,
-    "inboundBoundaryEdges": 52,
+    "inboundBoundaryEdges": 50,
     "knownViolations": 29,
     "moduleContexts": [
       {
@@ -145,7 +127,7 @@
       },
       {
         "context": "digital-employee",
-        "files": 24
+        "files": 26
       },
       {
         "context": "event-center",
@@ -161,7 +143,7 @@
       },
       {
         "context": "integration",
-        "files": 33
+        "files": 35
       },
       {
         "context": "intent",
@@ -169,7 +151,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 27
+        "files": 28
       },
       {
         "context": "source-control",
@@ -188,7 +170,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 505,
+    "moduleFiles": 510,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -214,31 +196,9 @@
     "outboundBoundaryEdges": 23,
     "repoValueSccs": [
       [
-        "packages/backend/src/auth/actor.ts",
-        "packages/backend/src/modules/identity-access/composition.ts",
-        "packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts",
-        "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts",
-        "packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts",
-        "packages/backend/src/modules/resource-catalog/public/operations.ts",
         "packages/backend/src/services/agent.ts",
         "packages/backend/src/services/agentDeps.ts",
-        "packages/backend/src/services/agentRefs.ts",
-        "packages/backend/src/services/agentResourceIntegrity.ts",
-        "packages/backend/src/services/execution/closure.ts",
-        "packages/backend/src/services/mcp.ts",
-        "packages/backend/src/services/mcpRuntimeTestTransitions.ts",
-        "packages/backend/src/services/memory.ts",
-        "packages/backend/src/services/plugin.ts",
-        "packages/backend/src/services/resourceAcl.ts",
-        "packages/backend/src/services/resourceRefs.ts",
-        "packages/backend/src/services/runtimeRegistry.ts",
-        "packages/backend/src/services/skill.ts",
-        "packages/backend/src/services/skillDeleteOp.ts",
-        "packages/backend/src/services/skillReferenceGuard.ts",
-        "packages/backend/src/services/skillVersion.ts",
-        "packages/backend/src/services/workflow.ts",
-        "packages/backend/src/services/workflow.validator.ts",
-        "packages/backend/src/services/workgroups.ts"
+        "packages/backend/src/services/agentResourceIntegrity.ts"
       ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -246,6 +206,10 @@
         "packages/backend/src/services/gitVersion.ts",
         "packages/backend/src/services/repoGroup.ts",
         "packages/backend/src/util/git.ts"
+      ],
+      [
+        "packages/backend/src/services/workflow.ts",
+        "packages/backend/src/services/workflow.validator.ts"
       ],
       [
         "packages/frontend/src/components/node-session/ConversationFlow.tsx",
@@ -257,10 +221,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 378,
+    "serviceFiles": 381,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6"
+  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f"
 }

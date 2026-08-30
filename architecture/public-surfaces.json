@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 265,
     "opaqueTypeRefs": 6,
-    "recursiveFields": 4827,
+    "recursiveFields": 4829,
     "symbols": 531
   },
   "entries": [
@@ -23653,9 +23653,9 @@
         "public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx",
         "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
         "public:resource-catalog:participants:ResourceAuthorizationInTx",
-        "public:resource-catalog:participants:ResourceCurrentAuthorityInTx",
         "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
         "public:resource-catalog:participants:ResourcePackageApplyTx",
+        "public:resource-catalog:participants:ResourceRequestContext",
         "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
         "public:resource-catalog:queries:ResourceAclQuery",
@@ -23791,8 +23791,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 54,
-        "maxUnionVariants": 28
+        "maxTransitiveLeafFields": 56,
+        "maxUnionVariants": 30
       },
       "consumerEdgeIds": [],
       "context": "identity-access",
@@ -23824,6 +23824,16 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:authorize.$parameter:context.operationId",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:authorize.$parameter:permission.$variant:0",
+          "type": "'users:read'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:authorize.$parameter:permission.$variant:1",
+          "type": "'users:search'"
         },
         {
           "consumerEdgeIds": [],
@@ -24083,7 +24093,7 @@
         {
           "consumerEdgeIds": [],
           "name": "authorize",
-          "signatureDigest": "sha256:8386d000936fabd9d00dd4f71925d0f569f2a46c416cdd2ae4ace219b230314e"
+          "signatureDigest": "sha256:cd8322592e086aa1558890521fe8152564b24631c22cc86267dcf224b92a4d38"
         },
         {
           "consumerEdgeIds": [],
@@ -26084,6 +26094,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:AgentPackageMutationParticipantInTx",
       "members": [
+        "[agentPackageMutationParticipantInTxBrand]",
         "commit"
       ],
       "methods": [
@@ -26100,7 +26111,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:ee22e16d7236299410fd12190af8860fe028b915adb2b6f5437c83cfd17a3f2a",
+      "signatureDigest": "sha256:bbc5fc3ae719d07e27d9acfbb89adfbb7ca09985ece501fc47fdda53049d16ae",
       "status": "target-context-current-surface",
       "symbol": "AgentPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -26216,6 +26227,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:CapabilityTemplatePackageMutationParticipantInTx",
       "members": [
+        "[capabilityTemplatePackageMutationParticipantInTxBrand]",
         "commit"
       ],
       "methods": [
@@ -26232,7 +26244,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:9ae03316da1cb0201b33796b73ef6eb92aa6cf89d1c54647b97063522e06106a",
+      "signatureDigest": "sha256:82c7c20c1651c5d4d722928417e11da50f5940a0f59ddebaacb25aee7f25a941",
       "status": "target-context-current-surface",
       "symbol": "CapabilityTemplatePackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -26269,13 +26281,14 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx",
       "members": [
+        "[integrationTriggerResourceSnapshotInTxBrand]",
         "loadAuthorized"
       ],
       "methods": [
         {
           "consumerEdgeIds": [],
           "name": "loadAuthorized",
-          "signatureDigest": "sha256:e4372c060984e5e4f038aa6035ee6a079fac8f330d96c333c3ed7a239f3583b3"
+          "signatureDigest": "sha256:7cb6d329580b30f630dc0f6366359a1385fed834ee37ee95994987f2da97761b"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#IntegrationTriggerResourceSnapshotInTx",
@@ -26283,7 +26296,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:eb59c5f87693c678dedf06ea61e31b69174335435648326ededf6a7d60e8be3b",
+      "signatureDigest": "sha256:18a8edbbc648999a038908eb01c27e3bf7bb7875d934d9c180952d673c1756b5",
       "status": "target-context-current-surface",
       "symbol": "IntegrationTriggerResourceSnapshotInTx",
       "transaction": "caller-tx",
@@ -26307,24 +26320,25 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:authorizeAndCommit.$parameter:plan",
-          "type": "{\n  [K in CatalogSelectorKind]: IntentCreateResourcePlan<K> | IntentUpdateResourcePlan<K>\n}[CatalogSelectorKind]"
+          "type": "K extends CatalogSelectorKind ? IntentCreateResourcePlan<K> | IntentUpdateResourcePlan<K> : never"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:authorizeAndCommit.$return",
-          "type": "{\n  [K in CatalogSelectorKind]: {\n    readonly kind: K\n    readonly operationId: string\n    readonly resourceId: string\n    readonly action: 'create' | 'update'\n    readonly revision: ResourceSummaryRevision<K>\n  }\n}[CatalogSelectorKind]"
+          "type": "K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never"
         }
       ],
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
       "members": [
+        "[intentApplyResourceParticipantInTxBrand]",
         "authorizeAndCommit"
       ],
       "methods": [
         {
           "consumerEdgeIds": [],
           "name": "authorizeAndCommit",
-          "signatureDigest": "sha256:6780664db9ad160d8a344e33ec04ca5230f7354aabe6b8a12918456c23c387da"
+          "signatureDigest": "sha256:a5579b7887693a380ff0366c8562daa6e1a2258efe5542cb80762c96072ee565"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#IntentApplyResourceParticipantInTx",
@@ -26332,7 +26346,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:f40537a9dafd7a0a884a748ce073b1d38945ea2ef5a247123b62181d70f8f050",
+      "signatureDigest": "sha256:c34ff1329dd106e0cc1742be8e87d523294c9a0c0334b89c0766b58b7163d862",
       "status": "target-context-current-surface",
       "symbol": "IntentApplyResourceParticipantInTx",
       "transaction": "caller-tx",
@@ -26446,6 +26460,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:McpPackageMutationParticipantInTx",
       "members": [
+        "[mcpPackageMutationParticipantInTxBrand]",
         "commit"
       ],
       "methods": [
@@ -26462,7 +26477,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:9e7e9a51436a9c85fb720813fc242fbee79193e892ec33036a93825d42733a74",
+      "signatureDigest": "sha256:33c0478353bdf00c0314c2342da09d7fc0242a52b4e0baa809237554d4688f53",
       "status": "target-context-current-surface",
       "symbol": "McpPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -26578,6 +26593,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:PluginPackageMutationParticipantInTx",
       "members": [
+        "[pluginPackageMutationParticipantInTxBrand]",
         "commit"
       ],
       "methods": [
@@ -26594,7 +26610,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:ab67dce62947aea584df69a308e4a2ba0c0a1b6db9230986ddc47dccf64bef2f",
+      "signatureDigest": "sha256:ed2c07dceef3840fb837897aab481e608abc4b0413ee4b5056c3ca0f5030224e",
       "status": "target-context-current-surface",
       "symbol": "PluginPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -26741,6 +26757,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:ResourceAuthorizationInTx",
       "members": [
+        "[resourceAuthorizationInTxBrand]",
         "accessOf",
         "assertEdit",
         "assertGovern",
@@ -26750,22 +26767,22 @@
         {
           "consumerEdgeIds": [],
           "name": "accessOf",
-          "signatureDigest": "sha256:a9e6856b1ad638374ee8b83564d5da853d3d85a513e13667a680a188def33172"
+          "signatureDigest": "sha256:0c0787c6a0c964f129f5ba2f65754fb69ca6ddb4cb517d9b3f452b620dfa8ff9"
         },
         {
           "consumerEdgeIds": [],
           "name": "assertEdit",
-          "signatureDigest": "sha256:14cdf7fa391dc2390f035b6463d6a9dbb9ccb3f5edf4f93f0fee6a94fc6d41fd"
+          "signatureDigest": "sha256:18aba1dc367a335ccee9523c62079b7ca1f22eb77a18f46adac340a191d180d1"
         },
         {
           "consumerEdgeIds": [],
           "name": "assertGovern",
-          "signatureDigest": "sha256:148c93f9fabbf8910bb193d2da15ed22ab24472484cc37e8debebb10fa0b8672"
+          "signatureDigest": "sha256:e3c7cd4d26aac7bdd482f3a9554497eada1bce2bb9999212db6f31ab01b529b6"
         },
         {
           "consumerEdgeIds": [],
           "name": "assertView",
-          "signatureDigest": "sha256:f2dc3da9ae29aec86d7708dbc9f003956a02f9485799dc298efe257eebfe33e7"
+          "signatureDigest": "sha256:7e1ba675f56603e6284323cd8f5224905c348584f537268138b445de93c0ebb0"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourceAuthorizationInTx",
@@ -26773,51 +26790,13 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:c169156bf51414cccae479bea028383d52e6a2dc4df6873ec2adb9f3ad76a6e3",
+      "signatureDigest": "sha256:0480b31dd0b5e5a6329062e61619a341d25da00fc7137184d472548b949aa2a8",
       "status": "target-context-current-surface",
       "symbol": "ResourceAuthorizationInTx",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
         "z.infer"
       ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "confidential",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [],
-      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
-      "id": "public:resource-catalog:participants:ResourceCurrentAuthorityInTx",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourceCurrentAuthorityInTx",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx",
-        "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
-        "public:resource-catalog:participants:ResourceAuthorizationInTx",
-        "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
-        "public:resource-catalog:participants:ResourcePackageApplyTx",
-        "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
-        "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:0751c4931414ee3c9937d052a1e68bf31a5978a326f9d3187abaa61b06a15467",
-      "status": "target-context-current-surface",
-      "symbol": "ResourceCurrentAuthorityInTx",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -26974,6 +26953,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
       "members": [
+        "[resourcePackageApplyScenarioTxBrand]",
         "currentAuthority"
       ],
       "methods": [],
@@ -26984,7 +26964,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:87a604d9f6e7bfa997f43588366529baccd9770bc0da56602cde2e7dd96a7131",
+      "signatureDigest": "sha256:f30682e9a849f63187cafaba5fc1dac132b5f6c3459dbc50c8df34d086fb6a04",
       "status": "target-context-current-surface",
       "symbol": "ResourcePackageApplyScenarioTx",
       "transaction": "caller-tx",
@@ -27324,6 +27304,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:ResourcePackageApplyTx",
       "members": [
+        "[resourcePackageApplyTxBrand]",
         "agents",
         "audit",
         "capabilityTemplates",
@@ -27356,7 +27337,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:678f02639746b746067784045d8d37b0de8d5d1ad15f0b3edd6af511f454163f",
+      "signatureDigest": "sha256:7a16bd86f28c46ebd8e2ed667c63236bf94fcf14b22a4102822ac53ac73f698c",
       "status": "target-context-current-surface",
       "symbol": "ResourcePackageApplyTx",
       "transaction": "caller-tx",
@@ -27418,6 +27399,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:ResourcePackageAuditInTx",
       "members": [
+        "[resourcePackageAuditInTxBrand]",
         "recordResourceApplied"
       ],
       "methods": [
@@ -27434,7 +27416,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:d61f93fa5209901b4e70b29ae6b2b6775e6563802308f4fb5dd9ffbd45f56288",
+      "signatureDigest": "sha256:2ce50a46295f5bd970ddc353fe947e5ecc450e0a4ad63f13e0e80fe9f12b0150",
       "status": "target-context-current-surface",
       "symbol": "ResourcePackageAuditInTx",
       "transaction": "caller-tx",
@@ -27494,6 +27476,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:ResourcePackageEventsInTx",
       "members": [
+        "[resourcePackageEventsInTxBrand]",
         "resourceApplied"
       ],
       "methods": [
@@ -27510,7 +27493,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:dc665f0d4c00c5677488586c4b0e908cf47c2681d4cbd80caac2139d4262ff99",
+      "signatureDigest": "sha256:923eb3f01f2ec53c872092831b8156038ad4a017018c2231bc65efabe5f95201",
       "status": "target-context-current-surface",
       "symbol": "ResourcePackageEventsInTx",
       "transaction": "caller-tx",
@@ -27649,6 +27632,44 @@
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:ResourceRequestContext",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourceRequestContext",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx",
+        "public:resource-catalog:participants:IntentApplyResourceParticipantInTx",
+        "public:resource-catalog:participants:ResourceAuthorizationInTx",
+        "public:resource-catalog:participants:ResourcePackageApplyScenarioTx",
+        "public:resource-catalog:participants:ResourcePackageApplyTx",
+        "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
+        "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:964f8f9f6c5aa6d63158cbb1b1b345628a50ff72428adbb3349a31173d77598f",
+      "status": "target-context-current-surface",
+      "symbol": "ResourceRequestContext",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
       "fields": [
         {
           "consumerEdgeIds": [],
@@ -27679,13 +27700,14 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
       "members": [
+        "[resourceScopeAuthorizationInTxBrand]",
         "accessOf"
       ],
       "methods": [
         {
           "consumerEdgeIds": [],
           "name": "accessOf",
-          "signatureDigest": "sha256:3065fd31ceed4c06c4337be41c0f78c71ce827eca4a545aaf085c79f548963be"
+          "signatureDigest": "sha256:77f523cb57ad79968979539b373d42020ef65e0624c1e5e190533c2478e4395d"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#ResourceScopeAuthorizationInTx",
@@ -27693,7 +27715,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:16e66fd29fa23494b4721eeb1a365a7c44dda1085e6bccac1ac0098b0c33ae56",
+      "signatureDigest": "sha256:5c817b8a5750c1b91f431e34164eecb93dde94fa8aad340e55c783485f39de82",
       "status": "target-context-current-surface",
       "symbol": "ResourceScopeAuthorizationInTx",
       "transaction": "caller-tx",
@@ -27809,6 +27831,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:SkillPackageMutationParticipantInTx",
       "members": [
+        "[skillPackageMutationParticipantInTxBrand]",
         "commit"
       ],
       "methods": [
@@ -27825,7 +27848,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:b7d706700aceea9cc56f11e9f1a4f0e812e565b8c9bda9f9408a1f483aeced00",
+      "signatureDigest": "sha256:26999d204e8342765ba7665124ac05f7d5a7fce62ee787343174f798a7d5dc6a",
       "status": "target-context-current-surface",
       "symbol": "SkillPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -27862,13 +27885,14 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
       "members": [
+        "[taskExecutionResourceSnapshotInTxBrand]",
         "loadAuthorized"
       ],
       "methods": [
         {
           "consumerEdgeIds": [],
           "name": "loadAuthorized",
-          "signatureDigest": "sha256:bce5c0923c7d5f88c21796ffd1aa0f24fb1bc7b8db8de43e38768bcf2f0a125f"
+          "signatureDigest": "sha256:7d0a39128c2848092c9eea9ce4e56405928648b17c933df7c4af89244cc09d38"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#TaskExecutionResourceSnapshotInTx",
@@ -27876,7 +27900,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:560ed4b2bb210093718a4ec4e9e6a5cf022b57893a94495013d77e2420614441",
+      "signatureDigest": "sha256:174926a81d2a61cb6f79f22b35d277382fa00ce6995aac321cb4403208c0f899",
       "status": "target-context-current-surface",
       "symbol": "TaskExecutionResourceSnapshotInTx",
       "transaction": "caller-tx",
@@ -27990,6 +28014,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:WorkflowPackageMutationParticipantInTx",
       "members": [
+        "[workflowPackageMutationParticipantInTxBrand]",
         "commit"
       ],
       "methods": [
@@ -28006,7 +28031,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:d508a230dd7edecc5acbb426b67933081de4a91aea9773f70253d1fce5a81da5",
+      "signatureDigest": "sha256:3433f780bcc1a2b83f3e5bc4f0d3c8d689333692a1c9479be7efb8de887fc0d1",
       "status": "target-context-current-surface",
       "symbol": "WorkflowPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -28122,6 +28147,7 @@
       "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
       "id": "public:resource-catalog:participants:WorkgroupPackageMutationParticipantInTx",
       "members": [
+        "[workgroupPackageMutationParticipantInTxBrand]",
         "commit"
       ],
       "methods": [
@@ -28138,7 +28164,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:1870bf82c07870ba9084b83e86011466cd66fa769f59bff3f830519210dbf803",
+      "signatureDigest": "sha256:d22da2ac92e463e1e3d51a40442c52bf4aa447a35f13bc7a7c36b91384e7fa32",
       "status": "target-context-current-surface",
       "symbol": "WorkgroupPackageMutationParticipantInTx",
       "transaction": "caller-tx",
@@ -28346,7 +28372,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:getVisibleSummary.$return.$variant:0",
-          "type": "{\n  [P in K]: {\n    readonly ref: CatalogResourceRef<P>\n    readonly kind: P\n    readonly name: string\n    readonly description: string | null\n    readonly revision: ResourceSummaryRevision<P>\n    readonly visibilityHint: 'public' | 'private'\n  }\n}[K]"
+          "type": "K extends CatalogSelectorKind ? ResourceSummaryOf<K> : never"
         },
         {
           "consumerEdgeIds": [],
@@ -29502,7 +29528,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$value",
-          "type": "{\n  [K in CatalogSelectorKind]: {\n    readonly kind: K\n    readonly operationId: string\n    readonly resourceId: string\n    readonly action: 'create' | 'update'\n    readonly revision: ResourceSummaryRevision<K>\n  }\n}[CatalogSelectorKind]"
+          "type": "K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never"
         }
       ],
       "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
@@ -29516,7 +29542,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:c750e08b0b5f6f4b845d3456cd458ea27ade74cd9a520f434afd650980b6e677",
+      "signatureDigest": "sha256:98afb0bcbd21978349952fbdc6f078f940e0e8942a331330d19cfd85debfb0c8",
       "status": "target-context-current-surface",
       "symbol": "IntentResourceChangesetReceipt",
       "transaction": "none",
@@ -30564,7 +30590,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$value",
-          "type": "{\n  [P in K]: {\n    readonly ref: CatalogResourceRef<P>\n    readonly kind: P\n    readonly name: string\n    readonly description: string | null\n    readonly revision: ResourceSummaryRevision<P>\n    readonly visibilityHint: 'public' | 'private'\n  }\n}[K]"
+          "type": "K extends CatalogSelectorKind ? ResourceSummaryOf<K> : never"
         }
       ],
       "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
@@ -30578,7 +30604,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:26bc9289d875759575de5c862417eb102e8a2f7ee1849261e2bbdf948d5fb0e4",
+      "signatureDigest": "sha256:6945c801e9e42f05e73be6d14ed0dfef0fec57b25316200257080a577c177cd6",
       "status": "target-context-current-surface",
       "symbol": "ResourceSummary",
       "transaction": "none",
@@ -31431,7 +31457,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$value",
-          "type": "{\n  [K in CatalogSelectorKind]: IntentCreateResourcePlan<K> | IntentUpdateResourcePlan<K>\n}[CatalogSelectorKind]"
+          "type": "K extends CatalogSelectorKind ? IntentCreateResourcePlan<K> | IntentUpdateResourcePlan<K> : never"
         }
       ],
       "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
@@ -31445,7 +31471,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:8bb0cfc671db77921db8b7b1c9abe4f946f234b106fef73ffc6b35c864decb33",
+      "signatureDigest": "sha256:de2855e7173722b8db11354501512d40dfe188bfe52431d74ceb71fc053d3f14",
       "status": "target-context-current-surface",
       "symbol": "VersionedIntentResourceChangesetPlan",
       "transaction": "none",
@@ -49023,7 +49049,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6",
+  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f",
   "targetContexts": [
     "collaboration",
     "development-automation",

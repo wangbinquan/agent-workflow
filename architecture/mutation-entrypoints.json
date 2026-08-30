@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1072,
+    "entries": 1086,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -5565,6 +5565,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/digital-employee/composition/resourceCatalogAcl.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/composition/resourceCatalogAcl.ts#createDigitalEmployeeResourceCatalogAclProviders",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/resourceCatalogAcl.ts#createDigitalEmployeeResourceCatalogAclProviders",
+      "symbol": "createDigitalEmployeeResourceCatalogAclProviders",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/digital-employee/domain/model.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/digital-employee/domain/model.ts#CreateToolRegistrationBody",
@@ -6184,6 +6209,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/application/accessAdmission.ts#admitUserDirectoryQuery",
       "symbol": "admitUserDirectoryQuery",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/application/accessAdmission.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/application/accessAdmission.ts#admitUserSearchQuery",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/application/accessAdmission.ts#admitUserSearchQuery",
+      "symbol": "admitUserSearchQuery",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -6990,6 +7039,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/composition/resourceCatalogAcl.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/composition/resourceCatalogAcl.ts#createDevelopmentAdapterResourceCatalogAclProvider",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/resourceCatalogAcl.ts#createDevelopmentAdapterResourceCatalogAclProvider",
+      "symbol": "createDevelopmentAdapterResourceCatalogAclProvider",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -7425,7 +7499,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "effect",
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -7436,6 +7510,7 @@
       "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/intentApplyResourceParticipant.ts#CommitPort",
       "missingControls": [
         "audit",
+        "authority",
         "authorization",
         "event",
         "fenceOrOcc",
@@ -7473,7 +7548,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "effect",
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -7484,6 +7559,7 @@
       "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts#createResourceAuthorizationInTx",
       "missingControls": [
         "audit",
+        "authority",
         "event",
         "fenceOrOcc"
       ],
@@ -7512,6 +7588,278 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourceAuthorization.ts#createResourceScopeAuthorizationInTx",
       "symbol": "createResourceScopeAuthorizationInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createAgentPackageMutationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createAgentPackageMutationParticipantInTx",
+      "symbol": "createAgentPackageMutationParticipantInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createCapabilityTemplatePackageMutationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createCapabilityTemplatePackageMutationParticipantInTx",
+      "symbol": "createCapabilityTemplatePackageMutationParticipantInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createMcpPackageMutationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createMcpPackageMutationParticipantInTx",
+      "symbol": "createMcpPackageMutationParticipantInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createPluginPackageMutationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createPluginPackageMutationParticipantInTx",
+      "symbol": "createPluginPackageMutationParticipantInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyScenarioTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyScenarioTx",
+      "symbol": "createResourcePackageApplyScenarioTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageApplyTx",
+      "symbol": "createResourcePackageApplyTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageAuditInTx",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageAuditInTx",
+      "symbol": "createResourcePackageAuditInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageEventsInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createResourcePackageEventsInTx",
+      "symbol": "createResourcePackageEventsInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createSkillPackageMutationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createSkillPackageMutationParticipantInTx",
+      "symbol": "createSkillPackageMutationParticipantInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkflowPackageMutationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkflowPackageMutationParticipantInTx",
+      "symbol": "createWorkflowPackageMutationParticipantInTx",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkgroupPackageMutationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/resourcePackageCapabilities.ts#createWorkgroupPackageMutationParticipantInTx",
+      "symbol": "createWorkgroupPackageMutationParticipantInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -25482,7 +25830,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6",
+  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

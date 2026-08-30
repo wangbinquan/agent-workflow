@@ -69,9 +69,9 @@
     {
       "callee": "registerMcpOperationProjection",
       "file": "packages/backend/src/mcp/tools.ts",
-      "id": "ambient:packages/backend/src/mcp/tools.ts#registerMcpOperationProjection:1811",
+      "id": "ambient:packages/backend/src/mcp/tools.ts#registerMcpOperationProjection:1814",
       "kind": "register-call",
-      "line": 1811,
+      "line": 1814,
       "ownerEntryId": "owner:packages/backend/src/mcp/tools.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
@@ -4953,9 +4953,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:931",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:932",
       "kind": "register-call",
-      "line": 931,
+      "line": 932,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -4964,9 +4964,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:657",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:658",
       "kind": "register-call",
-      "line": 657,
+      "line": 658,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createApp",
@@ -11109,5 +11109,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3b87c73bf67bb65cb750da509deb67a6720cdaa012fbc2a1f36f4109cd3a66d6"
+  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f"
 }
