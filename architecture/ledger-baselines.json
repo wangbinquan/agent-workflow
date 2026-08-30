@@ -447,12 +447,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 19903,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 19904,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-WG 为授权后校验的 closed delete submission 增加一个具名 application helper；本许可仅覆盖本次 19903→19904 的 canonical payload。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:964de20c3a13eeb7dbde11afbc898d33de3e93a28caa0cab2493eecf3edc1d4c",
+    "sourceDigest": "sha256:a2f4cf3bcac371a4f1ca1dc6307dcce1e37567c24ab96c2142dbcf33abb0e7f1",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -465,8 +468,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "82d99ed5927009dbfd5d416922bd580ad2cd47e6",
-    "contentDigest": "sha256:becb0412d9ef0b5c74e7a534172fcfe55e89d3b4b6b04cfc77f328185667c18e",
+    "currentSnapshotSha": "19b86b450bca0757cba75cf41a9274aed1bbd6d4",
+    "contentDigest": "sha256:ba6368debd78960dd7f114fef7fe3a1af674ccd15e35893ab23e7ed5fc201c8f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

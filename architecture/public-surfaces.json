@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 302,
     "opaqueTypeRefs": 6,
-    "recursiveFields": 5545,
+    "recursiveFields": 5547,
     "symbols": 581
   },
   "entries": [
@@ -29088,7 +29088,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 96,
+        "maxTransitiveLeafFields": 97,
         "maxUnionVariants": 35
       },
       "consumerEdgeIds": [
@@ -29384,8 +29384,15 @@
           "consumerEdgeIds": [
             "import:574c6f41a4373335a708"
           ],
-          "fieldPath": "$method:delete.$parameter:input.deletion",
-          "type": "unknown"
+          "fieldPath": "$method:delete.$parameter:input.deletion.body",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:574c6f41a4373335a708"
+          ],
+          "fieldPath": "$method:delete.$parameter:input.deletion.kind",
+          "type": "'json-body'"
         },
         {
           "consumerEdgeIds": [
@@ -34555,8 +34562,13 @@
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "deletion",
-          "type": "unknown"
+          "fieldPath": "deletion.body",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "deletion.kind",
+          "type": "'json-body'"
         },
         {
           "consumerEdgeIds": [],
@@ -34578,7 +34590,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:908e3326a7372507224523f8fef387cb1d7b74e04a7ae9d7be13ddc2981cebf5",
+      "signatureDigest": "sha256:d198008ccdd03476bf38b6e92d6569cf82382bfdad1637d2bf3fa74bbe7a6b67",
       "status": "target-context-current-surface",
       "symbol": "DeleteWorkgroupCatalogInput",
       "transaction": "none",
@@ -55648,7 +55660,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:964de20c3a13eeb7dbde11afbc898d33de3e93a28caa0cab2493eecf3edc1d4c",
+  "sourceDigest": "sha256:a2f4cf3bcac371a4f1ca1dc6307dcce1e37567c24ab96c2142dbcf33abb0e7f1",
   "targetContexts": [
     "collaboration",
     "development-automation",
