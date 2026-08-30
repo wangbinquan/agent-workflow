@@ -2,9 +2,14 @@
 
 配套：`proposal.md`（D1～D12）· `plan.md`（实施 DAG）
 
-状态：Approved / In Progress；D1～D12 已于 2026-08-30 获用户明确批准。
-
-Source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`
+- 状态：Done（2026-08-30；实现、canonical、AC-1～AC-12 与 exact-SHA hosted closeout 已完成）
+- 开工 source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`
+- additive / CLI implementation：`4a1c739351f27847ffb3554869e7f613ab8e1eef` →
+  `ce7d9fbf541208b00b9d52d221058f0387a15ae3` → `4c349cf068d38f6842469ba565b4aedd6961b41c`
+- descriptor / alias cutover：`572d01e0c50b3d8401bf9a317c317b5fd4b5b008`
+- final hosted contract repair：`dffe9bc836d87a2433153a3b2e8a8efc8cf17b95`
+- final functional exact SHA：`7ede76a88649f9c3f5501eef47106631e89f24c1`
+- canonical source digest：`sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec`
 
 ## 1. 设计结论
 
@@ -39,10 +44,10 @@ cli/start acquireLock
 
 ## 2. Source inventory 与污染边界
 
-### 2.1 Committed evidence
+### 2.1 Baseline 与 committed evidence
 
-所有生产源码证据取 source pin；当前 worktree 的 RFC-345 文档、resource-catalog 新文件和共享索引更新属于其他 session，不作为
-RFC-346 事实，也不由本 RFC修改或提交。
+下表记录开工 source pin 的兼容性 oracle；最终实现事实取上述 RFC-346 commits 及其 containing exact SHA `7ede76a8`。实施过程中
+RFC-344/345/347 的并发产物只在 owner 明确交还的 shared paths 上原样共存，未由 RFC-346 回退或代交其独占路径。
 
 | 类别                        | Exact paths                                                                                                  | 判定                                                         |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
@@ -104,8 +109,8 @@ packages/backend/src/modules/system-operations/
 
 ```ts
 declare const restoreArtifactRefBrand: unique symbol
-export type RestoreArtifactRef = string & {
-  readonly [restoreArtifactRefBrand]: 'restore-artifact-ref-v1'
+export interface RestoreArtifactRef {
+  readonly [restoreArtifactRefBrand]: 'restore-artifact-ref'
 }
 
 export type RestoreDirection = 'same' | 'forward' | 'downgrade'
@@ -123,7 +128,6 @@ export interface BackupResultView {
 }
 
 export interface RestorePlanView {
-  readonly artifactRef: RestoreArtifactRef
   readonly direction: RestoreDirection
   readonly backupKind: string | null
   readonly backupMigrationCreatedAt: number | null
@@ -155,23 +159,25 @@ application contract 不携带平台路径。既有显示 path/dir 只由 output
 ### 5.1 Commands/queries
 
 ```ts
-export interface RequestBackup {
+import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
+
+export interface RequestBackupCommand {
   execute(
-    ctx: SystemOperationContext,
+    ctx: CommandContext | LocalSystemOperationContext,
     input: { includeWorktrees: boolean },
   ): Promise<BackupResultView>
 }
 
-export interface PlanLocalRestore {
+export interface PlanLocalRestoreQuery {
   execute(
     ctx: LocalSystemOperationContext,
     input: { artifactRef: RestoreArtifactRef; skipIntegrityCheck: boolean },
   ): Promise<RestorePlanView>
 }
 
-export interface StageRestore {
+export interface StageRestoreCommand {
   execute(
-    ctx: SystemOperationContext | LocalSystemOperationContext,
+    ctx: CommandContext | LocalSystemOperationContext,
     input: {
       artifactRef: RestoreArtifactRef
       noSafetyBackup: boolean
@@ -181,11 +187,11 @@ export interface StageRestore {
   ): Promise<{ direction: RestoreDirection }>
 }
 
-export interface CancelStagedRestore {
-  execute(ctx: SystemOperationContext): Promise<{ cleared: boolean }>
+export interface CancelStagedRestoreCommand {
+  execute(ctx: CommandContext): { cleared: boolean }
 }
 
-export interface ActivateLocalRestore {
+export interface ActivateLocalRestoreCommand {
   execute(
     ctx: LocalSystemOperationContext,
     input: {
@@ -197,13 +203,14 @@ export interface ActivateLocalRestore {
   ): Promise<LocalRestoreReceipt>
 }
 
-export interface GetRecoveryStatus {
-  execute(ctx: SystemOperationQueryContext): RecoveryStatusView
+export interface GetRecoveryStatusQuery {
+  execute(ctx: QueryContext): RecoveryStatusView
 }
 ```
 
-`SystemOperationContext` / `SystemOperationQueryContext` 是 identity-access current authority types 的窄 alias；handler 不读取 role/permission
-集合，现有 route registration 继续声明 `backup:run`。`LocalSystemOperationContext` 只由 CLI bootstrap composition 铸造，不进入 HTTP/MCP。
+最终实现不保留可递归的 module-private authority alias：可执行 command/query 直接消费 identity-access exact `CommandContext` /
+`QueryContext`，`public/types.ts` 只导出 DTO、codec、branded artifact ref 与 bootstrap-local context。Handler 不读取 role/permission 集合，
+route registration 继续声明 `backup:run`；`LocalSystemOperationContext` 只由 CLI bootstrap composition 铸造，不进入 HTTP/MCP。
 
 ### 5.2 Coordinator ports
 
@@ -479,3 +486,52 @@ design/RFC-294-backend-layered-target-architecture/plan.md
 ```
 
 任何实际提交前重新生成 exact allowlist；不得 broad-stage，且不得代交 RFC-344/345 的并发 WIP。
+
+## 14. 实际落地与机器证据
+
+最终 production topology：
+
+```text
+HTTP descriptor binding ─┐
+                         ├─ exact public command/query ─> one system-operations application instance
+bootstrap-local CLI ─────┘                                      │
+                                                               ├─ AdminBackupCoordinatorPort
+                                                               └─ AdminRestoreCoordinatorPort
+                                                                          │
+                                                         one legacy platform adapter
+                                                                          │
+                                            backup / restore / pendingRestore mechanisms (W9/W9-E)
+```
+
+落地结果与设计裁决逐项一致：
+
+- 四个 primary descriptors 与四个 `legacy-http.*` data-only aliases 进入同一 frozen catalog；alias 只一跳、一对一、同 kind、同 major，
+  且不持有 handler/codec/admission；
+- `createApp` bootstrap 只 composition 一次 module；backup/restore routes 只消费 public handles，`AppDeps`、DB/FS/Paths/migration
+  resolver/legacy service deep import 在这两条 route 上归零；
+- CLI composition 上提 `main.ts` bootstrap；`backup.ts` / `restore.ts` 只保留 argv 与 output/exit projection；
+- artifact ingress 运行时提供与 actual ref 一致的 operation codec，multipart `File` 与 local path 不进入 public DTO；
+- exact owner mapping 与 source locks 排除 maintenance/doctor/migrate/db compact/readiness/GC，并把 physical restore compatibility debt
+  精确留给 W9-E；
+- authority-bearing contract 只存在于 executable `public/commands.ts` / `public/queries.ts`，`public/types.ts` 无
+  `RequestAuthority`、`CommandContext` 或 `QueryContext` alias leakage。
+
+Canonical final source digest 为
+`sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec`。RFC-346 source/test commits 均为
+`7ede76a88649f9c3f5501eef47106631e89f24c1` 的祖先；该 clean-checkout exact SHA 的权威 hosted evidence：
+
+| Workflow             | Run           | 结果                  |
+| -------------------- | ------------- | --------------------- |
+| Main CI              | `33317698270` | `COMPLETED / SUCCESS` |
+| e2e-full-nightly     | `33317736186` | `COMPLETED / SUCCESS` |
+| e2e-webkit-nightly   | `33317732124` | `COMPLETED / SUCCESS` |
+| evidence scenarios   | `33317735982` | `COMPLETED / SUCCESS` |
+| git protocols E2E    | `33317735272` | `COMPLETED / SUCCESS` |
+| integration OpenCode | `33317735322` | `COMPLETED / SUCCESS` |
+| maintenance soak     | `33317735048` | `COMPLETED / SUCCESS` |
+| visual regression    | `33317735095` | `COMPLETED / SUCCESS` |
+| Windows platform     | `33317734896` | `COMPLETED / SUCCESS` |
+
+Main CI 的 backend 8/8、三平台 Playwright 与 required rollup 全绿；8 个 scheduled workflows 的 completed suites 均
+`failed=[]` / `unfinished=[]`。因此 AC-1～AC-12 已闭合，RFC-346 只关闭 RFC-294 W4-E7；W9-E physical generation protocol 与
+其他 W4 子波仍按各自 successor 推进。

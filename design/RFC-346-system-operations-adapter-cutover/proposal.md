@@ -1,12 +1,20 @@
 # RFC-346 — System Operations 管理编排与 adapter cutover（RFC-294 W4-E7）
 
-状态：Approved / In Progress（D1～D12 已于 2026-08-30 获用户明确批准；已授权实现、提交与 push）
+- 状态：Done（2026-08-30；D1～D12、AC-1～AC-12、canonical 与 exact-SHA hosted closeout 已完成）
+- 开工 source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`
+- additive module / adapter / CLI cohort：`4a1c739351f27847ffb3554869e7f613ab8e1eef` →
+  `ce7d9fbf541208b00b9d52d221058f0387a15ae3` → `4c349cf068d38f6842469ba565b4aedd6961b41c`
+- descriptor / alias cutover：`572d01e0c50b3d8401bf9a317c317b5fd4b5b008`
+- hosted contract repair：`dffe9bc836d87a2433153a3b2e8a8efc8cf17b95`
+- canonical source digest：`sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec`
+- published functional exact SHA / Main CI：`7ede76a88649f9c3f5501eef47106631e89f24c1` /
+  `33317698270`（terminal success）
+- 归属：只关闭 RFC-294 W4-E7；physical restore generation、legacy mechanism replacement 与 participant protocol 继续归 W9-E
 
-Source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`
-
-并发边界：RFC-344 / W4-A 与 RFC-345 / W4-C 正由其他 session 落地。本 RFC 在 RFC-344 hosted closeout 前只允许新增
-`modules/system-operations` 合同、legacy platform adapter、CLI composition 与专项测试；不修改 RFC-345 路径，也不提前修改
-`server.ts`、`routes/{backup,restore}.ts`、`platform/operations/*` 或 canonical architecture payload。
+实施期并发边界（已履行）：RFC-344 / W4-A 与 RFC-345 / W4-C 由其他 session 落地；RFC-344 hosted closeout 前只实施
+`modules/system-operations` 合同、legacy platform adapter、CLI composition 与专项测试，Cohort B 才修改
+`server.ts`、`routes/{backup,restore}.ts`、`platform/operations/*` 与 canonical architecture payload。RFC-345 owned paths 全程未由本
+RFC提交。
 
 ## 1. 摘要
 
@@ -103,7 +111,7 @@ RFC-344 current catalog 为四条 HTTP route 自动生成以下 compatibility id
   在 W9/W9-E 前仍是有账 debt。
 - 不替 RFC-344 或 RFC-345 完成、提交或发布任何文件。
 
-## 5. 待批准裁决
+## 5. 已批准裁决
 
 ### D1 — E7 只拥有管理编排，不拥有运维杂项
 
@@ -221,3 +229,39 @@ canonical regeneration 必须等待 RFC-344 发布，并在开工前重新 pin e
 
 2026-08-30，用户明确批准 D1～D12，并授权实施与 push。授权只覆盖 `plan.md` T1～T6；不授权 W9-E physical restore、
 maintenance/background 归位或新产品能力。RFC-344 hosted closeout 前只允许 D12 指定的 additive/CLI cohort。
+
+## 10. 实际落地与 hosted closeout
+
+最终 production topology 与批准版边界一致：
+
+- `modules/system-operations` 只暴露四类 command、两类 query、DTO/ref 与四个 operation descriptors；authority 只出现在 executable
+  command/query contract，`public/types.ts` 保持 authority-free；
+- HTTP 与 CLI 复用同一 application handlers；HTTP backup/restore route 只做协议映射并消费 bootstrap-composed public handles，
+  E7-owned route `AppDeps` consumer `2→0`；
+- 四个 `legacy-http.*` identity 是 data-only、一跳、一对一 alias，解析到四个 `system-operations.*.v1` primary descriptors 的同一
+  bound handler；不存在 fallback second handler 或 shadow effect；
+- restore artifact 只经 composition-owned ingress 转为 branded ref；legacy backup/restore/pending mechanism 由唯一 adapter 保留，
+  W9/W9-E debt 没有被本 RFC冒领；
+- canonical exact mapping 排除 maintenance、doctor、migrate、db compact、health/readiness 与 task/workspace cleanup；RFC-295
+  downgrade audit 继续是只读 explicit compatibility command。
+
+最终功能候选为 `7ede76a88649f9c3f5501eef47106631e89f24c1`；RFC-346 implementation commits 均为其祖先，clean-checkout
+hosted 结果为 9/9 terminal success：
+
+| Workflow             | Run           | 结果                  |
+| -------------------- | ------------- | --------------------- |
+| Main CI              | `33317698270` | `COMPLETED / SUCCESS` |
+| e2e-full-nightly     | `33317736186` | `COMPLETED / SUCCESS` |
+| e2e-webkit-nightly   | `33317732124` | `COMPLETED / SUCCESS` |
+| evidence scenarios   | `33317735982` | `COMPLETED / SUCCESS` |
+| git protocols E2E    | `33317735272` | `COMPLETED / SUCCESS` |
+| integration OpenCode | `33317735322` | `COMPLETED / SUCCESS` |
+| maintenance soak     | `33317735048` | `COMPLETED / SUCCESS` |
+| visual regression    | `33317735095` | `COMPLETED / SUCCESS` |
+| Windows platform     | `33317734896` | `COMPLETED / SUCCESS` |
+
+Main CI 的 backend 8/8、三平台 Playwright 与 required rollup 全绿；scheduled suites 的 `failed=[]`、`unfinished=[]`。这组证据关闭
+AC-12，并只把 RFC-294 W4-E7 标为完成，不倒签 W9-E 或其他 W4 子波。
+
+本次 RFC-owning docs-only publication 只提交本目录三件套。含 RFC-347 并发 hunks 的 `STATE.md`、`design/plan.md` 与 RFC-294 plan
+按 shared-main 规则交回协调 session 在独立短临界区同步，不进入本提交。

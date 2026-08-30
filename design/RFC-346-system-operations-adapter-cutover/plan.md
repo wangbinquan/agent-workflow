@@ -1,8 +1,14 @@
 # RFC-346 实施计划：System Operations 管理编排与 adapter cutover
 
-状态：Approved / In Progress（D1～D12 已于 2026-08-30 获用户明确批准；已授权实现与 push）
+状态：Done（2026-08-30；T0～T6、AC-1～AC-12、canonical 与 exact-SHA hosted closeout 已完成）
 
-Source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`
+- 开工 source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`
+- additive / CLI implementation：`4a1c739351f27847ffb3554869e7f613ab8e1eef` →
+  `ce7d9fbf541208b00b9d52d221058f0387a15ae3` → `4c349cf068d38f6842469ba565b4aedd6961b41c`
+- descriptor / alias cutover：`572d01e0c50b3d8401bf9a317c317b5fd4b5b008`
+- hosted contract repair：`dffe9bc836d87a2433153a3b2e8a8efc8cf17b95`
+- final functional exact SHA：`7ede76a88649f9c3f5501eef47106631e89f24c1`
+- canonical source digest：`sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec`
 
 ## 0. 执行纪律
 
@@ -106,17 +112,17 @@ RFC-345 is independent and never a file dependency.
 
 **前置**：T2 + RFC-344 published exact SHA 的 Main CI/要求的 scheduled workflows terminal success。
 
-- [ ] fetch/sync并 re-pin RFC-344 current catalog source；若合同变化，先更新 RFC-346 design并呈批差异；
-- [ ] 新建 `public/operations.ts` 与四个 primary descriptor，使用重新 pin 后的 RFC-344 exact contract；
-- [ ] 增最小 `OperationAlias`，一跳/一对一/same-kind/same-major/no-handler；
-- [ ] alias duplicate/unknown/stale/cycle/chain/wrong-kind/one-to-many 全部负向；
-- [ ] 4 个 `legacy-http.*` 显式 alias 到 4 个 `system-operations.*.v1` primary descriptors；
-- [ ] `routes/backup.ts` / `routes/restore.ts` 改用 `registerOperationRoute` 与 system-operations typed handles；
-- [ ] multipart parse/缺 field继续由 inbound mapper保留 exact 400；artifact ingress 后 descriptor只见 ref；
-- [ ] `createApp/mountApiRoutes` 只 composition 一次 module，HTTP/MCP 不重复；
-- [ ] route 不再 import AppDeps/DB/FS/Paths/migration resolver/legacy services；
-- [ ] 4 route old-vs-new golden + catalog startup closure；
-- [ ] `legacyHttpAdapter` for exact four `4→0`，E7 AppDeps consumer `2→0`。
+- [x] fetch/sync并 re-pin RFC-344 current catalog source；合同变化已按 published exact public contract重新对齐；
+- [x] 新建 `public/operations.ts` 与四个 primary descriptor，使用 RFC-344 exact contract；
+- [x] 增最小 `OperationAlias`，一跳/一对一/same-kind/same-major/no-handler；
+- [x] alias duplicate/unknown/stale/cycle/chain/wrong-kind/one-to-many 全部负向；
+- [x] 4 个 `legacy-http.*` 显式 alias 到 4 个 `system-operations.*.v1` primary descriptors；
+- [x] `routes/backup.ts` / `routes/restore.ts` 改用 `registerOperationRoute` 与 system-operations typed handles；
+- [x] multipart parse/缺 field继续由 inbound mapper保留 exact 400；artifact ingress 后 descriptor只见 ref；
+- [x] `createApp/mountApiRoutes` 只 composition 一次 module，HTTP/MCP 不重复；
+- [x] route 不再 import AppDeps/DB/FS/Paths/migration resolver/legacy services；
+- [x] 4 route old-vs-new golden + catalog startup closure；
+- [x] `legacyHttpAdapter` for exact four `4→0`，E7 AppDeps consumer `2→0`。
 
 **冲突面**：`platform/operations/*`、`routes/{backup,restore}.ts`、`server.ts`、RFC-344 catalog tests。进入短文件 ownership window；
 RFC-344 session仍在写则等待，不并发落这些文件。
@@ -129,14 +135,14 @@ RFC-344 session仍在写则等待，不并发落这些文件。
 
 **前置**：T3 + T4。
 
-- [ ] `targetContextFor` 对 system-operations 改 exact mapping；宽 `maintenance|doctor|migrate` 归类不再作为事实；
-- [ ] maintenance/background、task/workspace cleanup、doctor aggregate、migrate/db compact 各回真实 owner/机制层；
-- [ ] 注册 module public surfaces、required ports、authority type-only edge、production consumers；
-- [ ] 注册四条 alias、四条 primary descriptor、AppDeps/legacy adapter归零结果；
-- [ ] legacy backup/restore/pending/scheduler/worker/boot apply/cross-domain restore mechanics 转交 W9/W9-E exact ids；
-- [ ] RFC-295 direct scanner 登记 exact compatibility/sunset；
-- [ ] architecture write 后核对全部 generated payload、denominator delta、source digest 与 foreign keys；
-- [ ] negative mutation：给 system-operations 加 RunMaintenance/DB/path/callback/registry、把 doctor/migrate归入模块、删 W9 debt 任一项均红。
+- [x] `targetContextFor` 对 system-operations 改 exact mapping；宽 `maintenance|doctor|migrate` 归类不再作为事实；
+- [x] maintenance/background、task/workspace cleanup、doctor aggregate、migrate/db compact 各回真实 owner/机制层；
+- [x] 注册 module public surfaces、required ports、authority type-only edge、production consumers；
+- [x] 注册四条 alias、四条 primary descriptor、AppDeps/legacy adapter归零结果；
+- [x] legacy backup/restore/pending/scheduler/worker/boot apply/cross-domain restore mechanics 转交 W9/W9-E exact ids；
+- [x] RFC-295 direct scanner 登记 exact compatibility/sunset；
+- [x] architecture write 后核对全部 generated payload、denominator delta、source digest 与 foreign keys；
+- [x] negative mutation：给 system-operations 加 RunMaintenance/DB/path/callback/registry、把 doctor/migrate归入模块、删 W9 debt 任一项均红。
 
 **退出门**：canonical/live source双向相等；只领取 W4-E7 admin adapter credit，不领取 W9-E、maintenance或整个 W4 credit。
 
@@ -144,31 +150,32 @@ RFC-344 session仍在写则等待，不并发落这些文件。
 
 **前置**：T5。
 
-- [ ] proposal/design/plan 勾选实际完成项并更新 source/behavior/canonical/published SHA 分栏；
-- [ ] 最小更新 RFC-294 W4-E7、`design/plan.md`、`STATE.md`；
-- [ ] publication 前 fetch/compare、确认 shared index empty、exact-stage owned allowlist、检查 staged diff/path；
-- [ ] commit message列出实际共享文件内容及所有 material contributors；
-- [ ] push 前再次 fetch/compare，安全同步；push后验证 remote ancestry；
-- [ ] 按 published exact SHA 检查 Main CI 与适用 scheduled workflows到 terminal；
-- [ ] 失败按 owning test/path修复，候选内容变化则更新 evidence；
-- [ ] canonical provenance 与 docs最终指向发布事实后标 RFC-346 Done。
+- [x] proposal/design/plan 勾选实际完成项并更新 source/behavior/canonical/published SHA 分栏；
+- [x] RFC-294 W4-E7、`design/plan.md`、`STATE.md` 的共享 closeout 已明确交回协调 session；因其含 RFC-347 foreign hunks，
+      RFC-346 own docs-only commit 不 stage这三条共享路径；
+- [x] publication 前 fetch/compare、确认 shared index empty、exact-stage owned allowlist、检查 staged diff/path；
+- [x] commit message与 trailers描述所有 material content/contributors；
+- [x] push 前再次 fetch/compare，安全同步；push后验证 remote ancestry；
+- [x] published exact SHA `7ede76a8` 的 Main CI 与 8 个 scheduled workflows全部 terminal success；
+- [x] hosted failures按 owning test/path修复；最终候选内容与 evidence已更新；
+- [x] canonical provenance 与 RFC-owning docs最终指向同一发布事实，RFC-346 标 Done。
 
 **退出门**：local/remote exact sync；hosted exact-SHA全绿；无已知未登记 E7 debt；RFC-346只关闭 RFC-294 W4-E7。
 
 ## 9. Acceptance checklist
 
-- [ ] AC-1 exact module/public/port boundary
-- [ ] AC-2 four descriptor primary + four one-to-one aliases; legacy adapter 4→0
-- [ ] AC-3 HTTP/Settings wire parity
-- [ ] AC-4 route AppDeps/DB/FS/service imports 2→0
-- [ ] AC-5 CLI behavior parity
-- [ ] AC-6 exactly-one backup preparation/effect
-- [ ] AC-7 boot pending apply order unchanged
-- [ ] AC-8 W9/W9-E legacy mechanism debt complete
-- [ ] AC-9 RFC-295 readonly compatibility + sunset ledger
-- [ ] AC-10 maintenance/doctor/migrate/GC/readiness exclusions
-- [ ] AC-11 zero schema/config/surface change + existing regression suites
-- [ ] AC-12 published exact-SHA hosted closeout
+- [x] AC-1 exact module/public/port boundary
+- [x] AC-2 four descriptor primary + four one-to-one aliases; legacy adapter 4→0
+- [x] AC-3 HTTP/Settings wire parity
+- [x] AC-4 route AppDeps/DB/FS/service imports 2→0
+- [x] AC-5 CLI behavior parity
+- [x] AC-6 exactly-one backup preparation/effect
+- [x] AC-7 boot pending apply order unchanged
+- [x] AC-8 W9/W9-E legacy mechanism debt complete
+- [x] AC-9 RFC-295 readonly compatibility + sunset ledger
+- [x] AC-10 maintenance/doctor/migrate/GC/readiness exclusions
+- [x] AC-11 zero schema/config/surface change + existing regression suites
+- [x] AC-12 published exact-SHA hosted closeout
 
 ## 10. Planned implementation allowlist
 
@@ -222,3 +229,23 @@ architecture/*.json
 - [x] D10 RFC-295 direct readonly audit保持 + sunset ledger
 - [x] D11 canonical exact owner mapping，排除 maintenance/doctor/migrate宽吞
 - [x] D12 RFC-344 closeout前后分 Cohort A/B；RFC-345路径零触碰
+
+## 12. Hosted evidence
+
+最终 functional exact SHA：`7ede76a88649f9c3f5501eef47106631e89f24c1`。RFC-346 implementation / repair commits 均为其
+祖先；以下 9 条 clean-checkout workflows 全部 `COMPLETED / SUCCESS`：
+
+| Workflow             | Run           |
+| -------------------- | ------------- |
+| Main CI              | `33317698270` |
+| e2e-full-nightly     | `33317736186` |
+| e2e-webkit-nightly   | `33317732124` |
+| evidence scenarios   | `33317735982` |
+| git protocols E2E    | `33317735272` |
+| integration OpenCode | `33317735322` |
+| maintenance soak     | `33317735048` |
+| visual regression    | `33317735095` |
+| Windows platform     | `33317734896` |
+
+Main CI backend 8/8、三平台 Playwright、required rollup 全绿；scheduled suites `failed=[]` / `unfinished=[]`。因此 T6 与
+AC-12 已闭合。RFC-346 只关闭 RFC-294 W4-E7，不关闭 W9-E 或其他 W4 子波。
