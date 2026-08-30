@@ -1,7 +1,16 @@
 # RFC-344 — OperationCatalog 与 transport cutover（RFC-294 W4-A）
 
-- 状态：Approved / Implementation candidate（2026-08-30；D1～D10 已获批准，等待 published exact-SHA hosted closeout）
-- current-source pin：`fa244b0319581efc6aad3f3f216b917278fc17f7`
+- 状态：Done（2026-08-30；D1～D10、AC-1～AC-12、canonical 与 exact-SHA hosted closeout 已完成）
+- 开工 source pin：`fa244b0319581efc6aad3f3f216b917278fc17f7`
+- core cutover / stabilization：`1f6edeb3d0399bf89a957e50d1643fd3dcf9c6cc` →
+  `4e49626a3c6fc499ba0dd71642bb262a42283526`
+- architecture convergence / hosted repairs：`593e760dbc4ba4ddac5dd7ec3831b2181f4b4c86` →
+  `765de8b5ff6d61c72cd126fe62172ce761fa9638` → `107596c430f29a0fbcfee83ad93f7d6eaacbb993` →
+  `baeb34431bb00470b2ca036fa103071afa440f7f`
+- final canonical snapshot / source digest：`249a0d3f71dcc193cf18f1d7fb1663b79c2a88f5` /
+  `sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad`
+- published implementation exact SHA / Main CI：`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` /
+  `33298828254`（terminal success）
 - 前置：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W0-R/W3、
   [RFC-329](../RFC-329-mcp-gate-surface-completion/proposal.md)、
   [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md)
@@ -169,3 +178,31 @@ composition root。
 
 已按 [plan.md](./plan.md) 的 T1～T8 实施 production candidate。中间提交可以标记某 cohort cutover 完成，但在 AC-1～AC-12 全部满足前，
 RFC-344 保持 In Progress；不得用“catalog 类型已存在”“RFC-329 inventory 已绿”或“source 已 push”替代 W4-A hosted exit。
+
+## 8. 落地与关闭记录
+
+2026-08-30，RFC-344 已按批准范围完整落地并关闭：
+
+- `1f6edeb3d0399bf89a957e50d1643fd3dcf9c6cc` 建立并接入 closed `OperationCatalog`，472 条 current HTTP route
+  获得 stable operation identity，52/52 MCP tools 全部进入 direct、parameterized、composite 或 local-introspection binding；
+  `resource_read/resource_write` 使用 closed selector，composite tool 显式声明 typed dependencies。
+- identity-access user HTTP/CLI 与 development mission/config/activity 已切到 exact public operation contracts；descriptor-backed
+  RouteMeta、MCP presentation 与 API docs 从同一 frozen projection 读取。compatibility HTTP adapter 继续逐 leaf 显式标债并交给
+  W4-B/C/E，不因本 RFC 完成而冒领归零。
+- MCP private Hono、`mcp/dispatch.ts`、lazy duplicate `mountApiRoutes` 与对应三文件 SCC 已删除；REST root 是唯一 route table，
+  MCP 不再把业务调用重新编码为 URL/method 后进入第二套 transport stack。
+- `4e49626a3c6fc499ba0dd71642bb262a42283526`、`765de8b5ff6d61c72cd126fe62172ce761fa9638`、
+  `107596c430f29a0fbcfee83ad93f7d6eaacbb993` 与 `baeb34431bb00470b2ca036fa103071afa440f7f` 闭合了 catalog
+  唯一性、descriptor consumer、bootstrap handoff、public-surface 与 hosted architecture source locks；最后一条 RFC-305 consumer ledger
+  漂移由 `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 修正为 executable `queries.ts` owner。
+- final canonical snapshot 为 `249a0d3f71dcc193cf18f1d7fb1663b79c2a88f5`，source digest 为
+  `sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad`；final test-only consumer ledger
+  修复不改变 production source digest。
+- exact SHA `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 的 Main CI `33298828254` terminal success：static、
+  typecheck/lint/format、build、frontend、backend 8/8 与 Ubuntu/macOS/Windows Playwright 全绿。相同 SHA 的 8 个定时 workflow
+  也全部 terminal success：e2e-full `33298851279`、e2e-webkit `33298852761`、evidence `33298851076`、git-protocols
+  `33298851691`、integration-opencode `33298851086`、maintenance-soak `33298851934`、visual `33298851050`、
+  windows-platform `33298851033`。
+
+RFC-344 据此只关闭 RFC-294 W4-A 与 W4-D 的 duplicate-root residual。W4-B、W4-C、其余 W4-D/AppDeps contraction、W4-E
+各 bounded-context cutover 仍按独立 successor 与授权门推进。

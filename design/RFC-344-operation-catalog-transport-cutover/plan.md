@@ -1,9 +1,16 @@
 # RFC-344 实施计划 — OperationCatalog 与 transport cutover
 
-状态：Approved / Implementation candidate（2026-08-30）；D1～D10、完整实施与提交上库已获批准，等待 canonical/publication 与
-published exact-SHA hosted closeout。
+状态：Done（2026-08-30）；D1～D10、T0～T8、canonical replay 与 published exact-SHA hosted closeout 已完成。
 
-Current-source pin：`fa244b0319581efc6aad3f3f216b917278fc17f7`。
+开工 source pin：`fa244b0319581efc6aad3f3f216b917278fc17f7`。
+
+Core cutover / stabilization：`1f6edeb3d0399bf89a957e50d1643fd3dcf9c6cc` →
+`4e49626a3c6fc499ba0dd71642bb262a42283526`。
+
+Final canonical snapshot / source digest：`249a0d3f71dcc193cf18f1d7fb1663b79c2a88f5` /
+`sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad`。
+
+Published exact SHA / Main CI：`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` / `33298828254`（terminal success）。
 
 ## 0. 批准与完成口径
 
@@ -11,7 +18,7 @@ Current-source pin：`fa244b0319581efc6aad3f3f216b917278fc17f7`。
 - [x] 已按 RFC-294 §3.2 启动 W4 current-source 调研并建立独立 successor；
 - [x] 用户明确批准 RFC-344 D1～D10、完整实施与提交上库；
 - [x] RFC-294 的目标裁决与本 RFC 不冲突；compatibility HTTP debt 明确保留给 W4-B/C/E；
-- [ ] AC-1～AC-12、published exact SHA、Main CI 与定时 workflows 全绿后，RFC-344/W4-A 才能 Done。
+- [x] AC-1～AC-12、published exact SHA、Main CI 与 8 个定时 workflows 全绿，RFC-344/W4-A 可以 Done。
 
 本 RFC 允许多个小 cohort commit，但不允许用中间基础设施提交提前宣称 W4-A 完成。每个 cohort 都采用 exact-path staging、独立
 rollback point 与 shared-main publication critical section。
@@ -132,12 +139,12 @@ fresh fetch 后重新采集，漂移只更新 source census，不静默改裁决
 ### T8 — Publication / hosted closeout
 
 - [x] backend typecheck、exact ESLint 与 architecture read-only report 已绿；最终 Prettier/diff-check 在 source freeze 后重跑；
-- [ ] 按用户约定不把本地 Bun test/E2E/full gate 当最终依据；
-- [ ] canonical generator 只在 publication critical section、全 source 稳定后由单一 owner运行；
-- [ ] exact-stage，核对 staged allowlist/diff/message/真实 co-author trailers；
-- [ ] 用户授权后 commit/push，fresh fetch 验证 `HEAD=origin/main` 与 divergence 0/0；
-- [ ] 跟踪 published exact SHA 的 Main CI、三平台 E2E 与项目要求的定时 workflows；
-- [ ] 全部 terminal success 后更新 RFC-344 三件套、RFC-294 W4-A、`design/plan.md`、`STATE.md` 为 Done。
+- [x] 按用户约定不把本地 Bun test/E2E/full gate 当最终依据，最终 verdict 取 published exact-SHA hosted 结果；
+- [x] canonical generator 只在 publication critical section、全 source 稳定后由单一 owner运行；
+- [x] exact-stage，核对 staged allowlist/diff/message/真实 co-author trailers；
+- [x] 用户授权后 commit/push，fresh fetch 验证 `HEAD=origin/main` 与 divergence 0/0；
+- [x] published exact SHA 的 Main CI、三平台 E2E 与项目要求的 8 个定时 workflows 全部 terminal success；
+- [x] RFC-344 proposal/design/plan 已回填 Done；RFC-294 W4-A、`design/plan.md`、`STATE.md` 的共享 closeout 在下一短临界区同步。
 
 ## 3. 预计源码范围
 
@@ -172,3 +179,19 @@ fresh fetch 后重新采集，漂移只更新 source census，不静默改裁决
 - W4-C 负责 Resource Catalog；
 - W4-D 后续继续收缩 53 个 `AppDeps` consumer 与 bootstrap composition；
 - W4-E 各 bounded context 仍逐域呈批，不因 operation id 或 descriptor 存在而自动 Done。
+
+## 6. 实际 publication 与 hosted closeout
+
+| stage                          | commit / run                                                                                                                         | 结果                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| core cutover                   | `1f6edeb3d0399bf89a957e50d1643fd3dcf9c6cc`                                                                                           | OperationCatalog、472 route identity、52/52 MCP binding、single handler chain            |
+| stabilization                  | `4e49626a3c6fc499ba0dd71642bb262a42283526` / `765de8b5ff6d61c72cd126fe62172ce761fa9638` / `107596c430f29a0fbcfee83ad93f7d6eaacbb993` | descriptor/catalog/root 与 hosted architecture regression 收敛                           |
+| canonical                      | `593e760dbc4ba4ddac5dd7ec3831b2181f4b4c86` → `249a0d3f71dcc193cf18f1d7fb1663b79c2a88f5`                                              | full source snapshot、retired growth permits、source digest 闭合                         |
+| final consumer lock            | `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68`                                                                                           | RFC-305 exact consumer ledger 与 RFC-346 executable query context 一致                   |
+| Main CI                        | `33298828254`                                                                                                                        | static/build/frontend/backend 8/8、三平台 Playwright 与 required aggregator 全部 success |
+| e2e full / WebKit              | `33298851279` / `33298852761`                                                                                                        | 两条完整矩阵 terminal success                                                            |
+| evidence / git / runtime       | `33298851076` / `33298851691` / `33298851086`                                                                                        | terminal success                                                                         |
+| maintenance / visual / Windows | `33298851934` / `33298851050` / `33298851033`                                                                                        | terminal success                                                                         |
+
+AC-1～AC-12 均已闭合。RFC-344 据此 Done，并只关闭 RFC-294 W4-A 与 W4-D duplicate-root residual；W4-B、W4-C、
+其余 W4-D 与 W4-E 仍按各自 successor 推进。

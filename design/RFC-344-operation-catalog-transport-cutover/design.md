@@ -1,7 +1,13 @@
 # RFC-344 技术设计 — OperationCatalog 与 transport cutover
 
-- 状态：Approved / Implementation candidate（2026-08-30；等待 published exact-SHA hosted closeout）
-- current-source pin：`fa244b0319581efc6aad3f3f216b917278fc17f7`
+- 状态：Done（2026-08-30；完整 catalog/transport cutover、canonical 与 hosted closeout 已完成）
+- 开工 source pin：`fa244b0319581efc6aad3f3f216b917278fc17f7`
+- core cutover / stabilization：`1f6edeb3d0399bf89a957e50d1643fd3dcf9c6cc` →
+  `4e49626a3c6fc499ba0dd71642bb262a42283526`
+- final canonical snapshot / digest：`249a0d3f71dcc193cf18f1d7fb1663b79c2a88f5` /
+  `sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad`
+- published exact SHA / Main CI：`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` /
+  `33298828254`（terminal success）
 - parent wave：[RFC-294 W4-A](../RFC-294-backend-layered-target-architecture/plan.md#w4-a-operation-catalog-与-adapter-parity)
 
 ## 1. 当前拓扑
@@ -331,3 +337,31 @@ method/path/admission/summary wire；MCP 文档读取同一次登记的 tool pre
 - current REST/MCP/CLI regression、三平台 E2E、Main CI 与定时 workflows。
 
 按用户约定，最终功能结论以 published exact-SHA hosted CI 为准；本地不以 Bun full gate 代替 hosted verdict。
+
+## 15. 落地后的实际边界
+
+最终 production topology 与本设计一致：
+
+```text
+owning module public operation
+  → frozen OperationCatalog + closed binding
+  → HTTP / MCP / CLI protocol projection
+  → one typed invoke / one mounted handler chain
+```
+
+- 472 条 current HTTP declarations 全部拥有 stable operation identity；52/52 MCP tools 全部属于 direct、parameterized、
+  composite 或 local-introspection binding。unknown/stale/duplicate operation、selector case、dependency 与 presentation closure 由启动
+  自检和 architecture locks 双向约束。
+- identity user HTTP/CLI 与 development mission/config/activity 是 descriptor-backed pilot；其 route/CLI 只消费 exact public
+  operations。其余 compatibility HTTP leaf 继续带 `legacyHttpAdapter=true`，由 W4-B/C/E 的独立 vertical slice 收口。
+- API docs、RouteMeta 与 MCP presentation 从 frozen catalog/binding projection 读取；`services/apiDocs.ts` 不再反向读取 route/tool
+  registry。MCP private Hono、`mcp/dispatch.ts`、lazy duplicate mount 与对应 SCC 已灭绝。
+- final canonical snapshot `249a0d3f71dcc193cf18f1d7fb1663b79c2a88f5` 对应 source digest
+  `sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad`；final exact SHA
+  `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 只再修正测试 consumer ledger，不改变 production snapshot。
+- Main CI `33298828254` 以及 e2e-full `33298851279`、e2e-webkit `33298852761`、evidence `33298851076`、
+  git-protocols `33298851691`、integration-opencode `33298851086`、maintenance-soak `33298851934`、visual
+  `33298851050`、windows-platform `33298851033` 均 terminal success；全部 completed suites 的 `failed=[]`、
+  `unfinished=[]`。
+
+这些结果满足 proposal AC-1～AC-12，只关闭 RFC-294 W4-A 与 duplicate-root residual；不改变 W4-B/C/E 的独立 owner、范围与批准门。
