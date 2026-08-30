@@ -22,24 +22,16 @@ import {
   McpRuntimeTestMessageRequestSchema,
   RenameMcpRequestSchema,
   UpdateMcpRequestSchema,
-  type Mcp,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
+import type { McpOperationContext } from '@/modules/resource-catalog/public/participants'
+import type { McpCatalogResource } from '@/modules/resource-catalog/public/types'
+import { invokeOperation } from '@/platform/operations/invoke'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { createMcp, deleteMcp, getMcpById, listMcps, renameMcp, updateMcp } from '@/services/mcp'
-import {
-  mcpOperationConfigHashOf,
-  withMcpOperationConfigHash,
-} from '@/services/mcpOperationRevision'
-import {
-  canViewResource,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { serializeMcpFor } from '@/services/tokenRedaction'
 import { mountAclEndpoints } from './resourceAcl'
@@ -54,12 +46,8 @@ import {
   staleConflictError,
 } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import {
-  deletePreparedMcpRuntimeTestsInTx,
-  transitionMcpAclRuntimeTestsInTx,
-} from '@/services/mcpRuntimeTestTransitions'
-import { Paths } from '@/util/paths'
+import type { McpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import { transitionMcpAclRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import { safeJsonOrEmpty } from '@/util/http'
 
 const log = createLogger('mcps-routes')
@@ -71,35 +59,23 @@ export function __setProbeOptionsForTesting(opts: ProbeOptions | undefined): voi
   probeOptionsOverride = opts
 }
 
-export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
-  const runtimeTests = getMcpRuntimeTestService({
-    db: deps.db,
-    configPath: deps.configPath,
-    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    runFn: deps.mcpRuntimeTestDependencies?.runFn,
-    now: deps.mcpRuntimeTestDependencies?.now,
-    capacity: deps.mcpRuntimeTestDependencies?.capacity,
-  })
-  // RFC-099: missing and not-visible produce the identical 404 (D1).
-  async function loadVisibleMcp(actor: Actor, id: string): Promise<Mcp> {
-    const mcp = await getMcpById(deps.db, id)
-    if (mcp === null || !(await canViewResource(deps.db, actor, 'mcp', mcp))) {
-      throw new NotFoundError('mcp-not-found', 'mcp not found')
-    }
-    return mcp
-  }
+export function mcpRouteNow(): number {
+  return (probeOptionsOverride?.now ?? Date.now)()
+}
 
-  async function nextMutationTimestamp(mcp: Mcp): Promise<number> {
-    const persisted = await getProbeByMcpId(deps.db, mcp.id)
-    return mcpOperationCoordinator.nextCausalTimestamp(
-      mcp.id,
-      (probeOptionsOverride?.now ?? Date.now)(),
-      [
-        mcp.updatedAt + 1,
-        (persisted?.startedAt ?? 0) + 1,
-        mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
-      ],
-    )
+export interface McpRouteDependencies {
+  readonly catalog: McpCatalogModule
+  readonly authorityFor: (actor: Actor) => McpOperationContext
+  readonly runtimeTests: McpRuntimeTestService
+}
+
+export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDependencies): void {
+  const { catalog, runtimeTests } = module
+  // RFC-099: missing and not-visible produce the identical 404 (D1).
+  async function loadVisibleMcp(actor: Actor, id: string): Promise<McpCatalogResource> {
+    const mcp = await invokeOperation(catalog.operations.get, module.authorityFor(actor), { id })
+    if (mcp === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
+    return mcp
   }
 
   registerRoute(
@@ -112,12 +88,9 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List MCP servers visible to the caller',
     },
     async (c) => {
-      const list = await listMcps(deps.db)
-      const visible = await filterVisibleRows(deps.db, actorOf(c), 'mcp', list)
       const actor = actorOf(c)
-      return c.json(
-        visible.map((m) => serializeMcpFor(withMcpOperationConfigHash(m), actor.source)),
-      )
+      const visible = await invokeOperation(catalog.operations.list, module.authorityFor(actor), {})
+      return c.json(visible.map((mcp) => serializeMcpFor(mcp, actor.source)))
     },
   )
 
@@ -134,11 +107,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const list = await listProbes(deps.db)
-      const visibleMcps = await filterVisibleRows(
-        deps.db,
-        actorOf(c),
-        'mcp',
-        await listMcps(deps.db),
+      const actor = actorOf(c)
+      const visibleMcps = await invokeOperation(
+        catalog.operations.list,
+        module.authorityFor(actor),
+        {},
       )
       const allowed = new Set(visibleMcps.map((m) => m.id))
       return c.json(list.filter((p) => allowed.has(p.mcpId)))
@@ -156,12 +129,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      return c.json(
-        serializeMcpFor(
-          withMcpOperationConfigHash(await loadVisibleMcp(actor, c.req.param('id'))),
-          actor.source,
-        ),
-      )
+      return c.json(serializeMcpFor(await loadVisibleMcp(actor, c.req.param('id')), actor.source))
     },
   )
 
@@ -353,11 +321,12 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const created = await createMcp(deps.db, parsed.data, {
-        ownerUserId: actor.user.id,
-        actor,
-      })
-      return c.json(serializeMcpFor(withMcpOperationConfigHash(created), actor.source), 201)
+      const created = await invokeOperation(
+        catalog.operations.create,
+        module.authorityFor(actor),
+        parsed.data,
+      )
+      return c.json(serializeMcpFor(created, actor.source), 201)
     },
   )
 
@@ -380,24 +349,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const resolved = await loadVisibleMcp(actor, id)
-      const updated = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-        const fresh = await loadVisibleMcp(actor, resolved.id)
-        // RFC-324: content write. An MCP's content IS its config — command,
-        // args, env — so an edit grantee can change what this server runs in the
-        // daemon's environment. That is the RFC-324 D7/I6 ruling; the RFC-242 env save
-        // gate and every `scripts:author` field fence still apply unchanged.
-        // The patch schema carries no `name` (rename is its own route below).
-        await requireResourceEdit(deps.db, actor, 'mcp', fresh)
-        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-        const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
-        return updateMcp(deps.db, fresh.id, patch, {
-          existing: fresh,
-          updatedAt: await nextMutationTimestamp(fresh),
-        })
+      const updated = await invokeOperation(catalog.operations.update, module.authorityFor(actor), {
+        id,
+        update: parsed.data,
       })
-      await runtimeTests.reconcileDurableIntents()
-      return c.json(serializeMcpFor(withMcpOperationConfigHash(updated), actorOf(c).source))
+      return c.json(serializeMcpFor(updated, actor.source))
     },
   )
 
@@ -422,20 +378,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-        const fresh = await loadVisibleMcp(actor, resolved.id)
-        await requireResourceGovern(deps.db, actor, 'mcp', fresh)
-        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-        // RFC-222 (D5, N-6): confirm against the FRESH name inside the exclusive
-        // section, so a concurrent rename is caught as a mismatch.
-        assertDeleteConfirm(parsed.data, fresh.name, 'mcp')
-        await runtimeTests.prepareMcpDelete(fresh.id)
-        captureDeleteSnapshot(c, actor, fresh)
-        await deleteMcp(deps.db, fresh.id, actor, {
-          existing: fresh,
-          beforeDeleteInTx: (tx) => deletePreparedMcpRuntimeTestsInTx(tx, fresh.id),
-        })
+      const receipt = await invokeOperation(catalog.operations.delete, module.authorityFor(actor), {
+        id: resolved.id,
+        deletion: parsed.data,
       })
+      captureDeleteSnapshot(c, actor, receipt.deleted)
       return c.body(null, 204)
     },
   )
@@ -459,19 +406,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const resolved = await loadVisibleMcp(actor, id)
-      const renamed = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-        const fresh = await loadVisibleMcp(actor, resolved.id)
-        await requireResourceGovern(deps.db, actor, 'mcp', fresh)
-        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-        const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
-        return renameMcp(deps.db, fresh.id, rename, {
-          existing: fresh,
-          updatedAt: await nextMutationTimestamp(fresh),
-        })
+      const renamed = await invokeOperation(catalog.operations.rename, module.authorityFor(actor), {
+        id,
+        rename: parsed.data,
       })
-      await runtimeTests.reconcileDurableIntents()
-      return c.json(serializeMcpFor(withMcpOperationConfigHash(renamed), actorOf(c).source))
+      return c.json(serializeMcpFor(renamed, actor.source))
     },
   )
 
@@ -543,7 +482,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
         async () => {
           const start = await mcpOperationCoordinator.runExclusive(resolved.id, async () => {
             const captured = await loadVisibleMcp(actor, resolved.id)
-            const actualHash = mcpOperationConfigHashOf(captured)
+            const actualHash = captured.operationConfigHash
             if (actualHash !== expectedHash) {
               throw staleConflictError('mcp', 'the MCP changed; reload before probing', {
                 expectedConfigHash: expectedHash,
@@ -559,11 +498,10 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
               )
             }
             const persisted = await getProbeByMcpId(deps.db, captured.id)
-            const operation = mcpOperationCoordinator.beginOperation(
-              captured.id,
-              (probeOptionsOverride?.now ?? Date.now)(),
-              [captured.updatedAt + 1, (persisted?.startedAt ?? 0) + 1],
-            )
+            const operation = mcpOperationCoordinator.beginOperation(captured.id, mcpRouteNow(), [
+              captured.updatedAt + 1,
+              (persisted?.startedAt ?? 0) + 1,
+            ])
             return { captured, ...operation }
           })
 
@@ -583,18 +521,29 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
           }
 
           return mcpOperationCoordinator.runExclusive(resolved.id, async () => {
-            const current = await getMcpById(deps.db, resolved.id)
-            if (current === null || mcpOperationConfigHashOf(current) !== expectedHash) {
+            const authority = module.authorityFor(actor)
+            const current = await invokeOperation(catalog.operations.get, authority, {
+              id: resolved.id,
+            })
+            if (current === null) {
+              const identity = await catalog.participants.aclIdentity.load(resolved.id)
+              if (identity !== null) {
+                throw staleConflictError(
+                  'mcp',
+                  'MCP access changed while the probe was running; result was discarded',
+                )
+              }
               throw staleConflictError(
                 'mcp',
                 'the MCP changed while the probe was running; result was discarded',
                 { expectedConfigHash: expectedHash },
               )
             }
-            if (!(await canViewResource(deps.db, actor, 'mcp', current))) {
+            if (current.operationConfigHash !== expectedHash) {
               throw staleConflictError(
                 'mcp',
-                'MCP access changed while the probe was running; result was discarded',
+                'the MCP changed while the probe was running; result was discarded',
+                { expectedConfigHash: expectedHash },
               )
             }
             if (mcpOperationCoordinator.latestGeneration(current.id) !== start.generation) {
@@ -618,15 +567,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
     type: 'mcp',
     base: '/api/mcps',
     param: 'id',
-    load: (db, id) => getMcpById(db, id),
+    load: (_db, id) => catalog.participants.aclIdentity.load(id),
     coordinator: {
       runExclusive: (resourceId, task) => mcpOperationCoordinator.runExclusive(resourceId, task),
-      loadById: (db, resourceId) => getMcpById(db, resourceId),
-      nextUpdatedAt: async (row) => {
-        const mcp = await getMcpById(deps.db, row.id)
-        if (mcp === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
-        return nextMutationTimestamp(mcp)
-      },
+      loadById: (_db, resourceId) => catalog.participants.aclIdentity.load(resourceId),
+      nextUpdatedAt: (row) => catalog.participants.aclIdentity.nextUpdatedAt(row.id),
     },
     afterWriteInTx: (tx, change) =>
       transitionMcpAclRuntimeTestsInTx(tx, {
@@ -638,13 +583,4 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps): void {
       }),
     afterUpdate: () => runtimeTests.reconcileDurableIntents(),
   })
-}
-
-function assertExpectedHash(mcp: Mcp, expected: string): void {
-  if (mcpOperationConfigHashOf(mcp) !== expected) {
-    throw staleConflictError('mcp', 'the MCP changed; reload before modifying it', {
-      expectedConfigHash: expected,
-      currentConfigHash: mcpOperationConfigHashOf(mcp),
-    })
-  }
 }

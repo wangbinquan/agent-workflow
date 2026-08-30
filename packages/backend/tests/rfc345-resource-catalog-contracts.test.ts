@@ -34,6 +34,7 @@ import {
   type GrantTargetKind,
   type IntegrationTriggerResourceRequest,
   type IntentResourceChangesetReceipt,
+  type McpCatalogResource,
   type McpPackageMutation,
   type PackageResourceKind,
   type PluginPackageMutation,
@@ -41,13 +42,17 @@ import {
   type ResourceSummary,
   type SkillPackageMutation,
   type TaskExecutionResourceRequest,
+  type UpdateMcpCatalogInput,
   type VersionedIntentResourceChangesetPlan,
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
+import type { McpCommands } from '../src/modules/resource-catalog/public/commands'
+import type { McpQueries } from '../src/modules/resource-catalog/public/queries'
 import type {
   IntegrationTriggerResourceSnapshotInTx,
   IntentApplyResourceParticipantInTx,
+  McpAclIdentityParticipant,
   ResourceAuthorizationInTx,
   ResourcePackageApplyScenarioProvider,
   ResourcePackageApplyTx,
@@ -55,6 +60,10 @@ import type {
   ResourceScopeAuthorizationInTx,
   TaskExecutionResourceSnapshotInTx,
 } from '../src/modules/resource-catalog/public/participants'
+import type {
+  McpCatalogModule,
+  McpOperationDescriptors,
+} from '../src/modules/resource-catalog/public/operations'
 import type { LegacyResourcePackageMutationParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'
 
 type Equal<Left, Right> =
@@ -165,6 +174,28 @@ assertType<
     'accessOf' | 'assertView' | 'assertEdit' | 'assertGovern'
   >
 >(true)
+assertType<Equal<Extract<keyof McpCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
+  true,
+)
+assertType<Equal<Extract<keyof McpQueries, string>, 'list' | 'get'>>(true)
+assertType<Equal<Extract<keyof McpAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(true)
+assertType<
+  Equal<
+    Extract<keyof McpOperationDescriptors, string>,
+    'list' | 'get' | 'create' | 'update' | 'delete' | 'rename'
+  >
+>(true)
+assertType<
+  Equal<
+    Extract<keyof McpCatalogModule, string>,
+    'commands' | 'queries' | 'operations' | 'participants'
+  >
+>(true)
+
+const mcpResourceTypeProbe: McpCatalogResource | null = null
+const mcpUpdateTypeProbe: UpdateMcpCatalogInput | null = null
+void mcpResourceTypeProbe
+void mcpUpdateTypeProbe
 
 const correlatedSummary: ResourceSummary<'agent'> = {
   ref: { kind: 'agent', id: 'agent-1' },
@@ -415,6 +446,77 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(catalog).toContain('nextCursor')
     expect(catalog).not.toContain("from '@/services/")
     expect(projections).toContain('resourceCatalogProjectionDependencies')
+  })
+
+  test('T5-M active HTTP and MCP compatibility bindings execute the owned aggregate', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const route = readFileSync(resolve(sourceRoot, 'routes/mcps.ts'), 'utf8')
+    const application = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/mcps/mcpApplication.ts'),
+      'utf8',
+    )
+    const repository = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteMcpRepository.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/mcpOperations.ts'),
+      'utf8',
+    )
+    const operations = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
+      'utf8',
+    )
+    const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+
+    expect(route).not.toContain("from '@/services/mcp'")
+    expect(
+      route.match(/invokeOperation\(\s*catalog\.operations\./g)?.length,
+    ).toBeGreaterThanOrEqual(8)
+    expect(route).toContain('catalog.participants.aclIdentity.load')
+    expect(application).toContain('coordinator.runExclusive')
+    expect(application).toContain('requireEdit')
+    expect(application).toContain('requireGovern')
+    expect(application).not.toContain("from '@/db/")
+    expect(application).not.toContain('/infrastructure/')
+    expect(repository).toContain('dbTxSync')
+    expect(repository).toContain('findAgentReferencesInTx')
+    expect(repository).not.toContain("from '@/services/")
+    expect(composition).toContain('createSqliteMcpRepository')
+    expect(composition).toContain('createMcpApplication')
+    for (const operationId of [
+      'mcp-catalog.list-mcps.v1',
+      'mcp-catalog.get-mcp.v1',
+      'mcp-catalog.create-mcp.v1',
+      'mcp-catalog.update-mcp.v1',
+      'mcp-catalog.delete-mcp.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+      expect(mcpBindings).toContain(operationId)
+    }
+    expect(operations).toContain('mcp-catalog.rename-mcp.v1')
+    expect(server).toContain('composeMcpCatalog({')
+    expect(server).toContain('transitionMutationInTx: transitionMcpRuntimeTestsInTx')
+    expect(server).toContain('deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx')
+    expect(server).toContain('directOperationAuthority(identityAccess.directAuthority, actor)')
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name)
+        return entry.isDirectory() ? walk(path) : entry.name.endsWith('.ts') ? [path] : []
+      })
+    const legacyConsumers = walk(sourceRoot)
+      .filter((path) => readFileSync(path, 'utf8').includes("@/services/mcp'"))
+      .map((path) => path.slice(sourceRoot.length + 1))
+      .sort()
+    expect(legacyConsumers).toEqual([
+      'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/intent/applyChangeset.ts',
+      'services/intent/dumpBuilder.ts',
+      'services/intent/resourceCatalogProjections.ts',
+      'services/mcpRuntimeTest.ts',
+    ])
   })
 
   test('BundleApply keeps lifecycle ownership while seven writer arms stay in infrastructure', () => {

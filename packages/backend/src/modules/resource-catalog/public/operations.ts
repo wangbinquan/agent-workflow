@@ -2,6 +2,240 @@
 // this exact entrypoint while their call sites move to the data-only command,
 // query and participant contracts.
 
+import {
+  McpLocalConfigSchema,
+  McpLocalConfigWriteSchema,
+  McpNameSchema,
+  McpRemoteConfigSchema,
+  OperationConfigHashSchema,
+  ResourceVisibilitySchema,
+} from '@agent-workflow/shared'
+import { z } from 'zod'
+import { defineCommandOperation, defineQueryOperation } from '@/platform/operations/definitions'
+import type {
+  CommandOperationDescriptor,
+  QueryOperationDescriptor,
+} from '@/platform/operations/contracts'
+import type { McpCommands } from './commands'
+import type { McpAclIdentityParticipant, McpOperationContext } from './participants'
+import type { McpQueries } from './queries'
+import type {
+  CreateMcpCatalogInput,
+  DeleteMcpCatalogInput,
+  DeleteMcpCatalogReceipt,
+  GetMcpCatalogInput,
+  McpCatalogResource,
+  RenameMcpCatalogInput,
+  UpdateMcpCatalogInput,
+} from './types'
+
+const MCP_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'resource-operation-stale',
+  'internal-error',
+] as const)
+
+const emptyMcpInputSchema = z.object({}).strict()
+const getMcpInputSchema = z.object({ id: z.string().min(1) }).strict()
+const exactCreateMcpSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      name: McpNameSchema,
+      description: z.string().default(''),
+      type: z.literal('local'),
+      config: McpLocalConfigWriteSchema,
+      enabled: z.boolean().default(true),
+    })
+    .strict(),
+  z
+    .object({
+      name: McpNameSchema,
+      description: z.string().default(''),
+      type: z.literal('remote'),
+      config: McpRemoteConfigSchema,
+      enabled: z.boolean().default(true),
+    })
+    .strict(),
+])
+const exactUpdateMcpSchema = z.union([
+  z
+    .object({
+      description: z.string().optional(),
+      type: z.literal('local').optional(),
+      config: McpLocalConfigWriteSchema.optional(),
+      enabled: z.boolean().optional(),
+      expectedConfigHash: OperationConfigHashSchema,
+    })
+    .strict(),
+  z
+    .object({
+      description: z.string().optional(),
+      type: z.literal('remote').optional(),
+      config: McpRemoteConfigSchema.optional(),
+      enabled: z.boolean().optional(),
+      expectedConfigHash: OperationConfigHashSchema,
+    })
+    .strict(),
+])
+const updateMcpInputSchema = z
+  .object({ id: z.string().min(1), update: exactUpdateMcpSchema })
+  .strict()
+const deleteMcpInputSchema = z
+  .object({
+    id: z.string().min(1),
+    deletion: z
+      .object({
+        confirm: z.string().optional(),
+        expectedConfigHash: OperationConfigHashSchema,
+      })
+      .strict(),
+  })
+  .strict()
+const renameMcpInputSchema = z
+  .object({
+    id: z.string().min(1),
+    rename: z
+      .object({
+        newName: McpNameSchema,
+        expectedConfigHash: OperationConfigHashSchema,
+      })
+      .strict(),
+  })
+  .strict()
+
+const mcpResourceBase = {
+  id: z.string(),
+  name: McpNameSchema,
+  description: z.string(),
+  ownerUserId: z.string().nullable().optional(),
+  visibility: ResourceVisibilitySchema.optional(),
+  aclRevision: z.number().int().nonnegative().optional(),
+  enabled: z.boolean(),
+  schemaVersion: z.number().int(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+  operationConfigHash: OperationConfigHashSchema,
+} as const
+const exactMcpResourceSchema = z.discriminatedUnion('type', [
+  z.object({ ...mcpResourceBase, type: z.literal('local'), config: McpLocalConfigSchema }).strict(),
+  z
+    .object({ ...mcpResourceBase, type: z.literal('remote'), config: McpRemoteConfigSchema })
+    .strict(),
+])
+const deleteMcpReceiptSchema = z.object({ deleted: exactMcpResourceSchema }).strict()
+
+export interface McpOperationDescriptors {
+  readonly list: QueryOperationDescriptor<
+    Record<never, never>,
+    McpCatalogResource[],
+    McpOperationContext
+  >
+  readonly get: QueryOperationDescriptor<
+    GetMcpCatalogInput,
+    McpCatalogResource | null,
+    McpOperationContext
+  >
+  readonly create: CommandOperationDescriptor<
+    CreateMcpCatalogInput,
+    McpCatalogResource,
+    McpOperationContext
+  >
+  readonly update: CommandOperationDescriptor<
+    UpdateMcpCatalogInput,
+    McpCatalogResource,
+    McpOperationContext
+  >
+  readonly delete: CommandOperationDescriptor<
+    DeleteMcpCatalogInput,
+    DeleteMcpCatalogReceipt,
+    McpOperationContext
+  >
+  readonly rename: CommandOperationDescriptor<
+    RenameMcpCatalogInput,
+    McpCatalogResource,
+    McpOperationContext
+  >
+}
+
+export interface McpCatalogModule {
+  readonly commands: McpCommands
+  readonly queries: McpQueries
+  readonly operations: McpOperationDescriptors
+  readonly participants: Readonly<{
+    aclIdentity: McpAclIdentityParticipant
+  }>
+}
+
+export function createMcpOperationDescriptors(
+  commands: McpCommands,
+  queries: McpQueries,
+): McpOperationDescriptors {
+  return Object.freeze({
+    list: defineQueryOperation({
+      id: 'mcp-catalog.list-mcps.v1',
+      summary: 'List MCP servers visible to the caller',
+      permissions: ['mcps:read'],
+      publicErrors: MCP_PUBLIC_ERRORS,
+      inputSchema: emptyMcpInputSchema,
+      outputSchema: z.array(exactMcpResourceSchema),
+      invoke: async (authority: McpOperationContext) => [...(await queries.list(authority))],
+    }),
+    get: defineQueryOperation({
+      id: 'mcp-catalog.get-mcp.v1',
+      summary: 'Get one MCP server',
+      permissions: ['mcps:read'],
+      publicErrors: MCP_PUBLIC_ERRORS,
+      inputSchema: getMcpInputSchema,
+      outputSchema: exactMcpResourceSchema.nullable(),
+      invoke: (authority: McpOperationContext, input: GetMcpCatalogInput) =>
+        queries.get(authority, input),
+    }),
+    create: defineCommandOperation({
+      id: 'mcp-catalog.create-mcp.v1',
+      summary: 'Create an MCP server',
+      permissions: ['mcps:create'],
+      publicErrors: MCP_PUBLIC_ERRORS,
+      inputSchema: exactCreateMcpSchema,
+      outputSchema: exactMcpResourceSchema,
+      invoke: (authority: McpOperationContext, input: CreateMcpCatalogInput) =>
+        commands.create(authority, input),
+    }),
+    update: defineCommandOperation({
+      id: 'mcp-catalog.update-mcp.v1',
+      summary: 'Replace an MCP server',
+      permissions: ['mcps:update'],
+      publicErrors: MCP_PUBLIC_ERRORS,
+      inputSchema: updateMcpInputSchema,
+      outputSchema: exactMcpResourceSchema,
+      invoke: (authority: McpOperationContext, input: UpdateMcpCatalogInput) =>
+        commands.update(authority, input),
+    }),
+    delete: defineCommandOperation({
+      id: 'mcp-catalog.delete-mcp.v1',
+      summary: 'Delete an MCP server',
+      permissions: ['mcps:delete'],
+      publicErrors: MCP_PUBLIC_ERRORS,
+      inputSchema: deleteMcpInputSchema,
+      outputSchema: deleteMcpReceiptSchema,
+      invoke: (authority: McpOperationContext, input: DeleteMcpCatalogInput) =>
+        commands.delete(authority, input),
+    }),
+    rename: defineCommandOperation({
+      id: 'mcp-catalog.rename-mcp.v1',
+      summary: 'Rename an MCP server',
+      permissions: ['mcps:update'],
+      publicErrors: MCP_PUBLIC_ERRORS,
+      inputSchema: renameMcpInputSchema,
+      outputSchema: exactMcpResourceSchema,
+      invoke: (authority: McpOperationContext, input: RenameMcpCatalogInput) =>
+        commands.rename(authority, input),
+    }),
+  })
+}
+
 export { assertNameUnchangedForEditor } from '../application/resourceAccess'
 export {
   DEFAULT_USER_RESOURCE_VISIBILITY,

@@ -1,4 +1,7 @@
-import type { RequestAuthority } from '@/modules/identity-access/public/participants'
+import type {
+  DirectAuthenticatedAuthority,
+  RequestAuthority,
+} from '@/modules/identity-access/public/participants'
 import type {
   AgentPackageMutation,
   CapabilityTemplatePackageMutation,
@@ -6,6 +9,7 @@ import type {
   FrozenTaskExecutionResourceSnapshot,
   IntegrationTriggerResourceRequest,
   IntentResourceChangesetReceipt,
+  McpAclIdentity,
   McpPackageMutation,
   PluginPackageMutation,
   PreparedAgentPackageMutation,
@@ -29,6 +33,8 @@ import type {
 
 /** Opaque request context minted by identity-access; never an Actor-shaped bag. */
 export type ResourceRequestContext = RequestAuthority
+/** Branded current-user authority consumed by the exact MCP aggregate operations. */
+export type McpOperationContext = DirectAuthenticatedAuthority
 
 declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
 declare const intentApplyResourceParticipantInTxBrand: unique symbol
@@ -46,6 +52,13 @@ declare const resourcePackageEventsInTxBrand: unique symbol
 declare const resourcePackageAuditInTxBrand: unique symbol
 declare const resourcePackageApplyScenarioTxBrand: unique symbol
 declare const resourcePackageApplyTxBrand: unique symbol
+declare const mcpAclIdentityParticipantBrand: unique symbol
+
+export interface McpAclIdentityParticipant {
+  readonly [mcpAclIdentityParticipantBrand]: 'mcp-acl-identity-participant'
+  load(id: string): Promise<McpAclIdentity | null>
+  nextUpdatedAt(id: string): Promise<number>
+}
 
 export interface TaskExecutionResourceSnapshotInTx {
   readonly [taskExecutionResourceSnapshotInTxBrand]: 'task-execution-resource-snapshot'

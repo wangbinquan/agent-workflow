@@ -1,7 +1,10 @@
 import type { QueryContext } from '@/modules/identity-access/public/participants'
+import type { McpOperationContext } from './participants'
 import type {
   CatalogResourceRef,
   GetResourceAclRequest,
+  GetMcpCatalogInput,
+  McpCatalogResource,
   ResourceAclDocument,
   ResourceAclTarget,
   ResourceScopeAccess,
@@ -21,4 +24,9 @@ export interface ResourceAclQuery {
 
 export interface ResourceAuthorizationQuery {
   accessOf(context: QueryContext, target: ResourceAclTarget): Promise<ResourceScopeAccess>
+}
+
+export interface McpQueries {
+  list(authority: McpOperationContext): Promise<readonly McpCatalogResource[]>
+  get(authority: McpOperationContext, input: GetMcpCatalogInput): Promise<McpCatalogResource | null>
 }

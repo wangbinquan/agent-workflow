@@ -18,7 +18,7 @@ import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
 import { assertOperationCatalogClosed, registerOperationAlias } from '@/platform/operations/catalog'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
-import { directMcpOperationAuthority } from '@/routes/operationAuthority'
+import { directMcpOperationAuthority, directOperationAuthority } from '@/routes/operationAuthority'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
@@ -41,6 +41,8 @@ import {
   type IdentityAccessModule,
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
+import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
+import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
 import {
   composeSystemOperations,
   type SystemOperationsModule,
@@ -48,8 +50,14 @@ import {
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
-import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import { mountMcpRoutes } from '@/routes/mcps'
+import { getMcpRuntimeTestService, type McpRuntimeTestService } from '@/services/mcpRuntimeTest'
+import { getProbeByMcpId } from '@/services/mcpProbeStore'
+import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
+import {
+  deletePreparedMcpRuntimeTestsInTx,
+  transitionMcpRuntimeTestsInTx,
+} from '@/services/mcpRuntimeTestTransitions'
+import { mcpRouteNow, mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
@@ -723,12 +731,38 @@ export function createApp(deps: AppDeps): Hono {
     now: effectiveDeps.mcpRuntimeTestDependencies?.now,
     capacity: effectiveDeps.mcpRuntimeTestDependencies?.capacity,
   })
+  const mcpCatalog = composeMcpCatalog({
+    db: effectiveDeps.db,
+    coordinator: mcpOperationCoordinator,
+    nextMutationTimestamp: async (mcp) => {
+      const persisted = await getProbeByMcpId(effectiveDeps.db, mcp.id)
+      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpRouteNow(), [
+        mcp.updatedAt + 1,
+        (persisted?.startedAt ?? 0) + 1,
+        mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
+      ])
+    },
+    runtime: Object.freeze({
+      prepareDelete: (mcpId: string) => userRuntimeTests.prepareMcpDelete(mcpId),
+      reconcileDurableIntents: () => userRuntimeTests.reconcileDurableIntents(),
+    }),
+    transitionMutationInTx: transitionMcpRuntimeTestsInTx,
+    deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
+  })
   const identityUserOperations = composeIdentityUserOperations({
     db: effectiveDeps.db,
     identityAccess,
     afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
   })
-  mountApiRoutes(app, effectiveDeps, identityAccess, identityUserOperations, systemOperations)
+  mountApiRoutes(
+    app,
+    effectiveDeps,
+    identityAccess,
+    identityUserOperations,
+    systemOperations,
+    userRuntimeTests,
+    mcpCatalog,
+  )
 
   // RFC-344 — tools invoke stable operation ids on this already-mounted app.
   // No second Hono, route mount, module composition, or credential parse.
@@ -799,6 +833,8 @@ export function mountApiRoutes(
   identityAccess: IdentityAccessModule,
   identityUserOperations: IdentityUserOperations,
   systemOperations: SystemOperationsModule,
+  mcpRuntimeTests: McpRuntimeTestService,
+  mcpCatalog: McpCatalogModule,
 ): void {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -940,7 +976,11 @@ export function mountApiRoutes(
   mountRuntimesRoutes(app, deps)
   mountOverviewRoutes(app, deps) // RFC-190
   mountAgentRoutes(app, routeDeps)
-  mountMcpRoutes(app, deps)
+  mountMcpRoutes(app, deps, {
+    catalog: mcpCatalog,
+    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+    runtimeTests: mcpRuntimeTests,
+  })
   mountPluginRoutes(app, deps)
   mountSkillRoutes(app, deps)
   mountRepoRoutes(app, deps)

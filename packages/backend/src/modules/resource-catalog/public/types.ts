@@ -1,12 +1,17 @@
 import type {
   Agent,
   BundleOp,
+  CreateMcp,
+  DeleteMcp,
   IntentOp,
   Mcp,
+  McpOperationResource,
   Plugin,
+  RenameMcpRequest,
   ResourceAccess,
   ResourceAcl,
   ResourceVisibility,
+  UpdateMcpRequest,
   UpdateResourceAclBody,
   WorkflowDefinition,
   Workgroup,
@@ -89,6 +94,43 @@ export interface UpdateResourceAclRequest {
 }
 
 export type ResourceAclDocument = ResourceAcl
+
+/** T5-M aggregate contract. Persistence rows and transport contexts stay private. */
+export type McpCatalogResource = McpOperationResource
+export type CreateMcpCatalogInput = CreateMcp
+
+export interface GetMcpCatalogInput {
+  readonly id: string
+}
+
+export interface UpdateMcpCatalogInput {
+  readonly id: string
+  readonly update: UpdateMcpRequest
+}
+
+export interface DeleteMcpCatalogInput {
+  readonly id: string
+  readonly deletion: DeleteMcp
+}
+
+export interface RenameMcpCatalogInput {
+  readonly id: string
+  readonly rename: RenameMcpRequest
+}
+
+export interface DeleteMcpCatalogReceipt {
+  readonly deleted: McpCatalogResource
+}
+
+/** Purpose-specific identity used by the generic ACL transport adapter. */
+export interface McpAclIdentity {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly aclRevision: number
+  readonly updatedAt: number
+}
 
 export type TaskExecutionAgentSnapshot = Pick<
   Agent,
