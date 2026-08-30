@@ -1,7 +1,11 @@
 # RFC-340 技术设计 — 节点级意见型评审人授权与配置
 
-- 状态：In Progress；候选实现完成，等待共享 main 同步、全门与 exact-SHA CI
-- current-source：`5128efad55ba55fc95205c6dfd9b148916a181d1`
+- 状态：Done（2026-08-30；节点级授权、配置 UI、功能回归与 hosted closeout 已完成）
+- 开工 source pin：`5128efad55ba55fc95205c6dfd9b148916a181d1`
+- implementation commits：`0bde4f3e64ace65db4293d516916288164641ab3`、
+  `ec73490a92a62390d816c2d8526184f41556dc2a`、`761598e9877af7fa7ccf67c4b64d5f9e87f12012`
+- published containing exact SHA / Main CI：`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` /
+  `33298828254`（terminal success）
 - 目标 owner：RFC-294 `modules/collaboration`
 - 行为原则：扩展 assigned reviewer 的节点级意见能力；既有任务成员能力不回退
 
@@ -490,3 +494,29 @@ last-write-wins，不在本轮引入另一套 revision 协议。
 | tests / E2E    | capability matrix、assignment lifecycle、multi-user journey、architecture guards |
 
 不修改 scheduler、review node definition、decision transaction、continuation intent 或 workflow execution semantics。
+
+## 13. 落地后的实际边界
+
+最终 production topology 与本设计一致：
+
+```text
+frozen task + review node assignment
+  → collaboration resolveReviewAccess
+  → actor-specific ReviewDetail capabilities
+  → REST / MCP / single-doc / multi-doc consumers
+```
+
+- `review_node_reviewers` 以 `(taskId, reviewNodeId, reviewerUserId)` 持久化 0..N 集合；assignment 不写
+  `task_collaborators`，不授予 task detail、日志、diff、clarify、其它 review node 或 task WS 可见性。
+- assigned reviewer 可读被指派节点的当前 / 历史轮次、所有文档与所有意见，可新增意见并仅编辑自己的 pending 意见；不能删除任何意见、
+  编辑他人意见、逐篇 selection 或提交 approve / iterate / reject。owner / collaborator / observer / admin 的现有能力继续按并集投影。
+- `/tasks/:taskId/reviewers` 由 owner/admin 完整替换 frozen review-node reviewer map；独立页面复用 `UserPicker`，显示任务成员关系与能力取
+  并集提示，并在 390px hosted browser 旅程中完成深链、搜索、选择、保存、移除控件与无横向溢出验证。
+- review REST 与 RFC-326 MCP 工具消费同一个 collaboration capability；decision transaction、scheduler 与 continuation semantics 未因
+  reviewer 扩权。节点级页面不请求 task-only 数据、不链接 task detail、不订阅 task WS，并保持 bounded polling 与撤权后缓存丢弃。
+- 功能证据由 shared/backend/frontend durable matrices、真实 owner 配置 E2E、390px hosted UI 旅程和全仓 hosted workflows 组合承担；
+  不宣称存在一条覆盖所有 actor/轮次/拒绝路径的单体 browser spec。
+- exact SHA `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 包含全部 RFC-340 implementation commits。Main CI
+  `33298828254` 与 e2e-full `33298851279`、e2e-webkit `33298852761`、evidence `33298851076`、git-protocols
+  `33298851691`、integration-opencode `33298851086`、maintenance-soak `33298851934`、visual `33298851050`、
+  windows-platform `33298851033` 均 terminal success，满足 AC-1～AC-15。

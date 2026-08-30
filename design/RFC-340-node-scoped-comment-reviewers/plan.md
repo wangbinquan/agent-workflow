@@ -1,8 +1,14 @@
 # RFC-340 实施计划 — 节点级意见型评审人授权与配置
 
-状态：In Progress；T2～T8 候选实现与定向验证完成，T9～T11 等待 RFC-338 发布、最终全门、推送与 exact-SHA CI。
+状态：Done（2026-08-30）；D1～D14、T0～T11、AC-1～AC-15 与 published exact-SHA hosted closeout 已完成。
 
-current-source：`5128efad55ba55fc95205c6dfd9b148916a181d1`
+开工 source pin：`5128efad55ba55fc95205c6dfd9b148916a181d1`
+
+Implementation commits：`0bde4f3e64ace65db4293d516916288164641ab3`、
+`ec73490a92a62390d816c2d8526184f41556dc2a`、`761598e9877af7fa7ccf67c4b64d5f9e87f12012`。
+
+Published containing exact SHA / Main CI：`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` / `33298828254`
+（terminal success）。
 
 ## 1. 实施原则
 
@@ -97,7 +103,7 @@ current-source：`5128efad55ba55fc95205c6dfd9b148916a181d1`
 
 退出：assigned reviewer 只有节点级 read + comment；所有 decision mechanics 与旧角色能力不变。
 
-### T7 — 独立 reviewer 配置页（Done：本地 DOM；hosted browser 待 T9）
+### T7 — 独立 reviewer 配置页（Done）
 
 - [x] 注册 `/tasks/:taskId/reviewers` route；
 - [x] task detail 对 `canManage` actor 显示入口；
@@ -126,46 +132,52 @@ current-source：`5128efad55ba55fc95205c6dfd9b148916a181d1`
 
 退出：源码、DOM、键盘和真实点击四层都不存在 reviewer selection / decision 入口；owner/collaborator UI 不回退。
 
-### T9 — 多用户 E2E 与功能回归（Pending hosted browser）
+### T9 — 多用户 E2E 与功能回归（Done）
 
-- [ ] owner 按两个 review nodes 配置不同 reviewer sets；
-- [ ] reviewer inbox / pending count 仅含 assigned nodes；
-- [ ] 看所有意见、加意见、改自己、不能删意见或改他人；
-- [ ] 不能看 task detail / sibling review，不能 selection / decision；
-- [ ] collaborator 读取全部意见并 iterate / approve；
-- [ ] assignment removal 后入口 / 直链 / 写能力撤销，历史意见保留；
-- [ ] future round 自动继承集合；
-- [ ] 390px keyboard / focus / field error 与 1280px 主旅程；
-- [ ] existing owner/collaborator/observer review journeys 全绿。
+- [x] owner 按多个 review nodes 完整替换不同 reviewer sets；
+- [x] reviewer inbox / pending count 仅含 assigned nodes；
+- [x] 看所有意见、加意见、改自己、不能删意见或改他人；
+- [x] 不能看 task detail / sibling review，不能 selection / decision；
+- [x] collaborator 读取全部意见并 iterate / approve；
+- [x] assignment removal 后入口 / 直链 / 写能力撤销，历史意见保留；
+- [x] future round 自动继承集合；
+- [x] 390px keyboard / focus / save / overflow 与 canonical 1280px 浏览器矩阵；
+- [x] existing owner/collaborator/observer review journeys 全绿。
+
+证据按真实边界拆分：backend HTTP / domain matrix 承担多 actor、节点隔离、意见作者、撤权、历史 / future round 与 decision refusal；
+frontend DOM/source locks 承担 capability controls、keyboard、task link / query / WS 与 cache；`review-multidoc-round-history.spec.ts` 以真实
+owner 会话命中配置 GET/PUT，`ux-consistency.spec.ts` 以 390px 真实浏览器完成深链、UserPicker、保存与 overflow。全量 hosted E2E
+承担既有旅程回归；不把这些组合证据写成一条不存在的单体多用户 spec。
 
 退出：AC-1～AC-14 都有 durable automated assertion，关键 UX 有真实浏览器证据。
 
-### T10 — targeted gate 与功能实现门（In Progress）
+### T10 — targeted gate 与功能实现门（Done）
 
 - [x] shared / backend / frontend targeted tests；
 - [x] targeted lint / format、migration check、shared/frontend/backend typecheck；
-- [ ] migration upgrade + compiled binary smoke（若候选影响）；
-- [ ] review / MCP / task-collab E2E；
+- [x] migration upgrade + compiled binary smoke；
+- [x] review / MCP / task-collab E2E；
 - [x] 只审功能的实现门：能力矩阵、节点范围、历史、UI、无 decision bypass、existing behavior；
-- [ ] RFC-338 / RFC-339 发布后重跑完整 architecture / backend typecheck（MCP 已在 RFC-339 候选上通过）；
-- [ ] `git diff --check` 与 task-owned path / concurrent output 最终复核；
+- [x] RFC-338 / RFC-339 发布后完整 architecture / backend typecheck 与 hosted backend 8/8；
+- [x] `git diff --check` 与 task-owned path / concurrent output 最终复核；
 - [x] RFC AC → test traceability 表。
 
 退出：candidate content 不再变化，targeted gate 全绿，0 个未解决功能 finding。
 
-### T11 — 文档、发布与 exact-SHA CI（Pending；另需提交 / 推送授权）
+### T11 — 文档、发布与 exact-SHA CI（Done；共享索引回填另走协调临界区）
 
-- [ ] proposal / design / plan 更新实施事实和测试证据；
-- [ ] `design/plan.md` / `STATE.md` 更新为 In Progress / Done；
-- [ ] 进入共享 index publication critical section，确认 cached entries 只含明确交付集；
-- [ ] exact-path commit，包含实际 AI co-author trailer 并复核 message / path list；
-- [ ] 经用户授权后 fetch / sync / push；
-- [ ] 验证 remote ancestry 与 `main == origin/main`；
-- [ ] 等 exact-SHA main CI 及相关 scheduled workflow terminal success；
-- [ ] CI 失败只修与本 RFC 有关的功能问题，候选变化后做成比例复验；
-- [ ] 全部证据闭合后置 Done。
+- [x] proposal / design / plan 更新实施事实和测试证据；
+- [x] `design/plan.md` / `STATE.md` 在 implementation publication 期间保持 RFC-340 In Progress，最终 Done 翻转登记为共享 closeout；
+- [x] 每次进入共享 index publication critical section前确认 cached entries 只含明确交付集；
+- [x] implementation exact-path commits 包含实际 AI co-author trailer并复核 message / path list；
+- [x] 经用户授权后 fetch / sync / push；
+- [x] 验证三条 implementation commits 是 published exact SHA 的祖先；
+- [x] 等 containing exact-SHA Main CI 与 8 条 scheduled workflow terminal success；
+- [x] 逐个 successor 只修精确 hosted failure，候选变化后重新执行同 SHA 全门；
+- [x] AC-1～AC-15 全部证据闭合后置 Done。
 
-退出：AC-15 满足；若提交 / 推送未授权，明确保持本地 Draft / In Progress，不冒充交付完成。
+退出：AC-15 已满足。RFC 自有三件套在独立 docs critical section收口；共享 `design/plan.md` / `STATE.md` 因 RFC-347/348
+并发 WIP 不整文件代交，由各 owner 稳定交接后的短共享 closeout 临界区翻转，不改变本 RFC 已发布的功能与 hosted verdict。
 
 ## 3. AC → 测试追踪（实施时填写）
 
@@ -178,19 +190,30 @@ current-source：`5128efad55ba55fc95205c6dfd9b148916a181d1`
 | AC-5  | reviewer add-comment + author-role HTTP                              | Passed  |
 | AC-6  | own-edit / other-edit / delete refusal HTTP                          | Passed  |
 | AC-7  | selection / decision refusal HTTP                                    | Passed  |
-| AC-8  | frontend capability-driven single/multi-doc DOM；hosted browser 待跑 | Partial |
-| AC-9  | dedicated config page DOM / keyboard / 390px contracts               | Partial |
-| AC-10 | revocation-safe query/cache behavior                                 | Partial |
+| AC-8  | frontend capability-driven single/multi-doc DOM + hosted E2E          | Passed  |
+| AC-9  | no task link/query/WS + polling/cache source/DOM locks                 | Passed  |
+| AC-10 | 390px hosted deep-link/UserPicker/save/overflow + 1280px matrix       | Passed  |
 | AC-11 | owner/admin-only config + invalid relationship cases                 | Passed  |
 | AC-12 | remove / re-add access lifecycle                                     | Passed  |
 | AC-13 | exhaustive owner/collaborator/observer/reviewer/admin union          | Passed  |
-| AC-14 | RFC-317 本 RFC R2 边已清零；全门待并发候选收口                       | Partial |
-| AC-15 | exact-SHA hosted CI                                                  | Pending |
+| AC-14 | RFC-317/canonical architecture locks；collaboration owner 边归零       | Passed  |
+| AC-15 | `c5c4faaf...` Main CI + 8 scheduled workflows                        | Passed  |
 
-## 4. 当前停点
+## 4. 实际 publication 与 hosted closeout
 
-T2～T8 候选已完成且本 RFC 定向断言通过。RFC-339 已闭合 dispatcher bootstrap 漏接，backend typecheck 与 RFC-326 MCP suite
-（15 tests / 145 expects）均已通过；共享 index 为空、`main == origin/main == 5128efad5`。工作树中的 RFC-338 / RFC-339 仍未发布，
-并会更新本 RFC 也需要的 migration journal、schema、task-execution read models、server 与 i18n 等共享文件。按 shared-main 规则不暂存、
-不代交、不回滚这些并发产物；待其发布后 fast-forward / revalidate，再执行 T9～T11 的 hosted browser、exact-path commit、push 与
-exact-SHA CI。
+| stage                          | commit / run                                                                                          | 结果                                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| core implementation            | `0bde4f3e64ace65db4293d516916288164641ab3`                                                            | assignment、collaboration policy、REST/MCP、review UI、migration/contracts/tests      |
+| reviewer page styles           | `ec73490a92a62390d816c2d8526184f41556dc2a`                                                            | dedicated config layout、status chips、sticky actions、390px controls                 |
+| MCP/bootstrap joint seam       | `761598e9877af7fa7ccf67c4b64d5f9e87f12012`                                                            | REST/MCP 共享 composed deps 与 bootstrap-owned collaboration context                 |
+| containing exact SHA           | `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68`                                                            | 三条 implementation commits 均为其祖先                                                |
+| Main CI                        | `33298828254`                                                                                         | static/build/frontend/backend 8/8、三平台 Playwright、required aggregator 全部 success |
+| e2e full / WebKit              | `33298851279` / `33298852761`                                                                         | 两条完整矩阵 terminal success                                                         |
+| evidence / git / runtime       | `33298851076` / `33298851691` / `33298851086`                                                         | terminal success                                                                      |
+| maintenance / visual / Windows | `33298851934` / `33298851050` / `33298851033`                                                         | terminal success                                                                      |
+
+定向证据为 shared 4、backend reviewer/comment 20（77 expects）、frontend review/config 52、RFC-326 MCP 15（145 expects），并包含
+rolling migration、三端 typecheck、lint/format、architecture 与 `git diff --check`。hosted browser 以真实 owner 配置 API 命中、390px
+配置 UI 和全量现有评审旅程组合闭合；actor/节点/意见/撤权/禁止 decision 的穷尽矩阵由 durable backend/frontend tests 负责。
+
+RFC-340 据此 Done。共享 RFC 索引与 `STATE.md` 的最终状态翻转仍遵守共享文件 owner 交接，不回滚或代交 RFC-347/348 并发 WIP。

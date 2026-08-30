@@ -1,7 +1,11 @@
 # RFC-340 节点级意见型评审人授权与配置
 
-- 状态：In Progress（2026-08-28；候选实现与定向功能验证已完成，等待并发 RFC-338 / RFC-339 发布后同步、全门与 exact-SHA CI）
-- current-source：`5128efad55ba55fc95205c6dfd9b148916a181d1`
+- 状态：Done（2026-08-30；D1～D14、AC-1～AC-15、发布与 exact-SHA hosted closeout 已完成）
+- 开工 source pin：`5128efad55ba55fc95205c6dfd9b148916a181d1`
+- implementation commits：`0bde4f3e64ace65db4293d516916288164641ab3`、
+  `ec73490a92a62390d816c2d8526184f41556dc2a`、`761598e9877af7fa7ccf67c4b64d5f9e87f12012`
+- published containing exact SHA / Main CI：`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` /
+  `33298828254`（terminal success）
 - 关联：RFC-005（人工评审门）、RFC-009（意见编辑）、RFC-013 / RFC-142（版本与轮次历史）、
   RFC-036（已移除的单人节点指派）、RFC-079 / RFC-129（多文档评审）、RFC-099（任务成员作答权）、
   RFC-285（意见作者边界）、RFC-294（`collaboration` 目标上下文）、RFC-324（observer）、
@@ -206,14 +210,24 @@ Alice 从方案评审移除 Bob。Bob 刷新收件箱后该节点消失，旧直
 
 用户已于 2026-08-28 明确批准实现，并授权实现完成后提交推送；production 按 `plan.md` T2～T11 推进。
 
-## 10. 当前候选事实（2026-08-28）
+## 10. 落地与关闭记录（2026-08-30）
 
-- migration / shared contracts、`collaboration` policy + ports、task-execution 窄 read models、配置 REST、review REST / MCP 共路由授权、
-  独立配置页以及 single / multi-doc capability UI 均已实现；
-- reviewer 的 HTTP 旅程已锁定：只列 assigned node、能读本人和他人的全部意见、可新增并以 `authorRole=reviewer` 署名、只能改自己，
-  不能删除 / selection / decision；
-- 配置 HTTP 已锁定 owner-only full replace、不会产生 `task_collaborators` 行、task 删除时 assignment cascade；移除 / 重加及历史 run
-  访问均有回归；
-- shared 4、backend reviewer/comment 20（77 expects）、frontend review/config 52、RFC-326 MCP 15（145 expects）项定向测试通过；
-  migration check、targeted lint 与三端类型检查通过。当前共享树继续被 RFC-338 / RFC-339 修改，本 RFC 不改动或代交这些并发产物；
-- `origin/main` 仍为 `5128efad55ba55fc95205c6dfd9b148916a181d1`，未进入 publication critical section，未暂存、未提交、未推送。
+- migration `0217_rfc340_review_node_reviewers`、shared contracts、`collaboration` policy / ports / sqlite adapter、task-execution
+  窄 read models、owner/admin 配置 REST、review REST / MCP 共路由授权、独立配置页以及 single / multi-doc capability UI 已完整上库。
+- reviewer 的 durable HTTP 旅程已锁定：只列 assigned node，能读该节点当前 / 历史文档及所有作者意见，可新增并以
+  `authorRole='reviewer'` 署名，只能编辑自己的 pending 意见；删除任意意见、编辑他人意见、selection、approve、iterate、reject 与
+  decision-batch 绕行均被拒绝且无持久化效果。
+- 配置面已锁定 owner/admin full replace、active-user / frozen-review-node validation、不会产生 `task_collaborators` 行、task 删除级联，
+  并覆盖移除、重加、未来轮次与历史 run。任务 owner / collaborator / observer / admin 的既有能力和组合角色取并集均有回归。
+- 定向门包括 shared 4 项、backend reviewer/comment 20 项（77 expects）、frontend review/config 52 项、RFC-326 MCP 15 项
+  （145 expects）、rolling migration 以及三端 typecheck / lint / format / migration / architecture checks。真实浏览器证据由
+  `review-multidoc-round-history.spec.ts` 的真实 owner GET/PUT 配置命中与 `ux-consistency.spec.ts` 的 390px 深链、UserPicker、保存和
+  overflow 旅程承担；节点授权、评论作者边界、撤权与禁止决策由 durable backend matrix 承担。没有把这些拆分证据冒充成一条不存在的
+  单体多用户 browser spec。
+- 三条 implementation commit 均是 `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 的祖先。该 exact SHA 的 Main CI
+  `33298828254` terminal success；相同 SHA 的 e2e-full `33298851279`、e2e-webkit `33298852761`、evidence
+  `33298851076`、git-protocols `33298851691`、integration-opencode `33298851086`、maintenance-soak `33298851934`、visual
+  `33298851050`、windows-platform `33298851033` 也全部 COMPLETED/SUCCESS，completed suites 的 `failed=[]`、`unfinished=[]`。
+
+因此 reviewer 仍是节点级意见角色，而不是第四种 task-wide membership：能看被指派评审节点及全部意见，只能新增 / 编辑自己的
+pending 意见，不能删除、逐篇取舍、通过、重新生成或退回。RFC-340 据此满足 AC-1～AC-15 并关闭。
