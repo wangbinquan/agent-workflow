@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 42,
-    "transactionCallbacks": 285
+    "transactionCallbacks": 289
   },
   "entries": [
     {
@@ -870,6 +870,54 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#rollForwardSkillTails",
       "status": "clear",
       "symbol": "rollForwardSkillTails",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#dbTxSync:164",
+      "line": 164,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#createSqliteMcpRepository",
+      "status": "clear",
+      "symbol": "createSqliteMcpRepository",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#dbTxSync:193",
+      "line": 193,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#createSqliteMcpRepository",
+      "status": "clear",
+      "symbol": "createSqliteMcpRepository",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#dbTxSync:222",
+      "line": 222,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#createSqliteMcpRepository",
+      "status": "clear",
+      "symbol": "createSqliteMcpRepository",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#dbTxSync:283",
+      "line": 283,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#createSqliteMcpRepository",
+      "status": "clear",
+      "symbol": "createSqliteMcpRepository",
       "targetContext": "resource-catalog",
       "transactionCallee": "dbTxSync"
     },
@@ -3522,7 +3570,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec",
+  "sourceDigest": "sha256:35542681b5f5c0e53074b1346cfe5569dc76eab861e354bd04096015f28df262",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

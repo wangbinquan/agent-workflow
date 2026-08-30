@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:35542681b5f5c0e53074b1346cfe5569dc76eab861e354bd04096015f28df262`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1073 |
+| backend production TS 文件 | 1078 |
 | `services/` 文件 | 381 |
-| `modules/**` 文件 / 非空 context | 517 / 14 |
+| `modules/**` 文件 / 非空 context | 522 / 14 |
 | backend 值级 SCC / 全仓值级 SCC | 3 / 5 |
 | `KNOWN_VIOLATIONS` | 29 |
 | route→DB / transport→DB 值级边 | 15 / 2 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 460 |
-| `architectureExceptions` | 1756 |
+| `architectureExceptions` | 1783 |
 | `backgroundJobs` | 273 |
-| `crossContextImports` | 1800 |
+| `crossContextImports` | 1828 |
 | `facades` | 381 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 19679 |
-| `mutationEntrypoints` | 1105 |
+| `moduleSymbolOwners` | 19744 |
+| `mutationEntrypoints` | 1118 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 537 |
-| `transactionExternalEffects` | 285 |
+| `publicSurfaces` | 549 |
+| `transactionExternalEffects` | 289 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -58,17 +58,17 @@
 | task-execution / engine | 20 |
 | collaboration / domain | 14 |
 | development-automation / composition | 13 |
+| resource-catalog / application | 13 |
 | code-capability / domain | 11 |
 | integration / application | 10 |
 | integration / composition | 10 |
-| resource-catalog / application | 10 |
 | task-execution / infrastructure | 10 |
 | collaboration / infrastructure | 9 |
 | digital-employee / application | 9 |
 | intent / domain | 9 |
 | integration / infrastructure | 8 |
+| resource-catalog / infrastructure | 8 |
 | development-automation / engine | 7 |
-| resource-catalog / infrastructure | 7 |
 | digital-employee / infrastructure | 6 |
 | event-center / application | 6 |
 | identity-access / public | 6 |
@@ -92,6 +92,7 @@
 | identity-access / domain | 3 |
 | integration / domain | 3 |
 | integration / public | 3 |
+| resource-catalog / composition | 3 |
 | source-control / infrastructure | 3 |
 | system-operations / application | 3 |
 | code-capability / infrastructure | 2 |
@@ -100,7 +101,6 @@
 | execution-contract / application | 2 |
 | execution-contract / public | 2 |
 | identity-access / composition | 2 |
-| resource-catalog / composition | 2 |
 | source-control / composition | 2 |
 | system-operations / domain | 2 |
 | system-operations / infrastructure | 2 |
@@ -184,12 +184,12 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 1082 |
-| legacy-inbound | 548 |
-| external-layer-debt | 83 |
+| legacy-outbound | 1102 |
+| legacy-inbound | 553 |
+| external-layer-debt | 85 |
 | offered-consumption | 48 |
+| authority-type-only | 13 |
 | required-implementation | 13 |
-| authority-type-only | 12 |
 | off-dag-offered | 11 |
 | temporary-internal-debt | 3 |
 
@@ -197,9 +197,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 1082 |
-| legacy-inbound | 548 |
-| external-layer-debt | 83 |
+| legacy-outbound | 1102 |
+| legacy-inbound | 553 |
+| external-layer-debt | 85 |
 | no-routes-to-db | 15 |
 | off-dag-offered | 11 |
 | no-circular | 10 |
@@ -211,12 +211,12 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 799 |
-| W4-C | 154 |
+| W4-E1 | 813 |
+| W4-C | 163 |
 | W4-E0 | 125 |
 | W4 | 118 |
 | W4-E8 | 106 |
-| W9 | 102 |
+| W9 | 106 |
 | W5 | 94 |
 | W4-E9 | 85 |
 | W4-B | 79 |
@@ -235,7 +235,7 @@
 | context | 数量 |
 | --- | --- |
 | task-execution | 129 |
-| resource-catalog | 89 |
+| resource-catalog | 101 |
 | collaboration | 77 |
 | identity-access | 55 |
 | digital-employee | 44 |
@@ -248,11 +248,11 @@
 | integration | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 537）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 139 / 549）
 
 | context | 数量 |
 | --- | --- |
-| resource-catalog | 30 |
+| resource-catalog | 33 |
 | collaboration | 20 |
 | digital-employee | 17 |
 | code-capability | 15 |

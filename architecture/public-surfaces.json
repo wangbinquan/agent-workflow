@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 353,
+    "consumers": 356,
     "exactEntrypointFiles": 44,
     "governedFieldSurfaces": 5,
-    "methods": 275,
+    "methods": 283,
     "opaqueTypeRefs": 6,
-    "recursiveFields": 5011,
-    "symbols": 537
+    "recursiveFields": 5166,
+    "symbols": 549
   },
   "entries": [
     {
@@ -21460,7 +21460,10 @@
         "public:identity-access:participants:DirectAuthorityBinding",
         "public:identity-access:participants:DirectAuthorityIdentity",
         "public:identity-access:participants:LegacyActorProjection",
-        "public:identity-access:participants:LegacyActorProjectionFactory"
+        "public:identity-access:participants:LegacyActorProjectionFactory",
+        "public:resource-catalog:commands:McpCommands",
+        "public:resource-catalog:participants:McpOperationContext",
+        "public:resource-catalog:queries:McpQueries"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -22737,6 +22740,7 @@
       "consumerEdgeIds": [
         "import:1dc5b5e49c264dc6c757",
         "import:4f2d65e593b82a16fee0",
+        "import:5e235bf49d40017d0720",
         "import:b45d3c7ac9ba7c8496c5",
         "import:ffeb63bdfdb7de4e4c02"
       ],
@@ -22784,6 +22788,7 @@
         {
           "consumerEdgeIds": [
             "import:1dc5b5e49c264dc6c757",
+            "import:5e235bf49d40017d0720",
             "import:b45d3c7ac9ba7c8496c5",
             "import:ffeb63bdfdb7de4e4c02"
           ],
@@ -22857,6 +22862,12 @@
           "ownerEntryId": "owner:packages/backend/src/routes/operationAuthority.ts#$file"
         },
         {
+          "context": "resource-catalog",
+          "edgeId": "import:5e235bf49d40017d0720",
+          "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file"
+        },
+        {
           "context": "development-automation",
           "edgeId": "import:b45d3c7ac9ba7c8496c5",
           "file": "packages/backend/src/modules/development-automation/application/activityOperations.ts",
@@ -22872,7 +22883,10 @@
       "publicTypeConsumerIds": [
         "public:identity-access:participants:DirectAuthorityAdmission",
         "public:identity-access:participants:DirectAuthorityBinding",
-        "public:identity-access:participants:DirectAuthorityIdentity"
+        "public:identity-access:participants:DirectAuthorityIdentity",
+        "public:resource-catalog:commands:McpCommands",
+        "public:resource-catalog:participants:McpOperationContext",
+        "public:resource-catalog:queries:McpQueries"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -24843,7 +24857,10 @@
         "public:identity-access:participants:DirectAuthorityAdmission",
         "public:identity-access:participants:DirectAuthorityBinding",
         "public:identity-access:participants:DirectAuthorityIdentity",
-        "public:identity-access:participants:LegacyActorProjectionFactory"
+        "public:identity-access:participants:LegacyActorProjectionFactory",
+        "public:resource-catalog:commands:McpCommands",
+        "public:resource-catalog:participants:McpOperationContext",
+        "public:resource-catalog:queries:McpQueries"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -27723,6 +27740,441 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 75,
+        "maxUnionVariants": 28
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input",
+          "type": "z.infer<typeof CreateMcpSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$return",
+          "type": "z.infer<typeof McpOperationResourceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:input.deletion",
+          "type": "z.infer<typeof DeleteMcpSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$parameter:input.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:delete.$return.deleted",
+          "type": "z.infer<typeof McpOperationResourceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:input.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$parameter:input.rename",
+          "type": "z.infer<typeof RenameMcpRequestSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rename.$return",
+          "type": "z.infer<typeof McpOperationResourceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:input.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:input.update",
+          "type": "z.infer<typeof UpdateMcpRequestSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$return",
+          "type": "z.infer<typeof McpOperationResourceSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/commands.ts",
+      "id": "public:resource-catalog:commands:McpCommands",
+      "members": [
+        "create",
+        "delete",
+        "rename",
+        "update"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "create",
+          "signatureDigest": "sha256:9e7f27836aa85d5bbf5f9ae0a0528d7734cfe67ffe878bbe2846281d5f8be8e0"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "delete",
+          "signatureDigest": "sha256:48b49001023918819722f7db25271f033cf774190ef54e668b1b2e980bb54905"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "rename",
+          "signatureDigest": "sha256:ec5a62e4447db433729299a116c51cbefc144ff1ad4d9503e2c4d19305290d01"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "update",
+          "signatureDigest": "sha256:0c9272a83c578d2873e01304d5dc5bdb80691ceba58d5b2c3a6429bed67ce511"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#McpCommands",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:5317a34a9fcd6e3c78ed2e7f22f68685d3ad8190449c584e3cfe799d5dd002e3",
+      "status": "target-context-current-surface",
+      "symbol": "McpCommands",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "Extract",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -28178,6 +28630,239 @@
       "symbol": "IntentApplyResourceParticipantInTx",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$parameter:id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:0.aclRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:0.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:0.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:0.ownerUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:0.ownerUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:0.updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:0.visibility",
+          "type": "z.infer<typeof ResourceVisibilitySchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:load.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:nextUpdatedAt.$parameter:id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:nextUpdatedAt.$return",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:McpAclIdentityParticipant",
+      "members": [
+        "[mcpAclIdentityParticipantBrand]",
+        "load",
+        "nextUpdatedAt"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "load",
+          "signatureDigest": "sha256:b398298ac1cae26e05ddd93aeffaec541206e74aa9ae0cf43d26d5f3776003e7"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "nextUpdatedAt",
+          "signatureDigest": "sha256:5e4c5932ff74a8df3793b9b5583fda1e625926406c87db8c43d7ec7e6dc38574"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpAclIdentityParticipant",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:f4e5823e94b551022bdb6dfa27d09577f0ce30c115f0d09e1576da7a8c8175c7",
+      "status": "target-context-current-surface",
+      "symbol": "McpAclIdentityParticipant",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:a32b4819e358f3c2babc"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a32b4819e358f3c2babc"
+          ],
+          "fieldPath": "source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a32b4819e358f3c2babc"
+          ],
+          "fieldPath": "user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "userId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:McpOperationContext",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpOperationContext",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a32b4819e358f3c2babc",
+          "file": "packages/backend/src/routes/mcps.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:commands:McpCommands",
+        "public:resource-catalog:queries:McpQueries"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:291173c697e9a6f84199a5b7c103ac3a810dc9c55cc74e132e584e7320c1ff77",
+      "status": "target-context-current-surface",
+      "symbol": "McpOperationContext",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Extract",
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -30005,6 +30690,234 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 36,
+        "maxUnionVariants": 16
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$parameter:input.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$return.$variant:0",
+          "type": "z.infer<typeof McpOperationResourceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return",
+          "type": "readonly McpCatalogResource[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/queries.ts",
+      "id": "public:resource-catalog:queries:McpQueries",
+      "members": [
+        "get",
+        "list"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "get",
+          "signatureDigest": "sha256:19362669e2f35c6206d8186e3933223d631152b3bbb590cb11b128e64accfa22"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "list",
+          "signatureDigest": "sha256:ec1c7fe3c145137b80e08babe486a079525d9aad7442fa37939f94103d6c04d1"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#McpQueries",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:794010fcfdf345d242bf7fd6e637be35a90bec9a15a34c63ad0738bf993bd6e5",
+      "status": "target-context-current-surface",
+      "symbol": "McpQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Extract",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -30748,6 +31661,136 @@
       "fields": [
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "z.infer<typeof CreateMcpSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:CreateMcpCatalogInput",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#CreateMcpCatalogInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:commands:McpCommands"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e5c07c2ece317ea05a6cc7a43323fbf296e45e32d1aa15b200df1a775e27ee64",
+      "status": "target-context-current-surface",
+      "symbol": "CreateMcpCatalogInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "deletion",
+          "type": "z.infer<typeof DeleteMcpSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "id",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:DeleteMcpCatalogInput",
+      "members": [
+        "deletion",
+        "id"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#DeleteMcpCatalogInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:commands:McpCommands"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:fa345f823a73a70def322c692e1c7f87b958ad843ddbf231127e30da2f59d0f0",
+      "status": "target-context-current-surface",
+      "symbol": "DeleteMcpCatalogInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "deleted",
+          "type": "z.infer<typeof McpOperationResourceSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:DeleteMcpCatalogReceipt",
+      "members": [
+        "deleted"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#DeleteMcpCatalogReceipt",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:commands:McpCommands"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:de5391919356596282da7de304d8cc676d741575831144a2380dd409ea4a663f",
+      "status": "target-context-current-surface",
+      "symbol": "DeleteMcpCatalogReceipt",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "currentRevision",
           "type": "number"
         },
@@ -31100,6 +32143,46 @@
       "fields": [
         {
           "consumerEdgeIds": [],
+          "fieldPath": "id",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:GetMcpCatalogInput",
+      "members": [
+        "id"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#GetMcpCatalogInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:queries:McpQueries"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:f71dd97b98794cabc861efd007ec76fab19a983e9965949e53b79d8dc82c4682",
+      "status": "target-context-current-surface",
+      "symbol": "GetMcpCatalogInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "target.ownerUserId.$variant:0",
           "type": "string"
         },
@@ -31374,6 +32457,134 @@
       "symbol": "IntentResourceChangesetReceipt",
       "transaction": "none",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "aclRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "ownerUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "ownerUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "visibility",
+          "type": "z.infer<typeof ResourceVisibilitySchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:McpAclIdentity",
+      "members": [
+        "aclRevision",
+        "id",
+        "name",
+        "ownerUserId",
+        "updatedAt",
+        "visibility"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpAclIdentity",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:participants:McpAclIdentityParticipant"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:0c3984dbbfd42fd402a08f25f85be30b52f681c0e1e1a2ab36d152a7aa282490",
+      "status": "target-context-current-surface",
+      "symbol": "McpAclIdentity",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:3404a549a492a98d5919"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "z.infer<typeof McpOperationResourceSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:McpCatalogResource",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpCatalogResource",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:3404a549a492a98d5919",
+          "file": "packages/backend/src/routes/mcps.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:commands:McpCommands",
+        "public:resource-catalog:queries:McpQueries",
+        "public:resource-catalog:types:DeleteMcpCatalogReceipt"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:486555ad692e99e57d98160ed8bb18bd42a0d622ad061b39418b17b5362c3390",
+      "status": "target-context-current-surface",
+      "symbol": "McpCatalogResource",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -31899,6 +33110,54 @@
       "transaction": "none",
       "unresolvedTypeRefs": [
         "Extract"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "rename",
+          "type": "z.infer<typeof RenameMcpRequestSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:RenameMcpCatalogInput",
+      "members": [
+        "id",
+        "rename"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#RenameMcpCatalogInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:commands:McpCommands"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:ae7b9db8763ac63ec08ef0a2ad0c88a9acb0be38e07d5e5221ac0af4af7f1e76",
+      "status": "target-context-current-surface",
+      "symbol": "RenameMcpCatalogInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
       ],
       "version": 1
     },
@@ -33196,6 +34455,54 @@
       "transaction": "none",
       "unresolvedTypeRefs": [
         "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "update",
+          "type": "z.infer<typeof UpdateMcpRequestSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:UpdateMcpCatalogInput",
+      "members": [
+        "id",
+        "update"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#UpdateMcpCatalogInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:commands:McpCommands"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:ab37d539e4fdf3952ad7c45d2bed2ca5b3a2d77f56edd90e69a130012a23705d",
+      "status": "target-context-current-surface",
+      "symbol": "UpdateMcpCatalogInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
       ],
       "version": 1
     },
@@ -50783,7 +52090,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec",
+  "sourceDigest": "sha256:35542681b5f5c0e53074b1346cfe5569dc76eab861e354bd04096015f28df262",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -766,6 +766,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:04008840d850b6541722",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#McpCatalogModule",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "toSymbol": "McpCatalogModule",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
@@ -3930,6 +3947,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1dc2a2f6fcf5abb8ef7b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineCommandOperation",
+      "toPath": "packages/backend/src/platform/operations/definitions.ts",
+      "toSymbol": "defineCommandOperation",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclRegistry.ts",
       "fromSymbol": "$file",
@@ -4180,6 +4214,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths",
       "toPath": "packages/backend/src/util/paths.ts",
       "toSymbol": "Paths",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1f982e319a841c425936",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -5713,6 +5764,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2a86c18358b0c8092d8d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "dbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts#$file",
@@ -6750,6 +6818,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
+      "fromPath": "packages/backend/src/routes/mcps.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3404a549a492a98d5919",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpCatalogResource",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toSymbol": "McpCatalogResource",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#$file",
@@ -7138,6 +7223,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
       "toPath": "packages/backend/src/db/txSync.ts",
       "toSymbol": "DbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:366605b2302f748940fc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
+      "toPath": "packages/backend/src/db/client.ts",
+      "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -8626,6 +8728,23 @@
       "fromPath": "packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts",
       "fromSymbol": "$file",
       "id": "exception:import:45eefc0781a0ec411c12",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
+      "toPath": "packages/backend/src/db/client.ts",
+      "toSymbol": "DbClient",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:46285a25e045572eafef",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
       "owner": "resource-catalog",
@@ -10660,6 +10779,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
+      "fromPath": "packages/backend/src/routes/mcps.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:578316f82cbb76732419",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#McpCatalogModule",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "toSymbol": "McpCatalogModule",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEventWsProjector.ts#$file",
@@ -10895,6 +11031,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookMrLaunchGuards",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "webhookMrLaunchGuards",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:59bab7e37b7b55021282",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#QueryOperationDescriptor",
+      "toPath": "packages/backend/src/platform/operations/contracts.ts",
+      "toSymbol": "QueryOperationDescriptor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -13144,6 +13297,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6bf8d878b0368416b18a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "external-layer-debt",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package",
+      "toPath": "external:drizzle-orm",
+      "toSymbol": "*",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromSymbol": "$file",
@@ -13548,6 +13718,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toSymbol": "discloseRefs",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6eef468b9da5ed2289cf",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "mcps",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -14789,6 +14976,23 @@
       "toPath": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toSymbol": "createDevelopmentConfigSupplementalDescriptors",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7d01ca4f85716b5ec190",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ValidationError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -19143,6 +19347,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
+      "fromPath": "packages/backend/src/routes/mcps.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a32b4819e358f3c2babc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpOperationContext",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "toSymbol": "McpOperationContext",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/application/activityOperations.ts#$file",
@@ -19362,6 +19583,23 @@
       "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toSymbol": "GateContinuationEffectStep",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a56dc2f1a6cbf1f91284",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -20178,6 +20416,23 @@
       "toPath": "packages/backend/src/services/resourceAcl.ts",
       "toSymbol": "resolveTaskRole",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ad0c566a264e4c1398b4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "external-layer-debt",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package",
+      "toPath": "external:drizzle-orm",
+      "toSymbol": "*",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "type",
@@ -22783,6 +23038,40 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c54162989c603289c19b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineQueryOperation",
+      "toPath": "packages/backend/src/platform/operations/definitions.ts",
+      "toSymbol": "defineQueryOperation",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c555331ffc1fe44c1f8a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "staleConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourcePackage/preview.ts#$file",
       "fromPath": "packages/backend/src/services/resourcePackage/preview.ts",
       "fromSymbol": "$file",
@@ -23118,6 +23407,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/mcpAclIdentity.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/participants/mcpAclIdentity.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c87f0fd6ccf8c297952e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -23667,6 +23973,40 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ce31dc84ed4a956a7152",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ValidationError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ce76566f819b34f8f09d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#CommandOperationDescriptor",
+      "toPath": "packages/backend/src/platform/operations/contracts.ts",
+      "toSymbol": "CommandOperationDescriptor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -24104,6 +24444,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createProcessEffectAttemptObserver",
       "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toSymbol": "createProcessEffectAttemptObserver",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d147ef175109346afd9b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#composeMcpCatalog",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toSymbol": "composeMcpCatalog",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -26402,6 +26759,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e4181ab0ae534ecbf15a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "DbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
@@ -27864,6 +28238,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ef24e4ed1192c06b2a34",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "agents",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeExecution.ts#$file",
@@ -28036,6 +28427,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f0ca393b7210a9d80d08",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "NotFoundError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
       "fromSymbol": "$file",
@@ -28184,6 +28592,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeInvocations",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "employeeInvocations",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f16014cc5761c2b4bada",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "staleConflictError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -28559,6 +28984,23 @@
       "toPath": "packages/backend/src/modules/collaboration/public/commands.ts",
       "toSymbol": "prepareReviewGateOpen",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f56be2401184467b86c5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "DbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -29513,6 +29955,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fd48a6574835b4b540f5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts#$file",
@@ -29854,9 +30313,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1756,
+    "architectureExceptions": 1783,
     "implementationSccs": 0,
-    "observedEdges": 1800,
+    "observedEdges": 1828,
     "requiredPorts": 25,
     "targetEdges": 64
   },
@@ -30119,6 +30578,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeOsWriterState"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:04008840d850b6541722",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/operations",
+      "syntax": "static-import",
+      "targetSymbol": "McpCatalogModule",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#McpCatalogModule"
     },
     {
       "edgeKind": "value",
@@ -33209,6 +33684,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#runManagedProcess"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "id": "import:1dc2a2f6fcf5abb8ef7b",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/operations/definitions",
+      "syntax": "static-import",
+      "targetSymbol": "defineCommandOperation",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/operations/definitions.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineCommandOperation"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/application/configOperations.ts",
@@ -33479,6 +33970,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/paths.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "id": "import:1f982e319a841c425936",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "NotFoundError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
       "edgeKind": "type",
@@ -34937,6 +35444,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/composition.ts#composeExecutionContract"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:2a86c18358b0c8092d8d",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "dbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts",
@@ -35913,6 +36436,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repositoryTransportConnections"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/mcps.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
+      "id": "import:3404a549a492a98d5919",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "McpCatalogResource",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#McpCatalogResource"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts",
@@ -36279,6 +36818,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:366605b2302f748940fc",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/db/client",
+      "syntax": "static-import",
+      "targetSymbol": "DbClient",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/client.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -37742,6 +38297,22 @@
       "fromFile": "packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts#$file",
       "id": "import:45eefc0781a0ec411c12",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/db/client",
+      "syntax": "static-import",
+      "targetSymbol": "DbClient",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/client.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
+      "id": "import:46285a25e045572eafef",
       "owner": "resource-catalog",
       "removeAfterWave": "W4-E1",
       "role": "legacy-outbound",
@@ -39705,6 +40276,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/types.ts#CollaborationCommandContext"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/mcps.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
+      "id": "import:578316f82cbb76732419",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/operations",
+      "syntax": "static-import",
+      "targetSymbol": "McpCatalogModule",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#McpCatalogModule"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEventWsProjector.ts",
@@ -39927,6 +40514,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookMrLaunchGuards"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "id": "import:59bab7e37b7b55021282",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/operations/contracts",
+      "syntax": "static-import",
+      "targetSymbol": "QueryOperationDescriptor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/operations/contracts.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#QueryOperationDescriptor"
     },
     {
       "edgeKind": "type",
@@ -40391,6 +40994,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file",
+      "id": "import:5e235bf49d40017d0720",
+      "owner": "resource-catalog",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "DirectAuthenticatedAuthority",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthenticatedAuthority"
     },
     {
       "edgeKind": "value",
@@ -42250,6 +42869,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:6bf8d878b0368416b18a",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "external-layer-debt",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
@@ -42631,6 +43266,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:6eef468b9da5ed2289cf",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "mcps",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps"
     },
     {
       "edgeKind": "value",
@@ -43831,6 +44482,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "id": "import:7d01ca4f85716b5ec190",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ValidationError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
       "edgeKind": "type",
@@ -48057,6 +48724,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/systemIdentity.ts#SYSTEM_USER_ID"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/mcps.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
+      "id": "import:a32b4819e358f3c2babc",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "McpOperationContext",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#McpOperationContext"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/application/activityOperations.ts",
@@ -48311,6 +48994,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#GateContinuationEffectStep"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "id": "import:a56dc2f1a6cbf1f91284",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
       "edgeKind": "value",
@@ -49159,6 +49858,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/resourceAcl.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:ad0c566a264e4c1398b4",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "external-layer-debt",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "type",
@@ -51738,6 +52453,38 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "id": "import:c54162989c603289c19b",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/operations/definitions",
+      "syntax": "static-import",
+      "targetSymbol": "defineQueryOperation",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/operations/definitions.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineQueryOperation"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:c555331ffc1fe44c1f8a",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "staleConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/resourcePackage/preview.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourcePackage/preview.ts#$file",
@@ -52071,6 +52818,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/participants/mcpAclIdentity.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/mcpAclIdentity.ts#$file",
+      "id": "import:c87f0fd6ccf8c297952e",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "NotFoundError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
       "edgeKind": "value",
@@ -52634,6 +53397,38 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:ce31dc84ed4a956a7152",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ValidationError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
+      "id": "import:ce76566f819b34f8f09d",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/operations/contracts",
+      "syntax": "static-import",
+      "targetSymbol": "CommandOperationDescriptor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/operations/contracts.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#CommandOperationDescriptor"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -53095,6 +53890,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#createProcessEffectAttemptObserver"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:d147ef175109346afd9b",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpOperations",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpCatalog",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#composeMcpCatalog"
     },
     {
       "edgeKind": "value",
@@ -55353,6 +56164,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
+      "id": "import:e4181ab0ae534ecbf15a",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "DbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
@@ -56761,6 +57588,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:ef24e4ed1192c06b2a34",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "agents",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeExecution.ts",
@@ -56922,6 +57765,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:f0ca393b7210a9d80d08",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "NotFoundError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts#$file",
@@ -57063,6 +57922,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeInvocations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
+      "id": "import:f16014cc5761c2b4bada",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "staleConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError"
     },
     {
       "edgeKind": "type",
@@ -57415,6 +58290,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/public/commands.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/commands.ts#prepareReviewGateOpen"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:f56be2401184467b86c5",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "DbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
       "edgeKind": "value",
@@ -58313,6 +59204,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
+      "id": "import:fd48a6574835b4b540f5",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts",
@@ -59146,7 +60053,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec",
+  "sourceDigest": "sha256:35542681b5f5c0e53074b1346cfe5569dc76eab861e354bd04096015f28df262",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

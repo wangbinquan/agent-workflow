@@ -356,8 +356,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1105,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1118,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 将 13 个 MCP command 与 compatibility mutation binding 纳入受管 entrypoint 分母；写入仍由同一 resource-catalog repository/transaction owner 承担。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -370,8 +373,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 285,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 289,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 将 4 个 MCP repository transaction callback 显式纳入外部效果候选分母；同步事务与 runtime output port 边界保持不变。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -391,8 +397,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1800,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 1828,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 将 route、bootstrap 与 compatibility consumers 改接 exact MCP public contracts，新增 28 条逐 symbol observed edge；全部已分类且没有新增 R1 debt。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -412,8 +421,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1756,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 1783,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 的 27 条新增 exact public-contract edge 均生成逐 path/symbol 的 reviewed classification；未新增 wildcard 或 unresolved first-party edge。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -426,8 +438,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 537,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 549,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 新增 12 个 MCP command/query/descriptor/type/participant exact public symbols；consumer、authority、transaction 与 data-class 递归面已纳入 canonical surface。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -447,12 +462,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 19679,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 19744,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 新增或显式化 65 个 MCP application/port/repository/composition/public top-level symbols；每个 symbol 均登记唯一 current/target owner，而非新增架构债。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec",
+    "sourceDigest": "sha256:35542681b5f5c0e53074b1346cfe5569dc76eab861e354bd04096015f28df262",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -465,8 +483,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9c1248bc51b08d1c8c6a20a99bc1de2c5772b06f",
-    "contentDigest": "sha256:04b06db22e52d16c5adc69f2ad77b68ddd3f3aadecca9c45c115daf5b9d5f59c",
+    "currentSnapshotSha": "56fa9e88e36619114c455716774ae86607bbb388",
+    "contentDigest": "sha256:f77fe256ef977bcf8e65ebf2f132c272c8ef2a140ed48864214ce82c8e748fd1",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
