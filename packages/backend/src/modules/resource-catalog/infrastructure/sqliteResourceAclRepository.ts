@@ -1,46 +1,18 @@
-import type {
-  AclResourceType,
-  ResourceGrantLevel,
-  ResourceVisibility,
-  UserPublic,
-} from '@agent-workflow/shared'
+import type { AclResourceType, UserPublic } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
+import { dbTxSync, type NotPromise } from '@/db/txSync'
 import { resourceGrants, users } from '@/db/schema'
+import type {
+  ResourceAclMutationContext,
+  ResourceAclMutationRow,
+} from '../application/ports/resourceAclPersistence'
 import {
   SQLITE_ACL_TABLES,
   SQLITE_OWNER_NAME_UNIQUE_TYPES,
   sqliteOwnerNamePartitionOf,
 } from './sqliteAclRegistry'
 import { grantsOfResourceWhere } from './sqliteResourceGrantRepository'
-
-export interface SqliteAclMutationRow {
-  readonly id: string
-  readonly name: string
-  readonly ownerUserId: string | null
-  readonly visibility: ResourceVisibility
-  readonly aclRevision: number
-}
-
-export interface SqliteAclMutationContext {
-  readonly tx: DbTxSync
-  readonly current: SqliteAclMutationRow
-  readonly ownerNameIsUnique: boolean
-  hasOwnerNameCollision(nextOwnerUserId: string): boolean
-  activeUserIds(userIds: readonly string[]): ReadonlySet<string>
-  updateAclRow(input: {
-    readonly ownerUserId: string | null
-    readonly visibility: ResourceVisibility
-    readonly aclRevision: number
-    readonly updatedAt: number
-  }): void
-  replaceGrants(
-    grants: ReadonlyMap<string, ResourceGrantLevel>,
-    addedBy: string,
-    addedAt: number,
-  ): void
-}
 
 export async function getSqliteResourceAclRevision(
   db: DbClient,
@@ -87,7 +59,7 @@ export function withSqliteResourceAclMutation<T>(
   db: DbClient,
   type: AclResourceType,
   resourceId: string,
-  run: (context: SqliteAclMutationContext) => T & NotPromise<T>,
+  run: (context: ResourceAclMutationContext) => NotPromise<T>,
 ): T | undefined {
   const table = SQLITE_ACL_TABLES[type]
   const partition = sqliteOwnerNamePartitionOf(type)
@@ -102,10 +74,10 @@ export function withSqliteResourceAclMutation<T>(
       })
       .from(table)
       .where(eq(table.id, resourceId))
-      .get() as (SqliteAclMutationRow & Record<string, unknown>) | undefined
+      .get() as (ResourceAclMutationRow & Record<string, unknown>) | undefined
     if (raw === undefined) return undefined
 
-    const current: SqliteAclMutationRow = {
+    const current: ResourceAclMutationRow = {
       id: resourceId,
       name: raw.name,
       ownerUserId: raw.ownerUserId ?? null,

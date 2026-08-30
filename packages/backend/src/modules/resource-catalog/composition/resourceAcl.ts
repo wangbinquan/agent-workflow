@@ -1,0 +1,96 @@
+import type { DbTxSync } from '@/db/txSync'
+import { createResourceAclApplication } from '../application/resourceAcl'
+import {
+  createResourceAuthorizationInTx as createResourceAuthorizationParticipantInTx,
+  createResourceScopeAuthorizationInTx as createResourceScopeAuthorizationParticipantInTx,
+  type ResourceCurrentAuthorityResolver,
+} from '../application/participants/resourceAuthorization'
+import type {
+  ResourceAccessRowReadPort,
+  ResourceAclMutationPort,
+  ResourceAclReadPort,
+  ResourceGrantReadPort,
+} from '../application/ports/resourceAclPersistence'
+import { createResourceAuthorizationApplication } from '../application/resourceAuthorization'
+import { getAclResourceAccessRowInTx } from '../infrastructure/sqliteAclReadRepository'
+import {
+  getSqliteResourceAclRevision,
+  isSqliteOwnerNameConstraintError,
+  loadAclUsers,
+  withSqliteResourceAclMutation,
+} from '../infrastructure/sqliteResourceAclRepository'
+import {
+  listGrantedResourceIds,
+  listResourceGrants,
+  listResourceGrantsInTx,
+  loadGrantLevel,
+  loadGrantLevelInTx,
+  loadGrantLevelsForUser,
+} from '../infrastructure/sqliteResourceGrantRepository'
+
+const grantReads: ResourceGrantReadPort = {
+  listGrantedResourceIds: (db, actor, type) => listGrantedResourceIds(db, actor, type),
+  loadGrantLevel: (db, type, resourceId, userId) => loadGrantLevel(db, type, resourceId, userId),
+  loadGrantLevelInTx: (tx, type, resourceId, userId) =>
+    loadGrantLevelInTx(tx, type, resourceId, userId),
+  loadGrantLevelsForUser: (db, type, resourceIds, userId) =>
+    loadGrantLevelsForUser(db, type, resourceIds, userId),
+}
+
+const aclReads: ResourceAclReadPort = {
+  getRevision: (db, type, resourceId) => getSqliteResourceAclRevision(db, type, resourceId),
+  listGrants: (db, type, resourceId) => listResourceGrants(db, type, resourceId),
+  loadUsers: (db, userIds) => loadAclUsers(db, userIds),
+}
+
+const aclMutations: ResourceAclMutationPort = {
+  withMutation: (db, type, resourceId, run) =>
+    withSqliteResourceAclMutation(db, type, resourceId, run),
+  listGrantsInTx: (tx, type, resourceId) => listResourceGrantsInTx(tx, type, resourceId),
+  isOwnerNameConstraintError: isSqliteOwnerNameConstraintError,
+}
+
+const accessRows: ResourceAccessRowReadPort = {
+  getInTx: (tx, type, resourceId) => getAclResourceAccessRowInTx(tx, type, resourceId),
+}
+
+const authorization = createResourceAuthorizationApplication(grantReads)
+const acl = createResourceAclApplication({ authorization, mutation: aclMutations, read: aclReads })
+
+export const {
+  canEditResource,
+  canEditResourceInTx,
+  canGovernResource,
+  canViewResource,
+  canViewResourceInTx,
+  discloseRefs,
+  filterVisibleRows,
+  projectVisibleRowsWithAccess,
+  requireResourceEdit,
+  requireResourceGovern,
+  requireResourceView,
+  resolveResourceAccessFor,
+  resolveResourceAccessForInTx,
+} = authorization
+
+export const { getResourceAcl, updateResourceAcl } = acl
+
+const participantDependencies = { accessRows, authorization }
+
+export function createResourceAuthorizationInTx(
+  tx: DbTxSync,
+  authorityResolver: ResourceCurrentAuthorityResolver,
+) {
+  return createResourceAuthorizationParticipantInTx(tx, authorityResolver, participantDependencies)
+}
+
+export function createResourceScopeAuthorizationInTx(
+  tx: DbTxSync,
+  authorityResolver: ResourceCurrentAuthorityResolver,
+) {
+  return createResourceScopeAuthorizationParticipantInTx(
+    tx,
+    authorityResolver,
+    participantDependencies,
+  )
+}

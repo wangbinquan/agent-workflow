@@ -15,7 +15,7 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type { AclRow } from '@/modules/resource-catalog/domain/resourceAccess'
-import { updateResourceAcl as updateResourceAclApplication } from '@/modules/resource-catalog/application/resourceAcl'
+import { updateResourceAcl as updateResourceAclComposition } from '@/modules/resource-catalog/composition/resourceAcl'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
@@ -41,8 +41,8 @@ export {
   requireResourceView,
   resolveResourceAccessFor,
   resolveResourceAccessForInTx,
-} from '@/modules/resource-catalog/application/resourceAuthorization'
-export { getResourceAcl } from '@/modules/resource-catalog/application/resourceAcl'
+} from '@/modules/resource-catalog/composition/resourceAcl'
+export { getResourceAcl } from '@/modules/resource-catalog/composition/resourceAcl'
 export {
   canEditAccess,
   canEditRow,
@@ -95,8 +95,8 @@ export {
 } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 
 /**
- * Legacy composition wrapper. The application command accepts an injected
- * post-commit effect; the old service path supplies the existing WS hook.
+ * Legacy facade wrapper. Resource persistence is bound by module composition;
+ * the old service path supplies only the existing post-commit WebSocket hook.
  */
 export function updateResourceAcl(
   db: DbClient,
@@ -118,7 +118,7 @@ export function updateResourceAcl(
     ) => void
   } = {},
 ): Promise<ResourceAcl> {
-  return updateResourceAclApplication(db, actor, type, row, body, {
+  return updateResourceAclComposition(db, actor, type, row, body, {
     ...options,
     afterCommit: (client) => triggerRevalidation(client, 'resource-acl-changed'),
   })

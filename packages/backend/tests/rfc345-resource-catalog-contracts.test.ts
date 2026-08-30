@@ -335,6 +335,26 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     expect(application).not.toContain("from '@/ws/")
+
+    const applicationInfrastructureImports = sources
+      .filter(({ path }) => path.includes('/modules/resource-catalog/application/'))
+      .flatMap(({ path, source }) =>
+        [
+          ...source.matchAll(
+            /(?:\bfrom\s+|\bimport\s*\(\s*)['"]([^'"]*\/infrastructure\/[^'"]*)['"]/g,
+          ),
+        ].map((match) => `${path}: ${match[1]}`),
+      )
+    expect(applicationInfrastructureImports).toEqual([])
+
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/resourceAcl.ts'),
+      'utf8',
+    )
+    expect(composition).toContain('createResourceAuthorizationApplication(grantReads)')
+    expect(composition).toContain('createResourceAclApplication({')
+    expect(composition).toContain('withSqliteResourceAclMutation')
+    expect(composition).toContain('getAclResourceAccessRowInTx')
   })
 
   test('Intent selector and dump share one paged actor-visible catalog owner', () => {

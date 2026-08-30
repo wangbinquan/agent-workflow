@@ -2,29 +2,40 @@ import type { Actor } from '@/auth/actor'
 import type { DbTxSync } from '@/db/txSync'
 import { ForbiddenError, NotFoundError } from '@/util/errors'
 import { canEditAccess, canGovernAccess, canViewAccess } from '../../domain/resourceAccess'
-import { getAclResourceAccessRowInTx } from '../../infrastructure/sqliteAclReadRepository'
 import type {
   ResourceAuthorizationInTx,
   ResourceCurrentAuthorityInTx,
   ResourceScopeAuthorizationInTx,
 } from '../../public/participants'
 import type { ResourceAclTarget, ResourceMemoryScopeRef } from '../../public/types'
-import { resolveResourceAccessForInTx } from '../resourceAuthorization'
+import type { ResourceAccessRowReadPort } from '../ports/resourceAclPersistence'
+import type { ResourceAuthorizationApplication } from '../resourceAuthorization'
 
 export interface ResourceCurrentAuthorityResolver {
   resolve(authority: ResourceCurrentAuthorityInTx): Actor
 }
 
+export interface ResourceAuthorizationParticipantDependencies {
+  readonly accessRows: ResourceAccessRowReadPort
+  readonly authorization: Pick<ResourceAuthorizationApplication, 'resolveResourceAccessForInTx'>
+}
+
 export function createResourceAuthorizationInTx(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
+  dependencies: ResourceAuthorizationParticipantDependencies,
 ): ResourceAuthorizationInTx {
   const accessOf = (authority: ResourceCurrentAuthorityInTx, target: ResourceAclTarget) =>
-    resolveResourceAccessForInTx(tx, authorityResolver.resolve(authority), target.ref.kind, {
-      id: target.ref.id,
-      ownerUserId: target.ownerUserId,
-      visibility: target.visibility,
-    })
+    dependencies.authorization.resolveResourceAccessForInTx(
+      tx,
+      authorityResolver.resolve(authority),
+      target.ref.kind,
+      {
+        id: target.ref.id,
+        ownerUserId: target.ownerUserId,
+        visibility: target.visibility,
+      },
+    )
 
   return {
     accessOf,
@@ -60,11 +71,12 @@ export function createResourceAuthorizationInTx(
 export function createResourceScopeAuthorizationInTx(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
+  dependencies: ResourceAuthorizationParticipantDependencies,
 ): ResourceScopeAuthorizationInTx {
-  const authorization = createResourceAuthorizationInTx(tx, authorityResolver)
+  const authorization = createResourceAuthorizationInTx(tx, authorityResolver, dependencies)
   return {
     accessOf(authority, scope: ResourceMemoryScopeRef) {
-      const row = getAclResourceAccessRowInTx(tx, scope.kind, scope.id)
+      const row = dependencies.accessRows.getInTx(tx, scope.kind, scope.id)
       if (row === null) return 'none'
       return authorization.accessOf(authority, {
         ref: { kind: scope.kind, id: scope.id },
