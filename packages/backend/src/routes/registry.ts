@@ -191,9 +191,13 @@ export function routeMetaGate(meta: RouteMeta): MiddlewareHandler {
     // `/api/auth/me` should be told it cannot reach that endpoint AT ALL rather
     // than that it is the wrong kind of token — the permanent reason wins, and
     // the answer stays stable if the same matrix is later reissued as
-    // `general`. `/api/mcp` never reaches this gate: it is the MCP transport,
-    // not a route registered through registerRoute.
-    if (actor.source === 'pat' && actor.purpose === 'mcp_only') {
+    // `general`. A bound MCP invocation reuses the route-owned handler chain,
+    // so its explicit transport marker bypasses only this REST-purpose check.
+    if (
+      actor.source === 'pat' &&
+      actor.purpose === 'mcp_only' &&
+      c.get('operationTransport') !== 'mcp'
+    ) {
       throw new ForbiddenError(
         'token-mcp-only',
         'this token was issued for MCP use only and cannot call the REST API',
