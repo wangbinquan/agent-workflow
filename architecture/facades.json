@@ -3696,7 +3696,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:6e737b2f4e57899def77",
+        "import:88b9cee8fd1da9fe92d1",
+        "import:cc633659ca1ea381d3c8"
+      ],
       "exportedSymbols": [
         "InstallResult",
         "NpmUnavailableError",
@@ -7940,5 +7944,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:62171f9b837384ce8fec8a0591c91b7ad47f1672c33b585d6f29033b18effb62"
+  "sourceDigest": "sha256:a4ce9ab244bbedfaff2c0af2d086bdc3ef0060825c1604cff409f3ebb18cfffd"
 }

@@ -356,8 +356,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1119,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1134,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-P 将 plugin route 切到具名 typed commands、queries 与 application-owned operations，新增十五条被 canonical 显式识别的 mutation entrypoints；这是 active production cutover 的一次性许可。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -370,8 +373,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 289,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 293,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-P 把 plugin installer、cleanup 与 update-check side effects 显式建模为 application ports，并在 composition/repository transaction callbacks 中接线，净增四条可审计 callback；这是一次性许可。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -391,8 +397,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1831,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 1860,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-P 新增 plugin aggregate 的 typed application、repository、composition 与 route public-contract wiring，净增二十九条已分类 observed edges；这是 active cutover 的一次性许可。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -412,8 +421,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1786,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 1815,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-P 新增 plugin aggregate 的 typed application、repository、composition 与 route contract wiring，净增二十九条具名 owner/edge/layer 分类；这是一次性 canonical growth 许可。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -426,8 +438,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 549,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 565,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-P 新增十六个 plugin typed commands、queries、participants 与 descriptor public symbols，并由 active route 消费；这是 aggregate cutover 的一次性许可。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -447,12 +462,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 19744,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 19816,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-P 新增 plugin aggregate application、ports、composition、SQLite repository 与 public-contract源码，canonical owner census 净增七十二项；这是具名模块落位的一次性许可。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:62171f9b837384ce8fec8a0591c91b7ad47f1672c33b585d6f29033b18effb62",
+    "sourceDigest": "sha256:a4ce9ab244bbedfaff2c0af2d086bdc3ef0060825c1604cff409f3ebb18cfffd",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
