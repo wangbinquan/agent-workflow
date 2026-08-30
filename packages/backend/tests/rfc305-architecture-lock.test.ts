@@ -411,7 +411,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/resource-catalog/public/queries.ts -> @/modules/identity-access/public/participants',
       // RFC-344 system-operation contracts share the same sealed command context.
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/system-operations/public/types.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',
       // RFC-320 — auth receives exact profile commands/queries through the
       // server-composed module; it never imports module internals or storage.
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',
