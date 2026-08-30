@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1149,
+    "entries": 1163,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -7874,6 +7874,29 @@
         "fenceOrOcc": true,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts#createAgentApplication",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts#createAgentApplication",
+      "symbol": "createAgentApplication",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#createMcpApplication",
@@ -7885,6 +7908,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#createMcpApplication",
       "symbol": "createMcpApplication",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/participants/agentAclIdentity.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/participants/agentAclIdentity.ts#createAgentAclIdentityParticipant",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/participants/agentAclIdentity.ts#createAgentAclIdentityParticipant",
+      "symbol": "createAgentAclIdentityParticipant",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -8592,6 +8640,29 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentRepository.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentRepository.ts#createSqliteAgentRepository",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAgentRepository.ts#createSqliteAgentRepository",
+      "symbol": "createSqliteAgentRepository",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -8710,6 +8781,30 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#createAgentOperationDescriptors",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#createAgentOperationDescriptors",
+      "symbol": "createAgentOperationDescriptors",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#createMcpOperationDescriptors",
       "missingControls": [
         "audit",
@@ -8768,6 +8863,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#createWorkgroupOperationDescriptors",
       "symbol": "createWorkgroupOperationDescriptors",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteAgentInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteAgentInputSchema",
+      "symbol": "deleteAgentInputSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteAgentReceiptSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteAgentReceiptSchema",
+      "symbol": "deleteAgentReceiptSchema",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -8932,6 +9077,31 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#renameAgentInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#renameAgentInputSchema",
+      "symbol": "renameAgentInputSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#renameMcpInputSchema",
       "missingControls": [
         "audit",
@@ -8993,6 +9163,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#renameWorkgroupInputSchema",
       "symbol": "renameWorkgroupInputSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#updateAgentInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#updateAgentInputSchema",
+      "symbol": "updateAgentInputSchema",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -9082,6 +9277,31 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/types.ts#CreateAgentCatalogInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#CreateAgentCatalogInput",
+      "symbol": "CreateAgentCatalogInput",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/public/types.ts#CreateMcpCatalogInput",
       "missingControls": [
         "audit",
@@ -9143,6 +9363,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#CreateWorkgroupCatalogInput",
       "symbol": "CreateWorkgroupCatalogInput",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/types.ts#DeleteAgentCatalogInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#DeleteAgentCatalogInput",
+      "symbol": "DeleteAgentCatalogInput",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/types.ts#DeleteAgentCatalogReceipt",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#DeleteAgentCatalogReceipt",
+      "symbol": "DeleteAgentCatalogReceipt",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -9307,6 +9577,31 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/types.ts#RenameAgentCatalogInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#RenameAgentCatalogInput",
+      "symbol": "RenameAgentCatalogInput",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/public/types.ts#RenameMcpCatalogInput",
       "missingControls": [
         "audit",
@@ -9368,6 +9663,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#RenameWorkgroupCatalogInput",
       "symbol": "RenameWorkgroupCatalogInput",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/types.ts#UpdateAgentCatalogInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#UpdateAgentCatalogInput",
+      "symbol": "UpdateAgentCatalogInput",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -13895,6 +14215,31 @@
       "ownerEntryId": "owner:packages/backend/src/routes/accountRepositoryTransportCredentials.ts#$file",
       "symbol": "$http:put:186",
       "targetContext": "source-control",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/routes/agents.ts",
+      "finalCriterion": "W4 transport-to-application cutover",
+      "id": "mutation:packages/backend/src/routes/agents.ts#$http:delete:290",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/routes/agents.ts#$file",
+      "symbol": "$http:delete:290",
+      "targetContext": "resource-catalog",
       "targetLayer": "inbound"
     },
     {
@@ -27365,7 +27710,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a2f4cf3bcac371a4f1ca1dc6307dcce1e37567c24ab96c2142dbcf33abb0e7f1",
+  "sourceDigest": "sha256:ce9498a848212198aec9858f175f1f544e806f5c092f1575db420dbdc8edce1b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

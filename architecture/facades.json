@@ -25,11 +25,18 @@
     {
       "boundaryEdgeIds": [
         "import:0aba22b312a39937580a",
+        "import:13e014dbd377f6caeacc",
         "import:1d720d6d63f2d462cc60",
+        "import:29200a39cf8f15c240e6",
+        "import:3c92726706fe1dc0db73",
         "import:43b671485ec4af63913a",
         "import:582010bd11a8e1414cf8",
+        "import:a934294ffa9c74e4d64d",
         "import:cb1b84ca9a78f2e5bb72",
-        "import:df7ffa71cb9fc6266e48"
+        "import:ce4fd75f6895f5d3c697",
+        "import:df7ffa71cb9fc6266e48",
+        "import:e1b38dde34a0448c45da",
+        "import:f70a8d032153cc2c1ae0"
       ],
       "exportedSymbols": [
         "ClosureRefNameMaps",
@@ -4046,6 +4053,7 @@
         "import:0bdd5872f51b9d36bc8c",
         "import:1c52de161937aac851f9",
         "import:1d93f24706f4767d9822",
+        "import:1dda70b66c2b34f8edef",
         "import:1eb562451b46af717bc5",
         "import:203f0b3f9ebdda2ab76f",
         "import:204d6f5f730c5f944e6e",
@@ -4071,6 +4079,7 @@
         "import:63036822c155a308b849",
         "import:63393e4afe17cf731b56",
         "import:6bbbe5aec89dba912d0a",
+        "import:6d51d92c4f3abacd158f",
         "import:6dc3cc98e819a54b368a",
         "import:6edeb303b3c2c4fd303c",
         "import:764e09199ce835ec4730",
@@ -4079,6 +4088,7 @@
         "import:770398043ec38da7d894",
         "import:778999c72af36b0c8c1d",
         "import:7a348cfb57cbb202029e",
+        "import:7be5edef861861f1f7d5",
         "import:7de0da9ccf75dabb3e95",
         "import:7eb456e07848cccfa9ee",
         "import:7f0c518f4b0e5246e4c4",
@@ -4104,6 +4114,7 @@
         "import:c0f076f663549fe626ff",
         "import:c15fbdc17cbb56b43a97",
         "import:c9955e68ed1697edbff4",
+        "import:ca51b81cd9a1c53898c8",
         "import:d1d661916b08b704035f",
         "import:d2127746f2dc82033220",
         "import:d21e5ef24119fffed223",
@@ -6426,7 +6437,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:6222591edf7ab4185f0c",
+        "import:d013e33a13b4230993b6"
+      ],
       "exportedSymbols": [
         "SKILL_FUSION_WORKFLOW_ID",
         "SKILL_FUSION_WORKFLOW_NAME",
@@ -7952,5 +7966,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a2f4cf3bcac371a4f1ca1dc6307dcce1e37567c24ab96c2142dbcf33abb0e7f1"
+  "sourceDigest": "sha256:ce9498a848212198aec9858f175f1f544e806f5c092f1575db420dbdc8edce1b"
 }
