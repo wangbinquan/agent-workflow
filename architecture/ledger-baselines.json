@@ -392,10 +392,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 1861,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-P 新增 PluginUpdateCommands exact contract，并由 active plugin route 形成一条具名 production consumer edge。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -416,10 +413,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 1816,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-P 为 active plugin route 到 PluginUpdateCommands 增加一条 exact legacy-inbound 迁移边，禁止宽泛豁免。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -433,10 +427,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 566,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-P 将六方法 god surface 拆成四方法 PluginCommands 与两方法 PluginUpdateCommands，新增一个 cohesive public contract。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -457,10 +448,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 19817,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-345 T5-P 为新增的 cohesive PluginUpdateCommands public symbol登记唯一 resource-catalog owner。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -477,8 +465,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "20a2653640e6efd58f7861dc3f2fbcbebe6496d8",
-    "contentDigest": "sha256:16f07681b5d069d68463c3e5b39edb5dea61b6e69eae244cab4db8a774f7b039",
+    "currentSnapshotSha": "b1a7ff29fb0a6927adef185695da3e62862f7244",
+    "contentDigest": "sha256:78953baf9bf4635ef3ca4af0374407476cbff859f106c5a77e5506bd315675c4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
