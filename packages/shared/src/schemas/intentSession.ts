@@ -15,7 +15,9 @@ export const CreateIntentSessionSchema = z
   .object({
     message: z.string().min(1).max(INTENT_MESSAGE_MAX),
     /** Optional free-text nudge about the desired artifact kind(s). */
-    hint: z.string().max(200).optional(),
+    /** RFC-348 D4b — the composer's artifact-type pre-selection; six-type enum
+     *  (RFC-235 D33). Auto is `omitted`, never a value. */
+    hint: z.enum(INTENT_RESOURCE_TYPES).optional(),
     /**
      * Mounts applied BEFORE the first generation turn fires (RFC-234 T13:
      * the modify entry must not race the auto-started turn — a post-create

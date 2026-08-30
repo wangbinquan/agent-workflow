@@ -62,7 +62,10 @@ describe('dump projections (OUT direction)', () => {
     const text = JSON.stringify(projected)
     expect(text).not.toContain(SECRET)
     expect(text).toContain('mcp.example.com')
-    expect(projected.config.oauth).toBe(INTENT_REDACTED)
+    // RFC-348 D2 — oauth is authorable now: only `clientSecret` is redacted, the
+    // rest of the block (clientId / scope / redirectUri) survives so an update
+    // can echo it back.
+    expect(projected.config.oauth).toEqual({ clientSecret: INTENT_REDACTED })
   })
 
   test('plugin: spec token via git-url redactor, every option string masked', () => {

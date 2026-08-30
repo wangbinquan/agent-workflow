@@ -82,6 +82,24 @@ function redactRecordValues(
 /** MCP → dump projection. Closed carriers:
  *  local  — env.* values (all), command[1:] (all argv after the executable),
  *  remote — url userinfo+query, headers.* values (all), oauth secrets. */
+function projectMcpOAuthForDump(oauth: unknown): unknown {
+  if (oauth === undefined) return undefined
+  if (oauth === false) return false
+  if (typeof oauth !== 'object' || oauth === null) return INTENT_REDACTED
+  const o = oauth as {
+    clientId?: unknown
+    clientSecret?: unknown
+    scope?: unknown
+    redirectUri?: unknown
+  }
+  return {
+    ...(typeof o.clientId === 'string' ? { clientId: o.clientId } : {}),
+    ...(o.clientSecret === undefined ? {} : { clientSecret: INTENT_REDACTED }),
+    ...(typeof o.scope === 'string' ? { scope: o.scope } : {}),
+    ...(typeof o.redirectUri === 'string' ? { redirectUri: o.redirectUri } : {}),
+  }
+}
+
 export function projectMcpForDump(mcp: {
   type: 'local' | 'remote'
   name: string
@@ -111,7 +129,9 @@ export function projectMcpForDump(mcp: {
     config: {
       url: typeof mcp.config.url === 'string' ? redactUrlForDump(mcp.config.url) : undefined,
       headers: redactRecordValues(mcp.config.headers as Record<string, string> | undefined),
-      oauth: mcp.config.oauth === undefined ? undefined : INTENT_REDACTED,
+      // RFC-348 D2 — project OAuth so the model can read and echo it back: only
+      // `clientSecret` is redacted; `false` (disabled) stays `false`.
+      oauth: projectMcpOAuthForDump(mcp.config.oauth),
       timeoutMs: mcp.config.timeoutMs,
     },
   }
@@ -354,6 +374,15 @@ export function findNonSentinelSecretCarriers(op: {
       const url = p.config?.url
       if (typeof url === 'string' && /\/\/[^/\s@]+@/.test(url)) {
         push('/payload/config/url')
+      }
+      // RFC-348 D2 — `oauth.clientSecret` is a secret carrier like env/headers
+      // values: only the sentinel (filled through a confirm-time slot) or ''.
+      const oauth = (p.config as { oauth?: unknown } | undefined)?.oauth
+      if (typeof oauth === 'object' && oauth !== null) {
+        const secret = (oauth as { clientSecret?: unknown }).clientSecret
+        if (typeof secret === 'string' && secret !== '' && secret !== INTENT_SECRET_SENTINEL) {
+          push('/payload/config/oauth/clientSecret')
+        }
       }
     }
   }

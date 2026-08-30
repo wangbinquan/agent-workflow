@@ -6304,7 +6304,7 @@ export const enUS: Resources = {
       'If the final iteration still does not satisfy the exit condition, use its outputs and continue downstream. Inner or merge failures still stop the workflow.',
     fieldExitConditionKind: 'Exit condition kind',
     fieldExitConditionKindHint:
-      'port-empty: trimmed value empty · port-not-empty: trimmed value non-empty (clarify use case — exit when the agent finally produces an output instead of asking again) · port-equals: exact match · port-count-lt: count < n',
+      'port-empty: trimmed value empty · port-not-empty: trimmed value non-empty (clarify use case — exit when the agent finally produces an output instead of asking again) · port-equals: exact match · port-count-lt: count < n · port-inactive: the producer marked the port inactive this round (RFC-306 branch ports)',
     fieldExitConditionTarget: 'Exit condition target',
     fieldExitConditionTargetHint: '(nodeId, portName) probed each iteration',
     fieldExitConditionValue: 'Equals value',

@@ -102,6 +102,24 @@ export function isWrapperKind(kind: NodeKind | string | null | undefined): boole
   return (WRAPPER_NODE_KINDS as readonly string[]).includes(kind ?? '')
 }
 
+// RFC-348 D1b — wrapper-loop exit-condition kinds, SINGLE SOURCE. Before this
+// constant the list was hand-copied in four places and drifted: the runtime
+// parser (`modules/task-execution/domain/loopExitCondition.ts`) knew all five,
+// while the canvas inspector dropdown, both i18n help texts and the intent
+// builder's INTENT.md stopped at four — `port-inactive` (RFC-306) existed for
+// the scheduler but nobody could author it. Consumers: the parser (type +
+// runtime kind check), the inspector `<Select>` options, and the intent
+// teaching registry; a new kind joins here first.
+export const LOOP_EXIT_CONDITION_KINDS = [
+  'port-empty',
+  'port-not-empty',
+  'port-equals',
+  'port-count-lt',
+  'port-inactive',
+] as const
+export const LoopExitConditionKindSchema = z.enum(LOOP_EXIT_CONDITION_KINDS)
+export type LoopExitConditionKind = z.infer<typeof LoopExitConditionKindSchema>
+
 // RFC-020: 'upload' joins as a sibling of 'files'. `files` picks paths
 // already inside the worktree; `upload` writes user-selected local files
 // into the worktree at a per-input `targetDir`. Packed value is identical

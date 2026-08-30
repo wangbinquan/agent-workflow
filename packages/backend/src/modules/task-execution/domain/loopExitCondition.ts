@@ -15,6 +15,8 @@
 //                     condition for a loop whose body decides, per iteration,
 //                     whether there is anything left to do.
 
+import { LOOP_EXIT_CONDITION_KINDS, type LoopExitConditionKind } from '@agent-workflow/shared'
+
 export type ExitCondition =
   | { kind: 'port-empty'; nodeId: string; portName: string }
   | { kind: 'port-inactive'; nodeId: string; portName: string }
@@ -37,11 +39,19 @@ export type ExitCondition =
  * (2026-08-12 审计对账：此注释原先写反成 "always exit / terminates after
  * iteration 0"，与实际 fail 行为相反，已按源码修正。)
  */
+// RFC-348 D1b — the parsed union and the shared kind roster must agree in
+// BOTH directions; a kind added to one without the other fails to compile.
+type _ParsedKindsCoverRoster = LoopExitConditionKind extends ExitCondition['kind'] ? true : never
+type _RosterCoversParsedKinds = ExitCondition['kind'] extends LoopExitConditionKind ? true : never
+const _exitKindRosterLock: [_ParsedKindsCoverRoster, _RosterCoversParsedKinds] = [true, true]
+void _exitKindRosterLock
+
 export function parseExitCondition(raw: unknown): ExitCondition | null {
   if (typeof raw !== 'object' || raw === null) return null
   const r = raw as Record<string, unknown>
   if (
     typeof r.kind !== 'string' ||
+    !(LOOP_EXIT_CONDITION_KINDS as readonly string[]).includes(r.kind) ||
     typeof r.nodeId !== 'string' ||
     r.nodeId.length === 0 ||
     typeof r.portName !== 'string' ||

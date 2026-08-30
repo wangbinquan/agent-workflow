@@ -217,6 +217,37 @@ export function skillRefToSelector(
 export const AgentPermissionSchema = z.record(z.string(), z.unknown())
 export type AgentPermission = z.infer<typeof AgentPermissionSchema>
 
+// RFC-348 D5d — opencode's permission vocabulary, SINGLE SOURCE (read from
+// `packages/core/src/v1/config/permission.ts:17-36` @1.18.4, not remembered).
+// Consumers: the opencode boundary composer (expands an author's `'*'` into
+// these keys), the Claude tool-gate mapper (action grammar) and the intent
+// teaching registry (teaches the grammar to the model). Previously the key
+// list was a private const in `services/runtime/opencode/boundary.ts` and the
+// action literals were retyped in `claudeCode/permissionMap.ts`.
+export const OPENCODE_PERMISSION_ACTIONS = ['allow', 'deny', 'ask'] as const
+export type OpencodePermissionAction = (typeof OPENCODE_PERMISSION_ACTIONS)[number]
+/** A bare top-level `'*'` sets the baseline for every key; explicit keys override it. */
+export const OPENCODE_PERMISSION_WILDCARD_KEY = '*' as const
+/** Known keys. `external_directory` is deliberately absent: the platform owns it
+ *  (workspace boundary), an author's `'*'` must never expand into it. */
+export const OPENCODE_PERMISSION_KEYS = [
+  'read',
+  'edit',
+  'glob',
+  'grep',
+  'list',
+  'bash',
+  'task',
+  'todowrite',
+  'question',
+  'webfetch',
+  'websearch',
+  'lsp',
+  'doom_loop',
+  'skill',
+] as const
+export type OpencodePermissionKey = (typeof OPENCODE_PERMISSION_KEYS)[number]
+
 /** Full agent resource (response shape). */
 export const AgentSchema = z.object({
   id: z.string(),

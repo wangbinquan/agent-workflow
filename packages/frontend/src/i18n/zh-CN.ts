@@ -12547,7 +12547,7 @@ export const zhCN: Resources = {
       '最后一轮仍未满足退出条件时，采用该轮输出并继续下游；内部执行或合并失败仍会停止流程。',
     fieldExitConditionKind: '退出条件类型',
     fieldExitConditionKindHint:
-      'port-empty：trim 后为空 · port-not-empty：trim 后非空（反问场景：agent 真正给出 output 才退出）· port-equals：完全相等 · port-count-lt：行数 < n',
+      'port-empty：trim 后为空 · port-not-empty：trim 后非空（反问场景：agent 真正给出 output 才退出）· port-equals：完全相等 · port-count-lt：行数 < n · port-inactive：本轮生产者把该端口标为未激活（RFC-306 分支端口）',
     fieldExitConditionTarget: '退出条件目标',
     fieldExitConditionTargetHint: '(nodeId, portName)，每轮检查',
     fieldExitConditionValue: '相等值',

@@ -4,7 +4,11 @@
 // shared case: wrapper-git renders the read-only inner list only; the loop
 // adds maxIterations / exitCondition / outputBindings.
 
-import { readContinueOnMaxIterations, type WorkflowNode } from '@agent-workflow/shared'
+import {
+  LOOP_EXIT_CONDITION_KINDS,
+  readContinueOnMaxIterations,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Field, NumberInput, Switch, TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
@@ -160,12 +164,7 @@ export function WrapperGitLoopEdit({
                   ),
                 )
               }
-              options={[
-                { value: 'port-empty', label: 'port-empty' },
-                { value: 'port-not-empty', label: 'port-not-empty' },
-                { value: 'port-equals', label: 'port-equals' },
-                { value: 'port-count-lt', label: 'port-count-lt' },
-              ]}
+              options={LOOP_EXIT_CONDITION_KINDS.map((kind) => ({ value: kind, label: kind }))}
             />
           </Field>
         </InspectorFieldAnchor>

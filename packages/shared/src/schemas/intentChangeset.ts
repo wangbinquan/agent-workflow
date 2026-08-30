@@ -21,7 +21,7 @@
 
 import { z } from 'zod'
 import { AgentOutputKindSchema } from './review'
-import { AGENT_NAME_RE } from './agent'
+import { AGENT_NAME_RE, AgentBranchPortsSchema } from './agent'
 import { asIntentResourceType, INTENT_RESOURCE_TYPES, type IntentResourceType } from './resourceAcl'
 import {
   isValidResourceDisplayName,
@@ -127,6 +127,9 @@ export const IntentAgentPayloadSchema = z
     /** Output port names; duplicates rejected at resolve time by CreateAgentSchema. */
     outputs: z.array(z.string().min(1).max(128)).max(64).default([]),
     outputKinds: z.record(z.string(), AgentOutputKindSchema).optional(),
+    /** RFC-348 D5 — RFC-306 branch ports; subset of `outputs`, validated at resolve
+     *  (`assertBranchPortsDeclared`). Omitted on an update ⇒ stored value kept. */
+    branchPorts: AgentBranchPortsSchema.optional(),
     inputs: z
       .array(
         z
@@ -225,6 +228,17 @@ export type IntentSkillPayload = z.infer<typeof IntentSkillPayloadSchema>
 /** MCP payload mirrors McpLocal/RemoteConfig bounds (schemas/mcp.ts) but stays
  *  its own schema: secret-bearing positions additionally pass the closed-slot
  *  scanner in ../intentSecretSlots.ts (sentinel-or-reject). */
+export const IntentMcpOAuthConfigSchema = z
+  .object({
+    clientId: z.string().max(1024).optional(),
+    clientSecret: z.string().max(1024).optional(),
+    scope: z.string().max(1024).optional(),
+    redirectUri: z.string().max(2048).optional(),
+  })
+  .strict()
+export const IntentMcpOAuthSchema = z.union([IntentMcpOAuthConfigSchema, z.literal(false)])
+export type IntentMcpOAuth = z.infer<typeof IntentMcpOAuthSchema>
+
 export const IntentMcpPayloadSchema = z.discriminatedUnion('type', [
   z
     .object({
@@ -258,6 +272,12 @@ export const IntentMcpPayloadSchema = z.discriminatedUnion('type', [
               'url must start with http:// or https://',
             ),
           headers: z.record(z.string().max(128), z.string().max(1024)).optional(),
+          /** RFC-348 D2 (user decision ②) — same keys as the platform's
+           *  `McpOAuthConfigSchema`; `clientSecret` is a secret carrier: only the
+           *  ‹secret› sentinel (a confirm-time slot) or '' is accepted, see
+           *  `findNonSentinelSecretCarriers`. `false` disables OAuth; omitted on
+           *  create = runtime auto-discovery, omitted on update = keep stored. */
+          oauth: IntentMcpOAuthSchema.optional(),
           timeoutMs: z.number().int().positive().optional(),
         })
         .strict(),

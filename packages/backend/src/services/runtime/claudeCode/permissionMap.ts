@@ -25,7 +25,7 @@
 //    prune. It is honored conservatively: the tool loads only if at least one
 //    pattern allows, and the caller is told the granularity was lost.
 
-import type { AgentPermission } from '@agent-workflow/shared'
+import { OPENCODE_PERMISSION_ACTIONS, type AgentPermission } from '@agent-workflow/shared'
 
 /** Claude built-ins the platform is willing to grant to a business node. */
 const GRANTABLE = [
@@ -78,7 +78,7 @@ const TABLE: Readonly<Record<string, readonly GrantableClaudeTool[]>> = Object.f
   doom_loop: [],
 })
 
-export type PermissionAction = 'ask' | 'allow' | 'deny'
+export type PermissionAction = (typeof OPENCODE_PERMISSION_ACTIONS)[number]
 
 export interface ClaudeToolGate {
   /** `--tools` value: the tools that survive the mapping, in table order. */
@@ -88,8 +88,8 @@ export interface ClaudeToolGate {
 }
 
 function actionOf(rule: unknown): { action: PermissionAction; patterned: boolean } | null {
-  if (rule === 'allow' || rule === 'deny' || rule === 'ask') {
-    return { action: rule, patterned: false }
+  if (typeof rule === 'string' && (OPENCODE_PERMISSION_ACTIONS as readonly string[]).includes(rule)) {
+    return { action: rule as PermissionAction, patterned: false }
   }
   if (rule !== null && typeof rule === 'object' && !Array.isArray(rule)) {
     // Record<pattern, Action>: conservative — allow only if some pattern allows.

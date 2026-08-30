@@ -6,7 +6,7 @@
 // runtime-neutral parts (BoundaryCtx / resolveBoundaryMounts /
 // scanSiblingTaskRoots) stay in the unified layer.
 
-import type { AgentPermission } from '@agent-workflow/shared'
+import { OPENCODE_PERMISSION_KEYS, type AgentPermission } from '@agent-workflow/shared'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { type BoundaryCtx, type ExternalDirRule } from '@/services/execution/workspaceBoundary'
@@ -149,19 +149,5 @@ export function composeOpencodeBoundary(
  * @1.18.4，读源非记忆）。`external_directory` 刻意不在这里——它由平台独占，
  * 作者的 `'*'` 展开时绝不覆盖它。
  */
-const OPENCODE_PERMISSION_KEYS = [
-  'read',
-  'edit',
-  'glob',
-  'grep',
-  'list',
-  'bash',
-  'task',
-  'todowrite',
-  'question',
-  'webfetch',
-  'websearch',
-  'lsp',
-  'doom_loop',
-  'skill',
-] as const
+// RFC-348 D5d: the key list moved to `@agent-workflow/shared` (OPENCODE_PERMISSION_KEYS)
+// so the intent builder teaches exactly the vocabulary this composer expands.
