@@ -592,8 +592,8 @@ test('RFC-319 DE-23: 向导用需求 / 问题 ID 发起任务，外部编号随 
     target: { repositoryId },
   })
 
-  await page.waitForURL(/\/tasks\/employee-cases\/[0-9A-Z]+$/)
-  const caseId = page.url().split('/').at(-1)!
+  await page.waitForURL((url) => /^\/tasks\/employee-cases\/[0-9A-Z]+$/.test(url.pathname))
+  const caseId = new URL(page.url()).pathname.split('/').at(-1)!
   await expect(page.getByRole('heading', { name: taskName, exact: true })).toBeVisible()
   await expect(
     page.getByText(`Development employee · ${intakeEmployeeName}`, { exact: true }),
