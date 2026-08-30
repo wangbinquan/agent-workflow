@@ -56,7 +56,7 @@ async function trustedDirectFixture(patScopes: ReadonlyArray<Permission> = []) {
         displayName: 'RFC 344',
         role: 'user',
         status: 'active',
-        additionalPermissions: ['tasks:read'],
+        additionalPermissions: [],
         accessRevision: 7,
       }),
     },

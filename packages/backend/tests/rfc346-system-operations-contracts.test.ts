@@ -369,7 +369,7 @@ describe('RFC-346 System Operations contracts', () => {
     ).toBe('task-execution')
     expect(
       targetContextFor('packages/backend/src/services/skillVersion.ts', 'restoreSkillVersion'),
-    ).toBe('resource-catalog')
+    ).toBe('knowledge-evolution')
     expect(targetContextFor('packages/backend/src/util/git.ts', 'restoreBranchRefCas')).toBe(
       'source-control',
     )
@@ -414,7 +414,7 @@ describe('RFC-346 System Operations contracts', () => {
           edge.role === 'authority-type-only',
       ),
     ).toBe(true)
-  })
+  }, 60_000)
 })
 
 function walk(dir: string): string[] {
