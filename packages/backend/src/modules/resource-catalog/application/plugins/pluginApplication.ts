@@ -7,7 +7,7 @@ import {
 } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
-import type { PluginCommands } from '../../public/commands'
+import type { PluginCommands, PluginUpdateCommands } from '../../public/commands'
 import type { PluginOperationContext } from '../../public/participants'
 import type { PluginQueries } from '../../public/queries'
 import type {
@@ -43,6 +43,7 @@ export interface PluginApplicationDependencies {
 
 export interface PluginApplication {
   readonly commands: PluginCommands
+  readonly updateCommands: PluginUpdateCommands
   readonly queries: PluginQueries
 }
 
@@ -290,7 +291,9 @@ export function createPluginApplication(deps: PluginApplicationDependencies): Pl
       })
       return deps.projection.resourceOf(renamed)
     },
+  })
 
+  const updateCommands: PluginUpdateCommands = Object.freeze({
     async checkUpdate(
       authority: PluginOperationContext,
       input: CheckPluginUpdateCatalogInput,
@@ -351,5 +354,5 @@ export function createPluginApplication(deps: PluginApplicationDependencies): Pl
     },
   })
 
-  return Object.freeze({ commands, queries })
+  return Object.freeze({ commands, updateCommands, queries })
 }

@@ -24,7 +24,7 @@ import type {
   CommandOperationDescriptor,
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
-import type { McpCommands, PluginCommands } from './commands'
+import type { McpCommands, PluginCommands, PluginUpdateCommands } from './commands'
 import type {
   McpAclIdentityParticipant,
   McpOperationContext,
@@ -333,6 +333,7 @@ export interface PluginOperationDescriptors {
 
 export interface PluginCatalogModule {
   readonly commands: PluginCommands
+  readonly updateCommands: PluginUpdateCommands
   readonly queries: PluginQueries
   readonly operations: PluginOperationDescriptors
   readonly participants: Readonly<{
@@ -342,6 +343,7 @@ export interface PluginCatalogModule {
 
 export function createPluginOperationDescriptors(
   commands: PluginCommands,
+  updateCommands: PluginUpdateCommands,
   queries: PluginQueries,
 ): PluginOperationDescriptors {
   return Object.freeze({
@@ -412,7 +414,7 @@ export function createPluginOperationDescriptors(
       inputSchema: checkPluginUpdateInputSchema,
       outputSchema: PluginUpdateCheckSchema,
       invoke: (authority: PluginOperationContext, input: CheckPluginUpdateCatalogInput) =>
-        commands.checkUpdate(authority, input),
+        updateCommands.checkUpdate(authority, input),
     }),
     upgrade: defineCommandOperation({
       id: 'plugin-catalog.upgrade-plugin.v1',
@@ -422,7 +424,7 @@ export function createPluginOperationDescriptors(
       inputSchema: upgradePluginInputSchema,
       outputSchema: PluginUpgradeResultSchema,
       invoke: (authority: PluginOperationContext, input: UpgradePluginCatalogInput) =>
-        commands.upgrade(authority, input),
+        updateCommands.upgrade(authority, input),
     }),
   })
 }

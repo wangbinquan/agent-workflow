@@ -49,7 +49,11 @@ import {
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
-import type { McpCommands, PluginCommands } from '../src/modules/resource-catalog/public/commands'
+import type {
+  McpCommands,
+  PluginCommands,
+  PluginUpdateCommands,
+} from '../src/modules/resource-catalog/public/commands'
 import type { McpQueries, PluginQueries } from '../src/modules/resource-catalog/public/queries'
 import type {
   IntegrationTriggerResourceSnapshotInTx,
@@ -196,12 +200,10 @@ assertType<
     'commands' | 'queries' | 'operations' | 'participants'
   >
 >(true)
-assertType<
-  Equal<
-    Extract<keyof PluginCommands, string>,
-    'create' | 'update' | 'delete' | 'rename' | 'checkUpdate' | 'upgrade'
-  >
->(true)
+assertType<Equal<Extract<keyof PluginCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
+  true,
+)
+assertType<Equal<Extract<keyof PluginUpdateCommands, string>, 'checkUpdate' | 'upgrade'>>(true)
 assertType<Equal<Extract<keyof PluginQueries, string>, 'list' | 'get'>>(true)
 assertType<Equal<Extract<keyof PluginAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
   true,
@@ -215,7 +217,7 @@ assertType<
 assertType<
   Equal<
     Extract<keyof PluginCatalogModule, string>,
-    'commands' | 'queries' | 'operations' | 'participants'
+    'commands' | 'updateCommands' | 'queries' | 'operations' | 'participants'
   >
 >(true)
 
@@ -606,6 +608,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).not.toContain("from '@/services/plugin'")
     expect(route).not.toContain("from '@/services/pluginInstaller'")
     expect(route).toContain('PluginCommands')
+    expect(route).toContain('PluginUpdateCommands')
     expect(route).toContain('PluginQueries')
     expect(route).toContain('PluginAclIdentityParticipant')
     for (const consumer of [
@@ -613,8 +616,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'commands.update(',
       'commands.delete(',
       'commands.rename(',
-      'commands.checkUpdate(',
-      'commands.upgrade(',
+      'updateCommands.checkUpdate(',
+      'updateCommands.upgrade(',
       'queries.list(',
       'queries.get(',
       'aclIdentity.load(',
@@ -626,6 +629,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('coordinator.runDeduplicatedOperation')
     expect(application).toContain('requireResourceEdit')
     expect(application).toContain('requireResourceGovern')
+    expect(application).toContain('const commands: PluginCommands = Object.freeze')
+    expect(application).toContain('const updateCommands: PluginUpdateCommands = Object.freeze')
+    expect(application).toContain('Object.freeze({ commands, updateCommands, queries })')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
     expect(repository).toContain('dbTxSync')
@@ -637,6 +643,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('createSqlitePluginRepository')
     expect(composition).toContain('createPluginApplication')
     expect(composition).toContain('createLegacyPluginInstaller')
+    expect(composition).toContain('application.commands')
+    expect(composition).toContain('application.updateCommands')
+    expect(operations).toContain('updateCommands.checkUpdate')
+    expect(operations).toContain('updateCommands.upgrade')
     for (const operationId of [
       'plugin-catalog.list-plugins.v1',
       'plugin-catalog.get-plugin.v1',
@@ -656,6 +666,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
     expect(server).toContain('composePluginCatalog({')
     expect(server).toContain('commands: pluginCatalog.commands')
+    expect(server).toContain('updateCommands: pluginCatalog.updateCommands')
     expect(server).toContain('queries: pluginCatalog.queries')
     expect(server).toContain('aclIdentity: pluginCatalog.participants.aclIdentity')
 

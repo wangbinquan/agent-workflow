@@ -53,6 +53,9 @@ export interface PluginCommands {
     authority: PluginOperationContext,
     input: RenamePluginCatalogInput,
   ): Promise<PluginCatalogResource>
+}
+
+export interface PluginUpdateCommands {
   checkUpdate(
     authority: PluginOperationContext,
     input: CheckPluginUpdateCatalogInput,

@@ -998,6 +998,7 @@ export function mountApiRoutes(
   })
   mountPluginRoutes(app, deps, {
     commands: pluginCatalog.commands,
+    updateCommands: pluginCatalog.updateCommands,
     queries: pluginCatalog.queries,
     aclIdentity: pluginCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),

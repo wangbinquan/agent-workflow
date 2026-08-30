@@ -11,7 +11,10 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import type { PluginCommands } from '@/modules/resource-catalog/public/commands'
+import type {
+  PluginCommands,
+  PluginUpdateCommands,
+} from '@/modules/resource-catalog/public/commands'
 import type {
   PluginAclIdentityParticipant,
   PluginOperationContext,
@@ -29,13 +32,14 @@ import { safeJsonOrEmpty } from '@/util/http'
 
 export interface PluginRouteDependencies {
   readonly commands: PluginCommands
+  readonly updateCommands: PluginUpdateCommands
   readonly queries: PluginQueries
   readonly aclIdentity: PluginAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => PluginOperationContext
 }
 
 export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteDependencies): void {
-  const { commands, queries, aclIdentity } = module
+  const { commands, updateCommands, queries, aclIdentity } = module
 
   async function loadVisiblePlugin(actor: Actor, id: string): Promise<PluginCatalogResource> {
     const plugin = await queries.get(module.authorityFor(actor), { id })
@@ -208,7 +212,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
       try {
-        const receipt = await commands.checkUpdate(module.authorityFor(actor), {
+        const receipt = await updateCommands.checkUpdate(module.authorityFor(actor), {
           id: initial.id,
           operation: parsed.data,
         })
@@ -238,7 +242,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
       try {
-        const receipt = await commands.upgrade(module.authorityFor(actor), {
+        const receipt = await updateCommands.upgrade(module.authorityFor(actor), {
           id: initial.id,
           operation: parsed.data,
         })

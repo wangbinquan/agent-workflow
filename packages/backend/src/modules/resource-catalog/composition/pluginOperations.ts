@@ -81,9 +81,14 @@ export function composePluginCatalog(
     now: input.now ?? Date.now,
   })
   const aclIdentity = createPluginAclIdentityParticipant({ repository, clock })
-  const operations = createPluginOperationDescriptors(application.commands, application.queries)
+  const operations = createPluginOperationDescriptors(
+    application.commands,
+    application.updateCommands,
+    application.queries,
+  )
   return Object.freeze({
     commands: application.commands,
+    updateCommands: application.updateCommands,
     queries: application.queries,
     operations,
     participants: Object.freeze({ aclIdentity }),

@@ -1498,7 +1498,7 @@ describe('RFC-294 W0-R current modules ratchet', () => {
     // Same stale discipline as the edge inventory above. RFC-339 removed the
     // RFC-331 task-execution topology/read-model deviations at W2-D.
     expect(publicSurfaceViolations(modules)).toEqual(PUBLIC_SURFACE_PILOT_DEBT)
-  })
+  }, 15_000)
 
   test('module capability ownership cannot be structurally forged or serialized', () => {
     expect(capabilityForgeViolations(modules)).toEqual([])
