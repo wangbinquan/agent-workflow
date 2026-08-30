@@ -555,27 +555,6 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 3. 跑生成器前先 `cp` 一份 HEAD 版本到 scratchpad，跑完对着它做「只取自己那几条」的合并；
    **不要**直接 `git add architecture/`。
 
-4. **整套重生成也能在脏树上做准——把生成器放到「HEAD + 只有自己改动」的导出副本里跑**
-   （RFC-348 实测，2026-08-30；不是 worktree、不碰 stash，只是 scratchpad 里的一份导出）：
-
-   ```bash
-   S=$SCRATCHPAD/clean && rm -rf "$S" && mkdir -p "$S" && git archive HEAD | tar -x -C "$S"
-   ln -s "$PWD/node_modules" "$S/node_modules"
-   for p in backend frontend shared; do ln -s "$PWD/packages/$p/node_modules" "$S/packages/$p/node_modules"; done
-   cp <自己改过的每个文件> "$S/<同路径>"            # 含手改过的 commons-debt / ledger-baselines 种子
-   (cd "$S" && git init -q && git add -A && git -c user.name=x -c user.email=x@x commit -qm snapshot \
-      && bun run scripts/architecture-census.ts --write)
-   cp "$S"/architecture/*.json architecture/ && cp "$S"/design/RFC-294-*/status.md design/RFC-294-*/status.md
-   ```
-
-   生成器读的就是 CI 将看到的那棵树，12 份 artifact 与 `status.md` 直接整体拿回，不用逐条挑。
-   两处补丁：① `--snapshot-sha` 在导出副本里解析不到主仓 SHA，先不带它跑，再用
-   `withArtifactProvenance(current, { originSha, currentSnapshotSha: <主仓 HEAD 全 SHA> })`
-   （`tests/architecture/rfc294Canonical.ts`）把四份治理账本的 provenance 钉回主仓可达的 commit；
-   ② 涨了的 baseline 照规则写 `allowGrowth` 点名本 RFC，**下一笔提交必须把它们删掉**
-   （T17 会判过期）——本 RFC 的 closeout 提交就是干这个的。导出副本里跑
-   `tests/architecture/` 时，`HEAD~1` 与「SHA 可达」类断言只在主仓才有意义，其余全绿即可。
-
 ### 改 artifact 的 `entries` 别忘了同文件的 `denominator`
 
 `module-symbol-owners.json` 与 `background-jobs.json` 各自带一个 `denominator` 块，里面的
