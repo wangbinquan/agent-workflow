@@ -6,8 +6,9 @@
 // channel, for the same reason: a capability list that is written twice is a
 // capability list that disagrees with itself.
 //
-// Every handler goes through `Dispatcher`, i.e. through the REST route table.
-// Tools do not touch services directly (see dispatch.ts for why).
+// Every handler invokes stable operation ids declared in operationBindings.ts.
+// The compatibility adapter targets the already-mounted main route table; no
+// tool chooses a method/URL or creates a second transport stack.
 //
 // ## Why named task tools but converged resource tools (D11)
 //
@@ -39,12 +40,21 @@ import {
   type WorkflowInput,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DispatchResult, Dispatcher } from '@/mcp/dispatch'
+import {
+  bindingForTool,
+  type McpHttpOperation,
+  MCP_OPERATIONS,
+  MCP_TOOL_BINDINGS,
+  RESOURCE_OPERATIONS,
+} from '@/mcp/operationBindings'
 import { bodySchemasFor, querySchemaFor, type ResourceBodySchemas } from '@/mcp/resourceSchemas'
+import { registerMcpOperationProjection } from '@/platform/operations/catalog'
+import type { OperationResult } from '@/platform/operations/contracts'
+import type { McpOperationHandles } from '@/mcp/operationClient'
 
 export interface McpToolContext {
   readonly actor: Actor
-  readonly dispatch: (req: Parameters<Dispatcher>[0]) => Promise<DispatchResult>
+  readonly operations: McpOperationHandles
   /** Progress heartbeat; a no-op when the client sent no progressToken. */
   readonly progress: (message: string) => Promise<void>
   readonly signal: AbortSignal
@@ -77,25 +87,8 @@ export interface McpToolDef {
 
 const taskId = z.string().min(1).describe('Task id (ULID), as returned by launch_task/list_tasks')
 
-/**
- * Encode one path segment before it is interpolated into a dispatch URL.
- *
- * Tool arguments are model-supplied. Without this, `get_task({id:"../workflows"})`
- * builds `/api/tasks/../workflows`, which WHATWG URL normalisation collapses to
- * `/api/workflows` — a DIFFERENT endpoint from the one the tool declared. The
- * target route's own gate still runs, so this cannot exceed the token's matrix,
- * but it breaks two things that do matter: the audit row still says `get_task`,
- * and `tools/list` stops describing what a tool can actually reach.
- *
- * The converged tools already did this inside `fillId`; the named tools did not.
- * One helper now, used by both, so they cannot drift apart again.
- */
-function enc(value: unknown): string {
-  return encodeURIComponent(String(value))
-}
-
 /** Everything a dispatch answer needs to become a tool result. */
-function unwrap(res: DispatchResult): unknown {
+function unwrap(res: OperationResult): unknown {
   if (res.status >= 400) throw new McpCallError(res)
   return res.body
 }
@@ -108,7 +101,7 @@ function unwrap(res: DispatchResult): unknown {
 export class McpCallError extends Error {
   readonly status: number
   readonly code: string
-  constructor(res: DispatchResult) {
+  constructor(res: OperationResult) {
     // The daemon's error envelope is FLAT — `{ok:false, code, message, details}`
     // (util/errors.ts `toPayload`), not `{error:{…}}`. Reading the wrong shape
     // would degrade every business refusal to a generic "request failed",
@@ -209,7 +202,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: LAUNCH_TASK_INPUT_SCHEMA,
     handler: async (args, ctx) => {
       await assertNoUploadInputs(String(args.workflowId), ctx)
-      return unwrap(await ctx.dispatch({ method: 'POST', path: '/api/tasks', body: args }))
+      return unwrap(await ctx.operations.taskLaunch({ body: args }))
     },
   },
   {
@@ -235,7 +228,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     },
     audit: (args) => ({ kind: 'repo-refs', id: String(args.cachedRepoId) }),
     handler: async (args, ctx) => {
-      const listed = unwrap(await ctx.dispatch({ method: 'GET', path: '/api/cached-repos' })) as {
+      const listed = unwrap(await ctx.operations.cachedReposList()) as {
         items?: ReadonlyArray<{ id?: unknown; localPath?: unknown }>
       }
       const row = (listed.items ?? []).find((item) => item.id === args.cachedRepoId)
@@ -253,9 +246,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
         })
       }
       return unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: '/api/repos/refs',
+        await ctx.operations.repoRefsList({
           query: { path: row.localPath },
         }),
       )
@@ -272,7 +263,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}` })),
+      unwrap(await ctx.operations.taskGet({ params: { id: String(args.id) } })),
   },
   {
     name: 'list_tasks',
@@ -286,9 +277,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     },
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: '/api/tasks',
+        await ctx.operations.taskList({
           query: {
             status: args.status === undefined ? undefined : String(args.status),
             limit: args.limit === undefined ? undefined : String(args.limit),
@@ -318,7 +307,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}/diff` })),
+      unwrap(await ctx.operations.taskDiffGet({ params: { id: String(args.id) } })),
   },
   {
     name: 'list_node_runs',
@@ -328,7 +317,11 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}/node-runs` })),
+      unwrap(
+        await ctx.operations.taskNodeRunsList({
+          params: { id: String(args.id) },
+        }),
+      ),
   },
   {
     name: 'cancel_task',
@@ -338,7 +331,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${enc(args.id)}/cancel` })),
+      unwrap(await ctx.operations.taskCancel({ params: { id: String(args.id) } })),
   },
   {
     name: 'retry_node',
@@ -354,9 +347,8 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     },
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/nodes/${enc(args.nodeRunId)}/retry`,
+        await ctx.operations.taskRetryNode({
+          params: { id: String(args.id), nodeRunId: String(args.nodeRunId) },
         }),
       ),
   },
@@ -368,7 +360,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${enc(args.id)}/resume` })),
+      unwrap(await ctx.operations.taskResume({ params: { id: String(args.id) } })),
   },
   {
     name: 'diagnose_task',
@@ -377,7 +369,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: { id: taskId },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/tasks/${enc(args.id)}/diagnose` })),
+      unwrap(await ctx.operations.taskDiagnose({ params: { id: String(args.id) } })),
   },
   {
     // RFC-329 A2 — the alert loop was BROKEN on this channel. `repair_alert` and
@@ -397,7 +389,11 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: { id: taskId },
     audit: (args) => ({ kind: 'task-alerts', id: String(args.id) }),
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/tasks/${enc(args.id)}/alerts` })),
+      unwrap(
+        await ctx.operations.taskAlertsList({
+          params: { id: String(args.id) },
+        }),
+      ),
   },
   {
     name: 'repair_alert',
@@ -422,9 +418,8 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     // an operation that had never once worked.
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/alerts/${enc(args.alertId)}/repair`,
+        await ctx.operations.taskAlertRepair({
+          params: { id: String(args.id), alertId: String(args.alertId) },
           body: { optionId: args.optionId, confirm: args.confirm },
         }),
       ),
@@ -439,9 +434,8 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: { id: taskId, alertId: z.string().min(1) },
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: `/api/tasks/${enc(args.id)}/alerts/${enc(args.alertId)}/repair-options`,
+        await ctx.operations.taskAlertRepairOptionsList({
+          params: { id: String(args.id), alertId: String(args.alertId) },
         }),
       ),
   },
@@ -458,9 +452,8 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
     },
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'DELETE',
-          path: `/api/tasks/${enc(args.id)}`,
+        await ctx.operations.taskDelete({
+          params: { id: String(args.id) },
           body: { confirm: args.confirm },
         }),
       ),
@@ -476,7 +469,7 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
  * task row, no worktree, nothing to clean up.
  */
 async function assertNoUploadInputs(workflowId: string, ctx: McpToolContext): Promise<void> {
-  const res = await ctx.dispatch({ method: 'GET', path: `/api/workflows/${enc(workflowId)}` })
+  const res = await ctx.operations.workflowGet({ params: { id: workflowId } })
   if (res.status >= 400) throw new McpCallError(res)
   // `WorkflowInput` identifies a port by `key`, NOT `name` — an earlier version
   // read `.name`, so every refusal said "(?)" and the caller could not tell
@@ -620,25 +613,28 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     handler: async (_args, ctx) => {
       // RFC-329 —— per-lane failure, and `Promise.allSettled` alone does NOT give
       // it. The dispatcher resolves 4xx/5xx as a fulfilled DispatchResult (see
-      // dispatch.ts); only `unwrap` turns those into a throw. So the unwrap has to
+      // operation adapter); only `unwrap` turns those into a throw. So unwrap has to
       // happen INSIDE each lane, or a lane that 500s reports as an empty gate list
       // — the single most dangerous answer this tool can give, because "nothing is
       // waiting on you" is exactly what a model acts on by moving on.
       const lane = async (
-        path: string,
+        operation: McpHttpOperation,
         query?: Record<string, string>,
       ): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> => {
         try {
-          return { ok: true, data: unwrap(await ctx.dispatch({ method: 'GET', path, query })) }
+          return {
+            ok: true,
+            data: unwrap(await ctx.operations.dependency(operation, { query })),
+          }
         } catch (err) {
           return { ok: false, error: err instanceof McpCallError ? err.code : 'error' }
         }
       }
       const [reviews, clarify, workgroupTasks, fusions] = await Promise.all([
-        lane('/api/reviews'),
-        lane('/api/clarify'),
-        lane('/api/workgroup-tasks/pending'),
-        lane('/api/fusions', { status: 'awaiting_approval' }),
+        lane(MCP_OPERATIONS.reviewsList),
+        lane(MCP_OPERATIONS.clarifyList),
+        lane(MCP_OPERATIONS.workgroupPendingList),
+        lane(MCP_OPERATIONS.fusionsList, { status: 'awaiting_approval' }),
       ])
       const lanes = { reviews, clarify, workgroupTasks, fusions }
       return { ...lanes, complete: Object.values(lanes).every((entry) => entry.ok) }
@@ -653,7 +649,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: [],
     inputSchema: { nodeRunId: z.string().min(1) },
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/clarify/${enc(args.nodeRunId)}` })),
+      unwrap(
+        await ctx.operations.clarifyGet({
+          params: { nodeRunId: String(args.nodeRunId) },
+        }),
+      ),
   },
   {
     name: 'answer_clarify',
@@ -717,9 +717,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     >,
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/clarify/${enc(args.nodeRunId)}/answers`,
+        await ctx.operations.clarifyAnswer({
+          params: { nodeRunId: String(args.nodeRunId) },
           body: {
             answers: args.answers,
             ifMatchIteration: args.ifMatchIteration,
@@ -759,9 +758,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'task-questions', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: `/api/tasks/${enc(args.id)}/questions`,
+        await ctx.operations.taskQuestionsList({
+          params: { id: String(args.id) },
           query: {
             ...(typeof args.sourceNodeId === 'string' ? { sourceNodeId: args.sourceNodeId } : {}),
             ...(typeof args.phase === 'string' ? { phase: args.phase } : {}),
@@ -792,9 +790,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'task-questions', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/questions/manual`,
+        await ctx.operations.taskQuestionRaise({
+          params: { id: String(args.id) },
           body: { title: args.title, body: args.body, targetNodeId: args.targetNodeId },
         }),
       ),
@@ -808,9 +805,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'task-questions', id: String(args.entryId) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/questions/${enc(args.entryId)}/confirm`,
+        await ctx.operations.taskQuestionConfirm({
+          params: { id: String(args.id), entryId: String(args.entryId) },
         }),
       ),
   },
@@ -830,9 +826,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'task-questions', id: String(args.entryId) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/questions/${enc(args.entryId)}/reassign`,
+        await ctx.operations.taskQuestionReassign({
+          params: { id: String(args.id), entryId: String(args.entryId) },
           body: { targetNodeId: args.targetNodeId },
         }),
       ),
@@ -848,9 +843,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'task-questions', id: String(args.entryId) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/questions/${enc(args.entryId)}/stage`,
+        await ctx.operations.taskQuestionStage({
+          params: { id: String(args.id), entryId: String(args.entryId) },
         }),
       ),
   },
@@ -872,9 +866,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'task-questions', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/questions/dispatch`,
+        await ctx.operations.taskQuestionsDispatch({
+          params: { id: String(args.id) },
           body: { entryIds: args.entryIds },
         }),
       ),
@@ -890,9 +883,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'clarify-directives', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: `/api/tasks/${enc(args.id)}/clarify-directives`,
+        await ctx.operations.clarifyDirectivesList({
+          params: { id: String(args.id) },
         }),
       ),
   },
@@ -912,9 +904,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'clarify-directives', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/tasks/${enc(args.id)}/nodes/${enc(args.nodeId)}/clarify-directive`,
+        await ctx.operations.clarifyDirectiveSet({
+          params: { id: String(args.id), nodeId: String(args.nodeId) },
           body: { directive: args.directive },
         }),
       ),
@@ -937,9 +928,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'clarify-draft', id: String(args.nodeRunId) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'PUT',
-          path: `/api/clarify/${enc(args.nodeRunId)}/draft`,
+        await ctx.operations.clarifyDraftSave({
+          params: { nodeRunId: String(args.nodeRunId) },
           body: {
             roundId: args.roundId,
             questionId: args.questionId,
@@ -965,7 +955,9 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({ method: 'GET', path: `/api/workgroup-tasks/${enc(args.id)}/room` }),
+        await ctx.operations.workgroupRoomGet({
+          params: { taskId: String(args.id) },
+        }),
       ),
   },
   {
@@ -983,9 +975,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/workgroup-tasks/${enc(args.id)}/messages`,
+        await ctx.operations.workgroupMessagePost({
+          params: { taskId: String(args.id) },
           body: { body: args.body },
         }),
       ),
@@ -1005,9 +996,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'workgroup-gate', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/workgroup-tasks/${enc(args.id)}/confirm`,
+        await ctx.operations.workgroupStepConfirm({
+          params: { taskId: String(args.id) },
           body: { decision: args.decision, comment: args.comment },
         }),
       ),
@@ -1027,9 +1017,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'workgroup-gate', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/workgroup-tasks/${enc(args.id)}/dw-confirm`,
+        await ctx.operations.workgroupDynamicWorkflowConfirm({
+          params: { taskId: String(args.id) },
           body: { decision: args.decision, comment: args.comment },
         }),
       ),
@@ -1053,9 +1042,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/workgroup-tasks/${enc(args.id)}/dw-save-as-workflow`,
+        await ctx.operations.workgroupDynamicWorkflowSave({
+          params: { taskId: String(args.id) },
           body: { name: args.name, description: args.description },
         }),
       ),
@@ -1077,9 +1065,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'workgroup-assignment', id: String(args.assignmentId) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/workgroup-tasks/${enc(args.id)}/assignments/${enc(args.assignmentId)}/deliver`,
+        await ctx.operations.workgroupAssignmentDeliver({
+          params: { taskId: String(args.id), id: String(args.assignmentId) },
           body: { body: args.body, summary: args.summary, detail: args.detail },
         }),
       ),
@@ -1095,9 +1082,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'workgroup-assignment', id: String(args.assignmentId) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/workgroup-tasks/${enc(args.id)}/assignments/${enc(args.assignmentId)}/cancel`,
+        await ctx.operations.workgroupAssignmentCancel({
+          params: { taskId: String(args.id), id: String(args.assignmentId) },
         }),
       ),
   },
@@ -1136,9 +1122,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: () => ({ kind: 'fusions' }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: '/api/fusions',
+        await ctx.operations.fusionsList({
           query: {
             ...(typeof args.status === 'string' ? { status: args.status } : {}),
             ...(typeof args.skillId === 'string' ? { skillId: args.skillId } : {}),
@@ -1156,7 +1140,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: { id: z.string().min(1) },
     audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/fusions/${enc(args.id)}` })),
+      unwrap(await ctx.operations.fusionGet({ params: { id: String(args.id) } })),
   },
   {
     name: 'approve_fusion',
@@ -1169,7 +1153,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: { id: z.string().min(1) },
     audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/fusions/${enc(args.id)}/approve` })),
+      unwrap(await ctx.operations.fusionApprove({ params: { id: String(args.id) } })),
   },
   {
     name: 'reject_fusion',
@@ -1185,9 +1169,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/fusions/${enc(args.id)}/reject`,
+        await ctx.operations.fusionReject({
+          params: { id: String(args.id) },
           body: { feedback: args.feedback },
         }),
       ),
@@ -1200,7 +1183,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: { id: z.string().min(1) },
     audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'POST', path: `/api/fusions/${enc(args.id)}/cancel` })),
+      unwrap(await ctx.operations.fusionCancel({ params: { id: String(args.id) } })),
   },
   {
     name: 'list_reviews',
@@ -1219,9 +1202,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: () => ({ kind: 'reviews' }),
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: '/api/reviews',
+        await ctx.operations.reviewsList({
           query: {
             status: typeof args.status === 'string' ? args.status : undefined,
             taskId: typeof args.taskId === 'string' ? args.taskId : undefined,
@@ -1242,7 +1223,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: { nodeRunId: reviewNodeRunId },
     audit: reviewAudit,
     handler: async (args, ctx) =>
-      unwrap(await ctx.dispatch({ method: 'GET', path: `/api/reviews/${enc(args.nodeRunId)}` })),
+      unwrap(
+        await ctx.operations.reviewGet({
+          params: { nodeRunId: String(args.nodeRunId) },
+        }),
+      ),
   },
   {
     name: 'get_review_document',
@@ -1261,9 +1246,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'GET',
-          path: `/api/reviews/${enc(args.nodeRunId)}/versions/${enc(args.docVersionId)}`,
+        await ctx.operations.reviewDocumentGet({
+          params: {
+            nodeRunId: String(args.nodeRunId),
+            versionId: String(args.docVersionId),
+          },
         }),
       ),
   },
@@ -1277,10 +1264,13 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: { nodeRunId: reviewNodeRunId },
     audit: reviewAudit,
     handler: async (args, ctx) => {
-      const base = `/api/reviews/${enc(args.nodeRunId)}`
       const [versions, rounds] = await Promise.all([
-        ctx.dispatch({ method: 'GET', path: `${base}/versions` }),
-        ctx.dispatch({ method: 'GET', path: `${base}/rounds` }),
+        ctx.operations.reviewVersionsList({
+          params: { nodeRunId: String(args.nodeRunId) },
+        }),
+        ctx.operations.reviewRoundsList({
+          params: { nodeRunId: String(args.nodeRunId) },
+        }),
       ])
       return { versions: unwrap(versions), rounds: unwrap(rounds) }
     },
@@ -1304,9 +1294,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/reviews/${enc(args.nodeRunId)}/comments`,
+        await ctx.operations.reviewCommentAdd({
+          params: { nodeRunId: String(args.nodeRunId) },
           body: {
             commentText: args.commentText,
             quote: args.quote,
@@ -1332,9 +1321,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'PATCH',
-          path: `/api/reviews/${enc(args.nodeRunId)}/comments/${enc(args.commentId)}`,
+        await ctx.operations.reviewCommentUpdate({
+          params: {
+            nodeRunId: String(args.nodeRunId),
+            commentId: String(args.commentId),
+          },
           body: { commentText: args.commentText },
         }),
       ),
@@ -1353,9 +1344,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'DELETE',
-          path: `/api/reviews/${enc(args.nodeRunId)}/comments/${enc(args.commentId)}`,
+        await ctx.operations.reviewCommentDelete({
+          params: {
+            nodeRunId: String(args.nodeRunId),
+            commentId: String(args.commentId),
+          },
         }),
       ),
   },
@@ -1375,9 +1368,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'PATCH',
-          path: `/api/reviews/${enc(args.nodeRunId)}/documents/${enc(args.docVersionId)}/selection`,
+        await ctx.operations.reviewSelectionSet({
+          params: {
+            nodeRunId: String(args.nodeRunId),
+            docVersionId: String(args.docVersionId),
+          },
           body: { selection: args.selection },
         }),
       ),
@@ -1397,9 +1392,8 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     audit: reviewAudit,
     handler: async (args, ctx) =>
       unwrap(
-        await ctx.dispatch({
-          method: 'POST',
-          path: `/api/reviews/${enc(args.nodeRunId)}/decision`,
+        await ctx.operations.reviewSubmit({
+          params: { nodeRunId: String(args.nodeRunId) },
           body: {
             decision: args.decision,
             rejectReason: args.rejectReason,
@@ -1429,10 +1423,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
  *     verbs have dedicated tools above. Two ways to cancel a task is one way
  *     too many.
  */
-interface ResourceOp {
-  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  /** `:id` is substituted; absent means a collection path. */
-  readonly path: string
+interface ResourceOperationPresentation {
   /**
    * The route ALSO demands `?confirm=true` as an irreversibility ack, separate
    * from RFC-247's type-to-confirm body. Only `memory` does this today.
@@ -1446,17 +1437,10 @@ interface ResourceOp {
   readonly forceQuery?: boolean
 }
 
-interface ResourceRoutes {
-  readonly list: ResourceOp
-  readonly get?: ResourceOp
-  /**
-   * RFC-327 —— 这个 kind 的「有什么可筛」目录(今天只有 memory:标签 + 计数)。
-   * 没有它时 `resource_read(method:'facets')` 明确拒绝,而不是悄悄退回 list。
-   */
-  readonly facets?: ResourceOp
-  readonly create?: ResourceOp
-  readonly update?: ResourceOp
-  readonly delete?: ResourceOp
+interface ResourcePresentation {
+  readonly create?: ResourceOperationPresentation
+  readonly update?: ResourceOperationPresentation
+  readonly delete?: ResourceOperationPresentation
   /** Surfaced by describe_resource when the shape is not the obvious one. */
   readonly note?: string
 }
@@ -1478,88 +1462,38 @@ const PERMISSION_DOMAIN: Partial<Record<McpResourceKind, MatrixResource>> = {
 
 const permissionDomainFor = (kind: McpResourceKind): string => PERMISSION_DOMAIN[kind] ?? kind
 
-const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
+/**
+ * MCP-only presentation quirks. Operation availability, method and path live
+ * exclusively in RESOURCE_OPERATIONS; this table cannot recreate a transport
+ * binding or silently drift from the catalog.
+ */
+const RESOURCE_PRESENTATION: Partial<Record<McpResourceKind, ResourcePresentation>> = {
   agents: {
-    list: { method: 'GET', path: '/api/agents' },
-    get: { method: 'GET', path: '/api/agents/:id' },
-    create: { method: 'POST', path: '/api/agents' },
-    update: { method: 'PUT', path: '/api/agents/:id' },
-    delete: { method: 'DELETE', path: '/api/agents/:id' },
     note: 'Updates and deletes are fenced: include `expectedUpdatedAt` and `expectedAclRevision` from a prior read.',
   },
   skills: {
-    list: { method: 'GET', path: '/api/skills' },
-    get: { method: 'GET', path: '/api/skills/:id' },
-    create: { method: 'POST', path: '/api/skills' },
-    // NOT `PUT /api/skills/:id` — that route is retired and answers 410 Gone on
-    // every call, so the first version of this table advertised a skill update
-    // that could never succeed.
-    update: { method: 'POST', path: '/api/skills/:id/save' },
-    delete: { method: 'DELETE', path: '/api/skills/:id' },
     note:
       'Updates go through the combined-save endpoint and are fenced: include the `expectedToken` ' +
       'from a prior read. Deletes need `expectedToken` + `expectedAclRevision`.',
   },
-  mcps: {
-    list: { method: 'GET', path: '/api/mcps' },
-    get: { method: 'GET', path: '/api/mcps/:id' },
-    create: { method: 'POST', path: '/api/mcps' },
-    update: { method: 'PUT', path: '/api/mcps/:id' },
-    delete: { method: 'DELETE', path: '/api/mcps/:id' },
-  },
-  plugins: {
-    list: { method: 'GET', path: '/api/plugins' },
-    get: { method: 'GET', path: '/api/plugins/:id' },
-    create: { method: 'POST', path: '/api/plugins' },
-    update: { method: 'PUT', path: '/api/plugins/:id' },
-    delete: { method: 'DELETE', path: '/api/plugins/:id' },
-  },
   workflows: {
-    list: { method: 'GET', path: '/api/workflows' },
-    get: { method: 'GET', path: '/api/workflows/:id' },
-    create: { method: 'POST', path: '/api/workflows' },
-    update: { method: 'PUT', path: '/api/workflows/:id' },
-    delete: { method: 'DELETE', path: '/api/workflows/:id' },
     note: 'Updates and deletes are fenced: include the `expectedVersion` from a prior read.',
   },
   workgroups: {
-    list: { method: 'GET', path: '/api/workgroups' },
-    get: { method: 'GET', path: '/api/workgroups/:id' },
-    create: { method: 'POST', path: '/api/workgroups' },
-    update: { method: 'PUT', path: '/api/workgroups/:id' },
-    delete: { method: 'DELETE', path: '/api/workgroups/:id' },
     note: 'Updates and deletes are fenced: include the `expectedVersion` from a prior read.',
   },
   'scheduled-tasks': {
-    list: { method: 'GET', path: '/api/scheduled-tasks' },
-    get: { method: 'GET', path: '/api/scheduled-tasks/:id' },
-    create: { method: 'POST', path: '/api/scheduled-tasks' },
-    update: { method: 'PUT', path: '/api/scheduled-tasks/:id' },
-    delete: { method: 'DELETE', path: '/api/scheduled-tasks/:id' },
     note:
       'Creating a schedule, or editing one in a way that arms a launch, additionally requires tasks:execute — ' +
       'a schedule is a launch with a delay.',
   },
   repos: {
-    list: { method: 'GET', path: '/api/cached-repos' },
-    // RFC-329 A1 — there is NO `get`. `GET /api/cached-repos/:id` was never
-    // registered (routes/cached-repos.ts mounts list, :id/refresh, :id DELETE,
-    // batch-import and imports/*), so this table advertised a read that answered
-    // 404 on every call while `describe_resource` reported it as supported. The
-    // web UI never read a single repo either — it lists and picks the row.
-    create: { method: 'POST', path: '/api/cached-repos/batch-import' },
-    delete: { method: 'DELETE', path: '/api/cached-repos/:id' },
     note:
       'Repos are imported in batches: `create` takes a batch payload, not one repo. There is no update — ' +
       'a mirror is refreshed, not edited. There is also no single-repo read: list and pick the row. ' +
       "`delete` needs that row's `urlRedacted` as `confirm`.",
   },
   'capability-templates': {
-    list: { method: 'GET', path: '/api/capability-templates' },
-    get: { method: 'GET', path: '/api/capability-templates/:id' },
-    create: { method: 'POST', path: '/api/capability-templates' },
-    update: { method: 'PUT', path: '/api/capability-templates/:id' },
-    delete: { method: 'DELETE', path: '/api/capability-templates/:id' },
     note:
       'RFC-309: a capability template is the whole configuration for one capability — the ' +
       'scripts and hooks it runs, the parameters it declares, and which agent and prompt fills ' +
@@ -1570,11 +1504,7 @@ const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
       'execution, gated on `scripts:author`, and never reachable from a tool surface.',
   },
   'repo-groups': {
-    list: { method: 'GET', path: '/api/repo-groups' },
-    get: { method: 'GET', path: '/api/repo-groups/:id' },
-    create: { method: 'POST', path: '/api/repo-groups' },
-    update: { method: 'PUT', path: '/api/repo-groups/:id' },
-    delete: { method: 'DELETE', path: '/api/repo-groups/:id', forceQuery: true },
+    delete: { forceQuery: true },
     note:
       'RFC-248: a repo group is a named multi-repo layout (mount paths, nesting, sparse subdir, ' +
       'readonly). It is the ONLY way to launch a multi-repo task — `launch_task` takes ' +
@@ -1585,13 +1515,7 @@ const RESOURCE_ROUTES: Partial<Record<McpResourceKind, ResourceRoutes>> = {
       'pass force=1 to detach those groups and disable those schedules.',
   },
   memory: {
-    list: { method: 'GET', path: '/api/memories' },
-    // RFC-327：标签 / scope 目录。读面,与 list 同权限档。
-    facets: { method: 'GET', path: '/api/memories/facets' },
-    get: { method: 'GET', path: '/api/memories/:id' },
-    create: { method: 'POST', path: '/api/memories' },
-    update: { method: 'PATCH', path: '/api/memories/:id' },
-    delete: { method: 'DELETE', path: '/api/memories/:id', confirmQuery: true },
+    delete: { confirmQuery: true },
   },
 }
 
@@ -1654,15 +1578,11 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
         ),
     },
     handler: async (args, ctx) => {
-      const routes = routesFor(args.kind)
-      const op =
-        args.method === 'get' ? routes.get : args.method === 'facets' ? routes.facets : routes.list
-      if (op === undefined)
-        throw new Error(`resource_read: ${String(args.kind)} has no ${String(args.method)}`)
+      const method = args.method === 'get' ? 'get' : args.method === 'facets' ? 'facets' : 'list'
+      const operation = resourceOperationFor(args.kind, method)
       return unwrap(
-        await ctx.dispatch({
-          method: op.method,
-          path: fillId(op.path, args.id),
+        await ctx.operations.dependency(operation, {
+          ...(method === 'get' ? { params: { id: String(args.id) } } : {}),
           query: args.query as Record<string, string> | undefined,
         }),
       )
@@ -1702,30 +1622,19 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
         ),
     },
     handler: async (args, ctx) => {
-      const routes = routesFor(args.kind)
       const method = args.method as 'create' | 'update' | 'delete'
-      const op = routes[method]
-      if (op === undefined) {
-        // Not a permission refusal — the capability does not exist for anyone.
-        // Saying so plainly stops a model retrying with a wider token.
-        throw new Error(
-          `resource_write: ${String(args.kind)} has no ${method} operation` +
-            (routes.note === undefined ? '' : ` — ${routes.note}`),
-        )
-      }
+      const operation = resourceOperationFor(args.kind, method)
+      const presentation = resourcePresentationFor(args.kind)[method]
       if (method === 'create') {
-        return unwrap(
-          await ctx.dispatch({ method: op.method, path: op.path, body: args.body ?? {} }),
-        )
+        return unwrap(await ctx.operations.dependency(operation, { body: args.body ?? {} }))
       }
       if (typeof args.id !== 'string' || args.id === '') {
         throw new Error(`resource_write: \`id\` is required for ${method}`)
       }
       if (method === 'update') {
         return unwrap(
-          await ctx.dispatch({
-            method: op.method,
-            path: fillId(op.path, args.id),
+          await ctx.operations.dependency(operation, {
+            params: { id: args.id },
             body: args.body ?? {},
           }),
         )
@@ -1739,17 +1648,16 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
       // what you read. Filling them in on the caller's behalf would defeat the
       // fence exactly when it matters, which is when two writers race.
       return unwrap(
-        await ctx.dispatch({
-          method: op.method,
-          path: fillId(op.path, args.id),
+        await ctx.operations.dependency(operation, {
+          params: { id: args.id },
           // `memory` gates hard-delete on a `?confirm=true` QUERY (its own
           // pre-RFC-247 irreversibility ack) IN ADDITION to the token's
           // type-to-confirm body. Sending only the body made every memory
           // delete fail with `confirm-required`.
           query: {
-            ...(op.confirmQuery === true ? { confirm: 'true' } : {}),
+            ...(presentation?.confirmQuery === true ? { confirm: 'true' } : {}),
             // RFC-248: 强制删除走查询串（REST 路由读的是 `?force=1`）。
-            ...(op.forceQuery === true && args.force === true ? { force: '1' } : {}),
+            ...(presentation?.forceQuery === true && args.force === true ? { force: '1' } : {}),
           },
           body: { ...(args.body ?? {}), confirm: args.confirm },
         }),
@@ -1770,16 +1678,33 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
   },
 ]
 
-function routesFor(kind: unknown): ResourceRoutes {
-  const routes = RESOURCE_ROUTES[kind as McpResourceKind]
-  if (routes === undefined) throw new Error(`unknown resource kind: ${String(kind)}`)
-  return routes
+function resourcePresentationFor(kind: unknown): ResourcePresentation {
+  const operations = (RESOURCE_OPERATIONS as Readonly<Record<string, unknown>>)[String(kind)]
+  if (operations === undefined) throw new Error(`unknown resource kind: ${String(kind)}`)
+  return RESOURCE_PRESENTATION[kind as McpResourceKind] ?? {}
 }
 
-function fillId(path: string, id: unknown): string {
-  if (!path.includes(':id')) return path
-  if (typeof id !== 'string' || id === '') throw new Error('`id` is required for this operation')
-  return path.replace(':id', encodeURIComponent(id))
+function resourceOperationFor(
+  kind: unknown,
+  method: 'list' | 'facets' | 'get' | 'create' | 'update' | 'delete',
+): (typeof MCP_OPERATIONS)[keyof typeof MCP_OPERATIONS] {
+  const operations = (
+    RESOURCE_OPERATIONS as Readonly<
+      Record<
+        string,
+        Partial<Record<typeof method, (typeof MCP_OPERATIONS)[keyof typeof MCP_OPERATIONS]>>
+      >
+    >
+  )[String(kind)]
+  const operation = operations?.[method]
+  if (operation === undefined) {
+    const note = resourcePresentationFor(kind).note
+    throw new Error(
+      `unknown resource operation: ${String(kind)}:${method}` +
+        (note === undefined ? '' : ` — ${note}`),
+    )
+  }
+  return operation
 }
 
 export function describeResource(kind: McpResourceKind): {
@@ -1790,11 +1715,18 @@ export function describeResource(kind: McpResourceKind): {
   querySchema?: unknown
   note?: string
 } {
-  const routes = routesFor(kind)
+  const presentation = resourcePresentationFor(kind)
   const ops: Array<{ operation: string; method: string; path: string; permission: string | null }> =
     []
   for (const operation of ['list', 'facets', 'get', 'create', 'update', 'delete'] as const) {
-    const op = routes[operation]
+    const op = (
+      RESOURCE_OPERATIONS as Readonly<
+        Record<
+          string,
+          Partial<Record<typeof operation, (typeof MCP_OPERATIONS)[keyof typeof MCP_OPERATIONS]>>
+        >
+      >
+    )[kind]?.[operation]
     if (op === undefined) continue
     ops.push({
       operation,
@@ -1816,7 +1748,7 @@ export function describeResource(kind: McpResourceKind): {
   const querySchema = querySchemaFor(kind)
   const base = { kind, operations: ops, bodySchemas }
   const withQuery = querySchema === undefined ? base : { ...base, querySchema }
-  return routes.note === undefined ? withQuery : { ...withQuery, note: routes.note }
+  return presentation.note === undefined ? withQuery : { ...withQuery, note: presentation.note }
 }
 
 // -----------------------------------------------------------------------------
@@ -1864,6 +1796,28 @@ export const ALL_TOOLS: ReadonlyArray<McpToolDef> = [
   ...RESOURCE_TOOLS,
   ...INTROSPECTION_TOOLS,
 ]
+
+const toolNames = new Set(ALL_TOOLS.map((tool) => tool.name))
+const bindingNames = Object.keys(MCP_TOOL_BINDINGS)
+const missingBindings = ALL_TOOLS.filter((tool) => bindingForTool(tool.name) === undefined).map(
+  (tool) => tool.name,
+)
+const staleBindings = bindingNames.filter((name) => !toolNames.has(name))
+if (missingBindings.length > 0 || staleBindings.length > 0) {
+  throw new Error(
+    `MCP operation binding closure mismatch: missing=[${missingBindings.join(', ')}] stale=[${staleBindings.join(', ')}]`,
+  )
+}
+registerMcpOperationProjection(
+  ALL_TOOLS.map((tool) => ({
+    name: tool.name,
+    title: tool.title,
+    description: tool.description,
+    permissions: tool.permissions,
+    binding: bindingForTool(tool.name)!,
+  })),
+  MCP_RESOURCE_KINDS.map((kind) => ({ kind, description: describeResource(kind) })),
+)
 
 /**
  * RFC-247 D10 — the tools a given token may see.

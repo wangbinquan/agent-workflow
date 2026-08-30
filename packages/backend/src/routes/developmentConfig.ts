@@ -1,1099 +1,245 @@
-// RFC-310 PR-1B —— 数字员工配置资源的 HTTP 面（design.md §12.2）。
+// RFC-310/RFC-344 — HTTP projection for development configuration operations.
 //
-// 五类资源（action-templates / verification-profiles / digital-employees /
-// automation-policies / development-adapters）共用同一 CRUD 形态：identity 可
-// 见性走 RFC-099 行级 ACL，publish 产 immutable revision。另有 repository
-// assignment（每 scope 至多一份）与两个 preview 端点（T19 simulate 面：与
-// 真实运行同一 pure evaluator，不 claim lease、不写 receipt）。
-//
-// route 是装配点（identity-access `auth/actor.ts:14` 同款惯例）：在这里构造
-// sqlite store 注入 application commands；permission 门统一走 registerRoute。
+// The owning module supplies the application operations. This adapter keeps
+// only URL/body projection, transport status and the generic ACL transport.
 
+import type { AclResourceType } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import { z } from 'zod'
-import { actorOf, type Actor } from '@/auth/actor'
-import { registerRoute } from '@/routes/registry'
+import { actorOf } from '@/auth/actor'
+import type { DbClient } from '@/db/client'
+import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import type {
+  DevelopmentConfigOperations,
+  DevelopmentConfigResourceKind,
+  DevelopmentConfigResourceOperations,
+} from '@/modules/development-automation/public/operations'
+import {
+  createDevelopmentConfigResourceDescriptors,
+  createDevelopmentConfigSupplementalDescriptors,
+  developmentConfigReviseInputSchema,
+  developmentEmployeePlaybookInputSchema,
+} from '@/modules/development-automation/public/operations'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
-import {
-  archiveActionTemplate,
-  createActionTemplate,
-  publishActionTemplate,
-  reviseActionTemplateDraft,
-} from '@/modules/development-automation/application/commands/actionTemplateCommands'
-import {
-  archiveVerificationProfile,
-  createVerificationProfile,
-  publishVerificationProfile,
-  reviseVerificationProfileDraft,
-} from '@/modules/development-automation/application/commands/verificationProfileCommands'
-import {
-  archiveDigitalEmployee,
-  createDigitalEmployee,
-  getDigitalEmployee,
-  listDigitalEmployees,
-  publishDigitalEmployee,
-  reviseDigitalEmployeeDraft,
-  createAutomationPolicy,
-  getAutomationPolicy,
-  listAutomationPolicies,
-  reviseAutomationPolicyDraft,
-  publishAutomationPolicy,
-  archiveAutomationPolicy,
-} from '@/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
-import {
-  deleteAssignment,
-  listAssignments,
-  upsertAssignment,
-} from '@/modules/development-automation/infrastructure/sqliteAssignmentStore'
-import {
-  createSqliteActionTemplateStore,
-  createSqliteVerificationProfileStore,
-} from '@/modules/development-automation/infrastructure/sqliteConfigResourceStore'
-import { createEmployeePublishLookup } from '@/modules/development-automation/infrastructure/publishLookup'
-import {
-  archiveDevelopmentAdapter,
-  createDevelopmentAdapter,
-  publishDevelopmentAdapter,
-  reviseDevelopmentAdapterDraft,
-} from '@/modules/integration/application/developmentAdapterCommands'
-import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
-import { evaluatePolicy } from '@/modules/development-automation/engine/policy/evaluatePolicy'
-import { resolveEmployeeSelection } from '@/modules/development-automation/engine/policy/workSelection'
-import { buildFactSnapshot } from '@/modules/development-automation/domain/facts'
-import { factCellSchema } from '@/modules/development-automation/domain/factCell'
-import { nextDecisionSchema } from '@/modules/development-automation/domain/decision'
-import { factPredicateSchema } from '@/modules/development-automation/domain/predicate'
-import {
-  compileEmployeePlaybook,
-  digitalEmployeeContentSchema,
-  validateDigitalEmployeeForPublish,
-} from '@/modules/development-automation/domain/digitalEmployee'
-import { projectEmployeeSetupJourney } from '@/modules/development-automation/domain/journeyProjection'
-import {
-  assertNameUnchangedForEditor,
-  canViewResource,
-  filterVisibleRows,
-  canEditResource,
-  listGrantedResourceIds,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
-import type { AclResourceType, ResourceAccess } from '@agent-workflow/shared'
-import type { AppDeps } from '@/server'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { registerOperationRoute } from '@/routes/operationRoute'
+import { directOperationAuthority } from '@/routes/operationAuthority'
+import { NotFoundError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 
-type PermissionPrefix =
-  | 'action-templates'
-  | 'verification-profiles'
-  | 'digital-employees'
-  | 'automation-policies'
-  | 'adapter-definitions'
-
-interface IdentityView {
-  id: string
-  name: string
-  publishedRevision: number | null
-  ownerUserId: string | null
-  visibility: 'private' | 'public'
-  createdAt: number
-  updatedAt: number
-  archivedAt: number | null
-  [key: string]: unknown
+interface ResourceHttpBinding {
+  readonly kind: DevelopmentConfigResourceKind
+  readonly base: string
+  readonly aclType: AclResourceType
+  readonly notFoundCode: string
 }
 
-interface ResourceHandlers {
-  list(actor: Actor): Promise<IdentityView[]>
-  get(actor: Actor, id: string): Promise<(IdentityView & { draft?: unknown }) | null>
-  create(
-    actor: Actor,
-    body: { name: string; draft: unknown; extra: Record<string, unknown> },
-  ): Promise<IdentityView>
-  revise(actor: Actor, id: string, body: { name?: string; draft?: unknown }): Promise<void>
-  publish(actor: Actor, id: string): Promise<{ revision: number; contentDigest: string }>
-  archive(actor: Actor, id: string): Promise<void>
-}
-
-const createBodySchema = z
-  .object({
-    name: z.string().min(1).max(200),
-    draft: z.unknown().optional(),
-    capabilityId: z.string().min(1).optional(),
-    purpose: z
-      .enum(['requirement-source', 'pipeline-gate', 'pipeline-classifier', 'approval-gateway'])
-      .optional(),
-  })
-  .strict()
-
-const reviseBodySchema = z
-  .object({ name: z.string().min(1).max(200).optional(), draft: z.unknown() })
-  .strict()
+const RESOURCE_BINDINGS: ReadonlyArray<ResourceHttpBinding> = Object.freeze([
+  {
+    kind: 'action-template',
+    base: '/api/code/action-templates',
+    aclType: 'action_template',
+    notFoundCode: 'action-templates-not-found',
+  },
+  {
+    kind: 'verification-profile',
+    base: '/api/code/verification-profiles',
+    aclType: 'verification_profile',
+    notFoundCode: 'verification-profiles-not-found',
+  },
+  {
+    kind: 'digital-employee',
+    base: '/api/code/digital-employees',
+    aclType: 'digital_employee',
+    notFoundCode: 'digital-employees-not-found',
+  },
+  {
+    kind: 'automation-policy',
+    base: '/api/code/automation-policies',
+    aclType: 'automation_policy',
+    notFoundCode: 'automation-policies-not-found',
+  },
+  {
+    kind: 'development-adapter',
+    base: '/api/integrations/development-adapters',
+    aclType: 'development_adapter',
+    notFoundCode: 'adapter-definitions-not-found',
+  },
+])
 
 function mountConfigResource(
   app: Hono,
-  deps: AppDeps,
-  cfg: {
-    base: string
-    permissionPrefix: PermissionPrefix
-    aclType: AclResourceType
-    summaryNoun: string
-    handlers: ResourceHandlers
-    loadAclRow: (db: AppDeps['db'], id: string) => Promise<AclVisibleRow | null>
-  },
+  deps: { readonly db: DbClient },
+  binding: ResourceHttpBinding,
+  operations: DevelopmentConfigResourceOperations,
+  contexts: DirectOperationContextFactory,
 ): void {
-  const perm = (verb: 'read' | 'create' | 'update' | 'archive') =>
-    [`${cfg.permissionPrefix}:${verb}`] as const
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: cfg.base,
-      permissions: [...perm('read')],
-      tokenAccess: 'allow',
-      summary: `List visible ${cfg.summaryNoun}s`,
+  const descriptors = createDevelopmentConfigResourceDescriptors(operations)
+  const context = (c: Parameters<typeof actorOf>[0]) =>
+    directOperationAuthority(contexts, actorOf(c))
+  registerOperationRoute(app, {
+    descriptor: descriptors.list,
+    method: 'GET',
+    path: binding.base,
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json({ items: output }),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptors.create,
+    method: 'POST',
+    path: binding.base,
+    tokenAccess: 'allow',
+    decode: async (c) => safeJsonOrEmpty(c.req.raw),
+    context,
+    encode: (c, output) => c.json(output, 201),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptors.get,
+    method: 'GET',
+    path: `${binding.base}/:id`,
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context,
+    encode: (c, output) => {
+      if (output === null) throw new NotFoundError(binding.notFoundCode, 'not found')
+      return c.json(output)
     },
-    async (c) => {
-      const rows = await cfg.handlers.list(actorOf(c))
-      return c.json({ items: rows })
-    },
-  )
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: cfg.base,
-      permissions: [...perm('create')],
-      tokenAccess: 'allow',
-      summary: `Create a ${cfg.summaryNoun} draft`,
-    },
-    async (c) => {
-      const body = createBodySchema.parse(await safeJsonOrEmpty(c.req.raw))
-      const { name, draft, ...extra } = body
-      const created = await cfg.handlers.create(actorOf(c), {
-        name,
-        draft: draft ?? {},
-        extra,
-      })
-      return c.json(created, 201)
-    },
-  )
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: `${cfg.base}/:id`,
-      permissions: [...perm('read')],
-      tokenAccess: 'allow',
-      summary: `Read one ${cfg.summaryNoun} (draft + published head)`,
-    },
-    async (c) => {
-      const found = await cfg.handlers.get(actorOf(c), c.req.param('id'))
-      if (found === null) throw new NotFoundError(`${cfg.permissionPrefix}-not-found`, 'not found')
-      return c.json(found)
-    },
-  )
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: `${cfg.base}/:id`,
-      permissions: [...perm('update')],
-      tokenAccess: 'allow',
-      summary: `Revise a ${cfg.summaryNoun} draft`,
-    },
-    async (c) => {
-      const body = reviseBodySchema.parse(await safeJsonOrEmpty(c.req.raw))
-      await cfg.handlers.revise(actorOf(c), c.req.param('id'), body)
-      return c.json({ ok: true })
-    },
-  )
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: `${cfg.base}/:id/publish`,
-      permissions: [...perm('update')],
-      tokenAccess: 'allow',
-      summary: `Publish an immutable ${cfg.summaryNoun} revision`,
-    },
-    async (c) => {
-      const receipt = await cfg.handlers.publish(actorOf(c), c.req.param('id'))
-      return c.json(receipt)
-    },
-  )
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: `${cfg.base}/:id/archive`,
-      permissions: [...perm('archive')],
-      tokenAccess: 'allow',
-      summary: `Archive a ${cfg.summaryNoun} (references stay resolvable)`,
-    },
-    async (c) => {
-      await cfg.handlers.archive(actorOf(c), c.req.param('id'))
-      return c.json({ ok: true })
-    },
-  )
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptors.revise,
+    method: 'PUT',
+    path: `${binding.base}/:id`,
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      ...developmentConfigReviseInputSchema.parse(await safeJsonOrEmpty(c.req.raw)),
+    }),
+    context,
+    encode: (c) => c.json({ ok: true }),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptors.publish,
+    method: 'POST',
+    path: `${binding.base}/:id/publish`,
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptors.archive,
+    method: 'POST',
+    path: `${binding.base}/:id/archive`,
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context,
+    encode: (c) => c.json({ ok: true }),
+  })
   mountAclEndpoints(app, deps, {
-    type: cfg.aclType,
-    base: cfg.base,
+    type: binding.aclType,
+    base: binding.base,
     param: 'id',
-    load: (db, key) => cfg.loadAclRow(db, key),
+    load: (_db, id) => operations.loadAclRow(id),
   })
 }
 
-interface AclVisibleRow {
-  id: string
-  ownerUserId: string | null
-  visibility: 'private' | 'public'
-}
-
-async function requireVisible<T extends AclVisibleRow>(
-  deps: AppDeps,
-  actor: Actor,
-  aclType: AclResourceType,
-  row: T | null,
-): Promise<T> {
-  if (row === null || !(await canViewResource(deps.db, actor, aclType, row))) {
-    throw new NotFoundError('resource-not-found', 'not found')
+export function mountDevelopmentConfigRoutes(
+  app: Hono,
+  deps: { readonly db: DbClient },
+  operations: DevelopmentConfigOperations,
+  contexts: DirectOperationContextFactory,
+): void {
+  for (const binding of RESOURCE_BINDINGS) {
+    mountConfigResource(app, deps, binding, operations.resources[binding.kind], contexts)
   }
-  return row
-}
-
-/**
- * 写门（revise / publish / archive / playbook PUT）。
- *
- * RFC-317 C1 之前，这五类资源的写路径只调 `requireVisible`——即**看得见就写得动**。
- * 而 `user` 角色预设本就持有这五类的 `:update` / `:archive` 点
- * （`shared/schemas/permission.ts` 的 `USER_RESOURCE_WRITES`），于是任何登录用户
- * 都能改写 / 发布 / 归档**别人的** public 动作模板、验证档案、数字员工、自动化
- * 策略与适配器定义。同一份 permission 文件的注释却写着「per-row check 是
- * resource ACL，和这里其他类型一样」——名实不符。
- *
- * 现在与其余十二类 ACL 资源走同一套公共判据：先做 `requireResourceView`
- * （不可见 ⇒ 404，与不存在同形，守 RFC-248 H9 反枚举），再按动作分档。
- *
- * **RFC-324 起 grant 分两档**：`read` 仍然只授可见与可用（这是 RFC-317 C1 修好的
- * 那条边界，没有回退）；`write` 额外授「改内容」，覆盖 revise 与 publish。
- * archive 属于治理面，与删除同级，仍然只有 owner / `resource-acl:bypass`。
- */
-async function requireEditable<T extends AclVisibleRow>(
-  deps: AppDeps,
-  actor: Actor,
-  aclType: AclResourceType,
-  row: T | null,
-): Promise<{ row: T; access: ResourceAccess }> {
-  if (row === null) throw new NotFoundError('resource-not-found', 'not found')
-  const access = await requireResourceEdit(deps.db, actor, aclType, row)
-  return { row, access }
-}
-
-/** RFC-324 —— 治理写（archive）：与删除同级，编辑授权不覆盖。 */
-async function requireGovernable<T extends AclVisibleRow>(
-  deps: AppDeps,
-  actor: Actor,
-  aclType: AclResourceType,
-  row: T | null,
-): Promise<T> {
-  if (row === null) throw new NotFoundError('resource-not-found', 'not found')
-  await requireResourceGovern(deps.db, actor, aclType, row)
-  return row
-}
-
-export function mountDevelopmentConfigRoutes(app: Hono, deps: AppDeps): void {
-  const templateStore = createSqliteActionTemplateStore(deps.db)
-  const profileStore = createSqliteVerificationProfileStore(deps.db)
-  const adapterStore = createSqliteDevelopmentAdapterStore(deps.db)
-  const now = () => Date.now()
-
-  const identityView = (r: {
-    id: string
-    name: string
-    publishedRevision: number | null
-    ownerUserId: string | null
-    visibility: 'private' | 'public'
-    createdAt: number
-    updatedAt: number
-    archivedAt: number | null
-  }): IdentityView => ({
-    id: r.id,
-    name: r.name,
-    publishedRevision: r.publishedRevision,
-    ownerUserId: r.ownerUserId,
-    visibility: r.visibility,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    archivedAt: r.archivedAt,
+  const descriptors = createDevelopmentConfigSupplementalDescriptors(operations)
+  const context = (c: Parameters<typeof actorOf>[0]) =>
+    directOperationAuthority(contexts, actorOf(c))
+  registerOperationRoute(app, {
+    descriptor: descriptors.readEmployeePlaybook,
+    method: 'GET',
+    path: '/api/code/digital-employees/:id/playbook',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
   })
-
-  // ---- action templates ----------------------------------------------------
-  mountConfigResource(app, deps, {
-    base: '/api/code/action-templates',
-    permissionPrefix: 'action-templates',
-    aclType: 'action_template',
-    summaryNoun: 'action template',
-    loadAclRow: async (_db, id) => templateStore.getById(id),
-    handlers: {
-      list: async (actor) =>
-        (await filterVisibleRows(deps.db, actor, 'action_template', templateStore.list())).map(
-          (r) => {
-            const published =
-              r.publishedRevision === null
-                ? null
-                : templateStore.getRevision(r.id, r.publishedRevision)
-            let executorKind: 'agent' | 'workgroup' | 'script' | null = null
-            if (published !== null) {
-              const content = JSON.parse(published.contentJson) as {
-                executor?: { kind?: unknown }
-              }
-              if (
-                content.executor?.kind === 'agent' ||
-                content.executor?.kind === 'workgroup' ||
-                content.executor?.kind === 'script'
-              ) {
-                executorKind = content.executor.kind
-              }
-            }
-            return {
-              ...identityView(r),
-              capabilityId: r.extra.capabilityId,
-              executorKind,
-            }
-          },
-        ),
-      get: async (actor, id) => {
-        const row = await requireVisible(deps, actor, 'action_template', templateStore.getById(id))
-        const record = templateStore.getById(id)!
-        return {
-          ...identityView(record),
-          capabilityId: record.extra.capabilityId,
-          draft: JSON.parse(row.draftJson),
-        }
-      },
-      create: async (actor, body) => {
-        const capabilityId = body.extra.capabilityId
-        if (typeof capabilityId !== 'string') {
-          throw new ValidationError(
-            'action-template-capability-required',
-            'capabilityId is required',
-          )
-        }
-        return identityView(
-          createActionTemplate(
-            { store: templateStore, now },
-            { actorUserId: actor.user.id, name: body.name, capabilityId, draft: body.draft },
-          ),
-        )
-      },
-      revise: async (actor, id, body) => {
-        const { row: current, access } = await requireEditable(
-          deps,
-          actor,
-          'action_template',
-          templateStore.getById(id),
-        )
-        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
-        assertNameUnchangedForEditor(access, current.name, body.name)
-        reviseActionTemplateDraft(
-          { store: templateStore, now },
-          { id, draft: body.draft ?? {}, ...(body.name === undefined ? {} : { name: body.name }) },
-        )
-      },
-      publish: async (actor, id) => {
-        await requireEditable(deps, actor, 'action_template', templateStore.getById(id))
-        return publishActionTemplate(
-          { store: templateStore, now },
-          { id, actorUserId: actor.user.id },
-        )
-      },
-      archive: async (actor, id) => {
-        await requireGovernable(deps, actor, 'action_template', templateStore.getById(id))
-        archiveActionTemplate({ store: templateStore, now }, { id })
-      },
-    },
+  registerOperationRoute(app, {
+    descriptor: descriptors.reviseEmployeePlaybook,
+    method: 'PUT',
+    path: '/api/code/digital-employees/:id/playbook',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      ...developmentEmployeePlaybookInputSchema.parse(await safeJsonOrEmpty(c.req.raw)),
+    }),
+    context,
+    encode: (c, output) => c.json(output),
   })
-
-  // ---- verification profiles ----------------------------------------------
-  mountConfigResource(app, deps, {
-    base: '/api/code/verification-profiles',
-    permissionPrefix: 'verification-profiles',
-    aclType: 'verification_profile',
-    summaryNoun: 'verification profile',
-    loadAclRow: async (_db, id) => profileStore.getById(id),
-    handlers: {
-      list: async (actor) =>
-        (await filterVisibleRows(deps.db, actor, 'verification_profile', profileStore.list())).map(
-          (r) => identityView(r),
-        ),
-      get: async (actor, id) => {
-        const row = await requireVisible(
-          deps,
-          actor,
-          'verification_profile',
-          profileStore.getById(id),
-        )
-        return { ...identityView(row), draft: JSON.parse(row.draftJson) }
-      },
-      create: async (actor, body) =>
-        identityView(
-          createVerificationProfile(
-            { store: profileStore, now },
-            { actorUserId: actor.user.id, name: body.name, draft: body.draft },
-          ),
-        ),
-      revise: async (actor, id, body) => {
-        const { row: current, access } = await requireEditable(
-          deps,
-          actor,
-          'verification_profile',
-          profileStore.getById(id),
-        )
-        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
-        assertNameUnchangedForEditor(access, current.name, body.name)
-        reviseVerificationProfileDraft(
-          { store: profileStore, now },
-          { id, draft: body.draft ?? {}, ...(body.name === undefined ? {} : { name: body.name }) },
-        )
-      },
-      publish: async (actor, id) => {
-        await requireEditable(deps, actor, 'verification_profile', profileStore.getById(id))
-        return publishVerificationProfile(
-          { store: profileStore, now },
-          { id, actorUserId: actor.user.id },
-        )
-      },
-      archive: async (actor, id) => {
-        await requireGovernable(deps, actor, 'verification_profile', profileStore.getById(id))
-        archiveVerificationProfile({ store: profileStore, now }, { id })
-      },
-    },
+  registerOperationRoute(app, {
+    descriptor: descriptors.validateEmployeePlaybook,
+    method: 'POST',
+    path: '/api/code/digital-employees/:id/playbook/validate',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
   })
-
-  // ---- digital employees ---------------------------------------------------
-  mountConfigResource(app, deps, {
-    base: '/api/code/digital-employees',
-    permissionPrefix: 'digital-employees',
-    aclType: 'digital_employee',
-    summaryNoun: 'digital employee',
-    loadAclRow: (db, id) => getDigitalEmployee(db, id),
-    handlers: {
-      list: async (actor) =>
-        (
-          await filterVisibleRows(
-            deps.db,
-            actor,
-            'digital_employee',
-            await listDigitalEmployees(deps.db),
-          )
-        ).map((r) => {
-          const draft = JSON.parse(r.draftJson) as {
-            description?: unknown
-            businessStatus?: unknown
-            steps?: unknown
-          }
-          return {
-            ...identityView(r),
-            description: typeof draft.description === 'string' ? draft.description : '',
-            businessStatus: draft.businessStatus === 'disabled' ? 'disabled' : 'enabled',
-            stepCount: Array.isArray(draft.steps) ? draft.steps.length : 0,
-          }
-        }),
-      get: async (actor, id) => {
-        const row = await requireVisible(
-          deps,
-          actor,
-          'digital_employee',
-          await getDigitalEmployee(deps.db, id),
-        )
-        return { ...identityView(row), draft: JSON.parse(row.draftJson) }
-      },
-      create: async (actor, body) =>
-        identityView(
-          await createDigitalEmployee(deps.db, {
-            name: body.name,
-            ownerUserId: actor.user.id,
-            draft: body.draft,
-          }),
-        ),
-      revise: async (actor, id, body) => {
-        const { row: current, access } = await requireEditable(
-          deps,
-          actor,
-          'digital_employee',
-          await getDigitalEmployee(deps.db, id),
-        )
-        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
-        assertNameUnchangedForEditor(access, current.name, body.name)
-        await reviseDigitalEmployeeDraft(deps.db, {
-          id,
-          draft: body.draft ?? {},
-          ...(body.name === undefined ? {} : { name: body.name }),
-        })
-      },
-      publish: async (actor, id) => {
-        await requireEditable(
-          deps,
-          actor,
-          'digital_employee',
-          await getDigitalEmployee(deps.db, id),
-        )
-        return publishDigitalEmployee(deps.db, {
-          id,
-          publishedBy: actor.user.id,
-          lookup: createEmployeePublishLookup(deps.db),
-        })
-      },
-      archive: async (actor, id) => {
-        await requireGovernable(
-          deps,
-          actor,
-          'digital_employee',
-          await getDigitalEmployee(deps.db, id),
-        )
-        await archiveDigitalEmployee(deps.db, id)
-      },
-    },
+  registerOperationRoute(app, {
+    descriptor: descriptors.readSetupJourney,
+    method: 'GET',
+    path: '/api/code/setup-journey',
+    tokenAccess: 'allow',
+    decode: (c) => ({ employeeId: c.req.query('employee') }),
+    context,
+    encode: (c, output) => c.json(output),
   })
-
-  // ---- business playbook aggregate + setup journey (PR-11/PR-13) ----------
-  // The generic CRUD remains an advanced compatibility surface. Business UI
-  // reads/writes one employee playbook and receives the same server-owned
-  // next-action projection used by /code.
-  const employeePlaybookBody = z
-    .object({
-      name: z.string().min(1).max(200).optional(),
-      playbook: z.unknown(),
-    })
-    .strict()
-
-  const playbookProjection = async (actor: Actor, id: string) => {
-    const row = await requireVisible(
-      deps,
-      actor,
-      'digital_employee',
-      await getDigitalEmployee(deps.db, id),
-    )
-    const parsed = digitalEmployeeContentSchema.safeParse(JSON.parse(row.draftJson))
-    const violations = parsed.success
-      ? validateDigitalEmployeeForPublish(parsed.data, createEmployeePublishLookup(deps.db))
-      : parsed.error.issues.map((issue) => ({
-          code: 'playbook-schema-invalid',
-          where: issue.path.join('/'),
-          detail: issue.message,
-        }))
-    const assignments = await listAssignments(deps.db)
-    const hasAssignment = assignments.some((assignment) => assignment.employeeId === id)
-    return {
-      ...identityView(row),
-      playbook: JSON.parse(row.draftJson) as unknown,
-      compiled: parsed.success ? compileEmployeePlaybook(parsed.data) : null,
-      violations,
-      readyToPublish: parsed.success && violations.length === 0,
-      assignmentCount: assignments.filter((assignment) => assignment.employeeId === id).length,
-      journey: projectEmployeeSetupJourney({
-        employee: {
-          id,
-          publishedRevision: row.publishedRevision,
-          archived: row.archivedAt !== null,
-          hasAssignment,
-        },
-        canCreate: actor.permissions.has('digital-employees:create'),
-        canUpdate: actor.permissions.has('digital-employees:update'),
-        canAssign: actor.permissions.has('repository-employee-assignments:update'),
-        canLaunch: actor.permissions.has('development-missions:launch'),
-        readyToPublish: parsed.success && violations.length === 0,
-      }),
-    }
-  }
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/digital-employees/:id/playbook',
-      permissions: ['digital-employees:read'],
-      tokenAccess: 'allow',
-      summary: 'Read one business digital-employee playbook with validation and next action',
-    },
-    async (c) => c.json(await playbookProjection(actorOf(c), c.req.param('id'))),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/code/digital-employees/:id/playbook',
-      permissions: ['digital-employees:update'],
-      tokenAccess: 'allow',
-      summary: 'Revise one complete business digital-employee playbook',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const id = c.req.param('id')
-      // RFC-330 D-② —— 保存 playbook 是内容写：`write` 授权者放行（此前误用治理门，
-      // 被授权的编辑者在旧详情页保存一律 403）；改名仍归 owner（RFC-324 D3）。
-      const { row: current, access } = await requireEditable(
-        deps,
-        actor,
-        'digital_employee',
-        await getDigitalEmployee(deps.db, id),
-      )
-      const body = employeePlaybookBody.parse(await safeJsonOrEmpty(c.req.raw))
-      assertNameUnchangedForEditor(access, current.name, body.name)
-      // Reject an incomplete browser write before replacing the previous draft;
-      // cross-resource closure violations remain visible and publish-blocking.
-      digitalEmployeeContentSchema.parse(body.playbook)
-      await reviseDigitalEmployeeDraft(deps.db, {
-        id,
-        draft: body.playbook,
-        ...(body.name === undefined ? {} : { name: body.name }),
-      })
-      return c.json({ ok: true, nextLocation: `/code/config/employees/${encodeURIComponent(id)}` })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/digital-employees/:id/playbook/validate',
-      permissions: ['digital-employees:read'],
-      tokenAccess: 'allow',
-      summary: 'Validate and compile the current business digital-employee playbook',
-    },
-    async (c) => {
-      const projection = await playbookProjection(actorOf(c), c.req.param('id'))
-      return c.json({
-        readyToPublish: projection.readyToPublish,
-        violations: projection.violations,
-        compiled: projection.compiled,
-        journey: projection.journey,
-      })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/setup-journey',
-      permissions: ['digital-employees:read'],
-      tokenAccess: 'allow',
-      summary: 'Read the single next action for first-time digital-employee setup',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const visible = await filterVisibleRows(
-        deps.db,
-        actor,
-        'digital_employee',
-        await listDigitalEmployees(deps.db),
-      )
-      const assignments = await listAssignments(deps.db)
-      const hasAssignment = (id: string): boolean =>
-        assignments.some((assignment) => assignment.employeeId === id)
-      const requestedEmployee = c.req.query('employee')
-      const selected =
-        (requestedEmployee === undefined
-          ? undefined
-          : visible.find((employee) => employee.id === requestedEmployee)) ??
-        visible.find(
-          (employee) => employee.archivedAt === null && employee.publishedRevision === null,
-        ) ??
-        visible.find(
-          (employee) =>
-            employee.archivedAt === null &&
-            employee.publishedRevision !== null &&
-            !hasAssignment(employee.id),
-        ) ??
-        visible.find((employee) => employee.archivedAt === null) ??
-        visible[0] ??
-        null
-      const selectedDraft =
-        selected === null
-          ? null
-          : digitalEmployeeContentSchema.safeParse(JSON.parse(selected.draftJson))
-      const selectedReadyToPublish =
-        selectedDraft?.success === true &&
-        validateDigitalEmployeeForPublish(selectedDraft.data, createEmployeePublishLookup(deps.db))
-          .length === 0
-      return c.json(
-        projectEmployeeSetupJourney({
-          employee:
-            selected === null
-              ? null
-              : {
-                  id: selected.id,
-                  publishedRevision: selected.publishedRevision,
-                  archived: selected.archivedAt !== null,
-                  hasAssignment: hasAssignment(selected.id),
-                },
-          canCreate: actor.permissions.has('digital-employees:create'),
-          canUpdate: actor.permissions.has('digital-employees:update'),
-          canAssign: actor.permissions.has('repository-employee-assignments:update'),
-          canLaunch: actor.permissions.has('development-missions:launch'),
-          readyToPublish: selectedReadyToPublish,
-        }),
-      )
-    },
-  )
-
-  // ---- automation policies -------------------------------------------------
-  mountConfigResource(app, deps, {
-    base: '/api/code/automation-policies',
-    permissionPrefix: 'automation-policies',
-    aclType: 'automation_policy',
-    summaryNoun: 'automation policy',
-    loadAclRow: (db, id) => getAutomationPolicy(db, id),
-    handlers: {
-      list: async (actor) =>
-        (
-          await filterVisibleRows(
-            deps.db,
-            actor,
-            'automation_policy',
-            await listAutomationPolicies(deps.db),
-          )
-        ).map((r) => identityView(r)),
-      get: async (actor, id) => {
-        const row = await requireVisible(
-          deps,
-          actor,
-          'automation_policy',
-          await getAutomationPolicy(deps.db, id),
-        )
-        return { ...identityView(row), draft: JSON.parse(row.draftJson) }
-      },
-      create: async (actor, body) =>
-        identityView(
-          await createAutomationPolicy(deps.db, {
-            name: body.name,
-            ownerUserId: actor.user.id,
-            draft: body.draft,
-          }),
-        ),
-      revise: async (actor, id, body) => {
-        const { row: current, access } = await requireEditable(
-          deps,
-          actor,
-          'automation_policy',
-          await getAutomationPolicy(deps.db, id),
-        )
-        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
-        assertNameUnchangedForEditor(access, current.name, body.name)
-        await reviseAutomationPolicyDraft(deps.db, {
-          id,
-          draft: body.draft ?? {},
-          ...(body.name === undefined ? {} : { name: body.name }),
-        })
-      },
-      publish: async (actor, id) => {
-        await requireEditable(
-          deps,
-          actor,
-          'automation_policy',
-          await getAutomationPolicy(deps.db, id),
-        )
-        return publishAutomationPolicy(deps.db, { id, publishedBy: actor.user.id })
-      },
-      archive: async (actor, id) => {
-        await requireGovernable(
-          deps,
-          actor,
-          'automation_policy',
-          await getAutomationPolicy(deps.db, id),
-        )
-        await archiveAutomationPolicy(deps.db, id)
-      },
-    },
+  registerOperationRoute(app, {
+    descriptor: descriptors.listAssignments,
+    method: 'GET',
+    path: '/api/code/repository-assignments',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json({ items: output }),
   })
-
-  // ---- development adapters (integration-owned) ---------------------------
-  mountConfigResource(app, deps, {
-    base: '/api/integrations/development-adapters',
-    permissionPrefix: 'adapter-definitions',
-    aclType: 'development_adapter',
-    summaryNoun: 'development adapter',
-    loadAclRow: async (_db, id) => adapterStore.getById(id),
-    handlers: {
-      list: async (actor) =>
-        (await filterVisibleRows(deps.db, actor, 'development_adapter', adapterStore.list())).map(
-          (r) => ({ ...identityView(r), purpose: (r as { purpose?: unknown }).purpose }),
-        ),
-      get: async (actor, id) => {
-        const row = adapterStore.getById(id)
-        const hasTechnicalAuthority =
-          actor.permissions.has('adapter-definitions:update') &&
-          actor.permissions.has('scripts:author')
-        // RFC-324 —— draft 里带的是可执行与密钥投影，读它的资格与「能不能改这份
-        // Adapter」同级：owner 之外，`write` 授权者也要看得到，否则「可编辑
-        // Adapter」名存实亡。技术权限（adapter-definitions:update + scripts:author）
-        // 仍是独立的第二道门，本 RFC 不动它。
-        if (
-          row !== null &&
-          hasTechnicalAuthority &&
-          (await canEditResource(deps.db, actor, 'development_adapter', row))
-        ) {
-          return {
-            ...identityView(row),
-            purpose: (row as { purpose?: unknown }).purpose,
-            draft: JSON.parse(row.draftJson),
-          }
-        }
-
-        // A private Adapter can be granted for selection/use without exposing
-        // its executableRef or secretProjection. Public visibility alone is
-        // deliberately insufficient for this detail endpoint: only an exact
-        // grant receives the same safe identity projection as the picker.
-        if (
-          row !== null &&
-          (await canViewResource(deps.db, actor, 'development_adapter', row)) &&
-          (await listGrantedResourceIds(deps.db, actor, 'development_adapter')).has(row.id)
-        ) {
-          return {
-            ...identityView(row),
-            purpose: (row as { purpose?: unknown }).purpose,
-          }
-        }
-        throw new ForbiddenError(
-          'adapter-technical-details-forbidden',
-          'reading Adapter executable and secret projection names requires adapter-definitions:update, scripts:author, and ownership',
-        )
-      },
-      create: async (actor, body) => {
-        const purpose = body.extra.purpose
-        if (typeof purpose !== 'string') {
-          throw new ValidationError('development-adapter-purpose-required', 'purpose is required')
-        }
-        return identityView(
-          createDevelopmentAdapter(
-            adapterStore,
-            {
-              userId: actor.user.id,
-              actorHasScriptsAuthor: actor.permissions.has('scripts:author'),
-            },
-            // adapter 的 draft 在写入时即 strict parse + scripts:author 字段门：
-            // 与其他四类「draft 宽容」不同——可执行引用不允许以草稿形态潜伏。
-            {
-              name: body.name,
-              content: {
-                ...(typeof body.draft === 'object' && body.draft !== null ? body.draft : {}),
-                purpose,
-              },
-              now: now(),
-            },
-          ),
-        )
-      },
-      revise: async (actor, id, body) => {
-        const { row: current, access } = await requireEditable(
-          deps,
-          actor,
-          'development_adapter',
-          adapterStore.getById(id),
-        )
-        // RFC-324 —— revise 的 body 可以带 name；改名归 owner，编辑授权只覆盖内容。
-        assertNameUnchangedForEditor(access, current.name, body.name)
-        reviseDevelopmentAdapterDraft(
-          adapterStore,
-          { userId: actor.user.id, actorHasScriptsAuthor: actor.permissions.has('scripts:author') },
-          { id, content: body.draft ?? {}, now: now() },
-        )
-      },
-      publish: async (actor, id) => {
-        await requireEditable(deps, actor, 'development_adapter', adapterStore.getById(id))
-        return publishDevelopmentAdapter(
-          adapterStore,
-          { userId: actor.user.id, actorHasScriptsAuthor: actor.permissions.has('scripts:author') },
-          { id, now: now() },
-        )
-      },
-      archive: async (actor, id) => {
-        await requireGovernable(deps, actor, 'development_adapter', adapterStore.getById(id))
-        archiveDevelopmentAdapter(adapterStore, { id, now: now() })
-      },
-    },
+  registerOperationRoute(app, {
+    descriptor: descriptors.upsertAssignment,
+    method: 'PUT',
+    path: '/api/code/repository-assignments',
+    tokenAccess: 'allow',
+    decode: async (c) => safeJsonOrEmpty(c.req.raw),
+    context,
+    encode: (c, output) => c.json(output),
   })
-
-  // ---- repository assignments (T17) ---------------------------------------
-  const assignmentBody = z
-    .object({
-      scopeKind: z.enum(['repository', 'repository-group', 'global-default']),
-      scopeRef: z.string().min(1).nullable(),
-      employee: z
-        .object({ id: z.string().min(1), revision: z.number().int().positive() })
-        .strict()
-        .nullable(),
-      selectionPolicy: z
-        .object({ id: z.string().min(1), revision: z.number().int().positive() })
-        .strict()
-        .nullable(),
-      executionPolicy: z
-        .object({ id: z.string().min(1), revision: z.number().int().positive() })
-        .strict()
-        .nullable(),
-      defaultRequirementSourceKey: z.string().min(1).nullable(),
-    })
-    .strict()
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/repository-assignments',
-      permissions: ['repository-employee-assignments:read'],
-      tokenAccess: 'allow',
-      summary: 'List repository/group/global digital-employee assignments',
-    },
-    async (c) => c.json({ items: await listAssignments(deps.db) }),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/code/repository-assignments',
-      permissions: ['repository-employee-assignments:update'],
-      tokenAccess: 'allow',
-      summary: 'Upsert the single assignment for one scope',
-    },
-    async (c) => {
-      const body = assignmentBody.parse(await safeJsonOrEmpty(c.req.raw))
-      const view = await upsertAssignment(deps.db, { ...body, updatedBy: actorOf(c).user.id })
-      return c.json(view)
-    },
-  )
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/code/repository-assignments/:scopeKind',
-      permissions: ['repository-employee-assignments:update'],
-      tokenAccess: 'allow',
-      summary: 'Delete the assignment for one scope (scopeRef via query)',
-    },
-    async (c) => {
-      const scopeKind = z
-        .enum(['repository', 'repository-group', 'global-default'])
-        .parse(c.req.param('scopeKind'))
-      const scopeRef = c.req.query('scopeRef') ?? null
-      await deleteAssignment(deps.db, scopeKind, scopeRef)
-      return c.json({ ok: true })
-    },
-  )
-
-  // ---- previews (T19 simulate; same pure evaluator as production) ----------
-  const guardSchema = z
-    .object({
-      missionTerminal: z.boolean(),
-      mrTerminal: z.enum(['active', 'merged', 'closed', 'not-applicable']),
-      holdsLease: z.boolean(),
-      activeWritableAction: z.boolean(),
-      unsettledEffect: z.boolean(),
-      transitionFence: z.enum(['none', 'cancel-pending', 'handoff-pending']),
-      factIntegrityViolations: z.array(z.string()),
-      staleBaseline: z.boolean(),
-      authorityViolations: z.array(z.string()),
-      exhaustedBudgets: z.array(z.string()),
-      automationMode: z.enum(['active', 'tracking-only']),
-      uploadSeed: z.enum(['not-applicable', 'pending', 'seeded', 'published']),
-      uploadPlanRef: z.string().nullable(),
-    })
-    .strict()
-
-  const cellsSchema = z.record(
-    factCellSchema(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/automation-policies/preview-decision',
-      permissions: ['automation-policies:read'],
-      tokenAccess: 'allow',
-      summary: 'Simulate the fixed-guard + first-match evaluator on fixture facts',
-    },
-    async (c) => {
-      const body = z
-        .object({
-          guards: guardSchema,
-          cells: cellsSchema,
-          rules: z.array(
-            z
-              .object({
-                ruleId: z.string().min(1),
-                when: z.array(factPredicateSchema),
-                decision: nextDecisionSchema,
-              })
-              .strict(),
-          ),
-        })
-        .strict()
-        .parse(await safeJsonOrEmpty(c.req.raw))
-      const snapshot = buildFactSnapshot({
-        missionRevision: 0,
-        capturedAt: '1970-01-01T00:00:00+00:00',
-        cells: body.cells,
-      })
-      const result = evaluatePolicy({
-        guards: body.guards,
-        snapshot,
-        rules: body.rules,
-      })
-      return c.json(result)
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/digital-employees/preview-selection',
-      permissions: ['digital-employees:read'],
-      tokenAccess: 'allow',
-      summary: 'Simulate deterministic employee selection on fixture facts',
-    },
-    async (c) => {
-      const ruleSchema = z
-        .object({
-          ruleId: z.string().min(1),
-          when: z.array(factPredicateSchema),
-          employeeRef: z.string().min(1),
-        })
-        .strict()
-      const body = z
-        .object({
-          explicitEmployeeRef: z.string().min(1).nullable(),
-          assignment: z
-            .object({
-              scope: z.enum(['repository', 'repository-group', 'global-default']),
-              employeeRef: z.string().min(1).nullable(),
-              selectionRules: z.array(ruleSchema).nullable(),
-              executionPolicyRef: z.string().min(1).nullable(),
-              defaultRequirementSourceKey: z.string().min(1).nullable(),
-            })
-            .strict()
-            .nullable(),
-          explicitFallbackRef: z.string().min(1).nullable(),
-          cells: cellsSchema,
-        })
-        .strict()
-        .parse(await safeJsonOrEmpty(c.req.raw))
-      const snapshot = buildFactSnapshot({
-        missionRevision: 0,
-        capturedAt: '1970-01-01T00:00:00+00:00',
-        cells: body.cells,
-      })
-      return c.json(
-        resolveEmployeeSelection({
-          explicitEmployeeRef: body.explicitEmployeeRef,
-          assignment: body.assignment,
-          explicitFallbackRef: body.explicitFallbackRef,
-          snapshot,
-        }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: descriptors.deleteAssignment,
+    method: 'DELETE',
+    path: '/api/code/repository-assignments/:scopeKind',
+    tokenAccess: 'allow',
+    decode: (c) => ({
+      scopeKind: c.req.param('scopeKind'),
+      scopeRef: c.req.query('scopeRef') ?? null,
+    }),
+    context,
+    encode: (c) => c.json({ ok: true }),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptors.previewPolicy,
+    method: 'POST',
+    path: '/api/code/automation-policies/preview-decision',
+    tokenAccess: 'allow',
+    decode: async (c) => safeJsonOrEmpty(c.req.raw),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptors.previewSelection,
+    method: 'POST',
+    path: '/api/code/digital-employees/preview-selection',
+    tokenAccess: 'allow',
+    decode: async (c) => safeJsonOrEmpty(c.req.raw),
+    context,
+    encode: (c, output) => c.json(output),
+  })
 }

@@ -7,10 +7,17 @@ import type { Hono } from 'hono'
 import { z } from 'zod'
 
 import { actorOf } from '@/auth/actor'
+import type { DbClient } from '@/db/client'
 import type { DigitalEmployeeModule } from '@/modules/digital-employee/composition'
+import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
+import {
+  createDevelopmentActivityOperation,
+  type DevelopmentActivityOperations,
+} from '@/modules/development-automation/public/operations'
+import { registerOperationRoute } from '@/routes/operationRoute'
+import { directOperationAuthority } from '@/routes/operationAuthority'
 import { registerRoute } from '@/routes/registry'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
-import type { AppDeps } from '@/server'
 import {
   getCaseMembers,
   loadVisibleCase,
@@ -77,8 +84,10 @@ function actorForToolAuthoring(c: Parameters<typeof actorOf>[0], body: unknown) 
 
 export function mountDigitalEmployeeRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: { readonly db: DbClient },
   module: DigitalEmployeeModule,
+  activityOperations: DevelopmentActivityOperations,
+  contexts: DirectOperationContextFactory,
 ): void {
   const maxUploadBytes = 32 * 1024 * 1024
 
@@ -467,31 +476,15 @@ export function mountDigitalEmployeeRoutes(
       },
     )
 
-    registerRoute(
-      app,
-      {
-        method: 'POST',
-        path: '/api/employee-cases/worker/run-one',
-        permissions: ['development-missions:retry'],
-        tokenAccess: 'never',
-        summary: 'Run one recoverable Digital Employee OS worker cycle',
-      },
-      async (c) => {
-        const channel = runtime.worker.publishOneChannelResult()
-        if (channel !== 'idle') return c.json({ activity: 'channel', state: channel })
-        const outbox = await runtime.worker.runOneOutbox()
-        if (outbox !== 'idle') return c.json({ activity: 'outbox', state: outbox })
-        if (runtime.worker.pumpOneDelivery()) {
-          return c.json({ activity: 'delivery', state: 'completed' })
-        }
-        const roundId = runtime.worker.planOneReaction()
-        if (roundId !== null) return c.json({ activity: 'reaction', state: roundId })
-        return c.json({
-          activity: 'execution',
-          state: await runtime.worker.inspectOneExecution(),
-        })
-      },
-    )
+    registerOperationRoute(app, {
+      descriptor: createDevelopmentActivityOperation(activityOperations),
+      method: 'POST',
+      path: '/api/employee-cases/worker/run-one',
+      tokenAccess: 'never',
+      decode: () => ({}),
+      context: (c) => directOperationAuthority(contexts, actorOf(c)),
+      encode: (c, output) => c.json(output),
+    })
   }
 
   registerRoute(

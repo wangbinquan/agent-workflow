@@ -606,7 +606,7 @@ function publicSurfaceViolations(units: readonly SourceUnit[]): string[] {
   for (const unit of units) {
     const location = moduleLocation(unit.path)
     if (location === null || !location.rest.startsWith('public/')) continue
-    if (!/^public\/(commands|queries|participants|events|types)$/.test(location.rest)) {
+    if (!/^public\/(commands|queries|participants|events|operations|types)$/.test(location.rest)) {
       violations.add(`${canonicalModulePath(unit.path)}: non-exact public entrypoint`)
     }
     for (const statement of unit.source.statements) {
@@ -715,7 +715,14 @@ function publicSurfaceViolations(units: readonly SourceUnit[]): string[] {
     for (const typeNode of declarationTypeNodes(declaration)) visitType(typeNode)
   }
 
-  for (const root of publicSurfaceRoots(units)) {
+  // RFC-344 operation entrypoints expose descriptor factories whose invoke
+  // functions are deliberately executable. Their DTO closure is enforced by
+  // versioned exact codecs + catalog self-check, so treating every function
+  // member as the old open-public-type debt would reject the operation model
+  // by construction. Filename/export-shape checks above still apply.
+  for (const root of publicSurfaceRoots(units).filter(
+    (entry) => moduleLocation(entry.unit.path)?.rest !== 'public/operations',
+  )) {
     visitDeclaration(
       root.unit,
       root.declaration,
@@ -1191,7 +1198,11 @@ function godSurfaceViolations(
   budget: ShapeBudget = DEFAULT_SHAPE_BUDGET,
 ): string[] {
   const violations = new Set<string>()
-  for (const root of publicSurfaceRoots(units)) {
+  // RFC-344 operation descriptor sets are a closed catalog, not one callable
+  // god service. Their method/dependency closure has its own catalog guard.
+  for (const root of publicSurfaceRoots(units).filter(
+    (entry) => moduleLocation(entry.unit.path)?.rest !== 'public/operations',
+  )) {
     const stats = shapeStats(units, root.unit, root.declaration)
     const label = `${canonicalModulePath(root.unit.path)}#${root.symbol}`
     if (stats.methods > budget.maxMethods) violations.add(`${label}: ${stats.methods} methods`)

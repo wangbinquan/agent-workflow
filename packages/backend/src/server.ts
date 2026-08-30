@@ -16,6 +16,9 @@ import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
+import { assertOperationCatalogClosed } from '@/platform/operations/catalog'
+import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
+import { directMcpOperationAuthority } from '@/routes/operationAuthority'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
@@ -33,7 +36,13 @@ import {
   type WebhookDispatcher,
 } from '@/services/webhook/dispatcherTypes'
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
-import { composeIdentityAccess } from '@/modules/identity-access/composition'
+import {
+  composeIdentityAccess,
+  type IdentityAccessModule,
+} from '@/modules/identity-access/composition'
+import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
+import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
+import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
@@ -99,6 +108,9 @@ import {
   developmentEmployeeTypePackage,
   developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
+import { composeDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
+import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
+import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
@@ -120,7 +132,10 @@ import {
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
-import { createDevelopmentMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
+import {
+  createDevelopmentMissionCodeHostEventContinuation,
+  type DevelopmentAutomationModule,
+} from '@/modules/development-automation/composition'
 import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentWorkspaceRepositoryPreparation,
@@ -188,14 +203,17 @@ export interface AppDeps {
    */
   repositoryPublicationTransport?: ReturnType<typeof createRepositoryPublicationTransport>
   /**
+   * RFC-344 daemon-scoped development automation participant. The CLI injects
+   * the same instance used by recovery and wake sweeps so REST and MCP cannot
+   * create an independent orchestration root.
+   */
+  developmentAutomation?: DevelopmentAutomationModule
+  /**
    * RFC-317 T54 —— RFC-321 传输凭据模块，**由 bootstrap 装配**后传进来。
    *
-   * 为什么不在 `mountApiRoutes` 里 compose：那个函数每进程被调用两次（REST 的
-   * `createApp` 一次，MCP dispatcher 的私有 Hono app 在首次 MCP 请求时懒建一次），
-   * 装配写在那里就是写在一个会跑两遍的地方。`composeRepositoryTransportCredentials`
-   * 自己按 `(db, secretBox)` memoized，所以搬家前后行为逐字等价——搬的是位置，
-   * 让代码落到它自己注释说的那个位置（"Bootstrap-owned"），也让 T54 的
-   * 「路由函数里的装配只减不增」棘轮重新成立。
+   * RFC-317 把它从当时会被 REST/MCP 两次调用的 `mountApiRoutes` 上移到
+   * bootstrap。RFC-344 已删除第二套 MCP Hono；继续由 bootstrap 持有，避免
+   * route mount 重新成为 module composition owner。
    *
    * `undefined`（直接调 `mountApiRoutes` 的调用方）与 `null`（没有 secretBox）
    * 都表示「没有传输凭据模块」。
@@ -394,8 +412,8 @@ export function createApp(deps: AppDeps): Hono {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
       : deps),
-    // RFC-317 T54：装配落在 bootstrap。`mountApiRoutes` 与 `mountMcpTransport`
-    // 拿到的是**同一个**实例，dispatcher 那次懒建不再各建一套。
+    // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
+    // 拿到的是**同一个**实例；MCP 不再另建 route table。
     repositoryTransport:
       deps.repositoryTransport ??
       (deps.secretBox === undefined
@@ -504,18 +522,36 @@ export function createApp(deps: AppDeps): Hono {
   // disagree in EITHER direction, which is what makes the guarantee real
   // rather than aspirational.
 
-  mountApiRoutes(app, effectiveDeps)
+  const userRuntimeTests = getMcpRuntimeTestService({
+    db: effectiveDeps.db,
+    configPath: effectiveDeps.configPath,
+    appHome: effectiveDeps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
+    runFn: effectiveDeps.mcpRuntimeTestDependencies?.runFn,
+    now: effectiveDeps.mcpRuntimeTestDependencies?.now,
+    capacity: effectiveDeps.mcpRuntimeTestDependencies?.capacity,
+  })
+  const identityUserOperations = composeIdentityUserOperations({
+    db: effectiveDeps.db,
+    identityAccess,
+    afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
+  })
+  mountApiRoutes(app, effectiveDeps, identityAccess, identityUserOperations)
 
-  // RFC-247 §4.1 — the MCP transport. Mounted after the REST table (it builds a
-  // second, actor-injected copy of that table for tool dispatch) and inside the
-  // /api/* auth scope, so the credential is resolved before it is inspected.
-  mountMcpTransport(app, effectiveDeps)
+  // RFC-344 — tools invoke stable operation ids on this already-mounted app.
+  // No second Hono, route mount, module composition, or credential parse.
+  mountMcpTransport(app, {
+    db: effectiveDeps.db,
+    configPath: effectiveDeps.configPath,
+    operationInvokerFor: (actor) =>
+      createBoundOperationInvoker(app, directMcpOperationAuthority(identityAccess.contexts, actor)),
+  })
 
   // RFC-247 T4 — refuse to boot on a coverage mismatch, in either direction.
   // Placed after every mount and before the SPA fallback so it sees the real
   // route table. `app.routes` is Hono's own registry of what was mounted, so a
   // route cannot hide from this by being registered through some other helper.
   assertRouteMetaCoverage(app.routes.map((r) => ({ method: r.method, path: r.path })))
+  assertOperationCatalogClosed()
 
   app.onError(errorHandler)
 
@@ -553,25 +589,26 @@ export function createApp(deps: AppDeps): Hono {
 /**
  * Every `/api/*` route, mounted onto whatever app is passed in.
  *
- * Split out of `createApp` for RFC-247's MCP transport: the MCP tools dispatch
- * into THIS SAME route table with an injected actor, rather than reaching past
- * it into the services. That is the whole reason MCP cannot become a second,
- * weaker authorization surface — every gate, payload validation and row-level
- * ACL check a REST caller passes through is the identical code path, not a
- * parallel implementation that has to be kept in agreement with it.
+ * Kept as the bootstrap-owned REST table. RFC-344's MCP adapter invokes stable
+ * operation ids against this already-mounted table; it never calls this mount
+ * function or composes a second module root.
  *
  * Note what is deliberately NOT here: `multiAuth`. Authentication belongs to
- * the entry point (HTTP for `createApp`, the token that opened the MCP session
- * for the dispatcher), while authorization belongs to the route declarations.
+ * the entry point (HTTP for `createApp`, the token that opened the MCP session),
+ * while authorization belongs to the operation/route declarations.
  */
-export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
-  const identityAccess = composeIdentityAccess(deps.db)
+export function mountApiRoutes(
+  app: Hono,
+  deps: ComposedAppDeps,
+  identityAccess: IdentityAccessModule,
+  identityUserOperations: IdentityUserOperations,
+): void {
   const appHome = deps.appHome ?? dirname(deps.configPath)
   const inputArtifacts = createEmployeeInputArtifactStore(
     join(appHome, 'artifacts', 'employee-inputs'),
   )
   const developmentDelivery = buildDevelopmentDeliveryDeps(deps.db, deps.secretBox)
-  // 装配已上移到 `createApp`（RFC-317 T54）——本函数每进程跑两遍，不该装配任何东西。
+  // 装配已上移到 `createApp`（RFC-317 T54）。本函数每进程只运行一次。
   const repositoryTransportModule = deps.repositoryTransport ?? null
   const repositoryTransportCoordinator =
     repositoryTransportModule === null
@@ -742,6 +779,20 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
       composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
     ],
   })
+  const developmentActivityOperations = composeDevelopmentActivityOperations(
+    digitalEmployee.runtime.worker,
+  )
+  const developmentConfigOperations = composeDevelopmentConfigOperations(deps.db)
+  const developmentMissionOperations = composeDevelopmentMissionOperations({
+    db: deps.db,
+    configPath: deps.configPath,
+    appHome: Paths.root,
+    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+    schedulerDriver,
+    repositoryPublicationTransport,
+    ...(deps.developmentAutomation === undefined ? {} : { automation: deps.developmentAutomation }),
+    legacyAdmissionsEnabled: () => readDigitalEmployeeWriterState(deps.db).legacyAdmissionsEnabled,
+  })
 
   mountConfigRoutes(app, deps)
   mountMaintenanceRoutes(app, deps)
@@ -787,12 +838,15 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
   mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center
   mountExecutionContractRoutes(app, executionContracts) // platform deterministic IO contracts
-  mountDigitalEmployeeRoutes(app, deps, digitalEmployee) // RFC-310 Digital Employee OS
-  mountDevelopmentConfigRoutes(app, deps) // RFC-310 PR-1B
-  mountDevelopmentMissionRoutes(app, deps, {
-    legacyAdmissionsEnabled: () => readDigitalEmployeeWriterState(deps.db).legacyAdmissionsEnabled,
-    repositoryPublicationTransport,
-  }) // RFC-310 legacy drain facade
+  mountDigitalEmployeeRoutes(
+    app,
+    deps,
+    digitalEmployee,
+    developmentActivityOperations,
+    identityAccess.contexts,
+  ) // RFC-310 Digital Employee OS / RFC-344 activity operation
+  mountDevelopmentConfigRoutes(app, deps, developmentConfigOperations, identityAccess.contexts) // RFC-310 PR-1B / RFC-344
+  mountDevelopmentMissionRoutes(app, developmentMissionOperations, identityAccess.contexts) // RFC-310 legacy drain / RFC-344
   mountMissionInputUploadRoutes(app, deps) // RFC-310 PR-3
   mountWebhookTriggerRoutes(app, deps) // RFC-257 T8
   mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
@@ -814,6 +868,9 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   mountAuthRoutes(app, deps, identityAccess)
   mountOidcAuthRoutes(app, deps)
   mountOidcRoutes(app, deps)
-  mountUserRoutes(app, deps, identityAccess)
+  mountUserRoutes(app, deps, {
+    contexts: identityAccess.contexts,
+    operations: identityUserOperations,
+  })
   mountDocsRoutes(app, deps) // RFC-247 D17
 }

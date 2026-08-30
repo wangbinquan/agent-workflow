@@ -21,12 +21,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import type { Actor } from '@/auth/actor'
 import { actorOf } from '@/auth/actor'
-import { createDispatcher, mcpDispatchActor, type Dispatcher } from '@/mcp/dispatch'
+import { bindingForTool } from '@/mcp/operationBindings'
+import { createBoundMcpOperationHandles } from '@/mcp/operationClient'
 import { McpCallError, toolsFor, type McpToolContext } from '@/mcp/tools'
+import type { DbClient } from '@/db/client'
+import type { OperationInvoker } from '@/platform/operations/contracts'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
 import { recordTokenCall, type TokenCallRecord } from '@/services/tokenAudit'
 import { redactErrorText } from '@/services/tokenRedaction'
-import type { ComposedAppDeps } from '@/server'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 /** Advertised to clients on initialize. */
@@ -34,13 +36,14 @@ const SERVER_INFO = { name: 'agent-workflow', version: '1' } as const
 
 export function buildMcpServer(
   actor: Actor,
-  dispatcher: Dispatcher,
+  operationInvoker: OperationInvoker,
   audit?: (record: Omit<TokenCallRecord, 'actor' | 'channel'>) => void,
 ): McpServer {
   const server = new McpServer(SERVER_INFO)
-  const dispatchActor = mcpDispatchActor(actor)
 
   for (const tool of toolsFor(actor)) {
+    const binding = bindingForTool(tool.name)
+    if (binding === undefined) throw new Error(`${tool.name}: missing operation binding`)
     server.registerTool(
       tool.name,
       {
@@ -57,11 +60,15 @@ export function buildMcpServer(
         let deletedSnapshot: unknown
         const ctx: McpToolContext = {
           actor,
-          dispatch: async (req) => {
-            const res = await dispatcher(req, dispatchActor)
-            if (res.auditSnapshot !== undefined) deletedSnapshot = res.auditSnapshot
-            return res
-          },
+          operations: createBoundMcpOperationHandles({
+            binding,
+            invoke: operationInvoker,
+            observe(result) {
+              if (result.auditSnapshot !== undefined) {
+                deletedSnapshot = result.auditSnapshot
+              }
+            },
+          }),
           progress: async (message) => {
             const token = extra._meta?.progressToken
             // D9 / F9 — no progressToken means the client did not ask to be
@@ -151,18 +158,13 @@ function toolError(err: unknown): {
   return { isError: true, content: [{ type: 'text', text: redactErrorText(text) }] }
 }
 
-export function mountMcpTransport(app: Hono, deps: ComposedAppDeps): void {
-  // Built once, on FIRST USE. The dispatcher mounts the whole /api route table
-  // into a second Hono app — real work, and pointless for a daemon (or a test)
-  // that never receives an MCP request. Deferring it keeps `createApp` the same
-  // cost it was before this RFC, which matters because the test suite builds
-  // hundreds of apps.
-  let dispatcher: Dispatcher | null = null
-  const dispatcherOnce = (): Dispatcher => {
-    dispatcher ??= createDispatcher(deps)
-    return dispatcher
-  }
+export interface McpTransportDeps {
+  readonly db: DbClient
+  readonly configPath: string
+  readonly operationInvokerFor: (actor: Actor) => OperationInvoker
+}
 
+export function mountMcpTransport(app: Hono, deps: McpTransportDeps): void {
   // Deliberately NOT registerRoute: `/api/mcp` is a transport, not a REST
   // endpoint with a permission point. Its authorization happens per TOOL, from
   // the same declarations `tools/list` filters on. The exemption is recorded in
@@ -193,7 +195,7 @@ export function mountMcpTransport(app: Hono, deps: ComposedAppDeps): void {
       throw new UnauthorizedError('the MCP endpoint accepts personal access tokens only')
     }
 
-    const server = buildMcpServer(actor, dispatcherOnce(), (record) => {
+    const server = buildMcpServer(actor, deps.operationInvokerFor(actor), (record) => {
       void recordTokenCall(deps.db, { ...record, actor, channel: 'mcp' })
     })
     const transport = new WebStandardStreamableHTTPServerTransport({

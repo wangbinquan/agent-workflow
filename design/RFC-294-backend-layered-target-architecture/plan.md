@@ -380,7 +380,8 @@ RFC-331 current payload `262f34bf7` 的 digest 为 `e9f8a0…`，provenance repi
 `4152b377a` 的 exact-SHA CI `33034946053` terminal `success`（35/35 jobs）。source pin、current exact-SHA verdict、containing evidence 与
 architecture counts 始终分栏，不用任一祖先结论代替当前提交的判定。
 N1/W0-R、N2/P0-D、RFC-331 W2-A、RFC-332 W2-B、RFC-333 P0-C、RFC-334 W2-C、RFC-339 W2-D、RFC-341 W3、
-RFC-342 P0-A 与 RFC-343 P0-B 均已满足并完成 exact-SHA hosted closeout。W4 以后 wave 仍须另立 RFC 并单独获批。
+RFC-342 P0-A 与 RFC-343 P0-B 均已满足并完成 exact-SHA hosted closeout。W4-A 已由 RFC-344 另立 successor、获批并进入
+implementation candidate；W4-B/C/E 与完整 W4-D 仍须另立 RFC 并单独获批。
 RFC-288/289 只作历史输入，不是节点。W5 的每个 SCC family 需 W4 已断 transport/root 回边；W6 在 W4 +
 P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队。W8 是 post-W7 独立能力线：未获批时保留挡板并
 跳过，不阻塞 W9；若同一 release 激活，则必须在 W9 清仓前汇入。
@@ -402,11 +403,12 @@ P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队
 | N9   | RFC-341 / W3（Done）                | task lifecycle + review/clarify/questions committed events、per-consumer delivery、持续 continuation worker、Event Center运维面与 legacy extinction 已完成                 | final `67a97480`；Main CI `33268925250` 与 8 个定时 workflow terminal success                                              |
 | N10  | RFC-342 / P0-A（Done）              | content-only PATCH、candidate Move、双 scope transaction、OCC receipt、commit 后 WS、UI cutover 与 prompt audience proof 已完成                                            | `9dc7e6ea8` → `74c0e72bb` → `e0ef3e51c`；final `67a97480` hosted closeout success                                          |
 | N11  | RFC-343 / P0-B（Done）              | actual-chain lock、retryable compensation、V1 artifact 与 prepared/committed convergence 已完成                                                                            | `f21d6142a`；final `67a97480` hosted closeout success                                                                      |
+| N12  | RFC-344 / W4-A（In Progress）       | stable OperationCatalog、52/52 MCP closed binding、single handler root、identity/development pilots 与 API docs projection 已形成 production candidate                     | 等待 canonical、push 与 published exact-SHA Main CI + 全部定时 workflows；未完成前 W4-A 不标 Done                          |
 | OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                   | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                   |
 
 P0-A、P0-B 与 W3 已关闭各自前置；它们不再被错误地用作“RFC-287 已经落地”的前置证明，也不倒签后续 wave。
-下一项 production migration 是 W4 的独立 current-source 调研与 successor RFC；W4-E2 可消费 P0-A，W6 可消费 P0-B，
-但各自仍须通过本 wave 的功能、transaction、compatibility 与 exact-SHA hosted gate。
+当前 production migration 是 RFC-344 / W4-A；W4-E2 可消费 P0-A，W6 可消费 P0-B，但各自仍须通过本 wave 的功能、transaction、
+compatibility 与 exact-SHA hosted gate。
 
 ## 4. W0-R：重建架构基线、owner 账本与机器栅栏
 
@@ -727,6 +729,10 @@ W5-owned debt transfer 完成，不执行对应 B/D，也不要求 W5-owned rout
 只在该 context 旧 consumer=0 后收缩。
 
 ### W4-A Operation catalog 与 adapter parity
+
+**实施 successor**：[RFC-344 OperationCatalog 与 transport cutover](../RFC-344-operation-catalog-transport-cutover/proposal.md)。D1～D10、
+完整实施与提交上库已获批准；当前 production candidate 已形成，但以下退出项只在 published exact SHA 的 Main CI 与全部要求的定时
+workflows terminal success 后勾选。
 
 - [ ] 定义 command/query 判别的 transport-neutral operation descriptor，完整 admission 含 permissions AND 与
       publicReason；账户角色只选择 permission preset，不设 identity gate；RouteMeta 从 operation + HTTP binding 派生，

@@ -3,7 +3,7 @@
 // 为什么要有这三条
 // ----------------
 // RFC-294 定的目标架构里，跨 bounded context 只允许走 exact
-// `public/{commands,queries,participants,events,types}` 合同，模块内部与 composition
+// `public/{commands,queries,participants,events,operations,types}` 合同，模块内部与 composition
 // 入口对外不可见。这个约束此前**只写在设计文档里**——没有任何机器在数它，于是：
 //
 //   - **R1（inbound）**：legacy 层（`services/` `routes/` `ws/` `auth/`）直接 import 模块
@@ -200,7 +200,7 @@ describe('RFC-317 T24 —— R3：模块目录形状', () => {
     }
     expect(
       actual,
-      'public/ 下只允许 commands / queries / participants / events / types 这五个 exact 入口。' +
+      'public/ 下只允许 commands / queries / participants / events / operations / types exact 入口。' +
         '别的文件名等于给了消费者一个不受合同约束的入口',
     ).toEqual(NON_EXACT_PUBLIC as Record<string, string[]>)
   })

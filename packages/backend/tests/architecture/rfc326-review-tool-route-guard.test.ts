@@ -23,6 +23,10 @@ import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskRoutes } from '@/routes/tasks'
 import type { AppDeps } from '@/server'
+import {
+  recordingOperationHandles,
+  type RecordedOperationCall,
+} from '../helpers/mcpOperationRecording'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
@@ -61,10 +65,9 @@ function canonicalDispatch(method: string, path: string): string {
 }
 
 /**
- * Every `/api/reviews*` path a tool dispatches to, derived by CALLING each
- * handler against a recording dispatcher (the same `ctx.dispatch` seam the
- * real server hands the tool). Tools that refuse the placeholder arguments
- * before dispatching (the converged resource tools) contribute nothing.
+ * Every `/api/reviews*` operation a tool invokes, derived by CALLING each
+ * handler against a recording operation adapter. Tools that refuse placeholder
+ * arguments before invoking contribute nothing.
  */
 async function reviewPathsDispatchedByTools(): Promise<Map<string, string[]>> {
   const byTool = new Map<string, string[]>()
@@ -86,12 +89,14 @@ async function reviewPathsDispatchedByTools(): Promise<Map<string, string[]>> {
   aborted.abort()
   for (const tool of ALL_TOOLS) {
     const calls: string[] = []
+    const recorded: RecordedOperationCall[] = []
     const ctx: McpToolContext = {
       actor: {} as McpToolContext['actor'],
-      dispatch: async (req) => {
-        if (req.path.startsWith(REVIEW_PREFIX)) calls.push(canonicalDispatch(req.method, req.path))
-        return { status: 200, body: {} }
-      },
+      operations: recordingOperationHandles(tool.name, recorded, (call) => {
+        if (call.path.startsWith(REVIEW_PREFIX))
+          calls.push(canonicalDispatch(call.method, call.path))
+        return {}
+      }),
       progress: async () => {},
       signal: aborted.signal,
     }

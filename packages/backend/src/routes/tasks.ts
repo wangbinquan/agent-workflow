@@ -26,7 +26,7 @@ import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
 import { tasks as tasksTable } from '@/db/schema'
 import type { AppDeps } from '@/server'
-import { registerRoute } from '@/routes/registry'
+import { registerRoute, registerRouteMiddleware } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import {
   assertCanReplaySourceTask,
@@ -221,7 +221,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   // RFC-036 visibility gate. All /api/tasks/:id/... reads require the actor
   // to be admin, owner, or a task_collaborators member. Mounted as middleware
   // so each downstream handler can assume the task is visible.
-  app.use('/api/tasks/:id', async (c, next) => {
+  registerRouteMiddleware(app, '/api/tasks/:id', async (c, next) => {
     // POST /api/tasks does not have :id; skip in that case.
     if (!c.req.param('id')) {
       await next()
@@ -230,7 +230,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     await visibilityCheck(c, deps)
     await next()
   })
-  app.use('/api/tasks/:id/*', async (c, next) => {
+  registerRouteMiddleware(app, '/api/tasks/:id/*', async (c, next) => {
     await visibilityCheck(c, deps)
     await next()
   })

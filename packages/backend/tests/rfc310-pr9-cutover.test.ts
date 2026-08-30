@@ -557,7 +557,15 @@ describe('RFC-310 PR-9 — cutover route error codes are named', () => {
     // code-host 的组合在单测里过重；内层全部拒绝路径已在上方 application 级
     // 逐一实测，这里以源码断言锁住 route 层的错误码壳不被改名。
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'developmentMissions.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'development-automation',
+        'composition',
+        'missionOperations.ts',
+      ),
       'utf8',
     )
     expect(source).toContain("new ConflictError('cutover-adopt-rejected'")

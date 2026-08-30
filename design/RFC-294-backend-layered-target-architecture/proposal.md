@@ -11,7 +11,9 @@
   [RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已完成 T0～T11、canonical 与 hosted/scheduled closeout并关闭 W2-D；
   [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已完成完整 W3；
   [RFC-342](../RFC-342-memory-scope-move-correctness/proposal.md) 与
-  [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md) 已分别关闭 P0-A/P0-B。W4 以后 wave 仍未授权）
+  [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md) 已分别关闭 P0-A/P0-B；
+  [RFC-344](../RFC-344-operation-catalog-transport-cutover/proposal.md) 已获批准并进入 W4-A implementation candidate，W4-B/C/E 及完整
+  W4-D 仍未授权）
 - 性质：目标架构总纲 + 迁移治理合同；已落 wave/slice 按 exact evidence 记账，未完成 wave 不因局部模块或账本存在而倒签 Done
 - `3bfd5be87ba98e329e49432d2e59bff918a878ec` 只保留为历史 measurement seed。current shape 统一由
   `architecture/current-report.json` 与七份 canonical manifests 重放。RFC-331 前的历史 source pin 为

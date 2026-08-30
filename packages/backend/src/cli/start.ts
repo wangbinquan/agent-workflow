@@ -901,6 +901,89 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const legacyMissionDrain = createLegacyMissionDrainPort(db)
   const employeeWriterState = activateDigitalEmployeeOsWriter(db, legacyMissionDrain)
   log.info('digital employee writer activated', { ...employeeWriterState })
+
+  // RFC-310 PR-3/PR-4 + RFC-344 —— bootstrap owns exactly one
+  // development-automation composition. HTTP and MCP receive this participant;
+  // boot recovery, terminal callbacks and wake sweeps drive the same instance.
+  const developmentMissionStore = createSqliteMissionStore(db)
+  const developmentAutomation = composeDevelopmentAutomation({
+    db,
+    appHome: Paths.root,
+    requirementSource: composeRequirementSourceRunner(db),
+    changeCandidate: bindChangeCandidateParticipant(),
+    candidateDelivery: bindCandidateDeliveryParticipant({
+      publicationTransport: repositoryPublicationTransport,
+    }),
+    conflictMerge: bindConflictMergeParticipant(),
+    ...buildDevelopmentDeliveryDeps(db, secretBox),
+    ...buildDevelopmentPipelineDeps(db),
+    ...buildDevelopmentMrFactsDeps(db, secretBox),
+    agentLauncher: composeAgentActionExecution({
+      db,
+      startDeps: buildStartTaskDeps(
+        db,
+        taskExecutionRuntime.schedulerDriver,
+        Paths.config,
+        SYSTEM_USER_ID,
+        secretBox,
+      ),
+      onTerminal: (executionRef) => {
+        const missionId = missionIdOfExecutionRef(db, executionRef)
+        if (missionId === null) return
+        developmentMissionStore.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'agent-execution',
+          deliveryKey: `agent-exec:${executionRef}`,
+          now: Date.now(),
+        })
+        void developmentAutomation
+          .drive(missionId)
+          .then((outcome) => {
+            if (outcome.stop === 'step-budget') {
+              log.warn('development mission drive reached its bounded step budget', {
+                missionId,
+                steps: outcome.steps,
+              })
+            }
+          })
+          .catch((err: unknown) => {
+            log.warn('development mission drive after Agent terminal failed', {
+              missionId,
+              err: err instanceof Error ? err.message : String(err),
+            })
+          })
+      },
+    }),
+    scriptLauncher: composeScriptActionExecution({
+      db,
+      startDeps: buildStartTaskDeps(
+        db,
+        taskExecutionRuntime.schedulerDriver,
+        Paths.config,
+        SYSTEM_USER_ID,
+        secretBox,
+      ),
+      onTerminal: (executionRef) => {
+        const missionId = missionIdOfExecutionRef(db, executionRef)
+        if (missionId === null) return
+        developmentMissionStore.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'agent-execution',
+          deliveryKey: `script-exec:${executionRef}`,
+          now: Date.now(),
+        })
+        void developmentAutomation.drive(missionId).catch((err: unknown) => {
+          log.warn('development mission drive after Script terminal failed', {
+            missionId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
+      },
+    }),
+    approvalGateway: developmentApprovalGateway,
+  })
   const employeeHttpEventCenter = composeEventCenter({
     db,
     typePackageDescriptorJsons: [
@@ -1112,6 +1195,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     maintenanceStatus: maintenanceService.status,
     secretBox,
     repositoryPublicationTransport,
+    developmentAutomation,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     taskExecutionReadModels: taskExecutionRuntime.readModels,
     webhookDispatcher,
@@ -1260,91 +1344,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // Intent/apply/resource-bundle boot convergence is admitted by
   // maintenanceService and executes off-thread; typed queued-session deltas
   // above are the only work handed back to main.
-  // RFC-310 PR-3/PR-4 —— development-automation 装配：启动恢复（fence 悬挂 /
-  // epoch 过期 effect / 到期 wake，与 sweep 同一 reconcile 机制）+ 30s wake
-  // sweep + hourly 未 claim 上传 TTL 回收 + agent 执行 runner（task-execution
-  // 侧组装；终态回调经反查落 wake hint，让 30s sweep 立即收取结果）。路由侧
-  // 另有同参装配（无共享可变状态，同 db/appHome 下两实例语义等价）；消费者
-  // 账本见 rfc310-architecture-lock。
-  const developmentMissionStore = createSqliteMissionStore(db)
-  const developmentAutomation = composeDevelopmentAutomation({
-    db,
-    appHome: Paths.root,
-    requirementSource: composeRequirementSourceRunner(db),
-    changeCandidate: bindChangeCandidateParticipant(),
-    candidateDelivery: bindCandidateDeliveryParticipant({
-      publicationTransport: repositoryPublicationTransport,
-    }),
-    conflictMerge: bindConflictMergeParticipant(),
-    ...buildDevelopmentDeliveryDeps(db, secretBox),
-    ...buildDevelopmentPipelineDeps(db),
-    ...buildDevelopmentMrFactsDeps(db, secretBox),
-    agentLauncher: composeAgentActionExecution({
-      db,
-      startDeps: buildStartTaskDeps(
-        db,
-        taskExecutionRuntime.schedulerDriver,
-        Paths.config,
-        SYSTEM_USER_ID,
-        secretBox,
-      ),
-      onTerminal: (executionRef) => {
-        const missionId = missionIdOfExecutionRef(db, executionRef)
-        if (missionId === null) return
-        developmentMissionStore.recordWakeHint({
-          id: ulid(),
-          missionId,
-          source: 'agent-execution',
-          deliveryKey: `agent-exec:${executionRef}`,
-          now: Date.now(),
-        })
-        void developmentAutomation
-          .drive(missionId)
-          .then((outcome) => {
-            if (outcome.stop === 'step-budget') {
-              log.warn('development mission drive reached its bounded step budget', {
-                missionId,
-                steps: outcome.steps,
-              })
-            }
-          })
-          .catch((err: unknown) => {
-            log.warn('development mission drive after Agent terminal failed', {
-              missionId,
-              err: err instanceof Error ? err.message : String(err),
-            })
-          })
-      },
-    }),
-    scriptLauncher: composeScriptActionExecution({
-      db,
-      startDeps: buildStartTaskDeps(
-        db,
-        taskExecutionRuntime.schedulerDriver,
-        Paths.config,
-        SYSTEM_USER_ID,
-        secretBox,
-      ),
-      onTerminal: (executionRef) => {
-        const missionId = missionIdOfExecutionRef(db, executionRef)
-        if (missionId === null) return
-        developmentMissionStore.recordWakeHint({
-          id: ulid(),
-          missionId,
-          source: 'agent-execution',
-          deliveryKey: `script-exec:${executionRef}`,
-          now: Date.now(),
-        })
-        void developmentAutomation.drive(missionId).catch((err: unknown) => {
-          log.warn('development mission drive after Script terminal failed', {
-            missionId,
-            err: err instanceof Error ? err.message : String(err),
-          })
-        })
-      },
-    }),
-    approvalGateway: developmentApprovalGateway,
-  })
+  // This recovery/driver section consumes the bootstrap-owned participant
+  // above; routes never assemble a second daemon instance.
   if (
     employeeWriterState.mode === 'legacy-draining' ||
     employeeWriterState.legacyAdmissionsEnabled

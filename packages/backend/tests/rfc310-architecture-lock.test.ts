@@ -39,6 +39,7 @@ const TOP_LEVEL_ALLOWED_FILES = new Set(['composition.ts'])
 const PUBLIC_ALLOWED = new Set([
   'commands.ts',
   'queries.ts',
+  'operations.ts',
   'participants.ts',
   'events.ts',
   'types.ts',
@@ -48,7 +49,6 @@ const PUBLIC_ALLOWED = new Set([
 const COMPOSITION_CONSUMERS: string[] = [
   'cli/start.ts',
   'platform/background/maintenanceWorker.ts',
-  'routes/developmentMissions.ts',
   'server.ts',
 ]
 const REQUIRED_PORTS_CONSUMERS: string[] = []

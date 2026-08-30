@@ -6,6 +6,8 @@ import type {
   DelegatedOperationContextFactory as DelegatedOperationContextFactoryPort,
   DelegatedSource,
   DirectOperationContextFactory as DirectOperationContextFactoryPort,
+  AuthenticatedAuthoritySnapshot,
+  DirectAuthenticatedAuthority,
   DirectTransport,
   DurableSourceAttemptRef,
   IdempotentCommandContext,
@@ -22,6 +24,8 @@ export type {
   DelegatedAuthorityRef,
   DelegatedSource,
   DirectTransport,
+  AuthenticatedAuthoritySnapshot,
+  DirectAuthenticatedAuthority,
   DurableSourceAttemptRef,
   IdempotentCommandContext,
   PrincipalSource,
@@ -111,6 +115,12 @@ export class DirectOperationContextFactory implements DirectOperationContextFact
     return context
   }
 
+  authorityFromAuthenticatedPrincipal(
+    authority: AuthenticatedAuthoritySnapshot,
+  ): DirectAuthenticatedAuthority {
+    return freezeDirectAuthority(authority)
+  }
+
   resolveCommandContext(context: CommandContext): AuthenticatedPrincipal {
     const metadata = trustedContextMetadata(context)
     if (metadata.transport === 'delegated') throw new Error('direct-command-context-required')
@@ -119,6 +129,31 @@ export class DirectOperationContextFactory implements DirectOperationContextFact
       source: metadata.source as PrincipalSource,
     })
   }
+
+  resolveQueryContext(context: QueryContext): AuthenticatedPrincipal {
+    const metadata = trustedContextMetadata(context)
+    if (metadata.transport === 'delegated') throw new Error('direct-query-context-required')
+    return Object.freeze({
+      userId: subjectRefOf(context.authority).userId,
+      source: metadata.source as PrincipalSource,
+    })
+  }
+}
+
+function freezeDirectAuthority(
+  authority: AuthenticatedAuthoritySnapshot,
+): DirectAuthenticatedAuthority {
+  return Object.freeze({
+    user: Object.freeze({ ...authority.user }),
+    userId: authority.user.id,
+    source: authority.source,
+    permissions: new Set(authority.permissions),
+    ...(authority.purpose === undefined ? {} : { purpose: authority.purpose }),
+    ...(authority.patId === undefined ? {} : { patId: authority.patId }),
+    ...(authority.authorityRevision === undefined
+      ? {}
+      : { authorityRevision: authority.authorityRevision }),
+  }) as unknown as DirectAuthenticatedAuthority
 }
 
 export function trustedContextMetadata(

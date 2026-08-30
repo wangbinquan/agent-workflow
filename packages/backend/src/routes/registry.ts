@@ -36,6 +36,14 @@ import type { Handler, Hono, MiddlewareHandler } from 'hono'
 import type { BlankEnv } from 'hono/types'
 import { ROUTE_BACKED_POINTS, type Permission } from '@agent-workflow/shared'
 import { tryActorOf } from '@/auth/actor'
+import {
+  registerHttpOperationProjection,
+  resetOperationRouteProjections,
+} from '@/platform/operations/catalog'
+import {
+  registerBoundOperationHandler,
+  registerBoundOperationMiddleware,
+} from '@/platform/operations/boundOperationInvoker'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -240,17 +248,42 @@ export function registerRoute<P extends string>(
   // A CONFLICTING re-declaration is still an error — that is the real mistake
   // this check exists to catch.
   REGISTRY.set(k, meta)
+  const operation = registerHttpOperationProjection(meta)
+  const gate = routeMetaGate(meta)
+  registerBoundOperationHandler({
+    app,
+    operationId: operation.operationId,
+    method: meta.method,
+    path: meta.path,
+    gate,
+    handlers,
+  })
   // `app.on(method, path, ...)` rather than `app.get`/`app.post`/… : the latter
   // are generic over a literal path type, which a runtime `meta.path` cannot
   // satisfy. `on` takes the method as data, which is exactly what a registry
   // needs — and it keeps this switch-free, so a future HttpMethod addition
   // cannot silently fall through.
-  app.on(meta.method, meta.path, routeMetaGate(meta), ...handlers)
+  app.on(meta.method, meta.path, gate, ...handlers)
+}
+
+/**
+ * Register non-transport route middleware on both the HTTP router and the
+ * direct operation handler table. This preserves route-owned visibility or
+ * projection behaviour when MCP invokes the same operation without routing.
+ */
+export function registerRouteMiddleware<P extends string>(
+  app: Hono,
+  path: P,
+  handler: MiddlewareHandler<BlankEnv, P>,
+): void {
+  registerBoundOperationMiddleware({ app, path, handler })
+  app.use(path, handler)
 }
 
 /** Test-only: drop every registration so suites can build fresh apps. */
 export function resetRouteMetaRegistry(): void {
   REGISTRY.clear()
+  resetOperationRouteProjections()
 }
 
 // -----------------------------------------------------------------------------

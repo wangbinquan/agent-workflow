@@ -38,6 +38,11 @@ export class GetUserAccess {
       trustedContextMetadata(context),
     )
   }
+
+  /** Shared admission for public directory queries with a different projection. */
+  async authorize(context: QueryContext): Promise<void> {
+    await this.admit(context)
+  }
 }
 
 export function requireUserAccess(view: AdminUserAccessView | null): AdminUserAccessView {

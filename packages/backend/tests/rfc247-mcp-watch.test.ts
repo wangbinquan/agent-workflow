@@ -17,6 +17,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { McpToolContext } from '../src/mcp/tools'
 import { watchTask, WATCH_HEARTBEAT_MS, WATCH_MAX_MS, type WatchDeps } from '../src/mcp/watch'
+import {
+  forwardingOperationHandles,
+  recordingOperationHandles,
+} from './helpers/mcpOperationRecording'
 
 interface Rig {
   ctx: McpToolContext
@@ -40,11 +44,11 @@ function rig(statuses: string[], opts: { withProgress?: boolean } = {}): Rig {
   }
   const ctx = {
     actor: {} as McpToolContext['actor'],
-    dispatch: async () => {
+    operations: recordingOperationHandles('watch_task', [], () => {
       const status = statuses[Math.min(state.reads, statuses.length - 1)]
       state.reads += 1
-      return { status: 200, body: { id: 't1', status } }
-    },
+      return { id: 't1', status }
+    }),
     progress: async (message: string) => {
       if (opts.withProgress === false) return
       progressMessages.push(message)
@@ -136,7 +140,10 @@ describe('RFC-247 watch_task — a read failure is a real error', () => {
     // Waiting longer cannot fix an unreadable task, and reporting
     // `stillRunning` would have the model wait again forever.
     const ctx = {
-      dispatch: async () => ({ status: 404, body: { code: 'task-not-found', message: 'gone' } }),
+      operations: forwardingOperationHandles('watch_task', [], () => ({
+        status: 404,
+        body: { code: 'task-not-found', message: 'gone' },
+      })),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as McpToolContext

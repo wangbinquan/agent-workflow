@@ -1,1167 +1,341 @@
-// RFC-310 PR-2 T31 / PR-3 收口 —— DevelopmentMission 的 HTTP 面。
-//
-// PR-2：launch/list/get/requirement-source/cancel/retry/decision-trace 七端点。
-// PR-3：装配 composeDevelopmentAutomation（evidence/materializer/reconciler）——
-// direct 正文在 launch 成功后由本层幂等 stash 为 evidence；响应丢失或首次
-// evidence 写失败可用同一 launch key 重放并续跑原 mission。mutation 成功后 fire-and-forget
-// 一轮 reconcile（进度保证仍由 daemon 的 30s wake sweep 兜底，这里只降延迟）；
-// 新增 requirement manifest / 逐文件 ranged 读 / answers / source-refresh
-// preview·apply 端点。handoff/attach/resume/upgrade 与其 permission 点随
-// PR-7/PR-8 挂载。mutation 都返回可追踪对象（missionId+status），不返回裸
-// 「已接受」。
-//
-// UI/API 无 host path：manifest 与文件读全部经 opaque ref（bundleId/sha256），
-// 文件字节从 EvidenceStore blob 流式出，不暴露 evidence 根路径。
+// RFC-310/RFC-344 — HTTP bindings for DevelopmentMission operation descriptors.
 
 import type { Hono } from 'hono'
 import { z } from 'zod'
-
-import { DIGITAL_EMPLOYEE_MISSION_STATUSES } from '@agent-workflow/shared'
-
 import { actorOf } from '@/auth/actor'
-import { registerRoute } from '@/routes/registry'
+import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
 import {
-  cancelMission,
-  launchMission,
-  launchMissionInputSchema,
-  previewMissionAdmission,
-  previewDirectInput,
-  retryBlockedMission,
-  selectMissionRequirementSource,
-  type LaunchDeps,
-} from '@/modules/development-automation/application/commands/launchMission'
-import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
-import { createRepositoryBaselineResolver } from '@/modules/development-automation/infrastructure/gitBaselineReader'
-import { createSqliteAdmissionLookup } from '@/modules/development-automation/infrastructure/sqliteAdmissionLookup'
-import { createSqliteFactSnapshotReader } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
-import { createSqliteUploadSessionStore } from '@/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import { insertUploadPlan } from '@/modules/development-automation/infrastructure/sqliteUploadPlanStore'
-import {
-  getDecisionTrace,
-  getMissionDetail,
-  getMissionMergeRequestView,
-  listMissionEffects,
-  listMissionSummaries,
-  listMissionSummariesPage,
-  listMissionTerminalOutcomeGroups,
-  type MissionPageCursor,
-} from '@/modules/development-automation/infrastructure/missionReadModels'
-import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
-import type { OperationFailureReceipt } from '@/modules/development-automation/domain/operationFailure'
-import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import {
-  bindCandidateDeliveryParticipant,
-  bindChangeCandidateParticipant,
-  bindConflictMergeParticipant,
-} from '@/modules/source-control/composition'
-import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
-import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
-import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
-import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
-import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
-import {
-  buildDevelopmentDeliveryDeps,
-  buildDevelopmentMrFactsDeps,
-  buildDevelopmentPipelineDeps,
-  resolveRepoClaimKey,
-} from '@/services/developmentDeliveryDeps'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { ulid } from 'ulid'
-import type { AppDeps } from '@/server'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { pipelineEvidenceManifestV1Schema } from '@/modules/development-automation/domain/pipelineManifest'
-import {
-  EVIDENCE_READ_MAX_BYTES,
-  readEvidenceFileRange,
-} from '@/modules/development-automation/application/pipelineEvidenceRead'
+  createDevelopmentMissionDescriptors,
+  type DevelopmentMissionOperations,
+} from '@/modules/development-automation/public/operations'
+import { registerOperationRoute } from '@/routes/operationRoute'
+import { directOperationAuthority } from '@/routes/operationAuthority'
+import { DomainError } from '@/util/errors'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
-import {
-  runCutoverCommand,
-  adoptActiveMr,
-} from '@/modules/development-automation/application/cutover'
-import { createSqliteCutoverStore } from '@/modules/development-automation/infrastructure/sqliteCutoverStore'
-import {
-  runMigrationAnalysis,
-  materializeMigrationCandidates,
-  readPersistedMigrationRun,
-} from '@/modules/development-automation/infrastructure/migrationAssets'
-import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
-import { readFileSync } from 'node:fs'
-import { projectMissionJourney } from '@/modules/development-automation/domain/journeyProjection'
 
-const log = createLogger('development-missions')
-
-/** materializer PortOutcome 失败 → HTTP 错误（refresh preview/apply 共用）。 */
-function refreshFailureError(failure: OperationFailureReceipt): DomainError {
-  if (failure.code === 'mission-not-found') {
-    return new NotFoundError('mission-not-found', 'mission not found')
-  }
-  if (failure.category === 'invalid-user-input') {
-    return new ValidationError(failure.code, failure.remediation)
-  }
-  return new ConflictError(failure.code, failure.remediation)
-}
-
-/** 游标编码:与 /repos 同款的 base64url 封套——对调用方不透明,服务端可换实现。 */
-function encodeMissionCursor(cursor: MissionPageCursor): string {
-  return Buffer.from(JSON.stringify(cursor), 'utf-8').toString('base64url')
-}
-
-/** 用 Zod 而不是类型断言:游标是**外部输入**,`as` 会把随后的校验变成装饰
- *  (RFC-054 W1-7 守卫锁的正是这一点)。 */
-const MissionCursorSchema = z.object({
-  createdAt: z.number().int().nonnegative(),
-  id: z.string().min(1),
-})
-
-const MissionViewSchema = z.enum(['all', 'active', 'attention', 'finished'])
-const RawMissionStatusesSchema = z.array(z.enum(DIGITAL_EMPLOYEE_MISSION_STATUSES))
-const MissionStatusesSchema = z.array(
-  z.enum([
-    'pending',
-    'running',
-    'done',
-    'failed',
-    'canceled',
-    'interrupted',
-    'awaiting_review',
-    'awaiting_human',
-  ]),
-)
-
-function decodeMissionCursor(raw: string): MissionPageCursor | null {
-  try {
-    const parsed = MissionCursorSchema.safeParse(
-      JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8')),
-    )
-    return parsed.success ? parsed.data : null
-  } catch {
-    return null
-  }
-}
+const recordBody = async (request: Request): Promise<Record<string, unknown>> =>
+  z.record(z.unknown()).parse(await safeJsonOrEmpty(request))
 
 export function mountDevelopmentMissionRoutes(
   app: Hono,
-  deps: AppDeps,
-  routeDeps: {
-    readonly legacyAdmissionsEnabled: () => boolean
-    readonly repositoryPublicationTransport: RepositoryPublicationTransport
-  },
+  operations: DevelopmentMissionOperations,
+  contexts: DirectOperationContextFactory,
 ): void {
-  const uploadSessions = createSqliteUploadSessionStore(deps.db)
-  const snapshots = createSqliteFactSnapshotReader(deps.db)
-  const missionStore = createSqliteMissionStore(deps.db)
-  const automation = composeDevelopmentAutomation({
-    db: deps.db,
-    appHome: Paths.root,
-    requirementSource: composeRequirementSourceRunner(deps.db),
-    changeCandidate: bindChangeCandidateParticipant(),
-    candidateDelivery: bindCandidateDeliveryParticipant({
-      publicationTransport: routeDeps.repositoryPublicationTransport,
-    }),
-    conflictMerge: bindConflictMergeParticipant(),
-    ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
-    ...buildDevelopmentPipelineDeps(deps.db),
-    ...buildDevelopmentMrFactsDeps(deps.db, deps.secretBox),
-    // PR-4：路由实例与 daemon 实例注入同一形状的 runner（同 db 下语义等价；
-    // SYSTEM_USER_ID——数字员工任务是 mission 自动化产物，不是 HTTP actor 的
-    // 个人任务）。终态回调落 wake hint（deliveryKey 幂等）并立即续跑；30s
-    // sweep 仍是进程退出/瞬时失败后的 durable 兜底。
-    agentLauncher: composeAgentActionExecution({
-      db: deps.db,
-      startDeps: buildStartTaskDeps(
-        deps.db,
-        requireSchedulerDriver(deps.schedulerDriver),
-        deps.configPath,
-        SYSTEM_USER_ID,
-        deps.secretBox,
-      ),
-      onTerminal: (executionRef) => {
-        const missionId = missionIdOfExecutionRef(deps.db, executionRef)
-        if (missionId === null) return
-        missionStore.recordWakeHint({
-          id: ulid(),
-          missionId,
-          source: 'agent-execution',
-          deliveryKey: `agent-exec:${executionRef}`,
-          now: Date.now(),
-        })
-        fireReconcile(missionId)
-      },
-    }),
-    scriptLauncher: composeScriptActionExecution({
-      db: deps.db,
-      startDeps: buildStartTaskDeps(
-        deps.db,
-        requireSchedulerDriver(deps.schedulerDriver),
-        deps.configPath,
-        SYSTEM_USER_ID,
-        deps.secretBox,
-      ),
-      onTerminal: (executionRef) => {
-        const missionId = missionIdOfExecutionRef(deps.db, executionRef)
-        if (missionId === null) return
-        missionStore.recordWakeHint({
-          id: ulid(),
-          missionId,
-          source: 'agent-execution',
-          deliveryKey: `script-exec:${executionRef}`,
-          now: Date.now(),
-        })
-        fireReconcile(missionId)
-      },
-    }),
-    approvalGateway: composeApprovalGatewayRunner(deps.db),
+  const descriptor = createDevelopmentMissionDescriptors(operations)
+  const context = (c: Parameters<typeof actorOf>[0]) =>
+    directOperationAuthority(contexts, actorOf(c))
+
+  registerOperationRoute(app, {
+    descriptor: descriptor.launch,
+    method: 'POST',
+    path: '/api/code/missions',
+    tokenAccess: 'allow',
+    decode: async (c) => ({ body: await recordBody(c.req.raw) }),
+    context,
+    encode: (c, output) => c.json(output.body, output.created ? 201 : 200),
   })
-  const launchDeps: LaunchDeps = {
-    store: missionStore,
-    lookup: createSqliteAdmissionLookup(deps.db),
-    now: () => Date.now(),
-    uploadAdmission: {
-      sessions: uploadSessions,
-      transact: (fn) => deps.db.transaction(() => fn()),
-      resolveBaseline: createRepositoryBaselineResolver(deps.db),
-      persistPlan: (plan) => insertUploadPlan(deps.db, plan),
-    },
-  }
-
-  const fireReconcile = (missionId: string): void => {
-    void automation
-      .drive(missionId)
-      .then((outcome) => {
-        if (outcome.stop === 'step-budget') {
-          log.warn('mission drive reached its bounded step budget', {
-            missionId,
-            steps: outcome.steps,
-          })
-        }
-      })
-      .catch((err: unknown) => {
-        log.warn('mission drive after route mutation failed', {
-          missionId,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      })
-  }
-
-  /**
-   * launch 成功后的装配步骤（requirementMaterializer 契约）：direct 正文/上传
-   * 语义按 mission 冻结的 digest stash 为 evidence。函数内容幂等，因而 launch
-   * 响应丢失或 evidence 短暂失败后可对原 mission 安全重放。
-   */
-  const stashDirectAfterLaunch = async (raw: unknown, missionId: string): Promise<boolean> => {
-    const parsed = launchMissionInputSchema.safeParse(raw)
-    if (!parsed.success || parsed.data.submission.kind !== 'direct') return false
-    const submission = parsed.data.submission
-    const stashed = await automation.materializer.stashDirectSubmission({
-      missionId,
-      submission: {
-        title: submission.title,
-        body: submission.body,
-        uploads: submission.uploads.map((upload, ordinal) => {
-          const row = uploadSessions.getUpload(upload.uploadRef)
-          return {
-            ordinal,
-            fileName: row?.originalName ?? '',
-            sha256: row?.sha256 ?? null,
-            targetPath: upload.repositoryTargetPath,
-            collisionMode: upload.collisionMode ?? 'create-only',
-            contentPolicy: upload.contentPolicy ?? 'preserve-upload',
-            fileMode: upload.fileMode ?? 'regular',
-          }
-        }),
-      },
-    })
-    if (!stashed.ok) {
-      throw new ConflictError(
-        stashed.failure.code,
-        `direct submission stash failed: ${stashed.failure.remediation}`,
-      )
-    }
-    return true
-  }
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions',
-      permissions: ['development-missions:launch'],
-      tokenAccess: 'allow',
-      summary: 'Launch a development mission (direct body/uploads or external id)',
-    },
-    async (c) => {
-      if (!routeDeps.legacyAdmissionsEnabled()) {
-        throw new ConflictError(
-          'legacy-mission-admission-retired',
-          'new work must be launched through a published Digital Employee; existing Missions remain available until they reach terminal state',
-        )
-      }
-      const actor = actorOf(c)
-      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      // actorUserId 永远 server-authoritative——覆盖 body 里的任何自报值。
-      const input = { ...body, actorUserId: actor.user.id }
-      const result = await launchMission(launchDeps, input)
-      const directStashed = await stashDirectAfterLaunch(input, result.missionId)
-      if (!result.created && directStashed) {
-        const mission = missionStore.getMission(result.missionId)
-        if (
-          mission?.status === 'blocked' &&
-          mission.blockCode === 'requirement-acquire-failed:direct-submission-not-staged'
-        ) {
-          await retryBlockedMission(launchDeps, { missionId: result.missionId })
-        }
-      }
-      if (result.created || directStashed) {
-        fireReconcile(result.missionId)
-      }
-      return c.json(result, result.created ? 201 : 200)
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/preview',
-      permissions: ['development-missions:launch'],
-      tokenAccess: 'allow',
-      summary:
-        'Preview employee, policy and requirement-source admission without creating a mission',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await previewMissionAdmission(launchDeps, {
-        ...body,
-        actorUserId: actor.user.id,
-      })
-      return c.json(result)
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/direct-input/preview',
-      permissions: ['development-missions:launch'],
-      tokenAccess: 'allow',
-      summary: 'Preview per-upload target dispositions against the current repository baseline',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await previewDirectInput(launchDeps, { ...body, actorUserId: actor.user.id })
-      return c.json(result)
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/missions',
-      permissions: ['development-missions:read'],
-      tokenAccess: 'allow',
-      summary: 'List development missions (paged when `limit`/`cursor` is given)',
-    },
-    async (c) => {
-      // RFC-311(自 RFC-310 移交)—— 双形状,与 `/api/cached-repos` 同款:
-      // 无参调用保持旧的 `{items}` 全量形状(既有消费点零改动),带任一分页参数
-      // 才切 `{items, nextCursor}` 封套。全表 `.all()` 在 mission 表长起来后会
-      // 复刻 /tasks 的卡顿形态,而它跑在 daemon 唯一的同步连接上。
-      const limitRaw = c.req.query('limit')
-      const cursorRaw = c.req.query('cursor')
-      const viewRaw = c.req.query('view')
-      const statusesRaw = c.req.query('statuses')
-      const qRaw = c.req.query('q')
-      const employeeRaw = c.req.query('employeeId')
-      const missionStatusesRaw = c.req.query('missionStatuses')
-      const paged =
-        limitRaw !== undefined ||
-        cursorRaw !== undefined ||
-        viewRaw !== undefined ||
-        statusesRaw !== undefined ||
-        qRaw !== undefined ||
-        employeeRaw !== undefined ||
-        missionStatusesRaw !== undefined
-      if (!paged) {
-        return c.json({ items: listMissionSummaries(deps.db) })
-      }
-      // RFC-311：view / statuses / q 与 /tasks 同名同义——服务端按 shared 里那张
-      // 唯一的 mission→task 状态映射反解，前端不再取全量自己过滤。
-      const viewParsed = MissionViewSchema.safeParse(viewRaw ?? 'all')
-      if (!viewParsed.success) {
-        throw new ValidationError('mission-view-invalid', `'${String(viewRaw)}' is not a view`)
-      }
-      const missionStatusesParsed = RawMissionStatusesSchema.safeParse(
-        missionStatusesRaw === undefined || missionStatusesRaw === ''
-          ? []
-          : missionStatusesRaw.split(','),
-      )
-      if (!missionStatusesParsed.success) {
-        throw new ValidationError(
-          'mission-raw-statuses-invalid',
-          `'${String(missionStatusesRaw)}' is not a mission status set`,
-        )
-      }
-      const statusesParsed = MissionStatusesSchema.safeParse(
-        statusesRaw === undefined || statusesRaw === '' ? [] : statusesRaw.split(','),
-      )
-      if (!statusesParsed.success) {
-        throw new ValidationError(
-          'mission-statuses-invalid',
-          `'${String(statusesRaw)}' is not a status set`,
-        )
-      }
-      const limit = limitRaw === undefined ? 50 : Number(limitRaw)
-      if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
-        throw new ValidationError('mission-limit-invalid', `'${String(limitRaw)}' is not a limit`)
-      }
-      let cursor: MissionPageCursor | undefined
-      if (cursorRaw !== undefined) {
-        const parsed = decodeMissionCursor(cursorRaw)
-        if (parsed === null) {
-          throw new ValidationError('mission-cursor-invalid', 'cursor is not decodable')
-        }
-        cursor = parsed
-      }
-      const page = listMissionSummariesPage(deps.db, {
-        limit,
-        view: viewParsed.data,
-        statuses: statusesParsed.data,
-        ...(qRaw !== undefined && qRaw !== '' ? { q: qRaw } : {}),
-        ...(employeeRaw !== undefined && employeeRaw !== '' ? { employeeId: employeeRaw } : {}),
-        ...(missionStatusesParsed.data.length > 0
-          ? { missionStatuses: missionStatusesParsed.data }
-          : {}),
-        ...(cursor !== undefined ? { cursor } : {}),
-      })
-      return c.json({
-        items: page.items,
-        nextCursor: page.nextCursor === null ? null : encodeMissionCursor(page.nextCursor),
-        counts: page.counts,
-      })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/missions/outcome-summaries',
-      permissions: ['digital-employees:read'],
-      tokenAccess: 'allow',
-      summary: 'List terminal legacy Mission outcome groups for every digital employee',
-    },
-    (c) => c.json({ items: listMissionTerminalOutcomeGroups(deps.db) }),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/missions/:id',
-      permissions: ['development-missions:read'],
-      tokenAccess: 'allow',
-      summary: 'Read one development mission (sources, readiness, block detail)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      const detail = getMissionDetail(deps.db, missionId)
-      if (detail === null) throw new NotFoundError('mission-not-found', 'mission not found')
-      // T61 —— UI 需要但不进 summary 的三块投影：待答问题集（cells 的
-      // pending ref → 台账原文）、action 结果（outcome/candidateRef 白名单
-      // cells）、effect 台账。nonce/host path/raw 正文照旧不出（§12.4）。
-      const mission = missionStore.getMission(missionId)
-      const cells =
-        mission?.requirementBundleRef == null
-          ? null
-          : snapshots.getCells(mission.requirementBundleRef)
-      const knownString = (id: string): string | null => {
-        const cell = cells?.[id]
-        return cell !== undefined && cell.state === 'known' && typeof cell.value === 'string'
-          ? cell.value
-          : null
-      }
-      const pendingQuestionSetRef = knownString('__requirement.pendingQuestionSetRef')
-      const questions =
-        pendingQuestionSetRef === null
-          ? null
-          : automation.materializer.loadQuestionSet(pendingQuestionSetRef)
-      const mergeRequest = getMissionMergeRequestView(deps.db, missionId, detail.repositoryId)
-      const collaborationReceipts = automation.collaboration(missionId)
-      const activeChild = [...collaborationReceipts.children]
-        .reverse()
-        .find(
-          (child) =>
-            !child.completionSatisfied &&
-            child.childMissionId !== null &&
-            !['blocked', 'handoff', 'canceled', 'closed-unmerged'].includes(child.status ?? ''),
-        )
-      const activeApproval = [...collaborationReceipts.approvals]
-        .reverse()
-        .find((approval) => approval.status === 'submitting' || approval.status === 'pending')
-      const collaboration =
-        activeApproval !== undefined &&
-        (activeChild === undefined || activeApproval.updatedAt >= (activeChild.observedAt ?? 0))
-          ? {
-              kind: 'approval' as const,
-              href:
-                activeApproval.externalRequestRef !== null &&
-                /^https?:\/\//.test(activeApproval.externalRequestRef)
-                  ? activeApproval.externalRequestRef
-                  : null,
-              resumeAt: activeApproval.nextObserveAt,
-              deadlineAt: activeApproval.deadlineAt,
-              needsHuman: activeApproval.status === 'pending',
-            }
-          : activeChild === undefined
-            ? null
-            : {
-                kind: 'child-mission' as const,
-                href: `/code/missions/${encodeURIComponent(activeChild.childMissionId!)}`,
-                resumeAt: null,
-                deadlineAt: activeChild.deadlineAt,
-              }
-      const actor = actorOf(c)
-      return c.json({
-        ...detail,
-        questions:
-          questions === null || pendingQuestionSetRef === null
-            ? null
-            : {
-                questionSetRef: pendingQuestionSetRef,
-                origin: questions.origin,
-                channel: questions.channel,
-                items: questions.questions,
-              },
-        action: {
-          lastOutcome: knownString('action.lastOutcome'),
-          lastCapability: knownString('action.lastCapability'),
-          candidateRef: knownString('__action.candidateRef'),
-          clarificationState: knownString('requirement.clarificationState'),
-        },
-        effects: listMissionEffects(deps.db, missionId),
-        collaboration: collaborationReceipts,
-        mergeRequest,
-        journey: projectMissionJourney({
-          missionId,
-          status: detail.status,
-          automationMode: detail.automationMode,
-          transitionFence: detail.transitionFence,
-          blockCode: detail.blockCode,
-          hasQuestions: questions !== null,
-          hasMergeRequest: mergeRequest !== null,
-          mergeRequestHref: mergeRequest?.href ?? null,
-          canInteract: actor.permissions.has('development-missions:interact'),
-          canRetry: actor.permissions.has('development-missions:retry'),
-          canAttach: actor.permissions.has('development-missions:attach'),
-          canResume: actor.permissions.has('development-missions:resume'),
-          collaboration,
-        }),
-        // PR-8 T92：pipeline evidence 摘要投影（manifest 从内容寻址 blob 读回；
-        // 大字节仍走 ranged 端点，这里只出 gates/files 目录级摘要）。
-        pipeline: ((): unknown => {
-          const manifestRef = knownString('__pipeline.manifestRef')
-          if (manifestRef === null) return null
-          const blob = automation.evidence.blobPath(manifestRef)
-          try {
-            const parsed = pipelineEvidenceManifestV1Schema.safeParse(
-              JSON.parse(readFileSync(blob, 'utf8')),
-            )
-            if (!parsed.success) return null
-            const m = parsed.data
-            return {
-              bundleId: m.bundleId,
-              headSha: m.headSha,
-              completeness: m.completeness,
-              collectedAt: knownString('__pipeline.collectedAt'),
-              gates: m.gates.map((g) => ({
-                gateKey: g.gateKey,
-                required: g.required,
-                status: g.status,
-                runRef: g.runRef,
-                attempt: g.attempt,
-                failureCategories: g.failureCategories,
-              })),
-              files: m.files.map((f) => ({
-                fileId: f.fileId,
-                relativePath: f.relativePath,
-                mediaType: f.mediaType,
-                bytes: f.bytes,
-                sha256: f.sha256,
-              })),
-            }
-          } catch {
-            return null
-          }
-        })(),
-      })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/missions/:id/requirement-manifest',
-      permissions: ['development-missions:read'],
-      tokenAccess: 'allow',
-      summary: 'Read the immutable requirement bundle manifest for a mission',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      if (getMissionDetail(deps.db, missionId) === null) {
-        throw new NotFoundError('mission-not-found', 'mission not found')
-      }
-      const manifest = automation.materializer.getRequirementManifest(missionId)
-      if (manifest === null) {
-        throw new NotFoundError(
-          'requirement-manifest-not-found',
-          'no requirement bundle has been materialized for this mission yet',
-        )
-      }
-      return c.json({ missionId, manifest })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/missions/:id/requirement-files/:sha256',
-      permissions: ['development-missions:read'],
-      tokenAccess: 'allow',
-      summary: 'Stream one requirement bundle file by content hash (supports Range)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      if (getMissionDetail(deps.db, missionId) === null) {
-        throw new NotFoundError('mission-not-found', 'mission not found')
-      }
-      const manifest = automation.materializer.getRequirementManifest(missionId)
-      if (manifest === null) {
-        throw new NotFoundError(
-          'requirement-manifest-not-found',
-          'no requirement bundle has been materialized for this mission yet',
-        )
-      }
-      // 只许读本 mission manifest 点名的内容 hash——blob 池是全局去重的，
-      // 不做这层归属检查就等于任意 mission 可探全池。
-      const sha256 = c.req.param('sha256')
-      const entry = manifest.files.find((file) => file.sha256 === sha256)
-      if (entry === undefined) {
-        throw new NotFoundError(
-          'requirement-file-not-found',
-          'the hash is not part of this mission requirement bundle',
-        )
-      }
-      const blob = Bun.file(automation.evidence.blobPath(sha256))
-      if (!(await blob.exists())) {
-        throw new NotFoundError('evidence-blob-missing', 'evidence blob is missing on disk')
-      }
-      const size = entry.bytes
-      const baseHeaders = { 'content-type': entry.mediaType, 'accept-ranges': 'bytes' }
+  registerOperationRoute(app, {
+    descriptor: descriptor.preview,
+    method: 'POST',
+    path: '/api/code/missions/preview',
+    tokenAccess: 'allow',
+    decode: async (c) => ({ body: await recordBody(c.req.raw) }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.previewDirectInput,
+    method: 'POST',
+    path: '/api/code/missions/direct-input/preview',
+    tokenAccess: 'allow',
+    decode: async (c) => ({ body: await recordBody(c.req.raw) }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.list,
+    method: 'GET',
+    path: '/api/code/missions',
+    tokenAccess: 'allow',
+    decode: (c) => ({
+      limit: c.req.query('limit'),
+      cursor: c.req.query('cursor'),
+      view: c.req.query('view'),
+      statuses: c.req.query('statuses'),
+      q: c.req.query('q'),
+      employeeId: c.req.query('employeeId'),
+      missionStatuses: c.req.query('missionStatuses'),
+    }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.listOutcomeSummaries,
+    method: 'GET',
+    path: '/api/code/missions/outcome-summaries',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json({ items: output }),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.get,
+    method: 'GET',
+    path: '/api/code/missions/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ missionId: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.getRequirementManifest,
+    method: 'GET',
+    path: '/api/code/missions/:id/requirement-manifest',
+    tokenAccess: 'allow',
+    decode: (c) => ({ missionId: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.getRequirementFile,
+    method: 'GET',
+    path: '/api/code/missions/:id/requirement-files/:sha256',
+    tokenAccess: 'allow',
+    decode: (c) => ({
+      missionId: c.req.param('id'),
+      sha256: c.req.param('sha256'),
+    }),
+    context,
+    encode: (c, file) => {
+      const baseHeaders = { 'content-type': file.mediaType, 'accept-ranges': 'bytes' }
       const rangeHeader = c.req.header('range')
       if (rangeHeader === undefined) {
-        return c.body(blob.stream(), 200, {
+        return c.body(file.openAll(), 200, {
           ...baseHeaders,
-          'content-length': String(size),
+          'content-length': String(file.bytes),
         })
       }
       const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
       if (match === null || (match[1] === '' && match[2] === '')) {
-        throw new DomainError('range-not-satisfiable', 'unsupported Range header', 416, { size })
+        throw new DomainError('range-not-satisfiable', 'unsupported Range header', 416, {
+          size: file.bytes,
+        })
       }
       let start: number
       let end: number
       if (match[1] === '') {
-        const suffix = Number(match[2])
-        start = Math.max(0, size - suffix)
-        end = size - 1
+        start = Math.max(0, file.bytes - Number(match[2]))
+        end = file.bytes - 1
       } else {
         start = Number(match[1])
-        end = match[2] === '' ? size - 1 : Number(match[2])
+        end = match[2] === '' ? file.bytes - 1 : Number(match[2])
       }
-      if (start >= size || start > end) {
-        throw new DomainError('range-not-satisfiable', `range out of bounds`, 416, { size })
+      if (start >= file.bytes || start > end) {
+        throw new DomainError('range-not-satisfiable', 'range out of bounds', 416, {
+          size: file.bytes,
+        })
       }
-      end = Math.min(end, size - 1)
-      return c.body(blob.slice(start, end + 1).stream(), 206, {
+      end = Math.min(end, file.bytes - 1)
+      return c.body(file.open(start, end), 206, {
         ...baseHeaders,
         'content-length': String(end - start + 1),
-        'content-range': `bytes ${start}-${end}/${size}`,
+        'content-range': `bytes ${start}-${end}/${file.bytes}`,
       })
     },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/requirement-source',
-      permissions: ['development-missions:interact'],
-      tokenAccess: 'allow',
-      summary: 'Resolve the requirement source for a mission awaiting selection',
-    },
-    async (c) => {
-      const body = z
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.selectRequirementSource,
+    method: 'POST',
+    path: '/api/code/missions/:id/requirement-source',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      missionId: c.req.param('id'),
+      ...z
         .object({ sourceKey: z.string().min(1) })
         .strict()
-        .parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await selectMissionRequirementSource(launchDeps, {
-        missionId: c.req.param('id'),
-        sourceKey: body.sourceKey,
-      })
-      fireReconcile(c.req.param('id'))
-      return c.json({ missionId: c.req.param('id'), ...result })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/answers',
-      permissions: ['development-missions:interact'],
-      tokenAccess: 'allow',
-      summary: 'Submit platform-channel answers for the pending question set',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await automation.submitAnswers({ ...body, missionId })
-      fireReconcile(missionId)
-      return c.json({ missionId, ...result })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/confirm-no-change',
-      permissions: ['development-missions:interact'],
-      tokenAccess: 'allow',
-      summary: 'Confirm the pending no-change gate (the only path into completed-no-change)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await automation.confirmNoChange({ ...body, missionId })
-      // 归属只进 route 层审计日志，不进 receipt cells（rfc099 prompt 隔离纪律）。
-      log.info('mission no-change confirmed', { missionId, userId: actorOf(c).user.id })
-      fireReconcile(missionId)
-      return c.json({ missionId, ...result })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/source-refresh/preview',
-      permissions: ['development-missions:interact'],
-      tokenAccess: 'allow',
-      summary:
-        'Re-fetch the external requirement source and compare source revisions (no state change)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      if (getMissionDetail(deps.db, missionId) === null) {
-        throw new NotFoundError('mission-not-found', 'mission not found')
-      }
-      const out = await automation.materializer.previewExternalRefresh(missionId)
-      if (!out.ok) throw refreshFailureError(out.failure)
-      return c.json({
-        missionId,
-        changed: out.changed,
-        currentSourceRevision: out.currentSourceRevision,
-        newSourceRevision: out.newSourceRevision,
-        manifestDigest: out.manifestDigest,
-        fileCount: out.fileCount,
-        totalBytes: out.totalBytes,
-      })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/source-refresh',
-      permissions: ['development-missions:interact'],
-      tokenAccess: 'allow',
-      summary: 'Apply an external requirement source refresh (new source generation + cell reset)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      if (getMissionDetail(deps.db, missionId) === null) {
-        throw new NotFoundError('mission-not-found', 'mission not found')
-      }
-      const out = await automation.materializer.applyExternalRefresh(missionId)
-      if (!out.ok) throw refreshFailureError(out.failure)
-      fireReconcile(missionId)
-      return c.json({ missionId, changed: out.changed, sourceRevision: out.sourceRevision })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/cancel',
-      permissions: ['development-missions:cancel'],
-      tokenAccess: 'allow',
-      summary: 'Cancel a mission (fences writes; settles dispatched effects first)',
-    },
-    async (c) => {
-      const result = await cancelMission(launchDeps, { missionId: c.req.param('id') })
-      fireReconcile(c.req.param('id'))
-      return c.json({ missionId: c.req.param('id'), ...result })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/retry',
-      permissions: ['development-missions:retry'],
-      tokenAccess: 'allow',
-      summary: 'Retry a blocked mission after remediation',
-    },
-    async (c) => {
-      const result = await retryBlockedMission(launchDeps, { missionId: c.req.param('id') })
-      fireReconcile(c.req.param('id'))
-      return c.json({ missionId: c.req.param('id'), ...result })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/missions/:id/decision-trace',
-      permissions: ['development-missions:read'],
-      tokenAccess: 'allow',
-      summary: 'Read the canonical guard/rule decision trace for a mission',
-    },
-    async (c) => {
-      if (getMissionDetail(deps.db, c.req.param('id')) === null) {
-        throw new NotFoundError('mission-not-found', 'mission not found')
-      }
-      return c.json({ items: getDecisionTrace(deps.db, c.req.param('id')) })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/missions/:id/pipeline-evidence/:sha256',
-      permissions: ['development-missions:read'],
-      tokenAccess: 'allow',
-      summary:
-        'Bounded ranged read of one pipeline evidence file (offset/limit, honest truncation)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      if (getMissionDetail(deps.db, missionId) === null) {
-        throw new NotFoundError('mission-not-found', 'mission not found')
-      }
-      // bundle↔mission 归属经 cells：collect arm（T65/T68）落
-      // `__pipeline.manifestRef`（manifest 的 evidence blob ref）。缺失 =
-      // 尚未采集，404 而非空 200。
-      const mission = missionStore.getMission(missionId)
-      const cells =
-        mission?.requirementBundleRef == null
-          ? null
-          : snapshots.getCells(mission.requirementBundleRef)
-      const manifestRefCell = cells?.['__pipeline.manifestRef']
-      const manifestRef =
-        manifestRefCell !== undefined &&
-        manifestRefCell.state === 'known' &&
-        typeof manifestRefCell.value === 'string'
-          ? manifestRefCell.value
-          : null
-      if (manifestRef === null) {
-        throw new NotFoundError(
-          'evidence-not-collected',
-          'no pipeline evidence has been collected for this mission yet',
-        )
-      }
-      const manifestBlob = Bun.file(automation.evidence.blobPath(manifestRef))
-      if (!(await manifestBlob.exists())) {
-        throw new NotFoundError('evidence-blob-missing', 'pipeline manifest blob is missing')
-      }
-      let manifestJson: unknown
-      try {
-        manifestJson = JSON.parse(await manifestBlob.text())
-      } catch {
-        throw new NotFoundError('pipeline-manifest-invalid', 'stored pipeline manifest is invalid')
-      }
-      const manifest = pipelineEvidenceManifestV1Schema.safeParse(manifestJson)
-      if (!manifest.success) {
-        throw new NotFoundError('pipeline-manifest-invalid', 'stored pipeline manifest is invalid')
-      }
-      // 只许读本 mission bundle 点名的内容 hash（blob 池全局去重，无此层
-      // 归属检查即任意 mission 可探全池——requirement-files 同款纪律）。
-      const sha256 = c.req.param('sha256')
-      const entry = manifest.data.files.find((file) => file.sha256 === sha256)
-      if (entry === undefined) {
-        throw new NotFoundError(
-          'pipeline-evidence-file-not-found',
-          'the hash is not part of this mission pipeline evidence bundle',
-        )
-      }
-      const offset = Number(c.req.query('offset') ?? '0')
-      const limit = Number(c.req.query('limit') ?? String(EVIDENCE_READ_MAX_BYTES))
-      const read = readEvidenceFileRange(
-        { blobPath: (ref) => automation.evidence.blobPath(ref) },
-        { sha256, offsetBytes: offset, limitBytes: limit },
-      )
-      if (!read.ok) {
-        if (read.code === 'range-invalid') {
-          throw new ValidationError('range-invalid', 'offset/limit must be valid integers')
-        }
-        throw new NotFoundError('evidence-blob-missing', 'evidence blob is missing on disk')
-      }
-      return c.body(read.bytes.slice().buffer as ArrayBuffer, 200, {
-        'content-type': entry.mediaType,
+        .parse(await safeJsonOrEmpty(c.req.raw)),
+    }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.submitAnswers,
+    method: 'POST',
+    path: '/api/code/missions/:id/answers',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      missionId: c.req.param('id'),
+      body: await recordBody(c.req.raw),
+    }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.confirmNoChange,
+    method: 'POST',
+    path: '/api/code/missions/:id/confirm-no-change',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      missionId: c.req.param('id'),
+      body: await recordBody(c.req.raw),
+    }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.previewSourceRefresh,
+    method: 'POST',
+    path: '/api/code/missions/:id/source-refresh/preview',
+    tokenAccess: 'allow',
+    decode: (c) => ({ missionId: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.applySourceRefresh,
+    method: 'POST',
+    path: '/api/code/missions/:id/source-refresh',
+    tokenAccess: 'allow',
+    decode: (c) => ({ missionId: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.cancel,
+    method: 'POST',
+    path: '/api/code/missions/:id/cancel',
+    tokenAccess: 'allow',
+    decode: (c) => ({ missionId: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.retry,
+    method: 'POST',
+    path: '/api/code/missions/:id/retry',
+    tokenAccess: 'allow',
+    decode: (c) => ({ missionId: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.decisionTrace,
+    method: 'GET',
+    path: '/api/code/missions/:id/decision-trace',
+    tokenAccess: 'allow',
+    decode: (c) => ({ missionId: c.req.param('id') }),
+    context,
+    encode: (c, output) => c.json({ items: output }),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.readPipelineEvidence,
+    method: 'GET',
+    path: '/api/code/missions/:id/pipeline-evidence/:sha256',
+    tokenAccess: 'allow',
+    decode: (c) => ({
+      missionId: c.req.param('id'),
+      sha256: c.req.param('sha256'),
+      offset: Number(c.req.query('offset') ?? '0'),
+      limit: Number(c.req.query('limit') ?? String(operations.maxPipelineEvidenceReadBytes)),
+    }),
+    context,
+    encode: (c, read) =>
+      c.body(read.bytes.slice().buffer as ArrayBuffer, 200, {
+        'content-type': read.mediaType,
         'content-length': String(read.bytes.byteLength),
         'x-evidence-total-bytes': String(read.totalBytes),
         'x-evidence-truncated': read.truncated ? 'true' : 'false',
         ...(read.nextOffset === null ? {} : { 'x-evidence-next-offset': String(read.nextOffset) }),
-      })
+      }),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.handoff,
+    method: 'POST',
+    path: '/api/code/missions/:id/handoff',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      missionId: c.req.param('id'),
+      body: await recordBody(c.req.raw),
+    }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.attachMergeRequest,
+    method: 'POST',
+    path: '/api/code/missions/:id/attach-mr',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      missionId: c.req.param('id'),
+      body: await recordBody(c.req.raw),
+    }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.resume,
+    method: 'POST',
+    path: '/api/code/missions/:id/resume',
+    tokenAccess: 'allow',
+    decode: async (c) => {
+      await recordBody(c.req.raw)
+      return { missionId: c.req.param('id') }
     },
-  )
-  // ---- PR-7b T80：handoff / attach-mr / resume（交接三命令）-----------------
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/handoff',
-      permissions: ['development-missions:handoff'],
-      tokenAccess: 'allow',
-      summary: 'Hand the mission over to a human (automation becomes tracking-only)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await automation.handoff({ ...body, missionId })
-      log.info('mission handoff', {
-        missionId,
-        userId: actorOf(c).user.id,
-        pending: result.pending,
-      })
-      fireReconcile(missionId)
-      return c.json({ missionId, ...result })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/attach-mr',
-      permissions: ['development-missions:attach'],
-      tokenAccess: 'allow',
-      summary: 'Attach a manually created merge request to a handed-over mission',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      const body = z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await automation.attachMr({ ...body, missionId })
-      log.info('mission attach-mr', {
-        missionId,
-        userId: actorOf(c).user.id,
-        mrClaimId: result.mrClaimId,
-      })
-      fireReconcile(missionId)
-      return c.json({ missionId, ...result })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/missions/:id/resume',
-      permissions: ['development-missions:resume'],
-      tokenAccess: 'allow',
-      summary: 'Resume automation on a tracking-only mission (facts refresh first)',
-    },
-    async (c) => {
-      const missionId = c.req.param('id')
-      z.record(z.unknown()).parse(await safeJsonOrEmpty(c.req.raw))
-      const result = await automation.resume({ missionId })
-      log.info('mission resume', { missionId, userId: actorOf(c).user.id })
-      fireReconcile(missionId)
-      return c.json({ missionId, ...result })
-    },
-  )
-
-  // ---- PR-9 T97–T103：cutover runbook（analyze/materialize/freeze/flip/
-  // rollback/adopt-mr + 读面）。全部走 development-missions:cutover——影响面
-  // 是整个 legacy 入口而非单条 mission 的一次性运维操作。
-  const cutoverStore = createSqliteCutoverStore(deps.db)
-  const cutoverDeps = {
-    cutoverStore,
-    now: () => Date.now(),
-    mintId: () => ulid(),
-  }
-  // adopt 只需要 observe——与 composition 内绑的同一构造（同 db 语义等价）。
-  const adoptPorts = { mrEffects: buildDevelopmentDeliveryDeps(deps.db, deps.secretBox).mrEffects }
-
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/code/cutover',
-      permissions: ['development-missions:cutover'],
-      tokenAccess: 'allow',
-      summary: 'Cutover state + freshly computed migration preflight report (T97 reconciliation)',
-    },
-    async (c) => {
-      // preflight 现算保证新鲜（legacy 表量级小）；persisted 是上次
-      // materialize 的落库结果（没跑过为 null）。两者并示即 T97 对账面。
-      const preflight = await runMigrationAnalysis(deps.db, Date.now())
-      return c.json({
-        state: cutoverStore.readState(),
-        preflight,
-        persisted: await readPersistedMigrationRun(deps.db),
-      })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/cutover/materialize',
-      permissions: ['development-missions:cutover'],
-      tokenAccess: 'allow',
-      summary: 'Materialize migration candidates as unpublished drafts (T95, idempotent)',
-    },
-    async (c) => {
-      const report = await runMigrationAnalysis(deps.db, Date.now())
-      const result = await materializeMigrationCandidates(deps.db, report)
-      log.info('cutover materialize', {
-        userId: actorOf(c).user.id,
-        created: result.created.length,
-        skipped: result.skipped.length,
-      })
-      return c.json({ report, ...result })
-    },
-  )
-
-  const runCutoverCommandRoute =
-    (command: 'freeze' | 'flip' | 'rollback') =>
-    async (c: Parameters<Parameters<typeof registerRoute>[2]>[0]) => {
-      const result = runCutoverCommand(cutoverDeps, command)
-      if (!result.ok) {
-        throw new ConflictError(
-          result.code === 'cutover-rollback-after-flip'
-            ? 'cutover-rollback-after-flip'
-            : 'cutover-phase-invalid',
-          result.detail,
-        )
-      }
-      log.info('cutover command', { command, userId: actorOf(c).user.id, state: result.state })
-      return c.json({ state: result.state })
-    }
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/cutover/freeze',
-      permissions: ['development-missions:cutover'],
-      tokenAccess: 'allow',
-      summary: 'Freeze legacy admission (T99: rounds API + code-round webhooks reject new work)',
-    },
-    runCutoverCommandRoute('freeze'),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/cutover/flip',
-      permissions: ['development-missions:cutover'],
-      tokenAccess: 'allow',
-      summary: 'Flip the writer generation to missions (T101)',
-    },
-    runCutoverCommandRoute('flip'),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/cutover/rollback',
-      permissions: ['development-missions:cutover'],
-      tokenAccess: 'allow',
-      summary: 'Roll back a frozen cutover to pre (T102; refused after flip)',
-    },
-    runCutoverCommandRoute('rollback'),
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/code/cutover/adopt-mr',
-      permissions: ['development-missions:cutover'],
-      tokenAccess: 'allow',
-      summary: 'Adopt an externally open MR as a watching mission (T100; runbook step 4/5)',
-    },
-    async (c) => {
-      const body = z
-        .object({
-          repositoryId: z.string().min(1),
-          mrIid: z.string().min(1),
-          employee: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
-          policy: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
-          legacyWorkItemId: z.string().nullish(),
-          legacyRoundId: z.string().nullish(),
-        })
-        .parse(await safeJsonOrThrowInvalid(c.req.raw))
-      const claimKey = resolveRepoClaimKey(deps.db, deps.secretBox, body.repositoryId)
-      if (claimKey === null) {
-        throw new ValidationError(
-          'cutover-repo-binding-missing',
-          'repository has no resolvable code-host binding',
-        )
-      }
-      const result = await adoptActiveMr(
-        { store: missionStore, ports: adoptPorts, ...cutoverDeps },
-        {
-          repositoryId: body.repositoryId,
-          mrIid: body.mrIid,
-          codeHostEndpointRef: claimKey.codeHostEndpointRef,
-          stableProjectRef: claimKey.stableProjectRef,
-          employee: body.employee ?? null,
-          policy: body.policy ?? null,
-          legacyWorkItemId: body.legacyWorkItemId ?? null,
-          legacyRoundId: body.legacyRoundId ?? null,
-          actorUserId: actorOf(c).user.id,
-        },
-      )
-      if (!result.ok) {
-        throw new ConflictError('cutover-adopt-rejected', `${result.code}: ${result.detail}`)
-      }
-      log.info('cutover adopt-mr', {
-        userId: actorOf(c).user.id,
-        missionId: result.missionId,
-        terminal: result.terminal,
-      })
-      if (result.terminal === null) fireReconcile(result.missionId)
-      return c.json(result)
-    },
-  )
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.readCutover,
+    method: 'GET',
+    path: '/api/code/cutover',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.materializeCutover,
+    method: 'POST',
+    path: '/api/code/cutover/materialize',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.freezeCutover,
+    method: 'POST',
+    path: '/api/code/cutover/freeze',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.flipCutover,
+    method: 'POST',
+    path: '/api/code/cutover/flip',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.rollbackCutover,
+    method: 'POST',
+    path: '/api/code/cutover/rollback',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context,
+    encode: (c, output) => c.json(output),
+  })
+  registerOperationRoute(app, {
+    descriptor: descriptor.adoptMergeRequest,
+    method: 'POST',
+    path: '/api/code/cutover/adopt-mr',
+    tokenAccess: 'allow',
+    decode: async (c) => ({ body: await safeJsonOrThrowInvalid(c.req.raw) }),
+    context,
+    encode: (c, output) => c.json(output),
+  })
 }

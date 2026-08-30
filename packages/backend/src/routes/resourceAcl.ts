@@ -13,7 +13,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
-import type { AppDeps } from '@/server'
+import type { DbClient } from '@/db/client'
 import { registerRoute } from '@/routes/registry'
 import type { DbTxSync } from '@/db/txSync'
 import {
@@ -48,7 +48,7 @@ export interface AclEndpointConfig {
   /** RFC-223: every ACL route is addressed by canonical resource id. */
   param: 'id'
   /** Load the row by the route key; null when absent. */
-  load: (db: AppDeps['db'], key: string) => Promise<AclRow | null>
+  load: (db: DbClient, key: string) => Promise<AclRow | null>
   /**
    * RFC-330 —— 404 码。默认 `${type}-not-found`（13 类沿用）；数字员工域的工具 / 模版传
    * 自己既有的连字符码（`employee-tool-not-found` 等），让同一资源在所有路由上只有一个
@@ -58,7 +58,7 @@ export interface AclEndpointConfig {
   /** RFC-201: optional stable-id linearization adapter for operation resources. */
   coordinator?: {
     runExclusive: (resourceId: string, task: () => Promise<ResourceAcl>) => Promise<ResourceAcl>
-    loadById: (db: AppDeps['db'], resourceId: string) => Promise<AclRow | null>
+    loadById: (db: DbClient, resourceId: string) => Promise<AclRow | null>
     nextUpdatedAt?: (row: AclRow) => Promise<number>
   }
   /** Post-commit resource-specific lifecycle invalidation hook. */
@@ -76,7 +76,11 @@ export interface AclEndpointConfig {
   ) => void
 }
 
-export function mountAclEndpoints(app: Hono, deps: AppDeps, cfg: AclEndpointConfig): void {
+export function mountAclEndpoints(
+  app: Hono,
+  deps: { readonly db: DbClient },
+  cfg: AclEndpointConfig,
+): void {
   const path = `${cfg.base}/:${cfg.param}/acl`
   // RFC-247 T1/T3 — the GET/PUT pair here is generated from a template, so
   // there is no literal path for a caller to declare. The mount registers its

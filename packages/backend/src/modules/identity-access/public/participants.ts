@@ -1,3 +1,4 @@
+import type { PatPurpose, Permission, Role } from '@agent-workflow/shared'
 import type { ResolvedAuthoritySubject } from './types'
 
 export type DirectTransport = 'http' | 'mcp' | 'cli'
@@ -14,6 +15,7 @@ declare const subjectRefBrand: unique symbol
 declare const requestAuthorityBrand: unique symbol
 declare const idempotencyKeyBrand: unique symbol
 declare const delegatedAuthorityBrand: unique symbol
+declare const directAuthenticatedAuthorityBrand: unique symbol
 
 export interface AuthorizationSubjectRef {
   readonly [subjectRefBrand]: 'authorization-subject-ref'
@@ -53,6 +55,31 @@ export interface AuthenticatedPrincipal {
   readonly source: PrincipalSource
 }
 
+/**
+ * Current-request authority frozen by the authenticated transport. Unlike a
+ * plain Actor this value can only be minted by the identity-access factory, so
+ * operation descriptors cannot accept a forgeable role/permission bag.
+ */
+export interface AuthenticatedAuthoritySnapshot {
+  readonly user: Readonly<{
+    readonly id: string
+    readonly username: string
+    readonly displayName: string
+    readonly role: Role
+    readonly status: 'active' | 'disabled' | 'invited'
+  }>
+  readonly source: Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>
+  readonly permissions: ReadonlySet<Permission>
+  readonly purpose?: PatPurpose
+  readonly patId?: string
+  readonly authorityRevision?: number
+}
+
+export interface DirectAuthenticatedAuthority extends AuthenticatedAuthoritySnapshot {
+  readonly [directAuthenticatedAuthorityBrand]: 'direct-authenticated-authority'
+  readonly userId: string
+}
+
 export interface DurableSourceAttemptRef {
   readonly sourceId: string
   readonly attemptId: string
@@ -79,7 +106,11 @@ export interface DirectOperationContextFactory {
     principal: AuthenticatedPrincipal,
     transport: DirectTransport,
   ): QueryContext
+  authorityFromAuthenticatedPrincipal(
+    authority: AuthenticatedAuthoritySnapshot,
+  ): DirectAuthenticatedAuthority
   resolveCommandContext(context: CommandContext): AuthenticatedPrincipal
+  resolveQueryContext(context: QueryContext): AuthenticatedPrincipal
 }
 
 /** Credential/inherited adapters receive current account facts, never a token secret or Actor. */

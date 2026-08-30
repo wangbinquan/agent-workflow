@@ -453,15 +453,17 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(server).toContain('schedulerDriver?: SchedulerDriverPort')
     expect(server).toContain('export type ComposedAppDeps = AppDeps & {')
     expect(server).toContain('const effectiveDeps: ComposedAppDeps = {')
-    expect(server).toContain('mountApiRoutes(app: Hono, deps: ComposedAppDeps)')
+    expect(server).toContain('export function mountApiRoutes(')
+    expect(server).toContain('deps: ComposedAppDeps')
+    expect(server).toContain('identityAccess: IdentityAccessModule')
     expect(server).toContain('const schedulerDriver = requireSchedulerDriver(deps.schedulerDriver)')
     expect(server).toContain('taskExecutionRuntime?.readModels')
     expect(cli).toContain('taskExecutionReadModels: taskExecutionRuntime.readModels')
 
-    const mcpDispatch = read('packages/backend/src/mcp/dispatch.ts')
     const mcpServer = read('packages/backend/src/mcp/server.ts')
-    expect(mcpDispatch).toContain('createDispatcher(deps: ComposedAppDeps)')
-    expect(mcpServer).toContain('mountMcpTransport(app: Hono, deps: ComposedAppDeps)')
+    expect(existsSync(resolve(ROOT, 'packages/backend/src/mcp/dispatch.ts'))).toBe(false)
+    expect(mcpServer).toContain('export interface McpTransportDeps')
+    expect(mcpServer).not.toContain("from '@/server'")
 
     for (const path of [
       'packages/backend/src/services/dispatchFrontier.ts',

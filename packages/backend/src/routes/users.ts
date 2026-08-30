@@ -2,102 +2,77 @@
 // public-fields-only `users:search` endpoint.
 
 import type { Hono } from 'hono'
-import { ulid } from 'ulid'
 import {
   CreateUserBodySchema,
   PatchUserBodySchema,
   ResetPasswordBodySchema,
 } from '@agent-workflow/shared'
-import { actorOf } from '@/auth/actor'
-import { hashPassword } from '@/auth/passwords'
-import { revokeAllSessionsForUser } from '@/auth/sessionStore'
-import type { AppDeps } from '@/server'
+import { actorOf, type Actor } from '@/auth/actor'
+import type { DbClient } from '@/db/client'
 import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { listAllPats } from '@/auth/patStore'
 import { listTokenAudit } from '@/services/tokenAudit'
-import { resetPassword, searchUsersPublic } from '@/services/users'
-import { isOidcManagedUser, listOidcManagedUserIds } from '@/services/accountAuthPolicy'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
-import type { CreateManagedUser, UpdateUserAccess } from '@/modules/identity-access/public/commands'
 import type { DirectOperationContextFactory } from '@/modules/identity-access/public/participants'
-import type { GetUserAccess } from '@/modules/identity-access/public/queries'
-import { UserAccessError, type AdminUserAccessView } from '@/modules/identity-access/public/types'
+import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
+import { UserAccessError } from '@/modules/identity-access/public/types'
 
 interface UserRouteIdentityAccess {
   readonly contexts: DirectOperationContextFactory
-  readonly createManagedUser: CreateManagedUser
-  readonly updateUserAccess: UpdateUserAccess
-  readonly getUserAccess: GetUserAccess
+  readonly operations: IdentityUserOperations
 }
 
 export function mountUserRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: { readonly db: DbClient },
   identityAccess: UserRouteIdentityAccess,
 ): void {
-  const runtimeTests = getMcpRuntimeTestService({
-    db: deps.db,
-    configPath: deps.configPath,
-    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    runFn: deps.mcpRuntimeTestDependencies?.runFn,
-    now: deps.mcpRuntimeTestDependencies?.now,
-    capacity: deps.mcpRuntimeTestDependencies?.capacity,
-  })
   // /api/users/search — `users:search`. MUST come before /api/users so the
   // literal wins over the parameterized route.
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/users/search',
-      permissions: ['users:search'],
-      tokenAccess: 'allow',
-      summary: 'Search users (public fields only)',
-    },
-    async (c) => {
-      const q = c.req.query('q') ?? undefined
-      const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '20'), 1), 100)
-      const excludeIds = (c.req.query('excludeIds') ?? '').split(',').filter(Boolean)
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.searchUsers,
+    method: 'GET',
+    path: '/api/users/search',
+    tokenAccess: 'allow',
+    decode: (c) => {
       const status = c.req.query('status')
       if (status !== undefined && !['active', 'disabled', 'invited'].includes(status)) {
         throw new ValidationError('user-invalid', `unknown user status '${status}'`)
       }
-      const rows = await searchUsersPublic(deps.db, {
-        q,
-        limit,
-        excludeIds,
-        status: status as 'active' | 'disabled' | 'invited' | undefined,
-      })
-      return c.json(rows)
+      return {
+        q: c.req.query('q') ?? undefined,
+        limit: Math.min(Math.max(Number(c.req.query('limit') ?? '20'), 1), 100),
+        excludeIds: (c.req.query('excludeIds') ?? '').split(',').filter(Boolean),
+        status,
+      }
     },
-  )
+    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => c.json(output),
+    mapError: mapUserAccessError,
+  })
 
   // RFC-099 — batch id → public-fields resolve for attribution chips
   // (review comments / clarify per-question editors / owner badges). Same
   // users:search permission class as the picker: public fields only, never
   // emails. Unknown ids are silently dropped so callers can blind-resolve.
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/users/lookup',
-      permissions: ['users:search'],
-      tokenAccess: 'allow',
-      summary: 'Look up users by id (public fields only)',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.lookupUsers,
+    method: 'POST',
+    path: '/api/users/lookup',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const body = (await c.req.json().catch(() => ({}))) as { ids?: unknown }
       const ids = Array.isArray(body.ids)
         ? body.ids.filter((x): x is string => typeof x === 'string' && x.length > 0).slice(0, 200)
         : []
-      if (ids.length === 0) return c.json([])
-      const { lookupUsersPublic } = await import('@/services/users')
-      return c.json(await lookupUsersPublic(deps.db, ids))
+      return { ids }
     },
-  )
+    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => c.json(output),
+    mapError: mapUserAccessError,
+  })
 
   // RFC-247 D8 / D16 / T27 — the `users:read` platform-wide token view.
   // READ-ONLY on purpose: an authorized actor can see every token and every call made with
@@ -133,63 +108,39 @@ export function mountUserRoutes(
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/users',
-      permissions: ['users:read'],
-      tokenAccess: 'allow',
-      summary: 'List users',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const context = identityAccess.contexts.queryFromAuthenticatedPrincipal(
-        { userId: actor.user.id, source: actor.source },
-        'http',
-      )
-      const rows = await accessCall(() => identityAccess.getUserAccess.list(context))
-      const managed = await listOidcManagedUserIds(
-        deps.db,
-        rows.map((row) => row.id),
-      )
-      return c.json(rows.map((row) => materializePublicAdminView(row, managed.has(row.id))))
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.listUsers,
+    method: 'GET',
+    path: '/api/users',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => c.json(output),
+    mapError: mapUserAccessError,
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/users/:id',
-      permissions: ['users:read'],
-      tokenAccess: 'allow',
-      summary: 'Get one user',
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.getUser,
+    method: 'GET',
+    path: '/api/users/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ userId: c.req.param('id') }),
+    context: (c) => queryContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => {
+      if (output === null) {
+        throw new NotFoundError('user-not-found', `user '${c.req.param('id')}' not found`)
+      }
+      return c.json(output)
     },
-    async (c) => {
-      const actor = actorOf(c)
-      const context = identityAccess.contexts.queryFromAuthenticatedPrincipal(
-        { userId: actor.user.id, source: actor.source },
-        'http',
-      )
-      const u = await accessCall(() =>
-        identityAccess.getUserAccess.execute(context, { userId: c.req.param('id') }),
-      )
-      if (!u) throw new NotFoundError('user-not-found', `user '${c.req.param('id')}' not found`)
-      return c.json(materializePublicAdminView(u, await isOidcManagedUser(deps.db, u.id)))
-    },
-  )
+    mapError: mapUserAccessError,
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/users',
-      permissions: ['users:write'],
-      tokenAccess: 'allow',
-      summary: 'Create a user',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.createUser,
+    method: 'POST',
+    path: '/api/users',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = CreateUserBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError(
@@ -200,43 +151,19 @@ export function mountUserRoutes(
           },
         )
       }
-      const actor = actorOf(c)
-      const now = Date.now()
-      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
-        { userId: actor.user.id, source: actor.source },
-        'http',
-        now,
-      )
-      const passwordHash = parsed.data.password ? await hashPassword(parsed.data.password) : null
-      const created = await accessCall(() =>
-        identityAccess.createManagedUser.execute(context, {
-          id: ulid(),
-          username: parsed.data.username,
-          email: parsed.data.email ?? null,
-          displayName: parsed.data.displayName,
-          passwordHash,
-          role: parsed.data.role,
-          status: passwordHash === null ? 'invited' : 'active',
-          forcePasswordChange: false,
-          createdBy: actor.user.id,
-          schemaVersion: 1,
-          additionalPermissions: parsed.data.additionalPermissions,
-        }),
-      )
-      return c.json(materializePublicAdminView(created, false), 201)
+      return parsed.data
     },
-  )
+    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => c.json(output, 201),
+    mapError: mapUserAccessError,
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'PATCH',
-      path: '/api/users/:id',
-      permissions: ['users:write'],
-      tokenAccess: 'allow',
-      summary: 'Update a user',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.updateUser,
+    method: 'PATCH',
+    path: '/api/users/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = PatchUserBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError(
@@ -247,122 +174,66 @@ export function mountUserRoutes(
           },
         )
       }
-      const actor = actorOf(c)
-      const now = Date.now()
-      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
-        { userId: actor.user.id, source: actor.source },
-        'http',
-        now,
-      )
-      const result = await accessCall(() =>
-        identityAccess.updateUserAccess.execute(context, {
-          targetUserId: c.req.param('id'),
-          displayName: parsed.data.displayName,
-          email: parsed.data.email,
-          status: parsed.data.status,
-          forcePasswordChange: parsed.data.forcePasswordChange,
-          access: parsed.data.access,
-          legacyRole: parsed.data.role,
-        }),
-      )
-      if (result.becameDisabled) {
-        await revokeAllSessionsForUser(deps.db, c.req.param('id'), now)
-        await runtimeTests.reconcileDurableIntents()
-      }
-      return c.json(
-        materializePublicAdminView(result.user, await isOidcManagedUser(deps.db, result.user.id)),
-      )
+      return { targetUserId: c.req.param('id'), ...parsed.data }
     },
-  )
+    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => c.json(output),
+    mapError: mapUserAccessError,
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/users/:id',
-      permissions: ['users:write'],
-      tokenAccess: 'allow',
-      summary: 'Delete a user',
-    },
-    async (c) => {
-      const userId = c.req.param('id')
-      const actor = actorOf(c)
-      const now = Date.now()
-      const context = identityAccess.contexts.fromAuthenticatedPrincipal(
-        { userId: actor.user.id, source: actor.source },
-        'http',
-        now,
-      )
-      const result = await accessCall(() =>
-        identityAccess.updateUserAccess.execute(context, {
-          targetUserId: userId,
-          status: 'disabled',
-        }),
-      )
-      if (result.becameDisabled) {
-        await revokeAllSessionsForUser(deps.db, userId, now)
-        await runtimeTests.reconcileDurableIntents()
-      }
-      return c.json({ ok: true, code: 'user-deletion-soft' })
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.disableUser,
+    method: 'DELETE',
+    path: '/api/users/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ targetUserId: c.req.param('id') }),
+    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => c.json(output),
+    mapError: mapUserAccessError,
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/users/:id/reset-password',
-      permissions: ['users:write'],
-      tokenAccess: 'allow',
-      summary: 'Reset a local password',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: identityAccess.operations.resetPassword,
+    method: 'POST',
+    path: '/api/users/:id/reset-password',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = ResetPasswordBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('reset-invalid', 'invalid reset-password body', {
           issues: parsed.error.issues,
         })
       }
-      await resetPassword(deps.db, c.req.param('id'), parsed.data)
-      return c.json({ ok: true })
+      return { targetUserId: c.req.param('id'), ...parsed.data }
     },
+    context: (c) => commandContext(identityAccess.contexts, actorOf(c)),
+    encode: (c, output) => c.json(output),
+    mapError: mapUserAccessError,
+  })
+}
+
+function queryContext(factory: DirectOperationContextFactory, actor: Actor) {
+  return factory.queryFromAuthenticatedPrincipal(
+    { userId: actor.user.id, source: actor.source },
+    'http',
   )
 }
 
-function materializePublicAdminView(row: AdminUserAccessView, hasOidcIdentity: boolean) {
-  return {
-    id: row.id,
-    username: row.username,
-    email: row.email,
-    displayName: row.displayName,
-    role: row.role,
-    status: row.status,
-    forcePasswordChange: row.forcePasswordChange,
-    createdBy: row.history.createdBy,
-    createdAt: row.history.createdAt,
-    updatedAt: row.history.updatedAt,
-    lastLoginAt: row.history.lastLoginAt,
-    additionalPermissions: row.additionalPermissions,
-    accessRevision: row.accessRevision,
-    hasOidcIdentity,
-  }
+function commandContext(factory: DirectOperationContextFactory, actor: Actor) {
+  return factory.fromAuthenticatedPrincipal({ userId: actor.user.id, source: actor.source }, 'http')
 }
 
-async function accessCall<T>(body: () => Promise<T>): Promise<T> {
-  try {
-    return await body()
-  } catch (error) {
-    if (!(error instanceof UserAccessError)) throw error
-    switch (error.kind) {
-      case 'conflict':
-        throw new ConflictError(error.code, error.message, error.details)
-      case 'forbidden':
-        throw new ForbiddenError(error.code, error.message, error.details)
-      case 'not-found':
-        throw new NotFoundError(error.code, error.message, error.details)
-      case 'validation':
-        throw new ValidationError(error.code, error.message, error.details)
-    }
+function mapUserAccessError(error: unknown): never {
+  if (!(error instanceof UserAccessError)) throw error
+  switch (error.kind) {
+    case 'conflict':
+      throw new ConflictError(error.code, error.message, error.details)
+    case 'forbidden':
+      throw new ForbiddenError(error.code, error.message, error.details)
+    case 'not-found':
+      throw new NotFoundError(error.code, error.message, error.details)
+    case 'validation':
+      throw new ValidationError(error.code, error.message, error.details)
   }
 }
 

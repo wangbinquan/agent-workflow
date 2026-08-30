@@ -43,7 +43,6 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { createDispatcher, mcpDispatchActor, type Dispatcher } from '../src/mcp/dispatch'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
 import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import {
@@ -55,8 +54,16 @@ import {
   type McpToolDef,
 } from '../src/mcp/tools'
 import { createApp } from '../src/server'
+import { createBoundOperationInvoker } from '../src/platform/operations/boundOperationInvoker'
+import type { OperationInvoker } from '../src/platform/operations/contracts'
 import { listTokenAuditForUser } from '../src/services/tokenAudit'
 import { createUser } from '../src/services/users'
+import {
+  operationHandlesForInvoker,
+  mcpTestOperationActor,
+  recordingOperationHandles,
+  type RecordedOperationCall,
+} from './helpers/mcpOperationRecording'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -97,7 +104,7 @@ interface Harness {
   appHome: string
   configPath: string
   userId: string
-  dispatch: Dispatcher
+  invokeFor: (actor: Actor) => OperationInvoker
   cleanup: () => void
 }
 
@@ -134,12 +141,13 @@ async function harness(): Promise<Harness> {
       taskExecutionReadModels: taskExecutionRuntime.readModels,
     }),
   }
+  const app = createApp(deps)
   return {
     db,
     appHome,
     configPath,
     userId: user.id,
-    dispatch: createDispatcher(deps),
+    invokeFor: (actor) => createBoundOperationInvoker(app, mcpTestOperationActor(actor)),
     cleanup: () => {
       db.$client.close()
       rmSync(tmp, { recursive: true, force: true })
@@ -259,11 +267,10 @@ async function seedReview(
   return { taskId, reviewRunId, docIds }
 }
 
-function ctxFor(h: Harness, actor: Actor): McpToolContext {
-  const dispatchActor = mcpDispatchActor(actor)
+function ctxFor(h: Harness, actor: Actor, toolName: string): McpToolContext {
   return {
     actor,
-    dispatch: (req) => h.dispatch(req, dispatchActor),
+    operations: operationHandlesForInvoker(toolName, h.invokeFor(actor)),
     progress: async () => {},
     signal: new AbortController().signal,
   }
@@ -275,7 +282,7 @@ async function call(
   name: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  return toolNamed(name).handler(args, ctxFor(h, actor))
+  return toolNamed(name).handler(args, ctxFor(h, actor, name))
 }
 
 async function refusalOf(fn: () => Promise<unknown>): Promise<McpCallError> {
@@ -610,26 +617,27 @@ describe('RFC-326 AC-24 — refusals a model can act on', () => {
 describe('RFC-326 AC-27 — every id is encoded before it reaches the dispatcher', () => {
   test('nodeRunId / docVersionId / commentId', async () => {
     const calls: string[] = []
-    const ctx: McpToolContext = {
+    const recorded: RecordedOperationCall[] = []
+    const ctxForTool = (toolName: string): McpToolContext => ({
       actor: {} as Actor,
-      dispatch: async (req) => {
-        calls.push(`${req.method} ${req.path}`)
-        return { status: 200, body: {} }
-      },
+      operations: recordingOperationHandles(toolName, recorded, (operation) => {
+        calls.push(`${operation.method} ${operation.path}`)
+        return {}
+      }),
       progress: async () => {},
       signal: new AbortController().signal,
-    }
+    })
     await toolNamed('get_review_document').handler(
       { nodeRunId: '../workflows', docVersionId: 'x/../y' },
-      ctx,
+      ctxForTool('get_review_document'),
     )
     await toolNamed('update_review_comment').handler(
       { nodeRunId: 'r 1', commentId: 'c/2', commentText: 'x' },
-      ctx,
+      ctxForTool('update_review_comment'),
     )
     await toolNamed('set_review_document_selection').handler(
       { nodeRunId: 'r', docVersionId: '../../users', selection: 'accepted' },
-      ctx,
+      ctxForTool('set_review_document_selection'),
     )
     expect(calls).toEqual([
       'GET /api/reviews/..%2Fworkflows/versions/x%2F..%2Fy',

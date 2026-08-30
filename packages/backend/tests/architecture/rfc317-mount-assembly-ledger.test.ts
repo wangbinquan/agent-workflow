@@ -1,9 +1,7 @@
 // RFC-317 T54 · findings TP-04 —— `mountApiRoutes` 既是路由表又是装配器。
 //
-// 它在挂任何路由之前先 compose 出十几个模块实例，而它**每进程被调用两次**：
-// 一次给 REST app（`createApp`），一次给 MCP dispatcher 的私有 Hono app
-// （`mcp/dispatch.ts`，在**第一次 MCP 请求**时懒建）。于是一个收到过 MCP 调用的 daemon
-// 持有**两套独立的**模块装配。
+// 它在挂任何路由之前先 compose 出十几个模块实例。RFC-344 已删除 MCP 私有 Hono，
+// 所以它现在每进程只运行一次；本账本继续推动剩余装配上移到 bootstrap。
 //
 // 已修的那一半（本批同批）：中间那句 `deps.digitalEmployeeWorkStart.bind(...)` 绑的是
 // **进程级** deferred participant——webhook dispatcher 拿的就是它。第二次绑会静默覆盖
@@ -25,7 +23,7 @@ import ts from 'typescript'
 const SERVER_TS = resolve(import.meta.dir, '..', '..', 'src', 'server.ts')
 
 /**
- * 开账当天（RFC-317 T54）`mountApiRoutes` 体内的装配调用：14 次。
+ * RFC-344 identity operation cutover 后 `mountApiRoutes` 体内的装配调用：13 次。
  *
  * **只减不增**：多一次 ⇒ 红（新模块的装配请落在 bootstrap，别再往路由函数里塞）；
  * 少一次却不销账 ⇒ 也红。
@@ -41,7 +39,6 @@ const ASSEMBLY_CALLS_IN_MOUNT: readonly string[] = [
   'composeDigitalEmployeeExecution',
   'composeDigitalEmployeeTaskCatalogSource',
   'composeExecutionContract',
-  'composeIdentityAccess',
   'composeTaskCatalog',
   'composeTaskExecutionCatalogSources',
   'createEmployeeInputArtifactStore',
@@ -72,8 +69,7 @@ describe('RFC-317 T54 —— 路由函数里的装配调用只减不增', () => 
   test('逐条相等（新增一次装配 ⇒ 红）', () => {
     expect(
       assemblyCallsInMountApiRoutes(readFileSync(SERVER_TS, 'utf8')),
-      '又往 mountApiRoutes 里塞了一次装配——它每进程被调用两次，塞进去的每个模块都会被' +
-        '装配两遍；新模块的装配请落在 bootstrap，把建好的合同对象传进来',
+      '又往 mountApiRoutes 里塞了一次装配——新模块的装配请落在 bootstrap，把建好的合同对象传进来',
     ).toEqual([...ASSEMBLY_CALLS_IN_MOUNT].sort())
   })
 

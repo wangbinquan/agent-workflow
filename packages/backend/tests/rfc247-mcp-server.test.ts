@@ -9,8 +9,8 @@
 //      validation) by calling a service directly
 //   3. `tools/list` advertises something the token cannot actually call
 //
-// The dispatcher exists precisely so (1) and (2) are structurally impossible;
-// these tests are what tells us it stayed that way.
+// Stable operation bindings target the already-mounted handler chain, making
+// (1) and (2) structurally impossible without a second Hono route root.
 
 import { describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -21,8 +21,8 @@ import { DEFAULT_CONFIG, type Permission, type WorkflowInput } from '@agent-work
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createDispatcher, mcpDispatchActor } from '../src/mcp/dispatch'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import {
   ALL_TOOLS,
@@ -34,6 +34,15 @@ import {
 import { MATRIX_RESOURCES } from '@agent-workflow/shared'
 import { KINDS_WITH_BODY_SCHEMAS } from '../src/mcp/resourceSchemas'
 import { createApp } from '../src/server'
+import { directMcpOperationAuthority } from '../src/routes/operationAuthority'
+import { createRouteOperationDispatcher as createDispatcher } from './helpers/routeOperationDispatcher'
+import {
+  forwardingOperationInvoker,
+  mcpTestOperationActor as mcpDispatchActor,
+  operationHandlesForInvoker,
+  recordingOperationInvoker,
+  type RecordedOperationCall,
+} from './helpers/mcpOperationRecording'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createUser } from '../src/services/users'
 
@@ -249,11 +258,12 @@ describe('RFC-247 D2 — the purpose gate does not fire on its own channel', () 
     expect(((await res.json()) as { code: string }).code).toBe('token-mcp-only')
   })
 
-  test('mcpDispatchActor clears purpose and NOTHING else', async () => {
+  test('the trusted MCP authority clears purpose and NOTHING else', async () => {
     const h = await harness()
     const actor = tokenActor(h, ['agents:create'])
-    const dispatchActor = mcpDispatchActor(actor)
+    const dispatchActor = directMcpOperationAuthority(composeIdentityAccess(h.db).contexts, actor)
     expect(dispatchActor.purpose).toBeUndefined()
+    expect(Object.isFrozen(dispatchActor)).toBe(true)
     expect(dispatchActor.source).toBe('pat')
     expect(dispatchActor.user).toEqual(actor.user)
     // The authority is identical — this is the line that would turn a channel
@@ -469,15 +479,19 @@ describe('RFC-247 AC-17 — an upload workflow is refused before anything exists
     // what is under test is the ORDER — refuse before POSTing a launch, so no
     // task row and no worktree are created and there is nothing to clean up.
     const calls: string[] = []
+    const recorded: RecordedOperationCall[] = []
     const ctx = {
       actor,
-      dispatch: async (req: { method: string; path: string }) => {
-        calls.push(`${req.method} ${req.path}`)
-        if (req.method === 'GET' && req.path.startsWith('/api/workflows/')) {
-          return { status: 200, body: { definition: { inputs: UPLOAD_INPUTS } } }
-        }
-        return dispatch(req as Parameters<typeof dispatch>[0], actor)
-      },
+      operations: operationHandlesForInvoker(
+        'launch_task',
+        forwardingOperationInvoker(recorded, (call) => {
+          calls.push(`${call.method} ${call.path}`)
+          if (call.method === 'GET' && call.path.startsWith('/api/workflows/')) {
+            return { status: 200, body: { definition: { inputs: UPLOAD_INPUTS } } }
+          }
+          return dispatch(call, actor)
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
@@ -499,17 +513,21 @@ describe('RFC-247 AC-17 — an upload workflow is refused before anything exists
     const tool = ALL_TOOLS.find((t) => t.name === 'launch_task')
 
     const calls: string[] = []
+    const recorded: RecordedOperationCall[] = []
     const ctx = {
       actor,
-      dispatch: async (req: { method: string; path: string }) => {
-        calls.push(`${req.method} ${req.path}`)
-        if (req.method === 'GET' && req.path.startsWith('/api/workflows/')) {
-          return { status: 200, body: { definition: { inputs: TEXT_INPUTS } } }
-        }
-        // The launch itself will fail on a nonexistent workflow — irrelevant
-        // here; the point is that it was ATTEMPTED.
-        return { status: 404, body: { code: 'workflow-not-found', message: 'nope' } }
-      },
+      operations: operationHandlesForInvoker(
+        'launch_task',
+        forwardingOperationInvoker(recorded, (call) => {
+          calls.push(`${call.method} ${call.path}`)
+          if (call.method === 'GET' && call.path.startsWith('/api/workflows/')) {
+            return { status: 200, body: { definition: { inputs: TEXT_INPUTS } } }
+          }
+          // The launch itself will fail on a nonexistent workflow — irrelevant
+          // here; the point is that it was ATTEMPTED.
+          return { status: 404, body: { code: 'workflow-not-found', message: 'nope' } }
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
@@ -538,13 +556,17 @@ describe('RFC-247 impl-gate — advertised operations actually reach a live rout
     const actor = mcpDispatchActor(tokenActor(h, ['skills:update']))
 
     const seen: string[] = []
+    const recorded: RecordedOperationCall[] = []
     const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
     const ctx = {
       actor,
-      dispatch: async (req: { method: string; path: string }) => {
-        seen.push(`${req.method} ${req.path}`)
-        return dispatch(req as Parameters<typeof dispatch>[0], actor)
-      },
+      operations: operationHandlesForInvoker(
+        'resource_write',
+        forwardingOperationInvoker(recorded, (call) => {
+          seen.push(`${call.method} ${call.path}`)
+          return dispatch(call, actor)
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
@@ -565,13 +587,17 @@ describe('RFC-247 impl-gate — advertised operations actually reach a live rout
     const actor = mcpDispatchActor(tokenActor(h, ['memory:delete']))
 
     const seen: Array<{ path: string; query: unknown }> = []
+    const recorded: RecordedOperationCall[] = []
     const tool = ALL_TOOLS.find((t) => t.name === 'resource_write')
     const ctx = {
       actor,
-      dispatch: async (req: { method: string; path: string; query?: unknown }) => {
-        seen.push({ path: req.path, query: req.query })
-        return dispatch(req as Parameters<typeof dispatch>[0], actor)
-      },
+      operations: operationHandlesForInvoker(
+        'resource_write',
+        forwardingOperationInvoker(recorded, (call) => {
+          seen.push({ path: call.path, query: call.query })
+          return dispatch(call, actor)
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
@@ -597,12 +623,16 @@ describe('RFC-247 impl-gate — advertised operations actually reach a live rout
     const actor = mcpDispatchActor(tokenActor(h, ['tasks:execute']))
     const tool = ALL_TOOLS.find((t) => t.name === 'repair_alert')
     let body: unknown
+    const recorded: RecordedOperationCall[] = []
     const ctx = {
       actor,
-      dispatch: async (req: { body?: unknown }) => {
-        body = req.body
-        return { status: 200, body: {} }
-      },
+      operations: operationHandlesForInvoker(
+        'repair_alert',
+        recordingOperationInvoker(recorded, (call) => {
+          body = call.body
+          return {}
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
@@ -628,12 +658,16 @@ describe('RFC-247 impl-gate — a model-supplied id cannot retarget the dispatch
     const actor = mcpDispatchActor(tokenActor(h, []))
     const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
     let path = ''
+    const recorded: RecordedOperationCall[] = []
     const ctx = {
       actor,
-      dispatch: async (req: { path: string }) => {
-        path = req.path
-        return { status: 200, body: {} }
-      },
+      operations: operationHandlesForInvoker(
+        'get_task',
+        recordingOperationInvoker(recorded, (call) => {
+          path = call.path
+          return {}
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]
@@ -648,12 +682,16 @@ describe('RFC-247 impl-gate — a model-supplied id cannot retarget the dispatch
     const actor = mcpDispatchActor(tokenActor(h, []))
     const tool = ALL_TOOLS.find((t) => t.name === 'get_task')
     let path = ''
+    const recorded: RecordedOperationCall[] = []
     const ctx = {
       actor,
-      dispatch: async (req: { path: string }) => {
-        path = req.path
-        return { status: 200, body: {} }
-      },
+      operations: operationHandlesForInvoker(
+        'get_task',
+        recordingOperationInvoker(recorded, (call) => {
+          path = call.path
+          return {}
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<NonNullable<typeof tool>['handler']>[1]

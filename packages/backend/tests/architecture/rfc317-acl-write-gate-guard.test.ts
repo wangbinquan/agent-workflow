@@ -101,16 +101,30 @@ const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
   return { rel, calledNames: calledIdentifierNames(rel, readFileSync(path, 'utf8')) }
 })
 
+const CONFIG_OPERATION_SOURCE = 'packages/backend/src/modules/development-automation/composition/configOperations.ts'
+const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = {
+  'packages/backend/src/routes/developmentConfig.ts': calledIdentifierNames(
+    CONFIG_OPERATION_SOURCE,
+    readFileSync(resolve(REPO_ROOT, CONFIG_OPERATION_SOURCE), 'utf8'),
+  ),
+}
+
+const calledNamesFor = (source: RouteSource): ReadonlySet<string> => {
+  const delegated = OPERATION_GATE_DELEGATES[source.rel]
+  if (delegated === undefined) return source.calledNames
+  return new Set([...source.calledNames, ...delegated])
+}
+
 const usesMountAclEndpoints = (source: RouteSource): boolean =>
   source.rel !== ACL_MOUNTER_DEFINITION && source.calledNames.has('mountAclEndpoints')
 /** RFC-324 —— 真写门：治理档或内容档，两者都不是「看得见就写得动」。 */
 const WRITE_GATES = ['requireResourceGovern', 'requireResourceEdit'] as const
 const usesOwnerGate = (source: RouteSource): boolean =>
-  WRITE_GATES.some((gate) => source.calledNames.has(gate))
+  WRITE_GATES.some((gate) => calledNamesFor(source).has(gate))
 const usesVisibilityOracle = (source: RouteSource): boolean =>
   source.calledNames.has('canViewResource')
 const usesEditGate = (source: RouteSource): boolean =>
-  source.calledNames.has('requireResourceEdit')
+  calledNamesFor(source).has('requireResourceEdit')
 
 /**
  * RFC-324 —— 挂了 `/acl` 却一个 `requireResourceEdit` 都没有的路由文件，意味着这

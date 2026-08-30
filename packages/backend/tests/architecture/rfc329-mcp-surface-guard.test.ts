@@ -35,6 +35,7 @@ import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
 import { ALL_TOOLS, MCP_RESOURCE_KINDS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta } from '@/routes/registry'
+import { recordingOperationHandles } from '../helpers/mcpOperationRecording'
 import { createApp } from '@/server'
 import {
   EXEMPT_REASONS,
@@ -148,11 +149,11 @@ async function dispatchedByTool(): Promise<Map<string, Set<string>>> {
           user: { id: 'u', role: 'admin' },
           permissions: new Set<Permission>(),
         } as unknown as McpToolContext['actor'],
-        dispatch: async (req) => {
-          const normalised = req.path.split('FIXTURE_ID').join(':id').split(PH).join(':id')
-          calls.add(canon(req.method, normalised))
-          return { status: 200, body: respond(req.path) }
-        },
+        operations: recordingOperationHandles(tool.name, [], (call) => {
+          const normalised = call.path.split('FIXTURE_ID').join(':id').split(PH).join(':id')
+          calls.add(canon(call.method, normalised))
+          return respond(call.path)
+        }),
         progress: async () => {},
         signal: aborted.signal,
       }

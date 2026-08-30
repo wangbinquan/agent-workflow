@@ -17,6 +17,10 @@ import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import type { AppDeps } from '@/server'
 import { ConflictError } from '@/util/errors'
+import {
+  recordingOperationHandles,
+  type RecordedOperationCall,
+} from './helpers/mcpOperationRecording'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -27,21 +31,17 @@ function toolNamed(name: string) {
 }
 
 /** Records what a handler dispatches; `respond` fakes the route's answer. */
-function recordingCtx(respond: (path: string) => unknown = () => ({})): {
+function recordingCtx(
+  toolName: string,
+  respond: (path: string) => unknown = () => ({}),
+): {
   ctx: McpToolContext
   calls: Array<{ method: string; path: string; query?: Record<string, string | undefined> }>
 } {
-  const calls: Array<{
-    method: string
-    path: string
-    query?: Record<string, string | undefined>
-  }> = []
+  const calls: RecordedOperationCall[] = []
   const ctx: McpToolContext = {
     actor: {} as McpToolContext['actor'],
-    dispatch: async (req) => {
-      calls.push({ method: req.method, path: req.path, ...(req.query ? { query: req.query } : {}) })
-      return { status: 200, body: respond(req.path) }
-    },
+    operations: recordingOperationHandles(toolName, calls, (call) => respond(call.path)),
     progress: async () => {},
     signal: new AbortController().signal,
   }
@@ -87,7 +87,7 @@ describe('RFC-329 AC-1 — repos has no single-repo read, and the table no longe
 
 describe('RFC-329 AC-2 — the alert loop is closed on this channel', () => {
   test('list_task_alerts exists and dispatches to the alerts route', async () => {
-    const { ctx, calls } = recordingCtx()
+    const { ctx, calls } = recordingCtx('list_task_alerts')
     await toolNamed('list_task_alerts').handler({ id: 'T1' }, ctx)
     expect(calls).toEqual([{ method: 'GET', path: '/api/tasks/T1/alerts' }])
   })
@@ -108,19 +108,23 @@ describe('RFC-329 AC-2 — the alert loop is closed on this channel', () => {
 
   test('the three tools form a closed loop: alerts → options → repair', async () => {
     const seen: string[] = []
-    const { ctx } = recordingCtx()
-    const trace: McpToolContext = {
+    const calls: RecordedOperationCall[] = []
+    const { ctx } = recordingCtx('list_task_alerts')
+    const trace = (toolName: string): McpToolContext => ({
       ...ctx,
-      dispatch: async (req) => {
-        seen.push(`${req.method} ${req.path}`)
-        return { status: 200, body: {} }
-      },
-    }
-    await toolNamed('list_task_alerts').handler({ id: 'T1' }, trace)
-    await toolNamed('list_repair_options').handler({ id: 'T1', alertId: 'A1' }, trace)
+      operations: recordingOperationHandles(toolName, calls, (call) => {
+        seen.push(`${call.method} ${call.path}`)
+        return {}
+      }),
+    })
+    await toolNamed('list_task_alerts').handler({ id: 'T1' }, trace('list_task_alerts'))
+    await toolNamed('list_repair_options').handler(
+      { id: 'T1', alertId: 'A1' },
+      trace('list_repair_options'),
+    )
     await toolNamed('repair_alert').handler(
       { id: 'T1', alertId: 'A1', optionId: 'O1', confirm: true },
-      trace,
+      trace('repair_alert'),
     )
     expect(seen).toEqual([
       'GET /api/tasks/T1/alerts',
@@ -132,7 +136,7 @@ describe('RFC-329 AC-2 — the alert loop is closed on this channel', () => {
 
 describe('RFC-329 AC-3 — list_repo_refs resolves the mirror path itself', () => {
   test('two hops: list the repos, then ask for that row’s refs by path', async () => {
-    const { ctx, calls } = recordingCtx((path) =>
+    const { ctx, calls } = recordingCtx('list_repo_refs', (path) =>
       path === '/api/cached-repos'
         ? {
             items: [
@@ -150,7 +154,7 @@ describe('RFC-329 AC-3 — list_repo_refs resolves the mirror path itself', () =
   })
 
   test('an unknown id is a business refusal shaped like a 404, not a crash', async () => {
-    const { ctx, calls } = recordingCtx((path) =>
+    const { ctx, calls } = recordingCtx('list_repo_refs', (path) =>
       path === '/api/cached-repos' ? { items: [{ id: 'R1', localPath: '/mirrors/r1' }] } : {},
     )
     const err = await toolNamed('list_repo_refs')

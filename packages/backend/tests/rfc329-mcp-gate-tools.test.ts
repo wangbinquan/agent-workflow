@@ -12,6 +12,11 @@ import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { SubmitClarifyAnswersSchema } from '@agent-workflow/shared'
 import { ALL_TOOLS, type McpToolContext } from '@/mcp/tools'
+import {
+  forwardingOperationHandles,
+  recordingOperationHandles,
+  type RecordedOperationCall,
+} from './helpers/mcpOperationRecording'
 
 function toolNamed(name: string) {
   const tool = ALL_TOOLS.find((t) => t.name === name)
@@ -32,18 +37,10 @@ async function dispatchOf(
   args: Record<string, unknown>,
   respond: (path: string) => unknown = () => ({}),
 ): Promise<Call[]> {
-  const calls: Call[] = []
+  const calls: RecordedOperationCall[] = []
   const ctx: McpToolContext = {
     actor: {} as McpToolContext['actor'],
-    dispatch: async (req) => {
-      calls.push({
-        method: req.method,
-        path: req.path,
-        ...(req.body !== undefined ? { body: req.body } : {}),
-        ...(req.query !== undefined ? { query: req.query } : {}),
-      })
-      return { status: 200, body: respond(req.path) }
-    },
+    operations: recordingOperationHandles(name, calls, (call) => respond(call.path)),
     progress: async () => {},
     signal: new AbortController().signal,
   }
@@ -331,10 +328,11 @@ describe('RFC-329 AC-10 — list_pending_gates covers four gates and fails per l
     // dispatcher resolves 4xx/5xx as fulfilled results.
     const ctx: McpToolContext = {
       actor: {} as McpToolContext['actor'],
-      dispatch: async (req) =>
-        req.path === '/api/workgroup-tasks/pending'
+      operations: forwardingOperationHandles('list_pending_gates', [], (call) => {
+        return call.path === '/api/workgroup-tasks/pending'
           ? { status: 500, body: { code: 'boom', message: 'boom' } }
-          : { status: 200, body: [] },
+          : { status: 200, body: [] }
+      }),
       progress: async () => {},
       signal: new AbortController().signal,
     }
@@ -356,7 +354,7 @@ describe('RFC-329 AC-10 — list_pending_gates covers four gates and fails per l
       {},
       {
         actor: {} as McpToolContext['actor'],
-        dispatch: async () => ({ status: 200, body: [] }),
+        operations: recordingOperationHandles('list_pending_gates', [], () => []),
         progress: async () => {},
         signal: new AbortController().signal,
       },

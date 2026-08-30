@@ -1244,13 +1244,15 @@ function buildPublicSurfaces(
     symbol: string,
   ): Pick<PublicSurfaceEntry, 'authority' | 'dataClass' | 'serialization' | 'transaction'> => ({
     authority:
-      location.entrypoint === 'commands' || location.entrypoint === 'queries'
+      location.entrypoint === 'commands' ||
+      location.entrypoint === 'queries' ||
+      location.entrypoint === 'operations'
         ? 'request-authority'
         : location.entrypoint === 'participants'
           ? 'context-bound'
           : 'none',
     transaction:
-      location.entrypoint === 'commands'
+      location.entrypoint === 'commands' || location.entrypoint === 'operations'
         ? 'own-tx'
         : location.entrypoint === 'participants'
           ? 'caller-tx'
@@ -1258,7 +1260,9 @@ function buildPublicSurfaces(
     serialization:
       location.entrypoint === 'events'
         ? 'durable'
-        : location.entrypoint === 'commands' || location.entrypoint === 'queries'
+        : location.entrypoint === 'commands' ||
+            location.entrypoint === 'queries' ||
+            location.entrypoint === 'operations'
           ? 'wire'
           : 'ephemeral',
     dataClass: /secret|credential|token|password/i.test(symbol)

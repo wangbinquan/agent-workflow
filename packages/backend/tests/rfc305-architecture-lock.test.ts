@@ -311,7 +311,14 @@ describe('RFC-305 identity-access architecture', () => {
     const publicRoot = resolve(IDENTITY_ROOT, 'public')
     expect(
       sourceFiles(publicRoot).map((file) => relative(publicRoot, file).replaceAll('\\', '/')),
-    ).toEqual(['commands.ts', 'events.ts', 'participants.ts', 'queries.ts', 'types.ts'])
+    ).toEqual([
+      'commands.ts',
+      'events.ts',
+      'operations.ts',
+      'participants.ts',
+      'queries.ts',
+      'types.ts',
+    ])
     expect(exportedNames(resolve(publicRoot, 'commands.ts'))).toEqual([
       'CreateManagedUser',
       'CreateManagedUserCommand',
@@ -330,6 +337,11 @@ describe('RFC-305 identity-access architecture', () => {
     expect(exportedNames(resolve(publicRoot, 'events.ts'))).toEqual([
       'AuthorityRevisionChanged',
       'IdentityAccessEventSink',
+    ])
+    expect(exportedNames(resolve(publicRoot, 'operations.ts'))).toEqual([
+      'IdentityUserOperationDeps',
+      'IdentityUserOperations',
+      'createIdentityUserOperations',
     ])
     expect(exportedNames(resolve(publicRoot, 'queries.ts'))).toEqual([
       'GetUserAccess',
@@ -376,6 +388,12 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/auth/loginPolicy.ts -> @/modules/identity-access/public/commands',
+      // RFC-344 CLI/HTTP user bindings invoke the same descriptor cohort;
+      // only the process-edge userBootstrap composes its concrete module.
+      'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/composition/userOperations',
       // RFC-320 — auth receives exact profile commands/queries through the
       // server-composed module; it never imports module internals or storage.
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',
@@ -385,11 +403,12 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-342 — memory scope moves receive only the direct context factory;
       // request identity remains sealed inside the factory-minted context.
       'packages/backend/src/routes/memories.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/commands',
+      'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/server.ts -> @/modules/identity-access/composition/userOperations',
+      'packages/backend/src/server.ts -> @/modules/identity-access/public/operations',
       // The memory command resolves the direct context inside its writer
       // transaction, then re-reads current user/grant state before both scope gates.
       'packages/backend/src/services/memory.ts -> @/modules/identity-access/public/participants',

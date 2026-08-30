@@ -184,7 +184,7 @@ const RAW_TRANSACTION_SITES: Record<string, number> = {
   'modules/digital-employee/infrastructure/sqliteRuntimeStore.ts': 14,
   'modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts': 1,
   'modules/event-center/infrastructure/sqliteEventStore.ts': 4,
-  'routes/developmentMissions.ts': 1,
+  'modules/development-automation/composition/missionOperations.ts': 1,
 }
 
 describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必须逐处可见', () => {

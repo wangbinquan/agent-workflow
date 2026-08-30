@@ -1,9 +1,8 @@
 // RFC-317 T54（findings TP-04）—— 进程级 work-start 参与者不得被静默重绑。
 //
-// 为什么这条测试存在：`mountApiRoutes` 每进程被调用**两次**——一次给 REST app
-// （`createApp`），一次给 MCP dispatcher 的私有 Hono app（`mcp/dispatch.ts`，在第一次
-// MCP 请求时懒建）。它里面那句 `deps.digitalEmployeeWorkStart.bind(...)` 绑的是进程级的
-// deferred participant，而 `cli/start.ts` 把这个 participant 交给了 webhook dispatcher。
+// 为什么这条测试存在：RFC-344 前 `mountApiRoutes` 每进程被调用两次，第二套 MCP Hono
+// 会重绑进程级 participant。RFC-344 已删除那套 route root；once guard 仍保留，防止未来
+// 任何新入口重复绑定 `cli/start.ts` 交给 webhook dispatcher 的 participant。
 //
 // 改造前 `bind` 是一句裸赋值，没有 once 守卫：**一旦有人发过一次 MCP 请求**，此后所有
 // webhook / 事件驱动的工作启动都改道到 MCP 那套私有 runtime 上，无日志、无报错、
@@ -58,14 +57,13 @@ describe('RFC-317 T54 —— work-start participant 的绑定是一次性的', (
   })
 })
 
-describe('RFC-317 T54 —— MCP dispatcher 不参与进程级绑定', () => {
-  test('dispatch.ts 显式把 digitalEmployeeWorkStart 置空后再挂路由', async () => {
-    // 源码层断言：dispatcher 是第二个路由面，不该抢进程级参与者。
-    // 行为层的证据是上面那条「绑第二次直接抛」——如果 dispatcher 还在绑，
-    // 任何一次建 dispatcher 的测试都会炸。
-    const { readFileSync } = await import('node:fs')
+describe('RFC-344 —— MCP 不再拥有第二个进程级绑定入口', () => {
+  test('旧 dispatch root 消失，server 只创建 direct bound operation invoker', async () => {
+    const { existsSync, readFileSync } = await import('node:fs')
     const { resolve } = await import('node:path')
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'mcp', 'dispatch.ts'), 'utf8')
-    expect(src).toContain('digitalEmployeeWorkStart: undefined')
+    expect(existsSync(resolve(import.meta.dir, '..', 'src', 'mcp', 'dispatch.ts'))).toBe(false)
+    const server = readFileSync(resolve(import.meta.dir, '..', 'src', 'server.ts'), 'utf8')
+    expect(server).toContain('directMcpOperationAuthority(identityAccess.contexts, actor)')
+    expect(server).not.toContain('app.request(')
   })
 })

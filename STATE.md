@@ -2,6 +2,14 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **RFC 实施候选（Approved / In Progress，2026-08-30）：[RFC-344 OperationCatalog 与 transport cutover（RFC-294 W4-A）](design/RFC-344-operation-catalog-transport-cutover/proposal.md)。**
+> D1～D10、完整实施与提交上库已获批准。当前候选已让 472 条 HTTP route 获得 stable operation identity，52/52 MCP tool 进入
+> direct/parameterized/composite/local-introspection closed binding 并只调用同一已挂载 handler chain；`mcp/dispatch.ts`、第二套 Hono 与
+> `mcp/dispatch ↔ mcp/server ↔ server` SCC 已删除，API docs 改读 catalog projection。identity user HTTP/CLI 与 development
+> mission/config/activity 已 descriptor 化，daemon 只 compose 一套 development automation；`AppDeps` consumer 由 53 降至 48，
+> `mountApiRoutes` assembly 由 14 降至 13。尚待 canonical、publication 及 exact-SHA Main CI + 全部定时 workflows；在 hosted closeout 前
+> 不标记 Done，也不倒签 W4-B/C/E 或完整 W4-D。
+
 > ✅ **已完成 RFC（Done，2026-08-30）：[RFC-341 生命周期已提交事件与协作命令收口（RFC-294 W3）](design/RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md)。**
 > task lifecycle 与 review/clarify/questions 已切 closed committed events + per-consumer durable delivery；continuous worker消费
 > RFC-333 intent，Event Center 原页展示并重试 delivery，legacy request-owned wake/direct emitters已归零。idle dispatcher 在空队列只做

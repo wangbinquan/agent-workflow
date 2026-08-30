@@ -39,10 +39,11 @@ export interface ImportEdge {
   readonly syntax: EdgeSyntax
 }
 
-/** RFC-294 §3.2 的受控 public 入口，exact 五个，不含别名。 */
+/** RFC-294 §3.2 的受控 public 入口；RFC-344 新增 exact operations，不含别名。 */
 export const PUBLIC_ENTRYPOINTS = [
   'commands',
   'events',
+  'operations',
   'participants',
   'queries',
   'types',
@@ -298,7 +299,7 @@ const BARE_MODULE_ROOT = /^@\/modules\/([a-z0-9-]+)$/
 /**
  * R1：`packages/backend/src` 下**非 module** 文件指向 module 内部的边。
  *
- * 允许：exact `public/{commands,queries,participants,events,types}`；
+ * 允许：exact `public/{commands,queries,participants,events,operations,types}`；
  * bootstrap（`server.ts` / `cli/start.ts`）可额外指向 `composition`。
  *
  * 裸模块根导入（`@/modules/foo`）单独判：`moduleLocation` 对它返回 null，若不显式

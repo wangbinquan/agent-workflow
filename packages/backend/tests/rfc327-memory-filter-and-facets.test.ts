@@ -21,11 +21,17 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents } from '../src/db/schema'
-import { createDispatcher, mcpDispatchActor } from '../src/mcp/dispatch'
 import { ALL_TOOLS, describeResource } from '../src/mcp/tools'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
 import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createApp } from '../src/server'
+import { createRouteOperationDispatcher as createDispatcher } from './helpers/routeOperationDispatcher'
+import {
+  forwardingOperationInvoker,
+  mcpTestOperationActor as mcpDispatchActor,
+  operationHandlesForInvoker,
+  type RecordedOperationCall,
+} from './helpers/mcpOperationRecording'
 import { createManualCandidate, promoteCandidate } from '../src/services/memory'
 import { createUser } from '../src/services/users'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -297,13 +303,17 @@ describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
     })
     const actor = mcpDispatchActor(patActor(h, []))
     const seen: Array<{ path: string; query: unknown }> = []
+    const recorded: RecordedOperationCall[] = []
     const tool = ALL_TOOLS.find((t) => t.name === 'resource_read')!
     const ctx = {
       actor,
-      dispatch: async (req: { method: string; path: string; query?: unknown }) => {
-        seen.push({ path: req.path, query: req.query })
-        return dispatch(req as Parameters<typeof dispatch>[0], actor)
-      },
+      operations: operationHandlesForInvoker(
+        'resource_read',
+        forwardingOperationInvoker(recorded, (call) => {
+          seen.push({ path: call.path, query: call.query })
+          return dispatch(call, actor)
+        }),
+      ),
       progress: async () => {},
       signal: new AbortController().signal,
     } as unknown as Parameters<typeof tool.handler>[1]

@@ -25,7 +25,7 @@ afterEach(() => {
 describe('user CLI', () => {
   test('create + list + reset-password + disable round-trip', async () => {
     // Re-import for each test so the path module re-reads AGENT_WORKFLOW_HOME.
-    const { userCommand } = await import('../src/cli/user')
+    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
 
     const created = await userCommand([
       'create',
@@ -71,7 +71,7 @@ describe('user CLI', () => {
   })
 
   test('disable + enable round-trip on a non-admin user', async () => {
-    const { userCommand } = await import('../src/cli/user')
+    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
     await userCommand(['create', '--username', 'alice', '--admin', '--password', 'correctPw123'])
     await userCommand(['create', '--username', 'bob', '--password', 'correctPw123'])
 
@@ -87,27 +87,27 @@ describe('user CLI', () => {
   })
 
   test('enable on a missing user errors out', async () => {
-    const { userCommand } = await import('../src/cli/user')
+    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
     const r = await userCommand(['enable', '--username', 'ghost'])
     expect(r.status).toBe('error')
     expect(r.output).toMatch(/not found/)
   })
 
   test('user create without --username errors out', async () => {
-    const { userCommand } = await import('../src/cli/user')
+    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
     const r = await userCommand(['create', '--admin'])
     expect(r.status).toBe('error')
     expect(r.output).toMatch(/--username/)
   })
 
   test('unknown subcommand surfaces usage error', async () => {
-    const { userCommand } = await import('../src/cli/user')
+    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
     const r = await userCommand(['nope'])
     expect(r.status).toBe('error')
   })
 
   test('bootstrap rejects a non-admin/no-password first user', async () => {
-    const { userCommand } = await import('../src/cli/user')
+    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
     const r = await userCommand(['create', '--username', 'bob', '--display', 'Bob'])
     expect(r.status).toBe('error')
     expect(r.output).toMatch(/bootstrap requires/)

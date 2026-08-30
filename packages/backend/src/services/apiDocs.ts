@@ -1,15 +1,15 @@
 // RFC-247 D17 / §7 — the API + MCP documentation, generated at runtime.
 //
-// Everything here is DERIVED: the endpoint list comes from `allRouteMeta()`,
-// the tool list from the MCP registry, the permission list from the shared
-// catalog. Nothing is retyped.
+// Everything here is DERIVED: endpoint, tool and resource projections come
+// from the closed operation catalog; the permission list comes from shared.
+// Nothing is retyped from route or MCP adapter source.
 //
 // That is the whole design constraint, and it is not about saving effort.
 // Hand-written API docs are wrong within a release and stay wrong, because
 // nothing fails when they drift. A user reading "needs `workflows:create`" and
 // finding that their token 403s has been failed twice — once by the gate and
-// once by the page that told them what to ask for. AC-22 locks this: change a
-// `RouteMeta` permission or add a tool, and this output changes with it.
+// once by the page that told them what to ask for. AC-22 locks this: change an
+// operation projection or add a tool binding, and this output changes with it.
 //
 // The docs are trimmed against the caller's effective account permissions.
 // `role` remains response/display metadata and a preset-only fallback for pure
@@ -25,8 +25,11 @@ import {
   type Permission,
   type Role,
 } from '@agent-workflow/shared'
-import { ALL_TOOLS, describeResource, MCP_RESOURCE_KINDS } from '@/mcp/tools'
-import { allRouteMeta } from '@/routes/registry'
+import {
+  allOperationResources,
+  allOperationRoutes,
+  allOperationTools,
+} from '@/platform/operations/catalog'
 
 export interface ApiDocEndpoint {
   readonly method: string
@@ -57,7 +60,13 @@ export interface ApiDocs {
   readonly alwaysGranted: ReadonlyArray<Permission>
   readonly endpoints: ReadonlyArray<ApiDocEndpoint>
   readonly tools: ReadonlyArray<ApiDocTool>
-  readonly resourceKinds: ReadonlyArray<ReturnType<typeof describeResource>>
+  readonly resourceKinds: ReadonlyArray<{
+    readonly kind: string
+    readonly operations: ReadonlyArray<unknown>
+    readonly bodySchemas: unknown
+    readonly querySchema?: unknown
+    readonly note?: string
+  }>
   readonly mcp: {
     readonly endpoint: string
     readonly transport: string
@@ -82,7 +91,7 @@ export function buildApiDocs(
     resolveEffectiveAccountPermissions({ role, additionalPermissions: [] })
   const grantable = new Set(grantableMatrixPoints(accountPermissions))
 
-  const endpoints = allRouteMeta()
+  const endpoints = allOperationRoutes()
     .filter((m) => m.tokenAccess !== 'never')
     // Effective-authority trimming: an endpoint whose points the account cannot hold is not
     // "advanced", it is unreachable, and listing it teaches the wrong thing.
@@ -98,7 +107,7 @@ export function buildApiDocs(
       a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path),
     )
 
-  const tools = ALL_TOOLS.map((t) => ({
+  const tools = allOperationTools().map((t) => ({
     name: t.name,
     title: t.title,
     description: t.description,
@@ -110,7 +119,11 @@ export function buildApiDocs(
     resource: MatrixResource
     verbs: Array<{ verb: string; permission: Permission }>
   }> = []
-  for (const kind of MCP_RESOURCE_KINDS) {
+  const resourceKinds = allOperationResources().map(
+    (entry) => entry.description as ApiDocs['resourceKinds'][number],
+  )
+  for (const entry of resourceKinds) {
+    const kind = entry.kind
     // RFC-248 T30c: MCP 的 kind 不都是可授权资源——`repo-groups` 是独立的工具
     // 寻址单位，写权限沿用 `repos:*`。这里只枚举真正在权限矩阵上的那些，
     // 否则会给账号页凭空造出一行永远勾不上的 `repo-groups:*`。
@@ -134,7 +147,7 @@ export function buildApiDocs(
     alwaysGranted: READ_POINTS.filter((p) => !p.endsWith(':own') && !p.endsWith(':all')),
     endpoints,
     tools,
-    resourceKinds: MCP_RESOURCE_KINDS.map((k) => describeResource(k)),
+    resourceKinds,
     mcp: {
       endpoint: '/api/mcp',
       transport: 'Streamable HTTP (stateless)',

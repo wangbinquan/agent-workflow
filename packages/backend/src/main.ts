@@ -22,7 +22,7 @@ import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import { packageCommand } from './cli/package'
-import { userCommand } from './cli/user'
+import { runUserCommand } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 import {
@@ -270,7 +270,7 @@ async function main(): Promise<void> {
 
     case 'user': {
       const rest = Bun.argv.slice(3)
-      const result = await userCommand(rest)
+      const result = await runUserCommand(rest)
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(1)
       break

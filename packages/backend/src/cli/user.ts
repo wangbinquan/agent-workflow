@@ -1,21 +1,10 @@
-// RFC-036 — `agent-workflow user …` CLI. Direct sqlite access; never uses
-// HTTP. The CLI is a break-glass path for admin / first-time bootstrap.
+// RFC-036/RFC-344 — `agent-workflow user …` CLI binding. Argument/TTY
+// projection lives here; DB/bootstrap composition lives in userBootstrap.ts.
 
-import { existsSync, readdirSync } from 'node:fs'
-import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { Paths } from '@/util/paths'
-import { hashPassword } from '@/auth/passwords'
-import { completeBootstrapWithAdmin, isBootstrapRequired } from '@/auth/loginPolicy'
-import {
-  createUser,
-  disableUser,
-  enableUser,
-  findByUsername,
-  listAllUsers,
-  resetPassword,
-} from '@/services/users'
 import { RoleSchema, resolveEffectiveAccountPermissions, type Role } from '@agent-workflow/shared'
+import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
+import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
+import { invokeOperation } from '@/platform/operations/invoke'
 
 interface ParsedFlags {
   username?: string
@@ -67,17 +56,24 @@ function parseFlags(argv: string[]): ParsedFlags {
   return out
 }
 
-async function ensureDb() {
-  const migrationsFolder = await resolveMigrationsFolder()
-  const dbVersion = existsSync(migrationsFolder)
-    ? readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql')).length
-    : 0
-  const db = openDb({ path: Paths.db, migrationsFolder })
-  return { db, dbVersion }
+export interface UserCommandDeps {
+  readonly operations: IdentityUserOperations
+  readonly commandContext: () => CommandContext
+  readonly queryContext: () => QueryContext
+  readonly bootstrap: {
+    readonly isRequired: () => boolean
+    readonly createFirstAdministrator: (input: {
+      readonly username: string
+      readonly displayName: string
+      readonly email?: string
+      readonly password: string
+    }) => Promise<{ readonly id: string; readonly username: string }>
+  }
 }
 
 export async function userCommand(
   args: string[],
+  deps: UserCommandDeps,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const sub = args[0]
   const rest = args.slice(1)
@@ -96,7 +92,10 @@ export async function userCommand(
   }
 
   const flags = parseFlags(rest)
-  const { db } = await ensureDb()
+  const findByUsername = async (username: string) =>
+    (await invokeOperation(deps.operations.listUsers, deps.queryContext(), {})).find(
+      (candidate) => candidate.username === username,
+    ) ?? null
 
   try {
     if (sub === 'create') {
@@ -113,7 +112,7 @@ export async function userCommand(
         }
         role = parsed.data
       }
-      if (isBootstrapRequired(db)) {
+      if (deps.bootstrap.isRequired()) {
         const bootstrapCanManageUsers = resolveEffectiveAccountPermissions({
           role,
           additionalPermissions: [],
@@ -123,23 +122,24 @@ export async function userCommand(
             'bootstrap requires the first user to be an admin with --password (use --admin --password <pw>)',
           )
         }
-        const created = completeBootstrapWithAdmin(db, {
+        const created = await deps.bootstrap.createFirstAdministrator({
           username: flags.username,
           displayName: flags.displayName ?? flags.username,
           ...(flags.email !== undefined ? { email: flags.email } : {}),
-          passwordHash: await hashPassword(flags.password),
+          password: flags.password,
         })
         return {
           output: `created first administrator ${created.username} (id=${created.id}); daemon token retired\n`,
           status: 'ok',
         }
       }
-      const created = await createUser(db, {
+      const created = await invokeOperation(deps.operations.createUser, deps.commandContext(), {
         username: flags.username,
         displayName: flags.displayName ?? flags.username,
         email: flags.email,
         role,
         password: flags.password,
+        additionalPermissions: [],
       })
       const noteStatus = created.status === 'invited' ? ' (status=invited, no password)' : ''
       return {
@@ -151,16 +151,20 @@ export async function userCommand(
       if (!flags.username || !flags.newPassword) {
         return badUsage('--username and --new-password are required')
       }
-      const row = await findByUsername(db, flags.username)
+      const row = await findByUsername(flags.username)
       if (!row) return { output: `user ${flags.username} not found\n`, status: 'error' }
-      await resetPassword(db, row.id, { newPassword: flags.newPassword, force: true })
+      await invokeOperation(deps.operations.resetPassword, deps.commandContext(), {
+        targetUserId: row.id,
+        newPassword: flags.newPassword,
+        force: true,
+      })
       return {
         output: `reset password for ${flags.username}; sessions revoked; force_password_change=1\n`,
         status: 'ok',
       }
     }
     if (sub === 'list') {
-      const rows = await listAllUsers(db)
+      const rows = await invokeOperation(deps.operations.listUsers, deps.queryContext(), {})
       const lines = rows.map(
         (r) => `${r.id}\t${r.username}\t${r.role}\t${r.status}\t${r.displayName}`,
       )
@@ -168,16 +172,21 @@ export async function userCommand(
     }
     if (sub === 'disable') {
       if (!flags.username) return badUsage('--username is required')
-      const row = await findByUsername(db, flags.username)
+      const row = await findByUsername(flags.username)
       if (!row) return { output: `user ${flags.username} not found\n`, status: 'error' }
-      await disableUser(db, row.id)
+      await invokeOperation(deps.operations.disableUser, deps.commandContext(), {
+        targetUserId: row.id,
+      })
       return { output: `disabled ${flags.username}\n`, status: 'ok' }
     }
     if (sub === 'enable') {
       if (!flags.username) return badUsage('--username is required')
-      const row = await findByUsername(db, flags.username)
+      const row = await findByUsername(flags.username)
       if (!row) return { output: `user ${flags.username} not found\n`, status: 'error' }
-      await enableUser(db, row.id)
+      await invokeOperation(deps.operations.updateUser, deps.commandContext(), {
+        targetUserId: row.id,
+        status: 'active',
+      })
       return { output: `enabled ${flags.username}\n`, status: 'ok' }
     }
     return badUsage(`unknown subcommand: ${sub}`)
