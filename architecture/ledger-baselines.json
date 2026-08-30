@@ -322,10 +322,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-module-layer-rules.test.ts",
       "symbol": "MODULE_LAYER_RULE_DEBT",
       "baseline": 29,
-      "why": "RFC-294 review 2026-08-30 §B2：design §3 常驻规则 1～3 的存量违规（domain 导 adapter、application/engine 导 @/db/schema、fenced 层导 infrastructure/**），按 rule|file|specifier 逐条入账；只许降。",
-      "allowGrowth": {
-        "why": "RFC-345 contract checkpoint（fbc0ec093）在 resource-catalog application 直接 import 本模块 infrastructure 4 条；先入账（removeAfterWave W4-C）保持门可判，RFC-345 T9 销账。"
-      }
+      "why": "RFC-294 review 2026-08-30 §B2：design §3 常驻规则 1～3 的存量违规（domain 导 adapter、application/engine 导 @/db/schema、fenced 层导 infrastructure/**），按 rule|file|specifier 逐条入账；只许降。"
     },
     {
       "id": "rfc294-review-unconsumed-public-symbols",
@@ -454,8 +451,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "fbc0ec09307f0c34aaefa34835704d773f50fca8",
-    "contentDigest": "sha256:5317dcf0973debbad13b79050420daa5203d3f377d3301aeb6ad3da5f83a33d9",
+    "currentSnapshotSha": "5cdb65246ee113ddae6739dd7b619aa870b8ac4f",
+    "contentDigest": "sha256:6b17460da758ed225b0ebc12db097bf296a4a13a3784ee8ea7b94c4d7cb79036",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
