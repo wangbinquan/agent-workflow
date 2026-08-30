@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -17,7 +17,7 @@
 | `KNOWN_VIOLATIONS` | 29 |
 | route→DB / transport→DB 值级边 | 15 / 2 |
 | route/MCP `AppDeps` consumer 文件 | 46 |
-| production ambient wiring seam | 457 |
+| production ambient wiring seam | 460 |
 | background work entries | 273 |
 | direct native `setInterval`（call / files） | 24 / 21 |
 | direct native timers（全部） | 72 |
@@ -29,16 +29,16 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 457 |
-| `architectureExceptions` | 1759 |
+| `ambientWiring` | 460 |
+| `architectureExceptions` | 1756 |
 | `backgroundJobs` | 273 |
-| `crossContextImports` | 1803 |
+| `crossContextImports` | 1800 |
 | `facades` | 381 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 19677 |
-| `mutationEntrypoints` | 1104 |
+| `moduleSymbolOwners` | 19679 |
+| `mutationEntrypoints` | 1105 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 541 |
+| `publicSurfaces` | 537 |
 | `transactionExternalEffects` | 285 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -184,8 +184,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 1083 |
-| legacy-inbound | 550 |
+| legacy-outbound | 1082 |
+| legacy-inbound | 548 |
 | external-layer-debt | 83 |
 | offered-consumption | 48 |
 | required-implementation | 13 |
@@ -197,8 +197,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 1083 |
-| legacy-inbound | 550 |
+| legacy-outbound | 1082 |
+| legacy-inbound | 548 |
 | external-layer-debt | 83 |
 | no-routes-to-db | 15 |
 | off-dag-offered | 11 |
@@ -213,10 +213,10 @@
 | --- | --- |
 | W4-E1 | 799 |
 | W4-C | 154 |
-| W4-E0 | 127 |
+| W4-E0 | 125 |
 | W4 | 118 |
 | W4-E8 | 106 |
-| W9 | 103 |
+| W9 | 102 |
 | W5 | 94 |
 | W4-E9 | 85 |
 | W4-B | 79 |
@@ -237,7 +237,7 @@
 | task-execution | 129 |
 | resource-catalog | 89 |
 | collaboration | 77 |
-| identity-access | 59 |
+| identity-access | 55 |
 | digital-employee | 44 |
 | system-operations | 33 |
 | source-control | 24 |
@@ -248,7 +248,7 @@
 | integration | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 140 / 541）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 537）
 
 | context | 数量 |
 | --- | --- |
@@ -257,9 +257,9 @@
 | digital-employee | 17 |
 | code-capability | 15 |
 | system-operations | 12 |
-| identity-access | 11 |
 | task-execution | 9 |
 | event-center | 8 |
+| identity-access | 7 |
 | source-control | 6 |
 | integration | 5 |
 | development-automation | 3 |

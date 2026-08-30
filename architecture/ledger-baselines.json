@@ -356,8 +356,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1104,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1105,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-347 将 initial-user-access 改为同一 live transaction scope 绑定的 identity-owned participant，并把两个 composition-local runtime sink 纳入 exact mutation census；净增 1 个受管入口，不新增公开能力或兼容债。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -384,14 +387,17 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 457,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+      "baseline": 460,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
+      "allowGrowth": {
+        "why": "RFC-347 的 AuthorityClaimRegistry 成为三类 authority handle 唯一 freeze/brand/register owner；三个同文件 registry mint 站点进入 exact wiring census，用于防止外部伪造，不新增 ambient singleton。"
+      }
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1803,
+      "baseline": 1800,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -412,7 +418,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1759,
+      "baseline": 1756,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -426,7 +432,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 541,
+      "baseline": 537,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -447,12 +453,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 19677,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 19679,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-347 内部化四个零 consumer public symbol、增加 transaction binding 与 registry-owned helper 后，owner ledger 净增 2 个 top-level symbol；每个 symbol 均已有唯一 current/target owner，未扩大 public surface。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0",
+    "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -465,8 +474,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c5aa01711744896917e1cdf755e61cd36a7386af",
-    "contentDigest": "sha256:3a73ad41981edc99524d1f238c5d0fdd91ce6841521e900271ed4e5d36e7973c",
+    "currentSnapshotSha": "dffe9bc836d87a2433153a3b2e8a8efc8cf17b95",
+    "contentDigest": "sha256:8468c3db78b22d44acc81a9f0b89ca174f8ce4032b50c210106e65225350b26b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

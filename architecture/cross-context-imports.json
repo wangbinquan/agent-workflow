@@ -7636,23 +7636,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/userBootstrap.ts#$file",
-      "fromPath": "packages/backend/src/cli/userBootstrap.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3c2f5b3576552d2b70bf",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E0",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#InitialUserAccessProvisioner",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "InitialUserAccessProvisioner",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/composition.ts",
       "fromSymbol": "$file",
@@ -14028,23 +14011,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/auth.ts#$file",
-      "fromPath": "packages/backend/src/routes/auth.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:74e04a87aacef3f825db",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E0",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#InitialUserAccessProvisioner",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "InitialUserAccessProvisioner",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts",
       "fromSymbol": "$file",
@@ -19889,23 +19855,6 @@
       "toPath": "external:drizzle-orm",
       "toSymbol": "*",
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#$file",
-      "fromPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a98f3afd8cfecfc7d2e7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/transactionScope.ts#TransactionScope",
-      "toPath": "packages/backend/src/platform/persistence/transactionScope.ts",
-      "toSymbol": "TransactionScope",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -29905,9 +29854,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1759,
+    "architectureExceptions": 1756,
     "implementationSccs": 0,
-    "observedEdges": 1803,
+    "observedEdges": 1800,
     "requiredPorts": 25,
     "targetEdges": 64
   },
@@ -36797,22 +36746,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/userBootstrap.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/userBootstrap.ts#$file",
-      "id": "import:3c2f5b3576552d2b70bf",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E0",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "InitialUserAccessProvisioner",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#InitialUserAccessProvisioner"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/composition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file",
@@ -43133,22 +43066,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/routes/auth.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/auth.ts#$file",
-      "id": "import:74e04a87aacef3f825db",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E0",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "InitialUserAccessProvisioner",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#InitialUserAccessProvisioner"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteManualQuestionOpenWriter.ts#$file",
@@ -48922,22 +48839,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "identity-access",
-      "fromFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#$file",
-      "id": "import:a98f3afd8cfecfc7d2e7",
-      "owner": "identity-access",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/transactionScope",
-      "syntax": "static-import",
-      "targetSymbol": "TransactionScope",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/transactionScope.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/transactionScope.ts#TransactionScope"
     },
     {
       "edgeKind": "type",
@@ -59245,7 +59146,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0",
+  "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

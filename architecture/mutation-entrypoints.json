@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1104,
+    "entries": 1105,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -6704,6 +6704,28 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/composition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/composition.ts#RuntimeIdentityAccessEventSink",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#RuntimeIdentityAccessEventSink",
+      "symbol": "RuntimeIdentityAccessEventSink",
+      "targetContext": "identity-access",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -6729,23 +6751,23 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
+        "authorization": false,
+        "event": true,
         "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/identity-access/composition.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/identity-access/composition.ts#syncInitialUserAccessProvision",
+      "id": "mutation:packages/backend/src/modules/identity-access/composition.ts#RuntimePresenceProjectionSink",
       "missingControls": [
         "audit",
         "authority",
-        "event",
+        "authorization",
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#syncInitialUserAccessProvision",
-      "symbol": "syncInitialUserAccessProvision",
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#RuntimePresenceProjectionSink",
+      "symbol": "RuntimePresenceProjectionSink",
       "targetContext": "identity-access",
       "targetLayer": "composition"
     },
@@ -26263,7 +26285,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0",
+  "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

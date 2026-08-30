@@ -100,6 +100,39 @@
       "targetContext": "event-center"
     },
     {
+      "callee": "registerAuthority",
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "ambient:packages/backend/src/modules/identity-access/application/operationContext.ts#registerAuthority:112",
+      "kind": "register-call",
+      "line": 112,
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#AuthorityClaimRegistry",
+      "removeAfterWave": "W6/W9",
+      "symbol": "AuthorityClaimRegistry",
+      "targetContext": "identity-access"
+    },
+    {
+      "callee": "registerAuthority",
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "ambient:packages/backend/src/modules/identity-access/application/operationContext.ts#registerAuthority:129",
+      "kind": "register-call",
+      "line": 129,
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#AuthorityClaimRegistry",
+      "removeAfterWave": "W6/W9",
+      "symbol": "AuthorityClaimRegistry",
+      "targetContext": "identity-access"
+    },
+    {
+      "callee": "registerAuthority",
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "ambient:packages/backend/src/modules/identity-access/application/operationContext.ts#registerAuthority:171",
+      "kind": "register-call",
+      "line": 171,
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#AuthorityClaimRegistry",
+      "removeAfterWave": "W6/W9",
+      "symbol": "AuthorityClaimRegistry",
+      "targetContext": "identity-access"
+    },
+    {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1461",
@@ -5045,7 +5078,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 457,
+    "ambientWiring": 460,
     "disabled": 7,
     "entries": 273,
     "executionLocal": 25,
@@ -11141,5 +11174,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0"
+  "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec"
 }

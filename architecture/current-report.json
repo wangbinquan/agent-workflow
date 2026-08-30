@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 457,
-    "architectureExceptions": 1759,
+    "ambientWiring": 460,
+    "architectureExceptions": 1756,
     "backgroundJobs": 273,
-    "crossContextImports": 1803,
+    "crossContextImports": 1800,
     "facades": 381,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 19677,
-    "mutationEntrypoints": 1104,
+    "moduleSymbolOwners": 19679,
+    "mutationEntrypoints": 1105,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 541,
+    "publicSurfaces": 537,
     "transactionExternalEffects": 285
   },
   "metrics": {
-    "ambientWiringEntries": 457,
+    "ambientWiringEntries": 460,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -224,5 +224,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0"
+  "sourceDigest": "sha256:867b62d0070be085a7a4a36f566134b02248bd80d6212859974343319bdd22ec"
 }
