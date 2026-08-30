@@ -603,6 +603,11 @@ async function applyInner(
               })
               break
             }
+            default: {
+              // RFC-348 D7 — a seventh IntentResourceType must be handled here, not fall through.
+              const _exhaustive: never = op.resourceType
+              throw new Error(`unhandled intent resource type ${String(_exhaustive)}`)
+            }
           }
           continue
         }
@@ -618,6 +623,19 @@ async function applyInner(
               )
             }
             const { name: _name, ...patchBody } = op.payload as Record<string, unknown>
+            // RFC-348 D5 (user ruling ①) — an intent update that OMITS a sidecar keeps
+            // the stored value; the explicit clear forms (`[]` / `{}` / `'normal'` /
+            // `{}`) still clear. The resolve seam always sends `frontmatterExtra`,
+            // which makes prepareAgentUpdate take its explicit-extra path and skip
+            // its own sidecar merge — so the merge happens here, from the row itself.
+            for (const key of [
+              'branchPorts',
+              'outputKinds',
+              'role',
+              'outputWrapperPortNames',
+            ] as const) {
+              if (!(key in patchBody) && existing[key] !== undefined) patchBody[key] = existing[key]
+            }
             const patch = UpdateAgentSchema.parse(patchBody)
             const prepared = await prepareAgentUpdate(
               db,
@@ -643,12 +661,13 @@ async function applyInner(
             if (p.type !== existing.type) {
               throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
             }
-            // Codex impl-gate P1-2: the intent MCP schema carries no oauth
-            // block, and update replaces config WHOLE — carry the existing
-            // oauth forward or a remote MCP silently loses its auth.
+            // Codex impl-gate P1-2 + RFC-348 D2 (Codex r12 P1#1): update replaces
+            // config WHOLE, so a stored oauth block is carried forward ONLY when the
+            // payload omits it — an explicit `false` / object is the user's edit.
+            const payloadOauth = (p.config as { oauth?: unknown }).oauth
             const existingOauth = (existing.config as { oauth?: unknown }).oauth
             const nextConfig =
-              existingOauth === undefined
+              payloadOauth !== undefined || existingOauth === undefined
                 ? p.config
                 : { ...(p.config as Record<string, unknown>), oauth: existingOauth }
             const set: PreparedMcpUpdate['set'] = {
@@ -753,11 +772,15 @@ async function applyInner(
             })
             break
           }
-          default:
+          default: {
+            // RFC-348 D7 — compile-time exhaustiveness over IntentResourceType (see the create switch).
+            const _exhaustive: never = op.resourceType
+            void _exhaustive
             throw new ValidationError(
               'intent-op-unsupported',
               `${op.resourceType} update via intent is not supported yet; propose a copy instead`,
             )
+          }
         }
       } catch (err) {
         // Live-run lesson (deepseek 2026-07-28): a canonical-service schema

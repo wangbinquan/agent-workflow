@@ -1102,3 +1102,23 @@ describe('intent session routes', () => {
     expect(badType.status).toBe(422)
   })
 })
+
+// RFC-348 D4 — `hint` is a closed enum of INTENT_RESOURCE_TYPES (it used to be a
+// free-text string the doc never rendered). A roster value is accepted; anything
+// else is rejected at the route boundary (422) instead of being silently stored.
+describe('intent session hint (RFC-348)', () => {
+  test('roster value is accepted, free text is rejected with 422', async () => {
+    const ok = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: '给我一个工作流', hint: 'workflow' }),
+    })
+    expect(ok.status).toBe(201)
+    const bad = await req(ownerToken, '/api/intent-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ message: '给我一个工作流', hint: 'foo' }),
+    })
+    expect(bad.status).toBe(422)
+    const body = (await bad.json()) as { error?: { code?: string }; code?: string }
+    expect(JSON.stringify(body)).toContain('intent-invalid')
+  })
+})

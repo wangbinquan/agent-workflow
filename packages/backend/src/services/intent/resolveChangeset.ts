@@ -124,9 +124,22 @@ export function findTempRefCycles(cs: IntentChangeset): string[] {
   return [...cyclic]
 }
 
+/**
+ * RFC-348 (impl-gate r2 #1) — what the draft validator knows about MOUNTED rows
+ * beyond the manifest: the stored `branchPorts` of each dumped agent, so an
+ * update that OMITS `branchPorts` (= keep the stored value, user ruling ①) is
+ * checked against the outputs it is about to declare — otherwise dropping an
+ * output while keeping a branch port surfaces only at apply.
+ */
+export interface DraftValidationContext {
+  /** agent resourceId → stored branch ports (from the dump's agent projection). */
+  agentBranchPorts?: ReadonlyMap<string, readonly string[]>
+}
+
 export function validateDraftChangeset(
   manifest: IntentContextManifest,
   cs: IntentChangeset,
+  context: DraftValidationContext = {},
 ): DraftValidationReport {
   const errors: string[] = []
   const credentialFindings: DraftValidationReport['credentialFindings'] = []
@@ -152,6 +165,26 @@ export function validateDraftChangeset(
       errors.push(
         `${op.opId}: secret carrier must be the ‹secret› sentinel (${pointer}) (intent-secret-value-forbidden)`,
       )
+    }
+    // RFC-348 D5 (AC-4) — branch ports must name declared outputs; say so at
+    // draft time so the model repairs it next turn instead of failing at apply.
+    if (op.resourceType === 'agent') {
+      const declared = new Set(op.payload.outputs)
+      const stored =
+        op.action === 'update' && op.payload.branchPorts === undefined
+          ? context.agentBranchPorts?.get(byHandle.get(op.target)?.resourceId ?? '')
+          : undefined
+      const effective = op.payload.branchPorts ?? stored ?? []
+      const undeclared = effective.filter((port) => !declared.has(port))
+      if (undeclared.length > 0) {
+        errors.push(
+          `${op.opId}: branchPorts reference undeclared output port(s): ${undeclared.join(', ')}${
+            stored !== undefined
+              ? ' — the update omits branchPorts, so the stored branch ports are kept; list them in outputs or send branchPorts:[]'
+              : ''
+          } (agent-branch-port-undeclared)`,
+        )
+      }
     }
     // credential-shaped strings anywhere in the payload
     for (const finding of scanForCredentialPatterns(op.payload, `/${op.opId}/payload`)) {
@@ -256,8 +289,9 @@ function collectScriptEnvNodes(
 export function deriveIntentSlots(
   manifest: IntentContextManifest,
   cs: IntentChangeset,
+  context: DraftValidationContext = {},
 ): { slots: IntentSlot[]; report: DraftValidationReport } {
-  const report = validateDraftChangeset(manifest, cs)
+  const report = validateDraftChangeset(manifest, cs, context)
   const slots: IntentSlot[] = []
   for (const op of cs.ops) {
     if (op.resourceType === 'mcp') {
@@ -280,6 +314,15 @@ export function deriveIntentSlots(
       }
       if (op.payload.type === 'local') pushSecret('/config/env', config.env)
       if (op.payload.type === 'remote') pushSecret('/config/headers', config.headers)
+      // RFC-348 D2 (user ruling ②) — remote `oauth.clientSecret` is a closed carrier
+      // exactly like a header value: sentinel in, server-issued slot out.
+      if (op.payload.type === 'remote') {
+        const oauth = (op.payload.config as { oauth?: unknown }).oauth
+        if (typeof oauth === 'object' && oauth !== null) {
+          const { clientSecret } = oauth as { clientSecret?: string }
+          if (clientSecret !== undefined) pushSecret('/config/oauth', { clientSecret })
+        }
+      }
     }
     if (op.resourceType === 'workflow') {
       // RFC-253 T28 — script-node env mirrors MCP env: the model may only emit
@@ -546,6 +589,9 @@ export function resolveIntentBundle(input: {
           description: p.description,
           outputs: p.outputs,
           ...(p.outputKinds === undefined ? {} : { outputKinds: p.outputKinds }),
+          // RFC-348 D5 — RFC-306 branch ports ride through; subset-of-outputs is
+          // checked at draft time (validateDraftChangeset) and again by prepareAgent*.
+          ...(p.branchPorts === undefined ? {} : { branchPorts: p.branchPorts }),
           ...(p.inputs === undefined ? {} : { inputs: p.inputs }),
           ...(p.outputWrapperPortNames === undefined
             ? {}
@@ -588,6 +634,11 @@ export function resolveIntentBundle(input: {
           overlay('/config/env', (config as { env?: Record<string, string> }).env)
         } else {
           overlay('/config/headers', (config as { headers?: Record<string, string> }).headers)
+          // RFC-348 D2 — an explicit oauth object carries `clientSecret` as a slot.
+          const oauth = (config as { oauth?: unknown }).oauth
+          if (typeof oauth === 'object' && oauth !== null) {
+            overlay('/config/oauth', oauth as Record<string, string>)
+          }
         }
         payload = {
           type: op.payload.type,
@@ -701,6 +752,13 @@ export function resolveIntentBundle(input: {
           members,
         }
         break
+      }
+      default: {
+        // RFC-348 D7 — a seventh IntentResourceType must be handled here, not fall through.
+        const _exhaustive: never = op
+        throw new Error(
+          `unhandled intent resource type ${String((_exhaustive as { resourceType?: unknown }).resourceType)}`,
+        )
       }
     }
 

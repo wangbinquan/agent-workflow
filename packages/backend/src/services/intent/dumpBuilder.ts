@@ -45,7 +45,16 @@ import { NotFoundError } from '@/util/errors'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
 import { extractWorkflowAgentRefs } from '@/services/resourceRefs'
+import { inArray } from 'drizzle-orm'
+import { agents } from '@/db/schema'
 import type { DbClient } from '@/db/client'
+import { listRuntimes, resolveRuntimeByName } from '@/services/runtimeRegistry'
+import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
+import {
+  createDefaultIntentPlatformInventory,
+  renderPlatformInventoryFile,
+  type IntentPlatformInventory,
+} from './platformInventory'
 import { getAgentById } from '@/services/agent'
 import { getMcpById } from '@/services/mcp'
 import { getPlugin } from '@/services/plugin'
@@ -105,6 +114,72 @@ export interface IntentDumpInput {
    * Optional so unit tests can assert raw bodies; production always passes it.
    */
   envelopeNonce?: string
+  /**
+   * RFC-348 D5b — the runtime an agent inherits when it omits `runtime`
+   * (resolved by the turn config from `config.defaultRuntime`). Absent ⇒ the
+   * registry's own fallback (`resolveRuntimeByName(db, null)`).
+   */
+  effectiveDefaultRuntime?: { name: string; protocol: string }
+  /**
+   * RFC-348 D5c — port names for the agents that survive the inventory cap,
+   * printed beside each inventory row so a workflow can be wired without
+   * mounting every agent. Default: one narrow select on `agents.inputs/outputs`.
+   */
+  loadAgentPorts?: (ids: readonly string[]) => Promise<Map<string, AgentPortNames>>
+  /**
+   * RFC-348 D3 — read-only rows of the platform-only ACL types
+   * (`inventory/platform/<type>.md`). Default: the DB-backed loaders in
+   * ./platformInventory.ts; bootstrap may inject the composed-module port.
+   */
+  platformInventory?: IntentPlatformInventory
+}
+
+/** Locked sentence (design §4; mirrors `validateRuntimeReference`'s `runtime-disabled` rule). */
+export const RUNTIME_INVENTORY_RULE =
+  'Choose an enabled row for a new or re-pointed agent; (disabled) rows are listed only so you can recognise an existing pin.'
+
+async function fallbackDefaultRuntime(db: DbClient): Promise<{ name: string; protocol: string }> {
+  const resolved = await resolveRuntimeByName(db, null)
+  return { name: resolved.name, protocol: resolved.protocol }
+}
+
+export interface AgentPortNames {
+  inputs: string[]
+  outputs: string[]
+}
+
+async function loadAgentPortsFromDb(
+  db: DbClient,
+  ids: readonly string[],
+): Promise<Map<string, AgentPortNames>> {
+  const out = new Map<string, AgentPortNames>()
+  if (ids.length === 0) return out
+  const rows = await db
+    .select({ id: agents.id, inputs: agents.inputs, outputs: agents.outputs })
+    .from(agents)
+    .where(inArray(agents.id, [...ids]))
+  const names = (raw: string): string[] => {
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      if (!Array.isArray(parsed)) return []
+      return parsed
+        .map((entry) =>
+          typeof entry === 'string'
+            ? entry
+            : typeof entry === 'object' &&
+                entry !== null &&
+                typeof (entry as { name?: unknown }).name === 'string'
+              ? (entry as { name: string }).name
+              : null,
+        )
+        .filter((name): name is string => name !== null)
+    } catch {
+      return []
+    }
+  }
+  for (const row of rows)
+    out.set(row.id, { inputs: names(row.inputs), outputs: names(row.outputs) })
+  return out
 }
 
 export interface IntentDumpResult {
@@ -122,6 +197,8 @@ export interface IntentDumpResult {
   unavailableMounts: Array<{ handle: string; resourceType: AclResourceType }>
   /** RFC-291 面 F — high-water mark to persist back onto the session row. */
   handleWatermark: IntentHandleWatermark
+  /** RFC-348 — stored branch ports of every DUMPED agent (resourceId → ports), for draft validation. */
+  agentBranchPorts: Map<string, string[]>
 }
 
 const sha256 = sha256Hex // RFC-284 T7：alias 到共享单点
@@ -411,6 +488,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   const manifest: IntentContextManifest = []
   const hiddenDependencies: Array<{ parentHandle: string; count: number }> = []
   const inventoryTruncated: Partial<Record<AclResourceType, number>> = {}
+  const agentBranchPorts = new Map<string, string[]>()
 
   // ── resolve mounted roots + closure. A root that cannot be materialised
   // this epoch is SKIPPED and reported, not thrown (RFC-291 面 C). ──
@@ -532,6 +610,11 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
             : {}),
           outputs: agent.outputs,
           ...(agent.outputKinds !== undefined ? { outputKinds: agent.outputKinds } : {}),
+          // RFC-348 D5 — RFC-306 branch ports were lifted on read but never dumped,
+          // so an intent update could not echo them back.
+          ...(agent.branchPorts !== undefined && agent.branchPorts.length > 0
+            ? { branchPorts: agent.branchPorts }
+            : {}),
           ...(agent.role !== undefined ? { role: agent.role } : {}),
           ...(agent.outputWrapperPortNames !== undefined
             ? { outputWrapperPortNames: agent.outputWrapperPortNames }
@@ -542,6 +625,8 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
             : {}),
           bodyMd: agent.bodyMd,
         })
+        if (agent.branchPorts !== undefined)
+          agentBranchPorts.set(ref.resourceId, [...agent.branchPorts])
         seedFiles.push({ path: `${base}.md`, content: doc })
         manifest.push({ ...entryBase, fence: buildAgentFence(agent), dumpHash: sha256(doc) })
       } else if (ref.resourceType === 'skill') {
@@ -741,10 +826,22 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
       `# ${type} inventory (${sorted.length} visible${dropped > 0 ? `; TRUNCATED — ${dropped} more not listed, ask the user to mount what you need` : ''})`,
       '',
     ]
+    // RFC-348 D5c — agent rows carry their port names (capped ids only, one select).
+    const ports =
+      type === 'agent'
+        ? await (input.loadAgentPorts ?? ((ids) => loadAgentPortsFromDb(db, ids)))(
+            kept.map((row) => row.id),
+          )
+        : new Map<string, AgentPortNames>()
     for (const row of kept) {
       const handle = handleFor(type, row.id)
       const summary = summarizeInventoryRow(type, row.id, catalog)
-      lines.push(`- ${handle} \`${row.name}\`${summary === '' ? '' : ` — ${summary}`}`)
+      const agentPorts = ports.get(row.id)
+      const portsText =
+        agentPorts === undefined
+          ? ''
+          : ` · inputs:[${agentPorts.inputs.join(',')}] outputs:[${agentPorts.outputs.join(',')}]`
+      lines.push(`- ${handle} \`${row.name}\`${summary === '' ? '' : ` — ${summary}`}${portsText}`)
       const key = `${type}:${row.id}`
       if (!detailKeys.has(key)) {
         manifest.push({
@@ -758,6 +855,44 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
       }
     }
     seedFiles.push({ path: `inventory/${type}s.md`, content: `${lines.join('\n')}\n` })
+  }
+
+  // ── RFC-348 D5b — inventory/runtimes.md: the names an agent `runtime` may pin.
+  // Runtimes are not an ACL resource (no handle); names + protocol only — never
+  // binaryPath / configDir / extraArgs. Format locked by design §4 / AC-6.
+  const runtimeRows = [...(await listRuntimes(db))].sort((a, b) => a.name.localeCompare(b.name))
+  const effectiveDefault: { name: string; protocol: string } =
+    input.effectiveDefaultRuntime ?? (await fallbackDefaultRuntime(db))
+  const runtimeLines: string[] = [
+    `# runtimes (${runtimeRows.length})`,
+    `Effective default: ${effectiveDefault.name} (${effectiveDefault.protocol})`,
+    RUNTIME_INVENTORY_RULE,
+    '',
+  ]
+  let sawDefault = false
+  for (const row of runtimeRows) {
+    const isDefault = row.name === effectiveDefault.name
+    sawDefault ||= isDefault
+    runtimeLines.push(
+      `- ${row.name} — protocol ${row.protocol}${isDefault ? ' (default)' : ''}${row.enabled ? '' : ' (disabled)'}`,
+    )
+  }
+  if (!sawDefault) {
+    runtimeLines.push(
+      `- ${effectiveDefault.name} — protocol ${effectiveDefault.protocol} (built-in, no profile row) (default)`,
+    )
+  }
+  seedFiles.push({ path: 'inventory/runtimes.md', content: `${runtimeLines.join('\n')}\n` })
+
+  // ── RFC-348 D3 — inventory/platform/<type>.md for the nine platform-only types.
+  // A loader failure is a dump failure like any other read here (proposal §5):
+  // the turn settles as a durable error rather than generating on a partial map.
+  const platformInventory = input.platformInventory ?? createDefaultIntentPlatformInventory(db)
+  for (const type of platformOnlyResourceTypes()) {
+    seedFiles.push({
+      path: `inventory/platform/${type}.md`,
+      content: renderPlatformInventoryFile(type, await platformInventory.listRows(type, actor)),
+    })
   }
 
   // One choke point: fence EVERY dumped body (mounted resources + inventory)
@@ -808,6 +943,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
     hiddenDependencies,
     inventoryTruncated,
     unavailableMounts,
+    agentBranchPorts,
     // RFC-291 面 F — monotonic: never hand back something lower than the
     // watermark we were seeded with, even if this epoch minted nothing.
     handleWatermark: mergeHandleWatermarks(input.handleWatermark, handleWatermarkOf(alloc)),

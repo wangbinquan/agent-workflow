@@ -512,3 +512,73 @@ describe('RFC-253 T28 — script-node env masked in workflow dumps', () => {
     expect(wfDump?.content).not.toContain(SECRET)
   })
 })
+
+// RFC-348 D5 / D5c — branch ports are dumped; inventory rows carry port names.
+describe('RFC-348 — dump additions', () => {
+  test('mounted agent dumps branchPorts; inventory rows list in/out ports; runtimes.md exists', async () => {
+    await seedUser(OWNER)
+    const id = await seedAgent({
+      name: 'router',
+      outputs: JSON.stringify(['ok', 'needs_fix']),
+      inputs: JSON.stringify([{ name: 'diff', kind: 'string' }]),
+      frontmatterExtra: JSON.stringify({ branchPorts: ['needs_fix'] }),
+    })
+    const r = await buildIntentDump({
+      db,
+      actor: actorFor(OWNER),
+      appHome,
+      mounts: [{ resourceType: 'agent', resourceId: id }],
+    })
+    const mounted = r.seedFiles.find(
+      (f) => f.path.startsWith('mounted/') && f.content.includes('router'),
+    )
+    expect(mounted?.content).toContain('branchPorts:')
+    expect(mounted?.content).toContain('needs_fix')
+    const inventory = r.seedFiles.find((f) => f.path === 'inventory/agents.md')?.content ?? ''
+    expect(inventory).toContain('`router`')
+    expect(inventory).toContain('· inputs:[diff] outputs:[ok,needs_fix]')
+    expect(r.seedFiles.some((f) => f.path === 'inventory/runtimes.md')).toBe(true)
+  })
+})
+
+// RFC-348 AC-13 (impl-gate r2 #2) — the port projection is ONE narrow call for
+// exactly the agents that survived the cap; an agent without ports still renders.
+describe('RFC-348 — agent port projection call boundary', () => {
+  test('loadAgentPorts is called once with only the kept ids; empty ports render as []', async () => {
+    await seedUser(OWNER)
+    const a = await seedAgent({
+      name: 'aa-first',
+      outputs: JSON.stringify([]),
+      inputs: JSON.stringify([]),
+    })
+    const b = await seedAgent({
+      name: 'bb-second',
+      outputs: JSON.stringify(['out']),
+      inputs: JSON.stringify([{ name: 'in', kind: 'string' }]),
+    })
+    await seedAgent({ name: 'cc-dropped-by-cap' })
+    const calls: string[][] = []
+    const r = await buildIntentDump({
+      db,
+      actor: actorFor(OWNER),
+      appHome,
+      mounts: [],
+      inventoryCap: 2,
+      loadAgentPorts: async (ids) => {
+        calls.push([...ids])
+        return new Map(
+          [...ids].map((id) => [
+            id,
+            id === b ? { inputs: ['in'], outputs: ['out'] } : { inputs: [], outputs: [] },
+          ]),
+        )
+      },
+    })
+    expect(calls.length).toBe(1)
+    expect([...(calls[0] ?? [])].sort()).toEqual([a, b].sort())
+    const inventory = r.seedFiles.find((f) => f.path === 'inventory/agents.md')?.content ?? ''
+    expect(inventory).toContain('`aa-first` — an agent · inputs:[] outputs:[]')
+    expect(inventory).toContain('`bb-second` — an agent · inputs:[in] outputs:[out]')
+    expect(inventory).not.toContain('cc-dropped-by-cap')
+  })
+})

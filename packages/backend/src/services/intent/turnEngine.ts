@@ -13,10 +13,13 @@
 // Budgets (config): generate / question round caps per session. Boot recovery
 // + scratch GC live in ./maintenance.ts.
 
+import { z } from 'zod'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
+  INTENT_RESOURCE_TYPES,
+  type IntentResourceType,
   INTENT_LIMITS,
   IntentMountRequestsSchema,
   IntentQuestionsSchema,
@@ -48,6 +51,7 @@ import { buildIntentDump } from './dumpBuilder'
 import { mergeHandleWatermarks, parseHandleWatermark } from './manifest'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { buildIntentDoc, privilegesFromLens, type IntentDocTurn } from './intentDoc'
+import type { IntentPlatformInventory } from './platformInventory'
 import { validateDraftChangeset } from './resolveChangeset'
 import {
   assertNoUnsettledApply,
@@ -85,6 +89,8 @@ export interface IntentTurnConfig {
   maxQuestionRounds: number
   extraInstructions: string | null
   scratchRetentionHours?: number
+  /** RFC-348 D5b — the runtime an agent inherits when it omits `runtime` (name + protocol). */
+  effectiveDefaultRuntime?: { name: string; protocol: string }
 }
 
 export interface RunIntentTurnDeps {
@@ -93,6 +99,8 @@ export interface RunIntentTurnDeps {
   config: IntentTurnConfig
   /** Test seam — defaults to runSystemAgent. */
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  /** RFC-348 D3 — bootstrap-injected platform-only inventory port (default: DB-backed). */
+  platformInventory?: IntentPlatformInventory
   /** WS seam (T7 wires the broadcaster); default noop. */
   onSessionEvent?: (event: {
     type: string
@@ -144,6 +152,26 @@ interface SessionBudget {
 function parseBudget(row: IntentSessionRow): SessionBudget {
   const raw = JSON.parse(row.budgetJson) as Partial<SessionBudget>
   return { generateRounds: raw.generateRounds ?? 0, questionRounds: raw.questionRounds ?? 0 }
+}
+
+/**
+ * RFC-348 D4 (RFC-235 D33) — the resource type the user picked when opening the
+ * session, read off the first user turn's `hint` and parsed against the roster.
+ * Free text (pre-RFC-348 sessions) and absence both mean "no preference".
+ */
+export function requestedArtifactTypeOf(
+  turns: readonly { role: string; kind: string; contentJson: string }[],
+): IntentResourceType | null {
+  const first = turns.find((t) => t.role === 'user' && t.kind === 'message')
+  if (first === undefined) return null
+  let hint: unknown
+  try {
+    hint = (JSON.parse(first.contentJson) as { hint?: unknown }).hint
+  } catch {
+    return null
+  }
+  const parsed = z.enum(INTENT_RESOURCE_TYPES).safeParse(hint)
+  return parsed.success ? parsed.data : null
 }
 
 function turnDisplayText(turn: IntentTurnRow): string {
@@ -514,6 +542,12 @@ export async function runIntentTurn(
       // keeps a handle from being re-minted for a different resource.
       handleWatermark: parseHandleWatermark(minted.session.handleWatermarkJson),
       envelopeNonce,
+      ...(deps.config.effectiveDefaultRuntime === undefined
+        ? {}
+        : { effectiveDefaultRuntime: deps.config.effectiveDefaultRuntime }),
+      ...(deps.platformInventory === undefined
+        ? {}
+        : { platformInventory: deps.platformInventory }),
     })
     // Persist the fresh manifest (fences captured now = the commit baseline
     // for whatever draft this turn produces).
@@ -613,6 +647,7 @@ export async function runIntentTurn(
       // `permissions.has(...)` checks locally would be a second source of truth
       // for "may this session author privileged nodes".
       privileges: privilegesFromLens(privilegedNodeLensFor(input.actor)),
+      requestedArtifactType: requestedArtifactTypeOf(allTurns),
     })
 
     // Protocol tail: the SHARED block renders "list ALL these ports" with a
@@ -849,7 +884,9 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         repairOffset: cs.jsonRepair.offset,
       })
     }
-    const report = validateDraftChangeset(dump.manifest, normalized.changeset)
+    const report = validateDraftChangeset(dump.manifest, normalized.changeset, {
+      agentBranchPorts: dump.agentBranchPorts,
+    })
     report.errors.unshift(...normalized.errors)
     return settle(
       'changeset',
@@ -901,13 +938,19 @@ export async function resolveIntentTurnConfig(
     defaultRuntime?: string
   },
 ): Promise<IntentTurnConfig> {
-  const { resolveInternalAgentRuntime } = await import('@/services/runtimeRegistry')
+  const { resolveInternalAgentRuntime, resolveAgentRuntime } =
+    await import('@/services/runtimeRegistry')
   const runtime = await resolveInternalAgentRuntime(db, {
     runtimeName: cfg.intentBuilderRuntime ?? null,
     defaultRuntime: cfg.defaultRuntime ?? null,
   })
+  // RFC-348 D5b — what an agent WITHOUT `runtime` actually runs on (the Intent
+  // Builder's own runtime above may differ from it).
+  const agentDefault = await resolveAgentRuntime(db, null, cfg.defaultRuntime ?? null)
+  const effectiveDefaultRuntime = { name: agentDefault.name, protocol: agentDefault.protocol }
   return {
     runtime,
+    effectiveDefaultRuntime,
     lang: cfg.intentBuilderLang ?? null,
     timeoutMs: cfg.intentBuilderTurnTimeoutMs ?? 600_000,
     stdoutCapBytes: cfg.intentBuilderStdoutCapBytes ?? 8 * 1024 * 1024,

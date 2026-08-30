@@ -22,7 +22,9 @@ import {
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
+import { createRuntime, setRuntimeEnabled } from '../src/services/runtimeRegistry'
 import type { ResolvedRuntime } from '../src/services/runtimeRegistry'
+import { RUNTIME_INVENTORY_RULE } from '../src/services/intent/dumpBuilder'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
@@ -35,6 +37,7 @@ import {
   runIntentTurn,
   settleReservedIntentTurnStartFailure,
   type IntentTurnConfig,
+  requestedArtifactTypeOf,
 } from '../src/services/intent/turnEngine'
 import {
   listIntentTurnIdsForBootRecovery,
@@ -1267,4 +1270,128 @@ describe('privileged node forms follow real ROLE_PERMISSIONS', () => {
       expect(doc).not.toContain('Capability limits (hard)')
     })
   }
+})
+
+// ---------------------------------------------------------------------------
+// RFC-348 — hint → "Requested artifact type", runtimes inventory, agent ports.
+// ---------------------------------------------------------------------------
+describe('RFC-348 — requested artifact type and inventory additions', () => {
+  test('requestedArtifactTypeOf parses the first user turn against the roster', () => {
+    const turn = (hint: unknown) => ({
+      role: 'user',
+      kind: 'message',
+      contentJson: JSON.stringify({ message: 'x', ...(hint === undefined ? {} : { hint }) }),
+    })
+    expect(requestedArtifactTypeOf([turn('workflow')])).toBe('workflow')
+    expect(requestedArtifactTypeOf([turn('foo')])).toBeNull()
+    expect(requestedArtifactTypeOf([turn(undefined)])).toBeNull()
+    expect(requestedArtifactTypeOf([])).toBeNull()
+    expect(
+      requestedArtifactTypeOf([{ role: 'user', kind: 'message', contentJson: '{oops' }]),
+    ).toBeNull()
+  })
+
+  test('a UI-picked hint reaches INTENT.md on the first AND the second turn', async () => {
+    const { session } = await createIntentSession(db, actor, {
+      message: 'build a pipeline',
+      hint: 'workflow',
+    })
+    let seenDoc = ''
+    const first = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((opts, nonce) => {
+          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+        }),
+      },
+      { sessionId: session.id, actor },
+    )
+    expect(first.kind).toBe('changeset')
+    expect(seenDoc).toContain('## Requested artifact type')
+    expect(seenDoc).toContain('The user pre-selected **workflow** in the composer.')
+
+    await insertUserTurn(db, actor, session.id, 'message', { message: 'also add a review step' })
+    seenDoc = ''
+    await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        runFn: scriptedRun((opts, nonce) => {
+          seenDoc = opts.seedFiles?.find((f) => f.path === 'INTENT.md')?.content ?? ''
+          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+        }),
+      },
+      { sessionId: session.id, actor },
+    )
+    expect(seenDoc).toContain('The user pre-selected **workflow** in the composer.')
+  })
+
+  test('inventory/runtimes.md: design §4 format — protocol, ≥2 profiles, disabled, default without a row, rule sentence', async () => {
+    await createRuntime(db, { name: 'custom-oc', protocol: 'opencode' })
+    await createRuntime(db, { name: 'custom-cc', protocol: 'claude-code' })
+    await setRuntimeEnabled(db, 'custom-cc', false, null)
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    let files: Array<{ path: string; content: string }> = []
+    await runIntentTurn(
+      {
+        db,
+        appHome,
+        // The Intent Builder itself runs on `runtime` (opencode); agents inherit claude-code.
+        config: config({
+          effectiveDefaultRuntime: { name: 'claude-code', protocol: 'claude-code' },
+        }),
+        runFn: scriptedRun((opts, nonce) => {
+          files = (opts.seedFiles ?? []).map((f) => ({ path: f.path, content: f.content }))
+          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+        }),
+      },
+      { sessionId: session.id, actor },
+    )
+    const runtimes = files.find((f) => f.path === 'inventory/runtimes.md')?.content ?? ''
+    expect(runtimes).toContain('# runtimes (2)')
+    expect(runtimes).toContain('Effective default: claude-code (claude-code)')
+    expect(runtimes).toContain(RUNTIME_INVENTORY_RULE)
+    expect(runtimes).toContain('- custom-oc — protocol opencode')
+    expect(runtimes).toContain('- custom-cc — protocol claude-code (disabled)')
+    expect(runtimes).toContain(
+      '- claude-code — protocol claude-code (built-in, no profile row) (default)',
+    )
+    expect(runtimes.match(/\(default\)/g)?.length).toBe(1)
+    expect(runtimes).not.toContain('binaryPath')
+    for (const type of ['capability_template', 'employee_tool']) {
+      expect(files.some((f) => f.path === `inventory/platform/${type}.md`)).toBe(true)
+    }
+  })
+
+  test('a platform-only loader failure settles the turn as a durable error, never a partial map', async () => {
+    const { session } = await createIntentSession(db, actor, { message: 'x' })
+    let ran = false
+    const result = await runIntentTurn(
+      {
+        db,
+        appHome,
+        config: config(),
+        platformInventory: {
+          listRows: async () => {
+            throw new Error('platform inventory boom')
+          },
+        },
+        runFn: scriptedRun((_opts, nonce) => {
+          ran = true
+          return okResult(envelope(nonce, { summary: 'ok', changeset: MINIMAL_CHANGESET }))
+        }),
+      },
+      { sessionId: session.id, actor },
+    )
+    expect(ran).toBe(false)
+    expect(result.kind).toBe('error')
+    const turns = await db.select().from(intentTurns).where(eq(intentTurns.sessionId, session.id))
+    const errorTurn = turns.find((t) => t.kind === 'error')
+    expect(errorTurn).toBeDefined()
+    expect(JSON.parse(errorTurn?.contentJson ?? '{}').code).toBe('intent-turn-crashed')
+  })
 })
