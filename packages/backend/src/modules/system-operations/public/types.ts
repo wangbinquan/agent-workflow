@@ -1,6 +1,9 @@
 // RFC-346 — exact application DTOs for backup/restore administration.
 
 import { z } from 'zod'
+
+// Authority-bearing contexts stay on executable commands/queries. This file
+// remains DTO/ref-only so request authority cannot leak through public types.
 declare const localSystemOperationContextBrand: unique symbol
 declare const restoreArtifactRefBrand: unique symbol
 

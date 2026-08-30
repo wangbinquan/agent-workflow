@@ -10,18 +10,16 @@ import type {
 } from './types'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 
-type SystemOperationCommandContext = CommandContext | LocalSystemOperationContext
-
 export interface RequestBackupCommand {
   execute(
-    context: SystemOperationCommandContext,
+    context: CommandContext | LocalSystemOperationContext,
     input: RequestBackupInput,
   ): Promise<BackupResultView>
 }
 
 export interface StageRestoreCommand {
   execute(
-    context: SystemOperationCommandContext,
+    context: CommandContext | LocalSystemOperationContext,
     input: StageRestoreInput,
   ): Promise<StageRestoreResult>
 }

@@ -6,8 +6,6 @@ import type {
 } from './types'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
 
-type SystemOperationQueryContext = QueryContext
-
 export interface PlanLocalRestoreQuery {
   execute(
     context: LocalSystemOperationContext,
@@ -16,7 +14,7 @@ export interface PlanLocalRestoreQuery {
 }
 
 export interface GetRecoveryStatusQuery {
-  execute(context: SystemOperationQueryContext): RecoveryStatusView
+  execute(context: QueryContext): RecoveryStatusView
 }
 
 export interface SystemOperationQueries {

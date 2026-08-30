@@ -18,6 +18,7 @@ import {
   stageRestoreOptionsSchema,
 } from '../src/modules/system-operations/public/types'
 
+const SOURCE_ROOT = join(import.meta.dirname, '../src')
 const localContext = Object.freeze({}) as LocalSystemOperationContext
 const artifactRef = Object.freeze({}) as RestoreArtifactRef
 
@@ -104,6 +105,26 @@ describe('RFC-346 System Operations contracts', () => {
     expect(() =>
       recoveryStatusViewSchema.parse({ pending: null, failed: [], extra: true }),
     ).toThrow()
+  })
+
+  test('authority contexts stay on executable contracts instead of DTO aliases', () => {
+    const publicRoot = join(SOURCE_ROOT, 'modules/system-operations/public')
+    const types = readFileSync(join(publicRoot, 'types.ts'), 'utf8')
+    const commands = readFileSync(join(publicRoot, 'commands.ts'), 'utf8')
+    const queries = readFileSync(join(publicRoot, 'queries.ts'), 'utf8')
+
+    expect(types).not.toContain('@/modules/identity-access/public/participants')
+    expect(types).not.toMatch(/\bSystemOperation(?:Command|Query)Context\b/)
+    expect(commands).toContain(
+      "import type { CommandContext } from '@/modules/identity-access/public/participants'",
+    )
+    expect(commands).toContain('context: CommandContext | LocalSystemOperationContext')
+    expect(commands).not.toContain('type SystemOperationCommandContext')
+    expect(queries).toContain(
+      "import type { QueryContext } from '@/modules/identity-access/public/participants'",
+    )
+    expect(queries).toContain('execute(context: QueryContext): RecoveryStatusView')
+    expect(queries).not.toContain('type SystemOperationQueryContext')
   })
 
   test('all six use cases call only the two narrow coordinator ports', async () => {
