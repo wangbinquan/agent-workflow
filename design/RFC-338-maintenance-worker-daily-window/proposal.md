@@ -1,6 +1,6 @@
 # RFC-338 — 重维护 Worker 隔离与每日维护时刻
 
-- 状态：In Progress（用户已于 2026-08-28 批准 D1–D11，生产实施启动）
+- 状态：Done（2026-08-30；实现已发布，final exact-SHA hosted closeout 全绿）
 - 发起：用户，2026-08-28
 - source pin：`251b5d725ef731d15c17a01656fdc827f925e7c7`
 - 前置：RFC-311（数据库性能与可扩展性）、RFC-322（小时维护错峰）、RFC-294（后台目标架构）
@@ -170,15 +170,25 @@ proactive GC 串在同一 promise chain；实现前必须先按上表拆开，�
 - **AC-13 交付**：实现只在用户批准后开始；最终以包含实现的 exact SHA GitHub Actions 主 CI 与 scheduled soak
   终态成功为交付依据，并记录 source pin、负载参数和完整指标。
 
-## 9. 当前状态与批准门
+## 9. 交付状态与批准记录
 
 RFC 三件套、`design/plan.md` 与 `STATE.md` 已于 source pin 上完成；用户在确认 PostgreSQL server 不内嵌、数据库迁移另立
 RFC 后，于 2026-08-28 明确回复“批准”，批准 D1～D11 并授权 RFC-338 生产实施；随后又明确要求“完整实现
 RFC338 并提交上库”，因此本轮也取得了精确提交和推送授权。
 
-实施以 live baseline `f5f573a533e8527857f47b9cf74023e3629985b1` 开始。当前 T1～T9 候选实现与定向门已完成：
-重工作由独立 Worker/连接串行执行，日程、durable ledger、bounded slice、BUSY 退让、状态 API/设置页及真实
-HTTP/WS 2 秒阻塞门均已落地；真实编译二进制中 Worker 已实测为 `Ready`。50-client/full-seed 本地正式门、
-fault/characterization/mutation 报告也已通过并记录在 `verification-report.md`。RFC 继续保持 In Progress，因为
-AC-11 的 100-client hosted soak 与 AC-13 的提交、remote ancestry、exact-SHA 主 CI/hosted soak 终态仍必须在发布后证明。
-若需调整“默认频率、daily 溢出语义或正确性任务节奏”，先更新 RFC 再继续。
+实施以 live baseline `f5f573a533e8527857f47b9cf74023e3629985b1` 开始。主实现
+`a6d97ccf4870a64730e7f3d8a88531fad2f56577` 以及后续 maintenance/Bun Worker 收口（最后一笔 RFC-338
+专属 source fix 为 `e3433b76b0495a69dd9ab1b5d78994afe00763ca`）均已进入 final exact SHA
+`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 的 ancestry。重工作由独立 Worker/连接串行执行，日程、durable
+ledger、bounded slice、BUSY 退让、状态 API/设置页及真实 HTTP/WS 2 秒阻塞门均已落地；真实编译二进制中 Worker
+为 `Ready`。本地 50-client/full-seed、fault/characterization/mutation 证据均通过。
+
+final exact SHA 的 Main CI run `33298828254` 为 35/35 jobs `completed/success`；同一 SHA 的 8 个 scheduled
+workflows 也全部 `completed/success`。其中 maintenance soak run `33298851934` 在 100 clients、full seed、每阶段
+180 秒下 PASS：maintenance 窗口 API max 250.0ms、foreground write max 203.5ms、WS max gap 357.9ms、
+event-loop max gap 151.9ms、错误 0；123,996 条 SQLite statement 的 p95 上界为 50ms、max 131.1ms。报告 artifact
+为 `9728401544`，digest `sha256:66d8b49f4f3a98c329645c98cf1bdd92aff0af5a21bd783f3209040e41e77ee0`。
+AC-11 与 AC-13 据此闭合，RFC-338 状态为 Done；完整指标与 workflow 账本见 `verification-report.md`。
+
+该交付只证明周期维护不再占用 API 事件循环；PostgreSQL、普通 query pool、多实例和水平扩展仍须另立 RFC。若未来调整
+“默认频率、daily 溢出语义或正确性任务节奏”，必须先更新本 RFC 或由 successor RFC 明确取代。

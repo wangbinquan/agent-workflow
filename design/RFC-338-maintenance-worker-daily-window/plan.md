@@ -1,7 +1,7 @@
 # RFC-338 实施计划 — 重维护 Worker 隔离与每日维护时刻
 
-状态：In Progress；用户已于 2026-08-28 批准 `proposal.md §5 D1–D11`。T1～T9 候选实现与定向门已完成；
-T10 尚缺 50/100-client 大库 soak 与完整 fault/mutation 报告，T11 尚未取得提交/推送授权。
+状态：Done（2026-08-30）；用户已于 2026-08-28 批准 `proposal.md §5 D1–D11`，随后明确授权完整实现、提交与
+推送。T0～T11 均已完成，final functional exact SHA、Main CI 与 8 个 scheduled workflows 全部闭合。
 
 ## 1. 实施原则
 
@@ -36,20 +36,20 @@ T2 开工前 fetch/sync 并从 committed blob 重采以下 source-lock；任何�
 
 ## 3. 任务分解
 
-| 任务        | 内容                                                                                                                                                         | 依赖  | 状态                                                                                                      |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | --------------------------------------------------------------------------------------------------------- |
-| RFC-338-T0  | current-source 调研；完成 proposal/design/plan、总索引与 STATE；不改生产代码                                                                                 | —     | Done                                                                                                      |
-| RFC-338-T1  | 用户逐项批准或修改 D1–D11；实现前重采 source-lock、shared tree owner/index/remote                                                                            | T0    | Done                                                                                                      |
-| RFC-338-T2  | 建 freeze characterization、job inventory guard、真实 socket HTTP/WS/foreground-write harness 与旧实现 red target assertions                                 | T1    | Done                                                                                                      |
-| RFC-338-T3  | 定义 shared schedule/status schema、closed job catalog、IPC/cursor/result contracts；新增 durable `maintenance_runs` migration/store/CAS tests               | T2    | Done                                                                                                      |
-| RFC-338-T4  | 实现 platform background coordinator：hourly phase、daily IANA/DST、boot catch-up、hot apply、coalescing、priority/fairness                                  | T3    | Done                                                                                                      |
-| RFC-338-T5  | 实现 Worker entry/supervisor/handshake、worker-owned SQLite profile、busy/backoff、heartbeat/lease/crash restart 与 graceful drain                           | T3–T4 | Done                                                                                                      |
-| RFC-338-T6  | 迁 DB-first jobs：webhook delivery GC、retention、events archive DB slice、token audit、development retention；原 main body 归零                             | T5    | Done                                                                                                      |
-| RFC-338-T7  | 迁 mixed DB/FS jobs：events/task archive effect recovery、backup prune、plugin generation、upload/input、proactive worktree/iso/scratch/orphan/partial clone | T5–T6 | Done                                                                                                      |
-| RFC-338-T8  | 拆并迁 correctness：workspace cleanup recovery、intent journals/working sets/resource bundles、lifecycle invariant、human-gate；锁 boot/cadence/delta        | T5    | Done                                                                                                      |
-| RFC-338-T9  | 迁 WAL checkpoint；完成 status API、设置页 maintenance card、last/current/next/backlog/error、i18n/390px/keyboard                                            | T4–T8 | Done                                                                                                      |
-| RFC-338-T10 | 跑 per-job fault/characterization、常规 50-client 大库门、scheduled 100-client soak、mutation/architecture/full gate；生成指标报告                           | T6–T9 | In Progress（本地 50-client/full-seed、fault/mutation/target gates 已完成；hosted 100-client 待发布 SHA） |
-| RFC-338-T11 | 精确提交/推送，验证 commit path/trailer/remote ancestry 与 exact-SHA CI/scheduled soak；回填 RFC/STATE/索引为 Done                                           | T10   | Pending                                                                                                   |
+| 任务        | 内容                                                                                                                                                         | 依赖  | 状态                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------- |
+| RFC-338-T0  | current-source 调研；完成 proposal/design/plan、总索引与 STATE；不改生产代码                                                                                 | —     | Done                                                                          |
+| RFC-338-T1  | 用户逐项批准或修改 D1–D11；实现前重采 source-lock、shared tree owner/index/remote                                                                            | T0    | Done                                                                          |
+| RFC-338-T2  | 建 freeze characterization、job inventory guard、真实 socket HTTP/WS/foreground-write harness 与旧实现 red target assertions                                 | T1    | Done                                                                          |
+| RFC-338-T3  | 定义 shared schedule/status schema、closed job catalog、IPC/cursor/result contracts；新增 durable `maintenance_runs` migration/store/CAS tests               | T2    | Done                                                                          |
+| RFC-338-T4  | 实现 platform background coordinator：hourly phase、daily IANA/DST、boot catch-up、hot apply、coalescing、priority/fairness                                  | T3    | Done                                                                          |
+| RFC-338-T5  | 实现 Worker entry/supervisor/handshake、worker-owned SQLite profile、busy/backoff、heartbeat/lease/crash restart 与 graceful drain                           | T3–T4 | Done                                                                          |
+| RFC-338-T6  | 迁 DB-first jobs：webhook delivery GC、retention、events archive DB slice、token audit、development retention；原 main body 归零                             | T5    | Done                                                                          |
+| RFC-338-T7  | 迁 mixed DB/FS jobs：events/task archive effect recovery、backup prune、plugin generation、upload/input、proactive worktree/iso/scratch/orphan/partial clone | T5–T6 | Done                                                                          |
+| RFC-338-T8  | 拆并迁 correctness：workspace cleanup recovery、intent journals/working sets/resource bundles、lifecycle invariant、human-gate；锁 boot/cadence/delta        | T5    | Done                                                                          |
+| RFC-338-T9  | 迁 WAL checkpoint；完成 status API、设置页 maintenance card、last/current/next/backlog/error、i18n/390px/keyboard                                            | T4–T8 | Done                                                                          |
+| RFC-338-T10 | 跑 per-job fault/characterization、常规 50-client 大库门、scheduled 100-client soak、mutation/architecture/full gate；生成指标报告                           | T6–T9 | Done：本地 50-client 与 final exact-SHA hosted 100-client/full-seed 均 PASS   |
+| RFC-338-T11 | 精确提交/推送，验证 commit path/trailer/remote ancestry 与 exact-SHA CI/scheduled soak；回填 RFC/STATE/索引为 Done                                           | T10   | Done：实现 ancestry、Main CI 35/35 与同 SHA 8 个 scheduled workflows 均已核验 |
 
 ## 4. 实施波次
 
@@ -224,21 +224,21 @@ hourly phase golden 与 RFC-322 相等。
 
 ## 7. AC 证据账本
 
-| AC    | 主要证据                                                           | 交付记录                                                                                                                    |
-| ----- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| AC-1  | real socket + 2s Worker block test；event-loop/HTTP/WS metrics     | Done：`rfc338-maintenance-responsiveness.test.ts`，真实 HTTP/WS 在 2s 同步 Worker block 中持续响应                          |
-| AC-2  | two-connection foreground-write contention + transaction histogram | Done：`rfc338-maintenance-slices.test.ts`，50ms maintenance busy timeout 后同 cursor 可重试                                 |
-| AC-3  | periodic-heavy census + main body zero architecture guard          | Done：`rfc338-maintenance-architecture.test.ts` closed catalog/main-body-zero/build-entry guard                             |
-| AC-4  | mixed-tick split/cadence characterization + mutation               | Done：intent/worktree/human-gate/lifecycle 分类与 production-call source guards；原 cadence 回归通过                        |
-| AC-5  | shared daily schema/time algorithm golden                          | Done：schema + 9-case schedule suite覆盖南北半球 DST、leap day、00:00/23:59                                                 |
-| AC-6  | fake-clock hot apply/restart/missed/coalesced slot suite           | Done：schedule/store suite覆盖 hot apply、boot catch-up、slot/queued 合并与 stale recovery                                  |
-| AC-7  | Worker/lease/DB/FS fault injection matrix                          | Done（候选）：Worker crash/心跳/late event、lease/CAS、running+queued、SQLite BUSY 与 archive 四个 journal fault point 已锁 |
-| AC-8  | per-job characterization oracle                                    | Done（候选）：owner/perf 回归与 bounded slice/readback 通过，统一记录在 `verification-report.md`                            |
-| AC-9  | active-task snapshot/claim/fence race corpus                       | Done：RFC-165 scan 后变 active 的 durable terminal CAS race 回归通过                                                        |
-| AC-10 | settings component/E2E/visual/keyboard                             | Done（候选）：component tests + 390px in-app browser 实测；新增 compiled-binary E2E 待 hosted CI执行                        |
-| AC-11 | 50-client gate + 100-client scheduled soak report                  | Partial：本地 50-client/full-seed PASS；100-client hosted tier 待发布 SHA                                                   |
-| AC-12 | mutation receipts                                                  | Done（候选）：Worker/main timer/batch/count/BUSY/fence/slot/recovery/timezone/foreground transaction mutations 全部被杀死   |
-| AC-13 | exact commit/SHA/CI/soak ancestry and terminal status              | Pending                                                                                                                     |
+| AC    | 主要证据                                                           | 交付记录                                                                                                            |
+| ----- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| AC-1  | real socket + 2s Worker block test；event-loop/HTTP/WS metrics     | Done：`rfc338-maintenance-responsiveness.test.ts`，真实 HTTP/WS 在 2s 同步 Worker block 中持续响应                  |
+| AC-2  | two-connection foreground-write contention + transaction histogram | Done：`rfc338-maintenance-slices.test.ts`，50ms maintenance busy timeout 后同 cursor 可重试                         |
+| AC-3  | periodic-heavy census + main body zero architecture guard          | Done：`rfc338-maintenance-architecture.test.ts` closed catalog/main-body-zero/build-entry guard                     |
+| AC-4  | mixed-tick split/cadence characterization + mutation               | Done：intent/worktree/human-gate/lifecycle 分类与 production-call source guards；原 cadence 回归通过                |
+| AC-5  | shared daily schema/time algorithm golden                          | Done：schema + 9-case schedule suite覆盖南北半球 DST、leap day、00:00/23:59                                         |
+| AC-6  | fake-clock hot apply/restart/missed/coalesced slot suite           | Done：schedule/store suite覆盖 hot apply、boot catch-up、slot/queued 合并与 stale recovery                          |
+| AC-7  | Worker/lease/DB/FS fault injection matrix                          | Done：Worker crash/心跳/late event、lease/CAS、running+queued、SQLite BUSY 与 archive 四个 journal fault point 已锁 |
+| AC-8  | per-job characterization oracle                                    | Done：owner/perf 回归与 bounded slice/readback 通过，统一记录在 `verification-report.md`                            |
+| AC-9  | active-task snapshot/claim/fence race corpus                       | Done：RFC-165 scan 后变 active 的 durable terminal CAS race 回归通过                                                |
+| AC-10 | settings component/E2E/visual/keyboard                             | Done：component + 390px/browser + compiled-binary E2E；final Main/visual/webkit/windows workflows 全绿              |
+| AC-11 | 50-client gate + 100-client scheduled soak report                  | Done：本地 50-client PASS；exact SHA `c5c4faaf…` 的 100-client run `33298851934` PASS，错误 0、所有 gap <1s         |
+| AC-12 | mutation receipts                                                  | Done：Worker/main timer/batch/count/BUSY/fence/slot/recovery/timezone/foreground transaction mutations 全部被杀死   |
+| AC-13 | exact commit/SHA/CI/soak ancestry and terminal status              | Done：主实现为 exact SHA 祖先；Main `33298828254` 与同 SHA 8 schedules 全部 `completed/success`                     |
 
 ## 8. 停止门与回退
 

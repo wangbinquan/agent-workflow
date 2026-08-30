@@ -1,7 +1,8 @@
 # RFC-338 设计 — 重维护 Worker 隔离与每日维护时刻
 
-配套 `proposal.md`。当前状态：In Progress；用户已于 2026-08-28 批准 D1–D11，实施 live baseline 为
-`f5f573a533e8527857f47b9cf74023e3629985b1`。
+配套 `proposal.md`。当前状态：Done（2026-08-30）；用户已于 2026-08-28 批准 D1–D11，实施 live baseline 为
+`f5f573a533e8527857f47b9cf74023e3629985b1`，final functional exact SHA 为
+`c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68`。
 
 ## 1. 设计不变量
 
@@ -563,7 +564,7 @@ RFC-338 为后续工作建立以下 seam，但不实现后续工作：
 - **RFC-294**：新代码落 platform background/persistence 与模块 application/infrastructure 边界；不继续扩大 legacy `services/` god wiring，
   也不把本 RFC 记作 PostgreSQL 或全仓模块化 wave 完成。
 
-## 16. 候选实现证据与剩余门（2026-08-28）
+## 16. 最终实现与 hosted 证据（2026-08-30）
 
 - `maintenance_runs` durable slot/lease/cursor、closed catalog/protocol、schedule coordinator、Worker supervisor 与独立
   SQLite profile 已落位；主进程只 admission、接 typed delta 和投影状态，Worker degraded 时不回退执行重 body。
@@ -584,6 +585,19 @@ RFC-338 为后续工作建立以下 seam，但不实现后续工作：
   50ms、max 78.2ms。完整指标、backlog/drain rate 与第一次 445.3ms 反例的修复说明见 `verification-report.md`。
 - RFC338 目标与 owner/perf 回归 109/109、shared 3/3、frontend 2/2、compiled-binary Chromium E2E 1/1 通过；
   AC-7/8/12 的 fault/characterization/mutation receipts 已统一对账。
+- 主实现 `a6d97ccf4870a64730e7f3d8a88531fad2f56577` 与最后一笔 RFC-338 专属 source fix
+  `e3433b76b0495a69dd9ab1b5d78994afe00763ca` 均为 final functional exact SHA
+  `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 的祖先；该 SHA 也为当前已发布 `main` 的祖先。
+- final exact SHA 的 Main CI `33298828254` 共 35 jobs，failed/unfinished 均为空。相同 SHA 的 full
+  `33298851279`、webkit `33298852761`、evidence `33298851076`、git `33298851691`、integration
+  `33298851086`、maintenance `33298851934`、visual `33298851050`、windows `33298851033` 全部
+  `completed/success`。
+- maintenance run `33298851934` 使用 100 clients、full seed、control/maintenance 各 180 秒并 PASS。维护窗口
+  API p50/p95/max 为 58.7/127.1/250.0ms，foreground write max 203.5ms，WS max gap 357.9ms，event-loop
+  max gap 151.9ms，错误 0；123,996 条 SQLite statement p95≤50ms、max 131.1ms。events backlog
+  10,000,000→9,055,000，webhook deliveries 100,000→0；未清空的 events 以 durable `running` cursor 续跑，
+  不是隐藏为成功。artifact `9728401544` 的 digest 为
+  `sha256:66d8b49f4f3a98c329645c98cf1bdd92aff0af5a21bd783f3209040e41e77ee0`。
 
-尚未满足：AC-11 的 100-client hosted soak，以及 AC-13 的提交、remote ancestry、exact-SHA 主 CI 与 hosted soak
-终态。因此 RFC 状态保持 In Progress，不把本地候选冒充已发布完成。
+AC-1～AC-13 至此全部闭合，RFC-338 为 Done。该结论只覆盖 maintenance-induced freeze；不外推为 PostgreSQL、
+普通 query pool、多实例或水平扩展已经完成。
