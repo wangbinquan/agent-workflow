@@ -26,10 +26,13 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
-import type { McpOperationContext } from '@/modules/resource-catalog/public/participants'
+import type { McpCommands } from '@/modules/resource-catalog/public/commands'
+import type {
+  McpAclIdentityParticipant,
+  McpOperationContext,
+} from '@/modules/resource-catalog/public/participants'
+import type { McpQueries } from '@/modules/resource-catalog/public/queries'
 import type { McpCatalogResource } from '@/modules/resource-catalog/public/types'
-import { invokeOperation } from '@/platform/operations/invoke'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
@@ -64,16 +67,18 @@ export function mcpRouteNow(): number {
 }
 
 export interface McpRouteDependencies {
-  readonly catalog: McpCatalogModule
+  readonly commands: McpCommands
+  readonly queries: McpQueries
+  readonly aclIdentity: McpAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => McpOperationContext
   readonly runtimeTests: McpRuntimeTestService
 }
 
 export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDependencies): void {
-  const { catalog, runtimeTests } = module
+  const { commands, queries, aclIdentity, runtimeTests } = module
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleMcp(actor: Actor, id: string): Promise<McpCatalogResource> {
-    const mcp = await invokeOperation(catalog.operations.get, module.authorityFor(actor), { id })
+    const mcp = await queries.get(module.authorityFor(actor), { id })
     if (mcp === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
     return mcp
   }
@@ -89,7 +94,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
     },
     async (c) => {
       const actor = actorOf(c)
-      const visible = await invokeOperation(catalog.operations.list, module.authorityFor(actor), {})
+      const visible = await queries.list(module.authorityFor(actor))
       return c.json(visible.map((mcp) => serializeMcpFor(mcp, actor.source)))
     },
   )
@@ -108,11 +113,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
     async (c) => {
       const list = await listProbes(deps.db)
       const actor = actorOf(c)
-      const visibleMcps = await invokeOperation(
-        catalog.operations.list,
-        module.authorityFor(actor),
-        {},
-      )
+      const visibleMcps = await queries.list(module.authorityFor(actor))
       const allowed = new Set(visibleMcps.map((m) => m.id))
       return c.json(list.filter((p) => allowed.has(p.mcpId)))
     },
@@ -321,11 +322,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
         })
       }
       const actor = actorOf(c)
-      const created = await invokeOperation(
-        catalog.operations.create,
-        module.authorityFor(actor),
-        parsed.data,
-      )
+      const created = await commands.create(module.authorityFor(actor), parsed.data)
       return c.json(serializeMcpFor(created, actor.source), 201)
     },
   )
@@ -349,7 +346,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
         })
       }
       const actor = actorOf(c)
-      const updated = await invokeOperation(catalog.operations.update, module.authorityFor(actor), {
+      const updated = await commands.update(module.authorityFor(actor), {
         id,
         update: parsed.data,
       })
@@ -378,7 +375,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
           issues: parsed.error.issues,
         })
       }
-      const receipt = await invokeOperation(catalog.operations.delete, module.authorityFor(actor), {
+      const receipt = await commands.delete(module.authorityFor(actor), {
         id: resolved.id,
         deletion: parsed.data,
       })
@@ -406,7 +403,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
         })
       }
       const actor = actorOf(c)
-      const renamed = await invokeOperation(catalog.operations.rename, module.authorityFor(actor), {
+      const renamed = await commands.rename(module.authorityFor(actor), {
         id,
         rename: parsed.data,
       })
@@ -522,11 +519,9 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
 
           return mcpOperationCoordinator.runExclusive(resolved.id, async () => {
             const authority = module.authorityFor(actor)
-            const current = await invokeOperation(catalog.operations.get, authority, {
-              id: resolved.id,
-            })
+            const current = await queries.get(authority, { id: resolved.id })
             if (current === null) {
-              const identity = await catalog.participants.aclIdentity.load(resolved.id)
+              const identity = await aclIdentity.load(resolved.id)
               if (identity !== null) {
                 throw staleConflictError(
                   'mcp',
@@ -567,11 +562,11 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
     type: 'mcp',
     base: '/api/mcps',
     param: 'id',
-    load: (_db, id) => catalog.participants.aclIdentity.load(id),
+    load: (_db, id) => aclIdentity.load(id),
     coordinator: {
       runExclusive: (resourceId, task) => mcpOperationCoordinator.runExclusive(resourceId, task),
-      loadById: (_db, resourceId) => catalog.participants.aclIdentity.load(resourceId),
-      nextUpdatedAt: (row) => catalog.participants.aclIdentity.nextUpdatedAt(row.id),
+      loadById: (_db, resourceId) => aclIdentity.load(resourceId),
+      nextUpdatedAt: (row) => aclIdentity.nextUpdatedAt(row.id),
     },
     afterWriteInTx: (tx, change) =>
       transitionMcpAclRuntimeTestsInTx(tx, {

@@ -55,8 +55,8 @@ export interface McpProjection {
 export interface McpAccessPort {
   filterVisible(authority: McpOperationContext, rows: readonly Mcp[]): Promise<readonly Mcp[]>
   canView(authority: McpOperationContext, row: Mcp): Promise<boolean>
-  requireEdit(authority: McpOperationContext, row: Mcp): Promise<void>
-  requireGovern(authority: McpOperationContext, row: Mcp): Promise<void>
+  requireResourceEdit(authority: McpOperationContext, row: Mcp): Promise<void>
+  requireResourceGovern(authority: McpOperationContext, row: Mcp): Promise<void>
   discloseAgentReferences(
     authority: McpOperationContext,
     references: readonly McpAgentReference[],

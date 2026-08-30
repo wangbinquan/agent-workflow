@@ -147,7 +147,7 @@ export function createMcpApplication(deps: McpApplicationDependencies): McpAppli
       const resolved = await loadVisible(authority, input.id)
       const updated = await deps.coordinator.runExclusive(resolved.id, async () => {
         const fresh = await loadVisible(authority, resolved.id)
-        await deps.access.requireEdit(authority, fresh)
+        await deps.access.requireResourceEdit(authority, fresh)
         assertExpectedHash(deps.projection, fresh, input.update.expectedConfigHash, 'modifying')
 
         if (input.update.type !== undefined && input.update.type !== fresh.type) {
@@ -196,7 +196,7 @@ export function createMcpApplication(deps: McpApplicationDependencies): McpAppli
       const resolved = await loadVisible(authority, input.id)
       return deps.coordinator.runExclusive(resolved.id, async () => {
         const fresh = await loadVisible(authority, resolved.id)
-        await deps.access.requireGovern(authority, fresh)
+        await deps.access.requireResourceGovern(authority, fresh)
         assertExpectedHash(deps.projection, fresh, input.deletion.expectedConfigHash, 'deleting')
         assertDeleteConfirm(input.deletion, fresh.name)
         await deps.runtime.prepareDelete(fresh.id)
@@ -221,7 +221,7 @@ export function createMcpApplication(deps: McpApplicationDependencies): McpAppli
       const resolved = await loadVisible(authority, input.id)
       const renamed = await deps.coordinator.runExclusive(resolved.id, async () => {
         const fresh = await loadVisible(authority, resolved.id)
-        await deps.access.requireGovern(authority, fresh)
+        await deps.access.requireResourceGovern(authority, fresh)
         assertExpectedHash(deps.projection, fresh, input.rename.expectedConfigHash, 'modifying')
         const updatedAt = await deps.clock.next(fresh)
         if (input.rename.newName === fresh.name) return fresh

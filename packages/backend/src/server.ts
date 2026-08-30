@@ -977,7 +977,9 @@ export function mountApiRoutes(
   mountOverviewRoutes(app, deps) // RFC-190
   mountAgentRoutes(app, routeDeps)
   mountMcpRoutes(app, deps, {
-    catalog: mcpCatalog,
+    commands: mcpCatalog.commands,
+    queries: mcpCatalog.queries,
+    aclIdentity: mcpCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
     runtimeTests: mcpRuntimeTests,
   })

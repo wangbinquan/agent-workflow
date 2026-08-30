@@ -469,19 +469,41 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
     const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+    const routeDispatcher = readFileSync(
+      resolve(import.meta.dir, 'helpers/routeOperationDispatcher.ts'),
+      'utf8',
+    )
 
     expect(route).not.toContain("from '@/services/mcp'")
-    expect(
-      route.match(/invokeOperation\(\s*catalog\.operations\./g)?.length,
-    ).toBeGreaterThanOrEqual(8)
-    expect(route).toContain('catalog.participants.aclIdentity.load')
+    expect(route).not.toContain('catalog.operations')
+    expect(route).toContain(
+      "import type { McpCommands } from '@/modules/resource-catalog/public/commands'",
+    )
+    expect(route).toContain(
+      "import type { McpQueries } from '@/modules/resource-catalog/public/queries'",
+    )
+    expect(route).toContain('McpAclIdentityParticipant')
+    for (const consumer of [
+      'commands.create(',
+      'commands.update(',
+      'commands.delete(',
+      'commands.rename(',
+      'queries.list(',
+      'queries.get(',
+      'aclIdentity.load(',
+      'aclIdentity.nextUpdatedAt(',
+    ]) {
+      expect(route).toContain(consumer)
+    }
     expect(application).toContain('coordinator.runExclusive')
-    expect(application).toContain('requireEdit')
-    expect(application).toContain('requireGovern')
+    expect(application).toContain('requireResourceEdit')
+    expect(application).toContain('requireResourceGovern')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
     expect(repository).toContain('dbTxSync')
     expect(repository).toContain('findAgentReferencesInTx')
+    expect(repository).toContain("import { sha256Hex } from '@/util/hash'")
+    expect(repository).not.toContain("createHash('sha256')")
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createSqliteMcpRepository')
     expect(composition).toContain('createMcpApplication')
@@ -499,7 +521,16 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('composeMcpCatalog({')
     expect(server).toContain('transitionMutationInTx: transitionMcpRuntimeTestsInTx')
     expect(server).toContain('deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx')
+    expect(server).toContain('commands: mcpCatalog.commands')
+    expect(server).toContain('queries: mcpCatalog.queries')
+    expect(server).toContain('aclIdentity: mcpCatalog.participants.aclIdentity')
     expect(server).toContain('directOperationAuthority(identityAccess.directAuthority, actor)')
+    expect(routeDispatcher).toContain(
+      'deps.identityAccess ?? createIdentityAccessRuntime({ db: deps.db })',
+    )
+    expect(routeDispatcher).toContain('admitTestDirectAuthority(')
+    expect(routeDispatcher).toContain('createBoundOperationInvoker(app, identity.actor)')
+    expect(routeDispatcher).not.toContain('mcpTestOperationActor(actor)')
 
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

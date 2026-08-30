@@ -45,10 +45,11 @@ export function composeMcpCatalog(input: McpCatalogCompositionDependencies): Mcp
   const access: McpAccessPort = {
     filterVisible: (authority, rows) => filterVisibleRows<Mcp>(input.db, authority, 'mcp', rows),
     canView: (authority, row) => canViewResource(input.db, authority, 'mcp', row),
-    requireEdit: async (authority, row) => {
+    requireResourceEdit: async (authority, row) => {
       await requireResourceEdit(input.db, authority, 'mcp', row)
     },
-    requireGovern: (authority, row) => requireResourceGovern(input.db, authority, 'mcp', row),
+    requireResourceGovern: (authority, row) =>
+      requireResourceGovern(input.db, authority, 'mcp', row),
     discloseAgentReferences: (authority, references) =>
       discloseRefs(input.db, authority, 'agent', references),
   }

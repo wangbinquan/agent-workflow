@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { McpSchema, mcpOperationConfigHashWith, type Mcp } from '@agent-workflow/shared'
 import { and, eq, isNull, like, ne, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
@@ -6,6 +5,7 @@ import type { DbClient } from '@/db/client'
 import { agents, mcps } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 import type { McpAgentReference, McpProjection, McpRepository } from '../application/mcps/ports'
 import type { McpCatalogResource } from '../public/types'
 
@@ -60,9 +60,7 @@ function rowToMcp(row: McpRow): Mcp {
 }
 
 function configHashOf(mcp: Mcp): string {
-  return mcpOperationConfigHashWith(mcp, (canonical) =>
-    createHash('sha256').update(canonical, 'utf8').digest('hex'),
-  )
+  return mcpOperationConfigHashWith(mcp, sha256Hex)
 }
 
 function resourceOf(mcp: Mcp): McpCatalogResource {

@@ -1,9 +1,10 @@
 import type { Actor } from '@/auth/actor'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { allOperationRoutes } from '@/platform/operations/catalog'
 import type { OperationResult } from '@/platform/operations/contracts'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
 import { createApp, type AppDeps } from '@/server'
-import { mcpTestOperationActor } from './mcpOperationRecording'
+import { admitTestDirectAuthority } from './identityAccessAuthority'
 
 export interface RouteOperationRequest {
   readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -33,13 +34,29 @@ function matchPath(template: string, concrete: string): Readonly<Record<string, 
 
 /** Test-only compatibility shim for pre-RFC-344 route-level assertions. */
 export function createRouteOperationDispatcher(deps: AppDeps): RouteOperationDispatcher {
-  const app = createApp(deps)
+  const identityAccess = deps.identityAccess ?? createIdentityAccessRuntime({ db: deps.db })
+  const app = createApp({ ...deps, identityAccess })
   return async (request, actor) => {
     for (const route of allOperationRoutes()) {
       if (route.method !== request.method) continue
       const params = matchPath(route.path, request.path)
       if (params === null) continue
-      return createBoundOperationInvoker(app, mcpTestOperationActor(actor))(route.operationId, {
+      const identity = await admitTestDirectAuthority(
+        identityAccess.directAuthority,
+        actor.source === 'pat'
+          ? {
+              userId: actor.user.id,
+              source: 'pat',
+              patScopes: [...actor.permissions],
+              ...(actor.purpose === undefined ? {} : { patPurpose: actor.purpose }),
+              ...(actor.patId === undefined ? {} : { patId: actor.patId }),
+            }
+          : actor.source === 'session'
+            ? { userId: actor.user.id, source: 'session' }
+            : { source: 'daemon' },
+      )
+      if (identity === null) throw new Error('test route actor could not be admitted')
+      return createBoundOperationInvoker(app, identity.actor)(route.operationId, {
         params,
         query: request.query,
         body: request.body,
