@@ -398,15 +398,32 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/composition/userOperations',
+      // RFC-344 operation descriptors receive an exact authenticated authority;
+      // application code does not reconstruct the identity shape.
+      'packages/backend/src/modules/development-automation/application/activityOperations.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/development-automation/application/configOperations.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/development-automation/application/missionOperations.ts -> @/modules/identity-access/public/participants',
+      // RFC-345 resource contracts consume only identity-access public contexts.
+      'packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/public/commands.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/public/participants.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/public/queries.ts -> @/modules/identity-access/public/participants',
+      // RFC-344 system-operation contracts share the same sealed command context.
+      'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/system-operations/public/types.ts -> @/modules/identity-access/public/participants',
       // RFC-320 — auth receives exact profile commands/queries through the
       // server-composed module; it never imports module internals or storage.
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/queries',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/types',
+      'packages/backend/src/routes/developmentConfig.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/routes/developmentMissions.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/routes/digitalEmployees.ts -> @/modules/identity-access/public/participants',
       // RFC-342 — memory scope moves receive only the direct context factory;
       // request identity remains sealed inside the factory-minted context.
       'packages/backend/src/routes/memories.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/routes/operationAuthority.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',

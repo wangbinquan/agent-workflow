@@ -48,7 +48,10 @@ export {
   resolveResourceAccessForInTx,
   updateResourceAcl,
 } from '../composition/resourceAcl'
-export type { ResourceAclIdentityPersistence } from '../composition/required-ports'
+export type {
+  ForeignResourceAclType,
+  ResourceAclIdentityPersistence,
+} from '../composition/required-ports'
 export {
   findOwnedAclResourceIdsByName,
   getAclResourceAccessRow,
@@ -80,7 +83,10 @@ export {
   visibleRowsCondition,
   type AclColumnRef,
 } from '../infrastructure/sqliteResourceGrantRepository'
-export { listAllVisibleResourceSummariesForActor } from '../infrastructure/sqliteCatalogQuery'
+export {
+  listAllVisibleResourceSummariesForActor,
+  type SqliteResourceCatalogProjectionDependencies,
+} from '../infrastructure/sqliteCatalogQuery'
 export {
   findSqliteBuiltinResource,
   findSqliteBuiltinResourceInTx,
@@ -93,6 +99,8 @@ export {
   compensateLegacyResourcePackageArtifact,
   createLegacyResourcePackageMutationAdapter,
   rollForwardLegacyResourcePackageArtifacts,
+  type LegacyResourcePackageMutationDependencies,
+  type LegacyStagedSkillVersion,
   type PreparedResourcePackageMutation,
   type ResourcePackageMutationArtifact,
 } from '../infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'

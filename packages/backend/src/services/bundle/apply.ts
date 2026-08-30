@@ -32,6 +32,7 @@ import {
   type PreparedResourcePackageMutation,
   type ResourcePackageMutationArtifact,
 } from '@/modules/resource-catalog/public/operations'
+import { legacyResourcePackageMutationDependencies } from './legacyResourcePackageMutationDependencies'
 import { ConflictError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import {
@@ -164,18 +165,23 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
     })
   }
 
-  const mutationAdapter = createLegacyResourcePackageMutationAdapter({
-    db,
-    appHome: deps.appHome,
-    actor,
-    ...(deps.pluginInstallOpts === undefined ? {} : { pluginInstallOpts: deps.pluginInstallOpts }),
-    ...(deps.faults?.afterPluginInstall === undefined
-      ? {}
-      : { afterPluginInstall: deps.faults.afterPluginInstall }),
-    ...(deps.faults?.afterSkillStage === undefined
-      ? {}
-      : { afterSkillStage: deps.faults.afterSkillStage }),
-  })
+  const mutationAdapter = createLegacyResourcePackageMutationAdapter(
+    {
+      db,
+      appHome: deps.appHome,
+      actor,
+      ...(deps.pluginInstallOpts === undefined
+        ? {}
+        : { pluginInstallOpts: deps.pluginInstallOpts }),
+      ...(deps.faults?.afterPluginInstall === undefined
+        ? {}
+        : { afterPluginInstall: deps.faults.afterPluginInstall }),
+      ...(deps.faults?.afterSkillStage === undefined
+        ? {}
+        : { afterSkillStage: deps.faults.afterSkillStage }),
+    },
+    legacyResourcePackageMutationDependencies,
+  )
   let committedReceipt: BundleReceipt | null = null
 
   try {
@@ -295,7 +301,11 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
     for (const artifact of [...artifacts].reverse()) {
       try {
         deps.faults?.beforeArtifactCompensation?.(artifact)
-        compensateLegacyResourcePackageArtifact(db, artifact as ResourcePackageMutationArtifact)
+        compensateLegacyResourcePackageArtifact(
+          db,
+          artifact as ResourcePackageMutationArtifact,
+          legacyResourcePackageMutationDependencies,
+        )
       } catch (err) {
         compensated = false
         log.warn('bundle-artifact-compensation-failed', {
@@ -389,6 +399,7 @@ export async function convergeResourceBundleApplies(
           appHome,
           artifacts as ResourcePackageMutationArtifact[],
           log,
+          legacyResourcePackageMutationDependencies,
         )
       }
       rolledForward += 1
@@ -406,7 +417,11 @@ export async function convergeResourceBundleApplies(
     const artifacts = parseArtifacts(row.preparedArtifactsJson)
     for (const artifact of [...artifacts].reverse()) {
       try {
-        compensateLegacyResourcePackageArtifact(db, artifact as ResourcePackageMutationArtifact)
+        compensateLegacyResourcePackageArtifact(
+          db,
+          artifact as ResourcePackageMutationArtifact,
+          legacyResourcePackageMutationDependencies,
+        )
       } catch (err) {
         compensated = false
         log.warn('bundle-converge-compensation-failed', {

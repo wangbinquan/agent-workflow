@@ -48,16 +48,17 @@ export type ResourceCatalogCursor = string & {
   readonly [resourceCatalogCursorBrand]: 'resource-catalog-cursor'
 }
 
-export type ResourceSummary<K extends CatalogSelectorKind = CatalogSelectorKind> = {
-  [P in K]: {
-    readonly ref: CatalogResourceRef<P>
-    readonly kind: P
-    readonly name: string
-    readonly description: string | null
-    readonly revision: ResourceSummaryRevision<P>
-    readonly visibilityHint: 'public' | 'private'
-  }
-}[K]
+interface ResourceSummaryOf<K extends CatalogSelectorKind> {
+  readonly ref: CatalogResourceRef<K>
+  readonly kind: K
+  readonly name: string
+  readonly description: string | null
+  readonly revision: ResourceSummaryRevision<K>
+  readonly visibilityHint: 'public' | 'private'
+}
+
+export type ResourceSummary<K extends CatalogSelectorKind = CatalogSelectorKind> =
+  K extends CatalogSelectorKind ? ResourceSummaryOf<K> : never
 
 export interface ResourceSummaryQuery {
   readonly kinds?: readonly CatalogSelectorKind[]
@@ -231,19 +232,25 @@ type IntentUpdateResourcePlan<K extends CatalogSelectorKind> = {
   readonly payload: Readonly<IntentPayloadFor<K>>
 }
 
-export type VersionedIntentResourceChangesetPlan = {
-  [K in CatalogSelectorKind]: IntentCreateResourcePlan<K> | IntentUpdateResourcePlan<K>
-}[CatalogSelectorKind]
+type VersionedIntentResourceChangesetPlanOf<K extends CatalogSelectorKind> =
+  K extends CatalogSelectorKind ? IntentCreateResourcePlan<K> | IntentUpdateResourcePlan<K> : never
 
-export type IntentResourceChangesetReceipt = {
-  [K in CatalogSelectorKind]: {
-    readonly kind: K
-    readonly operationId: string
-    readonly resourceId: string
-    readonly action: 'create' | 'update'
-    readonly revision: ResourceSummaryRevision<K>
-  }
-}[CatalogSelectorKind]
+export type VersionedIntentResourceChangesetPlan =
+  VersionedIntentResourceChangesetPlanOf<CatalogSelectorKind>
+
+interface IntentResourceChangesetReceiptOf<K extends CatalogSelectorKind> {
+  readonly kind: K
+  readonly operationId: string
+  readonly resourceId: string
+  readonly action: 'create' | 'update'
+  readonly revision: ResourceSummaryRevision<K>
+}
+
+type DistributedIntentResourceChangesetReceipt<K extends CatalogSelectorKind> =
+  K extends CatalogSelectorKind ? IntentResourceChangesetReceiptOf<K> : never
+
+export type IntentResourceChangesetReceipt =
+  DistributedIntentResourceChangesetReceipt<CatalogSelectorKind>
 
 export type IntegrationTriggerResourceRequest =
   | { readonly kind: 'scheduled-workflow'; readonly workflowId: string }

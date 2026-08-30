@@ -11,8 +11,8 @@
 //   ① workflow YAML 导入 → services/workflow.ts createWorkflow 单点；
 //   ② skill ZIP 导入 → skill-zip.ts 全部创建走 createManagedSkillWithFiles
 //     （skill.ts 内 initialPrivateResourceAcl ×2：reserve 与 recreate 两臂）；
-//   ③ bundle apply → bundle/apply.ts 的 plugin 铸造走 initialPrivateResourceAcl
-//     （RFC-284 T11 收编）。
+//   ③ bundle apply → resource-catalog aggregate adapter 的 plugin 铸造经 owner-bound
+//      dependency 走 initialPrivateResourceAcl（RFC-284 T11 收编）。
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -20,6 +20,8 @@ import { resolve } from 'node:path'
 
 const src = (rel: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', 'services', rel), 'utf8')
+const moduleSrc = (rel: string): string =>
+  readFileSync(resolve(import.meta.dir, '..', 'src', 'modules', rel), 'utf8')
 
 describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
   test('① workflow 创建（含 YAML 导入路）经 initialPrivateResourceAcl', () => {
@@ -40,8 +42,13 @@ describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
   })
 
   test('③ bundle apply 的 plugin 铸造经 initialPrivateResourceAcl（RFC-284 T11）', () => {
-    const apply = src('bundle/apply.ts')
-    expect(apply).toContain('initialPrivateResourceAcl(ctx.actor.user.id)')
-    expect(apply.includes("visibility: 'public'")).toBe(false)
+    const adapter = moduleSrc(
+      'resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
+    )
+    const dependencies = src('bundle/legacyResourcePackageMutationDependencies.ts')
+    expect(adapter).toContain('dependencies.initialPrivateResourceAcl(actor.user.id)')
+    expect(dependencies).toContain('initialPrivateResourceAcl,')
+    expect(adapter.includes("visibility: 'public'")).toBe(false)
+    expect(dependencies.includes("visibility: 'public'")).toBe(false)
   })
 })

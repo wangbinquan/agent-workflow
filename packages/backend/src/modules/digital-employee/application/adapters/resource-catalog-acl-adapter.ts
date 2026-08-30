@@ -1,4 +1,4 @@
-import type { ResourceAclIdentityPersistence } from '@/modules/resource-catalog/composition/required-ports'
+import type { ResourceAclIdentityPersistence } from '@/modules/resource-catalog/public/operations'
 import type {
   DigitalEmployeeAclIdentityPersistence,
   DigitalEmployeeAuthoringStore,

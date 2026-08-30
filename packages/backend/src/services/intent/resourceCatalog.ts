@@ -6,6 +6,7 @@ import type { AclResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/public/operations'
+import { resourceCatalogProjections } from './resourceCatalogProjections'
 
 export interface IntentVisibleResource {
   resourceType: AclResourceType
@@ -18,10 +19,12 @@ export async function listVisibleIntentResources(
   db: DbClient,
   actor: Actor,
 ): Promise<IntentVisibleResource[]> {
-  return (await listAllVisibleResourceSummariesForActor(db, actor)).map((summary) => ({
-    resourceType: summary.kind,
-    resourceId: summary.ref.id,
-    name: summary.name,
-    description: summary.description,
-  }))
+  return (await listAllVisibleResourceSummariesForActor(db, actor, resourceCatalogProjections)).map(
+    (summary) => ({
+      resourceType: summary.kind,
+      resourceId: summary.ref.id,
+      name: summary.name,
+      description: summary.description,
+    }),
+  )
 }

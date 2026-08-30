@@ -22,6 +22,7 @@ import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 import * as schema from '../../src/db/schema'
 import { SQLITE_ACL_TABLES } from '../../src/modules/resource-catalog/infrastructure/sqliteAclRegistry'
+import type { ForeignResourceAclType } from '../../src/modules/resource-catalog/public/operations'
 
 /** RFC-099 的行级 ACL 列集。 */
 const ACL_COLUMNS = ['owner_user_id', 'visibility'] as const
@@ -53,8 +54,16 @@ function allTables(): TableFacts[] {
 }
 
 const TABLES = allTables()
+const OWNER_INJECTED_ACL_TABLES = {
+  development_adapter: schema.developmentAdapterDefinitions,
+  employee_definition: schema.employeeDefinitions,
+  employee_tool: schema.employeeToolRegistrations,
+  employee_job_template: schema.employeeJobTemplates,
+} satisfies Record<ForeignResourceAclType, SQLiteTable>
 const ACL_TABLE_NAMES = new Set(
-  Object.values(SQLITE_ACL_TABLES).map((table) => getTableConfig(table).name),
+  [...Object.values(SQLITE_ACL_TABLES), ...Object.values(OWNER_INJECTED_ACL_TABLES)].map(
+    (table) => getTableConfig(table).name,
+  ),
 )
 const hasAclColumns = (table: TableFacts): boolean =>
   ACL_COLUMNS.every((column) => table.columns.has(column))
@@ -75,7 +84,7 @@ describe('RFC-317 T9 —— ACL 列与 ACL 类型必须一一对应', () => {
     expect(
       offenders,
       '这些表带着完整的行级 ACL 列却不是 ACL 资源类型——列是惰性的，而且会误导读代码的人以为可见性已受控。' +
-        '要么把它加进 ACL_RESOURCE_TYPES/ACL_TABLES，要么删列，要么进 PENDING_ENROLMENT 并写清清偿波次',
+        '要么由 resource-catalog registry 或 foreign owner provider 精确入网，要么删列，要么进 PENDING_ENROLMENT 并写清清偿波次',
     ).toEqual([])
   })
 

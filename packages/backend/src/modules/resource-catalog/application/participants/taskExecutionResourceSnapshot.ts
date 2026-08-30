@@ -1,5 +1,5 @@
 import type {
-  ResourceCurrentAuthorityInTx,
+  ResourceRequestContext,
   TaskExecutionResourceSnapshotInTx,
 } from '../../public/participants'
 import type {
@@ -18,28 +18,33 @@ type SnapshotOf<K extends FrozenTaskExecutionResourceSnapshot['kind']> = Extract
 
 export interface TaskExecutionResourceSnapshotPorts {
   readonly workflowLaunch: (
-    authority: ResourceCurrentAuthorityInTx,
+    authority: ResourceRequestContext,
     request: RequestOf<'workflow-launch'>,
   ) => SnapshotOf<'workflow-launch'>
   readonly agentInjection: (
-    authority: ResourceCurrentAuthorityInTx,
+    authority: ResourceRequestContext,
     request: RequestOf<'agent-injection'>,
   ) => SnapshotOf<'agent-injection'>
   readonly callWorkflow: (
-    authority: ResourceCurrentAuthorityInTx,
+    authority: ResourceRequestContext,
     request: RequestOf<'call-workflow'>,
   ) => SnapshotOf<'call-workflow'>
   readonly callWorkgroup: (
-    authority: ResourceCurrentAuthorityInTx,
+    authority: ResourceRequestContext,
     request: RequestOf<'call-workgroup'>,
   ) => SnapshotOf<'call-workgroup'>
 }
 
+const trustedTaskExecutionSnapshots = new WeakSet<TaskExecutionResourceSnapshotInTx>()
+
 export function createTaskExecutionResourceSnapshotInTx(
   ports: TaskExecutionResourceSnapshotPorts,
 ): TaskExecutionResourceSnapshotInTx {
-  return {
-    loadAuthorized(authority, requests) {
+  const participant = Object.freeze({
+    loadAuthorized(
+      authority: ResourceRequestContext,
+      requests: readonly TaskExecutionResourceRequest[],
+    ) {
       return requests.map((request): FrozenTaskExecutionResourceSnapshot => {
         switch (request.kind) {
           case 'workflow-launch':
@@ -53,5 +58,7 @@ export function createTaskExecutionResourceSnapshotInTx(
         }
       })
     },
-  }
+  }) as unknown as TaskExecutionResourceSnapshotInTx
+  trustedTaskExecutionSnapshots.add(participant)
+  return participant
 }

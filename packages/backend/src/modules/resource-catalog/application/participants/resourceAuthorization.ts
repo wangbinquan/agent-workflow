@@ -4,7 +4,7 @@ import { ForbiddenError, NotFoundError } from '@/util/errors'
 import { canEditAccess, canGovernAccess, canViewAccess } from '../../domain/resourceAccess'
 import type {
   ResourceAuthorizationInTx,
-  ResourceCurrentAuthorityInTx,
+  ResourceRequestContext,
   ResourceScopeAuthorizationInTx,
 } from '../../public/participants'
 import type { ResourceAclTarget, ResourceMemoryScopeRef } from '../../public/types'
@@ -12,7 +12,7 @@ import type { ResourceAccessRowReadPort } from '../ports/resourceAclPersistence'
 import type { ResourceAuthorizationApplication } from '../resourceAuthorization'
 
 export interface ResourceCurrentAuthorityResolver {
-  resolve(authority: ResourceCurrentAuthorityInTx): Actor
+  resolve(authority: ResourceRequestContext): Actor
 }
 
 export interface ResourceAuthorizationParticipantDependencies {
@@ -20,12 +20,15 @@ export interface ResourceAuthorizationParticipantDependencies {
   readonly authorization: Pick<ResourceAuthorizationApplication, 'resolveResourceAccessForInTx'>
 }
 
+const trustedResourceAuthorizations = new WeakSet<ResourceAuthorizationInTx>()
+const trustedResourceScopeAuthorizations = new WeakSet<ResourceScopeAuthorizationInTx>()
+
 export function createResourceAuthorizationInTx(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
   dependencies: ResourceAuthorizationParticipantDependencies,
 ): ResourceAuthorizationInTx {
-  const accessOf = (authority: ResourceCurrentAuthorityInTx, target: ResourceAclTarget) =>
+  const accessOf = (authority: ResourceRequestContext, target: ResourceAclTarget) =>
     dependencies.authorization.resolveResourceAccessForInTx(
       tx,
       authorityResolver.resolve(authority),
@@ -37,13 +40,13 @@ export function createResourceAuthorizationInTx(
       },
     )
 
-  return {
+  const participant = Object.freeze({
     accessOf,
-    assertView(authority, target) {
+    assertView(authority: ResourceRequestContext, target: ResourceAclTarget) {
       if (canViewAccess(accessOf(authority, target))) return
       throw new NotFoundError('not-found', `${target.ref.kind} not found`)
     },
-    assertEdit(authority, target) {
+    assertEdit(authority: ResourceRequestContext, target: ResourceAclTarget) {
       const access = accessOf(authority, target)
       if (!canViewAccess(access)) {
         throw new NotFoundError('not-found', `${target.ref.kind} not found`)
@@ -54,7 +57,7 @@ export function createResourceAuthorizationInTx(
         `you have read-only access to this ${target.ref.kind}; ask its owner for an edit grant or make your own copy`,
       )
     },
-    assertGovern(authority, target) {
+    assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget) {
       const access = accessOf(authority, target)
       if (!canViewAccess(access)) {
         throw new NotFoundError('not-found', `${target.ref.kind} not found`)
@@ -65,7 +68,9 @@ export function createResourceAuthorizationInTx(
         `deleting, renaming, transferring or re-granting a ${target.ref.kind} is reserved for its owner`,
       )
     },
-  }
+  }) as unknown as ResourceAuthorizationInTx
+  trustedResourceAuthorizations.add(participant)
+  return participant
 }
 
 export function createResourceScopeAuthorizationInTx(
@@ -74,8 +79,8 @@ export function createResourceScopeAuthorizationInTx(
   dependencies: ResourceAuthorizationParticipantDependencies,
 ): ResourceScopeAuthorizationInTx {
   const authorization = createResourceAuthorizationInTx(tx, authorityResolver, dependencies)
-  return {
-    accessOf(authority, scope: ResourceMemoryScopeRef) {
+  const participant = Object.freeze({
+    accessOf(authority: ResourceRequestContext, scope: ResourceMemoryScopeRef) {
       const row = dependencies.accessRows.getInTx(tx, scope.kind, scope.id)
       if (row === null) return 'none'
       return authorization.accessOf(authority, {
@@ -84,5 +89,7 @@ export function createResourceScopeAuthorizationInTx(
         visibility: row.visibility ?? 'public',
       })
     },
-  }
+  }) as unknown as ResourceScopeAuthorizationInTx
+  trustedResourceScopeAuthorizations.add(participant)
+  return participant
 }

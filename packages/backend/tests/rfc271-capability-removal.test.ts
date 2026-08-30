@@ -141,9 +141,18 @@ describe('C4/C5/C6 · 导出与覆盖侧的三条收缩仍然生效', () => {
 
   test('C5：覆盖判据是 owner，不是 exact-id、也不是角色', () => {
     const commit = read(resolve(BACKEND, 'src', 'services', 'resourcePackage', 'commit.ts'))
-    expect(read(resolve(BACKEND, 'src', 'services', 'bundle', 'apply.ts'))).toContain(
-      'bundle-overwrite-not-owned',
+    const adapter = read(
+      resolve(
+        BACKEND,
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'aggregateAdapters',
+        'legacyResourcePackageMutationParticipants.ts',
+      ),
     )
+    expect(adapter).toContain('bundle-overwrite-not-owned')
     // manager / admin 不再能跨 owner 覆盖：判据里没有任何角色分支。
     expect(commit).not.toMatch(/role === 'admin'|hasResourceAclBypass/)
   })

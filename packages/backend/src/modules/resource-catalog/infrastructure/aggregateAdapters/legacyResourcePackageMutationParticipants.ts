@@ -3,7 +3,8 @@
 // BundleApply still owns claim/journal/pre-stage ordering/big-tx/roll-forward/recovery until W6.
 // This adapter owns the seven aggregate-specific prepare/commit arms so the lifecycle engine no
 // longer reaches into seven legacy writers directly. The public participant contract stays free of
-// Actor/SQLite/filesystem values; these imports are deliberately confined to infrastructure.
+// Actor/SQLite/filesystem values. Legacy service functions are supplied through the module-owned
+// dependency port so infrastructure never imports the compatibility service layer in reverse.
 
 import { eq } from 'drizzle-orm'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -27,67 +28,6 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { plugins, skillOperations } from '@/db/schema'
-import {
-  commitTemplateInTx,
-  prepareTemplateFromBundle,
-  type PreparedTemplateWrite,
-} from '@/services/capabilityTemplates'
-import {
-  commitAgentCreateInTx,
-  commitAgentUpdateInTx,
-  getAgentById,
-  prepareAgentCreate,
-  prepareAgentUpdate,
-  type PreparedAgentCreate,
-  type PreparedAgentUpdate,
-} from '@/services/agent'
-import {
-  commitMcpCreateInTx,
-  commitMcpUpdateInTx,
-  getMcpById,
-  prepareMcpCreate,
-  type PreparedMcpCreate,
-  type PreparedMcpUpdate,
-} from '@/services/mcp'
-import { commitPluginCreateInTx, commitPluginPublishInTx } from '@/services/plugin'
-import { installPlugin, plannedGenerationDir, type InstallResult } from '@/services/pluginInstaller'
-import { getAclResourceOwnerInTx, initialPrivateResourceAcl } from '@/services/resourceAcl'
-import {
-  assertRefsUsableInTx,
-  extractWorkflowWorkflowRefs,
-  extractWorkflowWorkgroupRefs,
-} from '@/services/resourceRefs'
-import {
-  commitSkillReadyInTx,
-  compensateManagedSkillStage,
-  stageManagedSkill,
-} from '@/services/skill'
-import { unmarkSkillBootVerified } from '@/services/skillBootVerify'
-import { finishOperation } from '@/services/skillOperations'
-import {
-  abortStagedSkillVersion,
-  commitSkillVersionInTx,
-  publishStagedSkillVersion,
-  stageSkillVersion,
-  type StagedSkillVersion,
-} from '@/services/skillVersion'
-import {
-  broadcastWorkflowCreated,
-  commitWorkflowSaveInTx,
-  insertWorkflowInTx,
-  prepareWorkflowSave,
-  rowToWorkflowDetail,
-  type PreparedWorkflowSave,
-} from '@/services/workflow'
-import {
-  broadcastWorkgroupCreated,
-  commitWorkgroupCreateInTx,
-  commitWorkgroupSaveInTx,
-  prepareWorkgroupCreate,
-  prepareWorkgroupSave,
-  type PreparedWorkgroupCreate,
-  type PreparedWorkgroupSave,
-} from '@/services/workgroups'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Logger } from '@/util/log'
 import { monotonicNow } from '@/util/time'
@@ -142,16 +82,16 @@ export type PreparedResourcePackageMutation =
       op: AgentOperation
       resourceType: 'agent'
       kind: 'agent-create'
-      prepared: PreparedAgentCreate
+      prepared: unknown
     }
   | {
       op: AgentOperation
       resourceType: 'agent'
       kind: 'agent-update'
-      prepared: PreparedAgentUpdate
+      prepared: unknown
     }
-  | { op: McpOperation; resourceType: 'mcp'; kind: 'mcp-create'; prepared: PreparedMcpCreate }
-  | { op: McpOperation; resourceType: 'mcp'; kind: 'mcp-update'; prepared: PreparedMcpUpdate }
+  | { op: McpOperation; resourceType: 'mcp'; kind: 'mcp-create'; prepared: unknown }
+  | { op: McpOperation; resourceType: 'mcp'; kind: 'mcp-update'; prepared: unknown }
   | {
       op: PluginOperation
       resourceType: 'plugin'
@@ -178,30 +118,30 @@ export type PreparedResourcePackageMutation =
       op: WorkflowOperation
       resourceType: 'workflow'
       kind: 'workflow-update'
-      prepared: PreparedWorkflowSave
+      prepared: unknown
     }
   | {
       op: WorkgroupOperation
       resourceType: 'workgroup'
       kind: 'workgroup-create'
-      prepared: PreparedWorkgroupCreate
+      prepared: unknown
     }
   | {
       op: WorkgroupOperation
       resourceType: 'workgroup'
       kind: 'workgroup-update'
-      prepared: PreparedWorkgroupSave
+      prepared: unknown
     }
   | {
       op: CapabilityTemplateOperation
       resourceType: 'capability_template'
       kind: 'capability-template'
-      prepared: PreparedTemplateWrite
+      prepared: unknown
     }
 
 export type ResourcePackageMutationArtifact =
   | { kind: 'skill-stage'; skillId: string; opId: string; skillDir: string }
-  | { kind: 'skill-version-stage'; staged: StagedSkillVersion }
+  | { kind: 'skill-version-stage'; staged: LegacyStagedSkillVersion }
   | { kind: 'plugin-install'; pluginId: string; generationId: string; generationDir: string }
 
 export interface ResourcePackageMutationPreparationContext {
@@ -295,22 +235,207 @@ export interface LegacyResourcePackageMutationAdapterOptions {
   readonly afterSkillStage?: () => void
 }
 
+export interface LegacyStagedSkillVersion {
+  readonly skillId: string
+  readonly skillName: string
+  readonly opId: string | null
+  readonly publishId: string
+  readonly newVersion: number
+  readonly newHash: string
+  readonly filesDir: string
+  readonly versionDir: string
+  readonly stagingDir: string
+  readonly noop: unknown
+}
+
+interface LegacyPluginInstallResult {
+  readonly generationDir: string | null
+  readonly sourceKind: 'npm' | 'git' | 'file'
+  readonly cachedPath: string
+  readonly resolvedVersion: string | null
+}
+
+interface LegacyInitialResourceAcl {
+  readonly ownerUserId: string | null
+  readonly visibility: 'private'
+  readonly aclRevision: 0
+}
+
+/**
+ * Legacy implementation port supplied by the service-side compatibility
+ * composer. Keeping this interface module-owned preserves the seven exact
+ * participant arms while preventing infrastructure from importing legacy
+ * services in reverse.
+ */
+export interface LegacyResourcePackageMutationDependencies {
+  readonly prepareTemplateFromBundle: (
+    db: DbClient,
+    payload: unknown,
+    actor: Actor,
+    existingId: string | null,
+  ) => Promise<unknown>
+  readonly commitTemplateInTx: (tx: DbTxSync, prepared: unknown) => void
+  readonly prepareAgentCreate: (
+    db: DbClient,
+    input: ReturnType<typeof CreateAgentSchema.parse>,
+    options: {
+      readonly ownerUserId: string
+      readonly actor: Actor
+      readonly id: string
+      readonly pendingBundleIds: ReadonlySet<string>
+    },
+  ) => Promise<unknown>
+  readonly getAgentById: (db: DbClient, id: string) => Promise<unknown | null>
+  readonly prepareAgentUpdate: (
+    db: DbClient,
+    id: string,
+    patch: ReturnType<typeof UpdateAgentSchema.parse>,
+    actor: Actor,
+    expect: { readonly expectedUpdatedAt: number; readonly expectedAclRevision: number },
+    options: { readonly pendingBundleIds: ReadonlySet<string> },
+  ) => Promise<unknown>
+  readonly commitAgentCreateInTx: (tx: DbTxSync, prepared: unknown) => void
+  readonly commitAgentUpdateInTx: (tx: DbTxSync, prepared: unknown) => void
+  readonly prepareMcpCreate: (
+    db: DbClient,
+    input: CreateMcp,
+    options: { readonly ownerUserId: string; readonly actor: Actor },
+    resourceId: string,
+  ) => Promise<unknown>
+  readonly getMcpById: (
+    db: DbClient,
+    id: string,
+  ) => Promise<{ readonly type: 'local' | 'remote'; readonly updatedAt: number } | null>
+  readonly commitMcpCreateInTx: (tx: DbTxSync, prepared: unknown) => void
+  readonly commitMcpUpdateInTx: (tx: DbTxSync, prepared: unknown) => void
+  readonly commitPluginCreateInTx: (
+    tx: DbTxSync,
+    input: {
+      readonly id: string
+      readonly parsed: unknown
+      readonly initialAcl: LegacyInitialResourceAcl
+      readonly install: LegacyPluginInstallResult
+      readonly now: number
+    },
+  ) => void
+  readonly commitPluginPublishInTx: (
+    tx: DbTxSync,
+    captured: unknown,
+    input: Readonly<Record<string, unknown>>,
+  ) => void
+  readonly plannedGenerationDir: (
+    pluginId: string,
+    spec: string,
+    generationId: string,
+    pluginsDir?: string,
+  ) => string | null
+  readonly installPlugin: (
+    pluginId: string,
+    spec: string,
+    options: {
+      readonly pluginsDir?: string
+      readonly npmBin?: string
+      readonly timeoutMs?: number
+      readonly generationId: string
+    },
+  ) => Promise<LegacyPluginInstallResult>
+  readonly getAclResourceOwnerInTx: (
+    tx: DbTxSync,
+    type: BundleResourceType,
+    resourceId: string,
+  ) => string | null | undefined
+  readonly initialPrivateResourceAcl: (ownerUserId: string) => LegacyInitialResourceAcl
+  readonly assertRefsUsableInTx: (
+    tx: DbTxSync,
+    actor: Actor,
+    requests: readonly Readonly<Record<string, unknown>>[],
+  ) => void
+  readonly extractWorkflowWorkflowRefs: (definition: WorkflowDefinition) => string[]
+  readonly extractWorkflowWorkgroupRefs: (definition: WorkflowDefinition) => string[]
+  readonly stageManagedSkill: (
+    db: DbClient,
+    options: { readonly appHome: string },
+    input: Readonly<Record<string, unknown>>,
+    produce: (filesDir: string) => void,
+  ) => Promise<{ readonly skillId: string; readonly opId: string; readonly skillDir: string }>
+  readonly compensateManagedSkillStage: (
+    db: DbClient,
+    stage: { readonly skillId: string; readonly opId: string; readonly skillDir: string },
+  ) => void
+  readonly commitSkillReadyInTx: (
+    tx: DbTxSync,
+    input: { readonly skillId: string; readonly opId: string },
+  ) => void
+  readonly stageSkillVersion: (
+    db: DbClient,
+    options: { readonly appHome: string },
+    skillId: string,
+    produce: (stagingDir: string) => void,
+    commit: Readonly<Record<string, unknown>>,
+  ) => LegacyStagedSkillVersion
+  readonly abortStagedSkillVersion: (db: DbClient, staged: LegacyStagedSkillVersion) => void
+  readonly commitSkillVersionInTx: (
+    tx: DbTxSync,
+    staged: LegacyStagedSkillVersion,
+    commit: Readonly<Record<string, unknown>>,
+  ) => void
+  readonly publishStagedSkillVersion: (
+    db: DbClient,
+    options: { readonly appHome: string },
+    staged: LegacyStagedSkillVersion,
+  ) => void
+  readonly unmarkSkillBootVerified: (skillId: string) => void
+  readonly finishOperation: (tx: DbTxSync, opId: string) => void
+  readonly prepareWorkflowSave: (
+    db: DbClient,
+    id: string,
+    input: Readonly<Record<string, unknown>>,
+    principal: { readonly kind: 'actor'; readonly actor: Actor },
+  ) => Promise<unknown>
+  readonly insertWorkflowInTx: (tx: DbTxSync, input: Readonly<Record<string, unknown>>) => unknown
+  readonly commitWorkflowSaveInTx: (
+    tx: DbTxSync,
+    prepared: unknown,
+  ) => { readonly committed: boolean; readonly receipt: { readonly outcome: string } }
+  readonly rowToWorkflowDetail: (row: unknown) => unknown
+  readonly broadcastWorkflowCreated: (workflow: unknown) => void
+  readonly prepareWorkgroupCreate: (
+    db: DbClient,
+    input: CreateWorkgroup,
+    options: Readonly<Record<string, unknown>>,
+    resourceId: string,
+  ) => Promise<unknown>
+  readonly prepareWorkgroupSave: (
+    db: DbClient,
+    id: string,
+    input: Readonly<Record<string, unknown>>,
+    principal: { readonly kind: 'actor'; readonly actor: Actor },
+  ) => Promise<unknown>
+  readonly commitWorkgroupCreateInTx: (tx: DbTxSync, prepared: unknown) => unknown
+  readonly commitWorkgroupSaveInTx: (
+    tx: DbTxSync,
+    prepared: unknown,
+  ) => { readonly committed: boolean; readonly receipt: { readonly outcome: string } }
+  readonly broadcastWorkgroupCreated: (workgroup: unknown) => void
+}
+
 export function createLegacyResourcePackageMutationAdapter(
   options: LegacyResourcePackageMutationAdapterOptions,
+  dependencies: LegacyResourcePackageMutationDependencies,
 ): LegacyResourcePackageMutationAdapter {
   const { db, appHome, actor } = options
-  const pluginInstalls = new Map<string, InstallResult>()
+  const pluginInstalls = new Map<string, LegacyPluginInstallResult>()
   const skillStages = new Map<string, { skillId: string; opId: string; skillDir: string }>()
-  const skillVersionStages = new Map<string, StagedSkillVersion>()
-  const createdWorkflowRows: Array<ReturnType<typeof insertWorkflowInTx>> = []
-  const createdWorkgroups: Array<ReturnType<typeof commitWorkgroupCreateInTx>> = []
+  const skillVersionStages = new Map<string, LegacyStagedSkillVersion>()
+  const createdWorkflowRows: unknown[] = []
+  const createdWorkgroups: unknown[] = []
 
   const participants: LegacyResourcePackageMutationParticipants = {
     agents: {
       async prepare(operation, context) {
         if (operation.kind === 'agent-create') {
           const parsed = CreateAgentSchema.parse(operation.payload)
-          const prepared = await prepareAgentCreate(db, parsed, {
+          const prepared = await dependencies.prepareAgentCreate(db, parsed, {
             ownerUserId: actor.user.id,
             actor,
             id: operation.resourceId,
@@ -318,7 +443,7 @@ export function createLegacyResourcePackageMutationAdapter(
           })
           return { op: operation, resourceType: 'agent', kind: 'agent-create', prepared }
         }
-        const existing = await getAgentById(db, operation.resourceId)
+        const existing = await dependencies.getAgentById(db, operation.resourceId)
         if (existing === null) throw new NotFoundError('agent-not-found', 'agent not found')
         const { name: _name, ...patchBody } = operation.payload
         const patch = UpdateAgentSchema.parse(patchBody)
@@ -326,9 +451,14 @@ export function createLegacyResourcePackageMutationAdapter(
           expectedUpdatedAt: number
           expectedAclRevision: number
         }
-        const prepared = await prepareAgentUpdate(db, operation.resourceId, patch, actor, expect, {
-          pendingBundleIds: context.pendingIds,
-        })
+        const prepared = await dependencies.prepareAgentUpdate(
+          db,
+          operation.resourceId,
+          patch,
+          actor,
+          expect,
+          { pendingBundleIds: context.pendingIds },
+        )
         return { op: operation, resourceType: 'agent', kind: 'agent-update', prepared }
       },
     },
@@ -341,18 +471,23 @@ export function createLegacyResourcePackageMutationAdapter(
       async prepare(operation) {
         if (operation.kind === 'mcp-create') {
           const parsed: CreateMcp = CreateMcpSchema.parse(operation.payload)
-          const prepared = await prepareMcpCreate(db, parsed, {
-            ownerUserId: actor.user.id,
-            actor,
-          })
+          const prepared = await dependencies.prepareMcpCreate(
+            db,
+            parsed,
+            {
+              ownerUserId: actor.user.id,
+              actor,
+            },
+            operation.resourceId,
+          )
           return {
             op: operation,
             resourceType: 'mcp',
             kind: 'mcp-create',
-            prepared: { ...prepared, id: operation.resourceId },
+            prepared,
           }
         }
-        const existing = await getMcpById(db, operation.resourceId)
+        const existing = await dependencies.getMcpById(db, operation.resourceId)
         if (existing === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
         const payload = operation.payload as unknown as CreateMcp
         if (payload.type !== existing.type) {
@@ -418,7 +553,7 @@ export function createLegacyResourcePackageMutationAdapter(
           description: string
           definition: unknown
         }
-        const prepared = await prepareWorkflowSave(
+        const prepared = await dependencies.prepareWorkflowSave(
           db,
           operation.resourceId,
           {
@@ -441,20 +576,25 @@ export function createLegacyResourcePackageMutationAdapter(
       async prepare(operation, context) {
         if (operation.kind === 'workgroup-create') {
           const parsed: CreateWorkgroup = CreateWorkgroupSchema.parse(operation.payload)
-          const prepared = await prepareWorkgroupCreate(db, parsed, {
-            ownerUserId: actor.user.id,
-            actor,
-            pendingAgentNames: context.pendingAgentNames,
-          })
+          const prepared = await dependencies.prepareWorkgroupCreate(
+            db,
+            parsed,
+            {
+              ownerUserId: actor.user.id,
+              actor,
+              pendingAgentNames: context.pendingAgentNames,
+            },
+            operation.resourceId,
+          )
           return {
             op: operation,
             resourceType: 'workgroup',
             kind: 'workgroup-create',
-            prepared: { ...prepared, groupId: operation.resourceId },
+            prepared,
           }
         }
         const expect = operation.expect as { expectedVersion: number }
-        const prepared = await prepareWorkgroupSave(
+        const prepared = await dependencies.prepareWorkgroupSave(
           db,
           operation.resourceId,
           {
@@ -469,7 +609,7 @@ export function createLegacyResourcePackageMutationAdapter(
     },
     capabilityTemplates: {
       async prepare(operation) {
-        const prepared = await prepareTemplateFromBundle(
+        const prepared = await dependencies.prepareTemplateFromBundle(
           db,
           { ...operation.payload, id: operation.resourceId } as never,
           actor,
@@ -508,7 +648,7 @@ export function createLegacyResourcePackageMutationAdapter(
     async prestage(prepared, context) {
       if (prepared.kind === 'plugin-create' || prepared.kind === 'plugin-update') {
         const generationId = ulid()
-        const generationDir = plannedGenerationDir(
+        const generationDir = dependencies.plannedGenerationDir(
           prepared.op.resourceId,
           prepared.spec,
           generationId,
@@ -522,7 +662,7 @@ export function createLegacyResourcePackageMutationAdapter(
             generationDir,
           })
         }
-        const install = await installPlugin(prepared.op.resourceId, prepared.spec, {
+        const install = await dependencies.installPlugin(prepared.op.resourceId, prepared.spec, {
           ...options.pluginInstallOpts,
           generationId,
         })
@@ -531,7 +671,7 @@ export function createLegacyResourcePackageMutationAdapter(
         return
       }
       if (prepared.kind === 'skill-create') {
-        const stage = await stageManagedSkill(
+        const stage = await dependencies.stageManagedSkill(
           db,
           { appHome },
           {
@@ -549,7 +689,7 @@ export function createLegacyResourcePackageMutationAdapter(
         return
       }
       if (prepared.kind === 'skill-update') {
-        const staged = stageSkillVersion(
+        const staged = dependencies.stageSkillVersion(
           db,
           { appHome },
           prepared.op.resourceId,
@@ -570,7 +710,7 @@ export function createLegacyResourcePackageMutationAdapter(
     assertUpdateTargetsOwnedInTx(tx, operations) {
       for (const operation of operations) {
         if (operation.action !== 'update') continue
-        const ownerUserId = getAclResourceOwnerInTx(
+        const ownerUserId = dependencies.getAclResourceOwnerInTx(
           tx,
           operation.resourceType,
           operation.resourceId,
@@ -592,24 +732,24 @@ export function createLegacyResourcePackageMutationAdapter(
     commitInTx(tx, prepared, context) {
       switch (prepared.kind) {
         case 'agent-create':
-          commitAgentCreateInTx(tx, prepared.prepared)
+          dependencies.commitAgentCreateInTx(tx, prepared.prepared)
           return
         case 'agent-update':
-          commitAgentUpdateInTx(tx, prepared.prepared)
+          dependencies.commitAgentUpdateInTx(tx, prepared.prepared)
           return
         case 'mcp-create':
-          commitMcpCreateInTx(tx, prepared.prepared)
+          dependencies.commitMcpCreateInTx(tx, prepared.prepared)
           return
         case 'mcp-update':
-          commitMcpUpdateInTx(tx, prepared.prepared)
+          dependencies.commitMcpUpdateInTx(tx, prepared.prepared)
           return
         case 'plugin-create': {
           const install = pluginInstalls.get(prepared.op.opId)
           if (install === undefined) throw new Error('plugin install result missing')
-          commitPluginCreateInTx(tx, {
+          dependencies.commitPluginCreateInTx(tx, {
             id: prepared.op.resourceId,
             parsed: prepared.parsed as never,
-            initialAcl: initialPrivateResourceAcl(actor.user.id),
+            initialAcl: dependencies.initialPrivateResourceAcl(actor.user.id),
             install,
             now: Date.now(),
           })
@@ -625,7 +765,7 @@ export function createLegacyResourcePackageMutationAdapter(
             description?: string
             enabled?: boolean
           }
-          commitPluginPublishInTx(tx, captured, {
+          dependencies.commitPluginPublishInTx(tx, captured, {
             spec: payload.spec,
             optionsJson: JSON.stringify(payload.options ?? {}),
             description: payload.description ?? captured.description,
@@ -641,13 +781,13 @@ export function createLegacyResourcePackageMutationAdapter(
         case 'skill-create': {
           const stage = skillStages.get(prepared.op.opId)
           if (stage === undefined) throw new Error('skill stage missing')
-          commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
+          dependencies.commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
           return
         }
         case 'skill-update': {
           const staged = skillVersionStages.get(prepared.op.opId)
           if (staged === undefined) throw new Error('skill version stage missing')
-          commitSkillVersionInTx(tx, staged, {
+          dependencies.commitSkillVersionInTx(tx, staged, {
             source: 'import',
             authorUserId: actor.user.id,
             setDescription: skillPayload(prepared.op).description,
@@ -655,7 +795,7 @@ export function createLegacyResourcePackageMutationAdapter(
           return
         }
         case 'workflow-create': {
-          assertRefsUsableInTx(tx, actor, [
+          dependencies.assertRefsUsableInTx(tx, actor, [
             {
               type: 'agent',
               domain: 'id',
@@ -665,22 +805,22 @@ export function createLegacyResourcePackageMutationAdapter(
             },
             {
               type: 'workflow',
-              names: extractWorkflowWorkflowRefs(prepared.definition).filter(
-                (name) => !context.bundleCreatedNames.workflow.has(name),
-              ),
+              names: dependencies
+                .extractWorkflowWorkflowRefs(prepared.definition)
+                .filter((name) => !context.bundleCreatedNames.workflow.has(name)),
               domain: 'name',
             },
             {
               type: 'workgroup',
-              names: extractWorkflowWorkgroupRefs(prepared.definition).filter(
-                (name) => !context.bundleCreatedNames.workgroup.has(name),
-              ),
+              names: dependencies
+                .extractWorkflowWorkgroupRefs(prepared.definition)
+                .filter((name) => !context.bundleCreatedNames.workgroup.has(name)),
               domain: 'name',
             },
           ])
           const payload = prepared.op.payload as { name: string; description: string }
           createdWorkflowRows.push(
-            insertWorkflowInTx(tx, {
+            dependencies.insertWorkflowInTx(tx, {
               scriptPrincipal: { kind: 'actor', actor },
               id: prepared.op.resourceId,
               name: payload.name,
@@ -694,24 +834,24 @@ export function createLegacyResourcePackageMutationAdapter(
           return
         }
         case 'workflow-update': {
-          const result = commitWorkflowSaveInTx(tx, prepared.prepared)
+          const result = dependencies.commitWorkflowSaveInTx(tx, prepared.prepared)
           if (!result.committed && result.receipt.outcome !== 'already-current') {
             throw new ConflictError('bundle-baseline-stale', 'workflow save did not commit')
           }
           return
         }
         case 'workgroup-create':
-          createdWorkgroups.push(commitWorkgroupCreateInTx(tx, prepared.prepared))
+          createdWorkgroups.push(dependencies.commitWorkgroupCreateInTx(tx, prepared.prepared))
           return
         case 'workgroup-update': {
-          const result = commitWorkgroupSaveInTx(tx, prepared.prepared)
+          const result = dependencies.commitWorkgroupSaveInTx(tx, prepared.prepared)
           if (!result.committed && result.receipt.outcome !== 'already-current') {
             throw new ConflictError('bundle-baseline-stale', 'workgroup save did not commit')
           }
           return
         }
         case 'capability-template':
-          commitTemplateInTx(tx, prepared.prepared)
+          dependencies.commitTemplateInTx(tx, prepared.prepared)
       }
     },
     rollForwardCommitted(log) {
@@ -723,19 +863,20 @@ export function createLegacyResourcePackageMutationAdapter(
           skillVersionStages: [...skillVersionStages.values()],
         },
         log,
+        dependencies,
       )
     },
     broadcastCommitted() {
       for (const row of createdWorkflowRows) {
         try {
-          broadcastWorkflowCreated(rowToWorkflowDetail(row))
+          dependencies.broadcastWorkflowCreated(dependencies.rowToWorkflowDetail(row))
         } catch {
           // Existing behavior: broadcasts are fire-and-forget.
         }
       }
       for (const workgroup of createdWorkgroups) {
         try {
-          broadcastWorkgroupCreated(workgroup)
+          dependencies.broadcastWorkgroupCreated(workgroup)
         } catch {
           // Existing behavior: broadcasts are fire-and-forget.
         }
@@ -749,6 +890,7 @@ export function rollForwardLegacyResourcePackageArtifacts(
   appHome: string,
   artifacts: readonly ResourcePackageMutationArtifact[],
   log: Logger,
+  dependencies: LegacyResourcePackageMutationDependencies,
 ): void {
   rollForwardSkillTails(
     db,
@@ -762,19 +904,21 @@ export function rollForwardLegacyResourcePackageArtifacts(
       ),
     },
     log,
+    dependencies,
   )
 }
 
 export function compensateLegacyResourcePackageArtifact(
   db: DbClient,
   artifact: ResourcePackageMutationArtifact,
+  dependencies: LegacyResourcePackageMutationDependencies,
 ): void {
   switch (artifact.kind) {
     case 'skill-stage':
-      compensateManagedSkillStage(db, artifact)
+      dependencies.compensateManagedSkillStage(db, artifact)
       return
     case 'skill-version-stage':
-      abortStagedSkillVersion(db, artifact.staged)
+      dependencies.abortStagedSkillVersion(db, artifact.staged)
       return
     case 'plugin-install':
       rmSync(artifact.generationDir, { recursive: true, force: true })
@@ -841,11 +985,12 @@ function rollForwardSkillTails(
   appHome: string,
   state: {
     readonly skillStages: readonly { skillId: string; opId: string }[]
-    readonly skillVersionStages: readonly StagedSkillVersion[]
+    readonly skillVersionStages: readonly LegacyStagedSkillVersion[]
   },
   log: Logger,
+  dependencies: LegacyResourcePackageMutationDependencies,
 ): void {
-  const pendingSkillVersions: StagedSkillVersion[] = []
+  const pendingSkillVersions: LegacyStagedSkillVersion[] = []
   for (const staged of state.skillVersionStages) {
     if (staged.opId === null) {
       pendingSkillVersions.push(staged)
@@ -869,10 +1014,12 @@ function rollForwardSkillTails(
     }
   }
 
-  for (const staged of pendingSkillVersions) unmarkSkillBootVerified(staged.skillId)
+  for (const staged of pendingSkillVersions) {
+    dependencies.unmarkSkillBootVerified(staged.skillId)
+  }
   for (const staged of pendingSkillVersions) {
     try {
-      publishStagedSkillVersion(db, { appHome }, staged)
+      dependencies.publishStagedSkillVersion(db, { appHome }, staged)
     } catch (error) {
       log.warn('bundle-skill-publish-replayed-or-failed', {
         skillId: staged.skillId,
@@ -882,7 +1029,7 @@ function rollForwardSkillTails(
   }
   for (const stage of state.skillStages) {
     try {
-      dbTxSync(db, (tx) => finishOperation(tx, stage.opId))
+      dbTxSync(db, (tx) => dependencies.finishOperation(tx, stage.opId))
     } catch (error) {
       log.warn('bundle-skill-finish-replayed-or-failed', {
         skillId: stage.skillId,

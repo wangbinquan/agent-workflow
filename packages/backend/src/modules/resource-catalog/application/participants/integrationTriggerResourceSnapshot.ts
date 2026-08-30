@@ -1,6 +1,6 @@
 import type {
   IntegrationTriggerResourceSnapshotInTx,
-  ResourceCurrentAuthorityInTx,
+  ResourceRequestContext,
 } from '../../public/participants'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,
@@ -16,7 +16,7 @@ type SnapshotOf<K extends FrozenIntegrationTriggerResourceSnapshot['kind']> = Ex
   { readonly kind: K }
 >
 type SnapshotPort<K extends IntegrationTriggerResourceRequest['kind']> = (
-  authority: ResourceCurrentAuthorityInTx,
+  authority: ResourceRequestContext,
   request: RequestOf<K>,
 ) => SnapshotOf<K>
 
@@ -28,11 +28,16 @@ export interface IntegrationTriggerResourceSnapshotPorts {
   readonly webhookDigitalEmployee: SnapshotPort<'webhook-digital-employee'>
 }
 
+const trustedIntegrationTriggerSnapshots = new WeakSet<IntegrationTriggerResourceSnapshotInTx>()
+
 export function createIntegrationTriggerResourceSnapshotInTx(
   ports: IntegrationTriggerResourceSnapshotPorts,
 ): IntegrationTriggerResourceSnapshotInTx {
-  return {
-    loadAuthorized(authority, requests) {
+  const participant = Object.freeze({
+    loadAuthorized(
+      authority: ResourceRequestContext,
+      requests: readonly IntegrationTriggerResourceRequest[],
+    ) {
       return requests.map((request): FrozenIntegrationTriggerResourceSnapshot => {
         switch (request.kind) {
           case 'scheduled-workflow':
@@ -48,5 +53,7 @@ export function createIntegrationTriggerResourceSnapshotInTx(
         }
       })
     },
-  }
+  }) as unknown as IntegrationTriggerResourceSnapshotInTx
+  trustedIntegrationTriggerSnapshots.add(participant)
+  return participant
 }

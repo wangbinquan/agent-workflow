@@ -1,6 +1,6 @@
 import type {
   IntentApplyResourceParticipantInTx,
-  ResourceCurrentAuthorityInTx,
+  ResourceRequestContext,
 } from '../../public/participants'
 import type {
   IntentResourceChangesetReceipt,
@@ -17,7 +17,7 @@ type ReceiptOf<K extends CatalogSelectorKind> = Extract<
   { readonly kind: K }
 >
 type CommitPort<K extends CatalogSelectorKind> = (
-  authority: ResourceCurrentAuthorityInTx,
+  authority: ResourceRequestContext,
   plan: PlanOf<K>,
 ) => ReceiptOf<K>
 
@@ -30,11 +30,16 @@ export interface IntentApplyResourceCommitPorts {
   readonly workgroup: CommitPort<'workgroup'>
 }
 
+const trustedIntentApplyParticipants = new WeakSet<IntentApplyResourceParticipantInTx>()
+
 export function createIntentApplyResourceParticipantInTx(
   ports: IntentApplyResourceCommitPorts,
 ): IntentApplyResourceParticipantInTx {
-  return {
-    authorizeAndCommit(authority, plan) {
+  const participant = Object.freeze({
+    authorizeAndCommit(
+      authority: ResourceRequestContext,
+      plan: VersionedIntentResourceChangesetPlan,
+    ) {
       switch (plan.kind) {
         case 'agent':
           return ports.agent(authority, plan)
@@ -50,5 +55,7 @@ export function createIntentApplyResourceParticipantInTx(
           return ports.workgroup(authority, plan)
       }
     },
-  }
+  }) as unknown as IntentApplyResourceParticipantInTx
+  trustedIntentApplyParticipants.add(participant)
+  return participant
 }

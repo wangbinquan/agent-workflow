@@ -53,6 +53,7 @@ import { listSkillFiles, readSkillContent, readSkillFile } from '@/services/skil
 import { getWorkflow } from '@/services/workflow'
 import { getWorkgroupById } from '@/services/workgroups'
 import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/public/operations'
+import { resourceCatalogProjections } from './resourceCatalogProjections'
 import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'
 import type { SystemAgentSeedFile } from '@/services/systemAgentRun'
 import {
@@ -196,7 +197,11 @@ async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCa
     workflow: summaryMap(),
     workgroup: summaryMap(),
   }
-  for (const summary of await listAllVisibleResourceSummariesForActor(db, actor)) {
+  for (const summary of await listAllVisibleResourceSummariesForActor(
+    db,
+    actor,
+    resourceCatalogProjections,
+  )) {
     maps[summary.kind].set(summary.ref.id, {
       id: summary.ref.id,
       name: summary.name,

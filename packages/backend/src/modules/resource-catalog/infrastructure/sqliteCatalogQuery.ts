@@ -11,11 +11,7 @@ import type {
   ResourceSummaryQuery,
 } from '../public/types'
 import { CATALOG_SELECTOR_KINDS, type CatalogSelectorKind } from '../domain/resourceKinds'
-import { encodeSkillToken } from '@/services/skillToken'
-import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
-import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
-import { rowToPlugin } from '@/services/plugin'
-import { rowToMcp } from '@/services/mcp'
+import type { Mcp, Plugin } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 import { and, asc, eq, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
 import { visibleRowsCondition } from './sqliteResourceGrantRepository'
@@ -123,8 +119,21 @@ interface ActorCatalogQuery {
   readonly actor: Actor
 }
 
+export interface SqliteResourceCatalogProjectionDependencies {
+  readonly encodeSkillToken: (input: {
+    readonly skillId: string
+    readonly contentVersion: number
+    readonly metaRevision: number
+  }) => string
+  readonly mcpFromRow: (row: typeof mcps.$inferSelect) => Mcp
+  readonly mcpOperationConfigHashOf: (mcp: Mcp) => string
+  readonly pluginFromRow: (row: typeof plugins.$inferSelect) => Plugin
+  readonly pluginOperationConfigHashOf: (plugin: Plugin) => string
+}
+
 async function listKind(
   context: ActorCatalogQuery,
+  projections: SqliteResourceCatalogProjectionDependencies,
   kind: CatalogSelectorKind,
   query: ResourceSummaryQuery,
   cursor: DecodedCatalogCursor | null,
@@ -181,7 +190,7 @@ async function listKind(
         description: row.description,
         revision: {
           kind,
-          token: encodeSkillToken({
+          token: projections.encodeSkillToken({
             skillId: row.id,
             contentVersion: row.contentVersion,
             metaRevision: row.metaRevision,
@@ -200,13 +209,13 @@ async function listKind(
         .orderBy(asc(mcps.name), asc(mcps.id))
         .limit(limit)
       return rows.map((row) => {
-        const resource = rowToMcp(row)
+        const resource = projections.mcpFromRow(row)
         return {
           ref: { kind, id: row.id },
           kind,
           name: row.name,
           description: row.description,
-          revision: { kind, configHash: mcpOperationConfigHashOf(resource) },
+          revision: { kind, configHash: projections.mcpOperationConfigHashOf(resource) },
           visibilityHint: row.visibility,
         }
       })
@@ -225,7 +234,10 @@ async function listKind(
         kind,
         name: row.name,
         description: row.description,
-        revision: { kind, configHash: pluginOperationConfigHashOf(rowToPlugin(row)) },
+        revision: {
+          kind,
+          configHash: projections.pluginOperationConfigHashOf(projections.pluginFromRow(row)),
+        },
         visibilityHint: row.visibility,
       }))
     }
@@ -286,6 +298,7 @@ export async function listVisibleResourceSummariesForActor(
   db: DbClient,
   actor: Actor,
   query: ResourceSummaryQuery,
+  projections: SqliteResourceCatalogProjectionDependencies,
 ): Promise<ResourceSummaryPage> {
   if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > CATALOG_PAGE_MAX) {
     throw new ValidationError(
@@ -297,7 +310,9 @@ export async function listVisibleResourceSummariesForActor(
   const kinds = CATALOG_SELECTOR_KINDS.filter((kind) => requested.has(kind))
   const cursor = decodeCursor(query.cursor)
   const candidates = (
-    await Promise.all(kinds.map((kind) => listKind({ db, actor }, kind, query, cursor)))
+    await Promise.all(
+      kinds.map((kind) => listKind({ db, actor }, projections, kind, query, cursor)),
+    )
   )
     .flat()
     .sort(compareSummaries)
@@ -311,14 +326,20 @@ export async function listVisibleResourceSummariesForActor(
 export async function listAllVisibleResourceSummariesForActor(
   db: DbClient,
   actor: Actor,
+  projections: SqliteResourceCatalogProjectionDependencies,
 ): Promise<ResourceSummary[]> {
   const out: ResourceSummary[] = []
   let cursor: ResourceCatalogCursor | undefined
   do {
-    const page = await listVisibleResourceSummariesForActor(db, actor, {
-      limit: CATALOG_PAGE_MAX,
-      ...(cursor === undefined ? {} : { cursor }),
-    })
+    const page = await listVisibleResourceSummariesForActor(
+      db,
+      actor,
+      {
+        limit: CATALOG_PAGE_MAX,
+        ...(cursor === undefined ? {} : { cursor }),
+      },
+      projections,
+    )
     out.push(...page.items)
     cursor = page.nextCursor ?? undefined
   } while (cursor !== undefined)
@@ -329,14 +350,20 @@ export async function getVisibleResourceSummaryForActor(
   db: DbClient,
   actor: Actor,
   ref: CatalogResourceRef,
+  projections: SqliteResourceCatalogProjectionDependencies,
 ): Promise<ResourceSummary | null> {
   let cursor: ResourceCatalogCursor | undefined
   do {
-    const page = await listVisibleResourceSummariesForActor(db, actor, {
-      kinds: [ref.kind],
-      limit: CATALOG_PAGE_MAX,
-      ...(cursor === undefined ? {} : { cursor }),
-    })
+    const page = await listVisibleResourceSummariesForActor(
+      db,
+      actor,
+      {
+        kinds: [ref.kind],
+        limit: CATALOG_PAGE_MAX,
+        ...(cursor === undefined ? {} : { cursor }),
+      },
+      projections,
+    )
     const found = page.items.find((item) => item.ref.id === ref.id)
     if (found !== undefined) return found
     cursor = page.nextCursor ?? undefined
@@ -344,7 +371,7 @@ export async function getVisibleResourceSummaryForActor(
   return null
 }
 
-export interface SqliteResourceCatalogQueryDependencies {
+export interface SqliteResourceCatalogQueryDependencies extends SqliteResourceCatalogProjectionDependencies {
   resolve(context: QueryContext): ActorCatalogQuery
 }
 
@@ -354,11 +381,11 @@ export function createSqliteResourceCatalogQuery(
   return {
     listVisible(context, query) {
       const resolved = dependencies.resolve(context)
-      return listVisibleResourceSummariesForActor(resolved.db, resolved.actor, query)
+      return listVisibleResourceSummariesForActor(resolved.db, resolved.actor, query, dependencies)
     },
     getVisibleSummary(context, ref) {
       const resolved = dependencies.resolve(context)
-      return getVisibleResourceSummaryForActor(resolved.db, resolved.actor, ref)
+      return getVisibleResourceSummaryForActor(resolved.db, resolved.actor, ref, dependencies)
     },
   }
 }

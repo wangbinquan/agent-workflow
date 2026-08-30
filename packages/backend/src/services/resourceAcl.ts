@@ -15,10 +15,12 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import {
+  getResourceAcl as getResourceAclComposition,
   updateResourceAcl as updateResourceAclComposition,
   type AclRow,
   type ResourceAclIdentityPersistence,
 } from '@/modules/resource-catalog/public/operations'
+import { resolveLegacyResourceAclIdentityPersistence } from './resourceAclIdentityPersistence'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/public/operations'
@@ -45,7 +47,6 @@ export {
   resolveResourceAccessFor,
   resolveResourceAccessForInTx,
 } from '@/modules/resource-catalog/public/operations'
-export { getResourceAcl } from '@/modules/resource-catalog/public/operations'
 export {
   canEditAccess,
   canEditRow,
@@ -99,11 +100,27 @@ export {
 
 export type { ResourceAclIdentityPersistence } from '@/modules/resource-catalog/public/operations'
 
+export function getResourceAcl(
+  db: DbClient,
+  actor: Actor,
+  type: AclResourceType,
+  row: AclRow,
+  identityPersistence?: ResourceAclIdentityPersistence,
+): Promise<ResourceAcl> {
+  return getResourceAclComposition(
+    db,
+    actor,
+    type,
+    row,
+    identityPersistence ?? resolveLegacyResourceAclIdentityPersistence(db, type),
+  )
+}
+
 /**
  * Legacy facade wrapper. Resource persistence is bound by module composition;
  * the old service path supplies only the existing post-commit WebSocket hook.
  */
-export function updateResourceAcl(
+export async function updateResourceAcl(
   db: DbClient,
   actor: Actor,
   type: AclResourceType,
@@ -126,6 +143,8 @@ export function updateResourceAcl(
 ): Promise<ResourceAcl> {
   return updateResourceAclComposition(db, actor, type, row, body, {
     ...options,
+    identityPersistence:
+      options.identityPersistence ?? resolveLegacyResourceAclIdentityPersistence(db, type),
     afterCommit: (client) => triggerRevalidation(client, 'resource-acl-changed'),
   })
 }

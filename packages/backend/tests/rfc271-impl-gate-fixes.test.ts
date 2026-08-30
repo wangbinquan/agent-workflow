@@ -116,8 +116,13 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
     // 一次「DB 已提交、publish 前 SIGKILL」的 run 会留下已入库但**内容未发布**的技能
     // 版本。只 `rolledForward += 1` 等于宣称处理过而实际什么都没做。
     const src = read('src/services/bundle/apply.ts')
+    const adapter = read(
+      'src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
+    )
     const committedBranch = src.slice(src.indexOf("if (row.state === 'committed')"))
-    expect(committedBranch.slice(0, 1400)).toContain('rollForwardCommitted(')
+    expect(committedBranch.slice(0, 1800)).toContain('rollForwardLegacyResourcePackageArtifacts(')
+    expect(adapter).toContain('rollForwardSkillTails(')
+    expect(adapter).toContain('dependencies.publishStagedSkillVersion(')
   })
 })
 
@@ -132,7 +137,9 @@ describe('P1-6 · 补偿没做干净就不许终态化 failed', () => {
   })
 
   test('技能版本 artifact 落的是完整 staged 结构（够 publish 重放，不只够 abort）', () => {
-    const src = read('src/services/bundle/apply.ts')
+    const src = read(
+      'src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
+    )
     expect(src).toContain("recordArtifact({ kind: 'skill-version-stage', staged })")
     // 旧写法现编一个假的 StagedSkillVersion（newVersion: 0 / newHash: ''），
     // abort 恰好用不到才没出事——那是运气不是设计。

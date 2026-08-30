@@ -131,7 +131,7 @@ assertType<
 >(true)
 assertType<
   Equal<
-    keyof ResourcePackageApplyTx,
+    Extract<keyof ResourcePackageApplyTx, string>,
     | 'currentAuthority'
     | 'agents'
     | 'skills'
@@ -151,12 +151,19 @@ assertType<
     'agents' | 'skills' | 'mcps' | 'plugins' | 'workflows' | 'workgroups' | 'capabilityTemplates'
   >
 >(true)
-assertType<Equal<keyof TaskExecutionResourceSnapshotInTx, 'loadAuthorized'>>(true)
-assertType<Equal<keyof IntentApplyResourceParticipantInTx, 'authorizeAndCommit'>>(true)
-assertType<Equal<keyof IntegrationTriggerResourceSnapshotInTx, 'loadAuthorized'>>(true)
-assertType<Equal<keyof ResourceScopeAuthorizationInTx, 'accessOf'>>(true)
+assertType<Equal<Extract<keyof TaskExecutionResourceSnapshotInTx, string>, 'loadAuthorized'>>(true)
+assertType<Equal<Extract<keyof IntentApplyResourceParticipantInTx, string>, 'authorizeAndCommit'>>(
+  true,
+)
+assertType<Equal<Extract<keyof IntegrationTriggerResourceSnapshotInTx, string>, 'loadAuthorized'>>(
+  true,
+)
+assertType<Equal<Extract<keyof ResourceScopeAuthorizationInTx, string>, 'accessOf'>>(true)
 assertType<
-  Equal<keyof ResourceAuthorizationInTx, 'accessOf' | 'assertView' | 'assertEdit' | 'assertGovern'>
+  Equal<
+    Extract<keyof ResourceAuthorizationInTx, string>,
+    'accessOf' | 'assertView' | 'assertEdit' | 'assertGovern'
+  >
 >(true)
 
 const correlatedSummary: ResourceSummary<'agent'> = {
@@ -330,6 +337,24 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ]) {
       expect(facade).not.toContain(forbiddenImplementation)
     }
+    expect(facade).toContain('resolveLegacyResourceAclIdentityPersistence(db, type)')
+    const foreignProvider = readFileSync(
+      resolve(sourceRoot, 'services/resourceAclIdentityPersistence.ts'),
+      'utf8',
+    )
+    expect(foreignProvider).toContain("from '@/modules/digital-employee/public/operations'")
+    expect(foreignProvider).toContain("from '@/modules/integration/public/operations'")
+    expect(foreignProvider).not.toMatch(
+      /modules\/(?:digital-employee|integration)\/(?:application|composition|domain|infrastructure)/,
+    )
+    for (const type of [
+      'development_adapter',
+      'employee_definition',
+      'employee_tool',
+      'employee_job_template',
+    ]) {
+      expect(foreignProvider).toContain(`'${type}'`)
+    }
     const application = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/application/resourceAcl.ts'),
       'utf8',
@@ -365,6 +390,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts'),
       'utf8',
     )
+    const projections = readFileSync(
+      resolve(sourceRoot, 'services/intent/resourceCatalogProjections.ts'),
+      'utf8',
+    )
 
     for (const duplicateLoader of [
       'listAgents(',
@@ -384,6 +413,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(catalog).toContain('.limit(limit)')
     expect(catalog).toContain('CATALOG_SELECTOR_KINDS')
     expect(catalog).toContain('nextCursor')
+    expect(catalog).not.toContain("from '@/services/")
+    expect(projections).toContain('resourceCatalogProjectionDependencies')
   })
 
   test('BundleApply keeps lifecycle ownership while seven writer arms stay in infrastructure', () => {
@@ -394,6 +425,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
         sourceRoot,
         'modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
       ),
+      'utf8',
+    )
+    const dependencies = readFileSync(
+      resolve(sourceRoot, 'services/bundle/legacyResourcePackageMutationDependencies.ts'),
       'utf8',
     )
 
@@ -417,8 +452,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       "@/services/capabilityTemplates'",
     ]) {
       expect(engine).not.toContain(legacyWriter)
-      expect(adapter).toContain(legacyWriter)
+      expect(adapter).not.toContain(legacyWriter)
+      expect(dependencies).toContain(legacyWriter)
     }
+    expect(adapter).not.toContain("from '@/services/")
+    expect(engine).toContain('legacyResourcePackageMutationDependencies')
 
     for (const participant of [
       'agents:',

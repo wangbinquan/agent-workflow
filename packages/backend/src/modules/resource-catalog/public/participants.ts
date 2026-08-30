@@ -27,43 +27,62 @@ import type {
   WorkgroupPackageMutation,
 } from './types'
 
-/** Opaque current authority minted by identity-access; never an Actor-shaped bag. */
-export type ResourceCurrentAuthorityInTx = RequestAuthority
+/** Opaque request context minted by identity-access; never an Actor-shaped bag. */
+export type ResourceRequestContext = RequestAuthority
+
+declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
+declare const intentApplyResourceParticipantInTxBrand: unique symbol
+declare const integrationTriggerResourceSnapshotInTxBrand: unique symbol
+declare const resourceScopeAuthorizationInTxBrand: unique symbol
+declare const resourceAuthorizationInTxBrand: unique symbol
+declare const agentPackageMutationParticipantInTxBrand: unique symbol
+declare const skillPackageMutationParticipantInTxBrand: unique symbol
+declare const mcpPackageMutationParticipantInTxBrand: unique symbol
+declare const pluginPackageMutationParticipantInTxBrand: unique symbol
+declare const workflowPackageMutationParticipantInTxBrand: unique symbol
+declare const workgroupPackageMutationParticipantInTxBrand: unique symbol
+declare const capabilityTemplatePackageMutationParticipantInTxBrand: unique symbol
+declare const resourcePackageEventsInTxBrand: unique symbol
+declare const resourcePackageAuditInTxBrand: unique symbol
+declare const resourcePackageApplyScenarioTxBrand: unique symbol
+declare const resourcePackageApplyTxBrand: unique symbol
 
 export interface TaskExecutionResourceSnapshotInTx {
+  readonly [taskExecutionResourceSnapshotInTxBrand]: 'task-execution-resource-snapshot'
   loadAuthorized(
-    authority: ResourceCurrentAuthorityInTx,
+    authority: ResourceRequestContext,
     requests: readonly TaskExecutionResourceRequest[],
   ): readonly FrozenTaskExecutionResourceSnapshot[]
 }
 
 export interface IntentApplyResourceParticipantInTx {
+  readonly [intentApplyResourceParticipantInTxBrand]: 'intent-apply-resource-participant'
   authorizeAndCommit(
-    authority: ResourceCurrentAuthorityInTx,
+    authority: ResourceRequestContext,
     plan: VersionedIntentResourceChangesetPlan,
   ): IntentResourceChangesetReceipt
 }
 
 export interface IntegrationTriggerResourceSnapshotInTx {
+  readonly [integrationTriggerResourceSnapshotInTxBrand]: 'integration-trigger-resource-snapshot'
   loadAuthorized(
-    authority: ResourceCurrentAuthorityInTx,
+    authority: ResourceRequestContext,
     requests: readonly IntegrationTriggerResourceRequest[],
   ): readonly FrozenIntegrationTriggerResourceSnapshot[]
 }
 
 export interface ResourceScopeAuthorizationInTx {
-  accessOf(
-    authority: ResourceCurrentAuthorityInTx,
-    scope: ResourceMemoryScopeRef,
-  ): ResourceScopeAccess
+  readonly [resourceScopeAuthorizationInTxBrand]: 'resource-scope-authorization'
+  accessOf(authority: ResourceRequestContext, scope: ResourceMemoryScopeRef): ResourceScopeAccess
 }
 
 /** General ACL verdict participant; consumers cannot request a resource body. */
 export interface ResourceAuthorizationInTx {
-  accessOf(authority: ResourceCurrentAuthorityInTx, target: ResourceAclTarget): ResourceScopeAccess
-  assertView(authority: ResourceCurrentAuthorityInTx, target: ResourceAclTarget): void
-  assertEdit(authority: ResourceCurrentAuthorityInTx, target: ResourceAclTarget): void
-  assertGovern(authority: ResourceCurrentAuthorityInTx, target: ResourceAclTarget): void
+  readonly [resourceAuthorizationInTxBrand]: 'resource-authorization'
+  accessOf(authority: ResourceRequestContext, target: ResourceAclTarget): ResourceScopeAccess
+  assertView(authority: ResourceRequestContext, target: ResourceAclTarget): void
+  assertEdit(authority: ResourceRequestContext, target: ResourceAclTarget): void
+  assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget): void
 }
 
 export interface AgentPackageMutationParticipant {
@@ -91,24 +110,31 @@ export interface CapabilityTemplatePackageMutationParticipant {
 }
 
 export interface AgentPackageMutationParticipantInTx {
+  readonly [agentPackageMutationParticipantInTxBrand]: 'agent-package-mutation'
   commit(prepared: PreparedAgentPackageMutation): ResourcePackageMutationReceipt<'agent'>
 }
 export interface SkillPackageMutationParticipantInTx {
+  readonly [skillPackageMutationParticipantInTxBrand]: 'skill-package-mutation'
   commit(prepared: PreparedSkillPackageMutation): ResourcePackageMutationReceipt<'skill'>
 }
 export interface McpPackageMutationParticipantInTx {
+  readonly [mcpPackageMutationParticipantInTxBrand]: 'mcp-package-mutation'
   commit(prepared: PreparedMcpPackageMutation): ResourcePackageMutationReceipt<'mcp'>
 }
 export interface PluginPackageMutationParticipantInTx {
+  readonly [pluginPackageMutationParticipantInTxBrand]: 'plugin-package-mutation'
   commit(prepared: PreparedPluginPackageMutation): ResourcePackageMutationReceipt<'plugin'>
 }
 export interface WorkflowPackageMutationParticipantInTx {
+  readonly [workflowPackageMutationParticipantInTxBrand]: 'workflow-package-mutation'
   commit(prepared: PreparedWorkflowPackageMutation): ResourcePackageMutationReceipt<'workflow'>
 }
 export interface WorkgroupPackageMutationParticipantInTx {
+  readonly [workgroupPackageMutationParticipantInTxBrand]: 'workgroup-package-mutation'
   commit(prepared: PreparedWorkgroupPackageMutation): ResourcePackageMutationReceipt<'workgroup'>
 }
 export interface CapabilityTemplatePackageMutationParticipantInTx {
+  readonly [capabilityTemplatePackageMutationParticipantInTxBrand]: 'capability-template-package-mutation'
   commit(
     prepared: PreparedCapabilityTemplatePackageMutation,
   ): ResourcePackageMutationReceipt<'capability_template'>
@@ -125,18 +151,22 @@ export interface ResourcePackageMutationParticipants {
 }
 
 export interface ResourcePackageEventsInTx {
+  readonly [resourcePackageEventsInTxBrand]: 'resource-package-events'
   resourceApplied(receipt: ResourcePackageMutationReceipt): void
 }
 
 export interface ResourcePackageAuditInTx {
+  readonly [resourcePackageAuditInTxBrand]: 'resource-package-audit'
   recordResourceApplied(receipt: ResourcePackageMutationReceipt): void
 }
 
 export interface ResourcePackageApplyScenarioTx {
-  readonly currentAuthority: ResourceCurrentAuthorityInTx
+  readonly [resourcePackageApplyScenarioTxBrand]: 'resource-package-apply-scenario'
+  readonly currentAuthority: ResourceRequestContext
 }
 
 export interface ResourcePackageApplyTx extends ResourcePackageApplyScenarioTx {
+  readonly [resourcePackageApplyTxBrand]: 'resource-package-apply'
   readonly agents: AgentPackageMutationParticipantInTx
   readonly skills: SkillPackageMutationParticipantInTx
   readonly mcps: McpPackageMutationParticipantInTx
