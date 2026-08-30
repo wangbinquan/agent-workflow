@@ -7,9 +7,10 @@ import type {
   BackupResultView,
   StageRestoreInput,
   StageRestoreResult,
-  SystemOperationCommandContext,
 } from './types'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
+
+type SystemOperationCommandContext = CommandContext | LocalSystemOperationContext
 
 export interface RequestBackupCommand {
   execute(

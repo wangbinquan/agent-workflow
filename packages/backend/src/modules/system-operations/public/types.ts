@@ -1,8 +1,6 @@
 // RFC-346 — exact application DTOs for backup/restore administration.
 
 import { z } from 'zod'
-import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
-
 declare const localSystemOperationContextBrand: unique symbol
 declare const restoreArtifactRefBrand: unique symbol
 
@@ -13,9 +11,6 @@ export interface LocalSystemOperationContext {
 export interface RestoreArtifactRef {
   readonly [restoreArtifactRefBrand]: 'restore-artifact-ref'
 }
-
-export type SystemOperationCommandContext = CommandContext | LocalSystemOperationContext
-export type SystemOperationQueryContext = QueryContext
 
 export const requestBackupInputSchema = z.object({ includeWorktrees: z.boolean() }).strict()
 export type RequestBackupInput = z.infer<typeof requestBackupInputSchema>

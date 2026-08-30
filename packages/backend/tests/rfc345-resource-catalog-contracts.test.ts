@@ -342,8 +342,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'services/resourceAclIdentityPersistence.ts'),
       'utf8',
     )
-    expect(foreignProvider).toContain("from '@/modules/digital-employee/public/operations'")
-    expect(foreignProvider).toContain("from '@/modules/integration/public/operations'")
+    expect(foreignProvider).toContain("from '@/modules/digital-employee/public/commands'")
+    expect(foreignProvider).toContain("from '@/modules/integration/public/participants'")
     expect(foreignProvider).not.toMatch(
       /modules\/(?:digital-employee|integration)\/(?:application|composition|domain|infrastructure)/,
     )

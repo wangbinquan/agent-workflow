@@ -6,6 +6,8 @@ import type {
   ExactResourceRef,
 } from './types'
 
+export { createDigitalEmployeeResourceCatalogAclProviders } from '../composition/resourceCatalogAcl'
+
 /** Context-owned maintenance command port, composed once by the Worker bootstrap. */
 export interface DigitalEmployeeMaintenanceCommands {
   sweepExpiredInputUploads(now: number, limit: number): number

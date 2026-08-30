@@ -1,7 +1,7 @@
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { createDigitalEmployeeResourceCatalogAclProviders } from '@/modules/digital-employee/public/operations'
-import { createDevelopmentAdapterResourceCatalogAclProvider } from '@/modules/integration/public/operations'
+import { createDigitalEmployeeResourceCatalogAclProviders } from '@/modules/digital-employee/public/commands'
+import { createDevelopmentAdapterResourceCatalogAclProvider } from '@/modules/integration/public/participants'
 import type {
   ForeignResourceAclType,
   ResourceAclIdentityPersistence,

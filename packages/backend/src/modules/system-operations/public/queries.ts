@@ -3,8 +3,10 @@ import type {
   PlanLocalRestoreInput,
   RecoveryStatusView,
   RestorePlanView,
-  SystemOperationQueryContext,
 } from './types'
+import type { QueryContext } from '@/modules/identity-access/public/participants'
+
+type SystemOperationQueryContext = QueryContext
 
 export interface PlanLocalRestoreQuery {
   execute(

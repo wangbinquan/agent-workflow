@@ -12,7 +12,7 @@ import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
 import { encodeSkillToken } from '@/services/skillToken'
 import type { SqliteResourceCatalogProjectionDependencies } from '@/modules/resource-catalog/public/operations'
 
-export const resourceCatalogProjections = Object.freeze({
+export const resourceCatalogProjectionDependencies = Object.freeze({
   encodeSkillToken,
   mcpFromRow: rowToMcp,
   mcpOperationConfigHashOf,

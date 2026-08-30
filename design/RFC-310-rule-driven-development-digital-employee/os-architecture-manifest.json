@@ -28,7 +28,8 @@
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
         "server.ts -> public/events",
-        "server.ts -> public/types"
+        "server.ts -> public/types",
+        "services/resourceAclIdentityPersistence.ts -> public/commands"
       ]
     },
     "event-center": {
