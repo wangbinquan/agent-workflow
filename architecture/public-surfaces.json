@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 364,
+    "consumers": 365,
     "exactEntrypointFiles": 44,
     "governedFieldSurfaces": 5,
     "methods": 293,
     "opaqueTypeRefs": 6,
     "recursiveFields": 5365,
-    "symbols": 565
+    "symbols": 566
   },
   "entries": [
     {
@@ -21463,6 +21463,7 @@
         "public:identity-access:participants:LegacyActorProjectionFactory",
         "public:resource-catalog:commands:McpCommands",
         "public:resource-catalog:commands:PluginCommands",
+        "public:resource-catalog:commands:PluginUpdateCommands",
         "public:resource-catalog:participants:McpOperationContext",
         "public:resource-catalog:participants:PluginOperationContext",
         "public:resource-catalog:queries:McpQueries",
@@ -22889,6 +22890,7 @@
         "public:identity-access:participants:DirectAuthorityIdentity",
         "public:resource-catalog:commands:McpCommands",
         "public:resource-catalog:commands:PluginCommands",
+        "public:resource-catalog:commands:PluginUpdateCommands",
         "public:resource-catalog:participants:McpOperationContext",
         "public:resource-catalog:participants:PluginOperationContext",
         "public:resource-catalog:queries:McpQueries",
@@ -24866,6 +24868,7 @@
         "public:identity-access:participants:LegacyActorProjectionFactory",
         "public:resource-catalog:commands:McpCommands",
         "public:resource-catalog:commands:PluginCommands",
+        "public:resource-catalog:commands:PluginUpdateCommands",
         "public:resource-catalog:participants:McpOperationContext",
         "public:resource-catalog:participants:PluginOperationContext",
         "public:resource-catalog:queries:McpQueries",
@@ -28229,10 +28232,10 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 6,
+        "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 113,
-        "maxUnionVariants": 42
+        "maxTransitiveLeafFields": 75,
+        "maxUnionVariants": 28
       },
       "consumerEdgeIds": [
         "import:1324d9ae2eaf3e51d02d"
@@ -28242,109 +28245,6 @@
       "direction": "offered",
       "entrypoint": "commands",
       "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.authorityRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.patId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.permissions[]",
-          "type": "(typeof PERMISSIONS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.purpose",
-          "type": "z.infer<typeof PatPurposeSchema>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.source",
-          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:0",
-          "type": "'admin'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:1",
-          "type": "'user'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:2",
-          "type": "'manager'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:3",
-          "type": "'guest'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.status.$variant:0",
-          "type": "'active'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.status.$variant:1",
-          "type": "'disabled'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.status.$variant:2",
-          "type": "'invited'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.user.username",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$parameter:authority.userId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "fieldPath": "$method:checkUpdate.$parameter:input.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "fieldPath": "$method:checkUpdate.$parameter:input.operation",
-          "type": "z.infer<typeof PluginOperationRequestSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:checkUpdate.$return",
-          "type": "z.infer<typeof PluginUpdateCheckSchema>"
-        },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:create.$parameter:authority.authorityRevision",
@@ -28749,6 +28649,186 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:update.$return",
           "type": "z.infer<typeof PluginOperationResourceSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/commands.ts",
+      "id": "public:resource-catalog:commands:PluginCommands",
+      "members": [
+        "create",
+        "delete",
+        "rename",
+        "update"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:1324d9ae2eaf3e51d02d"
+          ],
+          "name": "create",
+          "signatureDigest": "sha256:165cb5859ce091544f0a4cef739a533b77c3ec1c5def3d5fc20abe96110d5cc8"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1324d9ae2eaf3e51d02d"
+          ],
+          "name": "delete",
+          "signatureDigest": "sha256:5922e3bd232fa2eb2cc90f6ddbdab6942acd0433cf0b52aee15da86dea83c428"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1324d9ae2eaf3e51d02d"
+          ],
+          "name": "rename",
+          "signatureDigest": "sha256:82b108467338a464246db31d8e14e43a4763e4fa64e792bfbec788c621f83b07"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1324d9ae2eaf3e51d02d"
+          ],
+          "name": "update",
+          "signatureDigest": "sha256:9f5850d3969cea72268aac465324265f94f3157de510acd42f4a43ace7ada668"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#PluginCommands",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:1324d9ae2eaf3e51d02d",
+          "file": "packages/backend/src/routes/plugins.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/plugins.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:f9d313aab91aab44ec20be64f9b9c8b4d1c80c0d902203761a870fc7500948ca",
+      "status": "target-context-current-surface",
+      "symbol": "PluginCommands",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "Extract",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 38,
+        "maxUnionVariants": 14
+      },
+      "consumerEdgeIds": [
+        "import:32c4d01c6c9fd418164d"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:32c4d01c6c9fd418164d"
+          ],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:32c4d01c6c9fd418164d"
+          ],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:32c4d01c6c9fd418164d"
+          ],
+          "fieldPath": "$method:checkUpdate.$parameter:input.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:32c4d01c6c9fd418164d"
+          ],
+          "fieldPath": "$method:checkUpdate.$parameter:input.operation",
+          "type": "z.infer<typeof PluginOperationRequestSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:checkUpdate.$return",
+          "type": "z.infer<typeof PluginUpdateCheckSchema>"
         },
         {
           "consumerEdgeIds": [],
@@ -28772,7 +28852,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
+            "import:32c4d01c6c9fd418164d"
           ],
           "fieldPath": "$method:upgrade.$parameter:authority.source",
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
@@ -28784,7 +28864,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
+            "import:32c4d01c6c9fd418164d"
           ],
           "fieldPath": "$method:upgrade.$parameter:authority.user.id",
           "type": "string"
@@ -28836,14 +28916,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
+            "import:32c4d01c6c9fd418164d"
           ],
           "fieldPath": "$method:upgrade.$parameter:input.id",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
+            "import:32c4d01c6c9fd418164d"
           ],
           "fieldPath": "$method:upgrade.$parameter:input.operation",
           "type": "z.infer<typeof PluginOperationRequestSchema>"
@@ -28855,64 +28935,32 @@
         }
       ],
       "file": "packages/backend/src/modules/resource-catalog/public/commands.ts",
-      "id": "public:resource-catalog:commands:PluginCommands",
+      "id": "public:resource-catalog:commands:PluginUpdateCommands",
       "members": [
         "checkUpdate",
-        "create",
-        "delete",
-        "rename",
-        "update",
         "upgrade"
       ],
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
+            "import:32c4d01c6c9fd418164d"
           ],
           "name": "checkUpdate",
           "signatureDigest": "sha256:e8382b448f701bea63bbc41fec2601e6566ec1a3520c93f12377bfed4818bb25"
         },
         {
           "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "name": "create",
-          "signatureDigest": "sha256:165cb5859ce091544f0a4cef739a533b77c3ec1c5def3d5fc20abe96110d5cc8"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "name": "delete",
-          "signatureDigest": "sha256:5922e3bd232fa2eb2cc90f6ddbdab6942acd0433cf0b52aee15da86dea83c428"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "name": "rename",
-          "signatureDigest": "sha256:82b108467338a464246db31d8e14e43a4763e4fa64e792bfbec788c621f83b07"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
-          ],
-          "name": "update",
-          "signatureDigest": "sha256:9f5850d3969cea72268aac465324265f94f3157de510acd42f4a43ace7ada668"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:1324d9ae2eaf3e51d02d"
+            "import:32c4d01c6c9fd418164d"
           ],
           "name": "upgrade",
           "signatureDigest": "sha256:07ab4c2bf15651929d3875a9fed91dea166d3eb54b04feec5e039a9a1ac74653"
         }
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#PluginCommands",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#PluginUpdateCommands",
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:1324d9ae2eaf3e51d02d",
+          "edgeId": "import:32c4d01c6c9fd418164d",
           "file": "packages/backend/src/routes/plugins.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/plugins.ts#$file"
         }
@@ -28920,9 +28968,9 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:40229b309c6f5d1a8356283daad1130a30bd8b9821e2d9a30bfc9bced2a13323",
+      "signatureDigest": "sha256:f4d971f4be76e885346ea8ff182ab80b641b7943b4c6c95b29340b43a9481640",
       "status": "target-context-current-surface",
-      "symbol": "PluginCommands",
+      "symbol": "PluginUpdateCommands",
       "transaction": "own-tx",
       "unresolvedTypeRefs": [
         "Extract",
@@ -30015,6 +30063,7 @@
       ],
       "publicTypeConsumerIds": [
         "public:resource-catalog:commands:PluginCommands",
+        "public:resource-catalog:commands:PluginUpdateCommands",
         "public:resource-catalog:queries:PluginQueries"
       ],
       "removeAfterWave": null,
@@ -32985,7 +33034,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#CheckPluginUpdateCatalogInput",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:commands:PluginCommands"
+        "public:resource-catalog:commands:PluginUpdateCommands"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -33025,7 +33074,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#CheckPluginUpdateCatalogReceipt",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:commands:PluginCommands"
+        "public:resource-catalog:commands:PluginUpdateCommands"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -36396,7 +36445,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#UpgradePluginCatalogInput",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:commands:PluginCommands"
+        "public:resource-catalog:commands:PluginUpdateCommands"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -36436,7 +36485,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#UpgradePluginCatalogReceipt",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:resource-catalog:commands:PluginCommands"
+        "public:resource-catalog:commands:PluginUpdateCommands"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -53965,7 +54014,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a4ce9ab244bbedfaff2c0af2d086bdc3ef0060825c1604cff409f3ebb18cfffd",
+  "sourceDigest": "sha256:ea3dbe17e3d73c766aefc27b2622adaad9b0a49f73d4e8acce027d91bc6a9521",
   "targetContexts": [
     "collaboration",
     "development-automation",

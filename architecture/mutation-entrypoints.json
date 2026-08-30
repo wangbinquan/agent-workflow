@@ -13662,7 +13662,7 @@
       },
       "file": "packages/backend/src/routes/plugins.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/plugins.ts#$http:delete:157",
+      "id": "mutation:packages/backend/src/routes/plugins.ts#$http:delete:161",
       "missingControls": [
         "audit",
         "authority",
@@ -13672,7 +13672,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/plugins.ts#$file",
-      "symbol": "$http:delete:157",
+      "symbol": "$http:delete:161",
       "targetContext": "resource-catalog",
       "targetLayer": "inbound"
     },
@@ -26996,7 +26996,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a4ce9ab244bbedfaff2c0af2d086bdc3ef0060825c1604cff409f3ebb18cfffd",
+  "sourceDigest": "sha256:ea3dbe17e3d73c766aefc27b2622adaad9b0a49f73d4e8acce027d91bc6a9521",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

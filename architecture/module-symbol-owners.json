@@ -6,7 +6,7 @@
     "moduleFiles": 527,
     "productionFiles": 1857,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 19816
+    "symbolsIncludingFileRoots": 19817
   },
   "entries": [
     {
@@ -51349,9 +51349,22 @@
       "file": "packages/backend/src/modules/resource-catalog/public/commands.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#PluginCommands",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:40229b309c6f5d1a8356283daad1130a30bd8b9821e2d9a30bfc9bced2a13323",
+      "signatureDigest": "sha256:f9d313aab91aab44ec20be64f9b9c8b4d1c80c0d902203761a870fc7500948ca",
       "status": "current-module",
       "symbol": "PluginCommands",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/public/commands.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#PluginUpdateCommands",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:f4d971f4be76e885346ea8ff182ab80b641b7943b4c6c95b29340b43a9481640",
+      "status": "current-module",
+      "symbol": "PluginUpdateCommands",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -238209,5 +238222,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a4ce9ab244bbedfaff2c0af2d086bdc3ef0060825c1604cff409f3ebb18cfffd"
+  "sourceDigest": "sha256:ea3dbe17e3d73c766aefc27b2622adaad9b0a49f73d4e8acce027d91bc6a9521"
 }

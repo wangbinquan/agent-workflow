@@ -6701,6 +6701,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/plugins.ts#$file",
+      "fromPath": "packages/backend/src/routes/plugins.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:32c4d01c6c9fd418164d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#PluginUpdateCommands",
+      "toPath": "packages/backend/src/modules/resource-catalog/public/commands.ts",
+      "toSymbol": "PluginUpdateCommands",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/backup.ts#$file",
       "fromPath": "packages/backend/src/routes/backup.ts",
       "fromSymbol": "$file",
@@ -30857,9 +30874,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1815,
+    "architectureExceptions": 1816,
     "implementationSccs": 0,
-    "observedEdges": 1860,
+    "observedEdges": 1861,
     "requiredPorts": 25,
     "targetEdges": 64
   },
@@ -36866,6 +36883,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/plugins.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/plugins.ts#$file",
+      "id": "import:32c4d01c6c9fd418164d",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "PluginUpdateCommands",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/commands.ts#PluginUpdateCommands"
     },
     {
       "edgeKind": "type",
@@ -61109,7 +61142,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a4ce9ab244bbedfaff2c0af2d086bdc3ef0060825c1604cff409f3ebb18cfffd",
+  "sourceDigest": "sha256:ea3dbe17e3d73c766aefc27b2622adaad9b0a49f73d4e8acce027d91bc6a9521",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
