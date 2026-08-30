@@ -21,7 +21,7 @@ import { is } from 'drizzle-orm'
 import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 import * as schema from '../../src/db/schema'
-import { ACL_TABLES } from '../../src/services/resourceAcl'
+import { SQLITE_ACL_TABLES } from '../../src/modules/resource-catalog/infrastructure/sqliteAclRegistry'
 
 /** RFC-099 的行级 ACL 列集。 */
 const ACL_COLUMNS = ['owner_user_id', 'visibility'] as const
@@ -54,7 +54,7 @@ function allTables(): TableFacts[] {
 
 const TABLES = allTables()
 const ACL_TABLE_NAMES = new Set(
-  Object.values(ACL_TABLES).map((table) => getTableConfig(table).name),
+  Object.values(SQLITE_ACL_TABLES).map((table) => getTableConfig(table).name),
 )
 const hasAclColumns = (table: TableFacts): boolean =>
   ACL_COLUMNS.every((column) => table.columns.has(column))

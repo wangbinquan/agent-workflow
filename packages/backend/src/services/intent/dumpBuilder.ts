@@ -46,13 +46,14 @@ import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
 import { extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import type { DbClient } from '@/db/client'
-import { listAgents } from '@/services/agent'
-import { listMcps } from '@/services/mcp'
-import { listPlugins } from '@/services/plugin'
-import { listSkills, listSkillFiles, readSkillContent, readSkillFile } from '@/services/skill'
-import { listWorkflows } from '@/services/workflow'
-import { listWorkgroups } from '@/services/workgroups'
-import { filterVisibleRows } from '@/services/resourceAcl'
+import { getAgentById } from '@/services/agent'
+import { getMcpById } from '@/services/mcp'
+import { getPlugin } from '@/services/plugin'
+import { listSkillFiles, readSkillContent, readSkillFile } from '@/services/skill'
+import { getWorkflow } from '@/services/workflow'
+import { getWorkgroupById } from '@/services/workgroups'
+import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/infrastructure/sqliteCatalogQuery'
+import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'
 import type { SystemAgentSeedFile } from '@/services/systemAgentRun'
 import {
   allocateHandle,
@@ -160,36 +161,96 @@ function firstLine(text: string, cap = 160): string {
 }
 
 interface VisibleCatalog {
-  agents: Map<string, Agent>
-  skills: Map<string, { id: string; name: string; description: string }>
-  mcps: Map<string, Mcp>
-  plugins: Map<string, Plugin>
-  workflows: Map<string, Workflow>
-  workgroups: Map<string, Workgroup>
-}
-
-async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCatalog> {
-  const [agents, skills, mcps, plugins, workflows, workgroups] = await Promise.all([
-    listAgents(db).then((rows) => filterVisibleRows(db, actor, 'agent', rows)),
-    listSkills(db).then((rows) => filterVisibleRows(db, actor, 'skill', rows)),
-    listMcps(db).then((rows) => filterVisibleRows(db, actor, 'mcp', rows)),
-    listPlugins(db).then((rows) => filterVisibleRows(db, actor, 'plugin', rows)),
-    listWorkflows(db).then((rows) => filterVisibleRows(db, actor, 'workflow', rows)),
-    listWorkgroups(db).then((rows) => filterVisibleRows(db, actor, 'workgroup', rows)),
-  ])
-  return {
-    agents: new Map(agents.map((a) => [a.id, a])),
-    skills: new Map(skills.map((s) => [s.id, s])),
-    mcps: new Map(mcps.map((m) => [m.id, m])),
-    plugins: new Map(plugins.map((p) => [p.id, p])),
-    workflows: new Map(workflows.map((w) => [w.id, w])),
-    workgroups: new Map(workgroups.map((w) => [w.id, w])),
+  db: DbClient
+  agents: Map<string, CatalogItem>
+  skills: Map<string, CatalogItem>
+  mcps: Map<string, CatalogItem>
+  plugins: Map<string, CatalogItem>
+  workflows: Map<string, CatalogItem>
+  workgroups: Map<string, CatalogItem>
+  details: {
+    agents: Map<string, Promise<Agent | null>>
+    mcps: Map<string, Promise<Mcp | null>>
+    plugins: Map<string, Promise<Plugin | null>>
+    workflows: Map<string, Promise<Workflow | null>>
+    workgroups: Map<string, Promise<Workgroup | null>>
   }
 }
 
+interface CatalogItem {
+  id: string
+  name: string
+  description: string | null
+}
+
+function summaryMap(): Map<string, CatalogItem> {
+  return new Map()
+}
+
+async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCatalog> {
+  const maps: Record<CatalogSelectorKind, Map<string, CatalogItem>> = {
+    agent: summaryMap(),
+    skill: summaryMap(),
+    mcp: summaryMap(),
+    plugin: summaryMap(),
+    workflow: summaryMap(),
+    workgroup: summaryMap(),
+  }
+  for (const summary of await listAllVisibleResourceSummariesForActor(db, actor)) {
+    maps[summary.kind].set(summary.ref.id, {
+      id: summary.ref.id,
+      name: summary.name,
+      description: summary.description,
+    })
+  }
+  return {
+    db,
+    agents: maps.agent,
+    skills: maps.skill,
+    mcps: maps.mcp,
+    plugins: maps.plugin,
+    workflows: maps.workflow,
+    workgroups: maps.workgroup,
+    details: {
+      agents: new Map(),
+      mcps: new Map(),
+      plugins: new Map(),
+      workflows: new Map(),
+      workgroups: new Map(),
+    },
+  }
+}
+
+function cachedDetail<T>(
+  cache: Map<string, Promise<T | null>>,
+  id: string,
+  load: () => Promise<T | null>,
+): Promise<T | null> {
+  const current = cache.get(id)
+  if (current !== undefined) return current
+  const pending = load()
+  cache.set(id, pending)
+  return pending
+}
+
+const loadAgentDetail = (catalog: VisibleCatalog, id: string): Promise<Agent | null> =>
+  cachedDetail(catalog.details.agents, id, () => getAgentById(catalog.db, id))
+
+const loadMcpDetail = (catalog: VisibleCatalog, id: string): Promise<Mcp | null> =>
+  cachedDetail(catalog.details.mcps, id, () => getMcpById(catalog.db, id))
+
+const loadPluginDetail = (catalog: VisibleCatalog, id: string): Promise<Plugin | null> =>
+  cachedDetail(catalog.details.plugins, id, () => getPlugin(catalog.db, id))
+
+const loadWorkflowDetail = (catalog: VisibleCatalog, id: string): Promise<Workflow | null> =>
+  cachedDetail(catalog.details.workflows, id, () => getWorkflow(catalog.db, id))
+
+const loadWorkgroupDetail = (catalog: VisibleCatalog, id: string): Promise<Workgroup | null> =>
+  cachedDetail(catalog.details.workgroups, id, () => getWorkgroupById(catalog.db, id))
+
 /** BFS the dependency closure of one mounted root. Returns VISIBLE members
  *  (typed ids) + the count of invisible ones (no identity recorded). */
-function expandClosure(
+async function expandClosure(
   root: IntentMountRef,
   catalog: VisibleCatalog,
   /**
@@ -203,7 +264,7 @@ function expandClosure(
    * `hiddenCount` must reflect ITS OWN closure.
    */
   adjacency: Map<string, IntentMountRef[]>,
-): { members: IntentMountRef[]; hiddenCount: number } {
+): Promise<{ members: IntentMountRef[]; hiddenCount: number }> {
   const members: IntentMountRef[] = []
   const seen = new Set<string>([`${root.resourceType}:${root.resourceId}`])
   let hiddenCount = 0
@@ -239,7 +300,7 @@ function expandClosure(
 
   while (cursor < queue.length) {
     const cur = queue[cursor++] as IntentMountRef
-    for (const edge of outEdgesOf(cur, catalog, adjacency)) {
+    for (const edge of await outEdgesOf(cur, catalog, adjacency)) {
       push(edge.resourceType, edge.resourceId)
     }
   }
@@ -253,11 +314,11 @@ function expandClosure(
  * the memo is root-independent; `push` then applies the per-root visibility and
  * hidden-count bookkeeping.
  */
-function outEdgesOf(
+async function outEdgesOf(
   cur: IntentMountRef,
   catalog: VisibleCatalog,
   adjacency: Map<string, IntentMountRef[]>,
-): IntentMountRef[] {
+): Promise<IntentMountRef[]> {
   const memoKey = `${cur.resourceType}:${cur.resourceId}`
   const cached = adjacency.get(memoKey)
   if (cached !== undefined) return cached
@@ -270,8 +331,8 @@ function outEdgesOf(
   }
 
   if (cur.resourceType === 'agent') {
-    const agent = catalog.agents.get(cur.resourceId)
-    if (agent !== undefined) {
+    const agent = await loadAgentDetail(catalog, cur.resourceId)
+    if (agent !== null) {
       for (const dep of agent.dependsOn) add('agent', dep)
       for (const m of agent.mcp) add('mcp', m)
       for (const p of agent.plugins) add('plugin', p)
@@ -280,8 +341,8 @@ function outEdgesOf(
       }
     }
   } else if (cur.resourceType === 'workflow') {
-    const wf = catalog.workflows.get(cur.resourceId)
-    if (wf !== undefined) {
+    const wf = await loadWorkflowDetail(catalog, cur.resourceId)
+    if (wf !== null) {
       const definition = wf.definition as WorkflowDefinition
       // RFC-291 面 D — agent refs come from the AUTHORITATIVE extractor rather
       // than a fourth hand-written agent-node walker. (The dump RENDERER below
@@ -320,8 +381,8 @@ function outEdgesOf(
       }
     }
   } else if (cur.resourceType === 'workgroup') {
-    const wg = catalog.workgroups.get(cur.resourceId)
-    if (wg !== undefined) {
+    const wg = await loadWorkgroupDetail(catalog, cur.resourceId)
+    if (wg !== null) {
       for (const member of wg.members) {
         if (member.memberType === 'agent' && member.agentId != null && member.agentId !== '') {
           add('agent', member.agentId)
@@ -359,7 +420,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   const hiddenMembers: IntentMountRef[] = []
   for (const mount of input.mounts) {
     const rootKey = `${mount.resourceType}:${mount.resourceId}`
-    const rootVisible = expandClosure(mount, catalog, adjacency)
+    const rootVisible = await expandClosure(mount, catalog, adjacency)
     const rootInCatalog =
       mount.resourceType === 'agent'
         ? catalog.agents.has(mount.resourceId)
@@ -438,8 +499,8 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
     // a silent "resource unavailable".
     try {
       if (ref.resourceType === 'agent') {
-        const agent = catalog.agents.get(ref.resourceId)
-        if (agent === undefined) continue
+        const agent = await loadAgentDetail(catalog, ref.resourceId)
+        if (agent === null) throw new NotFoundError('agent-not-found', 'agent not found')
         const skills: Array<AgentSkillSelector | string> = agent.skills.map((s) =>
           s.kind === 'managed'
             ? catalog.skills.has(s.skillId)
@@ -520,8 +581,8 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
           dumpHash: sha256(treeHash),
         })
       } else if (ref.resourceType === 'mcp') {
-        const mcp = catalog.mcps.get(ref.resourceId)
-        if (mcp === undefined) continue
+        const mcp = await loadMcpDetail(catalog, ref.resourceId)
+        if (mcp === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
         const doc = serializeMcpDump({
           handle,
           type: mcp.type,
@@ -533,8 +594,8 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
         seedFiles.push({ path: `${base}.yaml`, content: doc })
         manifest.push({ ...entryBase, fence: buildMcpFence(mcp), dumpHash: sha256(doc) })
       } else if (ref.resourceType === 'plugin') {
-        const plugin = catalog.plugins.get(ref.resourceId)
-        if (plugin === undefined) continue
+        const plugin = await loadPluginDetail(catalog, ref.resourceId)
+        if (plugin === null) throw new NotFoundError('plugin-not-found', 'plugin not found')
         const doc = serializePluginDump({
           handle,
           name: plugin.name,
@@ -546,8 +607,8 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
         seedFiles.push({ path: `${base}.yaml`, content: doc })
         manifest.push({ ...entryBase, fence: buildPluginFence(plugin), dumpHash: sha256(doc) })
       } else if (ref.resourceType === 'workflow') {
-        const wf = catalog.workflows.get(ref.resourceId)
-        if (wf === undefined) continue
+        const wf = await loadWorkflowDetail(catalog, ref.resourceId)
+        if (wf === null) throw new NotFoundError('workflow-not-found', 'workflow not found')
         const def = wf.definition as { nodes?: Array<Record<string, unknown>> }
         const transformed = {
           ...(wf.definition as Record<string, unknown>),
@@ -625,8 +686,8 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
         seedFiles.push({ path: `${base}.yaml`, content: doc })
         manifest.push({ ...entryBase, fence: buildWorkflowFence(wf), dumpHash: sha256(doc) })
       } else {
-        const wg = catalog.workgroups.get(ref.resourceId)
-        if (wg === undefined) continue
+        const wg = await loadWorkgroupDetail(catalog, ref.resourceId)
+        if (wg === null) throw new NotFoundError('workgroup-not-found', 'workgroup not found')
         const leader = wg.members.find((m) => m.id === wg.leaderMemberId)
         const doc = serializeWorkgroupDump({
           handle,
@@ -749,26 +810,17 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
 }
 
 function summarizeInventoryRow(type: AclResourceType, id: string, catalog: VisibleCatalog): string {
-  if (type === 'agent') {
-    const a = catalog.agents.get(id)
-    if (a === undefined) return ''
-    const ports = a.outputs.length > 0 ? ` [outputs: ${a.outputs.join(', ')}]` : ''
-    return `${firstLine(a.description)}${ports}`
-  }
-  if (type === 'skill') return firstLine(catalog.skills.get(id)?.description ?? '')
-  if (type === 'mcp') {
-    const m = catalog.mcps.get(id)
-    return m === undefined ? '' : `${firstLine(m.description)} [${m.type}]`
-  }
-  if (type === 'plugin') return firstLine(catalog.plugins.get(id)?.description ?? '')
-  if (type === 'workflow') {
-    const w = catalog.workflows.get(id)
-    if (w === undefined) return ''
-    const nodeCount = (w.definition as { nodes?: unknown[] }).nodes?.length ?? 0
-    return `${firstLine(w.description)} [${nodeCount} nodes]`
-  }
-  const wg = catalog.workgroups.get(id)
-  return wg === undefined
-    ? ''
-    : `${firstLine(wg.description)} [${wg.mode}, ${wg.members.length} members]`
+  const byType =
+    type === 'agent'
+      ? catalog.agents
+      : type === 'skill'
+        ? catalog.skills
+        : type === 'mcp'
+          ? catalog.mcps
+          : type === 'plugin'
+            ? catalog.plugins
+            : type === 'workflow'
+              ? catalog.workflows
+              : catalog.workgroups
+  return firstLine(byType.get(id)?.description ?? '')
 }

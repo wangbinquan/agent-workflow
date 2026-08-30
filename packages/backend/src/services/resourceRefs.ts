@@ -16,7 +16,7 @@
 
 import type { AclResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import { collectWorkflowCallRefs, collectWorkgroupCallRefs } from '@agent-workflow/shared'
-import { inArray, like } from 'drizzle-orm'
+import { like } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -24,9 +24,12 @@ import type { DbTxSync } from '@/db/txSync'
 import { agents } from '@/db/schema'
 import { ValidationError } from '@/util/errors'
 import {
-  ACL_TABLES,
   hasResourceAclBypass,
   isVisibleRow,
+  listAclResourceIdentityRowsByIds,
+  listAclResourceIdentityRowsByIdsInTx,
+  listAclResourceIdentityRowsByNames,
+  listAclResourceIdentityRowsByNamesInTx,
   listGrantedResourceIds,
   listGrantedResourceIdsInTx,
   type AclRow,
@@ -145,16 +148,7 @@ export async function resolveRefsUsableByName(
   const missing: Array<{ type: AclResourceType; name: string }> = []
   const enforce = actor !== null && !hasResourceAclBypass(actor)
   if (refs.length === 0 || !enforce) return { missing }
-  const table = ACL_TABLES[type]
-  const rows = (await db
-    .select({
-      id: table.id,
-      name: table.name,
-      ownerUserId: table.ownerUserId,
-      visibility: table.visibility,
-    })
-    .from(table)
-    .where(inArray(table.name, refs))) as Array<AclRow & { name: string }>
+  const rows = await listAclResourceIdentityRowsByNames(db, type, refs)
   if (rows.length === 0) return { missing }
   const granted = await listGrantedResourceIds(db, actor, type)
   const byName = groupRowsByName(rows)
@@ -190,16 +184,7 @@ async function loadAclRefRows(
 }> {
   const byId = new Map<string, AclRow & { name: string }>()
   if (tokens.length === 0) return { byId }
-  const table = ACL_TABLES[type]
-  const rows = (await db
-    .select({
-      id: table.id,
-      name: table.name,
-      ownerUserId: table.ownerUserId,
-      visibility: table.visibility,
-    })
-    .from(table)
-    .where(inArray(table.id, [...tokens]))) as Array<AclRow & { name: string }>
+  const rows = await listAclResourceIdentityRowsByIds(db, type, tokens)
   for (const row of rows) {
     byId.set(row.id, row)
   }
@@ -292,20 +277,12 @@ export function assertRefsUsableInTx(
     const refs = [...new Set(group.names)].filter((ref) => ref.length > 0)
     if (refs.length === 0) continue
     const nameDomain = group.domain === 'name'
-    const table = ACL_TABLES[group.type]
     // Narrowed enforcement identity: null ⇒ framework caller or ACL-bypass actor.
     const enforcingActor = actor !== null && !hasResourceAclBypass(actor) ? actor : null
     if (nameDomain && enforcingActor === null) continue // dangle-tolerant + no ACL to enforce
-    const rows = tx
-      .select({
-        id: table.id,
-        name: table.name,
-        ownerUserId: table.ownerUserId,
-        visibility: table.visibility,
-      })
-      .from(table)
-      .where(nameDomain ? inArray(table.name, refs) : inArray(table.id, refs))
-      .all() as Array<AclRow & { name: string }>
+    const rows = nameDomain
+      ? listAclResourceIdentityRowsByNamesInTx(tx, group.type, refs)
+      : listAclResourceIdentityRowsByIdsInTx(tx, group.type, refs)
     const byId = new Map(rows.map((row) => [row.id, row]))
     // RFC-282 D2 — the grant-set SQL lives in resourceAcl only.
     const granted =

@@ -14,8 +14,8 @@ import { Paths } from '@/util/paths'
 import { buildCurrentActor, type Actor } from '@/auth/actor'
 import { createSecretBox } from '@/auth/secretBox'
 import { users } from '@/db/schema'
-import { ACL_TABLES } from '@/services/resourceAcl'
-import { and, eq } from 'drizzle-orm'
+import { findOwnedAclResourceIdsByName } from '@/services/resourceAcl'
+import { eq } from 'drizzle-orm'
 import { writeFileSync, readFileSync } from 'node:fs'
 import { exportResourcePackage } from '@/services/resourcePackage/export'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
@@ -154,12 +154,7 @@ async function runExport(
     const name = flags.get('name')
     if (name === undefined)
       return { output: 'either --id or --name is required\n', status: 'error' }
-    const table = ACL_TABLES[type]
-    const matches = db
-      .select({ id: table.id })
-      .from(table)
-      .where(and(eq(table.name, name), eq(table.ownerUserId, actor.user.id)))
-      .all()
+    const matches = await findOwnedAclResourceIdsByName(db, type, actor.user.id, name)
     if (matches.length === 0)
       return { output: `no ${type} named '${name}' for you\n`, status: 'error' }
     if (matches.length > 1) {
@@ -167,11 +162,11 @@ async function runExport(
       return {
         output:
           `${matches.length} ${type}s named '${name}' belong to you; pass --id to pick one:\n` +
-          matches.map((m) => `  ${m.id}\n`).join(''),
+          matches.map((match) => `  ${match}\n`).join(''),
         status: 'error',
       }
     }
-    id = matches[0]!.id
+    id = matches[0]!
   }
 
   const pkg = await exportResourcePackage(

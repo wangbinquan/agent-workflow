@@ -33,7 +33,11 @@ import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { users, workgroupMembers } from '@/db/schema'
-import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
+import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
+import {
+  listSqlitePackageResourceRowsByIds,
+  listSqlitePackageResourceRowsByNames,
+} from '@/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { ValidationError } from '@/util/errors'
 
@@ -92,14 +96,7 @@ async function loadRows(
   type: BundleResourceType,
   ids: readonly string[],
 ): Promise<Record<string, unknown>[]> {
-  if (ids.length === 0) return []
-  const table = ACL_TABLES[type]
-  const rows = await db
-    .select()
-    .from(table)
-    .where(inArray(table.id, [...ids]))
-    .orderBy(asc(table.id))
-  const out = rows as unknown as Record<string, unknown>[]
+  const out = await listSqlitePackageResourceRowsByIds(db, type, ids, { orderById: true })
   if (type === 'workgroup') await attachWorkgroupMembers(db, out)
   return out
 }
@@ -281,12 +278,9 @@ async function resolveCallTarget(
   idHint: string | undefined,
   grants: ReadonlySet<string>,
 ): Promise<Record<string, unknown> | null> {
-  const table = ACL_TABLES[type]
-  const rows = (await db
-    .select()
-    .from(table)
-    .where(inArray(table.name, [name]))
-    .orderBy(asc(table.id))) as unknown as Array<Record<string, unknown>>
+  const rows = await listSqlitePackageResourceRowsByNames(db, type, [name], {
+    orderById: true,
+  })
   const visible = rows.filter((r) => isVisibleRow(actor, r as never, grants))
   if (visible.length === 0) return null
   if (idHint !== undefined) {

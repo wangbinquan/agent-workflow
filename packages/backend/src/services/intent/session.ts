@@ -36,11 +36,12 @@ import {
 } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
-  ACL_TABLES,
   canAuditIntentSessions,
   canViewResource,
   canViewResourceInTx,
-  type AclRow,
+  getAclResourceAccessRow,
+  getAclResourceAccessRowInTx,
+  getAclResourceIdentityRowInTx,
 } from '@/services/resourceAcl'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import {
@@ -229,17 +230,8 @@ function buildInitialManifestInTx(
   const manifest: IntentContextManifest = []
   const alloc = createHandleAllocator(manifest)
   for (const ref of input.mounts ?? []) {
-    const table = ACL_TABLES[ref.resourceType]
-    const aclRow = tx
-      .select({
-        id: table.id,
-        ownerUserId: table.ownerUserId,
-        visibility: table.visibility,
-      })
-      .from(table)
-      .where(eq(table.id, ref.resourceId))
-      .get() as AclRow | undefined
-    if (aclRow === undefined || !canViewResourceInTx(tx, actor, ref.resourceType, aclRow)) {
+    const aclRow = getAclResourceAccessRowInTx(tx, ref.resourceType, ref.resourceId)
+    if (aclRow === null || !canViewResourceInTx(tx, actor, ref.resourceType, aclRow)) {
       throw new NotFoundError('resource-not-found', `${ref.resourceType} not found`)
     }
     if (manifestEntryFor(manifest, ref.resourceType, ref.resourceId) !== undefined) continue
@@ -600,19 +592,9 @@ export async function decideIntentMountSuggestions(
         rejected.push({ resourceType: request.resourceType, name: request.name })
         continue
       }
-      const table = ACL_TABLES[request.resourceType]
-      const candidate = tx
-        .select({
-          id: table.id,
-          name: table.name,
-          ownerUserId: table.ownerUserId,
-          visibility: table.visibility,
-        })
-        .from(table)
-        .where(eq(table.id, decision.resourceId))
-        .get() as (AclRow & { name: string }) | undefined
+      const candidate = getAclResourceIdentityRowInTx(tx, request.resourceType, decision.resourceId)
       if (
-        candidate === undefined ||
+        candidate === null ||
         candidate.name !== request.name ||
         !canViewResourceInTx(tx, actor, request.resourceType, candidate)
       ) {
@@ -819,19 +801,8 @@ export async function addIntentMount(
   const row = await getIntentSessionForActor(db, actor, sessionId)
   assertWritable(actor, row)
   // 404-shape for invisible resources — mounting is a read of the resource.
-  const table = ACL_TABLES[ref.resourceType]
-  const aclRow = (
-    await db
-      .select({
-        id: table.id,
-        ownerUserId: table.ownerUserId,
-        visibility: table.visibility,
-      })
-      .from(table)
-      .where(eq(table.id, ref.resourceId))
-      .limit(1)
-  )[0] as AclRow | undefined
-  if (aclRow === undefined || !(await canViewResource(db, actor, ref.resourceType, aclRow))) {
+  const aclRow = await getAclResourceAccessRow(db, ref.resourceType, ref.resourceId)
+  if (aclRow === null || !(await canViewResource(db, actor, ref.resourceType, aclRow))) {
     throw new NotFoundError('resource-not-found', `${ref.resourceType} not found`)
   }
   const now = Date.now()
@@ -992,19 +963,8 @@ export async function listIntentProvenanceForActor(
 ): Promise<
   Array<{ commitId: string; sessionId: string; sessionTitle: string; createdAt: number }>
 > {
-  const table = ACL_TABLES[ref.resourceType]
-  const aclRow = (
-    await db
-      .select({
-        id: table.id,
-        ownerUserId: table.ownerUserId,
-        visibility: table.visibility,
-      })
-      .from(table)
-      .where(eq(table.id, ref.resourceId))
-      .limit(1)
-  )[0] as AclRow | undefined
-  if (aclRow === undefined || !(await canViewResource(db, actor, ref.resourceType, aclRow))) {
+  const aclRow = await getAclResourceAccessRow(db, ref.resourceType, ref.resourceId)
+  if (aclRow === null || !(await canViewResource(db, actor, ref.resourceType, aclRow))) {
     return []
   }
   const rows = await db

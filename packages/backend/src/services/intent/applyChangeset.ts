@@ -57,7 +57,7 @@ import {
   plugins as pluginsTable,
   skillOperations,
 } from '@/db/schema'
-import { ACL_TABLES } from '@/services/resourceAcl'
+import { getAclResourceOwner, listOwnedAclResourceNames } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import { ulid } from 'ulid'
@@ -185,16 +185,9 @@ export async function copyOnlyTargetsFor(
     // finalName / receipt 的 fromCopy）逐条保持。
     const entry = byHandle.get(op.target)
     if (entry === undefined) continue // unknown handle → draft validation owns it
-    const table = ACL_TABLES[entry.resourceType]
-    const row = (
-      await db
-        .select({ ownerUserId: table.ownerUserId })
-        .from(table)
-        .where(eq(table.id, entry.resourceId))
-        .limit(1)
-    )[0]
-    if (row === undefined) continue // vanished row → fence/stale owns it
-    if (row.ownerUserId !== actor.user.id) {
+    const ownerUserId = await getAclResourceOwner(db, entry.resourceType, entry.resourceId)
+    if (ownerUserId === undefined) continue // vanished row → fence/stale owns it
+    if (ownerUserId !== actor.user.id) {
       out.set(op.target, 'owned by another user or built-in')
     }
   }
@@ -289,12 +282,8 @@ async function occupiedNamesFor(
   // walking the capability template tables would add two sets nothing reads
   // and, once they were keys, quietly widen what an intent op may name.
   for (const type of INTENT_RESOURCE_TYPES) {
-    const table = ACL_TABLES[type]
-    const rows = await db
-      .select({ name: table.name })
-      .from(table)
-      .where(eq(table.ownerUserId, ownerUserId))
-    out.set(type, new Set(rows.map((r) => r.name.toLowerCase())))
+    const names = await listOwnedAclResourceNames(db, type, ownerUserId)
+    out.set(type, new Set(names.map((name) => name.toLowerCase())))
   }
   return out
 }

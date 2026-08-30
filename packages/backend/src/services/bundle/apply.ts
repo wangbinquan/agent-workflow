@@ -21,95 +21,26 @@
 // 补偿逻辑一并放进去是最自然的手滑，而那会把一次**已经成功**的导入回滚掉。
 
 import { and, eq } from 'drizzle-orm'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
-import { stringify as stringifyYaml } from 'yaml'
-import {
-  CreateAgentSchema,
-  CreateMcpSchema,
-  CreateWorkgroupSchema,
-  UpdateAgentSchema,
-  WorkflowDefinitionSchema,
-  migrateWorkflowDefinitionToLatest,
-  type CreateMcp,
-  type CreateWorkgroup,
-  type WorkflowDefinition,
-} from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { plugins, resourceBundleApplies, skillOperations } from '@/db/schema'
+import { dbTxSync } from '@/db/txSync'
+import { resourceBundleApplies } from '@/db/schema'
 import {
-  commitTemplateInTx,
-  prepareTemplateFromBundle,
-  type PreparedTemplateWrite,
-} from '@/services/capabilityTemplates'
-import { ACL_TABLES, initialPrivateResourceAcl } from '@/services/resourceAcl'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+  compensateLegacyResourcePackageArtifact,
+  createLegacyResourcePackageMutationAdapter,
+  rollForwardLegacyResourcePackageArtifacts,
+  type PreparedResourcePackageMutation,
+  type ResourcePackageMutationArtifact,
+} from '@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'
+import { ConflictError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
-import {
-  commitAgentCreateInTx,
-  commitAgentUpdateInTx,
-  getAgentById,
-  prepareAgentCreate,
-  prepareAgentUpdate,
-  type PreparedAgentCreate,
-  type PreparedAgentUpdate,
-} from '@/services/agent'
-import {
-  commitMcpCreateInTx,
-  commitMcpUpdateInTx,
-  getMcpById,
-  prepareMcpCreate,
-  type PreparedMcpCreate,
-  type PreparedMcpUpdate,
-} from '@/services/mcp'
-import { commitPluginCreateInTx, commitPluginPublishInTx } from '@/services/plugin'
-import { installPlugin, plannedGenerationDir, type InstallResult } from '@/services/pluginInstaller'
-import {
-  commitSkillReadyInTx,
-  compensateManagedSkillStage,
-  stageManagedSkill,
-} from '@/services/skill'
-import {
-  abortStagedSkillVersion,
-  commitSkillVersionInTx,
-  publishStagedSkillVersion,
-  stageSkillVersion,
-  type StagedSkillVersion,
-} from '@/services/skillVersion'
-import { unmarkSkillBootVerified } from '@/services/skillBootVerify'
-import { finishOperation } from '@/services/skillOperations'
-import {
-  assertRefsUsableInTx,
-  extractWorkflowWorkflowRefs,
-  extractWorkflowWorkgroupRefs,
-} from '@/services/resourceRefs'
-import {
-  broadcastWorkflowCreated,
-  commitWorkflowSaveInTx,
-  insertWorkflowInTx,
-  prepareWorkflowSave,
-  rowToWorkflowDetail,
-  type PreparedWorkflowSave,
-} from '@/services/workflow'
-import {
-  broadcastWorkgroupCreated,
-  commitWorkgroupCreateInTx,
-  commitWorkgroupSaveInTx,
-  prepareWorkgroupCreate,
-  prepareWorkgroupSave,
-  type PreparedWorkgroupCreate,
-  type PreparedWorkgroupSave,
-} from '@/services/workgroups'
 import {
   planBundleOps,
   type BundleApplyInput,
   type BundleArtifact,
   type BundleReceipt,
 } from './provider'
-import { lowerBundlePayloads, type LoweredOp } from './lower'
-import { monotonicNow } from '@/util/time'
+import { lowerBundlePayloads } from './lower'
 
 export interface BundleApplyDeps {
   db: DbClient
@@ -158,21 +89,6 @@ async function withApplyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 const ACTIVE_BUNDLE_APPLIES = new Set<string>()
 /** I9：再加一条下限——一个慢 npm 安装跨过小时 tick 是 ACTIVE，不是崩溃。 */
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
-
-type PreparedOp =
-  | { op: LoweredOp; kind: 'agent-create'; prepared: PreparedAgentCreate }
-  | { op: LoweredOp; kind: 'agent-update'; prepared: PreparedAgentUpdate }
-  | { op: LoweredOp; kind: 'mcp-create'; prepared: PreparedMcpCreate }
-  | { op: LoweredOp; kind: 'mcp-update'; prepared: PreparedMcpUpdate }
-  | { op: LoweredOp; kind: 'plugin-create'; spec: string; parsed: Record<string, unknown> }
-  | { op: LoweredOp; kind: 'plugin-update'; spec: string; captured: Record<string, unknown> }
-  | { op: LoweredOp; kind: 'skill-create' }
-  | { op: LoweredOp; kind: 'skill-update' }
-  | { op: LoweredOp; kind: 'workflow-create'; definition: WorkflowDefinition }
-  | { op: LoweredOp; kind: 'workflow-update'; prepared: PreparedWorkflowSave }
-  | { op: LoweredOp; kind: 'workgroup-create'; prepared: PreparedWorkgroupCreate }
-  | { op: LoweredOp; kind: 'workgroup-update'; prepared: PreparedWorkgroupSave }
-  | { op: LoweredOp; kind: 'capability-template'; prepared: PreparedTemplateWrite }
 
 export async function applyResourceBundle(
   deps: BundleApplyDeps,
@@ -248,9 +164,18 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
     })
   }
 
-  const pluginInstalls = new Map<string, InstallResult>()
-  const skillStages = new Map<string, { skillId: string; opId: string; skillDir: string }>()
-  const skillVersionStages = new Map<string, StagedSkillVersion>()
+  const mutationAdapter = createLegacyResourcePackageMutationAdapter({
+    db,
+    appHome: deps.appHome,
+    actor,
+    ...(deps.pluginInstallOpts === undefined ? {} : { pluginInstallOpts: deps.pluginInstallOpts }),
+    ...(deps.faults?.afterPluginInstall === undefined
+      ? {}
+      : { afterPluginInstall: deps.faults.afterPluginInstall }),
+    ...(deps.faults?.afterSkillStage === undefined
+      ? {}
+      : { afterSkillStage: deps.faults.afterSkillStage }),
+  })
   let committedReceipt: BundleReceipt | null = null
 
   try {
@@ -267,81 +192,23 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
         .map((o) => [o.resourceId, (o.payload as { name: string }).name]),
     )
 
-    const preparedOps: PreparedOp[] = []
+    const preparedOps: PreparedResourcePackageMutation[] = []
     for (const op of lowered) {
-      preparedOps.push(await prepareOne(deps, op, { actor, pendingIds, pendingAgentNames, key }))
+      preparedOps.push(await mutationAdapter.prepare(op, { pendingIds, pendingAgentNames, key }))
     }
 
     // ── ② pre-stage（record-before-act） ─────────────────────────────────
     for (const item of preparedOps) {
-      if (item.kind === 'plugin-create' || item.kind === 'plugin-update') {
-        // I14：generation id **由调用方预铸**，精确路径先落 journal 再安装。
-        const generationId = ulid()
-        const generationDir = plannedGenerationDir(
-          item.op.resourceId,
-          item.spec,
-          generationId,
-          deps.pluginInstallOpts?.pluginsDir,
-        )
-        if (generationDir !== null) {
-          recordArtifact({
-            kind: 'plugin-install',
-            pluginId: item.op.resourceId,
-            generationId,
-            generationDir,
-          })
-        }
-        const install = await installPlugin(item.op.resourceId, item.spec, {
-          ...deps.pluginInstallOpts,
-          generationId,
-        })
-        pluginInstalls.set(item.op.opId, install)
-        deps.faults?.afterPluginInstall?.()
-      } else if (item.kind === 'skill-create') {
-        const stage = await stageManagedSkill(
-          db,
-          { appHome: deps.appHome },
-          {
-            name: skillPayload(item.op).name,
-            description: skillPayload(item.op).description,
-            ownerUserId: actor.user.id,
-            actor,
-            id: item.op.resourceId,
-          },
-          (filesDir) => writeSkillTree(filesDir, item.op, provider.readSkillFile),
-        )
-        skillStages.set(item.op.opId, stage)
-        recordArtifact({ kind: 'skill-stage', ...stage })
-        deps.faults?.afterSkillStage?.()
-      } else if (item.kind === 'skill-update') {
-        const staged = stageSkillVersion(
-          db,
-          { appHome: deps.appHome },
-          item.op.resourceId,
-          (stagingDir) => writeSkillTree(stagingDir, item.op, provider.readSkillFile),
-          {
-            source: 'import',
-            authorUserId: actor.user.id,
-            ...skillExpectOf(item.op),
-            // T12：owner 围栏与其它类型同源——update 只能落在自己的行上。
-            expectedOwnerUserId: actor.user.id,
-            setDescription: skillPayload(item.op).description,
-          },
-        )
-        skillVersionStages.set(item.op.opId, staged)
-        // 完整结构落库：补偿只需要 stagingDir，但 committed 之后的 publish 重放
-        // 需要全部字段（见 `BundleArtifact` 的注释）。
-        recordArtifact({ kind: 'skill-version-stage', staged })
-        deps.faults?.afterSkillStage?.()
-      }
+      await mutationAdapter.prestage(item, {
+        readSkillFile: provider.readSkillFile,
+        recordArtifact: (artifact) => recordArtifact(artifact),
+      })
     }
 
     deps.faults?.beforeTx?.()
 
     // ── ③ big tx ─────────────────────────────────────────────────────────
     const applied: BundleReceipt['applied'] = []
-    const createdWorkflowRows: Array<ReturnType<typeof insertWorkflowInTx>> = []
-    const createdWorkgroups: Array<ReturnType<typeof commitWorkgroupCreateInTx>> = []
     const receipt = dbTxSync(db, (tx) => {
       const cas = tx
         .update(resourceBundleApplies)
@@ -360,7 +227,7 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
 
       // T12：**每个 update 目标**在提交事务里断言 owner。这是 §5.4 的核心——
       // 内容 hash 只证明「我读到的是这一版」，不是授权。
-      assertUpdateTargetsOwnedInTx(tx, actor.user.id, lowered)
+      mutationAdapter.assertUpdateTargetsOwnedInTx(tx, lowered)
 
       // 设计门 B3：本 bundle 正在创建的名字要从引用 ACL 复核里排除——那些行是
       // actor 在**这个事务里**创建的，没有别人的行可以躲在同名背后。
@@ -379,15 +246,7 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
       }
 
       for (const item of preparedOps) {
-        commitOne(tx, item, {
-          actor,
-          pluginInstalls,
-          skillStages,
-          skillVersionStages,
-          bundleCreatedNames,
-          createdWorkflowRows,
-          createdWorkgroups,
-        })
+        mutationAdapter.commitInTx(tx, item, { bundleCreatedNames })
         applied.push({
           opId: item.op.opId,
           resourceType: item.op.resourceType,
@@ -416,21 +275,8 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
 
     // ── ④ 幂等尾 ─────────────────────────────────────────────────────────
     deps.faults?.afterTxBeforeRollForward?.()
-    rollForwardCommitted(db, deps.appHome, { skillStages, skillVersionStages }, log)
-    for (const row of createdWorkflowRows) {
-      try {
-        broadcastWorkflowCreated(rowToWorkflowDetail(row))
-      } catch {
-        /* broadcast is fire-and-forget */
-      }
-    }
-    for (const wg of createdWorkgroups) {
-      try {
-        broadcastWorkgroupCreated(wg)
-      } catch {
-        /* broadcast is fire-and-forget */
-      }
-    }
+    mutationAdapter.rollForwardCommitted(log)
+    mutationAdapter.broadcastCommitted()
     return receipt
   } catch (error) {
     if (committedReceipt !== null) {
@@ -449,7 +295,7 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
     for (const artifact of [...artifacts].reverse()) {
       try {
         deps.faults?.beforeArtifactCompensation?.(artifact)
-        compensateArtifact(db, deps.appHome, artifact)
+        compensateLegacyResourcePackageArtifact(db, artifact as ResourcePackageMutationArtifact)
       } catch (err) {
         compensated = false
         log.warn('bundle-artifact-compensation-failed', {
@@ -507,459 +353,6 @@ export function replayBundleApplyOutcome(
   )
 }
 
-/** T12 —— 每个 update 目标必须归 actor 所有。 */
-function assertUpdateTargetsOwnedInTx(
-  tx: DbTxSync,
-  actorUserId: string,
-  ops: readonly LoweredOp[],
-): void {
-  for (const op of ops) {
-    if (op.action !== 'update') continue
-    const table = ACL_TABLES[op.resourceType]
-    const row = tx
-      .select({ ownerUserId: table.ownerUserId })
-      .from(table)
-      .where(eq(table.id, op.resourceId))
-      .get()
-    if (row === undefined) {
-      throw new NotFoundError(
-        `${op.resourceType}-not-found`,
-        `update target '${op.resourceId}' not found`,
-      )
-    }
-    if (row.ownerUserId !== actorUserId) {
-      // 「只能覆盖自己的，别人的不给覆盖选项」——服务端复算，不信客户端说什么。
-      throw new ValidationError(
-        'bundle-overwrite-not-owned',
-        `cannot overwrite ${op.resourceType} '${op.resourceId}': it belongs to another user`,
-      )
-    }
-  }
-}
-
-// --- 各 op 的 prepare / commit ---------------------------------------------
-
-const skillPayload = (op: LoweredOp): { name: string; description: string } =>
-  op.payload as { name: string; description: string }
-
-const skillExpectOf = (
-  op: LoweredOp,
-): { expectedVersion?: number; expectedMetaRevision?: number } => {
-  const expect = op.expect as
-    | { expectedContentVersion?: number; expectedMetaRevision?: number }
-    | undefined
-  if (expect === undefined) return {}
-  return {
-    ...(expect.expectedContentVersion !== undefined
-      ? { expectedVersion: expect.expectedContentVersion }
-      : {}),
-    ...(expect.expectedMetaRevision !== undefined
-      ? { expectedMetaRevision: expect.expectedMetaRevision }
-      : {}),
-  }
-}
-
-function writeSkillTree(
-  filesDir: string,
-  op: LoweredOp,
-  readSkillFile: (ref: string) => Uint8Array,
-): void {
-  const payload = op.payload as {
-    name: string
-    description: string
-    frontmatterExtra: Record<string, unknown>
-    bodyMd: string
-    files: Array<{ path: string; ref: string }>
-  }
-  const skillMd = `---\n${stringifyYaml(
-    { name: payload.name, description: payload.description, ...payload.frontmatterExtra },
-    { lineWidth: 0 },
-  )}---\n\n${payload.bodyMd}\n`
-  writeFileSync(join(filesDir, 'SKILL.md'), skillMd)
-  for (const file of payload.files) {
-    const abs = join(filesDir, file.path)
-    mkdirSync(dirname(abs), { recursive: true })
-    writeFileSync(abs, readSkillFile(file.ref))
-  }
-}
-
-async function prepareOne(
-  deps: BundleApplyDeps,
-  op: LoweredOp,
-  ctx: {
-    actor: BundleApplyInput['provider']['actor']
-    pendingIds: Set<string>
-    pendingAgentNames: Map<string, string>
-    key: string
-  },
-): Promise<PreparedOp> {
-  const { db } = deps
-  const { actor } = ctx
-  switch (op.kind) {
-    case 'agent-create': {
-      const parsed = CreateAgentSchema.parse(op.payload)
-      const prepared = await prepareAgentCreate(db, parsed, {
-        ownerUserId: actor.user.id,
-        actor,
-        id: op.resourceId,
-        pendingBundleIds: ctx.pendingIds,
-      })
-      return { op, kind: 'agent-create', prepared }
-    }
-    case 'agent-update': {
-      const existing = await getAgentById(db, op.resourceId)
-      if (existing === null) throw new NotFoundError('agent-not-found', 'agent not found')
-      const { name: _name, ...patchBody } = op.payload as Record<string, unknown>
-      const patch = UpdateAgentSchema.parse(patchBody)
-      const expect = op.expect as { expectedUpdatedAt: number; expectedAclRevision: number }
-      const prepared = await prepareAgentUpdate(db, op.resourceId, patch, actor, expect, {
-        pendingBundleIds: ctx.pendingIds,
-      })
-      return { op, kind: 'agent-update', prepared }
-    }
-    case 'mcp-create': {
-      const parsed: CreateMcp = CreateMcpSchema.parse(op.payload)
-      const prepared = await prepareMcpCreate(db, parsed, {
-        ownerUserId: actor.user.id,
-        actor,
-      })
-      return { op, kind: 'mcp-create', prepared: { ...prepared, id: op.resourceId } }
-    }
-    case 'mcp-update': {
-      const existing = await getMcpById(db, op.resourceId)
-      if (existing === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
-      const p = op.payload as CreateMcp
-      if (p.type !== existing.type) {
-        throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
-      }
-      const expect = op.expect as { expectedConfigHash: string }
-      return {
-        op,
-        kind: 'mcp-update',
-        prepared: {
-          id: op.resourceId,
-          set: {
-            updatedAt: monotonicNow(existing.updatedAt),
-            description: p.description,
-            enabled: p.enabled,
-            config: JSON.stringify(p.config),
-          },
-          expectedConfigHash: expect.expectedConfigHash,
-          expectedOwnerUserId: actor.user.id,
-        },
-      }
-    }
-    case 'plugin-create': {
-      const p = op.payload as { spec: string } & Record<string, unknown>
-      return { op, kind: 'plugin-create', spec: p.spec, parsed: p }
-    }
-    case 'plugin-update': {
-      const p = op.payload as { spec: string } & Record<string, unknown>
-      return { op, kind: 'plugin-update', spec: p.spec, captured: p }
-    }
-    case 'skill-create':
-      return { op, kind: 'skill-create' }
-    case 'skill-update':
-      return { op, kind: 'skill-update' }
-    case 'workflow-create': {
-      const definition = migrateWorkflowDefinitionToLatest(
-        WorkflowDefinitionSchema.parse((op.payload as { definition: unknown }).definition),
-      )
-      return { op, kind: 'workflow-create', definition }
-    }
-    case 'workflow-update': {
-      const expect = op.expect as { expectedVersion: number }
-      const payload = op.payload as { name: string; description: string; definition: unknown }
-      const prepared = await prepareWorkflowSave(
-        db,
-        op.resourceId,
-        {
-          expectedVersion: expect.expectedVersion,
-          clientMutationId: ctx.key,
-          snapshot: {
-            name: payload.name,
-            description: payload.description,
-            definition: migrateWorkflowDefinitionToLatest(
-              WorkflowDefinitionSchema.parse(payload.definition),
-            ),
-          },
-        },
-        { kind: 'actor', actor },
-      )
-      return { op, kind: 'workflow-update', prepared }
-    }
-    case 'workgroup-create': {
-      const parsed: CreateWorkgroup = CreateWorkgroupSchema.parse(op.payload)
-      const prepared = await prepareWorkgroupCreate(db, parsed, {
-        ownerUserId: actor.user.id,
-        actor,
-        pendingAgentNames: ctx.pendingAgentNames,
-      })
-      return {
-        op,
-        kind: 'workgroup-create',
-        prepared: { ...prepared, groupId: op.resourceId },
-      }
-    }
-    // RFC-304 T17b — create and update collapse into one prepared kind because
-    // the row builder is the same either way; `existing` is what distinguishes
-    // them, and it is a fact about the database rather than about the op.
-    // RFC-309 — one prepared kind for all six op names. The four legacy ones
-    // are kept so a package exported before the merge still imports (AC-12):
-    // a `capability-framework-*` op lands as a template with no agents filled
-    // in, and a `capability-binding-*` op as one with no scripts, which is
-    // exactly what each half carried. Whichever arrives, the field-level
-    // `scripts:author` check inside `prepareTemplateFromBundle` applies — an
-    // import must not be a way around the rule the HTTP route enforces.
-    case 'capability-framework-create':
-    case 'capability-framework-update':
-    case 'capability-binding-create':
-    case 'capability-binding-update':
-    case 'capability-template-create':
-    case 'capability-template-update': {
-      const prepared = await prepareTemplateFromBundle(
-        db,
-        { ...(op.payload as Record<string, unknown>), id: op.resourceId } as never,
-        actor,
-        op.kind.endsWith('-update') ? op.resourceId : null,
-      )
-      return { op, kind: 'capability-template', prepared }
-    }
-    case 'workgroup-update': {
-      const expect = op.expect as { expectedVersion: number }
-      const prepared = await prepareWorkgroupSave(
-        db,
-        op.resourceId,
-        {
-          expectedVersion: expect.expectedVersion,
-          clientMutationId: ctx.key,
-          snapshot: op.payload,
-        } as never,
-        { kind: 'actor', actor },
-      )
-      return { op, kind: 'workgroup-update', prepared }
-    }
-  }
-}
-
-function commitOne(
-  tx: DbTxSync,
-  item: PreparedOp,
-  ctx: {
-    actor: BundleApplyInput['provider']['actor']
-    pluginInstalls: Map<string, InstallResult>
-    skillStages: Map<string, { skillId: string; opId: string }>
-    skillVersionStages: Map<string, StagedSkillVersion>
-    bundleCreatedNames: { workflow: Set<string>; workgroup: Set<string> }
-    createdWorkflowRows: Array<ReturnType<typeof insertWorkflowInTx>>
-    createdWorkgroups: Array<ReturnType<typeof commitWorkgroupCreateInTx>>
-  },
-): void {
-  switch (item.kind) {
-    case 'agent-create':
-      commitAgentCreateInTx(tx, item.prepared)
-      return
-    case 'agent-update':
-      commitAgentUpdateInTx(tx, item.prepared)
-      return
-    case 'mcp-create':
-      commitMcpCreateInTx(tx, item.prepared)
-      return
-    case 'mcp-update':
-      commitMcpUpdateInTx(tx, item.prepared)
-      return
-    case 'plugin-create': {
-      const install = ctx.pluginInstalls.get(item.op.opId)
-      if (install === undefined) throw new Error('plugin install result missing')
-      commitPluginCreateInTx(tx, {
-        id: item.op.resourceId,
-        parsed: item.parsed as never,
-        // RFC-284 T11：字面 ACL 初值收编 initialPrivateResourceAcl（值逐字节同）。
-        initialAcl: initialPrivateResourceAcl(ctx.actor.user.id),
-        install,
-        now: Date.now(),
-      })
-      return
-    }
-    case 'plugin-update': {
-      const install = ctx.pluginInstalls.get(item.op.opId)
-      if (install === undefined) throw new Error('plugin install result missing')
-      const captured = selectPluginRowInTx(tx, item.op.resourceId)
-      const p = item.captured as {
-        spec: string
-        options?: Record<string, unknown>
-        description?: string
-        enabled?: boolean
-      }
-      commitPluginPublishInTx(tx, captured, {
-        spec: p.spec,
-        optionsJson: JSON.stringify(p.options ?? {}),
-        description: p.description ?? captured.description,
-        enabled: p.enabled ?? captured.enabled,
-        sourceKind: install.sourceKind,
-        cachedPath: install.cachedPath,
-        resolvedVersion: install.resolvedVersion,
-        installedAt: Date.now(),
-        updatedAt: monotonicNow(captured.updatedAt),
-      })
-      return
-    }
-    case 'skill-create': {
-      const stage = ctx.skillStages.get(item.op.opId)
-      if (stage === undefined) throw new Error('skill stage missing')
-      commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
-      return
-    }
-    case 'skill-update': {
-      const staged = ctx.skillVersionStages.get(item.op.opId)
-      if (staged === undefined) throw new Error('skill version stage missing')
-      commitSkillVersionInTx(tx, staged, {
-        source: 'import',
-        authorUserId: ctx.actor.user.id,
-        setDescription: skillPayload(item.op).description,
-      })
-      return
-    }
-    case 'workflow-create': {
-      // I13：引用 ACL 复核**在事务内**。挪到事务外（很自然的「preflight 归
-      // preflight」重构）会留下一个窗口：检查通过之后、提交之前 grant 被撤销，
-      // 资源仍带着一个已失效的引用落库。
-      assertRefsUsableInTx(tx, ctx.actor, [
-        {
-          type: 'agent',
-          domain: 'id',
-          names: (item.definition.nodes ?? [])
-            .filter((n) => n.kind === 'agent-single' && typeof n.agentId === 'string')
-            .map((n) => n.agentId as string),
-        },
-        {
-          type: 'workflow',
-          names: extractWorkflowWorkflowRefs(item.definition).filter(
-            (name) => !ctx.bundleCreatedNames.workflow.has(name),
-          ),
-          domain: 'name',
-        },
-        {
-          type: 'workgroup',
-          names: extractWorkflowWorkgroupRefs(item.definition).filter(
-            (name) => !ctx.bundleCreatedNames.workgroup.has(name),
-          ),
-          domain: 'name',
-        },
-      ])
-      const payload = item.op.payload as { name: string; description: string }
-      ctx.createdWorkflowRows.push(
-        insertWorkflowInTx(tx, {
-          scriptPrincipal: { kind: 'actor', actor: ctx.actor },
-          id: item.op.resourceId,
-          name: payload.name,
-          description: payload.description,
-          definition: item.definition,
-          ownerUserId: ctx.actor.user.id,
-          builtin: false,
-          now: Date.now(),
-        }),
-      )
-      return
-    }
-    case 'workflow-update': {
-      const result = commitWorkflowSaveInTx(tx, item.prepared)
-      if (!result.committed && result.receipt.outcome !== 'already-current') {
-        throw new ConflictError('bundle-baseline-stale', 'workflow save did not commit')
-      }
-      return
-    }
-    case 'workgroup-create':
-      ctx.createdWorkgroups.push(commitWorkgroupCreateInTx(tx, item.prepared))
-      return
-    case 'workgroup-update': {
-      const result = commitWorkgroupSaveInTx(tx, item.prepared)
-      if (!result.committed && result.receipt.outcome !== 'already-current') {
-        throw new ConflictError('bundle-baseline-stale', 'workgroup save did not commit')
-      }
-      return
-    }
-    case 'capability-template':
-      commitTemplateInTx(tx, item.prepared)
-      return
-  }
-}
-
-function selectPluginRowInTx(tx: DbTxSync, id: string): typeof plugins.$inferSelect {
-  const row = tx.select().from(plugins).where(eq(plugins.id, id)).get()
-  if (row === undefined) throw new NotFoundError('plugin-not-found', `plugin '${id}' not found`)
-  return row
-}
-
-/**
- * ④ 幂等尾。可安全重放。
- *
- * ⚠️ `unmarkSkillBootVerified` 在这里**一次性**对全部已提交技能做，且在任何逐项
- * publish 之前（T10 的那条注释）：放进 publish 里的话，先发布的技能已经 mark
- * 回来，而后一个还没发布的仍带着上一代 admission。
- */
-function rollForwardCommitted(
-  db: DbClient,
-  appHome: string,
-  state: {
-    skillStages: Map<string, { skillId: string; opId: string }>
-    skillVersionStages: Map<string, StagedSkillVersion>
-  },
-  log: Logger,
-): void {
-  // A committed journal is retained for audit and the hourly converger sees it forever. Once a
-  // skill operation is `done`, its exact tail has already published, verified and released its
-  // lock; replaying that old artifact after a later edit would compare today's live tree with the
-  // old hash and, worse, unmark the healthy skill before failing. Only the exact still-active op
-  // is an unfinished tail. Boot recovery may have finished it before this journal converger runs,
-  // in which case the boot snapshot verifier owns admission and this pass must be a no-op.
-  const pendingSkillVersions: StagedSkillVersion[] = []
-  for (const staged of state.skillVersionStages.values()) {
-    if (staged.opId === null) {
-      pendingSkillVersions.push(staged)
-      continue
-    }
-    const op = db
-      .select({ active: skillOperations.active, phase: skillOperations.phase })
-      .from(skillOperations)
-      .where(eq(skillOperations.opId, staged.opId))
-      .get()
-    if (op?.active === 1) {
-      pendingSkillVersions.push(staged)
-      continue
-    }
-    if (op?.phase !== 'done') {
-      log.warn('bundle-skill-publish-op-not-replayable', {
-        skillId: staged.skillId,
-        opId: staged.opId,
-        phase: op?.phase ?? 'missing',
-      })
-    }
-  }
-
-  for (const staged of pendingSkillVersions) unmarkSkillBootVerified(staged.skillId)
-  for (const staged of pendingSkillVersions) {
-    try {
-      publishStagedSkillVersion(db, { appHome }, staged)
-    } catch (err) {
-      log.warn('bundle-skill-publish-replayed-or-failed', {
-        skillId: staged.skillId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-  for (const stage of state.skillStages.values()) {
-    try {
-      dbTxSync(db, (tx) => finishOperation(tx, stage.opId))
-    } catch (err) {
-      log.warn('bundle-skill-finish-replayed-or-failed', {
-        skillId: stage.skillId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-}
-
 /**
  * ⑤ 收敛（启动 + 每小时）。
  *
@@ -984,24 +377,19 @@ export async function convergeResourceBundleApplies(
       // ⚠️ 光计数不算收敛：一次「DB 已提交、publish 前 SIGKILL」的 run 会留下一个
       // 已入库但**内容未发布**的技能版本。只 `rolledForward += 1` 等于宣称已经处理，
       // 而实际什么都没做。
-      const state = {
-        skillStages: new Map<string, { skillId: string; opId: string }>(),
-        skillVersionStages: new Map<string, StagedSkillVersion>(),
-      }
-      for (const artifact of parseArtifacts(row.preparedArtifactsJson)) {
-        if (artifact.kind === 'skill-stage') {
-          state.skillStages.set(artifact.opId, {
-            skillId: artifact.skillId,
-            opId: artifact.opId,
-          })
-        } else if (artifact.kind === 'skill-version-stage') {
-          const staged = artifact.staged as StagedSkillVersion
-          state.skillVersionStages.set(staged.publishId, staged)
-        }
-      }
-      if (state.skillStages.size > 0 || state.skillVersionStages.size > 0) {
+      const artifacts = parseArtifacts(row.preparedArtifactsJson)
+      if (
+        artifacts.some(
+          (artifact) => artifact.kind === 'skill-stage' || artifact.kind === 'skill-version-stage',
+        )
+      ) {
         // 每一步自己吞异常并 log（publish 已经发生过时会「重放即无操作」）。
-        rollForwardCommitted(db, appHome, state, log)
+        rollForwardLegacyResourcePackageArtifacts(
+          db,
+          appHome,
+          artifacts as ResourcePackageMutationArtifact[],
+          log,
+        )
       }
       rolledForward += 1
       continue
@@ -1018,7 +406,7 @@ export async function convergeResourceBundleApplies(
     const artifacts = parseArtifacts(row.preparedArtifactsJson)
     for (const artifact of [...artifacts].reverse()) {
       try {
-        compensateArtifact(db, appHome, artifact)
+        compensateLegacyResourcePackageArtifact(db, artifact as ResourcePackageMutationArtifact)
       } catch (err) {
         compensated = false
         log.warn('bundle-converge-compensation-failed', {
@@ -1055,24 +443,6 @@ function parseArtifacts(json: string): BundleArtifact[] {
     return Array.isArray(parsed) ? (parsed as BundleArtifact[]) : []
   } catch {
     return []
-  }
-}
-
-function compensateArtifact(db: DbClient, appHome: string, artifact: BundleArtifact): void {
-  switch (artifact.kind) {
-    case 'skill-stage':
-      compensateManagedSkillStage(db, artifact)
-      return
-    case 'skill-version-stage':
-      // 用**落库的那一份真实结构**，不再现编一个（旧写法把 newVersion/newHash 填
-      // 成 0/''、versionDir 填成 stagingDir，abort 恰好用不到才没出事——那是运气，
-      // 不是设计）。
-      abortStagedSkillVersion(db, artifact.staged as StagedSkillVersion)
-      return
-    case 'plugin-install':
-      // I14 的收益就在这一行：**精确路径**事前落了库，所以这里能删得准。
-      rmSync(artifact.generationDir, { recursive: true, force: true })
-      return
   }
 }
 

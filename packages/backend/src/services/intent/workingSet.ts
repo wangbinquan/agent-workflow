@@ -20,7 +20,7 @@ import {
   intentTurns,
   intentWorkingSetChanges,
 } from '@/db/schema'
-import { ACL_TABLES, canViewResourceInTx, type AclRow } from '@/services/resourceAcl'
+import { canViewResourceInTx, getAclResourceAccessRowInTx } from '@/services/resourceAcl'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { sha256Hex } from '@/util/hash'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
@@ -166,13 +166,8 @@ function validateAdditionsInTx(
   delta: IntentWorkingSetDelta,
 ): void {
   for (const ref of delta.additions) {
-    const table = ACL_TABLES[ref.resourceType]
-    const row = tx
-      .select({ id: table.id, ownerUserId: table.ownerUserId, visibility: table.visibility })
-      .from(table)
-      .where(eq(table.id, ref.resourceId))
-      .get() as AclRow | undefined
-    if (row === undefined || !canViewResourceInTx(tx, actor, ref.resourceType, row)) {
+    const row = getAclResourceAccessRowInTx(tx, ref.resourceType, ref.resourceId)
+    if (row === null || !canViewResourceInTx(tx, actor, ref.resourceType, row)) {
       throw new NotFoundError('resource-not-found', `${ref.resourceType} not found`)
     }
   }

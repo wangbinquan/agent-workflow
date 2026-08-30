@@ -18,7 +18,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { intentDraftResolutions, intentDrafts, intentSessions, intentTurns } from '@/db/schema'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
-import { ACL_TABLES, canViewResourceInTx, type AclRow } from '@/services/resourceAcl'
+import { canViewResourceInTx, getAclResourceIdentityRowInTx } from '@/services/resourceAcl'
 import { sha256Hex } from '@/util/hash'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { assertNoUnsettledApply, type ReservedIntentTurn } from './session'
@@ -502,19 +502,9 @@ export function reserveIntentCurrentAction(
     for (const request of requests) {
       const decision = decisions.get(mountRequestKey(request))!
       if (decision.action === 'reject') continue
-      const table = ACL_TABLES[request.resourceType]
-      const candidate = tx
-        .select({
-          id: table.id,
-          name: table.name,
-          ownerUserId: table.ownerUserId,
-          visibility: table.visibility,
-        })
-        .from(table)
-        .where(eq(table.id, decision.resourceId))
-        .get() as (AclRow & { name: string }) | undefined
+      const candidate = getAclResourceIdentityRowInTx(tx, request.resourceType, decision.resourceId)
       if (
-        candidate === undefined ||
+        candidate === null ||
         candidate.name !== request.name ||
         !canViewResourceInTx(tx, actor, request.resourceType, candidate)
       ) {

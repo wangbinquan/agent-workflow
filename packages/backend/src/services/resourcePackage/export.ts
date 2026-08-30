@@ -12,10 +12,13 @@
 
 import { stringify as stringifyYaml } from 'yaml'
 import type { BundleResourceType } from '@agent-workflow/shared'
-import { eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
+import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
+import {
+  getSqlitePackageResourceRow,
+  listSqlitePackageResourceRowsByIds,
+} from '@/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
 import { encodeZip, type ZipFile } from '@/util/zip'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
@@ -301,10 +304,7 @@ async function assertRootStillCurrent(
   expect: RootExportFence | undefined,
 ): Promise<void> {
   if (expect === undefined || Object.keys(expect).length === 0) return
-  const table = ACL_TABLES[type]
-  const row = (await db.select().from(table).where(eq(table.id, id)).get()) as
-    | Record<string, unknown>
-    | undefined
+  const row = await getSqlitePackageResourceRow(db, type, id)
   if (row === undefined) {
     throw new ConflictError('package-root-changed', `this ${type} vanished during export`)
   }
@@ -367,16 +367,11 @@ async function assertClosureStillCurrent(
 
   const currentRowById = new Map<string, Record<string, unknown>>()
   for (const [type, group] of byType) {
-    const table = ACL_TABLES[type]
-    const rows = (await db
-      .select()
-      .from(table)
-      .where(
-        inArray(
-          table.id,
-          group.map((resource) => resource.id),
-        ),
-      )) as unknown as Array<Record<string, unknown>>
+    const rows = await listSqlitePackageResourceRowsByIds(
+      db,
+      type,
+      group.map((resource) => resource.id),
+    )
     // ⚠️ 必须走**与闭包遍历同一条装载路径**：工作组成员在独立表 `workgroup_members`，
     // 由 `attachWorkgroupMembers` 在装载层补进 `row.members`。裸 select 拿到的行没有
     // 这个字段，比较时会恒不相等。

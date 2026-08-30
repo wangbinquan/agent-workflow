@@ -22,9 +22,10 @@ import { type DbTxSync, dbTxSync } from '@/db/txSync'
 import { users } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
-  ACL_TABLES,
   hasResourceAclBypass,
   isVisibleRow,
+  listAclResourceIdentityRowsByIdsInTx,
+  listAclResourceIdentityRowsByNamesInTx,
   listGrantedResourceIdsInTx,
 } from './resourceAcl'
 
@@ -351,18 +352,11 @@ function assertSelectedIdsVisibleInTx(
   for (const type of new Set(entries.map((entry) => entry.selector.type))) {
     const typeEntries = entries.filter((entry) => entry.selector.type === type)
     const selectedIds = [...new Set(typeEntries.map((entry) => entry.selectedId))]
-    const table = ACL_TABLES[type]
-    const selectedRows = tx
-      .select({
-        id: table.id,
-        name: table.name,
-        ownerUserId: table.ownerUserId,
-        visibility: table.visibility,
-        aclRevision: table.aclRevision,
-      })
-      .from(table)
-      .where(inArray(table.id, selectedIds))
-      .all() as ImportRefRow[]
+    const selectedRows = listAclResourceIdentityRowsByIdsInTx(
+      tx,
+      type,
+      selectedIds,
+    ) as ImportRefRow[]
     const grantedIds = grantedIdsInTx(tx, actor, type)
     const visibleSelectedIds = new Set(
       selectedRows.filter((row) => isVisibleRow(actor, row, grantedIds)).map((row) => row.id),
@@ -383,18 +377,7 @@ function buildCandidateSnapshotsInTx(
   for (const type of new Set(selectors.map((selector) => selector.type))) {
     const typeSelectors = selectors.filter((selector) => selector.type === type)
     const names = [...new Set(typeSelectors.map((selector) => selector.name))]
-    const table = ACL_TABLES[type]
-    const rows = tx
-      .select({
-        id: table.id,
-        name: table.name,
-        ownerUserId: table.ownerUserId,
-        visibility: table.visibility,
-        aclRevision: table.aclRevision,
-      })
-      .from(table)
-      .where(inArray(table.name, names))
-      .all() as ImportRefRow[]
+    const rows = listAclResourceIdentityRowsByNamesInTx(tx, type, names) as ImportRefRow[]
     const grantedIds = grantedIdsInTx(tx, actor, type)
     const visible = rows.filter((row) => isVisibleRow(actor, row, grantedIds))
     const ownerIds = [

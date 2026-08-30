@@ -8,11 +8,15 @@
 //
 // lowering 是**纯准备**：不写库、不碰 FS。它之后才轮到 prepare* / pre-stage。
 
-import type { AclResourceType, BundleOp, BundleOpKind } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
+import type {
+  AclResourceType,
+  BundleOp,
+  BundleOpKind,
+  BundleResourceType,
+} from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
-import { ACL_TABLES } from '@/services/resourceAcl'
+import { loadAclResourceNamesByIds } from '@/services/resourceAcl'
 import { ValidationError } from '@/util/errors'
 import { opAction, opSlug, resourceTypeOfOp, type BundleApplyProvider } from './provider'
 import {
@@ -26,7 +30,7 @@ import {
 export interface LoweredOp {
   opId: string
   kind: BundleOpKind
-  resourceType: AclResourceType
+  resourceType: BundleResourceType
   action: 'create' | 'update'
   /** create：预铸值；update：解析出来的既有行 id。 */
   resourceId: string
@@ -118,12 +122,9 @@ async function loadExistingNames(
     collectExternalRefs(op.payload, (type, id) => want(type, id))
   }
   for (const [type, ids] of byType) {
-    const table = ACL_TABLES[type]
-    const rows = await db
-      .select({ id: table.id, name: table.name })
-      .from(table)
-      .where(inArray(table.id, [...ids]))
-    for (const row of rows) into.set(row.id, row.name)
+    for (const [id, name] of await loadAclResourceNamesByIds(db, type, [...ids])) {
+      into.set(id, name)
+    }
   }
 }
 

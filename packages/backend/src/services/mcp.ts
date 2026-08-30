@@ -388,7 +388,7 @@ function validateConfigForType(type: 'local' | 'remote', config: unknown): void 
   }
 }
 
-function rowToMcp(row: McpRow): Mcp {
+export function rowToMcp(row: McpRow): Mcp {
   let config: unknown
   try {
     config = JSON.parse(row.config)

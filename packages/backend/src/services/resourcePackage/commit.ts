@@ -28,7 +28,14 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { resourceBundleApplies, users } from '@/db/schema'
-import { ACL_TABLES, canViewResource, canViewResourceInTx } from '@/services/resourceAcl'
+import { canViewResource, canViewResourceInTx } from '@/services/resourceAcl'
+import {
+  findSqliteBuiltinResource,
+  findSqliteBuiltinResourceInTx,
+  getSqlitePackageResourceRow,
+  getSqlitePackageResourceRowInTx,
+} from '@/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
+import { asPackageResourceKind } from '@/modules/resource-catalog/public/types'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
   applyResourceBundle,
@@ -630,22 +637,16 @@ function makePackageProvider(
       // 「本实例没有同名 built-in」——这正是原注释「只有两张表有列」所掩盖的
       // 那一步。
       if (type !== 'agent' && type !== 'workflow') return null
-      const table = ACL_TABLES[type]
-      const row = db
-        .select({ id: table.id })
-        .from(table)
-        .where(and(eq(table.name, name), eq((table as never as { builtin: never }).builtin, true)))
-        .get()
+      const row = await findSqliteBuiltinResource(db, type, name)
       return row?.id ?? null
     },
     resolveHumanMember: (workgroupSlug, username) =>
       humanMemberUserIds.get(humanMemberKey(workgroupSlug, username)) ?? null,
     resolveExternal: async (ref, expectType) => {
       const id = ref.startsWith('external:') ? ref.slice('external:'.length) : ref
-      const table = ACL_TABLES[expectType]
-      const row = db.select().from(table).where(eq(table.id, id)).get() as
-        | Record<string, unknown>
-        | undefined
+      const packageType = asPackageResourceKind(expectType)
+      const row =
+        packageType === null ? undefined : await getSqlitePackageResourceRow(db, packageType, id)
       // Missing and hidden must be byte-for-byte the same refusal. Otherwise a hand-built
       // package carrying `external:<id>` can distinguish a private row from an absent one before
       // the canonical write kernel reaches its own reference fence.
@@ -674,10 +675,7 @@ function makePackageProvider(
         if (expect === undefined) continue
         const type = typeOfSlug(input.pkg, d.localSlug)
         if (type === null) continue
-        const table = ACL_TABLES[type]
-        const row = tx.select().from(table).where(eq(table.id, d.targetId)).get() as
-          | Record<string, unknown>
-          | undefined
+        const row = getSqlitePackageResourceRowInTx(tx, type, d.targetId)
         if (row === undefined || !canViewResourceInTx(tx, actor, type, row as never)) {
           throw new ConflictError(
             'package-selected-target-gone',
@@ -707,14 +705,10 @@ function makePackageProvider(
         if (ref?.k !== 'builtin') {
           throw new ValidationError('package-invalid', `invalid builtin root '${rootRef}'`)
         }
-        const table = ACL_TABLES[ref.type]
-        const row = tx
-          .select({ id: table.id, name: table.name })
-          .from(table)
-          .where(
-            and(eq(table.name, ref.name), eq((table as never as { builtin: never }).builtin, true)),
-          )
-          .get() as { id: string; name: string } | undefined
+        const row =
+          ref.type === 'agent' || ref.type === 'workflow'
+            ? findSqliteBuiltinResourceInTx(tx, ref.type, ref.name)
+            : undefined
         if (row === undefined) {
           // 同名普通资源不能充当 built-in；这一条件与嵌套引用的 resolveBuiltin 完全
           // 相同，并且在 big tx 里复核，避免 preview 后环境前提漂移。
@@ -755,12 +749,9 @@ function makePackageProvider(
             `reuse decision for root '${rootSlug}' has no target`,
           )
         }
-        const table = ACL_TABLES[resourceType]
-        const row = tx
-          .select({ id: table.id, name: table.name })
-          .from(table)
-          .where(eq(table.id, resourceId))
-          .get() as { id: string; name: string } | undefined
+        const row = getSqlitePackageResourceRowInTx(tx, resourceType, resourceId) as
+          | { id: string; name: string }
+          | undefined
         if (row === undefined) {
           throw new ConflictError(
             'package-selected-target-gone',

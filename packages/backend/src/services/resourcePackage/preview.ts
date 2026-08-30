@@ -15,14 +15,15 @@
 // **用户的「选择」是自由的，但可选项与它们的基线是签死的。**
 
 import type { PackagePreview as SharedPackagePreviewWire } from '@agent-workflow/shared'
-import { eq, inArray } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { users } from '@/db/schema'
 import type { SecretBox } from '@/auth/secretBox'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { canonicalJson, type BundleOp, type BundleResourceType } from '@agent-workflow/shared'
-import { ACL_TABLES, isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
+import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
+import { listSqlitePackageResourceRowsByNames } from '@/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
 import { ValidationError } from '@/util/errors'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
@@ -326,7 +327,6 @@ async function findMissingBuiltins(
 
   const presentByType = new Map<string, Set<string>>()
   for (const [type, names] of wantedByType) {
-    const table = ACL_TABLES[type]
     const present = new Set<string>()
     // ⚠️ **分块**。把 N+1 换成一条无界的 `IN` 只是把问题换了个形状：SQLite 的绑定变量
     // 有上限，实测一个合法包（6.8MB，远低于上传上限）声明 65536 个 built-in 就让
@@ -335,12 +335,11 @@ async function findMissingBuiltins(
     // 服务端错误。
     const all = [...names]
     for (let i = 0; i < all.length; i += BUILTIN_LOOKUP_CHUNK) {
-      const rows = (await db
-        .select()
-        .from(table)
-        .where(inArray(table.name, all.slice(i, i + BUILTIN_LOOKUP_CHUNK)))) as unknown as Array<
-        Record<string, unknown>
-      >
+      const rows = await listSqlitePackageResourceRowsByNames(
+        db,
+        type,
+        all.slice(i, i + BUILTIN_LOOKUP_CHUNK),
+      )
       // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 **且**
       // `builtin = true`。只按名字查会绑上用户自建的同名资源。
       for (const row of rows.filter((row) => row.builtin === true)) present.add(String(row.name))
@@ -407,11 +406,8 @@ export async function buildPackagePreview(
     if (slug === null) continue // 包里只应有 create op（导出侧只产 create）
     const type = resourceTypeOfOp(op as BundleOp)
     const name = String((op.payload as { name?: unknown }).name ?? '')
-    const table = ACL_TABLES[type]
     const grants = new Set(await listGrantedResourceIds(db, actor, type))
-    const rows = (await db.select().from(table).where(eq(table.name, name))) as unknown as Array<
-      Record<string, unknown>
-    >
+    const rows = await listSqlitePackageResourceRowsByNames(db, type, [name])
     const visible = rows.filter((r) => isVisibleRow(actor, r as never, grants))
     const candidates: PreviewCandidate[] = visible.map((r) => ({
       id: String(r.id),
