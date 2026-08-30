@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 318,
+    "consumers": 317,
     "exactEntrypointFiles": 44,
     "governedFieldSurfaces": 5,
     "methods": 265,
     "opaqueTypeRefs": 6,
-    "recursiveFields": 4829,
-    "symbols": 531
+    "recursiveFields": 4823,
+    "symbols": 529
   },
   "entries": [
     {
@@ -21862,7 +21862,6 @@
       "consumerEdgeIds": [
         "import:429b7a0fd995a2dbd0cc",
         "import:6743c9c44ccd788a69c6",
-        "import:81fced63719295c7e49b",
         "import:a750ab47e77a5a32d43d",
         "import:dc45771c2563f02b5971"
       ],
@@ -21925,12 +21924,6 @@
           "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
         },
         {
-          "context": "system-operations",
-          "edgeId": "import:81fced63719295c7e49b",
-          "file": "packages/backend/src/modules/system-operations/public/types.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#$file"
-        },
-        {
           "context": "legacy",
           "edgeId": "import:a750ab47e77a5a32d43d",
           "file": "packages/backend/src/cli/user.ts",
@@ -21954,8 +21947,7 @@
         "public:system-operations:commands:CancelStagedRestoreCommand",
         "public:system-operations:commands:RequestBackupCommand",
         "public:system-operations:commands:StageRestoreCommand",
-        "public:system-operations:commands:SystemOperationCommands",
-        "public:system-operations:types:SystemOperationCommandContext"
+        "public:system-operations:commands:SystemOperationCommands"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -23532,9 +23524,9 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:577ba0bd1eb0a54d230a",
         "import:7809a0a3d6525f1a5a55",
         "import:836bc256bc2620881783",
-        "import:86465310f24d78c30307",
         "import:9055a24dab4915c4cd67"
       ],
       "context": "identity-access",
@@ -23564,6 +23556,12 @@
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext",
       "productionConsumers": [
         {
+          "context": "system-operations",
+          "edgeId": "import:577ba0bd1eb0a54d230a",
+          "file": "packages/backend/src/modules/system-operations/public/queries.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#$file"
+        },
+        {
           "context": "resource-catalog",
           "edgeId": "import:7809a0a3d6525f1a5a55",
           "file": "packages/backend/src/modules/resource-catalog/public/queries.ts",
@@ -23574,12 +23572,6 @@
           "edgeId": "import:836bc256bc2620881783",
           "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts#$file"
-        },
-        {
-          "context": "system-operations",
-          "edgeId": "import:86465310f24d78c30307",
-          "file": "packages/backend/src/modules/system-operations/public/types.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#$file"
         },
         {
           "context": "legacy",
@@ -23595,8 +23587,7 @@
         "public:resource-catalog:queries:ResourceAuthorizationQuery",
         "public:resource-catalog:queries:ResourceCatalogQuery",
         "public:system-operations:queries:GetRecoveryStatusQuery",
-        "public:system-operations:queries:SystemOperationQueries",
-        "public:system-operations:types:SystemOperationQueryContext"
+        "public:system-operations:queries:SystemOperationQueries"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -23666,9 +23657,7 @@
         "public:system-operations:commands:StageRestoreCommand",
         "public:system-operations:commands:SystemOperationCommands",
         "public:system-operations:queries:GetRecoveryStatusQuery",
-        "public:system-operations:queries:SystemOperationQueries",
-        "public:system-operations:types:SystemOperationCommandContext",
-        "public:system-operations:types:SystemOperationQueryContext"
+        "public:system-operations:queries:SystemOperationQueries"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -33998,7 +33987,7 @@
             "import:424172080507ad740340"
           ],
           "name": "execute",
-          "signatureDigest": "sha256:b3b9387062e255b5f3ef8efe8121dbc40a0315ec6accb58a50798b5b16b08c8d"
+          "signatureDigest": "sha256:d9b211a3929ee3aa0309d4b842de9a3e9d90cbbe108c852c6b88115166d37220"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#RequestBackupCommand",
@@ -34015,7 +34004,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:bd6551625a4f68772fd2b159c6b4df45fcc2a2ef565dac6e9b92d6820ad6394e",
+      "signatureDigest": "sha256:d13c2efa24db0e8e7a5f24f9ccdc385748c20a16e52413704f88f319759c7e59",
       "status": "target-context-current-surface",
       "symbol": "RequestBackupCommand",
       "transaction": "own-tx",
@@ -34082,7 +34071,7 @@
             "import:0e35feed5cb253c693df"
           ],
           "name": "execute",
-          "signatureDigest": "sha256:f4d0ef3a3469008ef96594edee6511ae61acfa7dc392cee18766180c1c1546a9"
+          "signatureDigest": "sha256:6843ff3386e8a261eb5378f0a7889f601afcf94cadc6d1aca1a56a1f8782655b"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#StageRestoreCommand",
@@ -34099,7 +34088,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:31933091135124904f1b5ebb8f1741914539e18e7106b2fafa032c6c97b825e9",
+      "signatureDigest": "sha256:ebef056ad9d4497aaca57066832e8e14061e3afcf626d47967ce16486b74d127",
       "status": "target-context-current-surface",
       "symbol": "StageRestoreCommand",
       "transaction": "own-tx",
@@ -34286,7 +34275,7 @@
         {
           "consumerEdgeIds": [],
           "name": "execute",
-          "signatureDigest": "sha256:c337f4a597c791863bec34e04733d1782e101d4b9bc305d89329114e4bb8894a"
+          "signatureDigest": "sha256:938b2a62fa0d483fa4bdaf71a645641d5ce1f8e7a72844eb97a1313da81a5f77"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#GetRecoveryStatusQuery",
@@ -34296,7 +34285,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:365974148fbda2b8cd255ed73e9d2cc35a3ca4674e49f4c280095ddbef34f701",
+      "signatureDigest": "sha256:379c9e96df4bcdd346b21f322d9450d70dccb4aca81fb14e1bad6a9b7a0b06cd",
       "status": "target-context-current-surface",
       "symbol": "GetRecoveryStatusQuery",
       "transaction": "none",
@@ -34419,7 +34408,7 @@
         {
           "consumerEdgeIds": [],
           "name": "execute",
-          "signatureDigest": "sha256:c337f4a597c791863bec34e04733d1782e101d4b9bc305d89329114e4bb8894a"
+          "signatureDigest": "sha256:938b2a62fa0d483fa4bdaf71a645641d5ce1f8e7a72844eb97a1313da81a5f77"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#SystemOperationQueries",
@@ -34808,8 +34797,7 @@
         "public:system-operations:commands:StageRestoreCommand",
         "public:system-operations:commands:SystemOperationCommands",
         "public:system-operations:queries:PlanLocalRestoreQuery",
-        "public:system-operations:queries:SystemOperationQueries",
-        "public:system-operations:types:SystemOperationCommandContext"
+        "public:system-operations:queries:SystemOperationQueries"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -35380,105 +35368,6 @@
       "signatureDigest": "sha256:9d37572cac3dd4e5beb51af74a1e12d81532244fce606975c984e231c383353e",
       "status": "target-context-current-surface",
       "symbol": "stageRestoreResultSchema",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "system-operations",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.causationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.correlationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.now",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.operationId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/system-operations/public/types.ts",
-      "id": "public:system-operations:types:SystemOperationCommandContext",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#SystemOperationCommandContext",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:system-operations:commands:RequestBackupCommand",
-        "public:system-operations:commands:StageRestoreCommand",
-        "public:system-operations:commands:SystemOperationCommands"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:27010698b1554893b7864c27543b336d8dea0d84945d92bddfcb7bebb0793d4a",
-      "status": "target-context-current-surface",
-      "symbol": "SystemOperationCommandContext",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "system-operations",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "correlationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "operationId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/system-operations/public/types.ts",
-      "id": "public:system-operations:types:SystemOperationQueryContext",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#SystemOperationQueryContext",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [
-        "public:system-operations:queries:GetRecoveryStatusQuery",
-        "public:system-operations:queries:SystemOperationQueries"
-      ],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:835c02d35bc070298431243584a148d63eb58f1d4eb6d51b16fa1ae6716a84eb",
-      "status": "target-context-current-surface",
-      "symbol": "SystemOperationQueryContext",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -49049,7 +48938,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f",
+  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad",
   "targetContexts": [
     "collaboration",
     "development-automation",

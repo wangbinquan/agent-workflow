@@ -321,7 +321,7 @@
       "id": "rfc294-review-module-layer-rules",
       "file": "packages/backend/tests/architecture/rfc294-review-module-layer-rules.test.ts",
       "symbol": "MODULE_LAYER_RULE_DEBT",
-      "baseline": 29,
+      "baseline": 25,
       "why": "RFC-294 review 2026-08-30 §B2：design §3 常驻规则 1～3 的存量违规（domain 导 adapter、application/engine 导 @/db/schema、fenced 层导 infrastructure/**），按 rule|file|specifier 逐条入账；只许降。"
     },
     {
@@ -377,7 +377,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1730,
+      "baseline": 1723,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -398,21 +398,21 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1693,
+      "baseline": 1687,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 381,
+      "baseline": 380,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 531,
+      "baseline": 529,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -433,12 +433,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 19402,
+      "baseline": 19396,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f",
+    "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -451,8 +451,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ef59054c5a15109e42e058d9a3611e656a3a40f1",
-    "contentDigest": "sha256:3c0a810c24604fc3a2f23afe96d8450ade62b46da26297f8295f51a5b65db1e2",
+    "currentSnapshotSha": "9e46a4605b5459e069470fb04e625e991ac64c64",
+    "contentDigest": "sha256:d65dc4efa79e4867718e03a26b790b9d2a550bd5caebdb72aef7eb445a72833a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

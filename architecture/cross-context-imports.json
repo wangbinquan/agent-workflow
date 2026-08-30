@@ -4474,23 +4474,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "fromPath": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:22eba09fdb22ad1b85e0",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/operations.ts#$file",
-      "toPath": "packages/backend/src/modules/integration/public/operations.ts",
-      "toSymbol": "createDevelopmentAdapterResourceCatalogAclProvider",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromSymbol": "$file",
@@ -7073,23 +7056,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "fromPath": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3af3d58894cdc9dc71b1",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/operations.ts#$file",
-      "toPath": "packages/backend/src/modules/digital-employee/public/operations.ts",
-      "toSymbol": "createDigitalEmployeeResourceCatalogAclProviders",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/codeHostEffectObserver.ts#$file",
@@ -9094,23 +9060,6 @@
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#$file",
-      "fromPath": "packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4ce05af5044efc68e85a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W4-B",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toSymbol": "ResourceAclIdentityPersistence",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "value",
@@ -23019,23 +22968,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#$file",
-      "fromPath": "packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cf73f056b24dc8f99f10",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "digital-employee",
-      "removeAfterWave": "W4-E9",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toSymbol": "ResourceAclIdentityPersistence",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/fusions.ts#$file",
@@ -24751,23 +24683,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentActionRuns",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "fromPath": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:dcdbc9788592404fb003",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toSymbol": "ResourceAclIdentityPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -27711,23 +27626,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "fromPath": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f700743d42a03fb8ccbd",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toSymbol": "ForeignResourceAclType",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
@@ -28783,9 +28681,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 1693,
+    "architectureExceptions": 1687,
     "implementationSccs": 0,
-    "observedEdges": 1730,
+    "observedEdges": 1723,
     "requiredPorts": 23,
     "targetEdges": 64
   },
@@ -32683,22 +32581,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "id": "import:22eba09fdb22ad1b85e0",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/public/operations",
-      "syntax": "static-import",
-      "targetSymbol": "createDevelopmentAdapterResourceCatalogAclProvider",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/public/operations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/operations.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
@@ -35130,22 +35012,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#persistIsoBase"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "id": "import:3af3d58894cdc9dc71b1",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/public/operations",
-      "syntax": "static-import",
-      "targetSymbol": "createDigitalEmployeeResourceCatalogAclProviders",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/public/operations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/operations.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/application/codeHostEffectObserver.ts",
@@ -37098,22 +36964,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "integration",
-      "fromFile": "packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#$file",
-      "id": "import:4ce05af5044efc68e85a",
-      "owner": "integration",
-      "removeAfterWave": "W4-B",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/public/operations",
-      "syntax": "static-import",
-      "targetSymbol": "ResourceAclIdentityPersistence",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/workgroups.ts",
@@ -38200,6 +38050,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#$file",
+      "id": "import:577ba0bd1eb0a54d230a",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "QueryContext",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext"
     },
     {
       "edgeKind": "type",
@@ -42826,22 +42692,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/public/types.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#$file",
-      "id": "import:81fced63719295c7e49b",
-      "owner": "system-operations",
-      "removeAfterWave": null,
-      "role": "authority-type-only",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "CommandContext",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#CommandContext"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
@@ -43352,22 +43202,6 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/composition/committedEvents.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition/committedEvents.ts#$file"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/public/types.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#$file",
-      "id": "import:86465310f24d78c30307",
-      "owner": "system-operations",
-      "removeAfterWave": null,
-      "role": "authority-type-only",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "QueryContext",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext"
     },
     {
       "edgeKind": "type",
@@ -50874,22 +50708,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "digital-employee",
-      "fromFile": "packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#$file",
-      "id": "import:cf73f056b24dc8f99f10",
-      "owner": "digital-employee",
-      "removeAfterWave": "W4-E9",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/public/operations",
-      "syntax": "static-import",
-      "targetSymbol": "ResourceAclIdentityPersistence",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/fusions.ts",
@@ -52584,22 +52402,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentActionRuns"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "id": "import:dcdbc9788592404fb003",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/operations",
-      "syntax": "static-import",
-      "targetSymbol": "ResourceAclIdentityPersistence",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -55434,22 +55236,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "id": "import:f700743d42a03fb8ccbd",
-      "owner": "identity-access",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/public/operations",
-      "syntax": "static-import",
-      "targetSymbol": "ForeignResourceAclType",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#$file"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
@@ -56884,7 +56670,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f",
+  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

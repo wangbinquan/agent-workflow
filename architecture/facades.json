@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 381,
+    "serviceFiles": 380,
     "thinFacades": 7
   },
   "entries": [
@@ -2277,7 +2277,7 @@
         "import:68901cdcf1f3d1300840"
       ],
       "exportedSymbols": [
-        "resourceCatalogProjections"
+        "resourceCatalogProjectionDependencies"
       ],
       "file": "packages/backend/src/services/intent/resourceCatalogProjections.ts",
       "id": "facade:packages/backend/src/services/intent/resourceCatalogProjections.ts",
@@ -4074,24 +4074,6 @@
       "status": "legacy-implementation",
       "targetContext": "task-execution",
       "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:22eba09fdb22ad1b85e0",
-        "import:3af3d58894cdc9dc71b1",
-        "import:dcdbc9788592404fb003",
-        "import:f700743d42a03fb8ccbd"
-      ],
-      "exportedSymbols": [
-        "resolveLegacyResourceAclIdentityPersistence"
-      ],
-      "file": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "id": "facade:packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-implementation",
-      "targetContext": "identity-access",
-      "targetLayer": "inbound"
     },
     {
       "boundaryEdgeIds": [],
@@ -7895,5 +7877,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f"
+  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad"
 }

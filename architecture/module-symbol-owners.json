@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1066,
+    "backendFiles": 1063,
     "frontendFiles": 620,
-    "legacyFiles": 556,
-    "moduleFiles": 510,
-    "productionFiles": 1840,
+    "legacyFiles": 555,
+    "moduleFiles": 508,
+    "productionFiles": 1837,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 19402
+    "symbolsIncludingFileRoots": 19396
   },
   "entries": [
     {
@@ -31721,6 +31721,18 @@
     {
       "currentContext": "digital-employee",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/adapters/resource-catalog-acl-adapter.ts#DigitalEmployeeResourceAclIdentityProvider",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeResourceAclIdentityProvider",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/digital-employee/application/adapters/task-catalog-adapter.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/application/adapters/task-catalog-adapter.ts#$file",
@@ -35770,18 +35782,6 @@
       "signatureDigest": "sha256:7c361edab0e90961491a3259e38d756dff6c4c6239a71408baf2fef06f4aebbe",
       "status": "current-module",
       "symbol": "employeeInvocationResultObservation",
-      "targetContext": "digital-employee",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "digital-employee",
-      "currentLayer": "public",
-      "exported": false,
-      "file": "packages/backend/src/modules/digital-employee/public/operations.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/public/operations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
       "targetContext": "digital-employee",
       "targetLayer": "public"
     },
@@ -41543,6 +41543,18 @@
     {
       "currentContext": "integration",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/adapters/resource-catalog-acl-adapter.ts#DevelopmentAdapterResourceAclIdentityProvider",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DevelopmentAdapterResourceAclIdentityProvider",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/integration/application/developmentAdapterCommands.ts",
       "id": "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#$file",
@@ -44640,18 +44652,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ProtectedMrLaunchGuardInput",
-      "targetContext": "integration",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "integration",
-      "currentLayer": "public",
-      "exported": false,
-      "file": "packages/backend/src/modules/integration/public/operations.ts",
-      "id": "owner:packages/backend/src/modules/integration/public/operations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
       "targetContext": "integration",
       "targetLayer": "public"
     },
@@ -51829,7 +51829,7 @@
       "file": "packages/backend/src/modules/system-operations/public/commands.ts",
       "id": "owner:packages/backend/src/modules/system-operations/public/commands.ts#RequestBackupCommand",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:bd6551625a4f68772fd2b159c6b4df45fcc2a2ef565dac6e9b92d6820ad6394e",
+      "signatureDigest": "sha256:d13c2efa24db0e8e7a5f24f9ccdc385748c20a16e52413704f88f319759c7e59",
       "status": "current-module",
       "symbol": "RequestBackupCommand",
       "targetContext": "system-operations",
@@ -51842,7 +51842,7 @@
       "file": "packages/backend/src/modules/system-operations/public/commands.ts",
       "id": "owner:packages/backend/src/modules/system-operations/public/commands.ts#StageRestoreCommand",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:31933091135124904f1b5ebb8f1741914539e18e7106b2fafa032c6c97b825e9",
+      "signatureDigest": "sha256:ebef056ad9d4497aaca57066832e8e14061e3afcf626d47967ce16486b74d127",
       "status": "current-module",
       "symbol": "StageRestoreCommand",
       "targetContext": "system-operations",
@@ -51880,7 +51880,7 @@
       "file": "packages/backend/src/modules/system-operations/public/queries.ts",
       "id": "owner:packages/backend/src/modules/system-operations/public/queries.ts#GetRecoveryStatusQuery",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:365974148fbda2b8cd255ed73e9d2cc35a3ca4674e49f4c280095ddbef34f701",
+      "signatureDigest": "sha256:379c9e96df4bcdd346b21f322d9450d70dccb4aca81fb14e1bad6a9b7a0b06cd",
       "status": "current-module",
       "symbol": "GetRecoveryStatusQuery",
       "targetContext": "system-operations",
@@ -52306,32 +52306,6 @@
       "signatureDigest": "sha256:9d37572cac3dd4e5beb51af74a1e12d81532244fce606975c984e231c383353e",
       "status": "current-module",
       "symbol": "stageRestoreResultSchema",
-      "targetContext": "system-operations",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "system-operations",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/system-operations/public/types.ts",
-      "id": "owner:packages/backend/src/modules/system-operations/public/types.ts#SystemOperationCommandContext",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:27010698b1554893b7864c27543b336d8dea0d84945d92bddfcb7bebb0793d4a",
-      "status": "current-module",
-      "symbol": "SystemOperationCommandContext",
-      "targetContext": "system-operations",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "system-operations",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/system-operations/public/types.ts",
-      "id": "owner:packages/backend/src/modules/system-operations/public/types.ts#SystemOperationQueryContext",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:835c02d35bc070298431243584a148d63eb58f1d4eb6d51b16fa1ae6716a84eb",
-      "status": "current-module",
-      "symbol": "SystemOperationQueryContext",
       "targetContext": "system-operations",
       "targetLayer": "public"
     },
@@ -87598,10 +87572,10 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/intent/resourceCatalogProjections.ts",
-      "id": "owner:packages/backend/src/services/intent/resourceCatalogProjections.ts#resourceCatalogProjections",
+      "id": "owner:packages/backend/src/services/intent/resourceCatalogProjections.ts#resourceCatalogProjectionDependencies",
       "removeAfterWave": "W4-E4a",
       "status": "legacy-target",
-      "symbol": "resourceCatalogProjections",
+      "symbol": "resourceCatalogProjectionDependencies",
       "targetContext": "intent",
       "targetLayer": "application"
     },
@@ -99568,54 +99542,6 @@
       "symbol": "updateResourceAcl",
       "targetContext": "task-execution",
       "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "id": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#$file",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "$file",
-      "targetContext": "identity-access",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "id": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#providersByDb",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "providersByDb",
-      "targetContext": "identity-access",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "id": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#providersFor",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "providersFor",
-      "targetContext": "identity-access",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/resourceAclIdentityPersistence.ts",
-      "id": "owner:packages/backend/src/services/resourceAclIdentityPersistence.ts#resolveLegacyResourceAclIdentityPersistence",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "resolveLegacyResourceAclIdentityPersistence",
-      "targetContext": "identity-access",
-      "targetLayer": "inbound"
     },
     {
       "currentContext": "legacy",
@@ -233205,5 +233131,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f"
+  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad"
 }

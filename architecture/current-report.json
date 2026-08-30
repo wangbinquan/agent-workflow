@@ -2,15 +2,15 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 456,
-    "architectureExceptions": 1693,
+    "architectureExceptions": 1687,
     "backgroundJobs": 272,
-    "crossContextImports": 1730,
-    "facades": 381,
+    "crossContextImports": 1723,
+    "facades": 380,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 19402,
+    "moduleSymbolOwners": 19396,
     "mutationEntrypoints": 1086,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 531,
+    "publicSurfaces": 529,
     "transactionExternalEffects": 285
   },
   "metrics": {
@@ -65,7 +65,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1066,
+    "backendProductionFiles": 1063,
     "backendValueSccs": [
       [
         "packages/backend/src/services/agent.ts",
@@ -127,7 +127,7 @@
       },
       {
         "context": "digital-employee",
-        "files": 26
+        "files": 25
       },
       {
         "context": "event-center",
@@ -143,7 +143,7 @@
       },
       {
         "context": "integration",
-        "files": 35
+        "files": 34
       },
       {
         "context": "intent",
@@ -170,7 +170,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 510,
+    "moduleFiles": 508,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -221,10 +221,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 381,
+    "serviceFiles": 380,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:af86198a233022bd8a925da50af9174794cd9c80235602e4ac55be80ab468a3f"
+  "sourceDigest": "sha256:0ff3f9655ff5f6c38bd5a922111dc96f586a64993ae4860248a2d8e3b3b0d3ad"
 }
