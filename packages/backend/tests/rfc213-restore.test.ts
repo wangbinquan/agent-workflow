@@ -35,6 +35,7 @@ import {
 } from '../src/services/restore'
 import { writeManifest, type BackupManifest } from '../src/services/backupManifest'
 import { restoreCommand } from '../src/cli/restore'
+import { composeLocalSystemOperations } from '../src/modules/system-operations/composition'
 import { hasPendingRestore } from '../src/services/pendingRestore'
 import { writePidFileForTest } from '../src/util/lock'
 import { appVersion } from '../src/util/version'
@@ -363,12 +364,14 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
 
 describe('restore CLI wrapper guard rails', () => {
   test('no tarball → usage error; missing file → error (both before touching state)', async () => {
-    const { restoreCommand } = await import('../src/cli/restore')
-    const noArg = await restoreCommand([])
+    const noArg = await restoreCommand([], composeLocalSystemOperations())
     expect(noArg.status).toBe('error')
     expect(noArg.output).toContain('usage:')
 
-    const missing = await restoreCommand([join(tmp('rfc213-cli-'), 'nope.tar.gz')])
+    const missing = await restoreCommand(
+      [join(tmp('rfc213-cli-'), 'nope.tar.gz')],
+      composeLocalSystemOperations(),
+    )
     expect(missing.status).toBe('error')
     expect(missing.output).toContain('no such file')
   })
@@ -497,11 +500,11 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
       ;(db as unknown as { $client: Database }).$client.close()
       // simulate a LIVE daemon: our own pid is alive by definition
       writePidFileForTest(join(appHome, '.daemon.lock'), process.pid)
-      const res = await restoreCommand([backup.path, '--dry-run'])
+      const res = await restoreCommand([backup.path, '--dry-run'], composeLocalSystemOperations())
       expect(res.status).toBe('ok')
       expect(res.output).toContain('dry-run')
       // …while an actual apply is still refused
-      const apply = await restoreCommand([backup.path, '--yes'])
+      const apply = await restoreCommand([backup.path, '--yes'], composeLocalSystemOperations())
       expect(apply.status).toBe('error')
       expect(apply.output).toContain('daemon is running')
     } finally {
@@ -517,7 +520,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
     try {
       const junk = join(appHome, 'junk.tar.gz')
       writeFileSync(junk, 'not a tarball')
-      const res = await restoreCommand([junk, '--stage'])
+      const res = await restoreCommand([junk, '--stage'], composeLocalSystemOperations())
       expect(res.status).toBe('error')
       expect(hasPendingRestore(appHome)).toBe(false)
     } finally {

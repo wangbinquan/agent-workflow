@@ -4,18 +4,38 @@
 // stops (so a fat-fingered restore can't overwrite data); --yes applies it.
 
 import { existsSync } from 'node:fs'
-import { composeLocalSystemOperations } from '@/modules/system-operations/composition'
+import type {
+  ActivateLocalRestoreCommand,
+  StageRestoreCommand,
+} from '@/modules/system-operations/public/commands'
+import type { PlanLocalRestoreQuery } from '@/modules/system-operations/public/queries'
+import type {
+  LocalSystemOperationContext,
+  RestoreArtifactRef,
+} from '@/modules/system-operations/public/types'
 
 export interface RestoreCommandResult {
   output: string
   status: 'ok' | 'error'
 }
 
+export interface RestoreCommandDeps {
+  readonly context: LocalSystemOperationContext
+  readonly planLocalRestore: PlanLocalRestoreQuery
+  readonly stageRestore: StageRestoreCommand
+  readonly activateLocalRestore: ActivateLocalRestoreCommand
+  prepareRestoreArtifact(path: string): Promise<RestoreArtifactRef>
+  releaseRestoreArtifact(ref: RestoreArtifactRef): void
+}
+
 const USAGE =
   'usage: agent-workflow restore <tarball> [--yes] [--stage] [--dry-run] ' +
   '[--no-safety-backup] [--no-migrate] [--skip-integrity-check]\n'
 
-export async function restoreCommand(argv: string[]): Promise<RestoreCommandResult> {
+export async function restoreCommand(
+  argv: string[],
+  deps: RestoreCommandDeps,
+): Promise<RestoreCommandResult> {
   const flags = new Set(argv.filter((a) => a.startsWith('--')))
   const tarball = argv.find((a) => !a.startsWith('--'))
   if (tarball === undefined) return { output: USAGE, status: 'error' }
@@ -27,10 +47,11 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
   // failures historically reject the command promise rather than becoming a
   // `restore failed:` result. Composition also converts the CLI path to an
   // application artifact ref, so paths do not cross the application seam.
-  const restore = await composeLocalSystemOperations().prepareRestore(tarball)
+  const artifactRef = await deps.prepareRestoreArtifact(tarball)
 
   try {
-    const plan = await restore.plan({
+    const plan = await deps.planLocalRestore.execute(deps.context, {
+      artifactRef,
       skipIntegrityCheck: flags.has('--skip-integrity-check'),
     })
     const planLines = [
@@ -70,7 +91,7 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
     // enforce (db.sqlite present + quick_check unless the escape hatch rides
     // along) — staging an invalid package used to arm a boot-loop brick.
     if (flags.has('--stage')) {
-      await restore.stage(applyOpts)
+      await deps.stageRestore.execute(deps.context, { artifactRef, ...applyOpts })
       return {
         output:
           planLines.join('\n') +
@@ -84,7 +105,10 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
     // LIVE daemon must (impl-gate P2-10: the old one-shot pid probe left a TOCTOU
     // window where a daemon started mid-restore and kept writing the old inode;
     // holding the daemon's own flock for the whole swap closes it).
-    const res = await restore.activate(applyOpts)
+    const res = await deps.activateLocalRestore.execute(deps.context, {
+      artifactRef,
+      ...applyOpts,
+    })
     if (res.status === 'daemon-running') {
       return {
         output:
@@ -113,6 +137,6 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
     const msg = err instanceof Error ? err.message : String(err)
     return { output: `restore failed: ${msg}\n`, status: 'error' }
   } finally {
-    restore.release()
+    deps.releaseRestoreArtifact(artifactRef)
   }
 }

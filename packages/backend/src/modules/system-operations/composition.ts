@@ -16,16 +16,12 @@ import {
   type RestoreArtifactRegistry,
 } from './infrastructure/restoreArtifactIngress'
 import type {
-  ActivateLocalRestoreOptions,
-  BackupResultView,
-  LocalRestoreActivationResult,
-  LocalSystemOperationContext,
-  RequestBackupInput,
-  RestorePlanOptions,
-  RestorePlanView,
-  StageRestoreOptions,
-  StageRestoreResult,
-} from './public/types'
+  ActivateLocalRestoreCommand,
+  RequestBackupCommand,
+  StageRestoreCommand,
+} from './public/commands'
+import type { PlanLocalRestoreQuery } from './public/queries'
+import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
 
 export interface SystemOperationsModule {
   readonly application: SystemOperationsApplication
@@ -55,16 +51,14 @@ export function composeSystemOperations(deps: {
   })
 }
 
-export interface LocalRestoreSession {
-  plan(options: RestorePlanOptions): Promise<RestorePlanView>
-  stage(options: StageRestoreOptions): Promise<StageRestoreResult>
-  activate(options: ActivateLocalRestoreOptions): Promise<LocalRestoreActivationResult>
-  release(): void
-}
-
 export interface LocalSystemOperations {
-  requestBackup(input: RequestBackupInput): Promise<BackupResultView>
-  prepareRestore(path: string): Promise<LocalRestoreSession>
+  readonly context: LocalSystemOperationContext
+  readonly requestBackup: RequestBackupCommand
+  readonly planLocalRestore: PlanLocalRestoreQuery
+  readonly stageRestore: StageRestoreCommand
+  readonly activateLocalRestore: ActivateLocalRestoreCommand
+  prepareRestoreArtifact(path: string): Promise<RestoreArtifactRef>
+  releaseRestoreArtifact(ref: RestoreArtifactRef): void
 }
 
 export function composeLocalSystemOperations(): LocalSystemOperations {
@@ -94,39 +88,17 @@ export function composeLocalSystemOperations(): LocalSystemOperations {
   const context = Object.freeze({}) as LocalSystemOperationContext
 
   const localOperations: LocalSystemOperations = {
-    requestBackup(input) {
-      return module.application.commands.requestBackup.execute(context, input)
-    },
-    async prepareRestore(path) {
+    context,
+    requestBackup: module.application.commands.requestBackup,
+    planLocalRestore: module.application.queries.planLocalRestore,
+    stageRestore: module.application.commands.stageRestore,
+    activateLocalRestore: module.application.commands.activateLocalRestore,
+    async prepareRestoreArtifact(path) {
       await resolveRestoreMigrations()
-      const artifactRef = artifacts.ingestLocalPath(path)
-      let released = false
-      const session: LocalRestoreSession = {
-        plan(options) {
-          return module.application.queries.planLocalRestore.execute(context, {
-            artifactRef,
-            ...options,
-          })
-        },
-        stage(options) {
-          return module.application.commands.stageRestore.execute(context, {
-            artifactRef,
-            ...options,
-          })
-        },
-        activate(options) {
-          return module.application.commands.activateLocalRestore.execute(context, {
-            artifactRef,
-            ...options,
-          })
-        },
-        release() {
-          if (released) return
-          released = true
-          artifacts.release(artifactRef)
-        },
-      }
-      return Object.freeze(session)
+      return artifacts.ingestLocalPath(path)
+    },
+    releaseRestoreArtifact(ref) {
+      artifacts.release(ref)
     },
   }
   return Object.freeze(localOperations)

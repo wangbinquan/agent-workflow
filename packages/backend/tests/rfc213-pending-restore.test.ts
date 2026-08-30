@@ -38,6 +38,8 @@ import {
 } from '../src/services/restore'
 import { readMigrationAxisFromJournal, writeManifest } from '../src/services/backupManifest'
 import { tarGz } from '../src/util/archive'
+import { restoreCommand } from '../src/cli/restore'
+import { composeLocalSystemOperations } from '../src/modules/system-operations/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -241,8 +243,7 @@ describe('restore --stage CLI', () => {
     const backup = await createBackup({ db, appHome, now: 1 })
     sqliteOf(db).close()
 
-    const { restoreCommand } = await import('../src/cli/restore')
-    const r = await restoreCommand([backup.path, '--stage'])
+    const r = await restoreCommand([backup.path, '--stage'], composeLocalSystemOperations())
     expect(r.status).toBe('ok')
     expect(r.output).toContain('STAGED')
     expect(hasPendingRestore(appHome)).toBe(true)

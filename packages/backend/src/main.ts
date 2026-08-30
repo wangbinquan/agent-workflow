@@ -25,6 +25,7 @@ import { packageCommand } from './cli/package'
 import { runUserCommand } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
+import { composeLocalSystemOperations } from './modules/system-operations/composition'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
@@ -68,6 +69,9 @@ async function main(): Promise<void> {
     process.exit(await runManagedProcessLauncher(Bun.argv))
   }
   const sub = Bun.argv[2] ?? 'help'
+  let localSystemOperations: ReturnType<typeof composeLocalSystemOperations> | undefined
+  const requireLocalSystemOperations = () =>
+    (localSystemOperations ??= composeLocalSystemOperations())
 
   switch (sub) {
     case MANAGED_PROCESS_LAUNCHER_SUBCOMMAND: {
@@ -248,14 +252,14 @@ async function main(): Promise<void> {
       break
 
     case 'backup': {
-      const result = await backupCommand(Bun.argv.slice(3))
+      const result = await backupCommand(Bun.argv.slice(3), requireLocalSystemOperations())
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(1)
       break
     }
 
     case 'restore': {
-      const result = await restoreCommand(Bun.argv.slice(3))
+      const result = await restoreCommand(Bun.argv.slice(3), requireLocalSystemOperations())
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(1)
       break
