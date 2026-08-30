@@ -55,6 +55,7 @@ import { ChoiceCards } from '@/components/ChoiceCards'
 import { TaskCreationContractFrame } from '@/components/task-creation/TaskCreationContractFrame'
 import {
   TaskCreationAdvancedSettings,
+  TaskCreationWorkingBranchField,
   buildTaskCreationAdvancedSummary,
   validateTaskCreationAdvancedValues,
   type TaskCreationAdvancedCapabilities,
@@ -1164,6 +1165,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     isLooseValidBranchName,
   )
   const workingBranchTrim = advancedValidation.workingBranchTrim
+  const spaceReady = sourceReady && !advancedValidation.workingBranchInvalid
   const stepContentReady =
     nameReady && contentReady && admissionGitIdentityReady && advancedValidation.valid
   // RFC-159 P2: editing a schedule with collaborators must wait for the id →
@@ -1474,7 +1476,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
   }
 
   const nextEnabled =
-    step === STEP_MODE ? stepModeReady : step === STEP_SPACE ? sourceReady : stepContentReady
+    step === STEP_MODE ? stepModeReady : step === STEP_SPACE ? spaceReady : stepContentReady
 
   const onNavigate = (i: number) => {
     setStep(i)
@@ -1870,7 +1872,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
 
   const canSubmit =
     stepModeReady &&
-    sourceReady &&
+    spaceReady &&
     stepContentReady &&
     collabReady &&
     relaunchReady &&
@@ -2421,6 +2423,13 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                   {t('taskWizard.spaceScratchHint')}
                 </div>
               )}
+              {advancedCapabilities.workingBranch ? (
+                <TaskCreationWorkingBranchField
+                  value={workingBranch}
+                  invalid={advancedValidation.workingBranchInvalid}
+                  onChange={setWorkingBranch}
+                />
+              ) : null}
             </div>
           )}
 
@@ -2580,7 +2589,6 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                     : undefined
                 }
                 onCollaboratorsChange={setCollaborators}
-                onWorkingBranchChange={setWorkingBranch}
                 onAutoCommitPushChange={(value) => {
                   setAutoCommitPush(value)
                   saveAutoCommitPushPref(value)
@@ -2622,6 +2630,14 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                         : space.repos
                             .map((r) => `${r.repoUrl}${r.ref ? ` @ ${r.ref}` : ''}`)
                             .join(', ')}
+                  {workingBranchTrim !== '' ? (
+                    <>
+                      {' · '}
+                      <span data-testid="wizard-summary-working-branch">
+                        {t('launch.workingBranch.label')}: {workingBranchTrim}
+                      </span>
+                    </>
+                  ) : null}
                   {summaryEdit(STEP_SPACE)}
                 </dd>
               </div>
@@ -2673,7 +2689,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
               </div>
               {(buildTaskCreationAdvancedSummary({
                 values: advancedValues,
-                capabilities: advancedCapabilities,
+                capabilities: { ...advancedCapabilities, workingBranch: false },
                 t,
               }).length > 0 ||
                 (kind === 'agent' && allowClarify)) && (
@@ -2683,7 +2699,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                     {[
                       ...buildTaskCreationAdvancedSummary({
                         values: advancedValues,
-                        capabilities: advancedCapabilities,
+                        capabilities: { ...advancedCapabilities, workingBranch: false },
                         t,
                       }),
                       kind === 'agent' && allowClarify ? t('taskWizard.clarifyOn') : null,

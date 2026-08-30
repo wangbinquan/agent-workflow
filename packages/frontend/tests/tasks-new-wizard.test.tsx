@@ -572,6 +572,9 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     const repository = await screen.findByTestId('repo-source-recent-urls-0')
     expect((repository as HTMLButtonElement).disabled).toBe(true)
     expect(repository.textContent).toContain('repo-fixed')
+    const workingBranch = screen.getByTestId('wizard-working-branch') as HTMLInputElement
+    expect(workingBranch.value).toBe('')
+    expect(workingBranch.closest('details')).toBeNull()
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
   })
 
@@ -608,13 +611,13 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
 
     fireEvent.click(screen.getByTestId('wizard-launch'))
     expect(await screen.findByTestId('employee-case-page')).toBeTruthy()
-    expect(
-      calls.find(
-        (call) =>
-          call.method === 'POST' &&
-          call.url.includes('/api/digital-employees/employee-fixed-repository/cases'),
-      )?.body,
-    ).toMatchObject({ name: '修复登录失败' })
+    const body = calls.find(
+      (call) =>
+        call.method === 'POST' &&
+        call.url.includes('/api/digital-employees/employee-fixed-repository/cases'),
+    )?.body as { name?: string; advanced?: Record<string, unknown> }
+    expect(body).toMatchObject({ name: '修复登录失败' })
+    expect(body.advanced).not.toHaveProperty('typeOptions')
   })
 
   test('digital employee submits four advanced options without an auto-commit switch', async () => {
@@ -632,6 +635,11 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     )
     next()
     await screen.findByTestId('repo-source-recent-urls-0')
+    const workingBranch = screen.getByTestId('wizard-working-branch')
+    expect(workingBranch.closest('details')).toBeNull()
+    fireEvent.change(workingBranch, {
+      target: { value: 'feature/rfc336-options' },
+    })
     next()
 
     fireEvent.change(await screen.findByTestId('wizard-task-name'), {
@@ -639,9 +647,6 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     })
     fireEvent.change(screen.getByPlaceholderText('Describe the request'), {
       target: { value: 'Implement the approved advanced options.' },
-    })
-    fireEvent.change(screen.getByTestId('wizard-working-branch'), {
-      target: { value: 'feature/rfc336-options' },
     })
     fireEvent.change(screen.getByTestId('wizard-max-duration'), { target: { value: '15' } })
     fireEvent.change(screen.getByTestId('wizard-max-tokens'), { target: { value: '12345' } })
@@ -653,7 +658,10 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
       expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false),
     )
     next()
-    expect(screen.getByTestId('wizard-summary-advanced').textContent).toContain(
+    expect(screen.getByTestId('wizard-summary-working-branch').textContent).toContain(
+      'feature/rfc336-options',
+    )
+    expect(screen.getByTestId('wizard-summary-advanced').textContent).not.toContain(
       'feature/rfc336-options',
     )
     fireEvent.click(screen.getByTestId('wizard-launch'))
@@ -837,7 +845,16 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
     await chooseManualRepoUrl()
     const urlInput = await screen.findByTestId('repo-source-url-0')
+    const workingBranch = screen.getByTestId('wizard-working-branch') as HTMLInputElement
+    expect(workingBranch.value).toBe('')
+    expect(workingBranch.closest('details')).toBeNull()
     fireEvent.change(urlInput, { target: { value: 'https://github.com/o/r.git' } })
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.change(workingBranch, { target: { value: 'feature with spaces' } })
+    expect(screen.getByTestId('wizard-branch-error')).toBeTruthy()
+    expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(workingBranch, { target: { value: '' } })
+    expect(screen.queryByTestId('wizard-branch-error')).toBeNull()
     expect((screen.getByTestId('stepper-next') as HTMLButtonElement).disabled).toBe(false)
     next()
 

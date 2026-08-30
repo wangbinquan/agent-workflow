@@ -30,6 +30,7 @@ import { TaskCreationContractFields } from '@/components/task-creation/TaskCreat
 import { TaskCreationContractFrame } from '@/components/task-creation/TaskCreationContractFrame'
 import {
   TaskCreationAdvancedSettings,
+  TaskCreationWorkingBranchField,
   buildTaskCreationAdvancedSummary,
   validateTaskCreationAdvancedValues,
   type TaskCreationAdvancedCapabilities,
@@ -352,6 +353,12 @@ export function TaskCreationSubjectDescriptorContract(
     descriptor?.workIntakeAuthoring.targetFields.every(
       (field) => !field.required || (effectiveTarget[field.fieldRef] ?? '').trim() !== '',
     ) === true
+  const repositorySpaceResolved =
+    descriptor?.workIntakeAuthoring.targetFields.some(
+      (field) =>
+        field.inputKind === 'repository-picker' &&
+        (effectiveTarget[field.fieldRef] ?? '').trim() !== '',
+    ) === true
   const filesValid =
     !needsFiles ||
     (files.length > 0 &&
@@ -505,9 +512,14 @@ export function TaskCreationSubjectDescriptorContract(
     step === 0
       ? employeeReady
       : step === 1
-        ? employeeReady && targetComplete
+        ? employeeReady && targetComplete && !advancedValidation.workingBranchInvalid
         : step === 2
-          ? employeeReady && targetComplete && taskNameComplete && contentComplete
+          ? employeeReady &&
+            targetComplete &&
+            taskNameComplete &&
+            contentComplete &&
+            !advancedValidation.durationInvalid &&
+            !advancedValidation.tokensInvalid
           : ready
   const onNavigate = (next: number) => {
     if (next < 0 || next >= steps.length || launch.isPending) return
@@ -668,6 +680,14 @@ export function TaskCreationSubjectDescriptorContract(
                     <ErrorBanner error={repositories.error} />
                   ) : null}
                   {groups.isError ? <ErrorBanner error={groups.error} /> : null}
+                  {advancedCapabilities.workingBranch && repositorySpaceResolved ? (
+                    <TaskCreationWorkingBranchField
+                      value={workingBranch}
+                      invalid={advancedValidation.workingBranchInvalid}
+                      disabled={launch.isPending}
+                      onChange={setWorkingBranch}
+                    />
+                  ) : null}
                 </>
               ) : null}
             </>
@@ -965,7 +985,6 @@ export function TaskCreationSubjectDescriptorContract(
                     }
                     disabled={launch.isPending}
                     onCollaboratorsChange={setCollaborators}
-                    onWorkingBranchChange={setWorkingBranch}
                     onMaxDurationMinChange={setMaxDurationMin}
                     onMaxTotalTokensChange={setMaxTotalTokens}
                   />
@@ -1008,6 +1027,14 @@ export function TaskCreationSubjectDescriptorContract(
                         })
                         .filter((value) => value !== '')
                         .join(' · ')}
+                  {advancedValidation.workingBranchTrim !== '' ? (
+                    <>
+                      {' · '}
+                      <span data-testid="wizard-summary-working-branch">
+                        {t('launch.workingBranch.label')}: {advancedValidation.workingBranchTrim}
+                      </span>
+                    </>
+                  ) : null}
                   {summaryEdit(1)}
                 </dd>
               </div>
@@ -1060,7 +1087,7 @@ export function TaskCreationSubjectDescriptorContract(
               </div>
               {buildTaskCreationAdvancedSummary({
                 values: advancedValues,
-                capabilities: advancedCapabilities,
+                capabilities: { ...advancedCapabilities, workingBranch: false },
                 t,
               }).length > 0 ? (
                 <div className="wizard-summary__row">
@@ -1068,7 +1095,7 @@ export function TaskCreationSubjectDescriptorContract(
                   <dd data-testid="wizard-summary-advanced">
                     {buildTaskCreationAdvancedSummary({
                       values: advancedValues,
-                      capabilities: advancedCapabilities,
+                      capabilities: { ...advancedCapabilities, workingBranch: false },
                       t,
                     }).join(' · ')}
                     {summaryEdit(2)}

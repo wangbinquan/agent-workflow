@@ -30,6 +30,17 @@ const ADVANCED_SRC = readFileSync(
   ),
   'utf-8',
 )
+const SUBJECT_DESCRIPTOR_SRC = readFileSync(
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'components',
+    'task-creation',
+    'TaskCreationSubjectDescriptorContract.tsx',
+  ),
+  'utf-8',
+)
 const DETAIL_SRC = readFileSync(
   resolve(import.meta.dirname, '..', 'src', 'routes', 'tasks.detail.tsx'),
   'utf-8',
@@ -45,13 +56,21 @@ describe('tasks.new.tsx — RFC-075 working branch + auto commit&push wiring', (
     )
   })
 
-  test('renders the working-branch input + auto commit&push switch', () => {
+  test('renders working branch in repository steps and keeps auto commit&push advanced', () => {
     expect(LAUNCH_SRC).toContain('<TaskCreationAdvancedSettings')
+    expect(LAUNCH_SRC).toContain('<TaskCreationWorkingBranchField')
+    expect(SUBJECT_DESCRIPTOR_SRC).toContain('<TaskCreationWorkingBranchField')
     expect(LAUNCH_SRC).toContain("workingBranch: space.kind === 'remote'")
     expect(LAUNCH_SRC).toContain("autoCommitPush: space.kind === 'remote'")
     expect(ADVANCED_SRC).toContain('data-testid="wizard-working-branch"')
     expect(ADVANCED_SRC).toContain("t('launch.workingBranch.label')")
     expect(ADVANCED_SRC).toContain("t('launch.autoCommitPush.label')")
+    expect(LAUNCH_SRC).toMatch(
+      /step === STEP_SPACE[\s\S]*?<TaskCreationWorkingBranchField[\s\S]*?step === STEP_CONTENT/,
+    )
+    expect(SUBJECT_DESCRIPTOR_SRC).toMatch(
+      /step === 1[\s\S]*?<TaskCreationWorkingBranchField[\s\S]*?step === 2/,
+    )
     // Uses the shared Switch primitive, not a hand-rolled checkbox.
     expect(ADVANCED_SRC).toMatch(/<Switch\b/)
   })
@@ -63,6 +82,10 @@ describe('tasks.new.tsx — RFC-075 working branch + auto commit&push wiring', (
   })
 
   test('canSubmit consults the branch validity gate', () => {
+    expect(LAUNCH_SRC).toMatch(
+      /spaceReady\s*=\s*sourceReady\s*&&\s*!advancedValidation\.workingBranchInvalid/,
+    )
+    expect(LAUNCH_SRC).toMatch(/STEP_SPACE\s*\?\s*spaceReady/)
     expect(LAUNCH_SRC).toMatch(/stepContentReady\s*=[\s\S]*?advancedValidation\.valid/)
     expect(LAUNCH_SRC).toMatch(/canSubmit\s*=[\s\S]*?stepContentReady/)
   })

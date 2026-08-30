@@ -82,6 +82,41 @@ export function buildTaskCreationAdvancedSummary(input: {
   ].filter((item): item is string => item !== null)
 }
 
+export function TaskCreationWorkingBranchField(props: {
+  readonly value: string
+  readonly invalid: boolean
+  readonly disabled?: boolean
+  readonly onChange: (value: string) => void
+}) {
+  const { value, invalid, disabled = false, onChange } = props
+  const { t } = useTranslation()
+
+  return (
+    <>
+      <Field
+        label={t('launch.workingBranch.label')}
+        hint={invalid ? t('launch.workingBranch.invalid') : t('launch.workingBranch.hint')}
+      >
+        <TextInput
+          value={value}
+          onChange={onChange}
+          maxLength={255}
+          placeholder={t('launch.workingBranch.placeholder')}
+          data-testid="wizard-working-branch"
+          disabled={disabled}
+        />
+      </Field>
+      {invalid ? (
+        <ErrorBanner
+          error={null}
+          message={t('launch.workingBranch.invalid')}
+          testid="wizard-branch-error"
+        />
+      ) : null}
+    </>
+  )
+}
+
 export function TaskCreationAdvancedSettings(props: {
   readonly values: TaskCreationAdvancedValues
   readonly capabilities: TaskCreationAdvancedCapabilities
@@ -89,7 +124,6 @@ export function TaskCreationAdvancedSettings(props: {
   readonly actorUserId?: string
   readonly disabled?: boolean
   readonly onCollaboratorsChange: (users: UserPublic[]) => void
-  readonly onWorkingBranchChange: (value: string) => void
   readonly onAutoCommitPushChange?: (value: boolean) => void
   readonly onMaxDurationMinChange: (value: number | undefined) => void
   readonly onMaxTotalTokensChange: (value: number | undefined) => void
@@ -101,7 +135,6 @@ export function TaskCreationAdvancedSettings(props: {
     actorUserId,
     disabled = false,
     onCollaboratorsChange,
-    onWorkingBranchChange,
     onAutoCommitPushChange,
     onMaxDurationMinChange,
     onMaxTotalTokensChange,
@@ -122,34 +155,6 @@ export function TaskCreationAdvancedSettings(props: {
               disabled={disabled}
             />
           </Field>
-        ) : null}
-        {capabilities.workingBranch ? (
-          <>
-            <Field
-              label={t('launch.workingBranch.label')}
-              hint={
-                validation.workingBranchInvalid
-                  ? t('launch.workingBranch.invalid')
-                  : t('launch.workingBranch.hint')
-              }
-            >
-              <TextInput
-                value={values.workingBranch}
-                onChange={onWorkingBranchChange}
-                maxLength={255}
-                placeholder={t('launch.workingBranch.placeholder')}
-                data-testid="wizard-working-branch"
-                disabled={disabled}
-              />
-            </Field>
-            {validation.workingBranchInvalid ? (
-              <ErrorBanner
-                error={null}
-                message={t('launch.workingBranch.invalid')}
-                testid="wizard-branch-error"
-              />
-            ) : null}
-          </>
         ) : null}
         {capabilities.autoCommitPush && values.autoCommitPush !== undefined ? (
           <Switch

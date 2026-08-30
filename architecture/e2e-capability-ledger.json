@@ -7657,7 +7657,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-task-wizard.spec.ts",
-          "test": "RFC-319 TASK-14：高级折叠区的协作者 / 工作分支 / 自动提交推送 / 最长时长 / token 上限逐项进入启动载荷并落库，git 身份由服务端从账户冻结 @nightly"
+          "test": "RFC-319 TASK-14：代码仓步骤的工作分支与高级折叠区的协作者 / 自动提交推送 / 最长时长 / token 上限逐项进入启动载荷并落库，git 身份由服务端从账户冻结 @nightly"
         }
       ]
     },

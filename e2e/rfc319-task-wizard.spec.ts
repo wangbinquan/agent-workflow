@@ -937,7 +937,7 @@ test('RFC-319 TASK-13：提交瞬间工作流被改掉时后端 409，向导报�
 
 // ---------------------------------------------------------------------------
 
-test('RFC-319 TASK-14：高级折叠区的协作者 / 工作分支 / 自动提交推送 / 最长时长 / token 上限逐项进入启动载荷并落库，git 身份由服务端从账户冻结 @nightly', async ({
+test('RFC-319 TASK-14：代码仓步骤的工作分支与高级折叠区的协作者 / 自动提交推送 / 最长时长 / token 上限逐项进入启动载荷并落库，git 身份由服务端从账户冻结 @nightly', async ({
   page,
 }) => {
   const agent = await createAgent('advanced')
@@ -951,6 +951,10 @@ test('RFC-319 TASK-14：高级折叠区的协作者 / 工作分支 / 自动提�
   await page.getByTestId('wizard-space-remote').click()
   await page.getByTestId('repo-source-recent-urls-0').click()
   await page.getByRole('option', { name: fixtureRepoUrl, exact: true }).click()
+  const workingBranchInput = page.getByTestId('wizard-working-branch')
+  await expect(workingBranchInput).toBeVisible()
+  await expect(workingBranchInput.locator('xpath=ancestor::details')).toHaveCount(0)
+  await workingBranchInput.fill(workingBranch)
   await page.getByTestId('stepper-next').click()
   await expect(page.getByTestId('stepper-step-content')).toHaveAttribute('aria-current', 'step')
 
@@ -965,8 +969,7 @@ test('RFC-319 TASK-14：高级折叠区的协作者 / 工作分支 / 自动提�
   await page.getByTestId(`wizard-collaborators-option-${peerUsername}`).click()
   await expect(page.getByTestId(`wizard-collaborators-remove-${peerUsername}`)).toBeVisible()
 
-  // ② 工作分支 ③ 自动提交推送 ④ 最长时长 ⑤ token 上限。
-  await page.getByTestId('wizard-working-branch').fill(workingBranch)
+  // ② 自动提交推送 ③ 最长时长 ④ token 上限。
   await advanced
     .locator('label.form-switch', { hasText: 'Auto commit & push on completion' })
     .locator('input[type="checkbox"]')
@@ -977,10 +980,11 @@ test('RFC-319 TASK-14：高级折叠区的协作者 / 工作分支 / 自动提�
   await page.getByTestId('stepper-next').click()
   await expect(page.getByTestId('stepper-step-confirm')).toHaveAttribute('aria-current', 'step')
 
-  // 确认页的高级摘要行是用户发车前唯一一次复核机会——五项缺一项都算漏报。
+  // 工作分支跟随代码仓摘要；其余四项仍在高级摘要里复核。
+  await expect(page.getByTestId('wizard-summary-working-branch')).toContainText(workingBranch)
   const advancedSummary = page.getByTestId('wizard-summary-advanced')
   await expect(advancedSummary).toContainText('1 collaborator')
-  await expect(advancedSummary).toContainText(workingBranch)
+  await expect(advancedSummary).not.toContainText(workingBranch)
   await expect(advancedSummary).toContainText('Auto commit & push on completion')
   await expect(advancedSummary).toContainText('Max duration (minutes): 7')
   await expect(advancedSummary).toContainText('Max total tokens: 12345')
