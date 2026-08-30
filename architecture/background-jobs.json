@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1129",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1161",
       "kind": "register-call",
-      "line": 1129,
+      "line": 1161,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1645",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1686",
       "kind": "register-call",
-      "line": 1645,
+      "line": 1686,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -25,9 +25,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1309",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1343",
       "kind": "register-call",
-      "line": 1309,
+      "line": 1343,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -36,9 +36,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:508",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:518",
       "kind": "register-call",
-      "line": 508,
+      "line": 518,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +47,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1322",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:1356",
       "kind": "global-setter",
-      "line": 1322,
+      "line": 1356,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -102,9 +102,9 @@
     {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
-      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1426",
+      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1461",
       "kind": "register-call",
-      "line": 1426,
+      "line": 1461,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode",
       "removeAfterWave": "W6/W9",
       "symbol": "runCallWorkflowNode",
@@ -289,9 +289,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/agents.ts",
-      "id": "ambient:packages/backend/src/routes/agents.ts#registerRoute:424",
+      "id": "ambient:packages/backend/src/routes/agents.ts#registerRoute:425",
       "kind": "register-call",
-      "line": 424,
+      "line": 425,
       "ownerEntryId": "owner:packages/backend/src/routes/agents.ts#mountAgentRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAgentRoutes",
@@ -300,9 +300,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/agents.ts",
-      "id": "ambient:packages/backend/src/routes/agents.ts#registerRoute:462",
+      "id": "ambient:packages/backend/src/routes/agents.ts#registerRoute:463",
       "kind": "register-call",
-      "line": 462,
+      "line": 463,
       "ownerEntryId": "owner:packages/backend/src/routes/agents.ts#mountAgentRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAgentRoutes",
@@ -311,9 +311,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/agents.ts",
-      "id": "ambient:packages/backend/src/routes/agents.ts#registerRoute:513",
+      "id": "ambient:packages/backend/src/routes/agents.ts#registerRoute:514",
       "kind": "register-call",
-      "line": 513,
+      "line": 514,
       "ownerEntryId": "owner:packages/backend/src/routes/agents.ts#mountAgentRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAgentRoutes",
@@ -322,9 +322,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:126",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:133",
       "kind": "register-call",
-      "line": 126,
+      "line": 133,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -333,9 +333,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:144",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:151",
       "kind": "register-call",
-      "line": 144,
+      "line": 151,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -344,9 +344,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:192",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:203",
       "kind": "register-call",
-      "line": 192,
+      "line": 203,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -355,9 +355,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:216",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:227",
       "kind": "register-call",
-      "line": 216,
+      "line": 227,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -366,9 +366,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:242",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:253",
       "kind": "register-call",
-      "line": 242,
+      "line": 253,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -377,9 +377,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:270",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:281",
       "kind": "register-call",
-      "line": 270,
+      "line": 281,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -388,9 +388,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:331",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:342",
       "kind": "register-call",
-      "line": 331,
+      "line": 342,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -399,9 +399,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:346",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:357",
       "kind": "register-call",
-      "line": 346,
+      "line": 357,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -410,9 +410,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:378",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:389",
       "kind": "register-call",
-      "line": 378,
+      "line": 389,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -421,9 +421,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:393",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:404",
       "kind": "register-call",
-      "line": 393,
+      "line": 404,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -432,9 +432,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:454",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:465",
       "kind": "register-call",
-      "line": 454,
+      "line": 465,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -443,9 +443,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:469",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:480",
       "kind": "register-call",
-      "line": 469,
+      "line": 480,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -454,9 +454,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:494",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:505",
       "kind": "register-call",
-      "line": 494,
+      "line": 505,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -465,9 +465,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:509",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:520",
       "kind": "register-call",
-      "line": 509,
+      "line": 520,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
@@ -476,20 +476,20 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/auth.ts",
-      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:72",
+      "id": "ambient:packages/backend/src/routes/auth.ts#registerRoute:79",
       "kind": "register-call",
-      "line": 72,
+      "line": 79,
       "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#mountAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAuthRoutes",
       "targetContext": "identity-access"
     },
     {
-      "callee": "registerRoute",
+      "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/backup.ts",
-      "id": "ambient:packages/backend/src/routes/backup.ts#registerRoute:11",
+      "id": "ambient:packages/backend/src/routes/backup.ts#registerOperationRoute:28",
       "kind": "register-call",
-      "line": 11,
+      "line": 28,
       "ownerEntryId": "owner:packages/backend/src/routes/backup.ts#mountBackupRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountBackupRoutes",
@@ -2071,9 +2071,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1014",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1018",
       "kind": "register-call",
-      "line": 1014,
+      "line": 1018,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2082,9 +2082,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:184",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:188",
       "kind": "register-call",
-      "line": 184,
+      "line": 188,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2093,9 +2093,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:227",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:231",
       "kind": "register-call",
-      "line": 227,
+      "line": 231,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2104,9 +2104,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:295",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:299",
       "kind": "register-call",
-      "line": 295,
+      "line": 299,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2115,9 +2115,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:510",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:514",
       "kind": "register-call",
-      "line": 510,
+      "line": 514,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2126,9 +2126,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:526",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:530",
       "kind": "register-call",
-      "line": 526,
+      "line": 530,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2137,9 +2137,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:560",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:564",
       "kind": "register-call",
-      "line": 560,
+      "line": 564,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2148,9 +2148,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:594",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:598",
       "kind": "register-call",
-      "line": 594,
+      "line": 598,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2159,9 +2159,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:630",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:634",
       "kind": "register-call",
-      "line": 630,
+      "line": 634,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2170,9 +2170,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:666",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:670",
       "kind": "register-call",
-      "line": 666,
+      "line": 670,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2181,9 +2181,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:692",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:696",
       "kind": "register-call",
-      "line": 692,
+      "line": 696,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2192,9 +2192,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:717",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:721",
       "kind": "register-call",
-      "line": 717,
+      "line": 721,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2203,9 +2203,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:739",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:743",
       "kind": "register-call",
-      "line": 739,
+      "line": 743,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2214,9 +2214,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:791",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:795",
       "kind": "register-call",
-      "line": 791,
+      "line": 795,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2225,9 +2225,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:814",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:818",
       "kind": "register-call",
-      "line": 814,
+      "line": 818,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2236,9 +2236,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:842",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:846",
       "kind": "register-call",
-      "line": 842,
+      "line": 846,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2247,9 +2247,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:859",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:863",
       "kind": "register-call",
-      "line": 859,
+      "line": 863,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2258,9 +2258,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:900",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:904",
       "kind": "register-call",
-      "line": 900,
+      "line": 904,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2269,9 +2269,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:934",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:938",
       "kind": "register-call",
-      "line": 934,
+      "line": 938,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2280,9 +2280,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:977",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:981",
       "kind": "register-call",
-      "line": 977,
+      "line": 981,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2291,9 +2291,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:994",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:998",
       "kind": "register-call",
-      "line": 994,
+      "line": 998,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2308,7 +2308,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/maintenance.ts#mountMaintenanceRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMaintenanceRoutes",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -2319,7 +2319,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/maintenanceDisk.ts#mountMaintenanceDiskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMaintenanceDiskRoutes",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -2330,7 +2330,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/maintenanceDisk.ts#mountMaintenanceDiskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMaintenanceDiskRoutes",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -2511,9 +2511,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:176",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:181",
       "kind": "register-call",
-      "line": 176,
+      "line": 181,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2522,9 +2522,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:232",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:237",
       "kind": "register-call",
-      "line": 232,
+      "line": 237,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2533,9 +2533,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:266",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:271",
       "kind": "register-call",
-      "line": 266,
+      "line": 271,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2544,9 +2544,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:302",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:307",
       "kind": "register-call",
-      "line": 302,
+      "line": 307,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2555,9 +2555,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:325",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:330",
       "kind": "register-call",
-      "line": 325,
+      "line": 330,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2566,9 +2566,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:351",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:356",
       "kind": "register-call",
-      "line": 351,
+      "line": 356,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2577,9 +2577,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:374",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:379",
       "kind": "register-call",
-      "line": 374,
+      "line": 379,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2588,9 +2588,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:391",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:396",
       "kind": "register-call",
-      "line": 391,
+      "line": 396,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2599,9 +2599,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:408",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:413",
       "kind": "register-call",
-      "line": 408,
+      "line": 413,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2610,9 +2610,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memories.ts",
-      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:88",
+      "id": "ambient:packages/backend/src/routes/memories.ts#registerRoute:93",
       "kind": "register-call",
-      "line": 88,
+      "line": 93,
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#mountMemoryRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryRoutes",
@@ -2698,9 +2698,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/oidc-auth.ts",
-      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:112",
+      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:117",
       "kind": "register-call",
-      "line": 112,
+      "line": 117,
       "ownerEntryId": "owner:packages/backend/src/routes/oidc-auth.ts#mountOidcAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountOidcAuthRoutes",
@@ -2709,9 +2709,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/oidc-auth.ts",
-      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:41",
+      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:46",
       "kind": "register-call",
-      "line": 41,
+      "line": 46,
       "ownerEntryId": "owner:packages/backend/src/routes/oidc-auth.ts#mountOidcAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountOidcAuthRoutes",
@@ -2720,9 +2720,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/oidc-auth.ts",
-      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:57",
+      "id": "ambient:packages/backend/src/routes/oidc-auth.ts#registerRoute:62",
       "kind": "register-call",
-      "line": 57,
+      "line": 62,
       "ownerEntryId": "owner:packages/backend/src/routes/oidc-auth.ts#mountOidcAuthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountOidcAuthRoutes",
@@ -2819,9 +2819,9 @@
     {
       "callee": "registerOperationDescriptor",
       "file": "packages/backend/src/routes/operationRoute.ts",
-      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerOperationDescriptor:45",
+      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerOperationDescriptor:48",
       "kind": "register-call",
-      "line": 45,
+      "line": 48,
       "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerOperationRoute",
@@ -2830,9 +2830,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/operationRoute.ts",
-      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerRoute:53",
+      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerRoute:56",
       "kind": "register-call",
-      "line": 53,
+      "line": 56,
       "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerOperationRoute",
@@ -2962,9 +2962,9 @@
     {
       "callee": "registerBoundOperationHandler",
       "file": "packages/backend/src/routes/registry.ts",
-      "id": "ambient:packages/backend/src/routes/registry.ts#registerBoundOperationHandler:253",
+      "id": "ambient:packages/backend/src/routes/registry.ts#registerBoundOperationHandler:257",
       "kind": "register-call",
-      "line": 253,
+      "line": 257,
       "ownerEntryId": "owner:packages/backend/src/routes/registry.ts#registerRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerRoute",
@@ -2973,9 +2973,9 @@
     {
       "callee": "registerBoundOperationMiddleware",
       "file": "packages/backend/src/routes/registry.ts",
-      "id": "ambient:packages/backend/src/routes/registry.ts#registerBoundOperationMiddleware:279",
+      "id": "ambient:packages/backend/src/routes/registry.ts#registerBoundOperationMiddleware:283",
       "kind": "register-call",
-      "line": 279,
+      "line": 283,
       "ownerEntryId": "owner:packages/backend/src/routes/registry.ts#registerRouteMiddleware",
       "removeAfterWave": "W6/W9",
       "symbol": "registerRouteMiddleware",
@@ -2984,9 +2984,9 @@
     {
       "callee": "registerHttpOperationProjection",
       "file": "packages/backend/src/routes/registry.ts",
-      "id": "ambient:packages/backend/src/routes/registry.ts#registerHttpOperationProjection:251",
+      "id": "ambient:packages/backend/src/routes/registry.ts#registerHttpOperationProjection:255",
       "kind": "register-call",
-      "line": 251,
+      "line": 255,
       "ownerEntryId": "owner:packages/backend/src/routes/registry.ts#registerRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerRoute",
@@ -3213,33 +3213,33 @@
       "targetContext": "task-execution"
     },
     {
-      "callee": "registerRoute",
+      "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/restore.ts",
-      "id": "ambient:packages/backend/src/routes/restore.ts#registerRoute:31",
+      "id": "ambient:packages/backend/src/routes/restore.ts#registerOperationRoute:46",
       "kind": "register-call",
-      "line": 31,
+      "line": 46,
       "ownerEntryId": "owner:packages/backend/src/routes/restore.ts#mountRestoreRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRestoreRoutes",
       "targetContext": "system-operations"
     },
     {
-      "callee": "registerRoute",
+      "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/restore.ts",
-      "id": "ambient:packages/backend/src/routes/restore.ts#registerRoute:45",
+      "id": "ambient:packages/backend/src/routes/restore.ts#registerOperationRoute:56",
       "kind": "register-call",
-      "line": 45,
+      "line": 56,
       "ownerEntryId": "owner:packages/backend/src/routes/restore.ts#mountRestoreRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRestoreRoutes",
       "targetContext": "system-operations"
     },
     {
-      "callee": "registerRoute",
+      "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/restore.ts",
-      "id": "ambient:packages/backend/src/routes/restore.ts#registerRoute:60",
+      "id": "ambient:packages/backend/src/routes/restore.ts#registerOperationRoute:66",
       "kind": "register-call",
-      "line": 60,
+      "line": 66,
       "ownerEntryId": "owner:packages/backend/src/routes/restore.ts#mountRestoreRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountRestoreRoutes",
@@ -3479,9 +3479,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:106",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:110",
       "kind": "register-call",
-      "line": 106,
+      "line": 110,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3490,9 +3490,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:120",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:124",
       "kind": "register-call",
-      "line": 120,
+      "line": 124,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3501,9 +3501,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:134",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:138",
       "kind": "register-call",
-      "line": 134,
+      "line": 138,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3512,9 +3512,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:179",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:183",
       "kind": "register-call",
-      "line": 179,
+      "line": 183,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3523,9 +3523,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:238",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:242",
       "kind": "register-call",
-      "line": 238,
+      "line": 242,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3534,9 +3534,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:268",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:272",
       "kind": "register-call",
-      "line": 268,
+      "line": 272,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3545,9 +3545,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:301",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:311",
       "kind": "register-call",
-      "line": 301,
+      "line": 311,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3556,9 +3556,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/scheduledTasks.ts",
-      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:317",
+      "id": "ambient:packages/backend/src/routes/scheduledTasks.ts#registerRoute:327",
       "kind": "register-call",
-      "line": 317,
+      "line": 327,
       "ownerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#mountScheduledTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountScheduledTaskRoutes",
@@ -3908,9 +3908,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1026",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1027",
       "kind": "register-call",
-      "line": 1026,
+      "line": 1027,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3919,9 +3919,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1081",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1082",
       "kind": "register-call",
-      "line": 1081,
+      "line": 1082,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3930,9 +3930,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1121",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1122",
       "kind": "register-call",
-      "line": 1121,
+      "line": 1122,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3941,9 +3941,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1142",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1143",
       "kind": "register-call",
-      "line": 1142,
+      "line": 1143,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3952,9 +3952,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1195",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1196",
       "kind": "register-call",
-      "line": 1195,
+      "line": 1196,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3963,9 +3963,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1221",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1222",
       "kind": "register-call",
-      "line": 1221,
+      "line": 1222,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3974,9 +3974,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1239",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1240",
       "kind": "register-call",
-      "line": 1239,
+      "line": 1240,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3985,9 +3985,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1259",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1260",
       "kind": "register-call",
-      "line": 1259,
+      "line": 1260,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -3996,9 +3996,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1286",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:1287",
       "kind": "register-call",
-      "line": 1286,
+      "line": 1287,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4062,9 +4062,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:434",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:435",
       "kind": "register-call",
-      "line": 434,
+      "line": 435,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4073,9 +4073,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:452",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:453",
       "kind": "register-call",
-      "line": 452,
+      "line": 453,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4084,9 +4084,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:480",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:481",
       "kind": "register-call",
-      "line": 480,
+      "line": 481,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4095,9 +4095,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:500",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:501",
       "kind": "register-call",
-      "line": 500,
+      "line": 501,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4106,9 +4106,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:526",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:527",
       "kind": "register-call",
-      "line": 526,
+      "line": 527,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4117,9 +4117,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:540",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:541",
       "kind": "register-call",
-      "line": 540,
+      "line": 541,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4128,9 +4128,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:558",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:559",
       "kind": "register-call",
-      "line": 558,
+      "line": 559,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4139,9 +4139,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:584",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:585",
       "kind": "register-call",
-      "line": 584,
+      "line": 585,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4150,9 +4150,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:605",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:606",
       "kind": "register-call",
-      "line": 605,
+      "line": 606,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4161,9 +4161,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:646",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:647",
       "kind": "register-call",
-      "line": 646,
+      "line": 647,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4172,9 +4172,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:678",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:679",
       "kind": "register-call",
-      "line": 678,
+      "line": 679,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4183,9 +4183,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:702",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:703",
       "kind": "register-call",
-      "line": 702,
+      "line": 703,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4194,9 +4194,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:728",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:729",
       "kind": "register-call",
-      "line": 728,
+      "line": 729,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4205,9 +4205,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:760",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:761",
       "kind": "register-call",
-      "line": 760,
+      "line": 761,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4216,9 +4216,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:779",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:780",
       "kind": "register-call",
-      "line": 779,
+      "line": 780,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4227,9 +4227,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:801",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:802",
       "kind": "register-call",
-      "line": 801,
+      "line": 802,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4238,9 +4238,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:826",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:827",
       "kind": "register-call",
-      "line": 826,
+      "line": 827,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4249,9 +4249,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:870",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:871",
       "kind": "register-call",
-      "line": 870,
+      "line": 871,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4260,9 +4260,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:904",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:905",
       "kind": "register-call",
-      "line": 904,
+      "line": 905,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4271,9 +4271,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:942",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:943",
       "kind": "register-call",
-      "line": 942,
+      "line": 943,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4282,9 +4282,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/tasks.ts",
-      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:993",
+      "id": "ambient:packages/backend/src/routes/tasks.ts#registerRoute:994",
       "kind": "register-call",
-      "line": 993,
+      "line": 994,
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#mountTaskRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountTaskRoutes",
@@ -4315,9 +4315,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:114",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:117",
       "kind": "register-call",
-      "line": 114,
+      "line": 117,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4326,9 +4326,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:125",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:128",
       "kind": "register-call",
-      "line": 125,
+      "line": 128,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4337,9 +4337,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:141",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:144",
       "kind": "register-call",
-      "line": 141,
+      "line": 144,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4348,9 +4348,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:164",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:167",
       "kind": "register-call",
-      "line": 164,
+      "line": 167,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4359,9 +4359,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:187",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:190",
       "kind": "register-call",
-      "line": 187,
+      "line": 190,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4370,9 +4370,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:198",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:201",
       "kind": "register-call",
-      "line": 198,
+      "line": 201,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4381,9 +4381,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:37",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:40",
       "kind": "register-call",
-      "line": 37,
+      "line": 40,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4392,9 +4392,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:63",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerOperationRoute:66",
       "kind": "register-call",
-      "line": 63,
+      "line": 66,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4403,9 +4403,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:100",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:103",
       "kind": "register-call",
-      "line": 100,
+      "line": 103,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4414,9 +4414,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/users.ts",
-      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:86",
+      "id": "ambient:packages/backend/src/routes/users.ts#registerRoute:89",
       "kind": "register-call",
-      "line": 86,
+      "line": 89,
       "ownerEntryId": "owner:packages/backend/src/routes/users.ts#mountUserRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountUserRoutes",
@@ -4951,11 +4951,22 @@
       "targetContext": "source-control"
     },
     {
+      "callee": "registerOperationAlias",
+      "file": "packages/backend/src/server.ts",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:999",
+      "kind": "register-call",
+      "line": 999,
+      "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountApiRoutes",
+      "targetContext": "bootstrap"
+    },
+    {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:932",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:955",
       "kind": "register-call",
-      "line": 932,
+      "line": 955,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -4964,9 +4975,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:658",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:676",
       "kind": "register-call",
-      "line": 658,
+      "line": 676,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createApp",
@@ -4997,9 +5008,9 @@
     {
       "callee": "registerRevalidationTrigger",
       "file": "packages/backend/src/ws/connections.ts",
-      "id": "ambient:packages/backend/src/ws/connections.ts#registerRevalidationTrigger:293",
+      "id": "ambient:packages/backend/src/ws/connections.ts#registerRevalidationTrigger:314",
       "kind": "register-call",
-      "line": 293,
+      "line": 314,
       "ownerEntryId": "owner:packages/backend/src/ws/connections.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
@@ -5008,9 +5019,9 @@
     {
       "callee": "setExpiredCredentialHandler",
       "file": "packages/backend/src/ws/connections.ts",
-      "id": "ambient:packages/backend/src/ws/connections.ts#setExpiredCredentialHandler:141",
+      "id": "ambient:packages/backend/src/ws/connections.ts#setExpiredCredentialHandler:147",
       "kind": "global-setter",
-      "line": 141,
+      "line": 147,
       "ownerEntryId": "owner:packages/backend/src/ws/connections.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
@@ -5034,7 +5045,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 456,
+    "ambientWiring": 457,
     "disabled": 7,
     "entries": 273,
     "executionLocal": 25,
@@ -5093,7 +5104,7 @@
       ],
       "file": "packages/backend/src/cli/start.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1368",
+      "id": "background:packages/backend/src/cli/start.ts#$setInterval:1402",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -5107,7 +5118,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1368",
+      "symbol": "$setInterval:1402",
       "targetContext": "bootstrap"
     },
     {
@@ -6279,7 +6290,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1508",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1543",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -6293,7 +6304,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1508",
+      "symbol": "$setInterval:1543",
       "targetContext": "task-execution"
     },
     {
@@ -6302,7 +6313,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1923",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1958",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -6316,7 +6327,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:1923",
+      "symbol": "$setTimeout:1958",
       "targetContext": "task-execution"
     },
     {
@@ -7626,7 +7637,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backup.ts#BACKUP_VACUUM_WORKER_ENTRY",
       "phase": "unknown",
       "symbol": "BACKUP_VACUUM_WORKER_ENTRY",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -7647,7 +7658,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backup.ts#vacuumIntoWorker",
       "phase": "unknown",
       "symbol": "vacuumIntoWorker",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -7670,7 +7681,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#$file",
       "phase": "unknown",
       "symbol": "$setInterval:217",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -7693,7 +7704,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#$file",
       "phase": "unknown",
       "symbol": "$setInterval:295",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -7716,7 +7727,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#pruneBackups",
       "phase": "unknown",
       "symbol": "pruneBackups",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -7737,7 +7748,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#runPrune",
       "phase": "unknown",
       "symbol": "runPrune",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -8705,7 +8716,7 @@
       ],
       "file": "packages/backend/src/services/intent/dispatcher.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/intent/dispatcher.ts#$setTimeout:74",
+      "id": "background:packages/backend/src/services/intent/dispatcher.ts#$setTimeout:82",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8719,7 +8730,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:74",
+      "symbol": "$setTimeout:82",
       "targetContext": "intent"
     },
     {
@@ -8969,7 +8980,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#advanceRetentionPhase",
       "phase": "unknown",
       "symbol": "advanceRetentionPhase",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -8990,7 +9001,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#RETENTION_DELETE_BATCH",
       "phase": "unknown",
       "symbol": "RETENTION_DELETE_BATCH",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9014,7 +9025,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#retentionCursor",
       "phase": "after-ready",
       "symbol": "retentionCursor",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9037,7 +9048,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#retentionPhases",
       "phase": "unknown",
       "symbol": "retentionPhases",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9061,7 +9072,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#runRetentionSweep",
       "phase": "unknown",
       "symbol": "runRetentionSweep",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9086,7 +9097,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#runRetentionSweepSlice",
       "phase": "after-ready",
       "symbol": "runRetentionSweepSlice",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9109,7 +9120,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#startRetentionSweeper",
       "phase": "after-ready",
       "symbol": "startRetentionSweeper",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -9130,7 +9141,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#zeroRetentionResult",
       "phase": "unknown",
       "symbol": "zeroRetentionResult",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9153,7 +9164,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#$file",
       "phase": "unknown",
       "symbol": "$setInterval:29",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9176,7 +9187,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:27",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -9197,7 +9208,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#REAL_TIMERS",
       "phase": "unknown",
       "symbol": "REAL_TIMERS",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -9218,7 +9229,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#startMaintenanceTicker",
       "phase": "before-ready",
       "symbol": "startMaintenanceTicker",
-      "targetContext": "system-operations"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -9918,7 +9929,7 @@
       ],
       "file": "packages/backend/src/services/scheduledTaskScheduler.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/scheduledTaskScheduler.ts#$setInterval:228",
+      "id": "background:packages/backend/src/services/scheduledTaskScheduler.ts#$setInterval:244",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9932,7 +9943,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/scheduledTaskScheduler.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:228",
+      "symbol": "$setInterval:244",
       "targetContext": "integration"
     },
     {
@@ -10258,7 +10269,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:378",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:380",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -10272,7 +10283,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:378",
+      "symbol": "$setTimeout:380",
       "targetContext": "task-execution"
     },
     {
@@ -10281,7 +10292,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5458",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5468",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -10295,7 +10306,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5458",
+      "symbol": "$setTimeout:5468",
       "targetContext": "task-execution"
     },
     {
@@ -11130,5 +11141,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1"
+  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0"
 }

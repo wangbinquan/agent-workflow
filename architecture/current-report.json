@@ -1,25 +1,24 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 456,
-    "architectureExceptions": 1712,
+    "ambientWiring": 457,
+    "architectureExceptions": 1759,
     "backgroundJobs": 273,
-    "crossContextImports": 1748,
+    "crossContextImports": 1803,
     "facades": 381,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 19609,
-    "mutationEntrypoints": 1091,
+    "moduleSymbolOwners": 19677,
+    "mutationEntrypoints": 1104,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 529,
+    "publicSurfaces": 541,
     "transactionExternalEffects": 285
   },
   "metrics": {
-    "ambientWiringEntries": 456,
+    "ambientWiringEntries": 457,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
       "packages/backend/src/routes/auth.ts",
-      "packages/backend/src/routes/backup.ts",
       "packages/backend/src/routes/cached-repos.ts",
       "packages/backend/src/routes/capabilityTemplates.ts",
       "packages/backend/src/routes/clarify.ts",
@@ -45,7 +44,6 @@
       "packages/backend/src/routes/port-artifacts.ts",
       "packages/backend/src/routes/repoGroups.ts",
       "packages/backend/src/routes/repos.ts",
-      "packages/backend/src/routes/restore.ts",
       "packages/backend/src/routes/reviews.ts",
       "packages/backend/src/routes/runtime.ts",
       "packages/backend/src/routes/runtimes.ts",
@@ -65,7 +63,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1072,
+    "backendProductionFiles": 1073,
     "backendValueSccs": [
       [
         "packages/backend/src/services/agent.ts",
@@ -110,7 +108,7 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 72,
-    "inboundBoundaryEdges": 61,
+    "inboundBoundaryEdges": 59,
     "knownViolations": 29,
     "moduleContexts": [
       {
@@ -159,7 +157,7 @@
       },
       {
         "context": "system-operations",
-        "files": 11
+        "files": 12
       },
       {
         "context": "task-catalog",
@@ -170,7 +168,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 516,
+    "moduleFiles": 517,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -226,5 +224,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1"
+  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0"
 }

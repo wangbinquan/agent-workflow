@@ -244,9 +244,9 @@
       "file": "packages/backend/src/services/backup.ts",
       "id": "facade:packages/backend/src/services/backup.ts",
       "ownerEntryId": "owner:packages/backend/src/services/backup.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -266,9 +266,9 @@
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "facade:packages/backend/src/services/backupManifest.ts",
       "ownerEntryId": "owner:packages/backend/src/services/backupManifest.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -290,9 +290,9 @@
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "facade:packages/backend/src/services/backupScheduler.ts",
       "ownerEntryId": "owner:packages/backend/src/services/backupScheduler.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -301,9 +301,9 @@
       "file": "packages/backend/src/services/backupVacuumWorker.ts",
       "id": "facade:packages/backend/src/services/backupVacuumWorker.ts",
       "ownerEntryId": "owner:packages/backend/src/services/backupVacuumWorker.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -1012,9 +1012,9 @@
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "facade:packages/backend/src/services/daemonCadence.ts",
       "ownerEntryId": "owner:packages/backend/src/services/daemonCadence.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -1645,7 +1645,8 @@
         "import:29bbacd38ff8111904f3",
         "import:2a9cc83e47470b926250",
         "import:7b873c8c94d8afa057be",
-        "import:ad67865e53e58fb12c42"
+        "import:ad67865e53e58fb12c42",
+        "import:e8671579024039df08ff"
       ],
       "exportedSymbols": [
         "RunTaskOptions"
@@ -2079,7 +2080,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:009b5330d3c57bcd2a35",
+        "import:ea8f75b23a1e03067bfa"
+      ],
       "exportedSymbols": [
         "IntentDispatchDeps",
         "dispatchIntentTurn",
@@ -2857,9 +2861,9 @@
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "facade:packages/backend/src/services/maintenanceDisk.ts",
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceDisk.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -2877,9 +2881,9 @@
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "facade:packages/backend/src/services/maintenanceRetention.ts",
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceRetention.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -2892,9 +2896,9 @@
       "file": "packages/backend/src/services/maintenanceState.ts",
       "id": "facade:packages/backend/src/services/maintenanceState.ts",
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceState.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -2912,9 +2916,9 @@
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "facade:packages/backend/src/services/maintenanceTicker.ts",
       "ownerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -3609,9 +3613,9 @@
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "facade:packages/backend/src/services/pendingRestore.ts",
       "ownerEntryId": "owner:packages/backend/src/services/pendingRestore.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -3839,9 +3843,9 @@
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "facade:packages/backend/src/services/rawDbSnapshot.ts",
       "ownerEntryId": "owner:packages/backend/src/services/rawDbSnapshot.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -4407,9 +4411,9 @@
       "file": "packages/backend/src/services/restore.ts",
       "id": "facade:packages/backend/src/services/restore.ts",
       "ownerEntryId": "owner:packages/backend/src/services/restore.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-implementation",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -4554,9 +4558,9 @@
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "facade:packages/backend/src/services/rfc295DowngradeAudit.ts",
       "ownerEntryId": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -5291,9 +5295,13 @@
       "targetLayer": "infrastructure"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:2e83c47b031dde16f55f"
+      ],
       "exportedSymbols": [
         "BuildScheduleLaunch",
+        "ScheduleAuthorityInvocation",
+        "ScheduleAuthorityRuntime",
         "ScheduleLaunch",
         "assertScheduledTargetUsable",
         "canViewScheduledTask",
@@ -6429,6 +6437,7 @@
       "boundaryEdgeIds": [
         "import:0f55df71f90870c1461b",
         "import:13a2f0644dd229a05dbd",
+        "import:22d95f653425a0679593",
         "import:248d07243c59a2fbb7e8",
         "import:3bf779c696831f7e9dde",
         "import:3fa453b8e3244c836abb",
@@ -6451,6 +6460,7 @@
         "import:de17d18a53431aaefb1a",
         "import:ee07aef5f87771b4e498",
         "import:f01878cbadafc5102253",
+        "import:f4bbeed18f5ade6b0a66",
         "import:fe30b04e89398c214603"
       ],
       "exportedSymbols": [
@@ -6984,11 +6994,14 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0aa9523307e76af8715c",
+        "import:26b643d51978a2a4e4ac",
         "import:7874e055a3ef739faf9b",
-        "import:d580fa2c7bf3f5130d2a"
+        "import:85fb15b69c0ddd3b5c50"
       ],
       "exportedSymbols": [
         "CreateIdentityArgs",
+        "OidcProfileIdentityAccess",
         "bindInvitedUserWithIdentity",
         "createIdentity",
         "createUserWithIdentity",
@@ -7008,9 +7021,7 @@
     {
       "boundaryEdgeIds": [
         "import:76342b93d74c3594fe25",
-        "import:8efba10420c1e80e2347",
-        "import:9fae1b004ac7cc7553f0",
-        "import:ca60bc463d24b5cca64b",
+        "import:bba2b3d97e0d2a01c68a",
         "import:ceed93be047843e0094a",
         "import:dc130aefec7638d047bf",
         "import:e8cd48b326940c7f3277"
@@ -7029,12 +7040,9 @@
         "getUserGitCommitIdentity",
         "listAllUsers",
         "lookupUsersPublic",
-        "mapOidcUserProfilePersistenceError",
         "patchUser",
         "resetPassword",
-        "searchUsersPublic",
-        "syncOidcUserProfile",
-        "syncOidcUserProfileInTransaction"
+        "searchUsersPublic"
       ],
       "file": "packages/backend/src/services/users.ts",
       "id": "facade:packages/backend/src/services/users.ts",
@@ -7230,9 +7238,13 @@
         "import:0611979cc179875aaf5f",
         "import:139778ff64f70937014b",
         "import:1666fefe6a88e0618563",
+        "import:19eec87c0b231181b518",
+        "import:1b2f1274eba64c06bc17",
         "import:3350de6092ebd2db6604",
         "import:480883d09c1d641e9742",
         "import:a2e9654391adadb03f25",
+        "import:a71db290ff82f72ce2f1",
+        "import:a9ed6b24881d713a1c0f",
         "import:ab832b33d5f2177cfb7c",
         "import:bdedc3ec8cb1796f7c6b",
         "import:d24dafb7ab9ed6195eda",
@@ -7888,7 +7900,7 @@
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "facade:packages/backend/src/services/worktreeBackup.ts",
       "ownerEntryId": "owner:packages/backend/src/services/worktreeBackup.ts#$file",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-implementation",
       "targetContext": "source-control",
       "targetLayer": "application"
@@ -7928,5 +7940,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1"
+  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0"
 }

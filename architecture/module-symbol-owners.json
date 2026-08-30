@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1072,
+    "backendFiles": 1073,
     "frontendFiles": 620,
     "legacyFiles": 556,
-    "moduleFiles": 516,
-    "productionFiles": 1846,
+    "moduleFiles": 517,
+    "productionFiles": 1847,
     "sharedFiles": 154,
-    "symbolsIncludingFileRoots": 19609
+    "symbolsIncludingFileRoots": 19677
   },
   "entries": [
     {
@@ -91,30 +91,6 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "buildActor",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "auth",
-      "exported": true,
-      "file": "packages/backend/src/auth/actor.ts",
-      "id": "owner:packages/backend/src/auth/actor.ts#buildCurrentActor",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "buildCurrentActor",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "auth",
-      "exported": true,
-      "file": "packages/backend/src/auth/actor.ts",
-      "id": "owner:packages/backend/src/auth/actor.ts#buildInheritedActor",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "buildInheritedActor",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -1417,12 +1393,60 @@
     {
       "currentContext": "legacy",
       "currentLayer": "auth",
+      "exported": false,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#ADMITTED_DAEMON_CREDENTIAL",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "ADMITTED_DAEMON_CREDENTIAL",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": false,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#admittedPatCredential",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "admittedPatCredential",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": false,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#admittedSessionCredential",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "admittedSessionCredential",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
       "exported": true,
       "file": "packages/backend/src/auth/session.ts",
       "id": "owner:packages/backend/src/auth/session.ts#describeCredential",
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "describeCredential",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#DirectAuthorityAdmissionRuntime",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "DirectAuthorityAdmissionRuntime",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -1527,6 +1551,18 @@
       "currentLayer": "auth",
       "exported": true,
       "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#reresolveIdentity",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "reresolveIdentity",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/session.ts",
       "id": "owner:packages/backend/src/auth/session.ts#resolveActor",
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
@@ -1555,6 +1591,18 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "ResolvedUpgradeIdentity",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#resolveIdentity",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "resolveIdentity",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -2044,10 +2092,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/dbCompact.ts",
       "id": "owner:packages/backend/src/cli/dbCompact.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2056,10 +2104,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/dbCompact.ts",
       "id": "owner:packages/backend/src/cli/dbCompact.ts#dbCompactCommand",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "dbCompactCommand",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2068,10 +2116,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/dbCompact.ts",
       "id": "owner:packages/backend/src/cli/dbCompact.ts#DbCompactResult",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DbCompactResult",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2080,10 +2128,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/dbCompact.ts",
       "id": "owner:packages/backend/src/cli/dbCompact.ts#mib",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "mib",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2092,10 +2140,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2104,10 +2152,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkAppHome",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkAppHome",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2116,10 +2164,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkBackups",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkBackups",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2128,10 +2176,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkConfig",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkConfig",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2140,10 +2188,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkDbIntegrity",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkDbIntegrity",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2152,10 +2200,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkGit",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkGit",
-      "targetContext": "source-control",
+      "targetContext": "bootstrap",
       "targetLayer": "infrastructure"
     },
     {
@@ -2164,10 +2212,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkLifecycleHealth",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkLifecycleHealth",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -2176,10 +2224,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkMigrations",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkMigrations",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2188,10 +2236,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#CheckResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "CheckResult",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2200,10 +2248,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkSealedCredentials",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkSealedCredentials",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2212,10 +2260,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkSecretFileProtection",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkSecretFileProtection",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2224,10 +2272,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkSsh",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkSsh",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2236,10 +2284,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#doctorCommand",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "doctorCommand",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2248,10 +2296,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#DoctorResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DoctorResult",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2260,10 +2308,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#evaluateGitCheck",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "evaluateGitCheck",
-      "targetContext": "source-control",
+      "targetContext": "bootstrap",
       "targetLayer": "infrastructure"
     },
     {
@@ -2272,10 +2320,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#evaluateLifecycleHealth",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "evaluateLifecycleHealth",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -2284,10 +2332,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#evaluateMigrationsStatus",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "evaluateMigrationsStatus",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -2296,10 +2344,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#evaluateSshCheck",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "evaluateSshCheck",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2308,10 +2356,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#formatDoctor",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "formatDoctor",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2320,10 +2368,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#LifecycleHealthCounts",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "LifecycleHealthCounts",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -2332,10 +2380,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/migrate.ts",
       "id": "owner:packages/backend/src/cli/migrate.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2344,10 +2392,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/migrate.ts",
       "id": "owner:packages/backend/src/cli/migrate.ts#migrateCommand",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "migrateCommand",
-      "targetContext": "system-operations",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2356,10 +2404,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/migrationReport.ts",
       "id": "owner:packages/backend/src/cli/migrationReport.ts#$file",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "source-control",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2368,10 +2416,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/migrationReport.ts",
       "id": "owner:packages/backend/src/cli/migrationReport.ts#migrationReportCommand",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "migrationReportCommand",
-      "targetContext": "source-control",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2396,6 +2444,42 @@
       "status": "legacy-target",
       "symbol": "packageCommand",
       "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/package.ts",
+      "id": "owner:packages/backend/src/cli/package.ts#PackageCommandBootstrap",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "PackageCommandBootstrap",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/package.ts",
+      "id": "owner:packages/backend/src/cli/package.ts#PackageCommandBootstrapFactory",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "PackageCommandBootstrapFactory",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/package.ts",
+      "id": "owner:packages/backend/src/cli/package.ts#PackageCommandIdentityHandle",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "PackageCommandIdentityHandle",
+      "targetContext": "identity-access",
       "targetLayer": "inbound"
     },
     {
@@ -2536,10 +2620,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/rfc295-downgrade-audit.ts",
       "id": "owner:packages/backend/src/cli/rfc295-downgrade-audit.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2548,10 +2632,10 @@
       "exported": false,
       "file": "packages/backend/src/cli/rfc295-downgrade-audit.ts",
       "id": "owner:packages/backend/src/cli/rfc295-downgrade-audit.ts#formatIssue",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "formatIssue",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2560,10 +2644,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/rfc295-downgrade-audit.ts",
       "id": "owner:packages/backend/src/cli/rfc295-downgrade-audit.ts#formatRfc295DowngradeAudit",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "formatRfc295DowngradeAudit",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2572,10 +2656,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/rfc295-downgrade-audit.ts",
       "id": "owner:packages/backend/src/cli/rfc295-downgrade-audit.ts#rfc295DowngradeAuditCommand",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "rfc295DowngradeAuditCommand",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -2584,10 +2668,10 @@
       "exported": true,
       "file": "packages/backend/src/cli/rfc295-downgrade-audit.ts",
       "id": "owner:packages/backend/src/cli/rfc295-downgrade-audit.ts#Rfc295DowngradeAuditCommandResult",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "Rfc295DowngradeAuditCommandResult",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -3256,10 +3340,10 @@
       "exported": false,
       "file": "packages/backend/src/db/client.ts",
       "id": "owner:packages/backend/src/db/client.ts#migratedSnapshot",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "migratedSnapshot",
-      "targetContext": "system-operations",
+      "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
     {
@@ -3268,10 +3352,10 @@
       "exported": false,
       "file": "packages/backend/src/db/client.ts",
       "id": "owner:packages/backend/src/db/client.ts#migratedSnapshotCache",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "migratedSnapshotCache",
-      "targetContext": "system-operations",
+      "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
     {
@@ -4648,10 +4732,10 @@
       "exported": true,
       "file": "packages/backend/src/db/schema.ts",
       "id": "owner:packages/backend/src/db/schema.ts#maintenanceRuns",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "maintenanceRuns",
-      "targetContext": "system-operations",
+      "targetContext": "task-execution",
       "targetLayer": "domain"
     },
     {
@@ -4660,10 +4744,10 @@
       "exported": true,
       "file": "packages/backend/src/db/schema.ts",
       "id": "owner:packages/backend/src/db/schema.ts#maintenanceState",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "maintenanceState",
-      "targetContext": "system-operations",
+      "targetContext": "task-execution",
       "targetLayer": "domain"
     },
     {
@@ -5176,10 +5260,10 @@
       "exported": true,
       "file": "packages/backend/src/db/schema.ts",
       "id": "owner:packages/backend/src/db/schema.ts#taskExecutionMaintenanceClaims",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "taskExecutionMaintenanceClaims",
-      "targetContext": "system-operations",
+      "targetContext": "task-execution",
       "targetLayer": "domain"
     },
     {
@@ -5188,10 +5272,10 @@
       "exported": true,
       "file": "packages/backend/src/db/schema.ts",
       "id": "owner:packages/backend/src/db/schema.ts#taskExecutionMaintenanceMembers",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "taskExecutionMaintenanceMembers",
-      "targetContext": "system-operations",
+      "targetContext": "task-execution",
       "targetLayer": "domain"
     },
     {
@@ -6463,6 +6547,18 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "AW_E2E_BUILD",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "main.ts",
+      "exported": false,
+      "file": "packages/backend/src/main.ts",
+      "id": "owner:packages/backend/src/main.ts#composePackageCommandBootstrap",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "composePackageCommandBootstrap",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -39321,6 +39417,78 @@
       "currentContext": "identity-access",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/identity-access/application/legacyActorProjection.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/legacyActorProjection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/application/legacyActorProjection.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/legacyActorProjection.ts#DirectLegacyProjectionInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DirectLegacyProjectionInput",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/application/legacyActorProjection.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/legacyActorProjection.ts#projectDelegatedLegacyActor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "projectDelegatedLegacyActor",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/application/legacyActorProjection.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/legacyActorProjection.ts#projectDirectLegacyActor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "projectDirectLegacyActor",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/application/legacyActorProjection.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/legacyActorProjection.ts#projectOwnerlessLegacyActor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "projectOwnerlessLegacyActor",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/application/legacyActorProjection.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/legacyActorProjection.ts#SYSTEM_USER_ID",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SYSTEM_USER_ID",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
       "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#$file",
       "removeAfterWave": null,
@@ -39332,36 +39500,12 @@
     {
       "currentContext": "identity-access",
       "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#authorityClaims",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "authorityClaims",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#contextMetadata",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "contextMetadata",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#createDelegatedAuthorityRef",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#AuthorityClaimRegistry",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createDelegatedAuthorityRef",
+      "symbol": "AuthorityClaimRegistry",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -39370,10 +39514,34 @@
       "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#delegatedAuthorityClaims",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#authoritySubjectResolver",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "delegatedAuthorityClaims",
+      "symbol": "authoritySubjectResolver",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#contextMetadataResolver",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "contextMetadataResolver",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#DelegatedClaim",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DelegatedClaim",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -39386,6 +39554,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DelegatedOperationContextFactory",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#DirectAuthorityRuntime",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DirectAuthorityRuntime",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -39418,10 +39598,10 @@
       "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#mintDirectAuthenticatedAuthority",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#InternallyOwnedAuthority",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "mintDirectAuthenticatedAuthority",
+      "symbol": "InternallyOwnedAuthority",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -39430,10 +39610,34 @@
       "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#mintRequestAuthority",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#InternallyOwnedContext",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "mintRequestAuthority",
+      "symbol": "InternallyOwnedContext",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#LocalOperatorContextFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LocalOperatorContextFactory",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#LocalOperatorIdentity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LocalOperatorIdentity",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -39470,6 +39674,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "subjectRefOf",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/application/operationContext.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/application/operationContext.ts#SYSTEM_USER_ID",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SYSTEM_USER_ID",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -40029,30 +40245,6 @@
       "currentContext": "identity-access",
       "currentLayer": "application",
       "exported": false,
-      "file": "packages/backend/src/modules/identity-access/application/queries/resolveDelegatedAuthority.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/queries/resolveDelegatedAuthority.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/identity-access/application/queries/resolveDelegatedAuthority.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/application/queries/resolveDelegatedAuthority.ts#ResolveDelegatedAuthority",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "ResolveDelegatedAuthority",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "application",
-      "exported": false,
       "file": "packages/backend/src/modules/identity-access/application/view.ts",
       "id": "owner:packages/backend/src/modules/identity-access/application/view.ts#$file",
       "removeAfterWave": null,
@@ -40088,12 +40280,60 @@
     {
       "currentContext": "identity-access",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/composition.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#buildIdentityAccessRuntime",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "buildIdentityAccessRuntime",
+      "targetContext": "identity-access",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/identity-access/composition.ts",
       "id": "owner:packages/backend/src/modules/identity-access/composition.ts#composeIdentityAccess",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "composeIdentityAccess",
+      "targetContext": "identity-access",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/composition.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#createIdentityAccessRuntime",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createIdentityAccessRuntime",
+      "targetContext": "identity-access",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/composition.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#CreateIdentityAccessRuntimeInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CreateIdentityAccessRuntimeInput",
+      "targetContext": "identity-access",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/composition.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#IdentityAccessFixtureRuntime",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IdentityAccessFixtureRuntime",
       "targetContext": "identity-access",
       "targetLayer": "composition"
     },
@@ -40112,12 +40352,36 @@
     {
       "currentContext": "identity-access",
       "currentLayer": "composition",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/identity-access/composition.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#modules",
+      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#IdentityAccessRuntime",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "modules",
+      "symbol": "IdentityAccessRuntime",
+      "targetContext": "identity-access",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/composition.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#RuntimePresenceConnections",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RuntimePresenceConnections",
+      "targetContext": "identity-access",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/composition.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/composition.ts#syncInitialUserAccessProvision",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "syncInitialUserAccessProvision",
       "targetContext": "identity-access",
       "targetLayer": "composition"
     },
@@ -40562,18 +40826,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "changesOf",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#InitialUserAccessProvision",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "InitialUserAccessProvision",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
     },
@@ -41028,6 +41280,81 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedDaemonCredential",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:b4e734caf9403ab0450512c355f0cd9681ff086d9db8ee86089367489d82eef3",
+      "status": "current-module",
+      "symbol": "AdmittedDaemonCredential",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#admittedDaemonCredentialBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "admittedDaemonCredentialBrand",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedPatCredential",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:3f0a742abe0658411a1cca77b79b4b4e7deff2be833caeca1595fd21b1e14e90",
+      "status": "current-module",
+      "symbol": "AdmittedPatCredential",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#admittedPatCredentialBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "admittedPatCredentialBrand",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedSessionCredential",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:c38dab6f82e1282cfed3134aa4e776f796871e8025e4d0a5f3aab16a4b60f50f",
+      "status": "current-module",
+      "symbol": "AdmittedSessionCredential",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#admittedSessionCredentialBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "admittedSessionCredentialBrand",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
       "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AuthenticatedAuthoritySnapshot",
       "removeAfterWave": null,
       "signatureDigest": "sha256:c4770a1665fac4144df2df6d19588f67acfa08b40f5fb94f5ee8dea3b4948f9c",
@@ -41091,6 +41418,19 @@
     {
       "currentContext": "identity-access",
       "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DelegatedAuthorityAdmission",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:4c35b9e34137be4aa58463e9fa2365a48cd2fa67952f89a504247b1cfb9372a8",
+      "status": "current-module",
+      "symbol": "DelegatedAuthorityAdmission",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
       "exported": false,
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
       "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#delegatedAuthorityBrand",
@@ -41105,11 +41445,11 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DelegatedAuthorityRef",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DelegatedRequestAuthority",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:cc17cb7c6e347b0c9ea2660f873fa2904aa632f17ed625a96192fccd1b2b8b8c",
+      "signatureDigest": "sha256:9840d1e103a0fa3a0f9655c06cac9926d0361846a4f68f4e77b7d98d0ce65c85",
       "status": "current-module",
-      "symbol": "DelegatedAuthorityRef",
+      "symbol": "DelegatedRequestAuthority",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -41118,24 +41458,11 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DelegatedAuthorityResolver",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DelegatedRequestAuthorityFactory",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:ba16bb1eef8582e8ccbdbb2be7a7356b8ace18fa941c757d8cca938ecc633bc4",
+      "signatureDigest": "sha256:072e8d0a2eec4e49c4e7cf9bc34160b553876bbcb774e51d24b3240cf3109b84",
       "status": "current-module",
-      "symbol": "DelegatedAuthorityResolver",
-      "targetContext": "identity-access",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DelegatedOperationContextFactory",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:96fc714cb50546c64be8466afc236cb4d54d6d45c8eb5fed77bdb89805d419d7",
-      "status": "current-module",
-      "symbol": "DelegatedOperationContextFactory",
+      "symbol": "DelegatedRequestAuthorityFactory",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -41159,7 +41486,7 @@
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
       "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthenticatedAuthority",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:d0000807a0421fc83fcad9cf69694d159d48ff92c42745bc65592a2f76aa9b2d",
+      "signatureDigest": "sha256:abf9cb6abfc6d283877b504765a74af3b7054ada7710878df8cba5d273b0f679",
       "status": "current-module",
       "symbol": "DirectAuthenticatedAuthority",
       "targetContext": "identity-access",
@@ -41182,11 +41509,37 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthenticatedAuthorityFactory",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityAdmission",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:c302745a64662a7fc2e311596604fcb85848710507187989d7d4595b664e510e",
+      "signatureDigest": "sha256:7cad59aa330259a38bd5fc2564badc948cbfb9c765cf577e8328e908248964e1",
       "status": "current-module",
-      "symbol": "DirectAuthenticatedAuthorityFactory",
+      "symbol": "DirectAuthorityAdmission",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityBinding",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:a59e8749c3179be1eb63efceb29f86d505109076080e71fc2d69905730da3c13",
+      "status": "current-module",
+      "symbol": "DirectAuthorityBinding",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityIdentity",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:efd8abda52fb1067e669e1774483a764ccb3aa18ef7404000cc2fc905fe440ed",
+      "status": "current-module",
+      "symbol": "DirectAuthorityIdentity",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -41197,7 +41550,7 @@
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
       "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectCommandContextFactory",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:7b569fb41d9b76bef6c4d63e2b23cb1a183ab925adc10be4050492735702e395",
+      "signatureDigest": "sha256:0941c532848ec93b1813e3d6338434edfd02329acb285d881f2a5911c1ef7fbc",
       "status": "current-module",
       "symbol": "DirectCommandContextFactory",
       "targetContext": "identity-access",
@@ -41210,9 +41563,34 @@
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
       "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectQueryContextFactory",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:7fae62377020b7cf1602b4acc943d57915e02b0b407e910b34bfc612c45ed5af",
+      "signatureDigest": "sha256:b594fa5b2f5ca7f894d3e06353600bfa4ea7e7233a32af5cc678f2484ae3feea",
       "status": "current-module",
       "symbol": "DirectQueryContextFactory",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectRequestAuthority",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:a4bbd0565383c8501426257cacc5dd0069a5e8e3dd463dd70b059a9c4f0c9e56",
+      "status": "current-module",
+      "symbol": "DirectRequestAuthority",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#directRequestAuthorityBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "directRequestAuthorityBrand",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -41226,19 +41604,6 @@
       "signatureDigest": "sha256:ab43aa34b97ff52610c14995ead70c85870e7e5cb4be13dfb3c33e52931de341",
       "status": "current-module",
       "symbol": "DirectTransport",
-      "targetContext": "identity-access",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DurableSourceAttemptRef",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:4276e11a6f29d26ac367bfea6a6f2b5e18938aa2fab4cf005d250d7cb1e8e668",
-      "status": "current-module",
-      "symbol": "DurableSourceAttemptRef",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -41264,6 +41629,147 @@
       "signatureDigest": "sha256:db36d14ca4372c0ceb5fde2e4c8f7c83d4ae0e79646cf498d02cbc0759eb64a8",
       "status": "current-module",
       "symbol": "IdempotentCommandContext",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#IdentityAccessEventSink",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:cc1b57739efeb51fdb44c805cfeadf4272910306af50f4935b8f925babc93b64",
+      "status": "current-module",
+      "symbol": "IdentityAccessEventSink",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#InitialUserAccessProvision",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:8a7a84c39aa0393f9d756b8019c680ed80c166b24defddc8094804d17fee2020",
+      "status": "current-module",
+      "symbol": "InitialUserAccessProvision",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#InitialUserAccessProvisioner",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:1cc9cb02d3c02cbe4ab936cdeb660f0b811432e65eee3f6aa409b11551858fd0",
+      "status": "current-module",
+      "symbol": "InitialUserAccessProvisioner",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#LegacyActorProjection",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:6336f1b06cb09aeb20902cb7fbfa1b9b2e2732a9f80f1f37257a6fe9a217c443",
+      "status": "current-module",
+      "symbol": "LegacyActorProjection",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#legacyActorProjectionBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "legacyActorProjectionBrand",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#LegacyActorProjectionFactory",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:d6fa74e75a5ef73b0cd6c20758ef319b55b15098912dd6c916ccfa5902efbfd2",
+      "status": "current-module",
+      "symbol": "LegacyActorProjectionFactory",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#PresenceConnectionTracker",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:e0afb4a8fbbb7d869f98d3af89638ecf7055b4b016207030b5153b3c9c773a92",
+      "status": "current-module",
+      "symbol": "PresenceConnectionTracker",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#PresenceLease",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:ee0b6a34171148a6c7db6db341482c46fe3d00ee5619eca6a10258535f0e5189",
+      "status": "current-module",
+      "symbol": "PresenceLease",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#presenceLeaseBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "presenceLeaseBrand",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#PresenceProjectionSink",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:6aa7320bfb4fd198cea130c7b778c98ce93dbe74192b45d3babe9b080501fd03",
+      "status": "current-module",
+      "symbol": "PresenceProjectionSink",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#PresenceQuery",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:ad3084793afd0c28842f091f9dcc1ddaaa8b0539a631219215cdd713c2bfec93",
+      "status": "current-module",
+      "symbol": "PresenceQuery",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -53781,6 +54287,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/system-operations/infrastructure/restoreArtifactIngress.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/restoreArtifactIngress.ts#createLiveRestoreStageInputCodec",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createLiveRestoreStageInputCodec",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/restoreArtifactIngress.ts",
       "id": "owner:packages/backend/src/modules/system-operations/infrastructure/restoreArtifactIngress.ts#createRestoreArtifactIngress",
       "removeAfterWave": null,
       "status": "current-module",
@@ -53910,6 +54428,114 @@
       "signatureDigest": "sha256:06826ef45ccc0d3ed536ca1e8155e36cbea25662d758a1127a2becfffc28c7a2",
       "status": "current-module",
       "symbol": "SystemOperationCommands",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#BACKUP_PERMISSION",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "BACKUP_PERMISSION",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#createSystemOperationDescriptors",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSystemOperationDescriptors",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#EFFECT_PUBLIC_ERRORS",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EFFECT_PUBLIC_ERRORS",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#emptyInputSchema",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "emptyInputSchema",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#PUBLIC_ERRORS",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "PUBLIC_ERRORS",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#SYSTEM_OPERATION_ALIASES",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SYSTEM_OPERATION_ALIASES",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#SYSTEM_OPERATION_IDS",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SYSTEM_OPERATION_IDS",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/public/operations.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/operations.ts#SystemOperationDescriptors",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SystemOperationDescriptors",
       "targetContext": "system-operations",
       "targetLayer": "public"
     },
@@ -58397,6 +59023,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#delegatedCallActor",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "delegatedCallActor",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#EnvelopeFollowupDecision",
@@ -58559,6 +59197,30 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "OneNodeResult",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#OWNERLESS_LEGACY_ACTOR",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "OWNERLESS_LEGACY_ACTOR",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#OWNERLESS_SYSTEM_USER_ID",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "OWNERLESS_SYSTEM_USER_ID",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -69078,6 +69740,30 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#ALIASES_BY_ID",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ALIASES_BY_ID",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#allOperationAliases",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "allOperationAliases",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/operations/catalog.ts",
       "id": "owner:packages/backend/src/platform/operations/catalog.ts#allOperationResources",
@@ -69272,6 +69958,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#lookupOperationAlias",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "lookupOperationAlias",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
       "id": "owner:packages/backend/src/platform/operations/catalog.ts#lookupOperationDescriptor",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -69416,6 +70114,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#registerOperationAlias",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "registerOperationAlias",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
       "id": "owner:packages/backend/src/platform/operations/catalog.ts#registerOperationDescriptor",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -69432,6 +70142,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "resetOperationRouteProjections",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#resolveOperationId",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "resolveOperationId",
       "targetContext": "platform",
       "targetLayer": "operations"
     },
@@ -69708,6 +70430,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "OPERATION_ID",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/contracts.ts",
+      "id": "owner:packages/backend/src/platform/operations/contracts.ts#OperationAlias",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "OperationAlias",
       "targetContext": "platform",
       "targetLayer": "operations"
     },
@@ -70494,6 +71228,30 @@
     {
       "currentContext": "legacy",
       "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/backend/src/routes/backup.ts",
+      "id": "owner:packages/backend/src/routes/backup.ts#BackupRouteIdentityAccess",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "BackupRouteIdentityAccess",
+      "targetContext": "system-operations",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/backend/src/routes/backup.ts",
+      "id": "owner:packages/backend/src/routes/backup.ts#BackupRouteSystemOperations",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "BackupRouteSystemOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "routes",
       "exported": true,
       "file": "packages/backend/src/routes/backup.ts",
       "id": "owner:packages/backend/src/routes/backup.ts#mountBackupRoutes",
@@ -71253,10 +72011,10 @@
       "exported": false,
       "file": "packages/backend/src/routes/maintenance.ts",
       "id": "owner:packages/backend/src/routes/maintenance.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -71265,10 +72023,10 @@
       "exported": true,
       "file": "packages/backend/src/routes/maintenance.ts",
       "id": "owner:packages/backend/src/routes/maintenance.ts#mountMaintenanceRoutes",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "mountMaintenanceRoutes",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -71277,10 +72035,10 @@
       "exported": false,
       "file": "packages/backend/src/routes/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/routes/maintenanceDisk.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -71289,10 +72047,10 @@
       "exported": true,
       "file": "packages/backend/src/routes/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/routes/maintenanceDisk.ts#mountMaintenanceDiskRoutes",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "mountMaintenanceDiskRoutes",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -71616,6 +72374,18 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "directOperationAuthority",
+      "targetContext": "identity-access",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "routes",
+      "exported": true,
+      "file": "packages/backend/src/routes/operationAuthority.ts",
+      "id": "owner:packages/backend/src/routes/operationAuthority.ts#directRequestAuthority",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "directRequestAuthority",
       "targetContext": "identity-access",
       "targetLayer": "inbound"
     },
@@ -72486,12 +73256,60 @@
     {
       "currentContext": "legacy",
       "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/backend/src/routes/restore.ts",
+      "id": "owner:packages/backend/src/routes/restore.ts#commandContext",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "commandContext",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "routes",
       "exported": true,
       "file": "packages/backend/src/routes/restore.ts",
       "id": "owner:packages/backend/src/routes/restore.ts#mountRestoreRoutes",
       "removeAfterWave": "W4-E7",
       "status": "legacy-target",
       "symbol": "mountRestoreRoutes",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/backend/src/routes/restore.ts",
+      "id": "owner:packages/backend/src/routes/restore.ts#queryContext",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "queryContext",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/backend/src/routes/restore.ts",
+      "id": "owner:packages/backend/src/routes/restore.ts#RestoreRouteSystemOperations",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "RestoreRouteSystemOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "routes",
+      "exported": false,
+      "file": "packages/backend/src/routes/restore.ts",
+      "id": "owner:packages/backend/src/routes/restore.ts#SystemOperationContextFactory",
+      "removeAfterWave": "W4-E7",
+      "status": "legacy-target",
+      "symbol": "SystemOperationContextFactory",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -75201,10 +76019,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75213,10 +76031,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#activeDbSnapshots",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "activeDbSnapshots",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75225,10 +76043,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#AW_COMPILED_BUILD",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "AW_COMPILED_BUILD",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75237,10 +76055,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#BACKUP_VACUUM_WORKER_ENTRY",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "BACKUP_VACUUM_WORKER_ENTRY",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75249,10 +76067,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#BackupOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "BackupOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75261,10 +76079,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#BackupResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "BackupResult",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75273,10 +76091,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#countDirEntries",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "countDirEntries",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75285,10 +76103,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#createBackup",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "createBackup",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75297,10 +76115,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#isDbSnapshotInProgress",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "isDbSnapshotInProgress",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75309,10 +76127,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#log",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75321,10 +76139,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#stampForFilename",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "stampForFilename",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75333,10 +76151,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#vacuumIntoOffThread",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "vacuumIntoOffThread",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75345,10 +76163,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#vacuumIntoOffThreadInner",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "vacuumIntoOffThreadInner",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75357,10 +76175,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backup.ts",
       "id": "owner:packages/backend/src/services/backup.ts#vacuumIntoWorker",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "vacuumIntoWorker",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75369,10 +76187,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75381,10 +76199,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#BackupKind",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "BackupKind",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75393,10 +76211,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#BackupManifest",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "BackupManifest",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75405,10 +76223,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#currentAppVersion",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "currentAppVersion",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75417,10 +76235,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#MANIFEST_FILENAME",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MANIFEST_FILENAME",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75429,10 +76247,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#MigrationAxis",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MigrationAxis",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75441,10 +76259,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#MigrationIdentity",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MigrationIdentity",
-      "targetContext": "identity-access",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75453,10 +76271,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#readDbMigrationIdentity",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "readDbMigrationIdentity",
-      "targetContext": "identity-access",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75465,10 +76283,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#readManifest",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "readManifest",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75477,10 +76295,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#readMigrationAxisFromJournal",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "readMigrationAxisFromJournal",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75489,10 +76307,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupManifest.ts",
       "id": "owner:packages/backend/src/services/backupManifest.ts#writeManifest",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "writeManifest",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75501,10 +76319,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75513,10 +76331,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#BackupSchedulerHandle",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "BackupSchedulerHandle",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75525,10 +76343,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#BackupSchedulerOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "BackupSchedulerOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75537,10 +76355,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#checkpointWal",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "checkpointWal",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75549,10 +76367,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#isRotatable",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "isRotatable",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75561,10 +76379,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#log",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75573,10 +76391,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#maybePreMigrationBackup",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "maybePreMigrationBackup",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75585,10 +76403,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#PreMigrationBackupOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "PreMigrationBackupOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75597,10 +76415,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#pruneBackups",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "pruneBackups",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75609,10 +76427,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#PruneOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "PruneOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75621,10 +76439,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#PruneResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "PruneResult",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75633,10 +76451,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#runPrune",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "runPrune",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75645,10 +76463,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#runWalCheckpointTick",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "runWalCheckpointTick",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75657,10 +76475,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#startBackupScheduler",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "startBackupScheduler",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75669,10 +76487,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#startWalCheckpointLoop",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "startWalCheckpointLoop",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75681,10 +76499,10 @@
       "exported": true,
       "file": "packages/backend/src/services/backupScheduler.ts",
       "id": "owner:packages/backend/src/services/backupScheduler.ts#WalCheckpointOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "WalCheckpointOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "engine"
     },
     {
@@ -75693,10 +76511,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backupVacuumWorker.ts",
       "id": "owner:packages/backend/src/services/backupVacuumWorker.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -75705,10 +76523,10 @@
       "exported": false,
       "file": "packages/backend/src/services/backupVacuumWorker.ts",
       "id": "owner:packages/backend/src/services/backupVacuumWorker.ts#self",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "self",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80349,10 +81167,10 @@
       "exported": false,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80361,10 +81179,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#DAEMON_CADENCE",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DAEMON_CADENCE",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80373,10 +81191,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#HOUR_MS",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "HOUR_MS",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80385,10 +81203,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80397,10 +81215,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#MAINTENANCE_PHASE",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MAINTENANCE_PHASE",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80409,10 +81227,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#MAINTENANCE_SLOW_TICK_MS",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MAINTENANCE_SLOW_TICK_MS",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80421,10 +81239,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#MaintenanceJob",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MaintenanceJob",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80433,10 +81251,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#MIN_PHASE_GAP_MS",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MIN_PHASE_GAP_MS",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -80445,10 +81263,10 @@
       "exported": true,
       "file": "packages/backend/src/services/daemonCadence.ts",
       "id": "owner:packages/backend/src/services/daemonCadence.ts#MINUTE_MS",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MINUTE_MS",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93525,10 +94343,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93537,10 +94355,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#cleanupRetiredStores",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "cleanupRetiredStores",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -93549,10 +94367,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#dirSize",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "dirSize",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93561,10 +94379,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#DiskReclaimReport",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DiskReclaimReport",
-      "targetContext": "source-control",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93573,10 +94391,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#log",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93585,10 +94403,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#ReclaimableItem",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ReclaimableItem",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93597,10 +94415,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#reportDiskReclaimable",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "reportDiskReclaimable",
-      "targetContext": "source-control",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93609,10 +94427,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceDisk.ts",
       "id": "owner:packages/backend/src/services/maintenanceDisk.ts#RETIRED_STORE_DIR",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RETIRED_STORE_DIR",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -93621,10 +94439,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93633,10 +94451,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#advanceRetentionPhase",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "advanceRetentionPhase",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93645,10 +94463,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#DAY_MS",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DAY_MS",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93657,10 +94475,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#log",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93669,10 +94487,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#RETENTION_DELETE_BATCH",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RETENTION_DELETE_BATCH",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93681,10 +94499,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#RetentionConfig",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RetentionConfig",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93693,10 +94511,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#retentionCursor",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "retentionCursor",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93705,10 +94523,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#RetentionPhase",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RetentionPhase",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93717,10 +94535,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#retentionPhases",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "retentionPhases",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93729,10 +94547,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#RetentionSweepCursorV1",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RetentionSweepCursorV1",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93741,10 +94559,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#RetentionSweepResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RetentionSweepResult",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93753,10 +94571,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#RetentionSweepSliceResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RetentionSweepSliceResult",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93765,10 +94583,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#runRetentionSweep",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "runRetentionSweep",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93777,10 +94595,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#runRetentionSweepSlice",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "runRetentionSweepSlice",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93789,10 +94607,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#startRetentionSweeper",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "startRetentionSweeper",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93801,10 +94619,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceRetention.ts",
       "id": "owner:packages/backend/src/services/maintenanceRetention.ts#zeroRetentionResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "zeroRetentionResult",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93813,10 +94631,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceState.ts",
       "id": "owner:packages/backend/src/services/maintenanceState.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93825,10 +94643,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceState.ts",
       "id": "owner:packages/backend/src/services/maintenanceState.ts#readMaintenanceNumber",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "readMaintenanceNumber",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93837,10 +94655,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceState.ts",
       "id": "owner:packages/backend/src/services/maintenanceState.ts#readMaintenanceValue",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "readMaintenanceValue",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93849,10 +94667,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceState.ts",
       "id": "owner:packages/backend/src/services/maintenanceState.ts#writeMaintenanceValue",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "writeMaintenanceValue",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93861,10 +94679,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93873,10 +94691,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#errorMessage",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "errorMessage",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93885,10 +94703,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#log",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93897,10 +94715,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#MaintenanceTickerHandle",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MaintenanceTickerHandle",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93909,10 +94727,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#MaintenanceTickerOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MaintenanceTickerOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93921,10 +94739,10 @@
       "exported": false,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#REAL_TIMERS",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "REAL_TIMERS",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93933,10 +94751,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#startMaintenanceTicker",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "startMaintenanceTicker",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -93945,10 +94763,10 @@
       "exported": true,
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "id": "owner:packages/backend/src/services/maintenanceTicker.ts#TimerApi",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "TimerApi",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -98889,10 +99707,10 @@
       "exported": false,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98901,10 +99719,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#applyPendingRestoreIfAny",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "applyPendingRestoreIfAny",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98913,10 +99731,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#ApplyPendingRestoreOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "ApplyPendingRestoreOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98925,10 +99743,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#clearPendingRestore",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "clearPendingRestore",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98937,10 +99755,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#FailedRestoreInfo",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "FailedRestoreInfo",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98949,10 +99767,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#hasPendingRestore",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "hasPendingRestore",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98961,10 +99779,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#listFailedRestores",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "listFailedRestores",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98973,10 +99791,10 @@
       "exported": false,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#log",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98985,10 +99803,10 @@
       "exported": false,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#markerPath",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "markerPath",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -98997,10 +99815,10 @@
       "exported": false,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#pendingDir",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "pendingDir",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -99009,10 +99827,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#PendingRestoreInfo",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "PendingRestoreInfo",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -99021,10 +99839,10 @@
       "exported": false,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#PendingRestoreMarker",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "PendingRestoreMarker",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -99033,10 +99851,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#readPendingRestore",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "readPendingRestore",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -99045,10 +99863,10 @@
       "exported": false,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#stagedPath",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "stagedPath",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -99057,10 +99875,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#stagePendingRestore",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "stagePendingRestore",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -99069,10 +99887,10 @@
       "exported": true,
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "owner:packages/backend/src/services/pendingRestore.ts#StagePendingRestoreOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "StagePendingRestoreOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -100509,10 +101327,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "owner:packages/backend/src/services/rawDbSnapshot.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -100521,10 +101339,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "owner:packages/backend/src/services/rawDbSnapshot.ts#fsyncPath",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "fsyncPath",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -100533,10 +101351,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "owner:packages/backend/src/services/rawDbSnapshot.ts#log",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -100545,10 +101363,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "owner:packages/backend/src/services/rawDbSnapshot.ts#rawCopyDb",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "rawCopyDb",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -100557,10 +101375,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "owner:packages/backend/src/services/rawDbSnapshot.ts#RawCopyOptions",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RawCopyOptions",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -100569,10 +101387,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "owner:packages/backend/src/services/rawDbSnapshot.ts#RawCopyResult",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RawCopyResult",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -100581,10 +101399,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rawDbSnapshot.ts",
       "id": "owner:packages/backend/src/services/rawDbSnapshot.ts#stampForFilename",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "stampForFilename",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -103965,10 +104783,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#$file",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -103977,10 +104795,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#assertBackupSkillsPayload",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "assertBackupSkillsPayload",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -103989,10 +104807,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#computeRestoreDirection",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "computeRestoreDirection",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104001,10 +104819,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#dbHasSkillRows",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "dbHasSkillRows",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104013,10 +104831,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#fsyncDir",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "fsyncDir",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104025,10 +104843,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#fsyncFile",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "fsyncFile",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104037,10 +104855,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#hasFusionProvenanceSchema",
-      "removeAfterWave": "W4-E3",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "hasFusionProvenanceSchema",
-      "targetContext": "knowledge-evolution",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -104049,10 +104867,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#isRealDirectory",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "isRealDirectory",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104061,10 +104879,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#log",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "log",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104073,10 +104891,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#planRestore",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "planRestore",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104085,10 +104903,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#restoreBackup",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "restoreBackup",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104097,10 +104915,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestoreDirection",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestoreDirection",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104109,10 +104927,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestoreDowngradeError",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestoreDowngradeError",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104121,10 +104939,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestoreIntegrityError",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestoreIntegrityError",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104133,10 +104951,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestoreOptions",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestoreOptions",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104145,10 +104963,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestorePlan",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestorePlan",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104157,10 +104975,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestorePostSwapError",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestorePostSwapError",
-      "targetContext": "source-control",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104169,10 +104987,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestorePreMigrationBinaryError",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestorePreMigrationBinaryError",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104181,10 +104999,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestoreResult",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestoreResult",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104193,10 +105011,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#RestoreSafetyBackupError",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RestoreSafetyBackupError",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104205,10 +105023,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#snapshotFsStateForSafety",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "snapshotFsStateForSafety",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104217,10 +105035,10 @@
       "exported": false,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#suspendNonTerminalTasksAfterRestore",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "suspendNonTerminalTasksAfterRestore",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104229,10 +105047,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#swapInDbFile",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "swapInDbFile",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -104241,10 +105059,10 @@
       "exported": true,
       "file": "packages/backend/src/services/restore.ts",
       "id": "owner:packages/backend/src/services/restore.ts#validateBackupForStage",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "validateBackupForStage",
-      "targetContext": "system-operations",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -105645,10 +106463,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105657,10 +106475,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#AUDITED_TASK_STATUS_SET",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "AUDITED_TASK_STATUS_SET",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -105669,10 +106487,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#AuditedTaskStatus",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "AuditedTaskStatus",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -105681,10 +106499,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#auditRfc295Downgrade",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "auditRfc295Downgrade",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105693,10 +106511,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#DefinitionOrigin",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "DefinitionOrigin",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105705,10 +106523,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#inactiveCodeHostSurfaces",
-      "removeAfterWave": "W4-B",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "inactiveCodeHostSurfaces",
-      "targetContext": "integration",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105717,10 +106535,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#isRfc295AuditedTaskStatus",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "isRfc295AuditedTaskStatus",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -105729,10 +106547,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#issue",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "issue",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105741,10 +106559,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#parseDefinition",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "parseDefinition",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105753,10 +106571,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#RFC295_DOWNGRADE_AUDIT_TASK_STATUSES",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "RFC295_DOWNGRADE_AUDIT_TASK_STATUSES",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "domain"
     },
     {
@@ -105765,10 +106583,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#Rfc295AuditTaskRow",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "Rfc295AuditTaskRow",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105777,10 +106595,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#Rfc295AuditWorkflowRow",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "Rfc295AuditWorkflowRow",
-      "targetContext": "resource-catalog",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105789,10 +106607,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#Rfc295DowngradeAuditInput",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "Rfc295DowngradeAuditInput",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105801,10 +106619,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#Rfc295DowngradeAuditResult",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "Rfc295DowngradeAuditResult",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105813,10 +106631,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#Rfc295DowngradeIssue",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "Rfc295DowngradeIssue",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105825,10 +106643,10 @@
       "exported": true,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#Rfc295DowngradeIssueCode",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "Rfc295DowngradeIssueCode",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105837,10 +106655,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#scanDefinition",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "scanDefinition",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -105849,10 +106667,10 @@
       "exported": false,
       "file": "packages/backend/src/services/rfc295DowngradeAudit.ts",
       "id": "owner:packages/backend/src/services/rfc295DowngradeAudit.ts#sourceFromStoredContext",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "sourceFromStoredContext",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "infrastructure"
     },
     {
@@ -110977,6 +111795,30 @@
       "status": "legacy-target",
       "symbol": "runScheduleNow",
       "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/scheduledTasks.ts",
+      "id": "owner:packages/backend/src/services/scheduledTasks.ts#ScheduleAuthorityInvocation",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "ScheduleAuthorityInvocation",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/scheduledTasks.ts",
+      "id": "owner:packages/backend/src/services/scheduledTasks.ts#ScheduleAuthorityRuntime",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "ScheduleAuthorityRuntime",
+      "targetContext": "identity-access",
       "targetLayer": "application"
     },
     {
@@ -120669,10 +121511,10 @@
       "exported": false,
       "file": "packages/backend/src/services/taskArchive.ts",
       "id": "owner:packages/backend/src/services/taskArchive.ts#restoreLegacyMovedDirectories",
-      "removeAfterWave": "W4-E7",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "restoreLegacyMovedDirectories",
-      "targetContext": "system-operations",
+      "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
     {
@@ -124458,6 +125300,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/userIdentities.ts",
+      "id": "owner:packages/backend/src/services/userIdentities.ts#OidcProfileIdentityAccess",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "OidcProfileIdentityAccess",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/userIdentities.ts",
       "id": "owner:packages/backend/src/services/userIdentities.ts#syncInsertedIdentityProfile",
@@ -124616,18 +125470,6 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/users.ts",
-      "id": "owner:packages/backend/src/services/users.ts#mapOidcUserProfilePersistenceError",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "mapOidcUserProfilePersistenceError",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/users.ts",
       "id": "owner:packages/backend/src/services/users.ts#patchUser",
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
@@ -124692,30 +125534,6 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "searchUsersPublic",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/users.ts",
-      "id": "owner:packages/backend/src/services/users.ts#syncOidcUserProfile",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "syncOidcUserProfile",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/users.ts",
-      "id": "owner:packages/backend/src/services/users.ts#syncOidcUserProfileInTransaction",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "syncOidcUserProfileInTransaction",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -131145,7 +131963,7 @@
       "exported": false,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#$file",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "$file",
       "targetContext": "source-control",
@@ -131157,7 +131975,7 @@
       "exported": true,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#captureWorktrees",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "captureWorktrees",
       "targetContext": "source-control",
@@ -131169,7 +131987,7 @@
       "exported": true,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#DEFAULT_MAX_WORKTREE_BYTES",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "DEFAULT_MAX_WORKTREE_BYTES",
       "targetContext": "source-control",
@@ -131181,7 +131999,7 @@
       "exported": false,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#dirSizeExclGit",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "dirSizeExclGit",
       "targetContext": "source-control",
@@ -131193,7 +132011,7 @@
       "exported": false,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#log",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "log",
       "targetContext": "source-control",
@@ -131205,7 +132023,7 @@
       "exported": true,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#reconstructWorktrees",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "reconstructWorktrees",
       "targetContext": "source-control",
@@ -131217,7 +132035,7 @@
       "exported": false,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#ULID_RE",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "ULID_RE",
       "targetContext": "source-control",
@@ -131229,7 +132047,7 @@
       "exported": true,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#WorktreeCaptureResult",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "WorktreeCaptureResult",
       "targetContext": "source-control",
@@ -131241,7 +132059,7 @@
       "exported": false,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#WorktreeMeta",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "WorktreeMeta",
       "targetContext": "source-control",
@@ -131253,7 +132071,7 @@
       "exported": true,
       "file": "packages/backend/src/services/worktreeBackup.ts",
       "id": "owner:packages/backend/src/services/worktreeBackup.ts#WorktreeReconstructResult",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-E",
       "status": "legacy-target",
       "symbol": "WorktreeReconstructResult",
       "targetContext": "source-control",
@@ -134361,10 +135179,10 @@
       "exported": false,
       "file": "packages/backend/src/util/migrationsFolder.ts",
       "id": "owner:packages/backend/src/util/migrationsFolder.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -134373,10 +135191,10 @@
       "exported": true,
       "file": "packages/backend/src/util/migrationsFolder.ts",
       "id": "owner:packages/backend/src/util/migrationsFolder.ts#resolveMigrationsFolder",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "resolveMigrationsFolder",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -134385,10 +135203,10 @@
       "exported": true,
       "file": "packages/backend/src/util/migrationsFolder.ts",
       "id": "owner:packages/backend/src/util/migrationsFolder.ts#ResolveMigrationsOptions",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ResolveMigrationsOptions",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -137185,6 +138003,18 @@
       "status": "legacy-target",
       "symbol": "gatedSubscribe",
       "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "ws",
+      "exported": true,
+      "file": "packages/backend/src/ws/registry.ts",
+      "id": "owner:packages/backend/src/ws/registry.ts#IdentityAccessWsBinding",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "IdentityAccessWsBinding",
+      "targetContext": "identity-access",
       "targetLayer": "inbound"
     },
     {
@@ -235687,5 +236517,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3bb8cf0d4594d581fe738cdfcf3f922a258a0e1119cf012d6181c81864aa0ba1"
+  "sourceDigest": "sha256:02e5030694d81e2b6a42d471be55f58942383be5906adc7b1ca7647b24eb6fd0"
 }
