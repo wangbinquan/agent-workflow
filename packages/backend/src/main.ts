@@ -11,6 +11,7 @@
 
 import { appVersion } from './util/version'
 import { runGitCredentialSubcommand } from './util/gitCredentialLease'
+import { SYSTEM_USER_ID } from './auth/systemIdentity'
 import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
@@ -22,9 +23,12 @@ import { startCommand } from './cli/start'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import { packageCommand } from './cli/package'
-import { runUserCommand } from './cli/userBootstrap'
+import { runUserCommand, type UserCommandIdentityHandle } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
+import { openDb } from './db/client'
+import { composeIdentityAccess } from './modules/identity-access/composition'
+import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
 import { composeLocalSystemOperations } from './modules/system-operations/composition'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
@@ -32,6 +36,8 @@ import {
   runManagedProcessLauncher,
 } from './services/execution/managedProcessLauncher'
 import { runManagedProcess } from './services/execution/managedProcess'
+import { resolveMigrationsFolder } from './util/migrationsFolder'
+import { Paths } from './util/paths'
 
 declare const AW_E2E_BUILD: boolean | undefined
 
@@ -59,6 +65,21 @@ function readPortFlag(argv: string[]): number | undefined {
     process.exit(2)
   }
   return n
+}
+
+async function composeUserCommandBootstrap() {
+  const migrationsFolder = await resolveMigrationsFolder()
+  const db = openDb({ path: Paths.db, migrationsFolder })
+  const identityAccess = composeIdentityAccess(db)
+  const operations = composeIdentityUserOperations({ db, identityAccess })
+  const principal = { userId: SYSTEM_USER_ID, source: 'cli' } as const
+  const identity = Object.freeze({
+    operations,
+    commandContext: () => identityAccess.contexts.fromAuthenticatedPrincipal(principal, 'cli'),
+    queryContext: () => identityAccess.contexts.queryFromAuthenticatedPrincipal(principal, 'cli'),
+  }) satisfies UserCommandIdentityHandle
+
+  return { db, identity }
 }
 
 async function main(): Promise<void> {
@@ -274,7 +295,7 @@ async function main(): Promise<void> {
 
     case 'user': {
       const rest = Bun.argv.slice(3)
-      const result = await runUserCommand(rest)
+      const result = await runUserCommand(rest, await composeUserCommandBootstrap())
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(1)
       break

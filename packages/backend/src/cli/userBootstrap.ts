@@ -1,32 +1,30 @@
-// RFC-344 — process-edge composition for the user CLI binding.
+// RFC-344/RFC-347 — process-edge bootstrap adapter for the user CLI binding.
 
-import { openDb } from '@/db/client'
 import { hashPassword } from '@/auth/passwords'
 import { completeBootstrapWithAdmin, isBootstrapRequired } from '@/auth/loginPolicy'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { userCommand } from '@/cli/user'
-import { composeIdentityAccess } from '@/modules/identity-access/composition'
-import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { Paths } from '@/util/paths'
+import { userCommand, type UserCommandDeps } from '@/cli/user'
+import type { DbClient } from '@/db/client'
+
+export type UserCommandIdentityHandle = Pick<
+  UserCommandDeps,
+  'operations' | 'commandContext' | 'queryContext'
+>
+
+export interface UserCommandBootstrapInput {
+  readonly db: DbClient
+  readonly identity: UserCommandIdentityHandle
+}
 
 export async function runUserCommand(
   args: string[],
+  bootstrap: UserCommandBootstrapInput,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
-  const migrationsFolder = await resolveMigrationsFolder()
-  const db = openDb({ path: Paths.db, migrationsFolder })
-  const identityAccess = composeIdentityAccess(db)
-  const operations = composeIdentityUserOperations({ db, identityAccess })
-  const principal = { userId: SYSTEM_USER_ID, source: 'cli' } as const
-
   return userCommand(args, {
-    operations,
-    commandContext: () => identityAccess.contexts.fromAuthenticatedPrincipal(principal, 'cli'),
-    queryContext: () => identityAccess.contexts.queryFromAuthenticatedPrincipal(principal, 'cli'),
+    ...bootstrap.identity,
     bootstrap: {
-      isRequired: () => isBootstrapRequired(db),
+      isRequired: () => isBootstrapRequired(bootstrap.db),
       async createFirstAdministrator(input) {
-        return completeBootstrapWithAdmin(db, {
+        return completeBootstrapWithAdmin(bootstrap.db, {
           username: input.username,
           displayName: input.displayName,
           ...(input.email === undefined ? {} : { email: input.email }),

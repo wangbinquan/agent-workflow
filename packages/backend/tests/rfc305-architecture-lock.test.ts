@@ -392,12 +392,13 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/auth/actor.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/auth/loginPolicy.ts -> @/modules/identity-access/public/commands',
-      // RFC-344 CLI/HTTP user bindings invoke the same descriptor cohort;
-      // only the process-edge userBootstrap composes its concrete module.
+      // RFC-344 CLI/HTTP user bindings invoke the same descriptor cohort.
+      // RFC-347 moves concrete CLI assembly to the reviewed process bootstrap;
+      // userBootstrap receives only the already-composed typed handle.
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/composition',
-      'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/composition/userOperations',
+      'packages/backend/src/main.ts -> ./modules/identity-access/composition',
+      'packages/backend/src/main.ts -> ./modules/identity-access/composition/userOperations',
       // RFC-344 operation descriptors receive an exact authenticated authority;
       // application code does not reconstruct the identity shape.
       'packages/backend/src/modules/development-automation/application/activityOperations.ts -> @/modules/identity-access/public/participants',

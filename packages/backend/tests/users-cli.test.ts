@@ -10,6 +10,42 @@ import { join } from 'node:path'
 let prevHome: string | undefined
 let homeDir: string
 
+async function createUserCommandFixture() {
+  const [
+    { SYSTEM_USER_ID },
+    { runUserCommand },
+    { openDb },
+    { composeIdentityAccess },
+    { composeIdentityUserOperations },
+    { resolveMigrationsFolder },
+    { Paths },
+  ] = await Promise.all([
+    import('../src/auth/systemIdentity'),
+    import('../src/cli/userBootstrap'),
+    import('../src/db/client'),
+    import('../src/modules/identity-access/composition'),
+    import('../src/modules/identity-access/composition/userOperations'),
+    import('../src/util/migrationsFolder'),
+    import('../src/util/paths'),
+  ])
+  const migrationsFolder = await resolveMigrationsFolder()
+  const db = openDb({ path: Paths.db, migrationsFolder })
+  const identityAccess = composeIdentityAccess(db)
+  const operations = composeIdentityUserOperations({ db, identityAccess })
+  const principal = { userId: SYSTEM_USER_ID, source: 'cli' } as const
+
+  return (args: string[]) =>
+    runUserCommand(args, {
+      db,
+      identity: {
+        operations,
+        commandContext: () => identityAccess.contexts.fromAuthenticatedPrincipal(principal, 'cli'),
+        queryContext: () =>
+          identityAccess.contexts.queryFromAuthenticatedPrincipal(principal, 'cli'),
+      },
+    })
+}
+
 beforeEach(() => {
   prevHome = process.env.AGENT_WORKFLOW_HOME
   homeDir = mkdtempSync(join(tmpdir(), 'aw-cli-'))
@@ -24,8 +60,7 @@ afterEach(() => {
 
 describe('user CLI', () => {
   test('create + list + reset-password + disable round-trip', async () => {
-    // Re-import for each test so the path module re-reads AGENT_WORKFLOW_HOME.
-    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
+    const userCommand = await createUserCommandFixture()
 
     const created = await userCommand([
       'create',
@@ -71,7 +106,7 @@ describe('user CLI', () => {
   })
 
   test('disable + enable round-trip on a non-admin user', async () => {
-    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
+    const userCommand = await createUserCommandFixture()
     await userCommand(['create', '--username', 'alice', '--admin', '--password', 'correctPw123'])
     await userCommand(['create', '--username', 'bob', '--password', 'correctPw123'])
 
@@ -87,27 +122,27 @@ describe('user CLI', () => {
   })
 
   test('enable on a missing user errors out', async () => {
-    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
+    const userCommand = await createUserCommandFixture()
     const r = await userCommand(['enable', '--username', 'ghost'])
     expect(r.status).toBe('error')
     expect(r.output).toMatch(/not found/)
   })
 
   test('user create without --username errors out', async () => {
-    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
+    const userCommand = await createUserCommandFixture()
     const r = await userCommand(['create', '--admin'])
     expect(r.status).toBe('error')
     expect(r.output).toMatch(/--username/)
   })
 
   test('unknown subcommand surfaces usage error', async () => {
-    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
+    const userCommand = await createUserCommandFixture()
     const r = await userCommand(['nope'])
     expect(r.status).toBe('error')
   })
 
   test('bootstrap rejects a non-admin/no-password first user', async () => {
-    const { runUserCommand: userCommand } = await import('../src/cli/userBootstrap')
+    const userCommand = await createUserCommandFixture()
     const r = await userCommand(['create', '--username', 'bob', '--display', 'Bob'])
     expect(r.status).toBe('error')
     expect(r.output).toMatch(/bootstrap requires/)
