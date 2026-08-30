@@ -8,7 +8,15 @@ import {
   McpNameSchema,
   McpRemoteConfigSchema,
   OperationConfigHashSchema,
+  CreatePluginSchema,
+  DeletePluginSchema,
+  PluginOperationRequestSchema,
+  PluginOperationResourceSchema,
+  PluginUpdateCheckSchema,
+  PluginUpgradeResultSchema,
+  RenamePluginRequestSchema,
   ResourceVisibilitySchema,
+  UpdatePluginRequestSchema,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { defineCommandOperation, defineQueryOperation } from '@/platform/operations/definitions'
@@ -16,17 +24,33 @@ import type {
   CommandOperationDescriptor,
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
-import type { McpCommands } from './commands'
-import type { McpAclIdentityParticipant, McpOperationContext } from './participants'
-import type { McpQueries } from './queries'
+import type { McpCommands, PluginCommands } from './commands'
 import type {
+  McpAclIdentityParticipant,
+  McpOperationContext,
+  PluginAclIdentityParticipant,
+  PluginOperationContext,
+} from './participants'
+import type { McpQueries, PluginQueries } from './queries'
+import type {
+  CheckPluginUpdateCatalogInput,
+  CheckPluginUpdateCatalogReceipt,
   CreateMcpCatalogInput,
+  CreatePluginCatalogInput,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
+  DeletePluginCatalogInput,
+  DeletePluginCatalogReceipt,
   GetMcpCatalogInput,
+  GetPluginCatalogInput,
   McpCatalogResource,
+  PluginCatalogResource,
   RenameMcpCatalogInput,
+  RenamePluginCatalogInput,
   UpdateMcpCatalogInput,
+  UpdatePluginCatalogInput,
+  UpgradePluginCatalogInput,
+  UpgradePluginCatalogReceipt,
 } from './types'
 
 const MCP_PUBLIC_ERRORS = Object.freeze([
@@ -232,6 +256,173 @@ export function createMcpOperationDescriptors(
       outputSchema: exactMcpResourceSchema,
       invoke: (authority: McpOperationContext, input: RenameMcpCatalogInput) =>
         commands.rename(authority, input),
+    }),
+  })
+}
+
+const PLUGIN_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'resource-operation-stale',
+  'internal-error',
+] as const)
+
+const emptyPluginInputSchema = z.object({}).strict()
+const getPluginInputSchema = z.object({ id: z.string().min(1) }).strict()
+const updatePluginInputSchema = z
+  .object({ id: z.string().min(1), update: UpdatePluginRequestSchema })
+  .strict()
+const deletePluginInputSchema = z
+  .object({ id: z.string().min(1), deletion: DeletePluginSchema })
+  .strict()
+const renamePluginInputSchema = z
+  .object({ id: z.string().min(1), rename: RenamePluginRequestSchema })
+  .strict()
+const checkPluginUpdateInputSchema = z
+  .object({ id: z.string().min(1), operation: PluginOperationRequestSchema })
+  .strict()
+const upgradePluginInputSchema = z
+  .object({ id: z.string().min(1), operation: PluginOperationRequestSchema })
+  .strict()
+const deletePluginReceiptSchema = z.object({ deleted: PluginOperationResourceSchema }).strict()
+
+export interface PluginOperationDescriptors {
+  readonly list: QueryOperationDescriptor<
+    Record<never, never>,
+    PluginCatalogResource[],
+    PluginOperationContext
+  >
+  readonly get: QueryOperationDescriptor<
+    GetPluginCatalogInput,
+    PluginCatalogResource | null,
+    PluginOperationContext
+  >
+  readonly create: CommandOperationDescriptor<
+    CreatePluginCatalogInput,
+    PluginCatalogResource,
+    PluginOperationContext
+  >
+  readonly update: CommandOperationDescriptor<
+    UpdatePluginCatalogInput,
+    PluginCatalogResource,
+    PluginOperationContext
+  >
+  readonly delete: CommandOperationDescriptor<
+    DeletePluginCatalogInput,
+    DeletePluginCatalogReceipt,
+    PluginOperationContext
+  >
+  readonly rename: CommandOperationDescriptor<
+    RenamePluginCatalogInput,
+    PluginCatalogResource,
+    PluginOperationContext
+  >
+  readonly checkUpdate: CommandOperationDescriptor<
+    CheckPluginUpdateCatalogInput,
+    CheckPluginUpdateCatalogReceipt,
+    PluginOperationContext
+  >
+  readonly upgrade: CommandOperationDescriptor<
+    UpgradePluginCatalogInput,
+    UpgradePluginCatalogReceipt,
+    PluginOperationContext
+  >
+}
+
+export interface PluginCatalogModule {
+  readonly commands: PluginCommands
+  readonly queries: PluginQueries
+  readonly operations: PluginOperationDescriptors
+  readonly participants: Readonly<{
+    aclIdentity: PluginAclIdentityParticipant
+  }>
+}
+
+export function createPluginOperationDescriptors(
+  commands: PluginCommands,
+  queries: PluginQueries,
+): PluginOperationDescriptors {
+  return Object.freeze({
+    list: defineQueryOperation({
+      id: 'plugin-catalog.list-plugins.v1',
+      summary: 'List plugins visible to the caller',
+      permissions: ['plugins:read'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: emptyPluginInputSchema,
+      outputSchema: z.array(PluginOperationResourceSchema),
+      invoke: async (authority: PluginOperationContext) => [...(await queries.list(authority))],
+    }),
+    get: defineQueryOperation({
+      id: 'plugin-catalog.get-plugin.v1',
+      summary: 'Get one plugin',
+      permissions: ['plugins:read'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: getPluginInputSchema,
+      outputSchema: PluginOperationResourceSchema.nullable(),
+      invoke: (authority: PluginOperationContext, input: GetPluginCatalogInput) =>
+        queries.get(authority, input),
+    }),
+    create: defineCommandOperation({
+      id: 'plugin-catalog.create-plugin.v1',
+      summary: 'Install a plugin',
+      permissions: ['plugins:create'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: CreatePluginSchema,
+      outputSchema: PluginOperationResourceSchema,
+      invoke: (authority: PluginOperationContext, input: CreatePluginCatalogInput) =>
+        commands.create(authority, input),
+    }),
+    update: defineCommandOperation({
+      id: 'plugin-catalog.update-plugin.v1',
+      summary: 'Replace a plugin',
+      permissions: ['plugins:update'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: updatePluginInputSchema,
+      outputSchema: PluginOperationResourceSchema,
+      invoke: (authority: PluginOperationContext, input: UpdatePluginCatalogInput) =>
+        commands.update(authority, input),
+    }),
+    delete: defineCommandOperation({
+      id: 'plugin-catalog.delete-plugin.v1',
+      summary: 'Delete a plugin',
+      permissions: ['plugins:delete'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: deletePluginInputSchema,
+      outputSchema: deletePluginReceiptSchema,
+      invoke: (authority: PluginOperationContext, input: DeletePluginCatalogInput) =>
+        commands.delete(authority, input),
+    }),
+    rename: defineCommandOperation({
+      id: 'plugin-catalog.rename-plugin.v1',
+      summary: 'Rename a plugin',
+      permissions: ['plugins:update'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: renamePluginInputSchema,
+      outputSchema: PluginOperationResourceSchema,
+      invoke: (authority: PluginOperationContext, input: RenamePluginCatalogInput) =>
+        commands.rename(authority, input),
+    }),
+    checkUpdate: defineCommandOperation({
+      id: 'plugin-catalog.check-plugin-update.v1',
+      summary: 'Check a plugin for an upstream update',
+      permissions: ['plugins:execute'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: checkPluginUpdateInputSchema,
+      outputSchema: PluginUpdateCheckSchema,
+      invoke: (authority: PluginOperationContext, input: CheckPluginUpdateCatalogInput) =>
+        commands.checkUpdate(authority, input),
+    }),
+    upgrade: defineCommandOperation({
+      id: 'plugin-catalog.upgrade-plugin.v1',
+      summary: 'Upgrade a plugin to the latest upstream version',
+      permissions: ['plugins:update'],
+      publicErrors: PLUGIN_PUBLIC_ERRORS,
+      inputSchema: upgradePluginInputSchema,
+      outputSchema: PluginUpgradeResultSchema,
+      invoke: (authority: PluginOperationContext, input: UpgradePluginCatalogInput) =>
+        commands.upgrade(authority, input),
     }),
   })
 }

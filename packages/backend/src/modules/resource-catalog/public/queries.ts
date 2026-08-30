@@ -1,10 +1,13 @@
 import type { QueryContext } from '@/modules/identity-access/public/participants'
 import type { McpOperationContext } from './participants'
+import type { PluginOperationContext } from './participants'
 import type {
   CatalogResourceRef,
   GetResourceAclRequest,
   GetMcpCatalogInput,
   McpCatalogResource,
+  GetPluginCatalogInput,
+  PluginCatalogResource,
   ResourceAclDocument,
   ResourceAclTarget,
   ResourceScopeAccess,
@@ -29,4 +32,12 @@ export interface ResourceAuthorizationQuery {
 export interface McpQueries {
   list(authority: McpOperationContext): Promise<readonly McpCatalogResource[]>
   get(authority: McpOperationContext, input: GetMcpCatalogInput): Promise<McpCatalogResource | null>
+}
+
+export interface PluginQueries {
+  list(authority: PluginOperationContext): Promise<readonly PluginCatalogResource[]>
+  get(
+    authority: PluginOperationContext,
+    input: GetPluginCatalogInput,
+  ): Promise<PluginCatalogResource | null>
 }

@@ -246,13 +246,27 @@ describe('production coordinator callsite ratchet', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'plugin.ts'),
       'utf8',
     )
-    expect(route.match(/pluginOperationCoordinator\.runExclusive/g)?.length).toBeGreaterThanOrEqual(
-      6,
+    const application = await readFile(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'application',
+        'plugins',
+        'pluginApplication.ts',
+      ),
+      'utf8',
     )
-    expect(route).toContain('runDeduplicatedOperation<PluginUpdateCheck>')
-    expect(route).toContain('loadById: (db, resourceId) => getPluginById(db, resourceId)')
+    expect(application.match(/coordinator\.runExclusive/g)?.length).toBeGreaterThanOrEqual(6)
+    expect(application).toContain('coordinator.runDeduplicatedOperation(')
+    expect(application).toContain('requireResourceEdit(')
+    expect(application).toContain('requireResourceGovern(')
+    expect(application).toContain('staleConflictError(')
+    expect(route).toContain('commands.checkUpdate(')
+    expect(route).toContain('commands.upgrade(')
+    expect(route).toContain('loadById: (_db, resourceId) => aclIdentity.load(resourceId)')
     expect(service).toContain('pluginOperationCoordinator.runExclusive(id')
-    // RFC-285 B5：同上——helper 单源锁。
-    expect(route).toContain('staleConflictError(')
   })
 })

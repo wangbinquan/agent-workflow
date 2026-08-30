@@ -1,14 +1,25 @@
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import type { McpOperationContext } from './participants'
+import type { PluginOperationContext } from './participants'
 import type {
+  CheckPluginUpdateCatalogInput,
+  CheckPluginUpdateCatalogReceipt,
   CreateMcpCatalogInput,
+  CreatePluginCatalogInput,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
+  DeletePluginCatalogInput,
+  DeletePluginCatalogReceipt,
   McpCatalogResource,
+  PluginCatalogResource,
   RenameMcpCatalogInput,
+  RenamePluginCatalogInput,
   ResourceAclDocument,
   UpdateMcpCatalogInput,
+  UpdatePluginCatalogInput,
   UpdateResourceAclRequest,
+  UpgradePluginCatalogInput,
+  UpgradePluginCatalogReceipt,
 } from './types'
 
 export interface ResourceAclCommands {
@@ -23,4 +34,31 @@ export interface McpCommands {
     input: DeleteMcpCatalogInput,
   ): Promise<DeleteMcpCatalogReceipt>
   rename(authority: McpOperationContext, input: RenameMcpCatalogInput): Promise<McpCatalogResource>
+}
+
+export interface PluginCommands {
+  create(
+    authority: PluginOperationContext,
+    input: CreatePluginCatalogInput,
+  ): Promise<PluginCatalogResource>
+  update(
+    authority: PluginOperationContext,
+    input: UpdatePluginCatalogInput,
+  ): Promise<PluginCatalogResource>
+  delete(
+    authority: PluginOperationContext,
+    input: DeletePluginCatalogInput,
+  ): Promise<DeletePluginCatalogReceipt>
+  rename(
+    authority: PluginOperationContext,
+    input: RenamePluginCatalogInput,
+  ): Promise<PluginCatalogResource>
+  checkUpdate(
+    authority: PluginOperationContext,
+    input: CheckPluginUpdateCatalogInput,
+  ): Promise<CheckPluginUpdateCatalogReceipt>
+  upgrade(
+    authority: PluginOperationContext,
+    input: UpgradePluginCatalogInput,
+  ): Promise<UpgradePluginCatalogReceipt>
 }

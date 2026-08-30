@@ -42,7 +42,11 @@ import {
   type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
-import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
+import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import type {
+  McpCatalogModule,
+  PluginCatalogModule,
+} from '@/modules/resource-catalog/public/operations'
 import {
   composeSystemOperations,
   type SystemOperationsModule,
@@ -52,7 +56,10 @@ import type { IdentityUserOperations } from '@/modules/identity-access/public/op
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { getMcpRuntimeTestService, type McpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
-import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
+import {
+  mcpOperationCoordinator,
+  pluginOperationCoordinator,
+} from '@/services/resourceOperationCoordinator'
 import {
   deletePreparedMcpRuntimeTestsInTx,
   transitionMcpRuntimeTestsInTx,
@@ -749,6 +756,10 @@ export function createApp(deps: AppDeps): Hono {
     transitionMutationInTx: transitionMcpRuntimeTestsInTx,
     deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
   })
+  const pluginCatalog = composePluginCatalog({
+    db: effectiveDeps.db,
+    coordinator: pluginOperationCoordinator,
+  })
   const identityUserOperations = composeIdentityUserOperations({
     db: effectiveDeps.db,
     identityAccess,
@@ -762,6 +773,7 @@ export function createApp(deps: AppDeps): Hono {
     systemOperations,
     userRuntimeTests,
     mcpCatalog,
+    pluginCatalog,
   )
 
   // RFC-344 — tools invoke stable operation ids on this already-mounted app.
@@ -835,6 +847,7 @@ export function mountApiRoutes(
   systemOperations: SystemOperationsModule,
   mcpRuntimeTests: McpRuntimeTestService,
   mcpCatalog: McpCatalogModule,
+  pluginCatalog: PluginCatalogModule,
 ): void {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -983,7 +996,12 @@ export function mountApiRoutes(
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
     runtimeTests: mcpRuntimeTests,
   })
-  mountPluginRoutes(app, deps)
+  mountPluginRoutes(app, deps, {
+    commands: pluginCatalog.commands,
+    queries: pluginCatalog.queries,
+    aclIdentity: pluginCatalog.participants.aclIdentity,
+    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+  })
   mountSkillRoutes(app, deps)
   mountRepoRoutes(app, deps)
   mountCachedRepoRoutes(app, deps)

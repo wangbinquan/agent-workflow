@@ -37,22 +37,25 @@ import {
   type McpCatalogResource,
   type McpPackageMutation,
   type PackageResourceKind,
+  type PluginCatalogResource,
   type PluginPackageMutation,
   type ResourceMemoryScopeRef,
   type ResourceSummary,
   type SkillPackageMutation,
   type TaskExecutionResourceRequest,
   type UpdateMcpCatalogInput,
+  type UpdatePluginCatalogInput,
   type VersionedIntentResourceChangesetPlan,
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
-import type { McpCommands } from '../src/modules/resource-catalog/public/commands'
-import type { McpQueries } from '../src/modules/resource-catalog/public/queries'
+import type { McpCommands, PluginCommands } from '../src/modules/resource-catalog/public/commands'
+import type { McpQueries, PluginQueries } from '../src/modules/resource-catalog/public/queries'
 import type {
   IntegrationTriggerResourceSnapshotInTx,
   IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
+  PluginAclIdentityParticipant,
   ResourceAuthorizationInTx,
   ResourcePackageApplyScenarioProvider,
   ResourcePackageApplyTx,
@@ -63,6 +66,8 @@ import type {
 import type {
   McpCatalogModule,
   McpOperationDescriptors,
+  PluginCatalogModule,
+  PluginOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
 import type { LegacyResourcePackageMutationParticipants } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'
 
@@ -191,11 +196,37 @@ assertType<
     'commands' | 'queries' | 'operations' | 'participants'
   >
 >(true)
+assertType<
+  Equal<
+    Extract<keyof PluginCommands, string>,
+    'create' | 'update' | 'delete' | 'rename' | 'checkUpdate' | 'upgrade'
+  >
+>(true)
+assertType<Equal<Extract<keyof PluginQueries, string>, 'list' | 'get'>>(true)
+assertType<Equal<Extract<keyof PluginAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
+  true,
+)
+assertType<
+  Equal<
+    Extract<keyof PluginOperationDescriptors, string>,
+    'list' | 'get' | 'create' | 'update' | 'delete' | 'rename' | 'checkUpdate' | 'upgrade'
+  >
+>(true)
+assertType<
+  Equal<
+    Extract<keyof PluginCatalogModule, string>,
+    'commands' | 'queries' | 'operations' | 'participants'
+  >
+>(true)
 
 const mcpResourceTypeProbe: McpCatalogResource | null = null
 const mcpUpdateTypeProbe: UpdateMcpCatalogInput | null = null
+const pluginResourceTypeProbe: PluginCatalogResource | null = null
+const pluginUpdateTypeProbe: UpdatePluginCatalogInput | null = null
 void mcpResourceTypeProbe
 void mcpUpdateTypeProbe
+void pluginResourceTypeProbe
+void pluginUpdateTypeProbe
 
 const correlatedSummary: ResourceSummary<'agent'> = {
   ref: { kind: 'agent', id: 'agent-1' },
@@ -547,6 +578,109 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'services/intent/dumpBuilder.ts',
       'services/intent/resourceCatalogProjections.ts',
       'services/mcpRuntimeTest.ts',
+    ])
+  })
+
+  test('T5-P active HTTP binding executes the owned aggregate and preserves exact legacy callers', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const route = readFileSync(resolve(sourceRoot, 'routes/plugins.ts'), 'utf8')
+    const application = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/plugins/pluginApplication.ts'),
+      'utf8',
+    )
+    const repository = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/pluginOperations.ts'),
+      'utf8',
+    )
+    const operations = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
+      'utf8',
+    )
+    const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+
+    expect(route).not.toContain("from '@/services/plugin'")
+    expect(route).not.toContain("from '@/services/pluginInstaller'")
+    expect(route).toContain('PluginCommands')
+    expect(route).toContain('PluginQueries')
+    expect(route).toContain('PluginAclIdentityParticipant')
+    for (const consumer of [
+      'commands.create(',
+      'commands.update(',
+      'commands.delete(',
+      'commands.rename(',
+      'commands.checkUpdate(',
+      'commands.upgrade(',
+      'queries.list(',
+      'queries.get(',
+      'aclIdentity.load(',
+      'aclIdentity.nextUpdatedAt(',
+    ]) {
+      expect(route).toContain(consumer)
+    }
+    expect(application).toContain('coordinator.runExclusive')
+    expect(application).toContain('coordinator.runDeduplicatedOperation')
+    expect(application).toContain('requireResourceEdit')
+    expect(application).toContain('requireResourceGovern')
+    expect(application).not.toContain("from '@/db/")
+    expect(application).not.toContain('/infrastructure/')
+    expect(repository).toContain('dbTxSync')
+    expect(repository).toContain('fullPluginRowWhere')
+    expect(repository).toContain('findAgentReferencesInTx')
+    expect(repository).toContain("import { sha256Hex } from '@/util/hash'")
+    expect(repository).not.toContain("createHash('sha256')")
+    expect(repository).not.toContain("from '@/services/")
+    expect(composition).toContain('createSqlitePluginRepository')
+    expect(composition).toContain('createPluginApplication')
+    expect(composition).toContain('createLegacyPluginInstaller')
+    for (const operationId of [
+      'plugin-catalog.list-plugins.v1',
+      'plugin-catalog.get-plugin.v1',
+      'plugin-catalog.create-plugin.v1',
+      'plugin-catalog.update-plugin.v1',
+      'plugin-catalog.delete-plugin.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+      expect(mcpBindings).toContain(operationId)
+    }
+    for (const operationId of [
+      'plugin-catalog.rename-plugin.v1',
+      'plugin-catalog.check-plugin-update.v1',
+      'plugin-catalog.upgrade-plugin.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+    }
+    expect(server).toContain('composePluginCatalog({')
+    expect(server).toContain('commands: pluginCatalog.commands')
+    expect(server).toContain('queries: pluginCatalog.queries')
+    expect(server).toContain('aclIdentity: pluginCatalog.participants.aclIdentity')
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name)
+        return entry.isDirectory() ? walk(path) : entry.name.endsWith('.ts') ? [path] : []
+      })
+    const legacyConsumers = walk(sourceRoot)
+      .filter((path) => {
+        const source = readFileSync(path, 'utf8')
+        return (
+          source.includes("@/services/plugin'") ||
+          (path.endsWith('/services/pluginGenerationGc.ts') && source.includes("from './plugin'"))
+        )
+      })
+      .map((path) => path.slice(sourceRoot.length + 1))
+      .sort()
+    expect(legacyConsumers).toEqual([
+      'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/intent/applyChangeset.ts',
+      'services/intent/dumpBuilder.ts',
+      'services/intent/resourceCatalogProjections.ts',
+      'services/pluginGenerationGc.ts',
+      'services/workflow.validator.ts',
     ])
   })
 

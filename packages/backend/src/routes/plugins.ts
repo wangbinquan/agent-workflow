@@ -6,75 +6,42 @@ import {
   PluginOperationRequestSchema,
   RenamePluginRequestSchema,
   UpdatePluginRequestSchema,
-  type Plugin,
-  type PluginUpdateCheck,
-  type PluginUpgradeResult,
   type ResourceAcl,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
+import type { PluginCommands } from '@/modules/resource-catalog/public/commands'
+import type {
+  PluginAclIdentityParticipant,
+  PluginOperationContext,
+} from '@/modules/resource-catalog/public/participants'
+import type { PluginQueries } from '@/modules/resource-catalog/public/queries'
+import type { PluginCatalogResource } from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { serializePluginFor } from '@/services/tokenRedaction'
-import {
-  createPlugin,
-  deletePlugin,
-  getPlugin,
-  getPluginById,
-  listPlugins,
-  reinstallPlugin,
-  renamePlugin,
-  updatePlugin,
-} from '@/services/plugin'
-import { checkForUpdate } from '@/services/pluginInstaller'
-import {
-  pluginOperationConfigHashOf,
-  withPluginOperationConfigHash,
-} from '@/services/pluginOperationRevision'
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import {
-  canViewResource,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
-import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 import { safeJsonOrEmpty } from '@/util/http'
 
-export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
-  async function loadVisiblePlugin(actor: Actor, id: string): Promise<Plugin> {
-    const plugin = await getPlugin(deps.db, id)
-    if (plugin === null || !(await canViewResource(deps.db, actor, 'plugin', plugin))) {
+export interface PluginRouteDependencies {
+  readonly commands: PluginCommands
+  readonly queries: PluginQueries
+  readonly aclIdentity: PluginAclIdentityParticipant
+  readonly authorityFor: (actor: Actor) => PluginOperationContext
+}
+
+export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteDependencies): void {
+  const { commands, queries, aclIdentity } = module
+
+  async function loadVisiblePlugin(actor: Actor, id: string): Promise<PluginCatalogResource> {
+    const plugin = await queries.get(module.authorityFor(actor), { id })
+    if (plugin === null) {
       throw new NotFoundError('plugin-not-found', `plugin '${id}' not found`)
     }
-    return plugin
-  }
-
-  /**
-   * RFC-324 —— 内容写用的「重取 + 判据」：安装内容、版本升级、上游检查。
-   *
-   * 与治理版分开，是因为这个 helper 此前一个人服务全部写路由，于是「改插件内容」
-   * 与「删掉这个插件」共用同一道 owner 门；分档之后这两件事不再同级。
-   */
-  async function loadFreshEditable(actor: Actor, stableId: string): Promise<Plugin> {
-    const plugin = await getPluginById(deps.db, stableId)
-    if (plugin === null || !(await canViewResource(deps.db, actor, 'plugin', plugin))) {
-      throw new NotFoundError('plugin-not-found', `plugin '${stableId}' not found`)
-    }
-    await requireResourceEdit(deps.db, actor, 'plugin', plugin)
-    return plugin
-  }
-
-  /** RFC-324 —— 治理写用的同款 helper：删除与改名。 */
-  async function loadFreshGovernable(actor: Actor, stableId: string): Promise<Plugin> {
-    const plugin = await getPluginById(deps.db, stableId)
-    if (plugin === null || !(await canViewResource(deps.db, actor, 'plugin', plugin))) {
-      throw new NotFoundError('plugin-not-found', `plugin '${stableId}' not found`)
-    }
-    await requireResourceGovern(deps.db, actor, 'plugin', plugin)
     return plugin
   }
 
@@ -88,16 +55,9 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List plugins visible to the caller',
     },
     async (c) => {
-      const visible = await filterVisibleRows(
-        deps.db,
-        actorOf(c),
-        'plugin',
-        await listPlugins(deps.db),
-      )
       const listActor = actorOf(c)
-      return c.json(
-        visible.map((r) => serializePluginFor(withPluginOperationConfigHash(r), listActor.source)),
-      )
+      const visible = await queries.list(module.authorityFor(listActor))
+      return c.json(visible.map((plugin) => serializePluginFor(plugin, listActor.source)))
     },
   )
 
@@ -113,10 +73,7 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const actor = actorOf(c)
       return c.json(
-        serializePluginFor(
-          withPluginOperationConfigHash(await loadVisiblePlugin(actor, c.req.param('id'))),
-          actor.source,
-        ),
+        serializePluginFor(await loadVisiblePlugin(actor, c.req.param('id')), actor.source),
       )
     },
   )
@@ -139,13 +96,8 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       }
       try {
         const actor = actorOf(c)
-        const created = await createPlugin(
-          deps.db,
-          parsed.data,
-          {},
-          { ownerUserId: actor.user.id, actor },
-        )
-        return c.json(serializePluginFor(withPluginOperationConfigHash(created), actor.source), 201)
+        const created = await commands.create(module.authorityFor(actor), parsed.data)
+        return c.json(serializePluginFor(created, actor.source), 201)
       } catch (error) {
         throw wrapInstallErrors(error)
       }
@@ -171,13 +123,11 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
       try {
-        const updated = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-          const fresh = await loadFreshEditable(actor, initial.id)
-          assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-          const { expectedConfigHash: _expectedConfigHash, ...patch } = parsed.data
-          return updatePlugin(deps.db, initial.id, patch)
+        const updated = await commands.update(module.authorityFor(actor), {
+          id: initial.id,
+          update: parsed.data,
         })
-        return c.json(serializePluginFor(withPluginOperationConfigHash(updated), actorOf(c).source))
+        return c.json(serializePluginFor(updated, actor.source))
       } catch (error) {
         throw wrapInstallErrors(error)
       }
@@ -204,14 +154,11 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-        const fresh = await loadFreshGovernable(actor, initial.id)
-        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-        // RFC-222 (D5, N-6): confirm against the fresh name in the exclusive section.
-        assertDeleteConfirm(parsed.data, fresh.name, 'plugin')
-        captureDeleteSnapshot(c, actor, initial)
-        await deletePlugin(deps.db, initial.id, actor)
+      const receipt = await commands.delete(module.authorityFor(actor), {
+        id: initial.id,
+        deletion: parsed.data,
       })
+      captureDeleteSnapshot(c, actor, receipt.deleted)
       return c.body(null, 204)
     },
   )
@@ -234,13 +181,11 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      const renamed = await pluginOperationCoordinator.runExclusive(initial.id, async () => {
-        const fresh = await loadFreshGovernable(actor, initial.id)
-        assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-        const { expectedConfigHash: _expectedConfigHash, ...rename } = parsed.data
-        return renamePlugin(deps.db, initial.id, rename)
+      const renamed = await commands.rename(module.authorityFor(actor), {
+        id: initial.id,
+        rename: parsed.data,
       })
-      return c.json(serializePluginFor(withPluginOperationConfigHash(renamed), actorOf(c).source))
+      return c.json(serializePluginFor(renamed, actor.source))
     },
   )
 
@@ -262,41 +207,11 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      // RFC-324: checking upstream is part of maintaining the plugin's content
-      // (it feeds the upgrade this same grantee may perform), so it sits on the
-      // edit gate alongside PUT and upgrade.
-      await requireResourceEdit(deps.db, actor, 'plugin', initial)
-      assertOperationSupported(initial)
-
       try {
-        const receipt =
-          await pluginOperationCoordinator.runDeduplicatedOperation<PluginUpdateCheck>(
-            initial.id,
-            parsed.data.expectedConfigHash,
-            async () => {
-              const captured = await pluginOperationCoordinator.runExclusive(
-                initial.id,
-                async () => {
-                  const fresh = await loadFreshEditable(actor, initial.id)
-                  assertExpectedHash(fresh, parsed.data.expectedConfigHash)
-                  assertOperationSupported(fresh)
-                  return fresh
-                },
-              )
-              const result = await checkForUpdate(captured.id, captured.spec, captured.cachedPath)
-              return pluginOperationCoordinator.runExclusive(captured.id, async () => {
-                const current = await loadFreshEditable(actor, captured.id)
-                assertExpectedHash(current, parsed.data.expectedConfigHash)
-                return {
-                  available: result.available,
-                  current: captured.resolvedVersion,
-                  latest: result.latest,
-                  identityStatus: result.identityStatus,
-                  configHashUsed: parsed.data.expectedConfigHash,
-                }
-              })
-            },
-          )
+        const receipt = await commands.checkUpdate(module.authorityFor(actor), {
+          id: initial.id,
+          operation: parsed.data,
+        })
         return c.json(receipt)
       } catch (error) {
         throw wrapInstallErrors(error)
@@ -323,27 +238,10 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
       try {
-        const receipt = await pluginOperationCoordinator.runExclusive<PluginUpgradeResult>(
-          initial.id,
-          async () => {
-            const captured = await loadFreshEditable(actor, initial.id)
-            assertExpectedHash(captured, parsed.data.expectedConfigHash)
-            assertOperationSupported(captured)
-
-            // Upgrade authorization never trusts a frontend cache. A legacy
-            // generation with unknown identity is allowed to reinstall once to
-            // establish a manifest baseline; a known no-change stays a no-op.
-            const check = await checkForUpdate(captured.id, captured.spec, captured.cachedPath)
-            const updated =
-              check.identityStatus === 'known' && !check.available
-                ? captured
-                : await reinstallPlugin(deps.db, captured.id)
-            return {
-              configHashUsed: parsed.data.expectedConfigHash,
-              resource: withPluginOperationConfigHash(updated),
-            }
-          },
-        )
+        const receipt = await commands.upgrade(module.authorityFor(actor), {
+          id: initial.id,
+          operation: parsed.data,
+        })
         return c.json(receipt)
       } catch (error) {
         throw wrapInstallErrors(error)
@@ -355,31 +253,14 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps): void {
     type: 'plugin',
     base: '/api/plugins',
     param: 'id',
-    load: (db, id) => getPluginById(db, id),
+    load: (_db, id) => aclIdentity.load(id),
     coordinator: {
       runExclusive: (resourceId: string, task: () => Promise<ResourceAcl>) =>
         pluginOperationCoordinator.runExclusive(resourceId, task),
-      loadById: (db, resourceId) => getPluginById(db, resourceId),
+      loadById: (_db, resourceId) => aclIdentity.load(resourceId),
+      nextUpdatedAt: (row) => aclIdentity.nextUpdatedAt(row.id),
     },
   })
-}
-
-function assertExpectedHash(plugin: Plugin, expected: string): void {
-  if (pluginOperationConfigHashOf(plugin) !== expected) {
-    throw staleConflictError(
-      'plugin',
-      'plugin changed since this operation was prepared; reload and retry',
-    )
-  }
-}
-
-function assertOperationSupported(plugin: Plugin): void {
-  if (plugin.sourceKind === 'file') {
-    throw new ValidationError(
-      'plugin-operation-unsupported',
-      'file source is externally managed and does not support Check or Upgrade',
-    )
-  }
 }
 
 /**

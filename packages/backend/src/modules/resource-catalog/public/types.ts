@@ -1,17 +1,25 @@
 import type {
   Agent,
   BundleOp,
+  CreatePlugin,
   CreateMcp,
+  DeletePlugin,
   DeleteMcp,
   IntentOp,
   Mcp,
   McpOperationResource,
   Plugin,
+  PluginOperationRequest,
+  PluginOperationResource,
+  PluginUpdateCheck,
+  PluginUpgradeResult,
+  RenamePluginRequest,
   RenameMcpRequest,
   ResourceAccess,
   ResourceAcl,
   ResourceVisibility,
   UpdateMcpRequest,
+  UpdatePluginRequest,
   UpdateResourceAclBody,
   WorkflowDefinition,
   Workgroup,
@@ -124,6 +132,56 @@ export interface DeleteMcpCatalogReceipt {
 
 /** Purpose-specific identity used by the generic ACL transport adapter. */
 export interface McpAclIdentity {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly aclRevision: number
+  readonly updatedAt: number
+}
+
+/** T5-P aggregate contract. Installer artifacts and SQLite rows stay private. */
+export type PluginCatalogResource = PluginOperationResource
+export type CreatePluginCatalogInput = CreatePlugin
+
+export interface GetPluginCatalogInput {
+  readonly id: string
+}
+
+export interface UpdatePluginCatalogInput {
+  readonly id: string
+  readonly update: UpdatePluginRequest
+}
+
+export interface DeletePluginCatalogInput {
+  readonly id: string
+  readonly deletion: DeletePlugin
+}
+
+export interface RenamePluginCatalogInput {
+  readonly id: string
+  readonly rename: RenamePluginRequest
+}
+
+export interface CheckPluginUpdateCatalogInput {
+  readonly id: string
+  readonly operation: PluginOperationRequest
+}
+
+export interface UpgradePluginCatalogInput {
+  readonly id: string
+  readonly operation: PluginOperationRequest
+}
+
+export interface DeletePluginCatalogReceipt {
+  readonly deleted: PluginCatalogResource
+}
+
+export type CheckPluginUpdateCatalogReceipt = PluginUpdateCheck
+export type UpgradePluginCatalogReceipt = PluginUpgradeResult
+
+/** Purpose-specific identity used by the generic ACL transport adapter. */
+export interface PluginAclIdentity {
   readonly id: string
   readonly name: string
   readonly ownerUserId: string | null
