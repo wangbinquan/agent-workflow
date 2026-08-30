@@ -407,7 +407,11 @@ async function chooseOption(page: Page, triggerTestid: string, label: string): P
   await expect(listbox).toBeVisible()
   await listbox
     .locator('li[role="option"]')
-    .filter({ has: page.locator('.select__option-label').filter({ hasText: exactText(label) }) })
+    .filter({
+      has: page
+        .locator('.select__option-title, .select__option-label')
+        .filter({ hasText: exactText(label) }),
+    })
     .click()
   await expect(listbox).toBeHidden()
 }
