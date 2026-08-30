@@ -5,7 +5,7 @@
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { Hono } from 'hono'
 import type { MaintenanceStatus, WorkflowRevision } from '@agent-workflow/shared'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { actorOf, tryActorOf } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { multiAuth } from '@/auth/session'
@@ -241,8 +241,8 @@ export interface AppDeps {
   configPath: string
   /**
    * Root used for immutable digital-employee program artifacts and isolated
-   * contract fixtures. Production derives it from configPath; tests may pin a
-   * dedicated directory without touching the process-global Paths singleton.
+   * contract fixtures. Production uses Paths.root; tests may pin a dedicated
+   * directory without touching the process-global Paths singleton.
    */
   appHome?: string
   /**
@@ -557,10 +557,12 @@ export function createApp(deps: AppDeps): Hono {
   if (taskExecutionReadModels === undefined) {
     throw new Error('task-execution-read-models-not-composed')
   }
+  const appHome = deps.appHome ?? Paths.root
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
       : deps),
+    appHome,
     digitalEmployeeCaseDetailProjection:
       deps.digitalEmployeeCaseDetailProjection ??
       composeDevelopmentEmployeeCaseDetailProjection(
@@ -572,11 +574,10 @@ export function createApp(deps: AppDeps): Hono {
       deps.collaborationContext ??
       createCollaborationCommandContext({
         db: deps.db,
-        appHome: deps.appHome ?? dirname(deps.configPath),
+        appHome,
         taskExecutionReadModels,
       }),
   }
-  const appHome = runtimeDeps.appHome ?? dirname(runtimeDeps.configPath)
   const repositoryBootstrap = composeRepositoryBootstrap(runtimeDeps, appHome)
   const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperations(
     runtimeDeps.db,
@@ -777,7 +778,7 @@ export function mountApiRoutes(
   identityAccess: IdentityAccessModule,
   identityUserOperations: IdentityUserOperations,
 ): void {
-  const appHome = deps.appHome ?? dirname(deps.configPath)
+  const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
     join(appHome, 'artifacts', 'employee-inputs'),
   )

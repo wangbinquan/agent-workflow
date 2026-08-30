@@ -1,5 +1,9 @@
 import { UserAccessError, type AdminUserAccessView } from '../../public/types'
-import { admissionSubjectOf, admitUserDirectoryQuery } from '../accessAdmission'
+import {
+  admissionSubjectOf,
+  admitUserDirectoryQuery,
+  admitUserSearchQuery,
+} from '../accessAdmission'
 import { subjectRefOf, trustedContextMetadata, type QueryContext } from '../operationContext'
 import type { UserAccessReadRepository } from '../ports/userAccessRepository'
 import { materializeUserAccessView } from '../view'
@@ -39,9 +43,25 @@ export class GetUserAccess {
     )
   }
 
-  /** Shared admission for public directory queries with a different projection. */
-  async authorize(context: QueryContext): Promise<void> {
-    await this.admit(context)
+  /** Shared admission for directory queries with a different projection. */
+  async authorize(
+    context: QueryContext,
+    permission: 'users:read' | 'users:search' = 'users:read',
+  ): Promise<void> {
+    if (permission === 'users:read') {
+      await this.admit(context)
+      return
+    }
+    const snapshot = await this.repository.findAccessSnapshot(
+      subjectRefOf(context.authority).userId,
+    )
+    admitUserSearchQuery(
+      admissionSubjectOf(
+        snapshot?.user ?? null,
+        snapshot?.grants.map((grant) => grant.permission) ?? [],
+      ),
+      trustedContextMetadata(context),
+    )
   }
 }
 

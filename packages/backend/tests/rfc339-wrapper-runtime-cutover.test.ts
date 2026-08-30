@@ -451,7 +451,9 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       expect(source, path).not.toContain('createLegacyTaskExecutionTopology')
     }
     expect(server).toContain('schedulerDriver?: SchedulerDriverPort')
-    expect(server).toContain('export type ComposedAppDeps = AppDeps & {')
+    expect(server).toContain('type RuntimeComposedAppDeps = AppDeps & {')
+    expect(server).toContain('export type ComposedAppDeps = RuntimeComposedAppDeps &')
+    expect(server).toContain('RepositoryBootstrap & {')
     expect(server).toContain('const effectiveDeps: ComposedAppDeps = {')
     expect(server).toContain('export function mountApiRoutes(')
     expect(server).toContain('deps: ComposedAppDeps')

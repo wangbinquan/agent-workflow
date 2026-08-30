@@ -1698,6 +1698,9 @@ function resourceOperationFor(
   )[String(kind)]
   const operation = operations?.[method]
   if (operation === undefined) {
+    if (method === 'facets') {
+      throw new Error(`${String(kind)} has no facets`)
+    }
     const note = resourcePresentationFor(kind).note
     throw new Error(
       `unknown resource operation: ${String(kind)}:${method}` +

@@ -45,6 +45,13 @@ export function createRouteOperationDispatcher(deps: AppDeps): RouteOperationDis
         body: request.body,
       })
     }
-    throw new Error(`no operation binding for ${request.method} ${request.path}`)
+    return {
+      status: 404,
+      body: {
+        ok: false,
+        code: 'route-not-found',
+        message: `no route for ${request.path}`,
+      },
+    }
   }
 }

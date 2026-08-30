@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Hono } from 'hono'
 import { ALL_TOOLS, describeResource, type McpToolContext } from '@/mcp/tools'
+import { MCP_OPERATIONS } from '@/mcp/operationBindings'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import type { AppDeps } from '@/server'
@@ -36,7 +37,7 @@ function recordingCtx(
   respond: (path: string) => unknown = () => ({}),
 ): {
   ctx: McpToolContext
-  calls: Array<{ method: string; path: string; query?: Record<string, string | undefined> }>
+  calls: RecordedOperationCall[]
 } {
   const calls: RecordedOperationCall[] = []
   const ctx: McpToolContext = {
@@ -89,7 +90,13 @@ describe('RFC-329 AC-2 — the alert loop is closed on this channel', () => {
   test('list_task_alerts exists and dispatches to the alerts route', async () => {
     const { ctx, calls } = recordingCtx('list_task_alerts')
     await toolNamed('list_task_alerts').handler({ id: 'T1' }, ctx)
-    expect(calls).toEqual([{ method: 'GET', path: '/api/tasks/T1/alerts' }])
+    expect(calls).toEqual([
+      {
+        operationId: MCP_OPERATIONS.taskAlertsList.id,
+        method: 'GET',
+        path: '/api/tasks/T1/alerts',
+      },
+    ])
   })
 
   test('repair_alert no longer sends the caller to get_task for the alertId', () => {
@@ -148,8 +155,17 @@ describe('RFC-329 AC-3 — list_repo_refs resolves the mirror path itself', () =
     )
     await toolNamed('list_repo_refs').handler({ cachedRepoId: 'R2' }, ctx)
     expect(calls).toEqual([
-      { method: 'GET', path: '/api/cached-repos' },
-      { method: 'GET', path: '/api/repos/refs', query: { path: '/mirrors/r2' } },
+      {
+        operationId: MCP_OPERATIONS.cachedReposList.id,
+        method: 'GET',
+        path: '/api/cached-repos',
+      },
+      {
+        operationId: MCP_OPERATIONS.repoRefsList.id,
+        method: 'GET',
+        path: '/api/repos/refs',
+        query: { path: '/mirrors/r2' },
+      },
     ])
   })
 

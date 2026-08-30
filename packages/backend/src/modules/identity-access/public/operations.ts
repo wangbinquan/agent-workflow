@@ -244,7 +244,7 @@ export function createIdentityUserOperations(
     kind: 'query',
     contextKind: 'authenticated-query',
     async invoke(context: QueryContext, input: z.infer<typeof searchUsersInputSchema>) {
-      await deps.getUserAccess.authorize(context)
+      await deps.getUserAccess.authorize(context, 'users:search')
       return deps.searchUsers(input)
     },
   })
@@ -266,7 +266,7 @@ export function createIdentityUserOperations(
     kind: 'query',
     contextKind: 'authenticated-query',
     async invoke(context: QueryContext, input: z.infer<typeof lookupUsersInputSchema>) {
-      await deps.getUserAccess.authorize(context)
+      await deps.getUserAccess.authorize(context, 'users:search')
       return input.ids.length === 0 ? [] : deps.lookupUsers(input.ids)
     },
   })

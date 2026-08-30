@@ -59,10 +59,6 @@ module.exports = {
       to: { path: '^packages/backend/' },
     },
     {
-      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
-      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
-      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
-      // 眼里长得一模一样）。
       name: 'no-services-to-routes',
       severity: 'error',
       comment:

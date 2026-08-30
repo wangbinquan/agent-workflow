@@ -538,6 +538,8 @@ describe('RFC-344 single inbound root source locks', () => {
 
     const server = readFileSync(join(ROOT, 'src/server.ts'), 'utf8')
     expect(server).toContain('directMcpOperationAuthority(identityAccess.contexts, actor)')
+    expect(server).toContain('const appHome = deps.appHome ?? Paths.root')
+    expect(server).not.toContain('dirname(runtimeDeps.configPath)')
 
     const start = readFileSync(join(ROOT, 'src/cli/start.ts'), 'utf8')
     expect(start.match(/composeDevelopmentAutomation\s*\(/g)).toHaveLength(1)

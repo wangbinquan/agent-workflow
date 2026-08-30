@@ -47,6 +47,32 @@ export function admitUserDirectoryQuery(
   }
 }
 
+/** Public-field directory search is intentionally available to the wider
+ * `users:search` cohort. Route admission checks the current credential while
+ * this application admission rechecks the durable account grant. */
+export function admitUserSearchQuery(
+  actor: {
+    readonly permissions: ReadonlySet<Permission>
+    readonly status: ManagedUserStatus
+  } | null,
+  context: { readonly source: string; readonly transport: string },
+): void {
+  if (context.source === 'cli' && context.transport === 'cli') return
+  if (
+    (context.source !== 'session' && context.source !== 'pat' && context.source !== 'daemon') ||
+    (context.transport !== 'http' && context.transport !== 'mcp') ||
+    actor === null ||
+    actor.status !== 'active' ||
+    !actor.permissions.has('users:search')
+  ) {
+    throw new UserAccessError(
+      'forbidden',
+      'user-search-forbidden',
+      'public user directory requires users:search',
+    )
+  }
+}
+
 /** Profile/status administration is a write even when it does not replace
  * the role/grant snapshot, so it requires `users:write`. */
 export function admitUserDirectoryAccess(
