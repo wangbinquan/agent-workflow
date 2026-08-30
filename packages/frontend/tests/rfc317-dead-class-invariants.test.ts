@@ -104,7 +104,6 @@ const UNDEFINED_CLASS_SNAPSHOT: readonly string[] = [
   'employee-playbook-step',
   'employee-step-join',
   'enum-picker',
-  'event-center-page',
   'event-source-row',
   'event-source-section',
   'execution-contract-guide__primary-heading',
