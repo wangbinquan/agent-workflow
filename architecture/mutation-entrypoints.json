@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1118,
+    "entries": 1119,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -13258,6 +13258,31 @@
       "symbol": "committedDeliveryRetryBodySchema",
       "targetContext": "source-control",
       "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/routes/mcps.ts",
+      "finalCriterion": "W4 transport-to-application cutover",
+      "id": "mutation:packages/backend/src/routes/mcps.ts#$http:delete:378",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
+      "symbol": "$http:delete:378",
+      "targetContext": "resource-catalog",
+      "targetLayer": "inbound"
     },
     {
       "controls": {
@@ -26604,7 +26629,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:35542681b5f5c0e53074b1346cfe5569dc76eab861e354bd04096015f28df262",
+  "sourceDigest": "sha256:62171f9b837384ce8fec8a0591c91b7ad47f1672c33b585d6f29033b18effb62",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

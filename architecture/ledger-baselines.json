@@ -356,8 +356,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1118,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1119,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 将 MCP route 从 aggregate invoker 切到具名 command，新增一条被 canonical 显式识别的 mutation entrypoint；这是 active production cutover 的一次性许可。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -391,8 +394,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 1828,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 1831,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 用三个具名 MCP public contract 替换 route 的 aggregate import，并复用共享 sha256 leaf，净增三条已分类 observed edge；这是 active cutover 的一次性许可。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -412,8 +418,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1783,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 1786,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-345 T5-M 用三个具名 MCP public contract 替换 route 的 aggregate import，并复用共享 sha256 leaf，净增三条有 owner 与移除波次的 exact exception；这是一次性许可。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -452,7 +461,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:35542681b5f5c0e53074b1346cfe5569dc76eab861e354bd04096015f28df262",
+    "sourceDigest": "sha256:62171f9b837384ce8fec8a0591c91b7ad47f1672c33b585d6f29033b18effb62",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -465,8 +474,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "56fa9e88e36619114c455716774ae86607bbb388",
-    "contentDigest": "sha256:2321e41383a0432a1e607cb83889e17cdf5d2e9378dc906b1bcce6e9f80d7a2a",
+    "currentSnapshotSha": "a07179869f339bbc0310f96849fb94c809589686",
+    "contentDigest": "sha256:23cc71baa1db39cd580770b853b9eac6abb6b15cf4706590e066abd9c4e49679",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
