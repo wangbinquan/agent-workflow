@@ -458,7 +458,8 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(server).toContain('export function mountApiRoutes(')
     expect(server).toContain('deps: ComposedAppDeps')
     expect(server).toContain('identityAccess: IdentityAccessModule')
-    expect(server).toContain('const schedulerDriver = requireSchedulerDriver(deps.schedulerDriver)')
+    expect(server).toContain('deps.schedulerDriver ?? taskExecutionRuntime?.schedulerDriver')
+    expect(server).toContain('const schedulerDriver = deps.schedulerDriver')
     expect(server).toContain('taskExecutionRuntime?.readModels')
     expect(cli).toContain('taskExecutionReadModels: taskExecutionRuntime.readModels')
 
