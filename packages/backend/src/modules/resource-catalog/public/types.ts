@@ -218,11 +218,13 @@ export interface UpdateWorkgroupCatalogInput {
 export interface DeleteWorkgroupCatalogInput {
   readonly id: string
   /**
-   * Transport submission validated by the application only after its govern
-   * gate. Keeping this opaque here preserves authorization-before-validation
-   * without allowing unvalidated data to reach the repository.
+   * Closed transport submission decoded and validated by the application only
+   * after its govern gate. The repository never receives this envelope.
    */
-  readonly deletion: unknown
+  readonly deletion: {
+    readonly kind: 'json-body'
+    readonly body: string
+  }
 }
 
 export interface RenameWorkgroupCatalogInput {

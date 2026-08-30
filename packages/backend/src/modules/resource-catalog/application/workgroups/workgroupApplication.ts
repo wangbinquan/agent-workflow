@@ -65,6 +65,24 @@ function assertDeleteConfirm(input: DeleteWorkgroup, expectedName: string): void
   }
 }
 
+function parseDeleteWorkgroupSubmission(
+  input: DeleteWorkgroupCatalogInput['deletion'],
+): DeleteWorkgroup {
+  let body: unknown = {}
+  try {
+    body = JSON.parse(input.body)
+  } catch {
+    // Preserve safeJsonOrEmpty's historical malformed/empty-body semantics.
+  }
+  const parsed = DeleteWorkgroupSchema.safeParse(body)
+  if (!parsed.success) {
+    throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
+      issues: parsed.error.issues,
+    })
+  }
+  return parsed.data
+}
+
 export function createWorkgroupApplication(
   deps: WorkgroupApplicationDependencies,
 ): WorkgroupApplication {
@@ -139,13 +157,7 @@ export function createWorkgroupApplication(
     async delete(authority: WorkgroupOperationContext, input: DeleteWorkgroupCatalogInput) {
       const current = await loadVisible(authority, input.id)
       await deps.access.requireResourceGovern(authority, current)
-      const parsed = DeleteWorkgroupSchema.safeParse(input.deletion)
-      if (!parsed.success) {
-        throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      const deletion = parsed.data
+      const deletion = parseDeleteWorkgroupSubmission(input.deletion)
       assertDeleteConfirm(deletion, current.name)
       const result = await deps.repository.delete(authority, { id: input.id, deletion })
       deps.events.deleted(result)

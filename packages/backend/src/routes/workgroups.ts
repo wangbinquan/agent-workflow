@@ -233,10 +233,10 @@ export function mountWorkgroupRoutes(
       const id = c.req.param('id')
       const actor = actorOf(c)
       const existing = await loadVisibleWorkgroup(actor, id)
-      const deletion = await safeJsonOrEmpty(c.req.raw)
+      const body = await c.req.raw.text().catch(() => '')
       await commands.delete(module.authorityFor(actor), {
         id: existing.id,
-        deletion,
+        deletion: { kind: 'json-body', body },
       })
       captureDeleteSnapshot(c, actor, existing)
       return c.body(null, 204)

@@ -753,6 +753,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
       'utf8',
     )
+    const publicTypes = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/types.ts'),
+      'utf8',
+    )
     const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
     const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
 
@@ -772,8 +776,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ]) {
       expect(route).toContain(consumer)
     }
+    expect(publicTypes).not.toContain('readonly deletion: unknown')
+    expect(publicTypes).toContain("readonly kind: 'json-body'")
+    expect(publicTypes).toContain('readonly body: string')
+    expect(route).not.toContain('DeleteWorkgroupSchema')
+    expect(route).toContain('c.req.raw.text()')
+    expect(route).toContain("deletion: { kind: 'json-body', body }")
     expect(application).toContain('requireResourceEdit')
     expect(application).toContain('requireResourceGovern')
+    expect(application).toContain('DeleteWorkgroupSchema.safeParse(body)')
     expect(application).toContain('const commands: WorkgroupCommands = Object.freeze')
     expect(application).toContain('const queries: WorkgroupQueries = Object.freeze')
     expect(application).not.toContain("from '@/db/")
@@ -785,6 +796,27 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createSqliteWorkgroupRepository')
     expect(composition).toContain('createWorkgroupApplication')
+    expect(operations).toContain('inputSchema: deleteWorkgroupInputSchema')
+    expect(operations).toContain("kind: 'json-body'")
+    expect(operations).toContain("body: JSON.stringify(input.deletion) ?? '{}'")
+
+    const deleteCommandStart = application.indexOf('async delete(')
+    const loadVisible = application.indexOf(
+      'const current = await loadVisible(authority, input.id)',
+      deleteCommandStart,
+    )
+    const requireGovern = application.indexOf(
+      'await deps.access.requireResourceGovern(authority, current)',
+      loadVisible,
+    )
+    const validateSubmission = application.indexOf(
+      'parseDeleteWorkgroupSubmission(input.deletion)',
+      requireGovern,
+    )
+    expect(deleteCommandStart).toBeGreaterThanOrEqual(0)
+    expect(loadVisible).toBeGreaterThan(deleteCommandStart)
+    expect(requireGovern).toBeGreaterThan(loadVisible)
+    expect(validateSubmission).toBeGreaterThan(requireGovern)
     for (const operationId of [
       'workgroup-catalog.list-workgroups.v1',
       'workgroup-catalog.get-workgroup.v1',

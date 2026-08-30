@@ -68,7 +68,6 @@ import type {
   UpgradePluginCatalogReceipt,
   CopyWorkgroupCatalogInput,
   CreateWorkgroupCatalogInput,
-  DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   GetWorkgroupCatalogInput,
   RenameWorkgroupCatalogInput,
@@ -512,7 +511,7 @@ export interface WorkgroupOperationDescriptors {
     WorkgroupOperationContext
   >
   readonly delete: CommandOperationDescriptor<
-    DeleteWorkgroupCatalogInput,
+    z.infer<typeof deleteWorkgroupInputSchema>,
     DeleteWorkgroupCatalogReceipt,
     WorkgroupOperationContext
   >
@@ -593,8 +592,17 @@ export function createWorkgroupOperationDescriptors(
       publicErrors: WORKGROUP_PUBLIC_ERRORS,
       inputSchema: deleteWorkgroupInputSchema,
       outputSchema: deleteWorkgroupReceiptSchema,
-      invoke: (authority: WorkgroupOperationContext, input: DeleteWorkgroupCatalogInput) =>
-        commands.delete(authority, input),
+      invoke: (
+        authority: WorkgroupOperationContext,
+        input: z.infer<typeof deleteWorkgroupInputSchema>,
+      ) =>
+        commands.delete(authority, {
+          id: input.id,
+          deletion: {
+            kind: 'json-body',
+            body: JSON.stringify(input.deletion) ?? '{}',
+          },
+        }),
     }),
     rename: defineCommandOperation({
       id: 'workgroup-catalog.rename-workgroup.v1',
