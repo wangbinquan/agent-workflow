@@ -4,11 +4,7 @@
 // stops (so a fat-fingered restore can't overwrite data); --yes applies it.
 
 import { existsSync } from 'node:fs'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { planRestore, restoreBackup, validateBackupForStage } from '@/services/restore'
-import { stagePendingRestore } from '@/services/pendingRestore'
-import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'
-import { Paths } from '@/util/paths'
+import { composeLocalSystemOperations } from '@/modules/system-operations/composition'
 
 export interface RestoreCommandResult {
   output: string
@@ -27,19 +23,22 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
     return { output: `restore failed: no such file: ${tarball}\n`, status: 'error' }
   }
 
-  // Resolve the migrations folder (the version gate reads its _journal.json).
-  // `force`: this path validates a FOREIGN tarball's migration generation, so
-  // the local set must be known-complete rather than "whatever is on disk".
-  const migrationsFolder = await resolveMigrationsFolder({ force: true })
+  // Keep preparation outside the result-mapping try: embedded migration-asset
+  // failures historically reject the command promise rather than becoming a
+  // `restore failed:` result. Composition also converts the CLI path to an
+  // application artifact ref, so paths do not cross the application seam.
+  const restore = await composeLocalSystemOperations().prepareRestore(tarball)
 
   try {
-    const plan = await planRestore(tarball, { migrationsFolder })
+    const plan = await restore.plan({
+      skipIntegrityCheck: flags.has('--skip-integrity-check'),
+    })
     const planLines = [
       `restore plan for ${tarball}:`,
-      `  kind:      ${plan.manifest?.kind ?? 'unknown (legacy backup)'}`,
+      `  kind:      ${plan.backupKind ?? 'unknown (legacy backup)'}`,
       `  direction: ${plan.direction}`,
-      `  backup migration: ${plan.backupLastCreatedAt ?? 'unknown'}`,
-      `  this binary:      ${plan.currentMaxWhen}`,
+      `  backup migration: ${plan.backupMigrationCreatedAt ?? 'unknown'}`,
+      `  this binary:      ${plan.binaryMigrationCreatedAt}`,
     ]
     if (plan.direction === 'downgrade') {
       return {
@@ -71,11 +70,7 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
     // enforce (db.sqlite present + quick_check unless the escape hatch rides
     // along) — staging an invalid package used to arm a boot-loop brick.
     if (flags.has('--stage')) {
-      await validateBackupForStage(tarball, {
-        migrationsFolder,
-        skipIntegrityCheck: applyOpts.skipIntegrityCheck,
-      })
-      stagePendingRestore(tarball, { ...applyOpts, now: Date.now() })
+      await restore.stage(applyOpts)
       return {
         output:
           planLines.join('\n') +
@@ -89,31 +84,22 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
     // LIVE daemon must (impl-gate P2-10: the old one-shot pid probe left a TOCTOU
     // window where a daemon started mid-restore and kept writing the old inode;
     // holding the daemon's own flock for the whole swap closes it).
-    const pid = readPidFromLock(Paths.lock)
-    if (pid !== null && isProcessAlive(pid)) {
+    const res = await restore.activate(applyOpts)
+    if (res.status === 'daemon-running') {
       return {
         output:
-          `restore refused: a daemon is running (pid ${pid}). ` +
+          `restore refused: a daemon is running (pid ${res.pid}). ` +
           `Stop it first (or use --stage to apply on next boot): agent-workflow stop\n`,
         status: 'error',
       }
     }
-    let lock: ReturnType<typeof acquireLock>
-    try {
-      lock = acquireLock(Paths.lock)
-    } catch {
+    if (res.status === 'lock-unavailable') {
       return {
         output:
           'restore refused: could not take the daemon lock (a daemon is starting?). ' +
           'Stop it first, or use --stage to apply on next boot.\n',
         status: 'error',
       }
-    }
-    let res: Awaited<ReturnType<typeof restoreBackup>>
-    try {
-      res = await restoreBackup(tarball, { migrationsFolder, ...applyOpts })
-    } finally {
-      lock.release()
     }
     const lines = [
       'restore complete:',
@@ -126,5 +112,7 @@ export async function restoreCommand(argv: string[]): Promise<RestoreCommandResu
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return { output: `restore failed: ${msg}\n`, status: 'error' }
+  } finally {
+    restore.release()
   }
 }
