@@ -45,17 +45,34 @@ import type {
   DirectAuthorityAdmission,
   DirectAuthorityBinding,
   DirectQueryContextFactory,
-  IdentityAccessEventSink,
   InitialUserAccessProvisioner,
+  InitialUserAccessProvision,
   LegacyActorProjectionFactory,
   PresenceConnectionTracker,
   PresenceLease,
-  PresenceProjectionSink,
   PresenceQuery,
 } from './public/participants'
 import type { UserAccessFenceReader } from './application/ports/userAccessRepository'
 
 const SYSTEM_USER_ID = '__system__'
+
+interface RuntimeIdentityAccessEventSink {
+  authorityRevisionChanged(input: {
+    readonly userId: string
+    readonly revision: number
+    readonly onFailure: (error: unknown) => void
+  }): void
+}
+
+interface RuntimePresenceProjectionSink {
+  publish(changes: ReadonlyArray<{ readonly userId: string; readonly online: boolean }>): void
+}
+
+/** Composition-only bridge. Public consumers receive only the provisioner
+ * returned for the currently live transaction scope. */
+export interface InitialUserAccessTransactionBinding {
+  forTransaction(transactionScope: TransactionScope): InitialUserAccessProvisioner
+}
 
 class RuntimePresenceConnections implements PresenceConnectionTracker {
   private readonly live = new Set<PresenceLease>()
@@ -100,7 +117,7 @@ export interface IdentityAccessRuntime {
   readonly getUserProfile: GetUserProfile
   readonly getUserGitCommitIdentity: GetUserGitCommitIdentity
   readonly updateOwnProfile: UpdateOwnProfile
-  readonly initialUserAccess: InitialUserAccessProvisioner
+  readonly initialUserAccess: InitialUserAccessTransactionBinding
   readonly syncOidcProfile: SyncOidcProfile
   readonly syncOidcProfileInTransaction: (
     transactionScope: TransactionScope,
@@ -126,8 +143,8 @@ export type IdentityAccessFixtureRuntime = Omit<IdentityAccessRuntime, 'contexts
 
 export interface CreateIdentityAccessRuntimeInput {
   readonly db: DbClient
-  readonly events?: IdentityAccessEventSink
-  readonly presenceProjection?: PresenceProjectionSink
+  readonly events?: RuntimeIdentityAccessEventSink
+  readonly presenceProjection?: RuntimePresenceProjectionSink
   readonly id?: () => string
   readonly now?: () => number
 }
@@ -237,7 +254,7 @@ function buildIdentityAccessRuntime(
       auditId: factoryDeps.id,
     }),
     initialUserAccess: Object.freeze({
-      insertInTransaction: syncInitialUserAccessProvision,
+      forTransaction: bindInitialUserAccessProvisioner,
     }),
     syncOidcProfile: new SyncOidcProfile({
       transactions,
@@ -267,10 +284,14 @@ function buildIdentityAccessRuntime(
   })
 }
 
-function syncInitialUserAccessProvision(
-  ...args: Parameters<InitialUserAccessProvisioner['insertInTransaction']>
-): void {
-  insertInitialUserAccessInTransaction(...args)
+function bindInitialUserAccessProvisioner(
+  transactionScope: TransactionScope,
+): InitialUserAccessProvisioner {
+  return Object.freeze({
+    insert(provision: InitialUserAccessProvision): void {
+      insertInitialUserAccessInTransaction(transactionScope, provision)
+    },
+  })
 }
 
 /** Explicit local/test fixture factory. Production daemon/server code receives

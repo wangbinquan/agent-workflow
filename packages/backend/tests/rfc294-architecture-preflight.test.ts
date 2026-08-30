@@ -1480,7 +1480,6 @@ const CROSS_CONTEXT_PILOT_DEBT: string[] = [
 ]
 
 const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
-  'modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#insertInitialUserAccessInTransaction: forbidden type import @/platform/persistence/transactionScope#TransactionScope',
   'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
 ]
 

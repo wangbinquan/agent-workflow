@@ -249,7 +249,7 @@ async function delegatedCallActor(
     parentTaskId: state.taskId,
     parentNodeRunId,
   })
-  return (admission?.actor as unknown as Actor | undefined) ?? null
+  return admission?.actor ?? null
 }
 
 /** RFC-282 C1-2 — config binary fallbacks for the mint-time freeze. Read at

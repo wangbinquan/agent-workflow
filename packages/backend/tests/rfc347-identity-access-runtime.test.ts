@@ -126,7 +126,6 @@ describe('RFC-347 direct authority runtime', () => {
   test('session, PAT and daemon admissions preserve their distinct resolved projections', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedUser(db, 'transport-user')
-    seedUser(db, '__system__')
     const runtime = createIdentityAccessRuntime({ db })
     const session = await admitTestDirectAuthority(runtime.directAuthority, {
       userId: 'transport-user',
@@ -308,9 +307,18 @@ describe('RFC-347 exact production source locks', () => {
   test('bootstrap admin and local CLI remain distinct exact participants', () => {
     const authRoutes = source('src/routes/auth.ts')
     expect(authRoutes).toContain('completeBootstrapWithAdmin(')
-    expect(authRoutes).toContain('deps.identityAccess.initialUserAccess')
+    expect(authRoutes).toContain('identityAccess.initialUserAccess')
     expect(authRoutes).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(authRoutes).not.toContain('fromAuthenticatedPrincipal(')
+
+    const participants = source('src/modules/identity-access/public/participants.ts')
+    const composition = source('src/modules/identity-access/composition.ts')
+    expect(participants).toContain('insert(provision: InitialUserAccessProvision): void')
+    expect(participants).not.toContain('TransactionScope')
+    expect(composition).toContain('forTransaction(transactionScope: TransactionScope)')
+    expect(composition).toContain(
+      'insertInitialUserAccessInTransaction(transactionScope, provision)',
+    )
 
     const mainRoot = source('src/main.ts')
     expect(mainRoot).toContain('.localOperator.forUser(')

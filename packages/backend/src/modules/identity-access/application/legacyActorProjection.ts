@@ -4,7 +4,7 @@ import {
   type PatPurpose,
   type Permission,
 } from '@agent-workflow/shared'
-import type { DirectAuthenticatedAuthority, LegacyActorProjection } from '../public/participants'
+import type { AuthenticatedAuthoritySnapshot, LegacyActorProjection } from '../public/participants'
 import type { ResolvedAuthoritySubject } from '../public/types'
 
 const SYSTEM_USER_ID = '__system__'
@@ -16,6 +16,13 @@ export type DirectLegacyProjectionInput = Readonly<{
   patId?: string
 }>
 
+/** Unbranded account projection prepared for the registry-owned direct
+ * authority factory. It is not a usable authority until that factory freezes,
+ * brands and registers it with the matching request handle. */
+export interface DirectLegacyProjection extends AuthenticatedAuthoritySnapshot {
+  readonly userId: string
+}
+
 /**
  * RFC-347's single compatibility projection.  Both direct and delegated
  * authority paths call this function with facts already resolved by the
@@ -24,7 +31,7 @@ export type DirectLegacyProjectionInput = Readonly<{
 export function projectDirectLegacyActor(
   subject: ResolvedAuthoritySubject,
   input: DirectLegacyProjectionInput,
-): DirectAuthenticatedAuthority {
+): DirectLegacyProjection {
   const accountPermissions = resolveEffectiveAccountPermissions({
     role: subject.role,
     additionalPermissions: subject.additionalPermissions,
@@ -36,7 +43,7 @@ export function projectDirectLegacyActor(
           matrix: input.patScopes ?? [],
         })
       : accountPermissions
-  return Object.freeze({
+  return {
     user: Object.freeze({
       id: subject.userId,
       username: subject.username,
@@ -54,7 +61,7 @@ export function projectDirectLegacyActor(
         }
       : {}),
     authorityRevision: subject.accessRevision,
-  }) as DirectAuthenticatedAuthority
+  }
 }
 
 export function projectDelegatedLegacyActor(

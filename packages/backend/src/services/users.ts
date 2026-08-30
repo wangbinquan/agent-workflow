@@ -178,7 +178,10 @@ export async function patchUser(
   // Legacy test/setup fixture; production routes use their injected runtime.
   const module = createIdentityAccessRuntime({ db })
   try {
-    const localOperator = await module.localOperator.forUser(actorId ?? SYSTEM_USER_ID)
+    const localOperator =
+      actorId === undefined
+        ? await module.localOperator.forUser(SYSTEM_USER_ID)
+        : await module.localOperator.forLegacyHttpUser(actorId)
     if (localOperator === null) {
       throw new ForbiddenError('user-access-actor-inactive', 'user access actor is not active')
     }

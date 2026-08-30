@@ -17,6 +17,7 @@ import { authLoginPolicy, oidcProviders, userSessions, users } from '@/db/schema
 import { dbTxSync } from '@/db/txSync'
 import type { InitialUserAccessProvisioner } from '@/modules/identity-access/public/participants'
 import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlite/existingTransactionScope'
+import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
@@ -181,10 +182,14 @@ export interface PreparedBootstrapAdmin extends Omit<CreateBootstrapAdminBody, '
   passwordHash: string
 }
 
+export interface InitialUserAccessTransactionBinding {
+  forTransaction(transactionScope: TransactionScope): InitialUserAccessProvisioner
+}
+
 export function completeBootstrapWithAdmin(
   db: DbClient,
   input: PreparedBootstrapAdmin,
-  initialUserAccess: InitialUserAccessProvisioner,
+  initialUserAccess: InitialUserAccessTransactionBinding,
   now: number = Date.now(),
 ): typeof users.$inferSelect {
   const id = input.id ?? ulid()
@@ -226,7 +231,7 @@ export function completeBootstrapWithAdmin(
       }
     }
     withExistingSQLiteTransactionScope(tx, (transactionScope) => {
-      initialUserAccess.insertInTransaction(transactionScope, {
+      initialUserAccess.forTransaction(transactionScope).insert({
         user: {
           id,
           username: input.username,

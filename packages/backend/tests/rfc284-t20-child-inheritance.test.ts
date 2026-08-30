@@ -99,6 +99,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     expect(keysWith('dropped-registered')).toEqual(
       [
         'fanoutMaxShardTotal',
+        'identityAccess',
         'codeHostConnections',
         'codeHostFetch',
         'repositoryPublicationTransport',

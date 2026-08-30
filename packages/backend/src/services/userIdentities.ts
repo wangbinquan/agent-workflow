@@ -19,10 +19,14 @@ import { withExistingSQLiteTransactionScope } from '@/platform/persistence/sqlit
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
+interface InitialUserAccessTransactionBinding {
+  forTransaction(transactionScope: TransactionScope): InitialUserAccessProvisioner
+}
+
 /** Bootstrap-owned OIDC profile participant.  Services receive this narrow
  * binding instead of composing an identity-access runtime from the database. */
 export interface OidcProfileIdentityAccess {
-  readonly initialUserAccess: InitialUserAccessProvisioner
+  readonly initialUserAccess: InitialUserAccessTransactionBinding
   readonly syncOidcProfile: Readonly<{
     execute(command: SyncOidcProfileCommand): SyncOidcProfileResult
   }>
@@ -242,7 +246,7 @@ export async function createUserWithIdentity(
       const userId = ulid()
       const operationId = ulid()
       withExistingSQLiteTransactionScope(tx, (transactionScope) => {
-        identityAccess.initialUserAccess.insertInTransaction(transactionScope, {
+        identityAccess.initialUserAccess.forTransaction(transactionScope).insert({
           user: {
             id: userId,
             username: args.username,

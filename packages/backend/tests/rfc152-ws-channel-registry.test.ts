@@ -41,6 +41,7 @@ import {
   gatedSubscribe,
   parseWsChannel,
   type AnyChannelParams,
+  type IdentityAccessWsBinding,
   type WsChannelKind,
   type WsConnectionData,
 } from '../src/ws/registry'
@@ -59,7 +60,12 @@ function makeActor(role: 'admin' | 'user' | 'manager', id = 'u-test'): Actor {
 }
 
 /** Minimal ServerWebSocket stand-in — gatedSubscribe only touches data+send. */
-function makeFakeWs(actor: Actor): {
+function makeFakeWs(
+  actor: Actor,
+  identityAccess: IdentityAccessWsBinding = stubIdentityAccessWsBinding(
+    actor.authorityRevision ?? 0,
+  ),
+): {
   ws: ServerWebSocket<WsConnectionData>
   sent: unknown[]
 } {
@@ -68,7 +74,7 @@ function makeFakeWs(actor: Actor): {
     channel: { kind: 'tasks-list' },
     actor,
     authority: TEST_DIRECT_AUTHORITY,
-    identityAccess: stubIdentityAccessWsBinding(actor.authorityRevision ?? 0),
+    identityAccess,
     // RFC-212 — the registry never reads these; they exist so the fixture stays
     // structurally identical to a real connection.
     credential: { kind: 'daemon' },
@@ -412,7 +418,21 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
 
   test('RFC-305 DB revision fence drops a frame even when the change notification was lost', () => {
     const probe = makeProbeSpec({})
-    const { ws, sent } = makeFakeWs(makeActor('user'))
+    const dbBackedIdentityAccess: IdentityAccessWsBinding = {
+      ...stubIdentityAccessWsBinding(),
+      authorityFence: {
+        readAuthorityFence(userId) {
+          const row = db.$client
+            .query('SELECT status, access_revision FROM users WHERE id = ? LIMIT 1')
+            .get(userId) as
+            | { status: 'active' | 'disabled' | 'invited'; access_revision: number }
+            | null
+            | undefined
+          return row == null ? null : { status: row.status, accessRevision: row.access_revision }
+        },
+      },
+    }
+    const { ws, sent } = makeFakeWs(makeActor('user'), dbBackedIdentityAccess)
     gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
     db.$client.query("UPDATE users SET access_revision = 1 WHERE id = 'u-test'").run()
     probe.fire({ type: 'x', n: 1 })

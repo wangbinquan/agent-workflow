@@ -1,15 +1,18 @@
 // RFC-344/RFC-347 — process-edge bootstrap adapter for the user CLI binding.
 
 import { hashPassword } from '@/auth/passwords'
-import { completeBootstrapWithAdmin, isBootstrapRequired } from '@/auth/loginPolicy'
+import {
+  completeBootstrapWithAdmin,
+  isBootstrapRequired,
+  type InitialUserAccessTransactionBinding,
+} from '@/auth/loginPolicy'
 import { userCommand, type UserCommandDeps } from '@/cli/user'
 import type { DbClient } from '@/db/client'
-import type { InitialUserAccessProvisioner } from '@/modules/identity-access/public/participants'
 
 export type UserCommandIdentityHandle = Pick<
   UserCommandDeps,
   'operations' | 'commandContext' | 'queryContext'
-> & { readonly initialUserAccess: InitialUserAccessProvisioner }
+> & { readonly initialUserAccess: InitialUserAccessTransactionBinding }
 
 export interface UserCommandBootstrapInput {
   readonly db: DbClient

@@ -2,14 +2,13 @@ import type {
   AdmittedDaemonCredential,
   AdmittedPatCredential,
   AdmittedSessionCredential,
+  AuthenticatedAuthoritySnapshot,
   AuthenticatedPrincipal,
-  AuthorizationSubjectRef,
   CommandContext,
   CurrentSubjectAccessResolver,
   DelegatedAuthorityAdmission,
   DelegatedRequestAuthority,
   DelegatedRequestAuthorityFactory,
-  DelegatedSource,
   DirectAuthenticatedAuthority,
   DirectAuthorityAdmission,
   DirectAuthorityBinding,
@@ -25,7 +24,11 @@ import type {
   RequestAuthority,
   ValidatedIdempotencyKey,
 } from '../public/participants'
-import { projectDelegatedLegacyActor, projectDirectLegacyActor } from './legacyActorProjection'
+import {
+  projectDelegatedLegacyActor,
+  projectDirectLegacyActor,
+  type DirectLegacyProjection,
+} from './legacyActorProjection'
 
 const SYSTEM_USER_ID = '__system__'
 
@@ -34,11 +37,9 @@ export type {
   AdmittedPatCredential,
   AdmittedSessionCredential,
   AuthenticatedPrincipal,
-  AuthorizationSubjectRef,
   CommandContext,
   DelegatedAuthorityAdmission,
   DelegatedRequestAuthority,
-  DelegatedSource,
   DirectAuthenticatedAuthority,
   DirectAuthorityIdentity,
   DirectRequestAuthority,
@@ -50,6 +51,18 @@ export type {
   RequestAuthority,
   ValidatedIdempotencyKey,
 } from '../public/participants'
+
+interface AuthorizationSubjectRef {
+  readonly userId: string
+}
+
+type DelegatedSource =
+  | 'schedule'
+  | 'webhook'
+  | 'event'
+  | 'call-workflow'
+  | 'call-workgroup'
+  | 'code-host'
 
 interface TrustedContextMetadata {
   readonly source: PrincipalSource | DelegatedSource
@@ -71,14 +84,11 @@ interface DelegatedClaim {
 const authoritySubjectResolver = Symbol('identity-access.authority-subject-resolver')
 const contextMetadataResolver = Symbol('identity-access.context-metadata-resolver')
 
-type InternallyOwnedAuthority = RequestAuthority & {
-  readonly [authoritySubjectResolver]?: () => AuthorizationSubjectRef
-}
 type InternallyOwnedContext = (CommandContext | QueryContext) & {
   readonly [contextMetadataResolver]?: () => TrustedContextMetadata
 }
 function subjectRef(userId: string): AuthorizationSubjectRef {
-  return Object.freeze({ userId }) as AuthorizationSubjectRef
+  return Object.freeze({ userId })
 }
 
 /** Every runtime owns these WeakMaps.  The non-enumerable resolver closes over
@@ -90,28 +100,35 @@ export class AuthorityClaimRegistry {
     DirectRequestAuthority,
     Readonly<{ principal: AuthenticatedPrincipal; actor: DirectAuthenticatedAuthority }>
   >()
-  private readonly authorityByProjection = new WeakMap<object, DirectRequestAuthority>()
+  private readonly authorityByProjection = new WeakMap<
+    AuthenticatedAuthoritySnapshot,
+    DirectRequestAuthority
+  >()
   private readonly delegatedClaims = new WeakMap<DelegatedRequestAuthority, DelegatedClaim>()
   private readonly contextMetadata = new WeakMap<object, TrustedContextMetadata>()
 
   mintLocalAuthority(principal: AuthenticatedPrincipal): RequestAuthority {
-    return this.mintAuthority<RequestAuthority>(principal.userId)
+    const authority = {} as RequestAuthority & Record<PropertyKey, unknown>
+    this.registerAuthority(authority, principal.userId)
+    return Object.freeze(authority)
   }
 
   mintDirectAuthority(
     principal: AuthenticatedPrincipal,
-    actor: DirectAuthenticatedAuthority,
+    projection: DirectLegacyProjection,
   ): DirectAuthorityIdentity {
-    const authority = this.mintAuthority<DirectRequestAuthority>(principal.userId)
+    const actor = this.mintDirectAuthenticatedAuthority(projection)
+    const authority = this.mintDirectRequestAuthority(principal.userId)
     this.directClaims.set(authority, Object.freeze({ principal, actor }))
     this.authorityByProjection.set(actor, authority)
     return Object.freeze({ authority, actor })
   }
 
   mintDelegatedAuthority(claim: DelegatedClaim): DelegatedRequestAuthority {
-    const authority = this.mintAuthority<DelegatedRequestAuthority>(claim.userId)
+    const authority = {} as DelegatedRequestAuthority & Record<PropertyKey, unknown>
+    this.registerAuthority(authority, claim.userId)
     this.delegatedClaims.set(authority, Object.freeze(claim))
-    return authority
+    return Object.freeze(authority)
   }
 
   directClaim(authority: DirectRequestAuthority) {
@@ -120,7 +137,7 @@ export class AuthorityClaimRegistry {
     return claim
   }
 
-  directAuthorityForProjection(projection: object): DirectRequestAuthority {
+  directAuthorityForProjection(projection: AuthenticatedAuthoritySnapshot): DirectRequestAuthority {
     const authority = this.authorityByProjection.get(projection)
     if (authority === undefined) throw new Error('foreign-legacy-actor-projection')
     return authority
@@ -149,8 +166,19 @@ export class AuthorityClaimRegistry {
     return Object.freeze(context) as T
   }
 
-  private mintAuthority<T extends RequestAuthority>(userId: string): T {
-    const handle = {} as T & Record<PropertyKey, unknown>
+  private mintDirectRequestAuthority(userId: string): DirectRequestAuthority {
+    const authority = {} as DirectRequestAuthority & Record<PropertyKey, unknown>
+    this.registerAuthority(authority, userId)
+    return Object.freeze(authority)
+  }
+
+  private mintDirectAuthenticatedAuthority(
+    projection: DirectLegacyProjection,
+  ): DirectAuthenticatedAuthority {
+    return Object.freeze({ ...projection }) as DirectAuthenticatedAuthority
+  }
+
+  private registerAuthority<T extends RequestAuthority>(handle: T, userId: string): void {
     Object.defineProperty(handle, authoritySubjectResolver, {
       enumerable: false,
       value: () => {
@@ -160,12 +188,11 @@ export class AuthorityClaimRegistry {
       },
     })
     this.authorityClaims.set(handle, subjectRef(userId))
-    return Object.freeze(handle) as T
   }
 }
 
 export function subjectRefOf(authority: RequestAuthority): AuthorizationSubjectRef {
-  const resolver = (authority as InternallyOwnedAuthority)[authoritySubjectResolver]
+  const resolver: unknown = Reflect.get(authority, authoritySubjectResolver)
   if (typeof resolver !== 'function') throw new Error('untrusted-request-authority')
   return resolver()
 }
@@ -210,7 +237,7 @@ export class DirectAuthorityRuntime implements DirectAuthorityAdmission, DirectA
     )
   }
 
-  authorityForLegacyProjection(projection: object): DirectRequestAuthority {
+  authorityForLegacyProjection(projection: AuthenticatedAuthoritySnapshot): DirectRequestAuthority {
     return this.registry.directAuthorityForProjection(projection)
   }
 
@@ -364,15 +391,30 @@ export class LocalOperatorContextFactory {
   ) {}
 
   async forUser(userId: string): Promise<LocalOperatorIdentity | null> {
+    return this.forResolvedUser(userId, 'cli', 'cli')
+  }
+
+  /** Compatibility seam for legacy service callers that still carry only the
+   * HTTP actor id. Unlike CLI break-glass, this preserves session semantics so
+   * self-role and audit guards continue to see the acting account. */
+  async forLegacyHttpUser(userId: string): Promise<LocalOperatorIdentity | null> {
+    return this.forResolvedUser(userId, 'session', 'http')
+  }
+
+  private async forResolvedUser(
+    userId: string,
+    source: Extract<PrincipalSource, 'cli' | 'session'>,
+    transport: Extract<DirectTransport, 'cli' | 'http'>,
+  ): Promise<LocalOperatorIdentity | null> {
     const current = await this.currentSubjects.resolveCurrentSubject(userId)
     if (current === null) return null
     const actor = projectDelegatedLegacyActor(current)
-    const principal = Object.freeze({ userId: current.userId, source: 'cli' as const })
+    const principal = Object.freeze({ userId: current.userId, source })
     return Object.freeze({
       actor,
       commandContext: (at?: number) =>
-        this.contexts.fromAuthenticatedPrincipal(principal, 'cli', at),
-      queryContext: () => this.contexts.queryFromAuthenticatedPrincipal(principal, 'cli'),
+        this.contexts.fromAuthenticatedPrincipal(principal, transport, at),
+      queryContext: () => this.contexts.queryFromAuthenticatedPrincipal(principal, transport),
     })
   }
 }

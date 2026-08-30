@@ -33,7 +33,7 @@ describe('RFC-257 · source locks', () => {
     // 或丢失密封凭据能力。
     const text = readFileSync(resolve(SRC, 'services/webhook/webhookDispatch.ts'), 'utf8')
     expect(text.replace(/\s+/g, '')).toContain(
-      'buildStartTaskDeps(deps.db,requireSchedulerDriver(deps.schedulerDriver),deps.configPath,actor.user.id,deps.secretBox,)',
+      'buildStartTaskDeps(deps.db,requireSchedulerDriver(deps.schedulerDriver),deps.configPath,actor.user.id,deps.secretBox,deps.identityAccess,)',
     )
     expect(text).not.toContain('actor.user.id, undefined)')
   })

@@ -1,18 +1,9 @@
 import type { PatPurpose, Permission, Role } from '@agent-workflow/shared'
-import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import type { ManagedUserStatus, ResolvedAuthoritySubject } from './types'
 
 export type DirectTransport = 'http' | 'mcp' | 'cli'
 export type PrincipalSource = 'session' | 'pat' | 'daemon' | 'cli' | 'system'
-export type DelegatedSource =
-  | 'schedule'
-  | 'webhook'
-  | 'event'
-  | 'call-workflow'
-  | 'call-workgroup'
-  | 'code-host'
 
-declare const subjectRefBrand: unique symbol
 declare const requestAuthorityBrand: unique symbol
 declare const directRequestAuthorityBrand: unique symbol
 declare const admittedSessionCredentialBrand: unique symbol
@@ -23,11 +14,6 @@ declare const delegatedAuthorityBrand: unique symbol
 declare const directAuthenticatedAuthorityBrand: unique symbol
 declare const legacyActorProjectionBrand: unique symbol
 declare const presenceLeaseBrand: unique symbol
-
-export interface AuthorizationSubjectRef {
-  readonly [subjectRefBrand]: 'authorization-subject-ref'
-  readonly userId: string
-}
 
 /** Opaque current-request authority. The subject claim lives only in the
  * identity-access runtime registry and cannot be spread, forged or serialized. */
@@ -106,13 +92,11 @@ export interface InitialUserAccessProvision {
   }
 }
 
-/** Exact synchronous participant for bootstrap/OIDC account creation that
- * must share the caller's existing SQLite transaction. */
+/** Transaction-bound participant for bootstrap/OIDC account creation. The
+ * composition root binds it to one live persistence scope; public consumers
+ * can insert through that bound lifetime without importing platform types. */
 export interface InitialUserAccessProvisioner {
-  insertInTransaction(
-    transactionScope: TransactionScope,
-    provision: InitialUserAccessProvision,
-  ): void
+  insert(provision: InitialUserAccessProvision): void
 }
 
 export interface AuthenticatedPrincipal {
@@ -197,7 +181,7 @@ export interface DirectQueryContextFactory {
 }
 
 export interface DirectAuthorityBinding {
-  authorityForLegacyProjection(projection: object): DirectRequestAuthority
+  authorityForLegacyProjection(projection: AuthenticatedAuthoritySnapshot): DirectRequestAuthority
   legacyProjectionForAuthority(authority: DirectRequestAuthority): DirectAuthenticatedAuthority
 }
 
@@ -246,18 +230,6 @@ export interface PresenceConnectionTracker {
 
 export interface PresenceQuery {
   snapshot(): ReadonlyArray<string>
-}
-
-export interface IdentityAccessEventSink {
-  authorityRevisionChanged(input: {
-    readonly userId: string
-    readonly revision: number
-    readonly onFailure: (error: unknown) => void
-  }): void
-}
-
-export interface PresenceProjectionSink {
-  publish(changes: ReadonlyArray<{ readonly userId: string; readonly online: boolean }>): void
 }
 
 // RFC-317 T41（findings TP-03）—— 出站授权围栏的**同步**读契约。传输层（ws/）经这条

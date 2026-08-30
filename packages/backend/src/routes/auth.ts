@@ -40,6 +40,7 @@ import {
   completeBootstrapWithAdmin,
   createPasswordLoginSession,
   getAuthLoginPolicy,
+  type InitialUserAccessTransactionBinding,
 } from '@/auth/loginPolicy'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -56,7 +57,6 @@ import type { UpdateOwnProfile } from '@/modules/identity-access/public/commands
 import type {
   DirectAuthorityBinding,
   DirectCommandContextFactory,
-  InitialUserAccessProvisioner,
 } from '@/modules/identity-access/public/participants'
 import type { GetUserProfile } from '@/modules/identity-access/public/queries'
 import { UserAccessError } from '@/modules/identity-access/public/types'
@@ -65,7 +65,7 @@ import { directRequestAuthority } from '@/routes/operationAuthority'
 interface AuthRouteIdentityAccess {
   readonly contexts: DirectCommandContextFactory
   readonly directAuthority: DirectAuthorityBinding
-  readonly initialUserAccess: InitialUserAccessProvisioner
+  readonly initialUserAccess: InitialUserAccessTransactionBinding
   readonly getUserProfile: GetUserProfile
   readonly updateOwnProfile: UpdateOwnProfile
 }

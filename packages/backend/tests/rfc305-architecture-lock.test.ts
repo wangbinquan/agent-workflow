@@ -365,13 +365,11 @@ describe('RFC-305 identity-access architecture', () => {
       // 自己拼 `users` 表的 SQL；这两个名字是把那条读收进 public 面的代价，
       // 也是它现在唯一的合法入口。
       'AuthorityFenceRecord',
-      'AuthorizationSubjectRef',
       'CommandContext',
       'CurrentSubjectAccessResolver',
       'DelegatedAuthorityAdmission',
       'DelegatedRequestAuthority',
       'DelegatedRequestAuthorityFactory',
-      'DelegatedSource',
       'DirectAuthenticatedAuthority',
       'DirectAuthorityAdmission',
       'DirectAuthorityBinding',
@@ -381,14 +379,12 @@ describe('RFC-305 identity-access architecture', () => {
       'DirectRequestAuthority',
       'DirectTransport',
       'IdempotentCommandContext',
-      'IdentityAccessEventSink',
       'InitialUserAccessProvision',
       'InitialUserAccessProvisioner',
       'LegacyActorProjection',
       'LegacyActorProjectionFactory',
       'PresenceConnectionTracker',
       'PresenceLease',
-      'PresenceProjectionSink',
       'PresenceQuery',
       'PrincipalSource',
       'QueryContext',
@@ -405,7 +401,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/cli/userBootstrap.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition',
       'packages/backend/src/main.ts -> ./modules/identity-access/composition/userOperations',
       'packages/backend/src/modules/development-automation/application/activityOperations.ts -> @/modules/identity-access/public/participants',
@@ -777,7 +772,7 @@ describe('RFC-305 reusable-authority fences', () => {
     expect(nodeMechanics).toContain("'call-workflow'")
     expect(nodeMechanics).toContain("'call-workgroup'")
     expect(scheduled).toContain('.delegatedRequests.forSchedule({')
-    expect(scheduled).toContain("'schedule'")
+    expect(scheduled).toContain('invocation,')
     expect(webhook).toContain('.delegatedRequests.forWebhook({')
     expect(webhook).toContain("'webhook'")
   })
@@ -813,7 +808,7 @@ describe('RFC-305 reusable-authority fences', () => {
     )
     expect(fenceRepository).toContain('SELECT status, access_revision FROM users WHERE id = ?')
     expect(registry).toContain('authorityFence.readAuthorityFence(ws.data.actor.user.id)')
-    expect(registry).toContain('if (!authorityRevisionCurrent(ws, db)) return')
+    expect(registry).toContain('if (!authorityRevisionCurrent(ws)) return')
     // 传输层不得再出现任何 raw client 用法（裸 SQL 会绕过上面那条端口判据）。
     // ⚠️ 必须先剥注释：上面那段解释自己就写着 `db.$client`，裸文本扫描会**撞上
     // 描述自己的注释**而永远为真——这个坑本仓在 RFC-217 的架构守卫上踩过一次。
