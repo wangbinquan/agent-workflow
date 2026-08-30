@@ -81,7 +81,16 @@ describe('RFC-292 trigger namespace source locks', () => {
   })
 
   test('Intent and dynamic generation derive canonical vocabulary and schema version', () => {
-    const intent = readFileSync(resolve(BACKEND_SRC, 'services/intent/intentDoc.ts'), 'utf8')
+    // RFC-348: INTENT.md's text is rendered from the teaching registries under
+    // modules/intent/domain/teaching/** and intentDoc.ts is pure assembly, so the
+    // lock reads the whole intent-doc source set — the derivation must exist
+    // somewhere in it, never a hand-written trigger vocabulary.
+    const intent = [
+      resolve(BACKEND_SRC, 'services/intent/intentDoc.ts'),
+      ...sourceFiles(resolve(BACKEND_SRC, 'modules/intent/domain/teaching')),
+    ]
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
     const orchestrator = readFileSync(resolve(BACKEND_SRC, 'services/orchestratorAgent.ts'), 'utf8')
     expect(intent).toContain('WEBHOOK_TEMPLATE_VARS.map(webhookTriggerToken)')
     expect(intent).toContain('$schema_version:${WORKFLOW_SCHEMA_VERSION}')

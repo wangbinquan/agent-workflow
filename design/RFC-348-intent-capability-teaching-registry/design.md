@@ -660,9 +660,11 @@ AC-7 由八个常驻 `@ts-expect-error` 夹具覆盖；实现报告的红屏证�
 3. **platform-only 九类的真实行（D3，用户另裁③）由 `services/intent/platformInventory.ts` 直接组装**：capability_template 走
    `services/capabilityTemplates`；其余八类直接调用各模块自己的 store / composition 工厂（`development-automation` 的
    `sqliteDigitalEmployeeStore` / `sqliteConfigResourceStore`、`integration` 的 `sqliteDevelopmentAdapterStore`、`digital-employee`
-   的 `sqliteAuthoringStore`，employee_tool 另加 `task-execution/composition/digitalEmployeeBuiltinToolCatalog` 取平台内建工具，
-   与 `server.ts` 同一组装），再经 resource-catalog public 的 `filterVisibleRows` 过滤。这是 RFC-294 意义上的**跨模块
-   infrastructure 引用（债）**：正解是 bootstrap 用组合好的模块 query port 实现 `IntentPlatformInventory` 并经
+   的 composition 工厂 `createDigitalEmployeeAuthoringReads`——RFC-310 manifest 对该 context 只放行 composition / public，
+   CI 实撞后由直读 `infrastructure/sqliteAuthoringStore` 改走装配面（`9b56dce8f`）；employee_tool 另加
+   `task-execution/composition/digitalEmployeeBuiltinToolCatalog` 取平台内建工具，与 `server.ts` 同一组装），再经 resource-catalog
+   public 的 `filterVisibleRows` 过滤。这是 RFC-294 意义上的**跨模块 infrastructure / composition 引用（债）**，共 11 条
+   legacy→module 入边已按 RFC-317 T22 带 why + 清偿波次登记进 `architecture/commons-debt.json`：正解是 bootstrap 用组合好的模块 query port 实现 `IntentPlatformInventory` 并经
    `IntentDispatchDeps → RunIntentTurnDeps → IntentDumpInput` 注入（端口已就位、注入链已留 `platformInventory?` seam）；
    之所以本 RFC 不落这一步，是 `server.ts` / `routes/intentSessions.ts` / `services/intent/dispatcher.ts` 三个文件此刻承载着
    RFC-347 并行 session 的未提交半截重构（`identityAccess` 接线），本 RFC 不得把他人的中间态一并推上 main。RFC-347 落地后

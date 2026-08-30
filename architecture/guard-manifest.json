@@ -924,7 +924,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 173
+      "lines": 192
     },
     {
       "id": "rfc294-architecture-preflight",
@@ -2002,8 +2002,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "9b2d185404687e09dc66e601d27ad999e53dc031",
-    "contentDigest": "sha256:9c300527ecf7bdb5cabacd4cb527302cbd1bc57233880302f662c4c750b46bdf",
+    "currentSnapshotSha": "9b56dce8fc83996ead252678c0f738247e9b12a8",
+    "contentDigest": "sha256:02186702ef0decfdd877e0d4ce0ea2440596c354f6d8db736842f5f309ecb5d4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
