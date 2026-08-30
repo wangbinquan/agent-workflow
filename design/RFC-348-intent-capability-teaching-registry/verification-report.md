@@ -82,8 +82,8 @@
   `PlatformInventoryContext` / `createDefaultIntentPlatformInventory` / `RunIntentTurnDeps.platformInventory?`）；④ T1.6 / T6.3 / T6.5 与
   design §9 测试矩阵改为真实文件名与 `OP_PREVIEW_RENDERERS`。
 - Codex 实现门 r6（2026-08-30）：**0 findings，实现门通过**（r1～r5 折入项全部复核闭合；Codex 定向验证 shared 33 / backend 291 / frontend 6、三包 typecheck 全绿）。实现门六轮累计 17 条（0 P1 / 8 P2 / 9 P3）。
-- 提交：__待补__（四笔 exact-pathspec 提交的 SHA）。
-- GitHub Actions（exact SHA）：__待补__。
+- 提交：`85c63a800`（shared）→ `729d16470`（registries + doc）→ `92aabcbd4`（seams + inventory）→ `9b2d18540` → `9b56dce8f` → `0d8cf87b6`（frontend + docs），全部按精确 pathspec / 已核对的 index 提交；`STATE.md` / `design/plan.md` 只含本 RFC 行。
+- GitHub Actions（exact SHA `4d1bec193`，含 `0d8cf87b6` 全部代码；`0d8cf87b6` 自身的 run 33311571331 被并发 push 取消）：Main CI `33311677678` success（https://github.com/wangbinquan/agent-workflow/actions/runs/33311677678）。
 
 ## 6. 已知债（design §10）
 

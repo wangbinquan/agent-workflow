@@ -146,7 +146,7 @@
 ### T9 — 门与发布
 
 - [x] T9.1 Codex 实现门（只审功能；范围限定本 RFC 文件清单；安全类内容一律弃置）并修 findings（r1～r5 共 17 条折入，r6 0 findings 通过；见 verification-report §5）。
-- [ ] T9.2 精确 pathspec `git add` / `git commit -- <paths>`；push；exact-SHA Main CI 盯到绿；红了小改补一提或 revert。
+- [x] T9.2 精确 pathspec `git add` / `git commit -- <paths>`；push；exact-SHA Main CI 盯到绿（`9b2d18540` → `9b56dce8f` → run `33311677678` success）。
 
 ## 依赖
 
@@ -174,7 +174,7 @@ T4/T5/T6/T7 ──► T8 ──► T9
 - [x] AC-1 形态 + 字段（含嵌套 / 变体）覆盖 + clarify 端口　- [x] AC-2 能力地图 + 路由对照　- [x] AC-3 hint 三态（含第 2 轮）
 - [x] AC-4 branchPorts 四态 + 下一轮 dump　- [x] AC-5 漂移字段补齐 / overrides 停教　- [x] AC-6 runtimes 清单（有效默认）
 - [x] AC-7 八个常驻夹具　- [x] AC-8 对账红　- [x] AC-9 既有契约测试不改即绿　- [x] AC-10 前端六处派生
-- [x] AC-11 ≤32 KB　- [ ] AC-12 exact-SHA CI 绿　- [x] AC-13 agent 行端口名　- [x] AC-14 反向扫描红　- [x] AC-15 编辑器 `port-inactive`
+- [x] AC-11 ≤32 KB　- [x] AC-12 exact-SHA CI 绿　- [x] AC-13 agent 行端口名　- [x] AC-14 反向扫描红　- [x] AC-15 编辑器 `port-inactive`
 - [x] ★ AC-16 九类只读清单　- [x] ★ AC-17 mcp oauth 往返　- [x] ★ AC-18 sidecar 省略即保留
 
 ## 设计门记录
