@@ -379,7 +379,10 @@ export function targetContextFor(path: string, symbol = ''): TargetOwner {
   if (/fusion|skillversion|knowledge/.test(value)) return 'knowledge-evolution'
   if (/structural|symbol|insight|narrative/.test(value)) return 'workspace-insight'
   if (/runtime|opencode|claudecode|providerprofile/.test(value)) return 'runtime-management'
-  if (/webhook|codehost|gitlab|github|integration/.test(value) || hasScheduleTargetToken(path, symbol)) {
+  if (
+    /webhook|codehost|gitlab|github|integration/.test(value) ||
+    hasScheduleTargetToken(path, symbol)
+  ) {
     return 'integration'
   }
   if (/repo|git|worktree|workspace|candidate|commit|publish/.test(value)) return 'source-control'
@@ -423,12 +426,13 @@ const RFC_332_COMPATIBILITY_BRIDGE_FILES = new Set([
   'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
 ])
 
-function isRfc332CompatibilityEdge(edge: Pick<ObservedContextEdge, 'fromFile' | 'toFile'>): boolean {
+function isRfc332CompatibilityEdge(
+  edge: Pick<ObservedContextEdge, 'fromFile' | 'toFile'>,
+): boolean {
   return (
     RFC_332_COMPATIBILITY_BRIDGE_FILES.has(edge.fromFile) ||
     (edge.fromFile === 'packages/backend/src/services/task.ts' &&
-      edge.toFile ===
-        'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts')
+      edge.toFile === 'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts')
   )
 }
 
@@ -840,10 +844,7 @@ function observedContextEdges(
             role = 'offered-consumption'
           } else {
             role = 'off-dag-offered'
-            removeAfterWave = offDagOfferedRemoveAfterWave(
-              fromLocation.context,
-              toLocation.context,
-            )
+            removeAfterWave = offDagOfferedRemoveAfterWave(fromLocation.context, toLocation.context)
           }
         } else {
           role = 'temporary-internal-debt'
@@ -1107,16 +1108,7 @@ function collectNodeShape(
       }
     }
   } else if (ts.isTypeAliasDeclaration(node)) {
-    collectTypeShape(
-      node.type,
-      source,
-      shape,
-      resolver,
-      prefix,
-      visited,
-      depth + 1,
-      typeParameters,
-    )
+    collectTypeShape(node.type, source, shape, resolver, prefix, visited, depth + 1, typeParameters)
   } else if (ts.isFunctionDeclaration(node)) {
     shape.methods.push({
       name: '$call',
@@ -1218,30 +1210,12 @@ function collectTypeShape(
   }
   if (ts.isIntersectionTypeNode(type)) {
     for (const member of type.types) {
-      collectTypeShape(
-        member,
-        source,
-        shape,
-        resolver,
-        prefix,
-        visited,
-        depth + 1,
-        typeParameters,
-      )
+      collectTypeShape(member, source, shape, resolver, prefix, visited, depth + 1, typeParameters)
     }
     return
   }
   if (ts.isParenthesizedTypeNode(type)) {
-    collectTypeShape(
-      type.type,
-      source,
-      shape,
-      resolver,
-      prefix,
-      visited,
-      depth + 1,
-      typeParameters,
-    )
+    collectTypeShape(type.type, source, shape, resolver, prefix, visited, depth + 1, typeParameters)
     return
   }
   if (ts.isArrayTypeNode(type)) {
@@ -1258,23 +1232,17 @@ function collectTypeShape(
     return
   }
   if (ts.isFunctionTypeNode(type) || ts.isConstructorTypeNode(type)) {
-    collectSignatureShape(
-      type,
-      source,
-      shape,
-      resolver,
-      prefix,
-      visited,
-      depth + 1,
-      typeParameters,
-    )
+    collectSignatureShape(type, source, shape, resolver, prefix, visited, depth + 1, typeParameters)
     return
   }
   if (ts.isTypeReferenceNode(type)) {
     const name = type.typeName.getText(source)
     const argument = type.typeArguments?.[0]
     if (typeParameters.has(name)) {
-      shape.fields.push({ fieldPath: prefix === '' ? '$value' : prefix, type: type.getText(source) })
+      shape.fields.push({
+        fieldPath: prefix === '' ? '$value' : prefix,
+        type: type.getText(source),
+      })
       return
     }
     if (argument !== undefined && ['Array', 'ReadonlyArray', 'Set', 'ReadonlySet'].includes(name)) {
@@ -2414,7 +2382,11 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
     file: 'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
     symbol: 'submitTaskContinuationTx',
     allowedTables: ['tasks', 'taskExecutionIntents', 'taskExecutionLineageOperationRecords'],
-    allowedTransitions: ['business-state->pending', 'intent-absent->pending', 'decision->authorized'],
+    allowedTransitions: [
+      'business-state->pending',
+      'intent-absent->pending',
+      'decision->authorized',
+    ],
     revisionPredicate: 'task-lifecycle-event-revision+decision-record-revision',
     requiredBrandedProof: 'CanonicalContinuationRequest',
   },
@@ -2465,9 +2437,10 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
   },
 ]
 
-function buildTaskExecutionControlGateways(
-  backend: readonly SourceUnit[],
-): { entries: TaskExecutionControlGatewayEntry[]; unknown: string[] } {
+function buildTaskExecutionControlGateways(backend: readonly SourceUnit[]): {
+  entries: TaskExecutionControlGatewayEntry[]
+  unknown: string[]
+} {
   const entries: TaskExecutionControlGatewayEntry[] = []
   const unknown: string[] = []
   for (const spec of TASK_EXECUTION_CONTROL_GATEWAY_SPECS) {
@@ -2642,10 +2615,7 @@ interface TaskOwnedEffectEntry {
   readonly ownerEntryId: string
 }
 
-function objectProperty(
-  object: ts.ObjectLiteralExpression,
-  name: string,
-): ts.Expression | null {
+function objectProperty(object: ts.ObjectLiteralExpression, name: string): ts.Expression | null {
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property) || propertyName(property.name) !== name) continue
     return property.initializer
@@ -2679,7 +2649,11 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         const symbol = owner?.name ?? '$file'
         const argument = node.arguments[0]
         if (argument === undefined || !ts.isObjectLiteralExpression(argument)) {
-          unknown.push({ file: unit.path, line, reason: `${callee} lacks an object-literal policy` })
+          unknown.push({
+            file: unit.path,
+            line,
+            reason: `${callee} lacks an object-literal policy`,
+          })
           ts.forEachChild(node, visit)
           return
         }
@@ -2689,7 +2663,11 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         else if (callee === 'createCodeHostEffectAttemptObserver') effectKind = 'code-host-mutation'
         else effectKind = literalText(objectProperty(argument, 'kind'))
         if (effectKind === null) {
-          unknown.push({ file: unit.path, line, reason: `${callee} has an unclassified effect kind` })
+          unknown.push({
+            file: unit.path,
+            line,
+            reason: `${callee} has an unclassified effect kind`,
+          })
           ts.forEachChild(node, visit)
           return
         }
@@ -2707,9 +2685,7 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
           line,
           effectKind,
           operationFamily: 'lineage-slot-stable-action',
-          generationPolicy: isCodeHost
-            ? 'next-retained-generation'
-            : 'intent-or-node-generation',
+          generationPolicy: isCodeHost ? 'next-retained-generation' : 'intent-or-node-generation',
           journaledBy: callee,
           attemptPolicy: isCodeHost ? 'per-http-send' : isProcess ? 'per-spawn' : 'per-act',
           resourceKeySetResolver: 'explicit-multi-resource-set',
@@ -3029,19 +3005,16 @@ function buildArchitectureExceptions(
       toOwnerEntryId: edge.toOwnerEntryId,
       edgeKind: edge.edgeKind,
       owner: edge.owner,
-      why:
-        isRfc332CompatibilityEdge(edge)
-          ? 'RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover.'
-          : edge.role === 'legacy-inbound'
+      why: isRfc332CompatibilityEdge(edge)
+        ? 'RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover.'
+        : edge.role === 'legacy-inbound'
           ? 'Legacy inbound caller reaches a module boundary before its W4 public use-case cutover.'
           : edge.role === 'legacy-outbound'
             ? 'A module still reaches a legacy implementation before its owner adapter cutover.'
             : edge.role === 'off-dag-offered'
               ? 'A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover.'
-            : 'Current module edge reaches a non-public internal entrypoint and must not become precedent.',
-      introducedByRFC: isRfc332CompatibilityEdge(edge)
-        ? 'RFC-332'
-        : 'pre-RFC-294-current-debt',
+              : 'Current module edge reaches a non-public internal entrypoint and must not become precedent.',
+      introducedByRFC: isRfc332CompatibilityEdge(edge) ? 'RFC-332' : 'pre-RFC-294-current-debt',
       removeAfterWave: edge.removeAfterWave!,
       expiresOn: '2027-12-31',
       mutationTest: 'rfc294-canonical-manifests: exact exception stale/unknown mutation',
@@ -3600,7 +3573,10 @@ export function projectGovernanceArtifacts(
     facadeManifest: CANONICAL_MANIFEST_PATHS.facades,
     ownerManifest: CANONICAL_MANIFEST_PATHS.moduleSymbolOwners,
   }
-  commonsDebt.entries = recordArray(commonsDebt, 'entries').map((entry) => {
+  const projectedDebtEntries: Array<Record<string, unknown>> = recordArray(
+    commonsDebt,
+    'entries',
+  ).flatMap((entry): Array<Record<string, unknown>> => {
     const matching = observedEdges.filter(
       (edge) =>
         edge.fromFile === entry.from &&
@@ -3608,20 +3584,42 @@ export function projectGovernanceArtifacts(
         edge.edgeKind === entry.edgeKind &&
         edge.syntax === entry.syntax,
     )
+    const rule = String(entry.rule)
+    if (
+      matching.length === 0 &&
+      (rule === 'R1-inbound-module-internals' || rule === 'R2-outbound-module-to-legacy')
+    ) {
+      return []
+    }
     const facadeIds = facades
       .filter((facade) => facade.file === entry.from || facade.file === entry.to)
       .map((facade) => String(facade.id))
       .sort()
-    return {
-      ...entry,
-      canonicalImportEdgeIds: matching.map((edge) => String(edge.id)).sort(),
-      canonicalFromOwnerEntryId: ownerEntryId(String(entry.from), '$file'),
-      canonicalToOwnerEntryIds: [
-        ...new Set(matching.map((edge) => String(edge.toOwnerEntryId))),
-      ].sort(),
-      canonicalFacadeIds: facadeIds,
-    }
+    return [
+      {
+        ...entry,
+        canonicalImportEdgeIds: matching.map((edge) => String(edge.id)).sort(),
+        canonicalFromOwnerEntryId: ownerEntryId(String(entry.from), '$file'),
+        canonicalToOwnerEntryIds: [
+          ...new Set(matching.map((edge) => String(edge.toOwnerEntryId))),
+        ].sort(),
+        canonicalFacadeIds: facadeIds,
+      },
+    ]
   })
+  commonsDebt.entries = projectedDebtEntries
+  const debtBaseline = commonsDebt.baseline
+  if (debtBaseline !== null && typeof debtBaseline === 'object' && !Array.isArray(debtBaseline)) {
+    commonsDebt.baseline = {
+      ...debtBaseline,
+      inboundEdges: projectedDebtEntries.filter(
+        (entry) => entry.rule === 'R1-inbound-module-internals',
+      ).length,
+      outboundEdges: projectedDebtEntries.filter(
+        (entry) => entry.rule === 'R2-outbound-module-to-legacy',
+      ).length,
+    }
+  }
 
   const guardManifest = structuredClone(input.guardManifest)
   guardManifest.canonicalProjection = {
@@ -3983,9 +3981,7 @@ export function validateCanonicalArtifacts(artifacts: CanonicalArtifacts): strin
       ? (ledger.entries as Array<Record<string, unknown>>)
       : []
     const unknown = Array.isArray(ledger.unknown) ? ledger.unknown : []
-    const bindings = Array.isArray(ledger.codeHostBindings)
-      ? ledger.codeHostBindings
-      : []
+    const bindings = Array.isArray(ledger.codeHostBindings) ? ledger.codeHostBindings : []
     if (entries.length === 0) errors.push('task-execution effect denominator is empty')
     if (unknown.length > 0) errors.push('task-execution effect ledger has unknown act sites')
     for (const entry of entries) {

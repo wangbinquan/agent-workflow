@@ -283,8 +283,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       observed
         .filter((edge) => edge.role === 'offered-consumption')
         .filter(
-          (edge) =>
-            !offeredPairs.has(`${String(edge.fromContext)}->${String(edge.toContext)}`),
+          (edge) => !offeredPairs.has(`${String(edge.fromContext)}->${String(edge.toContext)}`),
         ),
     ).toEqual([])
     const offDag = observed.filter((edge) => edge.role === 'off-dag-offered')
@@ -300,9 +299,11 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     ).toBe(true)
 
     const facades = generated.facades.entries as Array<Record<string, unknown>>
-    expect(facades.map((entry) => entry.status).every((status) =>
-      status === 'thin-facade' || status === 'legacy-implementation',
-    )).toBe(true)
+    expect(
+      facades
+        .map((entry) => entry.status)
+        .every((status) => status === 'thin-facade' || status === 'legacy-implementation'),
+    ).toBe(true)
     expect(
       facades.filter((entry) => entry.status === 'thin-facade').map((entry) => entry.file),
     ).toEqual([
@@ -469,6 +470,59 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
           Array.isArray(entry.canonicalImportEdgeIds) && entry.canonicalImportEdgeIds.length > 0,
       ),
     ).toBe(true)
+  })
+
+  test('RFC-317 projection retires settled boundary debt without minting new exceptions', () => {
+    const current = {
+      commonsManifest: readJson('architecture/commons-manifest.json'),
+      commonsDebt: readJson('architecture/commons-debt.json'),
+      guardManifest: readJson('architecture/guard-manifest.json'),
+      ledgerBaselines: readJson('architecture/ledger-baselines.json'),
+    }
+    const seeded = structuredClone(current)
+    const seedEntries = seeded.commonsDebt.entries as Array<Record<string, unknown>>
+    const exemplar = seedEntries.find((entry) => entry.rule === 'R1-inbound-module-internals')!
+    seedEntries.push({
+      ...exemplar,
+      from: 'packages/backend/src/services/__retired_boundary_fixture__.ts',
+      to: 'packages/backend/src/modules/identity-access/application/__retired_fixture__',
+      specifier: '@/modules/identity-access/application/__retired_fixture__',
+      canonicalImportEdgeIds: ['import:retired-fixture'],
+      canonicalFromOwnerEntryId: 'owner:retired-fixture',
+      canonicalToOwnerEntryIds: ['owner:retired-fixture'],
+      canonicalFacadeIds: [],
+    })
+    const seededBaseline = seeded.commonsDebt.baseline as Record<string, unknown>
+    seededBaseline.inboundEdges = Number(seededBaseline.inboundEdges) + 1
+
+    const projected = projectGovernanceArtifacts(generated, seeded)
+    const entries = projected.commonsDebt.entries as Array<Record<string, unknown>>
+    const baseline = projected.commonsDebt.baseline as Record<string, unknown>
+    const seedIdentities = new Set(
+      seedEntries.map(
+        (entry) =>
+          `${String(entry.rule)}|${String(entry.from)}|${String(entry.specifier)}|${String(entry.edgeKind)}|${String(entry.syntax)}`,
+      ),
+    )
+
+    expect(
+      entries.some(
+        (entry) => entry.from === 'packages/backend/src/services/__retired_boundary_fixture__.ts',
+      ),
+    ).toBe(false)
+    expect(
+      entries.every((entry) =>
+        seedIdentities.has(
+          `${String(entry.rule)}|${String(entry.from)}|${String(entry.specifier)}|${String(entry.edgeKind)}|${String(entry.syntax)}`,
+        ),
+      ),
+    ).toBe(true)
+    expect(baseline.inboundEdges).toBe(
+      entries.filter((entry) => entry.rule === 'R1-inbound-module-internals').length,
+    )
+    expect(baseline.outboundEdges).toBe(
+      entries.filter((entry) => entry.rule === 'R2-outbound-module-to-legacy').length,
+    )
   })
 
   test('the public-error mapper never copies private messages, causes or unknown detail keys', () => {
