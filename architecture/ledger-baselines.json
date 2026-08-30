@@ -69,8 +69,8 @@
       "id": "rfc294-public-surface-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
-      "baseline": 2,
-      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离，剩余两条继续按后续 consumer cutover 删除。"
+      "baseline": 1,
+      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离；RFC-347 又清偿一条，剩余一条继续按后续 consumer cutover 删除。"
     },
     {
       "id": "rfc294-god-surface-allowlist",
@@ -328,7 +328,7 @@
       "id": "rfc294-review-unconsumed-public-symbols",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 141,
+      "baseline": 136,
       "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。additive contract 允许先落，但必须同批入账并点名清偿波次；被消费后同批销账。只许降。"
     },
     {
