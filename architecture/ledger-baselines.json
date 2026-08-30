@@ -343,10 +343,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1086,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-344/345/347 已批准的 operation catalog、resource-catalog capability 与 identity bootstrap source 新增了 14 个受管 mutation entrypoint，本次逐项纳入同一 owner/control 分母。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -409,10 +406,7 @@
       "file": "architecture/facades.json",
       "symbol": "entries",
       "baseline": 381,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
-      "allowGrowth": {
-        "why": "RFC-345 为拆除 resource-catalog 反向依赖新增了 3 个具名 legacy compatibility facade/provider 文件；它们必须进入 exact facade census，不能隐藏在 unassigned 桶。"
-      }
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
@@ -440,10 +434,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 19402,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-344/345/347 的 approved source stack 新增 8 个 production 文件及其 top-level symbols；本次为这些 exact symbols 登记唯一 current/target owner，而非增加架构债。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -461,7 +452,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "ef59054c5a15109e42e058d9a3611e656a3a40f1",
-    "contentDigest": "sha256:9fbbeda9d8d6071d7014880498eb1ba6e3c597ec58b98b87af84c75f8ac6a517",
+    "contentDigest": "sha256:3c0a810c24604fc3a2f23afe96d8450ade62b46da26297f8295f51a5b65db1e2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
