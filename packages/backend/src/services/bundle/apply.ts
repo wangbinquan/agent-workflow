@@ -31,7 +31,7 @@ import {
   rollForwardLegacyResourcePackageArtifacts,
   type PreparedResourcePackageMutation,
   type ResourcePackageMutationArtifact,
-} from '@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'
+} from '@/modules/resource-catalog/public/operations'
 import { ConflictError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import {

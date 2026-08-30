@@ -2,7 +2,7 @@
 // modules/resource-catalog; legacy callers keep this stable import until their
 // consumer cohort moves to the module public contract.
 
-export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
+export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/public/operations'
 export {
   canEditAccess,
   canEditRow,
@@ -17,4 +17,4 @@ export {
   type AclRow,
   type ResourceAclActorProjection,
   type ResourceAclAudienceAuthority,
-} from '@/modules/resource-catalog/domain/resourceAccess'
+} from '@/modules/resource-catalog/public/operations'

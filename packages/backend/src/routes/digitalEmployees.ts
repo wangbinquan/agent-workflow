@@ -881,6 +881,7 @@ export function mountDigitalEmployeeRoutes(
     type: 'employee_definition',
     base: '/api/digital-employees',
     param: 'id',
+    identityPersistence: module.resourceAclIdentities.employeeDefinition,
     load: async (_db, key) => module.queries.getEmployeeAcl(key),
   })
 
@@ -891,6 +892,7 @@ export function mountDigitalEmployeeRoutes(
     base: '/api/digital-employee-tools',
     param: 'id',
     notFoundCode: 'employee-tool-not-found',
+    identityPersistence: module.resourceAclIdentities.employeeTool,
     load: async (_db, key) => {
       const row = module.queries.getToolAcl(key)
       return row === null || row.builtin ? null : row
@@ -901,6 +903,7 @@ export function mountDigitalEmployeeRoutes(
     base: '/api/digital-employee-job-templates',
     param: 'id',
     notFoundCode: 'employee-job-template-not-found',
+    identityPersistence: module.resourceAclIdentities.employeeJobTemplate,
     load: async (_db, key) => module.queries.getJobTemplateAcl(key),
   })
 }

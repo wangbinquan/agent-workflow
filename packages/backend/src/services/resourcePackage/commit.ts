@@ -34,7 +34,7 @@ import {
   findSqliteBuiltinResourceInTx,
   getSqlitePackageResourceRow,
   getSqlitePackageResourceRowInTx,
-} from '@/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
+} from '@/modules/resource-catalog/public/operations'
 import { asPackageResourceKind } from '@/modules/resource-catalog/public/types'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {

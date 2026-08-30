@@ -5,7 +5,7 @@
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/infrastructure/sqliteCatalogQuery'
+import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/public/operations'
 
 export interface IntentVisibleResource {
   resourceType: AclResourceType

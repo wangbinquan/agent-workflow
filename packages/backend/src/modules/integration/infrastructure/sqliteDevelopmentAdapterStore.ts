@@ -5,10 +5,11 @@
 // 的 published_revision——不存在半发布状态。name 走 owner+name 唯一索引，
 // 冲突翻译成 typed 409（RFC-223 惯例）。
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type {
+  DevelopmentAdapterAclIdentityPersistence,
   DevelopmentAdapterIdentityRow,
   DevelopmentAdapterStore,
 } from '@/modules/integration/application/developmentAdapterCommands'
@@ -34,8 +35,72 @@ function toIdentityRow(
   }
 }
 
+function createDevelopmentAdapterAclIdentity(
+  db: DbClient,
+): DevelopmentAdapterAclIdentityPersistence {
+  return {
+    getRevision(resourceId) {
+      return (
+        db
+          .select({ aclRevision: developmentAdapterDefinitions.aclRevision })
+          .from(developmentAdapterDefinitions)
+          .where(eq(developmentAdapterDefinitions.id, resourceId))
+          .get()?.aclRevision ?? 0
+      )
+    },
+    withMutation(resourceId, run) {
+      return dbTxSync<unknown>(db, (tx) => {
+        const row = tx
+          .select({
+            id: developmentAdapterDefinitions.id,
+            name: developmentAdapterDefinitions.name,
+            ownerUserId: developmentAdapterDefinitions.ownerUserId,
+            visibility: developmentAdapterDefinitions.visibility,
+            aclRevision: developmentAdapterDefinitions.aclRevision,
+          })
+          .from(developmentAdapterDefinitions)
+          .where(eq(developmentAdapterDefinitions.id, resourceId))
+          .get()
+        if (row === undefined) return undefined
+        return run({
+          current: row,
+          ownerNameIsUnique: true,
+          hasOwnerNameCollision(nextOwnerUserId) {
+            return (
+              tx
+                .select({ id: developmentAdapterDefinitions.id })
+                .from(developmentAdapterDefinitions)
+                .where(
+                  and(
+                    eq(developmentAdapterDefinitions.ownerUserId, nextOwnerUserId),
+                    eq(developmentAdapterDefinitions.name, row.name),
+                    ne(developmentAdapterDefinitions.id, resourceId),
+                  ),
+                )
+                .get() !== undefined
+            )
+          },
+          update(input) {
+            tx.update(developmentAdapterDefinitions)
+              .set({
+                ownerUserId: input.ownerUserId,
+                visibility: input.visibility,
+                aclRevision: input.aclRevision,
+                updatedAt: input.updatedAt,
+              })
+              .where(eq(developmentAdapterDefinitions.id, resourceId))
+              .run()
+          },
+        })
+      }) as ReturnType<typeof run> | undefined
+    },
+  }
+}
+
 export function createSqliteDevelopmentAdapterStore(db: DbClient): DevelopmentAdapterStore {
   return {
+    resourceAclIdentity: createDevelopmentAdapterAclIdentity(db),
+
     create(input) {
       const id = ulid()
       try {

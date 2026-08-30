@@ -14,11 +14,14 @@ import type {
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
-import type { AclRow } from '@/modules/resource-catalog/domain/resourceAccess'
-import { updateResourceAcl as updateResourceAclComposition } from '@/modules/resource-catalog/composition/resourceAcl'
+import {
+  updateResourceAcl as updateResourceAclComposition,
+  type AclRow,
+  type ResourceAclIdentityPersistence,
+} from '@/modules/resource-catalog/public/operations'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
-export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
+export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/public/operations'
 export {
   DEFAULT_USER_RESOURCE_VISIBILITY,
   assertInitialResourceOwner,
@@ -26,7 +29,7 @@ export {
   initialBuiltinResourceAcl,
   initialPrivateResourceAcl,
   resolveTaskRole,
-} from '@/modules/resource-catalog/application/resourceDefaults'
+} from '@/modules/resource-catalog/public/operations'
 export {
   canEditResource,
   canEditResourceInTx,
@@ -41,8 +44,8 @@ export {
   requireResourceView,
   resolveResourceAccessFor,
   resolveResourceAccessForInTx,
-} from '@/modules/resource-catalog/composition/resourceAcl'
-export { getResourceAcl } from '@/modules/resource-catalog/composition/resourceAcl'
+} from '@/modules/resource-catalog/public/operations'
+export { getResourceAcl } from '@/modules/resource-catalog/public/operations'
 export {
   canEditAccess,
   canEditRow,
@@ -61,7 +64,7 @@ export {
   type DisclosedRefs,
   type ResourceAclActorProjection,
   type ResourceAclAudienceAuthority,
-} from '@/modules/resource-catalog/domain/resourceAccess'
+} from '@/modules/resource-catalog/public/operations'
 export {
   findOwnedAclResourceIdsByName,
   getAclResourceAccessRow,
@@ -76,7 +79,7 @@ export {
   listOwnedAclResourceNames,
   loadAclResourceNamesByIds,
   type AclResourceIdentitySnapshot,
-} from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
+} from '@/modules/resource-catalog/public/operations'
 export {
   grantsOfResourceWhere,
   grantsOfUserWhere,
@@ -92,7 +95,9 @@ export {
   loadGrantLevelsForUser,
   visibleRowsCondition,
   type AclColumnRef,
-} from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+} from '@/modules/resource-catalog/public/operations'
+
+export type { ResourceAclIdentityPersistence } from '@/modules/resource-catalog/public/operations'
 
 /**
  * Legacy facade wrapper. Resource persistence is bound by module composition;
@@ -105,6 +110,7 @@ export function updateResourceAcl(
   row: AclRow,
   body: UpdateResourceAclBody,
   options: {
+    readonly identityPersistence?: ResourceAclIdentityPersistence
     readonly updatedAt?: number
     readonly afterWriteInTx?: (
       tx: DbTxSync,

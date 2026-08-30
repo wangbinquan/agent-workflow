@@ -17,10 +17,15 @@ import {
   resolveResourceAccess,
   type AclRow,
 } from '../domain/resourceAccess'
-import type { ResourceAclMutationPort, ResourceAclReadPort } from './ports/resourceAclPersistence'
+import type {
+  ResourceAclIdentityPersistence,
+  ResourceAclMutationPort,
+  ResourceAclReadPort,
+} from './ports/resourceAclPersistence'
 import type { ResourceAuthorizationApplication } from './resourceAuthorization'
 
 export interface ResourceAclWriteEffects {
+  readonly identityPersistence?: ResourceAclIdentityPersistence
   readonly afterWriteInTx?: (
     tx: DbTxSync,
     change: {
@@ -53,9 +58,10 @@ export function createResourceAclApplication({
     actor: Actor,
     type: AclResourceType,
     row: AclRow,
+    identityPersistence?: ResourceAclIdentityPersistence,
   ): Promise<ResourceAcl> {
     const [aclRevision, grantRows] = await Promise.all([
-      read.getRevision(db, type, row.id),
+      read.getRevision(db, type, row.id, identityPersistence),
       read.listGrants(db, type, row.id),
     ])
     const wantedIds = [
@@ -102,84 +108,53 @@ export function createResourceAclApplication({
     if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
     const now = options.updatedAt ?? Date.now()
 
-    const updatedRow = mutation.withMutation(db, type, row.id, (context) => {
-      const current = context.current
-      if (!authorization.canViewResourceInTx(context.tx, actor, type, current)) {
-        throw new NotFoundError('not-found', `${type} not found`)
-      }
-      if (body.expectedResourceId !== row.id) {
-        throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
-      }
-      if (current.aclRevision !== body.expectedAclRevision) {
-        throw new ConflictError(
-          'acl-revision-conflict',
-          `acl revision is ${current.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
-        )
-      }
-      if (!hasResourceAclBypass(actor) && current.ownerUserId !== actor.user.id) {
-        throw new ForbiddenError(
-          'forbidden',
-          `only the ${type} owner or an actor with resource-acl:bypass can modify it`,
-        )
-      }
-
-      if (referenced.size > 0) {
-        const active = context.activeUserIds([...referenced])
-        const invalid = [...referenced].filter(
-          (userId) => userId === SYSTEM_USER_ID || !active.has(userId),
-        )
-        if (invalid.length > 0) {
-          throw new ValidationError('acl-user-invalid', 'referenced user(s) not active', {
-            userIds: invalid,
-          })
+    const updatedRow = mutation.withMutation(
+      db,
+      type,
+      row.id,
+      options.identityPersistence,
+      (context) => {
+        const current = context.current
+        if (!authorization.canViewResourceInTx(context.tx, actor, type, current)) {
+          throw new NotFoundError('not-found', `${type} not found`)
         }
-      }
+        if (body.expectedResourceId !== row.id) {
+          throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
+        }
+        if (current.aclRevision !== body.expectedAclRevision) {
+          throw new ConflictError(
+            'acl-revision-conflict',
+            `acl revision is ${current.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
+          )
+        }
+        if (!hasResourceAclBypass(actor) && current.ownerUserId !== actor.user.id) {
+          throw new ForbiddenError(
+            'forbidden',
+            `only the ${type} owner or an actor with resource-acl:bypass can modify it`,
+          )
+        }
 
-      const previousOwner = current.ownerUserId
-      const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : previousOwner
-      const nextVisibility: ResourceVisibility =
-        body.visibility !== undefined ? body.visibility : (current.visibility ?? 'public')
+        if (referenced.size > 0) {
+          const active = context.activeUserIds([...referenced])
+          const invalid = [...referenced].filter(
+            (userId) => userId === SYSTEM_USER_ID || !active.has(userId),
+          )
+          if (invalid.length > 0) {
+            throw new ValidationError('acl-user-invalid', 'referenced user(s) not active', {
+              userIds: invalid,
+            })
+          }
+        }
 
-      if (
-        nextOwner !== previousOwner &&
-        nextOwner !== null &&
-        context.hasOwnerNameCollision(nextOwner)
-      ) {
-        throw new ConflictError(
-          'resource-name-conflict',
-          `${type} '${current.name}' already exists for the target owner`,
-          { resourceType: type, name: current.name, ownerUserId: nextOwner },
-        )
-      }
+        const previousOwner = current.ownerUserId
+        const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : previousOwner
+        const nextVisibility: ResourceVisibility =
+          body.visibility !== undefined ? body.visibility : (current.visibility ?? 'public')
 
-      let nextGrants: Map<string, ResourceGrantLevel>
-      if (body.grants !== undefined) {
-        nextGrants = new Map(body.grants.map((grant) => [grant.userId, grant.level] as const))
-      } else {
-        nextGrants = mutation.listGrantsInTx(context.tx, type, row.id)
-      }
-      if (
-        nextOwner !== previousOwner &&
-        previousOwner !== null &&
-        previousOwner !== SYSTEM_USER_ID &&
-        !nextGrants.has(previousOwner)
-      ) {
-        nextGrants.set(previousOwner, 'read')
-      }
-      if (nextOwner !== null) nextGrants.delete(nextOwner)
-
-      try {
-        context.updateAclRow({
-          ownerUserId: nextOwner,
-          visibility: nextVisibility,
-          aclRevision: current.aclRevision + 1,
-          updatedAt: now,
-        })
-      } catch (error) {
         if (
           nextOwner !== previousOwner &&
-          context.ownerNameIsUnique &&
-          mutation.isOwnerNameConstraintError(error)
+          nextOwner !== null &&
+          context.hasOwnerNameCollision(nextOwner)
         ) {
           throw new ConflictError(
             'resource-name-conflict',
@@ -187,22 +162,59 @@ export function createResourceAclApplication({
             { resourceType: type, name: current.name, ownerUserId: nextOwner },
           )
         }
-        throw error
-      }
-      context.replaceGrants(nextGrants, actor.user.id, now)
-      options.afterWriteInTx?.(context.tx, {
-        resourceId: row.id,
-        ownerUserId: nextOwner,
-        visibility: nextVisibility,
-        grantedUserIds: new Set(nextGrants.keys()),
-        now,
-      })
-      return { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }
-    })
+
+        let nextGrants: Map<string, ResourceGrantLevel>
+        if (body.grants !== undefined) {
+          nextGrants = new Map(body.grants.map((grant) => [grant.userId, grant.level] as const))
+        } else {
+          nextGrants = mutation.listGrantsInTx(context.tx, type, row.id)
+        }
+        if (
+          nextOwner !== previousOwner &&
+          previousOwner !== null &&
+          previousOwner !== SYSTEM_USER_ID &&
+          !nextGrants.has(previousOwner)
+        ) {
+          nextGrants.set(previousOwner, 'read')
+        }
+        if (nextOwner !== null) nextGrants.delete(nextOwner)
+
+        try {
+          context.updateAclRow({
+            ownerUserId: nextOwner,
+            visibility: nextVisibility,
+            aclRevision: current.aclRevision + 1,
+            updatedAt: now,
+          })
+        } catch (error) {
+          if (
+            nextOwner !== previousOwner &&
+            context.ownerNameIsUnique &&
+            mutation.isOwnerNameConstraintError(error)
+          ) {
+            throw new ConflictError(
+              'resource-name-conflict',
+              `${type} '${current.name}' already exists for the target owner`,
+              { resourceType: type, name: current.name, ownerUserId: nextOwner },
+            )
+          }
+          throw error
+        }
+        context.replaceGrants(nextGrants, actor.user.id, now)
+        options.afterWriteInTx?.(context.tx, {
+          resourceId: row.id,
+          ownerUserId: nextOwner,
+          visibility: nextVisibility,
+          grantedUserIds: new Set(nextGrants.keys()),
+          now,
+        })
+        return { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }
+      },
+    )
 
     if (updatedRow === undefined) throw new NotFoundError('not-found', `${type} not found`)
     options.afterCommit?.(db)
-    return getResourceAcl(db, actor, type, updatedRow)
+    return getResourceAcl(db, actor, type, updatedRow, options.identityPersistence)
   }
 
   return { getResourceAcl, updateResourceAcl }

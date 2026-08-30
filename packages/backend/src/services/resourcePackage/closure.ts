@@ -37,7 +37,7 @@ import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import {
   listSqlitePackageResourceRowsByIds,
   listSqlitePackageResourceRowsByNames,
-} from '@/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
+} from '@/modules/resource-catalog/public/operations'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { ValidationError } from '@/util/errors'
 

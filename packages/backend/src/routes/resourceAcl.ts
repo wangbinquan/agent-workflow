@@ -21,6 +21,7 @@ import {
   getResourceAcl,
   updateResourceAcl,
   type AclRow,
+  type ResourceAclIdentityPersistence,
 } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -49,6 +50,8 @@ export interface AclEndpointConfig {
   param: 'id'
   /** Load the row by the route key; null when absent. */
   load: (db: DbClient, key: string) => Promise<AclRow | null>
+  /** Aggregate-owner persistence for ACL identities outside resource-catalog. */
+  identityPersistence?: ResourceAclIdentityPersistence
   /**
    * RFC-330 —— 404 码。默认 `${type}-not-found`（13 类沿用）；数字员工域的工具 / 模版传
    * 自己既有的连字符码（`employee-tool-not-found` 等），让同一资源在所有路由上只有一个
@@ -160,7 +163,7 @@ export function mountAclEndpoints(
       if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
         throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
       }
-      return c.json(await getResourceAcl(deps.db, actor, cfg.type, row))
+      return c.json(await getResourceAcl(deps.db, actor, cfg.type, row, cfg.identityPersistence))
     },
   )
 
@@ -201,6 +204,7 @@ export function mountAclEndpoints(
         return updateResourceAcl(deps.db, actor, cfg.type, fresh, parsed.data, {
           updatedAt,
           afterWriteInTx: cfg.afterWriteInTx,
+          identityPersistence: cfg.identityPersistence,
         })
       }
       const result =

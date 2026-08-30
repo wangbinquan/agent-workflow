@@ -3,7 +3,14 @@ import { and, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type { AclRow } from '../domain/resourceAccess'
-import { SQLITE_ACL_TABLES } from './sqliteAclRegistry'
+import { isSqliteAclResourceType, SQLITE_ACL_TABLES } from './sqliteAclRegistry'
+
+function sqliteAclTable(type: AclResourceType) {
+  if (!isSqliteAclResourceType(type)) {
+    throw new Error(`ACL identity persistence is required for ${type}`)
+  }
+  return SQLITE_ACL_TABLES[type]
+}
 
 export interface AclResourceIdentitySnapshot extends AclRow {
   readonly name: string
@@ -16,7 +23,7 @@ export async function findOwnedAclResourceIdsByName(
   ownerUserId: string,
   name: string,
 ): Promise<string[]> {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   const rows = await db
     .select({ id: table.id })
     .from(table)
@@ -30,7 +37,7 @@ export async function loadAclResourceNamesByIds(
   ids: readonly string[],
 ): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map()
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   const rows = await db
     .select({ id: table.id, name: table.name })
     .from(table)
@@ -43,7 +50,7 @@ export async function getAclResourceOwner(
   type: AclResourceType,
   id: string,
 ): Promise<string | null | undefined> {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   const rows = await db
     .select({ ownerUserId: table.ownerUserId })
     .from(table)
@@ -57,7 +64,7 @@ export function getAclResourceOwnerInTx(
   type: AclResourceType,
   id: string,
 ): string | null | undefined {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   return tx.select({ ownerUserId: table.ownerUserId }).from(table).where(eq(table.id, id)).get()
     ?.ownerUserId
 }
@@ -67,7 +74,7 @@ export async function listOwnedAclResourceNames(
   type: AclResourceType,
   ownerUserId: string,
 ): Promise<string[]> {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   const rows = await db
     .select({ name: table.name })
     .from(table)
@@ -80,7 +87,7 @@ export async function getAclResourceAccessRow(
   type: AclResourceType,
   id: string,
 ): Promise<AclRow | null> {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   const rows = await db
     .select({
       id: table.id,
@@ -98,7 +105,7 @@ export function getAclResourceAccessRowInTx(
   type: AclResourceType,
   id: string,
 ): AclRow | null {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   return (
     tx
       .select({
@@ -117,7 +124,7 @@ export function getAclResourceIdentityRowInTx(
   type: AclResourceType,
   id: string,
 ): AclResourceIdentitySnapshot | null {
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   return (
     (tx
       .select({
@@ -139,7 +146,7 @@ export function listAclResourceIdentityRowsByIdsInTx(
   ids: readonly string[],
 ): AclResourceIdentitySnapshot[] {
   if (ids.length === 0) return []
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   return tx
     .select({
       id: table.id,
@@ -159,7 +166,7 @@ export async function listAclResourceIdentityRowsByIds(
   ids: readonly string[],
 ): Promise<AclResourceIdentitySnapshot[]> {
   if (ids.length === 0) return []
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   return (await db
     .select({
       id: table.id,
@@ -178,7 +185,7 @@ export function listAclResourceIdentityRowsByNamesInTx(
   names: readonly string[],
 ): AclResourceIdentitySnapshot[] {
   if (names.length === 0) return []
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   return tx
     .select({
       id: table.id,
@@ -198,7 +205,7 @@ export async function listAclResourceIdentityRowsByNames(
   names: readonly string[],
 ): Promise<AclResourceIdentitySnapshot[]> {
   if (names.length === 0) return []
-  const table = SQLITE_ACL_TABLES[type]
+  const table = sqliteAclTable(type)
   return (await db
     .select({
       id: table.id,

@@ -18,7 +18,7 @@ import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import {
   getSqlitePackageResourceRow,
   listSqlitePackageResourceRowsByIds,
-} from '@/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
+} from '@/modules/resource-catalog/public/operations'
 import { encodeZip, type ZipFile } from '@/util/zip'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {

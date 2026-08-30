@@ -28,7 +28,34 @@ export interface DevelopmentAdapterIdentityRow {
   readonly archivedAt: number | null
 }
 
+export interface DevelopmentAdapterAclIdentityMutation {
+  readonly current: {
+    readonly id: string
+    readonly name: string
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+    readonly aclRevision: number
+  }
+  readonly ownerNameIsUnique: true
+  hasOwnerNameCollision(nextOwnerUserId: string): boolean
+  update(input: {
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+    readonly aclRevision: number
+    readonly updatedAt: number
+  }): void
+}
+
+export interface DevelopmentAdapterAclIdentityPersistence {
+  getRevision(resourceId: string): number
+  withMutation<T>(
+    resourceId: string,
+    run: (mutation: DevelopmentAdapterAclIdentityMutation) => T,
+  ): T | undefined
+}
+
 export interface DevelopmentAdapterStore {
+  readonly resourceAclIdentity: DevelopmentAdapterAclIdentityPersistence
   create(input: {
     readonly name: string
     readonly purpose: DevelopmentAdapterContent['purpose']

@@ -358,6 +358,9 @@ export type ComposedAppDeps = RuntimeComposedAppDeps &
     readonly developmentAutomation: DevelopmentAutomationModule
     readonly developmentActivityOperations: DevelopmentActivityOperations
     readonly developmentActivityWorker: DevelopmentActivityWorkerBinding
+    readonly developmentAdapterAclIdentity: ReturnType<
+      typeof composeDevelopmentAdapterConfigOperations
+    >['resourceAclIdentity']
     readonly developmentConfigOperations: DevelopmentConfigOperations
     readonly developmentMissionOperations: DevelopmentMissionOperations
   }
@@ -575,9 +578,12 @@ export function createApp(deps: AppDeps): Hono {
   }
   const appHome = runtimeDeps.appHome ?? dirname(runtimeDeps.configPath)
   const repositoryBootstrap = composeRepositoryBootstrap(runtimeDeps, appHome)
+  const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperations(
+    runtimeDeps.db,
+  )
   const developmentConfigOperations = composeDevelopmentConfigOperations(
     runtimeDeps.db,
-    composeDevelopmentAdapterConfigOperations(runtimeDeps.db),
+    developmentAdapterConfigOperations,
   )
   const developmentActivityWorker = createDevelopmentActivityWorkerBinding()
   const developmentAutomation =
@@ -598,6 +604,7 @@ export function createApp(deps: AppDeps): Hono {
     developmentAutomation,
     developmentActivityOperations: developmentActivityWorker.operations,
     developmentActivityWorker,
+    developmentAdapterAclIdentity: developmentAdapterConfigOperations.resourceAclIdentity,
     developmentConfigOperations,
     developmentMissionOperations,
   }
@@ -952,7 +959,13 @@ export function mountApiRoutes(
     developmentActivityOperations,
     identityAccess.contexts,
   ) // RFC-310 Digital Employee OS / RFC-344 activity operation
-  mountDevelopmentConfigRoutes(app, deps, developmentConfigOperations, identityAccess.contexts) // RFC-310 PR-1B / RFC-344
+  mountDevelopmentConfigRoutes(
+    app,
+    deps,
+    developmentConfigOperations,
+    identityAccess.contexts,
+    deps.developmentAdapterAclIdentity,
+  ) // RFC-310 PR-1B / RFC-344
   mountDevelopmentMissionRoutes(app, developmentMissionOperations, identityAccess.contexts) // RFC-310 legacy drain / RFC-344
   mountMissionInputUploadRoutes(app, deps) // RFC-310 PR-3
   mountWebhookTriggerRoutes(app, deps) // RFC-257 T8

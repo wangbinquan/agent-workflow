@@ -8,6 +8,46 @@ import type { DbClient } from '@/db/client'
 import type { DbTxSync, NotPromise } from '@/db/txSync'
 import type { AclRow, ResourceAclActorProjection } from '../../domain/resourceAccess'
 
+/** ACL identity tables whose aggregate writer remains outside resource-catalog. */
+export type ForeignResourceAclType = Extract<
+  AclResourceType,
+  'development_adapter' | 'employee_definition' | 'employee_tool' | 'employee_job_template'
+>
+
+export interface ResourceAclIdentityMutationRow {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly aclRevision: number
+}
+
+export interface ResourceAclIdentityMutation {
+  readonly current: ResourceAclIdentityMutationRow
+  readonly ownerNameIsUnique: boolean
+  hasOwnerNameCollision(nextOwnerUserId: string): boolean
+  update(input: {
+    readonly ownerUserId: string | null
+    readonly visibility: ResourceVisibility
+    readonly aclRevision: number
+    readonly updatedAt: number
+  }): void
+}
+
+/**
+ * Consumer-owned identity persistence seam for ACL resources whose aggregate
+ * table belongs to another bounded context. The provider owns the synchronous
+ * transaction and never exposes its SQLite handle or table descriptor.
+ */
+export interface ResourceAclIdentityPersistence {
+  readonly type: ForeignResourceAclType
+  getRevision(resourceId: string): number
+  withMutation<T>(
+    resourceId: string,
+    run: (mutation: ResourceAclIdentityMutation) => T,
+  ): T | undefined
+}
+
 /** ACL grant reads needed by application authorization policy. */
 export interface ResourceGrantReadPort {
   listGrantedResourceIds(
@@ -37,7 +77,12 @@ export interface ResourceGrantReadPort {
 
 /** Read model used to render one ACL response. */
 export interface ResourceAclReadPort {
-  getRevision(db: DbClient, type: AclResourceType, resourceId: string): Promise<number>
+  getRevision(
+    db: DbClient,
+    type: AclResourceType,
+    resourceId: string,
+    identityPersistence?: ResourceAclIdentityPersistence,
+  ): Promise<number>
   listGrants(
     db: DbClient,
     type: AclResourceType,
@@ -79,6 +124,7 @@ export interface ResourceAclMutationPort {
     db: DbClient,
     type: AclResourceType,
     resourceId: string,
+    identityPersistence: ResourceAclIdentityPersistence | undefined,
     run: (context: ResourceAclMutationContext) => NotPromise<T>,
   ): T | undefined
   listGrantsInTx(

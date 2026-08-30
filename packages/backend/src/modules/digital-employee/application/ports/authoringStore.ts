@@ -144,7 +144,41 @@ export interface ExecutionPolicyRevisionRecord {
   readonly publishedBy: string | null
 }
 
+export interface DigitalEmployeeAclIdentityMutationRow {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: 'private' | 'public'
+  readonly aclRevision: number
+}
+
+export interface DigitalEmployeeAclIdentityMutation {
+  readonly current: DigitalEmployeeAclIdentityMutationRow
+  readonly ownerNameIsUnique: boolean
+  hasOwnerNameCollision(nextOwnerUserId: string): boolean
+  update(input: {
+    readonly ownerUserId: string | null
+    readonly visibility: 'private' | 'public'
+    readonly aclRevision: number
+    readonly updatedAt: number
+  }): void
+}
+
+export interface DigitalEmployeeAclIdentityPersistence {
+  getRevision(resourceId: string): number
+  withMutation<T>(
+    resourceId: string,
+    run: (mutation: DigitalEmployeeAclIdentityMutation) => T,
+  ): T | undefined
+}
+
 export interface DigitalEmployeeAuthoringStore {
+  readonly resourceAclIdentities: {
+    readonly employeeDefinition: DigitalEmployeeAclIdentityPersistence
+    readonly employeeTool: DigitalEmployeeAclIdentityPersistence
+    readonly employeeJobTemplate: DigitalEmployeeAclIdentityPersistence
+  }
+
   ensureTypePackage(input: TypePackageRecord): void
   listTypePackageRegistrations(): TypePackageRegistrationRecord[]
   /**

@@ -69,6 +69,7 @@ import type {
 import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/types'
 import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
 import type { DigitalEmployeeMaintenanceCommands } from './public/commands'
+import { createDigitalEmployeeResourceCatalogAclAdapters } from './application/adapters/resource-catalog-acl-adapter'
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
@@ -265,6 +266,7 @@ export interface DigitalEmployeeQueries {
 }
 
 export interface DigitalEmployeeModule {
+  readonly resourceAclIdentities: ReturnType<typeof createDigitalEmployeeResourceCatalogAclAdapters>
   readonly commands: DigitalEmployeeCommands
   readonly queries: DigitalEmployeeQueries
   readonly maintenance: {
@@ -551,6 +553,7 @@ export function composeDigitalEmployee(
     options.typePackageDriftPolicy === 'draft-overlay'
       ? withTypePackageDraftOverlay(persistedStore)
       : persistedStore
+  const resourceAclIdentities = createDigitalEmployeeResourceCatalogAclAdapters(store)
   const inputUploadStore = createEmployeeInputUploadStore(options.db)
   const inputArtifacts =
     options.inputArtifacts ??
@@ -681,6 +684,7 @@ export function composeDigitalEmployee(
   }
 
   return {
+    resourceAclIdentities,
     maintenance: {
       settleAutomaticUpgrades: () => service.settleAutomaticUpgrades(),
     },

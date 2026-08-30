@@ -8,6 +8,7 @@ import {
   publishDevelopmentAdapter,
   reviseDevelopmentAdapterDraft,
 } from '../application/developmentAdapterCommands'
+import { createDevelopmentAdapterResourceCatalogAclAdapter } from '../application/adapters/resource-catalog-acl-adapter'
 import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDevelopmentAdapterStore'
 import {
   assertNameUnchangedForEditor,
@@ -62,6 +63,7 @@ export function composeDevelopmentAdapterConfigOperations(db: DbClient) {
   const now = () => Date.now()
   return Object.freeze({
     kind: 'development-adapter' as const,
+    resourceAclIdentity: createDevelopmentAdapterResourceCatalogAclAdapter(store),
     async list(actor: Actor) {
       return (await filterVisibleRows(db, actor, 'development_adapter', store.list())).map(
         (row) => ({

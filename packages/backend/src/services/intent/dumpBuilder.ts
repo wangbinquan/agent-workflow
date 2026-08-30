@@ -52,7 +52,7 @@ import { getPlugin } from '@/services/plugin'
 import { listSkillFiles, readSkillContent, readSkillFile } from '@/services/skill'
 import { getWorkflow } from '@/services/workflow'
 import { getWorkgroupById } from '@/services/workgroups'
-import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/infrastructure/sqliteCatalogQuery'
+import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/public/operations'
 import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'
 import type { SystemAgentSeedFile } from '@/services/systemAgentRun'
 import {

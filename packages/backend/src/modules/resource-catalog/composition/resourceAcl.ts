@@ -38,14 +38,15 @@ const grantReads: ResourceGrantReadPort = {
 }
 
 const aclReads: ResourceAclReadPort = {
-  getRevision: (db, type, resourceId) => getSqliteResourceAclRevision(db, type, resourceId),
+  getRevision: (db, type, resourceId, identityPersistence) =>
+    getSqliteResourceAclRevision(db, type, resourceId, identityPersistence),
   listGrants: (db, type, resourceId) => listResourceGrants(db, type, resourceId),
   loadUsers: (db, userIds) => loadAclUsers(db, userIds),
 }
 
 const aclMutations: ResourceAclMutationPort = {
-  withMutation: (db, type, resourceId, run) =>
-    withSqliteResourceAclMutation(db, type, resourceId, run),
+  withMutation: (db, type, resourceId, identityPersistence, run) =>
+    withSqliteResourceAclMutation(db, type, resourceId, identityPersistence, run),
   listGrantsInTx: (tx, type, resourceId) => listResourceGrantsInTx(tx, type, resourceId),
   isOwnerNameConstraintError: isSqliteOwnerNameConstraintError,
 }

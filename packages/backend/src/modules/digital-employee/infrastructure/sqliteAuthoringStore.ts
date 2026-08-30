@@ -1,6 +1,7 @@
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull, ne } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   employeeDefinitionRevisions,
   employeeDefinitions,
@@ -27,6 +28,7 @@ import {
 } from '../domain/model'
 import type {
   DigitalEmployeeAuthoringStore,
+  DigitalEmployeeAclIdentityPersistence,
   EmployeeDefinitionRecord,
   EmployeeDefinitionRevisionRecord,
   JobTemplateRecord,
@@ -207,10 +209,192 @@ function getToolRevisionRow(db: DbClient, ref: ExactResourceRef) {
     .get()
 }
 
+function employeeDefinitionAclIdentity(db: DbClient): DigitalEmployeeAclIdentityPersistence {
+  return {
+    getRevision(resourceId) {
+      return (
+        db
+          .select({ aclRevision: employeeDefinitions.aclRevision })
+          .from(employeeDefinitions)
+          .where(eq(employeeDefinitions.id, resourceId))
+          .get()?.aclRevision ?? 0
+      )
+    },
+    withMutation(resourceId, run) {
+      return dbTxSync<unknown>(db, (tx) => {
+        const row = tx
+          .select({
+            id: employeeDefinitions.id,
+            name: employeeDefinitions.name,
+            ownerUserId: employeeDefinitions.ownerUserId,
+            visibility: employeeDefinitions.visibility,
+            aclRevision: employeeDefinitions.aclRevision,
+          })
+          .from(employeeDefinitions)
+          .where(eq(employeeDefinitions.id, resourceId))
+          .get()
+        if (row === undefined) return undefined
+        return run({
+          current: row,
+          ownerNameIsUnique: true,
+          hasOwnerNameCollision(nextOwnerUserId) {
+            return (
+              tx
+                .select({ id: employeeDefinitions.id })
+                .from(employeeDefinitions)
+                .where(
+                  and(
+                    eq(employeeDefinitions.ownerUserId, nextOwnerUserId),
+                    eq(employeeDefinitions.name, row.name),
+                    ne(employeeDefinitions.id, resourceId),
+                  ),
+                )
+                .get() !== undefined
+            )
+          },
+          update(input) {
+            tx.update(employeeDefinitions)
+              .set({
+                ownerUserId: input.ownerUserId,
+                visibility: input.visibility,
+                aclRevision: input.aclRevision,
+                updatedAt: input.updatedAt,
+              })
+              .where(eq(employeeDefinitions.id, resourceId))
+              .run()
+          },
+        })
+      }) as ReturnType<typeof run> | undefined
+    },
+  }
+}
+
+function employeeToolAclIdentity(db: DbClient): DigitalEmployeeAclIdentityPersistence {
+  return {
+    getRevision(resourceId) {
+      return (
+        db
+          .select({ aclRevision: employeeToolRegistrations.aclRevision })
+          .from(employeeToolRegistrations)
+          .where(eq(employeeToolRegistrations.id, resourceId))
+          .get()?.aclRevision ?? 0
+      )
+    },
+    withMutation(resourceId, run) {
+      return dbTxSync<unknown>(db, (tx) => {
+        const row = tx
+          .select({
+            id: employeeToolRegistrations.id,
+            name: employeeToolRegistrations.name,
+            ownerUserId: employeeToolRegistrations.ownerUserId,
+            visibility: employeeToolRegistrations.visibility,
+            aclRevision: employeeToolRegistrations.aclRevision,
+          })
+          .from(employeeToolRegistrations)
+          .where(eq(employeeToolRegistrations.id, resourceId))
+          .get()
+        if (row === undefined) return undefined
+        return run({
+          current: row,
+          ownerNameIsUnique: false,
+          hasOwnerNameCollision: () => false,
+          update(input) {
+            tx.update(employeeToolRegistrations)
+              .set({
+                ownerUserId: input.ownerUserId,
+                visibility: input.visibility,
+                aclRevision: input.aclRevision,
+                updatedAt: input.updatedAt,
+              })
+              .where(eq(employeeToolRegistrations.id, resourceId))
+              .run()
+          },
+        })
+      }) as ReturnType<typeof run> | undefined
+    },
+  }
+}
+
+function employeeJobTemplateAclIdentity(db: DbClient): DigitalEmployeeAclIdentityPersistence {
+  return {
+    getRevision(resourceId) {
+      return (
+        db
+          .select({ aclRevision: employeeJobTemplates.aclRevision })
+          .from(employeeJobTemplates)
+          .where(eq(employeeJobTemplates.id, resourceId))
+          .get()?.aclRevision ?? 0
+      )
+    },
+    withMutation(resourceId, run) {
+      return dbTxSync<unknown>(db, (tx) => {
+        const row = tx
+          .select({
+            id: employeeJobTemplates.id,
+            name: employeeJobTemplates.name,
+            ownerUserId: employeeJobTemplates.ownerUserId,
+            visibility: employeeJobTemplates.visibility,
+            aclRevision: employeeJobTemplates.aclRevision,
+            typeId: employeeJobTemplates.typeId,
+            typeRevision: employeeJobTemplates.typeRevision,
+          })
+          .from(employeeJobTemplates)
+          .where(eq(employeeJobTemplates.id, resourceId))
+          .get()
+        if (row === undefined) return undefined
+        return run({
+          current: {
+            id: row.id,
+            name: row.name,
+            ownerUserId: row.ownerUserId,
+            visibility: row.visibility,
+            aclRevision: row.aclRevision,
+          },
+          ownerNameIsUnique: true,
+          hasOwnerNameCollision(nextOwnerUserId) {
+            return (
+              tx
+                .select({ id: employeeJobTemplates.id })
+                .from(employeeJobTemplates)
+                .where(
+                  and(
+                    eq(employeeJobTemplates.ownerUserId, nextOwnerUserId),
+                    eq(employeeJobTemplates.typeId, row.typeId),
+                    eq(employeeJobTemplates.typeRevision, row.typeRevision),
+                    eq(employeeJobTemplates.name, row.name),
+                    ne(employeeJobTemplates.id, resourceId),
+                  ),
+                )
+                .get() !== undefined
+            )
+          },
+          update(input) {
+            tx.update(employeeJobTemplates)
+              .set({
+                ownerUserId: input.ownerUserId,
+                visibility: input.visibility,
+                aclRevision: input.aclRevision,
+                updatedAt: input.updatedAt,
+              })
+              .where(eq(employeeJobTemplates.id, resourceId))
+              .run()
+          },
+        })
+      }) as ReturnType<typeof run> | undefined
+    },
+  }
+}
+
 export function createSqliteDigitalEmployeeAuthoringStore(
   db: DbClient,
 ): DigitalEmployeeAuthoringStore {
   return {
+    resourceAclIdentities: {
+      employeeDefinition: employeeDefinitionAclIdentity(db),
+      employeeTool: employeeToolAclIdentity(db),
+      employeeJobTemplate: employeeJobTemplateAclIdentity(db),
+    },
+
     ensureTypePackage(input) {
       const existing = db
         .select()

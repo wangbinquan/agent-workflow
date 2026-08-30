@@ -20,6 +20,7 @@ import {
   developmentEmployeePlaybookInputSchema,
 } from '@/modules/development-automation/public/operations'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
+import type { ResourceAclIdentityPersistence } from '@/services/resourceAcl'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { NotFoundError } from '@/util/errors'
@@ -71,6 +72,7 @@ function mountConfigResource(
   binding: ResourceHttpBinding,
   operations: DevelopmentConfigResourceOperations,
   contexts: DirectAuthenticatedAuthorityFactory,
+  identityPersistence?: ResourceAclIdentityPersistence,
 ): void {
   const descriptors = createDevelopmentConfigResourceDescriptors(operations)
   const context = (c: Parameters<typeof actorOf>[0]) =>
@@ -140,6 +142,7 @@ function mountConfigResource(
     base: binding.base,
     param: 'id',
     load: (_db, id) => operations.loadAclRow(id),
+    ...(identityPersistence === undefined ? {} : { identityPersistence }),
   })
 }
 
@@ -148,9 +151,19 @@ export function mountDevelopmentConfigRoutes(
   deps: { readonly db: DbClient },
   operations: DevelopmentConfigOperations,
   contexts: DirectAuthenticatedAuthorityFactory,
+  developmentAdapterAclIdentity: ResourceAclIdentityPersistence,
 ): void {
   for (const binding of RESOURCE_BINDINGS) {
-    mountConfigResource(app, deps, binding, operations.resources[binding.kind], contexts)
+    mountConfigResource(
+      app,
+      deps,
+      binding,
+      operations.resources[binding.kind],
+      contexts,
+      binding.aclType === developmentAdapterAclIdentity.type
+        ? developmentAdapterAclIdentity
+        : undefined,
+    )
   }
   const descriptors = createDevelopmentConfigSupplementalDescriptors(operations)
   const context = (c: Parameters<typeof actorOf>[0]) =>

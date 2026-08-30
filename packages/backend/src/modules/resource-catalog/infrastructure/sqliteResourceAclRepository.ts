@@ -1,13 +1,16 @@
 import type { AclResourceType, UserPublic } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { dbTxSync, type NotPromise } from '@/db/txSync'
+import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
 import { resourceGrants, users } from '@/db/schema'
 import type {
+  ResourceAclIdentityMutation,
+  ResourceAclIdentityPersistence,
   ResourceAclMutationContext,
   ResourceAclMutationRow,
 } from '../application/ports/resourceAclPersistence'
 import {
+  isSqliteAclResourceType,
   SQLITE_ACL_TABLES,
   SQLITE_OWNER_NAME_UNIQUE_TYPES,
   sqliteOwnerNamePartitionOf,
@@ -18,7 +21,19 @@ export async function getSqliteResourceAclRevision(
   db: DbClient,
   type: AclResourceType,
   resourceId: string,
+  identityPersistence?: ResourceAclIdentityPersistence,
 ): Promise<number> {
+  if (identityPersistence !== undefined) {
+    if (identityPersistence.type !== type) {
+      throw new Error(
+        `ACL identity persistence type ${identityPersistence.type} cannot serve ${type}`,
+      )
+    }
+    return identityPersistence.getRevision(resourceId)
+  }
+  if (!isSqliteAclResourceType(type)) {
+    throw new Error(`ACL identity persistence is required for ${type}`)
+  }
   const table = SQLITE_ACL_TABLES[type]
   const rows = await db
     .select({ aclRevision: table.aclRevision })
@@ -26,6 +41,47 @@ export async function getSqliteResourceAclRevision(
     .where(eq(table.id, resourceId))
     .limit(1)
   return rows[0]?.aclRevision ?? 0
+}
+
+function runResourceAclMutation<T>(
+  tx: DbTxSync,
+  type: AclResourceType,
+  resourceId: string,
+  identity: ResourceAclIdentityMutation,
+  run: (context: ResourceAclMutationContext) => NotPromise<T>,
+): T {
+  return run({
+    tx,
+    current: identity.current,
+    ownerNameIsUnique: identity.ownerNameIsUnique,
+    hasOwnerNameCollision: (nextOwnerUserId) => identity.hasOwnerNameCollision(nextOwnerUserId),
+    activeUserIds(userIds) {
+      if (userIds.length === 0) return new Set()
+      const rows = tx
+        .select({ id: users.id, status: users.status })
+        .from(users)
+        .where(inArray(users.id, [...userIds]))
+        .all()
+      return new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
+    },
+    updateAclRow: (input) => identity.update(input),
+    replaceGrants(grants, addedBy, addedAt) {
+      tx.delete(resourceGrants).where(grantsOfResourceWhere(type, resourceId)).run()
+      if (grants.size === 0) return
+      tx.insert(resourceGrants)
+        .values(
+          [...grants].map(([userId, level]) => ({
+            resourceType: type,
+            resourceId,
+            userId,
+            level,
+            addedBy,
+            addedAt,
+          })),
+        )
+        .run()
+    },
+  })
 }
 
 export async function loadAclUsers(
@@ -59,8 +115,26 @@ export function withSqliteResourceAclMutation<T>(
   db: DbClient,
   type: AclResourceType,
   resourceId: string,
+  identityPersistence: ResourceAclIdentityPersistence | undefined,
   run: (context: ResourceAclMutationContext) => NotPromise<T>,
 ): T | undefined {
+  if (identityPersistence !== undefined) {
+    if (identityPersistence.type !== type) {
+      throw new Error(
+        `ACL identity persistence type ${identityPersistence.type} cannot serve ${type}`,
+      )
+    }
+    return identityPersistence.withMutation(resourceId, (identity) => {
+      // The provider owns dbTxSync on this same synchronous SQLite connection.
+      // Using the root Drizzle handle here still executes inside that active
+      // transaction, so identity, users and grants commit or roll back together.
+      const tx = db as unknown as DbTxSync
+      return runResourceAclMutation(tx, type, resourceId, identity, run)
+    })
+  }
+  if (!isSqliteAclResourceType(type)) {
+    throw new Error(`ACL identity persistence is required for ${type}`)
+  }
   const table = SQLITE_ACL_TABLES[type]
   const partition = sqliteOwnerNamePartitionOf(type)
   return dbTxSync<unknown>(db, (tx) => {
@@ -85,64 +159,44 @@ export function withSqliteResourceAclMutation<T>(
       aclRevision: raw.aclRevision,
     }
 
-    return run({
+    return runResourceAclMutation(
       tx,
-      current,
-      ownerNameIsUnique: SQLITE_OWNER_NAME_UNIQUE_TYPES.has(type),
-      hasOwnerNameCollision(nextOwnerUserId) {
-        if (!SQLITE_OWNER_NAME_UNIQUE_TYPES.has(type)) return false
-        return (
-          tx
-            .select({ id: table.id })
-            .from(table)
-            .where(
-              and(
-                eq(table.ownerUserId, nextOwnerUserId),
-                eq(table.name, current.name),
-                ne(table.id, resourceId),
-                ...Object.entries(partition).map(([key, column]) => eq(column, raw[key])),
-              ),
-            )
-            .get() !== undefined
-        )
-      },
-      activeUserIds(userIds) {
-        if (userIds.length === 0) return new Set()
-        const rows = tx
-          .select({ id: users.id, status: users.status })
-          .from(users)
-          .where(inArray(users.id, [...userIds]))
-          .all()
-        return new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
-      },
-      updateAclRow(input) {
-        tx.update(table)
-          .set({
-            ownerUserId: input.ownerUserId,
-            visibility: input.visibility,
-            aclRevision: input.aclRevision,
-            updatedAt: input.updatedAt,
-          })
-          .where(eq(table.id, resourceId))
-          .run()
-      },
-      replaceGrants(grants, addedBy, addedAt) {
-        tx.delete(resourceGrants).where(grantsOfResourceWhere(type, resourceId)).run()
-        if (grants.size === 0) return
-        tx.insert(resourceGrants)
-          .values(
-            [...grants].map(([userId, level]) => ({
-              resourceType: type,
-              resourceId,
-              userId,
-              level,
-              addedBy,
-              addedAt,
-            })),
+      type,
+      resourceId,
+      {
+        current,
+        ownerNameIsUnique: SQLITE_OWNER_NAME_UNIQUE_TYPES.has(type),
+        hasOwnerNameCollision(nextOwnerUserId) {
+          if (!SQLITE_OWNER_NAME_UNIQUE_TYPES.has(type)) return false
+          return (
+            tx
+              .select({ id: table.id })
+              .from(table)
+              .where(
+                and(
+                  eq(table.ownerUserId, nextOwnerUserId),
+                  eq(table.name, current.name),
+                  ne(table.id, resourceId),
+                  ...Object.entries(partition).map(([key, column]) => eq(column, raw[key])),
+                ),
+              )
+              .get() !== undefined
           )
-          .run()
+        },
+        update(input) {
+          tx.update(table)
+            .set({
+              ownerUserId: input.ownerUserId,
+              visibility: input.visibility,
+              aclRevision: input.aclRevision,
+              updatedAt: input.updatedAt,
+            })
+            .where(eq(table.id, resourceId))
+            .run()
+        },
       },
-    })
+      run,
+    )
   }) as T | undefined
 }
 
