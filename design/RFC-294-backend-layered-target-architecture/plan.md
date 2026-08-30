@@ -383,37 +383,37 @@ RFC-331 current payload `262f34bf7` 的 digest 为 `e9f8a0…`，provenance repi
 `4152b377a` 的 exact-SHA CI `33034946053` terminal `success`（35/35 jobs）。source pin、current exact-SHA verdict、containing evidence 与
 architecture counts 始终分栏，不用任一祖先结论代替当前提交的判定。
 N1/W0-R、N2/P0-D、RFC-331 W2-A、RFC-332 W2-B、RFC-333 P0-C、RFC-334 W2-C、RFC-339 W2-D、RFC-341 W3、
-RFC-342 P0-A 与 RFC-343 P0-B 均已满足并完成 exact-SHA hosted closeout。W4-A 已由 RFC-344 另立 successor、获批并进入
-implementation candidate；W4-C 已由 RFC-345 另立 successor、获批并开始 additive cohort；W4-E7 已由 RFC-346 起草 successor，
-D1～D12 已于 2026-08-30 获批并开始 additive/CLI cohort。W4-B、W4-E 其余 slices 与完整 W4-D 仍须另立 RFC 并单独获批。
+RFC-342 P0-A 与 RFC-343 P0-B 均已满足并完成 exact-SHA hosted closeout。RFC-344 已关闭 W4-A 与 W4-D duplicate-root residual；
+RFC-347 已关闭 W4-E0；RFC-346 已关闭 W4-E7；三者均有 published exact-SHA Main + 8 schedules 终态成功证据。W4-C 的
+RFC-345 仍为 In Progress，T4～T9 继续按独立 cohort 推进；W4-B、W4-E 其余 slices 与完整 W4-D 仍须另立 RFC 并单独获批。
 RFC-288/289 只作历史输入，不是节点。W5 的每个 SCC family 需 W4 已断 transport/root 回边；W6 在 W4 +
 P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队。W8 是 post-W7 独立能力线：未获批时保留挡板并
 跳过，不阻塞 W9；若同一 release 激活，则必须在 W9 清仓前汇入。
 
 ### 3.2 从当前 HEAD 起的执行队列
 
-| 顺序 | 批次                                | 本轮产出                                                                                                                                                                   | 开工/停止门                                                                                                                |
-| ---- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| B0   | baseline refresh（本设计已完成）    | 保留 `158b67296` / `4aa081…` 为 RFC-331 前历史基线；current payload `262f34bf7` / digest `e9f8a0…`，containing SHA `4152b377a` CI success                                  | source/hosted/behavior/architecture evidence 分开归因                                                                      |
-| N1a  | current manifest provenance（Done） | 保留 RFC-317 Done oracle，统一 commons manifest/debt、guard、ledger baseline 的 origin/current SHA + content digest；补 replay/tamper equality                             | 已落：ancestor-only 判据升级为四份 content-addressed current snapshot                                                      |
-| N1b  | W0-R canonical completion（Done）   | 把 RFC-317 subset 生成/投影进七份 canonical manifest，补 owner/symbol/edge FK、required-port liveness、ambient/public/background 全分母                                    | 已落：唯一 canonical 真值、global referential integrity 与 mutation gate；不计 production cutover credit                   |
-| N2   | P0-D / RFC-328（Done）              | durable owner/intent/effect/fence/maintenance/lineage、exact registry/context/outbox已落                                                                                   | containing SHA `5c762c197` hosted CI/visual success；W2 credit=0                                                           |
-| N3   | RFC-331 三件套（Done）              | current四kick/三child-control/status/call-graph/六账 inventory，锁 D1～D8、两刀切换、零能力影响与DEV-1                                                                     | 文档与用户批准门已完成                                                                                                     |
-| N4   | RFC-331 W2-A（Done）                | A1+B1～B4 与 E3 已切，`KNOWN 37→31`、task SCC family 消失；payload/provenance 已真实固定，exact-SHA CI 35/35 success                                                       | `81d97d060` → `262f34bf7` → `89b19057d` → `4152b377a` / `33034946053`                                                      |
-| N5   | RFC-332 W2-B（Done）                | 唯一 drive coordinator、repository preparation phase 0、三路 TaskEngine、DAG owner、exact W2-C/D/W3/W5 bridge 与 canonical scheduler owner 已形成；value SCC 保持 `4/6`    | `b63733a4f` → `a36fd94c2` → `4dd30d034`；CI `33052994260` 35/35 success                                                    |
-| N6   | RFC-333 / P0-C residual（Done）     | 三类 open/decision 原子 participant、canonical continuation、boot recovery、真实 SIGKILL、慢 sibling/deferred-question handoff 均已落                                      | `dda58935e` → `57e45c292`；CI 35/35、七条 scheduled 19/19 success；W2-C 前置解除                                           |
-| N7   | RFC-334 / W2-C（Done）              | 14-key NodeExecutorRegistry、typed host lane、neutral cap、legacy node selector/host body 与两条 W2-C exception 归零；三条 wrapper bridge 留 W2-D                          | `1271ecb20` → `cfe1326b4`；`8e58eb05f` CI `33142147682` 35/35；七条 scheduled 19/19 success                                |
-| N8   | RFC-339 / W2-D（Done）              | closed WrapperRuntime、Loop/Git/Fanout strategies、ExecutionScopeIndex、ExecutionMergeRecovery 与 bootstrap-only composition 已落；legacy wrapper/replay owner/bridge 归零 | `0c9c48e68` 主实现；payload/pin `5ac1e1c64` → `4c8497c2a`，digest `a0fd3ea9…`；exact-SHA hosted/scheduled closeout success |
-| N9   | RFC-341 / W3（Done）                | task lifecycle + review/clarify/questions committed events、per-consumer delivery、持续 continuation worker、Event Center运维面与 legacy extinction 已完成                 | final `67a97480`；Main CI `33268925250` 与 8 个定时 workflow terminal success                                              |
-| N10  | RFC-342 / P0-A（Done）              | content-only PATCH、candidate Move、双 scope transaction、OCC receipt、commit 后 WS、UI cutover 与 prompt audience proof 已完成                                            | `9dc7e6ea8` → `74c0e72bb` → `e0ef3e51c`；final `67a97480` hosted closeout success                                          |
-| N11  | RFC-343 / P0-B（Done）              | actual-chain lock、retryable compensation、V1 artifact 与 prepared/committed convergence 已完成                                                                            | `f21d6142a`；final `67a97480` hosted closeout success                                                                      |
-| N12  | RFC-344 / W4-A（In Progress）       | stable OperationCatalog、52/52 MCP closed binding、single handler root、identity/development pilots 与 API docs projection 已形成 production candidate                     | 等待 canonical、push 与 published exact-SHA Main CI + 全部定时 workflows；未完成前 W4-A 不标 Done                          |
-| N13  | W4-E0 identity-access（待立项）      | trusted direct/delegated request authority factory、presence/WS 收编、full `Actor` facade 退役——E1/E2/E3/E8/E9/E10 六个子波的共同前置（review 2026-08-30 §D1） | RFC-344 hosted closeout 后立即立 successor RFC；不等 W4-C/E7 完成                                                          |
-| OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                   | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                   |
+| 顺序 | 批次                                | 本轮产出                                                                                                                                                                                   | 开工/停止门                                                                                                                |
+| ---- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| B0   | baseline refresh（本设计已完成）    | 保留 `158b67296` / `4aa081…` 为 RFC-331 前历史基线；current payload `262f34bf7` / digest `e9f8a0…`，containing SHA `4152b377a` CI success                                                  | source/hosted/behavior/architecture evidence 分开归因                                                                      |
+| N1a  | current manifest provenance（Done） | 保留 RFC-317 Done oracle，统一 commons manifest/debt、guard、ledger baseline 的 origin/current SHA + content digest；补 replay/tamper equality                                             | 已落：ancestor-only 判据升级为四份 content-addressed current snapshot                                                      |
+| N1b  | W0-R canonical completion（Done）   | 把 RFC-317 subset 生成/投影进七份 canonical manifest，补 owner/symbol/edge FK、required-port liveness、ambient/public/background 全分母                                                    | 已落：唯一 canonical 真值、global referential integrity 与 mutation gate；不计 production cutover credit                   |
+| N2   | P0-D / RFC-328（Done）              | durable owner/intent/effect/fence/maintenance/lineage、exact registry/context/outbox已落                                                                                                   | containing SHA `5c762c197` hosted CI/visual success；W2 credit=0                                                           |
+| N3   | RFC-331 三件套（Done）              | current四kick/三child-control/status/call-graph/六账 inventory，锁 D1～D8、两刀切换、零能力影响与DEV-1                                                                                     | 文档与用户批准门已完成                                                                                                     |
+| N4   | RFC-331 W2-A（Done）                | A1+B1～B4 与 E3 已切，`KNOWN 37→31`、task SCC family 消失；payload/provenance 已真实固定，exact-SHA CI 35/35 success                                                                       | `81d97d060` → `262f34bf7` → `89b19057d` → `4152b377a` / `33034946053`                                                      |
+| N5   | RFC-332 W2-B（Done）                | 唯一 drive coordinator、repository preparation phase 0、三路 TaskEngine、DAG owner、exact W2-C/D/W3/W5 bridge 与 canonical scheduler owner 已形成；value SCC 保持 `4/6`                    | `b63733a4f` → `a36fd94c2` → `4dd30d034`；CI `33052994260` 35/35 success                                                    |
+| N6   | RFC-333 / P0-C residual（Done）     | 三类 open/decision 原子 participant、canonical continuation、boot recovery、真实 SIGKILL、慢 sibling/deferred-question handoff 均已落                                                      | `dda58935e` → `57e45c292`；CI 35/35、七条 scheduled 19/19 success；W2-C 前置解除                                           |
+| N7   | RFC-334 / W2-C（Done）              | 14-key NodeExecutorRegistry、typed host lane、neutral cap、legacy node selector/host body 与两条 W2-C exception 归零；三条 wrapper bridge 留 W2-D                                          | `1271ecb20` → `cfe1326b4`；`8e58eb05f` CI `33142147682` 35/35；七条 scheduled 19/19 success                                |
+| N8   | RFC-339 / W2-D（Done）              | closed WrapperRuntime、Loop/Git/Fanout strategies、ExecutionScopeIndex、ExecutionMergeRecovery 与 bootstrap-only composition 已落；legacy wrapper/replay owner/bridge 归零                 | `0c9c48e68` 主实现；payload/pin `5ac1e1c64` → `4c8497c2a`，digest `a0fd3ea9…`；exact-SHA hosted/scheduled closeout success |
+| N9   | RFC-341 / W3（Done）                | task lifecycle + review/clarify/questions committed events、per-consumer delivery、持续 continuation worker、Event Center运维面与 legacy extinction 已完成                                 | final `67a97480`；Main CI `33268925250` 与 8 个定时 workflow terminal success                                              |
+| N10  | RFC-342 / P0-A（Done）              | content-only PATCH、candidate Move、双 scope transaction、OCC receipt、commit 后 WS、UI cutover 与 prompt audience proof 已完成                                                            | `9dc7e6ea8` → `74c0e72bb` → `e0ef3e51c`；final `67a97480` hosted closeout success                                          |
+| N11  | RFC-343 / P0-B（Done）              | actual-chain lock、retryable compensation、V1 artifact 与 prepared/committed convergence 已完成                                                                                            | `f21d6142a`；final `67a97480` hosted closeout success                                                                      |
+| N12  | RFC-344 / W4-A（Done）              | stable OperationCatalog、52/52 MCP closed binding、single handler root、identity/development pilots 与 API docs projection 已落                                                            | final `c5c4faafc`；Main `33298828254` 与同 SHA 8 schedules terminal success；只额外关闭 W4-D duplicate-root residual       |
+| N13  | RFC-347 / W4-E0（Done）             | trusted direct/delegated request authority factory、presence/WS 收编、central `Actor` constructor 与 DB-keyed module cache 退役；remaining legacy projection按 E1/E2/E3/E8/E9/E10 精确入账 | final `7ede76a8`；Main `33317698270` 与同 SHA 8 schedules terminal success；不等于其余 W4-E slices Done                    |
+| OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                                   | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                   |
 
-P0-A、P0-B 与 W3 已关闭各自前置；它们不再被错误地用作“RFC-287 已经落地”的前置证明，也不倒签后续 wave。
-当前 production migration 是 RFC-344 / W4-A；W4-E2 可消费 P0-A，W6 可消费 P0-B，但各自仍须通过本 wave 的功能、transaction、
-compatibility 与 exact-SHA hosted gate。
+P0-A、P0-B、W3、W4-A、W4-E0 与 W4-E7 已关闭各自 successor；它们不再被错误地用作其它 wave 已经落地的证明，也不倒签后续
+slice。当前 active production migration 是 RFC-345 / W4-C；W4-E2 可消费 P0-A，W6 可消费 P0-B，但各自仍须通过本 wave 的功能、
+transaction、compatibility 与 exact-SHA hosted gate。
 
 ## 4. W0-R：重建架构基线、owner 账本与机器栅栏
 
@@ -735,22 +735,22 @@ W5-owned debt transfer 完成，不执行对应 B/D，也不要求 W5-owned rout
 
 ### W4-A Operation catalog 与 adapter parity
 
-**实施 successor**：[RFC-344 OperationCatalog 与 transport cutover](../RFC-344-operation-catalog-transport-cutover/proposal.md)。D1～D10、
-完整实施与提交上库已获批准；当前 production candidate 已形成，但以下退出项只在 published exact SHA 的 Main CI 与全部要求的定时
-workflows terminal success 后勾选。
+**实施 successor**：[RFC-344 OperationCatalog 与 transport cutover](../RFC-344-operation-catalog-transport-cutover/proposal.md)（Done）。
+final functional SHA `c5c4faafc91ad3cb8c5a3c10f5187a9a69f96c68` 的 Main `33298828254` 与同 SHA 8 个 scheduled
+workflows 全部 terminal success；以下退出项据此闭合。
 
-- [ ] 定义 command/query 判别的 transport-neutral operation descriptor，完整 admission 含 permissions AND 与
+- [x] 定义 command/query 判别的 transport-neutral operation descriptor，完整 admission 含 permissions AND 与
       publicReason；账户角色只选择 permission preset，不设 identity gate；RouteMeta 从 operation + HTTP binding 派生，
       tokenAccess 仍是 HTTP binding 独立门；
-- [ ] HTTP RouteMeta 与 MCP tool 映射引用同一 operation id/handler；
-- [ ] 保留 transport admission，行级 auth/OCC 在 command 内；
-- [ ] API docs 从 transport descriptor 派生，不让 service import route registry；
-- [ ] HTTP/MCP 同 input/actor 的 result/error parity 与权限矩阵。
-- [ ] 把 development mission/config/activity 与 user-access 的 HTTP/CLI bindings 登入同一 catalog；不得再由 route
+- [x] HTTP RouteMeta 与 MCP tool 映射引用同一 operation id/handler；
+- [x] 保留 transport admission，行级 auth/OCC 在 command 内；
+- [x] API docs 从 transport descriptor 派生，不让 service import route registry；
+- [x] HTTP/MCP 同 input/actor 的 result/error parity 与权限矩阵。
+- [x] 把 development mission/config/activity 与 user-access 的 HTTP/CLI bindings 登入同一 catalog；不得再由 route
       deep import module command/store 或另造 RouteMeta/handler registry；
-- [ ] code→transport exact golden 覆盖既有 404/409/410/412；unknown code fail-closed 500，public DTO exact codec
+- [x] code→transport exact golden 覆盖既有 404/409/410/412；unknown code fail-closed 500，public DTO exact codec
       不含 private cause；
-- [ ] 建 authority matrix：direct current actor；schedule/webhook/call/code-host delegated owner 每次重建 active/current
+- [x] 建 authority matrix：direct current actor；schedule/webhook/call/code-host delegated owner 每次重建 active/current
       effective permissions 并在目标 tx 重验 usability；manual resume 维持 Q6；maintenance/outbox/apply 用窄 capability，
       不伪装 Actor。
 
@@ -792,7 +792,7 @@ workflows terminal success 后勾选。
 
 - [ ] mount 函数只接本域 command/query + transport concern；
 - [ ] test seam 注入实例 handler/port，不挂全局 optional mega-context；
-- [ ] MCP 不再 mount 第二套 Hono route table；
+- [x] MCP 不再 mount 第二套 Hono route table；
 - [ ] server/bootstrap 只装配，无业务 query/switch。
 - [ ] `composeDevelopmentAutomation`、identity composition 等每模块只在 bootstrap 构造一次；route/CLI/services 不得
       直接 import composition/infrastructure，worker 与 inbound bindings 共享同一 injected module instance；
@@ -803,7 +803,10 @@ W4-E 不是一笔“大 context move”，按下列子波独立呈批/提交。�
 集合、closed event codec、authority matrix、schema expand/backfill/cutover（如有）、crash/replay oracle、wire oracle 与自己的
 rollback/admission owner；先落 domain/application contract，再切该 context 的单个 adapter consumer。
 
-- [ ] **E0 identity-access**：可信 direct/delegated request authority factory，保留 schedule/webhook/call 现授权语义；
+**E0 实施 successor**：[RFC-347 Identity Access authority / presence cutover](../RFC-347-identity-access-authority-presence-cutover/proposal.md)
+（Done；final `7ede76a8` 的 Main `33317698270` 与同 SHA 8 schedules terminal success，只领取 W4-E0）。
+
+- [x] **E0 identity-access**：可信 direct/delegated request authority factory，保留 schedule/webhook/call 现授权语义；
       以 RFC-312 已落的 presence domain、二态 projection、专用 WS 与可撤销 grant 为 oracle，把 composition 对 WS broadcaster/
       revalidation 的直连和 WeakMap module cache 收回 bootstrap/inbound adapter；grace/batch demand timer 纳入 W9 lifecycle；
       sealed system-effect contract/forge gate 在 W0-R，event-family factory 随 W3 producer/worker 落，不等 E0；
@@ -840,13 +843,13 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
 - [ ] **E6 resource-specific tools**：MCP runtime test 归 `resource-catalog/mcp/application/diagnostics`；落
       Start/SubmitTurn/Cancel/End + Session/Transcript、session/turn lease tx、exact MCP/runtime snapshot 与 process effect
       port，event 仅 ref/status；`testing/` 仅 fake/factory，不承载生产 use case；
-- [ ] **E7 system-operations adapter**：只切 admin command/query 与 platform coordinator port；把 RFC-295 downgrade audit 的
+- [x] **E7 system-operations adapter**：只切 admin command/query 与 platform coordinator port；把 RFC-295 downgrade audit 的
       CLI 直连 DB 记为一次性兼容命令与 sunset ledger，不据此创造 generic cross-domain audit port；physical restore generation
       protocol 不在普通 context revert 内实施，留 W9-E 独立 RFC。
 
   **实施 successor**：[RFC-346 System Operations 管理编排与 adapter cutover](../RFC-346-system-operations-adapter-cutover/proposal.md)。
-  当前为 Approved / In Progress，D1～D12 已于 2026-08-30 获用户明确批准；RFC-344 hosted closeout 前只允许 additive module、legacy adapter 与 CLI cohort，HTTP
-  descriptor/catalog/root/canonical 切换必须等待 RFC-344 发布，且全程不触碰 RFC-345 路径。
+  Done；final `7ede76a8` 的 Main `33317698270` 与同 SHA 8 schedules terminal success。只关闭 E7，physical restore generation
+  继续留 W9-E，且不触碰 RFC-345 路径。
 
 - [ ] **E8 development-automation**：以 RFC-310 已落 Mission/ActionRun/AgentAttempt、四类 immutable config、fact/evidence/
       effect ledger 为行为 oracle；落真实 `public/{commands,queries,participants,events,types}`，让 mission/config/activity route
