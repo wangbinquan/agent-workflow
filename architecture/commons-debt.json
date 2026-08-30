@@ -264,19 +264,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:1ce59ca0515776cc6043",
-        "import:3a5b7e78e1e6a444ff15",
-        "import:69193bb47ca5bb2c3076",
-        "import:d64e12890e434d257459"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#archiveActionTemplate",
-        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#createActionTemplate",
-        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#publishActionTemplate",
-        "owner:packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts#reviseActionTemplateDraft"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -291,19 +281,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2a018a0034e4f8c0003f",
-        "import:586922194f99d5fd5a92",
-        "import:593b930c084c3d44449c",
-        "import:6eea49e7b815460dc0b2"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#archiveVerificationProfile",
-        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#createVerificationProfile",
-        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#publishVerificationProfile",
-        "owner:packages/backend/src/modules/development-automation/application/commands/verificationProfileCommands.ts#reviseVerificationProfileDraft"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -318,13 +298,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:edcbca50c79f87d2021a"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/decision.ts#nextDecisionSchema"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -339,17 +315,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:85efdd070ec0248d3630",
-        "import:d9c359d42b9671cb258e",
-        "import:fb274db227e3d18a85d4"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/digitalEmployee.ts#compileEmployeePlaybook",
-        "owner:packages/backend/src/modules/development-automation/domain/digitalEmployee.ts#digitalEmployeeContentSchema",
-        "owner:packages/backend/src/modules/development-automation/domain/digitalEmployee.ts#validateDigitalEmployeeForPublish"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -364,13 +332,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:e022363ce0f3a3d270b8"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/factCell.ts#factCellSchema"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -385,13 +349,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2b0d5cc66e11a6df3d89"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/facts.ts#buildFactSnapshot"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -406,13 +366,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:211ae8e1973da32afca9"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/journeyProjection.ts#projectEmployeeSetupJourney"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -427,13 +383,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:7e451ee6136f68e6e981"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/predicate.ts#factPredicateSchema"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -448,13 +400,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:d9c02a1bc60b98bc2cac"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/engine/policy/evaluatePolicy.ts#evaluatePolicy"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -469,13 +417,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:0539c8445ea39548b82c"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/engine/policy/workSelection.ts#resolveEmployeeSelection"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -490,13 +434,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:77ec939456ca757a9555"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/publishLookup.ts#createEmployeePublishLookup"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -511,17 +451,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:a109b3318a5467248c21",
-        "import:a1451870fe19ce1f061a",
-        "import:bb4eceeae2d562593172"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAssignmentStore.ts#deleteAssignment",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAssignmentStore.ts#listAssignments",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAssignmentStore.ts#upsertAssignment"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -536,15 +468,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:78a9f9ddb4431476508d",
-        "import:e2090e7e7e08eeb8cf07"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteActionTemplateStore",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteVerificationProfileStore"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -559,35 +485,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:100d734b1b01c5b6576b",
-        "import:16d3b391c05972e0cf9d",
-        "import:17b8845d4eca808d7b6b",
-        "import:1b77f32e9aad74d5a8ae",
-        "import:3b517a088820f992ec4f",
-        "import:4417c0c3e0dac396a400",
-        "import:565c019dd5d352b97190",
-        "import:5c9aec86a1df9ced3986",
-        "import:a2f120efd3a3a60684a9",
-        "import:a3e549020028a196aeec",
-        "import:af59bff35064bc806eb8",
-        "import:d23b41589b7739d6f931"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#archiveAutomationPolicy",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#archiveDigitalEmployee",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#createAutomationPolicy",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#createDigitalEmployee",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#getAutomationPolicy",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#getDigitalEmployee",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listAutomationPolicies",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#listDigitalEmployees",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#publishAutomationPolicy",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#publishDigitalEmployee",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#reviseAutomationPolicyDraft",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore.ts#reviseDigitalEmployeeDraft"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -602,19 +502,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2fe6397a59472557c62a",
-        "import:5272834e56cecb1de311",
-        "import:aa33440a8d34b3267394",
-        "import:b4e77ec70ed2b1922b6e"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#archiveDevelopmentAdapter",
-        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#createDevelopmentAdapter",
-        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#publishDevelopmentAdapter",
-        "owner:packages/backend/src/modules/integration/application/developmentAdapterCommands.ts#reviseDevelopmentAdapterDraft"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -629,13 +519,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:77839a71c85af199a6c3"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/integration/infrastructure/sqliteDevelopmentAdapterStore.ts#createSqliteDevelopmentAdapterStore"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -650,25 +536,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:5c30b66441ca9671b30a",
-        "import:7d74e68fa38236bb4920",
-        "import:83c986cebe267f1d07b3",
-        "import:9bb3281620480873bb88",
-        "import:baca2202d61b96005808",
-        "import:e8fb088373d08e40a872",
-        "import:f64f923355c82dfd4c8a"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#cancelMission",
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#launchMission",
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#launchMissionInputSchema",
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#previewDirectInput",
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#previewMissionAdmission",
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#retryBlockedMission",
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#selectMissionRequirementSource"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -683,13 +553,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:ee2addd06f2b45af4ec4"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/application/commands/launchMission.ts#LaunchDeps"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -704,15 +570,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:92ab761e5a3ad2f61a2a",
-        "import:9cb8750389ab52ea21d5"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/application/cutover.ts#adoptActiveMr",
-        "owner:packages/backend/src/modules/development-automation/application/cutover.ts#runCutoverCommand"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -727,15 +587,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9445481b2f28691e48c4",
-        "import:f819cf66aa720a7670df"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/application/pipelineEvidenceRead.ts#EVIDENCE_READ_MAX_BYTES",
-        "owner:packages/backend/src/modules/development-automation/application/pipelineEvidenceRead.ts#readEvidenceFileRange"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -750,13 +604,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:52b69364e61fee437ba4"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomation"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -771,13 +621,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:3f958870072d35d05232"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/journeyProjection.ts#projectMissionJourney"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -792,13 +638,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:db0e6b6bfc2db5a53db9"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/operationFailure.ts#OperationFailureReceipt"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -813,13 +655,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b7039ff72b3f95865e2f"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/domain/pipelineManifest.ts#pipelineEvidenceManifestV1Schema"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -834,13 +672,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:1ea05bd306944affb007"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryBaselineResolver"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -855,17 +689,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:11bc2d5b9cd2ddaa0524",
-        "import:1d14dc519da6e9d7c2d1",
-        "import:f4991588b7518a68266d"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#materializeMigrationCandidates",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#readPersistedMigrationRun",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#runMigrationAnalysis"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -880,25 +706,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:0504090f8b4ede9f8620",
-        "import:1cea2e80331dd2c8791c",
-        "import:1df5fd9fa7775af0e238",
-        "import:2e6fa5d1fdd5a6eb6811",
-        "import:2f3bab22074487fdef23",
-        "import:5b07d6c45ff09aeb6e25",
-        "import:ab928791fbfe565cf0d3"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#getDecisionTrace",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#getMissionDetail",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#getMissionMergeRequestView",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionEffects",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionSummaries",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionSummariesPage",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#listMissionTerminalOutcomeGroups"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -913,13 +723,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:217730c12ecc31e14922"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/missionReadModels.ts#MissionPageCursor"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -934,13 +740,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:6faa1a904b5cdfdf5dc2"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteAdmissionLookup.ts#createSqliteAdmissionLookup"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -955,13 +757,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:bb2faa67db36434c21f5"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteCutoverStore.ts#createSqliteCutoverStore"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -976,13 +774,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:c72616f527c7fef28628"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -997,15 +791,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:363fb54245cb45d827ca",
-        "import:749e87473eab54d567a8"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts#createSqliteFactSnapshotReader",
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteReconcilerReaders.ts#missionIdOfExecutionRef"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -1020,13 +808,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:c1dd6a6c64677284e8c1"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadPlanStore.ts#insertUploadPlan"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -1041,13 +825,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9c4432f6332cda18b274"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#createSqliteUploadSessionStore"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -1062,13 +842,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:a8937fbac4eebe83af88"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/integration/composition/approvalGateway.ts#composeApprovalGatewayRunner"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -1083,13 +859,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:104de0e807d6281bab31"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/integration/composition/requirementSource.ts#composeRequirementSourceRunner"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -1104,17 +876,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W5（Source-control 边界）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:0a1dbb1fb93903fa7edd",
-        "import:136084f56dfaa607e7cc",
-        "import:b02950821e26bbef104d"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/source-control/composition.ts#bindCandidateDeliveryParticipant",
-        "owner:packages/backend/src/modules/source-control/composition.ts#bindChangeCandidateParticipant",
-        "owner:packages/backend/src/modules/source-control/composition.ts#bindConflictMergeParticipant"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -1129,13 +893,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:27c370dc221c9651a5ef"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/composition/agentActionExecution.ts#composeAgentActionExecution"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -1150,13 +910,9 @@
       "introducedByRFC": "pre-RFC-317（存量）",
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:a3204707b260cccb9a0e"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts#composeScriptActionExecution"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -3740,7 +3496,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805",
+    "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

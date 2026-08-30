@@ -314,8 +314,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1016,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1027,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-344 把 identity 与 development 写入口登记为显式 operation descriptors；新增条目是已分类 catalog authority，而非未治理的 transport 写口。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -335,15 +338,21 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 265,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 267,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-344 新增 operation catalog 与 direct handler table 的进程级装配状态；两条均由单一 daemon bootstrap 拥有并有关闭性自检。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 448,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+      "baseline": 456,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
+      "allowGrowth": {
+        "why": "RFC-344 以单一 route bootstrap 登记 descriptor、HTTP binding、MCP projection 与 route middleware；新增 wiring 是 catalog 闭包的显式组成。"
+      }
     },
     {
       "id": "rfc294-cross-context-observed-imports",
@@ -370,7 +379,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 1468,
+      "baseline": 1462,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -384,8 +393,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 403,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 405,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-344 新增 identity-access 与 development-automation 的 exact public operation descriptor surfaces，替代 transport 反向依赖。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -405,12 +417,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 18780,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 18991,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-344 新增 operation contracts、catalog adapters 与模块 application/composition/public symbols；所有新 symbol 均由 canonical owner projection 精确分类。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805",
+    "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

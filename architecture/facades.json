@@ -1,11 +1,14 @@
 {
   "denominator": {
-    "boundaryFacades": 101,
+    "boundaryFacades": 102,
     "serviceFiles": 378
   },
   "entries": [
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:592c617c9dd6ae9d5585",
+        "import:83f313574229557bd608"
+      ],
       "exportedSymbols": [
         "isOidcManagedUser",
         "listOidcManagedUserIds",
@@ -15,7 +18,7 @@
       "id": "facade:packages/backend/src/services/accountAuthPolicy.ts",
       "ownerEntryId": "owner:packages/backend/src/services/accountAuthPolicy.ts#$file",
       "removeAfterWave": "W4/W9",
-      "status": "legacy-owner",
+      "status": "boundary-facade",
       "targetContext": "identity-access",
       "targetLayer": "domain"
     },
@@ -1054,9 +1057,13 @@
         "import:5ca0115215c7a518be82",
         "import:63d523c54d1a697476d0",
         "import:6b23c460a2c6fb0330cd",
+        "import:6cdc2682e0b8408a3f13",
+        "import:a23a9763449d3afd3deb",
         "import:a2f7b9522199b0a664b5",
+        "import:b25c5861591a89e969ac",
         "import:b9745e0cebd5cb181aab",
-        "import:ecc6def497b174e798e5"
+        "import:ecc6def497b174e798e5",
+        "import:ffffa100fc82af2b8a6f"
       ],
       "exportedSymbols": [
         "assertDevelopmentWorkspaceRepositoryFreshness",
@@ -3922,7 +3929,14 @@
         "import:0a2b9e6a20d4608387fa",
         "import:1d93f24706f4767d9822",
         "import:4c4c9108499cf3711b0b",
-        "import:acf21ec1235a5ca37829"
+        "import:76d369094d0908d86848",
+        "import:778999c72af36b0c8c1d",
+        "import:86bd1c2c65fa665ae247",
+        "import:acf21ec1235a5ca37829",
+        "import:b6ca287f01f9906e5941",
+        "import:bf21c5a41170506373ae",
+        "import:d1d661916b08b704035f",
+        "import:f742478a62a352104078"
       ],
       "exportedSymbols": [
         "ACL_TABLES",
@@ -5737,6 +5751,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:01487092b4bfc9f5a127",
         "import:0d9ac63bf6f207d82551"
       ],
       "exportedSymbols": [
@@ -6839,9 +6854,12 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:76342b93d74c3594fe25",
         "import:8efba10420c1e80e2347",
         "import:9fae1b004ac7cc7553f0",
         "import:ca60bc463d24b5cca64b",
+        "import:ceed93be047843e0094a",
+        "import:dc130aefec7638d047bf",
         "import:e8cd48b326940c7f3277"
       ],
       "exportedSymbols": [
@@ -7757,5 +7775,5 @@
   "finalCriterion": "Every legacy service file has one target owner/layer and every boundary facade has exact consumers and a removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805"
+  "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959"
 }

@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 448,
-    "architectureExceptions": 1468,
-    "backgroundJobs": 265,
+    "ambientWiring": 456,
+    "architectureExceptions": 1462,
+    "backgroundJobs": 267,
     "crossContextImports": 1504,
     "facades": 378,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 18780,
-    "mutationEntrypoints": 1016,
+    "moduleSymbolOwners": 18991,
+    "mutationEntrypoints": 1027,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 403,
+    "publicSurfaces": 405,
     "transactionExternalEffects": 281
   },
   "metrics": {
-    "ambientWiringEntries": 448,
+    "ambientWiringEntries": 456,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -27,9 +27,6 @@
       "packages/backend/src/routes/codeHosts.ts",
       "packages/backend/src/routes/config.ts",
       "packages/backend/src/routes/daemon.ts",
-      "packages/backend/src/routes/developmentConfig.ts",
-      "packages/backend/src/routes/developmentMissions.ts",
-      "packages/backend/src/routes/digitalEmployees.ts",
       "packages/backend/src/routes/docs.ts",
       "packages/backend/src/routes/fusions.ts",
       "packages/backend/src/routes/health.ts",
@@ -48,7 +45,6 @@
       "packages/backend/src/routes/port-artifacts.ts",
       "packages/backend/src/routes/repoGroups.ts",
       "packages/backend/src/routes/repos.ts",
-      "packages/backend/src/routes/resourceAcl.ts",
       "packages/backend/src/routes/restore.ts",
       "packages/backend/src/routes/reviews.ts",
       "packages/backend/src/routes/runtime.ts",
@@ -60,7 +56,6 @@
       "packages/backend/src/routes/taskFeedback.ts",
       "packages/backend/src/routes/taskQuestions.ts",
       "packages/backend/src/routes/tasks.ts",
-      "packages/backend/src/routes/users.ts",
       "packages/backend/src/routes/webhookDeliveries.ts",
       "packages/backend/src/routes/webhookEndpoints.ts",
       "packages/backend/src/routes/webhookTriggers.ts",
@@ -70,13 +65,8 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 997,
+    "backendProductionFiles": 1016,
     "backendValueSccs": [
-      [
-        "packages/backend/src/mcp/dispatch.ts",
-        "packages/backend/src/mcp/server.ts",
-        "packages/backend/src/server.ts"
-      ],
       [
         "packages/backend/src/services/agent.ts",
         "packages/backend/src/services/agentDeps.ts",
@@ -94,7 +84,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 265,
+    "backgroundEntries": 267,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -120,7 +110,7 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 72,
-    "inboundBoundaryEdges": 89,
+    "inboundBoundaryEdges": 52,
     "knownViolations": 31,
     "moduleContexts": [
       {
@@ -133,7 +123,7 @@
       },
       {
         "context": "development-automation",
-        "files": 115
+        "files": 122
       },
       {
         "context": "digital-employee",
@@ -149,7 +139,7 @@
       },
       {
         "context": "identity-access",
-        "files": 33
+        "files": 35
       },
       {
         "context": "integration",
@@ -172,7 +162,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 454,
+    "moduleFiles": 463,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -197,11 +187,6 @@
     ],
     "outboundBoundaryEdges": 23,
     "repoValueSccs": [
-      [
-        "packages/backend/src/mcp/dispatch.ts",
-        "packages/backend/src/mcp/server.ts",
-        "packages/backend/src/server.ts"
-      ],
       [
         "packages/backend/src/services/agent.ts",
         "packages/backend/src/services/agentDeps.ts",
@@ -233,5 +218,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805"
+  "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959"
 }

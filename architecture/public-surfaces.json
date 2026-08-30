@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 297,
+    "consumers": 303,
     "exactEntrypointFiles": 37,
     "governedFieldSurfaces": 5,
-    "methods": 196,
+    "methods": 199,
     "opaqueTypeRefs": 5,
-    "recursiveFields": 1743,
-    "symbols": 403
+    "recursiveFields": 1774,
+    "symbols": 405
   },
   "entries": [
     {
@@ -12371,9 +12371,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:2f92b0c00b8f3a611626"
-      ],
+      "consumerEdgeIds": [],
       "context": "identity-access",
       "dataClass": "confidential",
       "direction": "offered",
@@ -12384,22 +12382,13 @@
       "members": [],
       "methods": [
         {
-          "consumerEdgeIds": [
-            "import:2f92b0c00b8f3a611626"
-          ],
+          "consumerEdgeIds": [],
           "name": "execute",
           "signatureDigest": "sha256:8a2486229ea35d4883a62130d8577f205547ce8753625192a46e70c04c7bba1c"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/commands.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:2f92b0c00b8f3a611626",
-          "file": "packages/backend/src/routes/users.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/users.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "removeAfterWave": null,
       "serialization": "wire",
       "signatureDigest": "sha256:ce1704839cecc9480e972390d5f47777db4be256743abbf7d04856bde5797b14",
@@ -13116,9 +13105,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:e7ab2b900584c1398664"
-      ],
+      "consumerEdgeIds": [],
       "context": "identity-access",
       "dataClass": "confidential",
       "direction": "offered",
@@ -13129,9 +13116,7 @@
       "members": [],
       "methods": [
         {
-          "consumerEdgeIds": [
-            "import:e7ab2b900584c1398664"
-          ],
+          "consumerEdgeIds": [],
           "name": "execute",
           "signatureDigest": "sha256:732c3cf808e3b648dbc188a58e7d52c893969197f4c15bdcfbebeebc4cbf96f3"
         },
@@ -13142,14 +13127,7 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/commands.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:e7ab2b900584c1398664",
-          "file": "packages/backend/src/routes/users.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/users.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "removeAfterWave": null,
       "serialization": "wire",
       "signatureDigest": "sha256:20c4dd82a2992bef3708b4c9f50950fddfec452bb31310f7dfbf307206041b9a",
@@ -13523,6 +13501,121 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [],
+      "context": "identity-access",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.username",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "public:identity-access:participants:AuthenticatedAuthoritySnapshot",
+      "members": [
+        "authorityRevision",
+        "patId",
+        "permissions",
+        "purpose",
+        "source",
+        "user"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AuthenticatedAuthoritySnapshot",
+      "productionConsumers": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:c4770a1665fac4144df2df6d19588f67acfa08b40f5fb94f5ee8dea3b4948f9c",
+      "status": "target-context-current-surface",
+      "symbol": "AuthenticatedAuthoritySnapshot",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Extract",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [
         "import:9e47062fefd95c496209"
       ],
@@ -13708,7 +13801,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:6743c9c44ccd788a69c6"
+        "import:6743c9c44ccd788a69c6",
+        "import:a750ab47e77a5a32d43d"
       ],
       "context": "identity-access",
       "dataClass": "metadata",
@@ -13761,6 +13855,12 @@
           "edgeId": "import:6743c9c44ccd788a69c6",
           "file": "packages/backend/src/services/memory.ts",
           "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a750ab47e77a5a32d43d",
+          "file": "packages/backend/src/cli/user.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/user.ts#$file"
         }
       ],
       "removeAfterWave": null,
@@ -14005,10 +14105,175 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:44063dbd9a2b40f75bf1",
+        "import:4d57f7be24d2d7aeceb0",
+        "import:4f2d65e593b82a16fee0",
+        "import:7ec84363e10805158745"
+      ],
+      "context": "identity-access",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:4f2d65e593b82a16fee0"
+          ],
+          "fieldPath": "authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4f2d65e593b82a16fee0"
+          ],
+          "fieldPath": "patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4f2d65e593b82a16fee0",
+            "import:7ec84363e10805158745"
+          ],
+          "fieldPath": "purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44063dbd9a2b40f75bf1",
+            "import:4f2d65e593b82a16fee0",
+            "import:7ec84363e10805158745"
+          ],
+          "fieldPath": "source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44063dbd9a2b40f75bf1",
+            "import:4d57f7be24d2d7aeceb0",
+            "import:7ec84363e10805158745"
+          ],
+          "fieldPath": "user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "userId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "public:identity-access:participants:DirectAuthenticatedAuthority",
+      "members": [
+        "[directAuthenticatedAuthorityBrand]",
+        "userId"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthenticatedAuthority",
+      "productionConsumers": [
+        {
+          "context": "development-automation",
+          "edgeId": "import:44063dbd9a2b40f75bf1",
+          "file": "packages/backend/src/modules/development-automation/application/missionOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/missionOperations.ts#$file"
+        },
+        {
+          "context": "development-automation",
+          "edgeId": "import:4d57f7be24d2d7aeceb0",
+          "file": "packages/backend/src/modules/development-automation/application/activityOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/activityOperations.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:4f2d65e593b82a16fee0",
+          "file": "packages/backend/src/routes/operationAuthority.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/operationAuthority.ts#$file"
+        },
+        {
+          "context": "development-automation",
+          "edgeId": "import:7ec84363e10805158745",
+          "file": "packages/backend/src/modules/development-automation/application/configOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/configOperations.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:d0000807a0421fc83fcad9cf69694d159d48ff92c42745bc65592a2f76aa9b2d",
+      "status": "target-context-current-surface",
+      "symbol": "DirectAuthenticatedAuthority",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Extract",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:261fa7cf7c1c599c04bf",
+        "import:28c52ef9cfc636ab019b",
         "import:5301263b73da31c26c24",
         "import:5a4e4edbb6afcc3e931b",
+        "import:602fc30b72656e3c908a",
         "import:bc0ac2093611bbcf5b73",
-        "import:dea03385f4ecc1079bd5"
+        "import:dea03385f4ecc1079bd5",
+        "import:df95accbb61c2a32c7d0"
       ],
       "context": "identity-access",
       "dataClass": "confidential",
@@ -14018,12 +14283,21 @@
       "file": "packages/backend/src/modules/identity-access/public/participants.ts",
       "id": "public:identity-access:participants:DirectOperationContextFactory",
       "members": [
+        "authorityFromAuthenticatedPrincipal",
         "fromAuthenticatedPrincipal",
         "fromAuthenticatedPrincipalWithIdempotency",
         "queryFromAuthenticatedPrincipal",
-        "resolveCommandContext"
+        "resolveCommandContext",
+        "resolveQueryContext"
       ],
       "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:df95accbb61c2a32c7d0"
+          ],
+          "name": "authorityFromAuthenticatedPrincipal",
+          "signatureDigest": "sha256:1f1bc4800d559821da8367b1010ada0ff8a8db44007072c24c7c97de9ad015fd"
+        },
         {
           "consumerEdgeIds": [
             "import:5301263b73da31c26c24",
@@ -14051,10 +14325,27 @@
           ],
           "name": "resolveCommandContext",
           "signatureDigest": "sha256:f2d38eb7fcee0d4aba08575fb8d869c2691479cc354d6c71daf4e9b7ae97be97"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "resolveQueryContext",
+          "signatureDigest": "sha256:479ab6f1749bdc0c1041e0b6091599caae8391b6e2a9577062ea54c29736569b"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectOperationContextFactory",
       "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:261fa7cf7c1c599c04bf",
+          "file": "packages/backend/src/routes/developmentMissions.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:28c52ef9cfc636ab019b",
+          "file": "packages/backend/src/routes/digitalEmployees.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:5301263b73da31c26c24",
@@ -14069,6 +14360,12 @@
         },
         {
           "context": "legacy",
+          "edgeId": "import:602fc30b72656e3c908a",
+          "file": "packages/backend/src/routes/developmentConfig.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#$file"
+        },
+        {
+          "context": "legacy",
           "edgeId": "import:bc0ac2093611bbcf5b73",
           "file": "packages/backend/src/services/memory.ts",
           "ownerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
@@ -14078,11 +14375,17 @@
           "edgeId": "import:dea03385f4ecc1079bd5",
           "file": "packages/backend/src/routes/memories.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:df95accbb61c2a32c7d0",
+          "file": "packages/backend/src/routes/operationAuthority.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/operationAuthority.ts#$file"
         }
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:9f4f1791148930bd6b70cb1d5de5e12b2c1b3a2102eab170ce8aa90c8850ec67",
+      "signatureDigest": "sha256:57f3828456fae0caa0a5943a00a3396788321db5d7573d64fc83ccfc6562f392",
       "status": "target-context-current-surface",
       "symbol": "DirectOperationContextFactory",
       "transaction": "caller-tx",
@@ -14306,7 +14609,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:9055a24dab4915c4cd67"
+      ],
       "context": "identity-access",
       "dataClass": "metadata",
       "direction": "offered",
@@ -14332,7 +14637,14 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:9055a24dab4915c4cd67",
+          "file": "packages/backend/src/cli/user.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/user.ts#$file"
+        }
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:78d451ed2a29f097e246598eaa8c1b54d8dffa3372bf8099ca9ddb7b2bd3bcf2",
@@ -14451,9 +14763,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:f85bda1e8b290bdd61d0"
-      ],
+      "consumerEdgeIds": [],
       "context": "identity-access",
       "dataClass": "confidential",
       "direction": "offered",
@@ -14469,29 +14779,23 @@
           "signatureDigest": "sha256:6ddadbbc453974c6dd8a85a87d3099bdbc89702a3256452b63cb82218e306d4f"
         },
         {
-          "consumerEdgeIds": [
-            "import:f85bda1e8b290bdd61d0"
-          ],
+          "consumerEdgeIds": [],
+          "name": "authorize",
+          "signatureDigest": "sha256:8386d000936fabd9d00dd4f71925d0f569f2a46c416cdd2ae4ace219b230314e"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "execute",
           "signatureDigest": "sha256:8af5b48f2285b7a78c056ad412243f5b99780226a1ed60f3cc42152fd7b87ea6"
         },
         {
-          "consumerEdgeIds": [
-            "import:f85bda1e8b290bdd61d0"
-          ],
+          "consumerEdgeIds": [],
           "name": "list",
           "signatureDigest": "sha256:62dc63f70c546683984ae84b4e6c4f84fbf76df568f63a0c3dddf49179467631"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/queries.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:f85bda1e8b290bdd61d0",
-          "file": "packages/backend/src/routes/users.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/users.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "removeAfterWave": null,
       "serialization": "wire",
       "signatureDigest": "sha256:fd6dcf5c63a5f1de7c0755258996e017d12ff5340d4e9d29a9807115147c0506",
@@ -14660,18 +14964,14 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 13
       },
-      "consumerEdgeIds": [
-        "import:3d7ee61e4d7f75c1323b"
-      ],
+      "consumerEdgeIds": [],
       "context": "identity-access",
       "dataClass": "confidential",
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:3d7ee61e4d7f75c1323b"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "accessRevision",
           "type": "number"
         },
@@ -14681,9 +14981,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d7ee61e4d7f75c1323b"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "displayName",
           "type": "string"
         },
@@ -14698,16 +14996,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d7ee61e4d7f75c1323b"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "forcePasswordChange",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d7ee61e4d7f75c1323b"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "history.createdAt",
           "type": "number"
         },
@@ -14732,16 +15026,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d7ee61e4d7f75c1323b"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "history.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d7ee61e4d7f75c1323b"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "id",
           "type": "string"
         },
@@ -14781,9 +15071,7 @@
           "type": "'invited'"
         },
         {
-          "consumerEdgeIds": [
-            "import:3d7ee61e4d7f75c1323b"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "username",
           "type": "string"
         }
@@ -14804,14 +15092,7 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/types.ts#AdminUserAccessView",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:3d7ee61e4d7f75c1323b",
-          "file": "packages/backend/src/routes/users.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/users.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:8447f6f9fbd6dc27c41e8cd0035980ae2cf50d06fe5a6b45c82fc9b71c7af285",
@@ -16611,7 +16892,7 @@
       },
       "consumerEdgeIds": [
         "import:4356c0c71f43c05ed086",
-        "import:53279e776eee952237c8",
+        "import:69c9575d26f58f30fd8c",
         "import:ad67865e53e58fb12c42"
       ],
       "context": "source-control",
@@ -16628,7 +16909,7 @@
         {
           "consumerEdgeIds": [
             "import:4356c0c71f43c05ed086",
-            "import:53279e776eee952237c8"
+            "import:69c9575d26f58f30fd8c"
           ],
           "name": "open",
           "signatureDigest": "sha256:f6b6441a85062738975ce300a59cbf44ac9433e26e504358533318990f2e852a"
@@ -16643,10 +16924,10 @@
           "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file"
         },
         {
-          "context": "legacy",
-          "edgeId": "import:53279e776eee952237c8",
-          "file": "packages/backend/src/routes/developmentMissions.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file"
+          "context": "development-automation",
+          "edgeId": "import:69c9575d26f58f30fd8c",
+          "file": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#$file"
         },
         {
           "context": "legacy",
@@ -17404,8 +17685,7 @@
         "import:9fb94658c07e4bc6792b",
         "import:c1bbd33580802c4df386",
         "import:cf874ab134b6f5de464c",
-        "import:e94ce69a37e26b3d19e1",
-        "import:ee2f998010e260fd3354"
+        "import:e94ce69a37e26b3d19e1"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -17471,12 +17751,6 @@
           "edgeId": "import:e94ce69a37e26b3d19e1",
           "file": "packages/backend/src/services/webhook/webhookDispatch.ts",
           "ownerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:ee2f998010e260fd3354",
-          "file": "packages/backend/src/routes/developmentMissions.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file"
         }
       ],
       "removeAfterWave": null,
@@ -17503,6 +17777,7 @@
         "import:52aebe854233bde53a8c",
         "import:55f90b53d2618e4d3027",
         "import:62f92a1725e7d433c0cf",
+        "import:63d1e4a51301ab4164aa",
         "import:87d1ccd8f09aeeb9e2c0",
         "import:924a40dfc07194923acc",
         "import:a99b4b3b04f47305bcd8"
@@ -17524,7 +17799,8 @@
         {
           "consumerEdgeIds": [
             "import:52aebe854233bde53a8c",
-            "import:55f90b53d2618e4d3027"
+            "import:55f90b53d2618e4d3027",
+            "import:63d1e4a51301ab4164aa"
           ],
           "name": "drive",
           "signatureDigest": "sha256:6d8900f712bba26023cbb0519798e0e853f920be2b1039b182df0d70d3e21922"
@@ -17579,6 +17855,12 @@
           "edgeId": "import:62f92a1725e7d433c0cf",
           "file": "packages/backend/src/services/multipartTaskStart.ts",
           "ownerEntryId": "owner:packages/backend/src/services/multipartTaskStart.ts#$file"
+        },
+        {
+          "context": "development-automation",
+          "edgeId": "import:63d1e4a51301ab4164aa",
+          "file": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#$file"
         },
         {
           "context": "legacy",
@@ -25704,7 +25986,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805",
+  "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959",
   "targetContexts": [
     "collaboration",
     "development-automation",

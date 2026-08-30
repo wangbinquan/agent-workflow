@@ -308,6 +308,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/development-automation/composition/missionOperations.ts#transaction:211",
+      "line": 211,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#composeDevelopmentMissionOperations",
+      "status": "clear",
+      "symbol": "composeDevelopmentMissionOperations",
+      "targetContext": "development-automation",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#dbTxSync:132",
@@ -1156,18 +1168,6 @@
       "symbol": "createMaintenanceRunStore",
       "targetContext": "platform",
       "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/routes/developmentMissions.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/routes/developmentMissions.ts#transaction:225",
-      "line": 225,
-      "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
-      "status": "clear",
-      "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [
@@ -3474,7 +3474,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805",
+  "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

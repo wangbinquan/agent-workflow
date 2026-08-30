@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1016,
+    "entries": 1027,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -733,6 +733,29 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/cli/userBootstrap.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/userBootstrap.ts#runUserCommand",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/userBootstrap.ts#runUserCommand",
+      "symbol": "runUserCommand",
+      "targetContext": "identity-access",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -1104,27 +1127,28 @@
     },
     {
       "controls": {
-        "audit": true,
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/mcp/dispatch.ts",
+      "file": "packages/backend/src/mcp/operationClient.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/mcp/dispatch.ts#createDispatcher",
+      "id": "mutation:packages/backend/src/mcp/operationClient.ts#createBoundMcpOperationHandles",
       "missingControls": [
+        "audit",
         "authority",
         "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/mcp/dispatch.ts#createDispatcher",
-      "symbol": "createDispatcher",
+      "ownerEntryId": "owner:packages/backend/src/mcp/operationClient.ts#createBoundMcpOperationHandles",
+      "symbol": "createBoundMcpOperationHandles",
       "targetContext": "resource-catalog",
-      "targetLayer": "inbound"
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -2434,6 +2458,30 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/application/activityOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/application/activityOperations.ts#createDevelopmentActivityOperation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/activityOperations.ts#createDevelopmentActivityOperation",
+      "symbol": "createDevelopmentActivityOperation",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "internal-family",
         "authorization": true,
         "event": true,
@@ -3361,6 +3409,75 @@
         "fenceOrOcc": true,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/development-automation/application/configOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/application/configOperations.ts#createDevelopmentConfigResourceDescriptors",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/configOperations.ts#createDevelopmentConfigResourceDescriptors",
+      "symbol": "createDevelopmentConfigResourceDescriptors",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/application/configOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/application/configOperations.ts#createDevelopmentConfigSupplementalDescriptors",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/configOperations.ts#createDevelopmentConfigSupplementalDescriptors",
+      "symbol": "createDevelopmentConfigSupplementalDescriptors",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/application/configOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/application/configOperations.ts#publishReceiptSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/configOperations.ts#publishReceiptSchema",
+      "symbol": "publishReceiptSchema",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/development-automation/application/conflictRepairDelivery.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/development-automation/application/conflictRepairDelivery.ts#publishConflictRepair",
@@ -3512,6 +3629,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/missionDriver.ts#stopOf",
       "symbol": "stopOf",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/application/missionOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/application/missionOperations.ts#createDevelopmentMissionDescriptors",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/missionOperations.ts#createDevelopmentMissionDescriptors",
+      "symbol": "createDevelopmentMissionDescriptors",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -6339,6 +6478,104 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/public/operations.ts#createIdentityUserOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#createIdentityUserOperations",
+      "symbol": "createIdentityUserOperations",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/public/operations.ts#createUserInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#createUserInputSchema",
+      "symbol": "createUserInputSchema",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/public/operations.ts#disableUserInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#disableUserInputSchema",
+      "symbol": "disableUserInputSchema",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/public/operations.ts#updateUserInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#updateUserInputSchema",
+      "symbol": "updateUserInputSchema",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -6604,7 +6841,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -6615,7 +6852,6 @@
       "id": "mutation:packages/backend/src/modules/integration/composition.ts#createDeferredDigitalEmployeeWorkStart",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
         "event",
         "fenceOrOcc",
@@ -10614,6 +10850,56 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/operations/boundOperationInvoker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/operations/boundOperationInvoker.ts#createBoundOperationInvoker",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/operations/boundOperationInvoker.ts#createBoundOperationInvoker",
+      "symbol": "createBoundOperationInvoker",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/operations/boundOperationInvoker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/operations/boundOperationInvoker.ts#runHandlerChain",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/operations/boundOperationInvoker.ts#runHandlerChain",
+      "symbol": "runHandlerChain",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "internal-family",
         "authorization": false,
         "event": false,
@@ -10730,30 +11016,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/routes/developmentConfig.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/routes/developmentConfig.ts#createBodySchema",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#createBodySchema",
-      "symbol": "createBodySchema",
-      "targetContext": "task-execution",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -10761,7 +11023,7 @@
       },
       "file": "packages/backend/src/routes/digitalEmployees.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:263",
+      "id": "mutation:packages/backend/src/routes/digitalEmployees.ts#$http:delete:272",
       "missingControls": [
         "audit",
         "authority",
@@ -10771,7 +11033,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
-      "symbol": "$http:delete:263",
+      "symbol": "$http:delete:272",
       "targetContext": "source-control",
       "targetLayer": "inbound"
     },
@@ -24121,7 +24383,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805",
+  "sourceDigest": "sha256:05937043840ae09bf4da3a2e1a69da9eecf1c7817b4b08c841542379ce2b1959",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
