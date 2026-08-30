@@ -29385,7 +29385,7 @@
             "import:574c6f41a4373335a708"
           ],
           "fieldPath": "$method:delete.$parameter:input.deletion",
-          "type": "z.infer<typeof DeleteWorkgroupSchema>"
+          "type": "unknown"
         },
         {
           "consumerEdgeIds": [
@@ -34556,7 +34556,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "deletion",
-          "type": "z.infer<typeof DeleteWorkgroupSchema>"
+          "type": "unknown"
         },
         {
           "consumerEdgeIds": [],
@@ -34578,13 +34578,11 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:c451075319e866ee6063ee5280a8fe97890ae48a071f9295ed9ab5419bd223b3",
+      "signatureDigest": "sha256:908e3326a7372507224523f8fef387cb1d7b74e04a7ae9d7be13ddc2981cebf5",
       "status": "target-context-current-surface",
       "symbol": "DeleteWorkgroupCatalogInput",
       "transaction": "none",
-      "unresolvedTypeRefs": [
-        "z.infer"
-      ],
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -55650,7 +55648,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b4d33e32e251f6882c829c6a2fad250607d8d97d93691d57f27316c9f9182edc",
+  "sourceDigest": "sha256:964de20c3a13eeb7dbde11afbc898d33de3e93a28caa0cab2493eecf3edc1d4c",
   "targetContexts": [
     "collaboration",
     "development-automation",
