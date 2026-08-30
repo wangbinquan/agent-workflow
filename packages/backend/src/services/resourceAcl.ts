@@ -20,7 +20,6 @@ import {
   type AclRow,
   type ResourceAclIdentityPersistence,
 } from '@/modules/resource-catalog/public/operations'
-import { resolveLegacyResourceAclIdentityPersistence } from './resourceAclIdentityPersistence'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/public/operations'
@@ -107,13 +106,7 @@ export function getResourceAcl(
   row: AclRow,
   identityPersistence?: ResourceAclIdentityPersistence,
 ): Promise<ResourceAcl> {
-  return getResourceAclComposition(
-    db,
-    actor,
-    type,
-    row,
-    identityPersistence ?? resolveLegacyResourceAclIdentityPersistence(db, type),
-  )
+  return getResourceAclComposition(db, actor, type, row, identityPersistence)
 }
 
 /**
@@ -143,8 +136,6 @@ export async function updateResourceAcl(
 ): Promise<ResourceAcl> {
   return updateResourceAclComposition(db, actor, type, row, body, {
     ...options,
-    identityPersistence:
-      options.identityPersistence ?? resolveLegacyResourceAclIdentityPersistence(db, type),
     afterCommit: (client) => triggerRevalidation(client, 'resource-acl-changed'),
   })
 }

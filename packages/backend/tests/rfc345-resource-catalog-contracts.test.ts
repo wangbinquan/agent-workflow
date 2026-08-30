@@ -3,7 +3,7 @@
 // purpose-specific participants and seven package participants.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   ACL_RESOURCE_TYPES,
@@ -337,24 +337,24 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ]) {
       expect(facade).not.toContain(forbiddenImplementation)
     }
-    expect(facade).toContain('resolveLegacyResourceAclIdentityPersistence(db, type)')
-    const foreignProvider = readFileSync(
-      resolve(sourceRoot, 'services/resourceAclIdentityPersistence.ts'),
+    expect(facade).not.toContain('resolveLegacyResourceAclIdentityPersistence')
+    expect(existsSync(resolve(sourceRoot, 'services/resourceAclIdentityPersistence.ts'))).toBe(
+      false,
+    )
+    const digitalEmployeeCommands = readFileSync(
+      resolve(sourceRoot, 'modules/digital-employee/public/commands.ts'),
       'utf8',
     )
-    expect(foreignProvider).toContain("from '@/modules/digital-employee/public/commands'")
-    expect(foreignProvider).toContain("from '@/modules/integration/public/participants'")
-    expect(foreignProvider).not.toMatch(
-      /modules\/(?:digital-employee|integration)\/(?:application|composition|domain|infrastructure)/,
+    const integrationParticipants = readFileSync(
+      resolve(sourceRoot, 'modules/integration/public/participants.ts'),
+      'utf8',
     )
-    for (const type of [
-      'development_adapter',
-      'employee_definition',
-      'employee_tool',
-      'employee_job_template',
-    ]) {
-      expect(foreignProvider).toContain(`'${type}'`)
-    }
+    expect(digitalEmployeeCommands).not.toContain(
+      'createDigitalEmployeeResourceCatalogAclProviders',
+    )
+    expect(integrationParticipants).not.toContain(
+      'createDevelopmentAdapterResourceCatalogAclProvider',
+    )
     const application = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/application/resourceAcl.ts'),
       'utf8',

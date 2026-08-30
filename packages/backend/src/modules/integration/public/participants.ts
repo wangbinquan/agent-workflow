@@ -1,7 +1,5 @@
 import type { StartAgentTask, StartTask, StartWorkgroupTask } from '@agent-workflow/shared'
 
-export { createDevelopmentAdapterResourceCatalogAclProvider } from '../composition/resourceCatalogAcl'
-
 export interface EventWorkStartOrigin {
   readonly eventSubscriptionId: string
   readonly eventDeliveryId: string
