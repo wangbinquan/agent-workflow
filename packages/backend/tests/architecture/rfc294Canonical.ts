@@ -351,6 +351,50 @@ export function hasScheduleTargetToken(path: string, symbol = ''): boolean {
   )
 }
 
+const SYSTEM_OPERATIONS_INBOUND_FILES = new Set([
+  'packages/backend/src/cli/backup.ts',
+  'packages/backend/src/cli/restore.ts',
+  'packages/backend/src/routes/backup.ts',
+  'packages/backend/src/routes/restore.ts',
+])
+
+const PLATFORM_ADMIN_MECHANISM_FILES = new Set([
+  'packages/backend/src/routes/maintenance.ts',
+  'packages/backend/src/routes/maintenanceDisk.ts',
+  'packages/backend/src/services/backup.ts',
+  'packages/backend/src/services/backupManifest.ts',
+  'packages/backend/src/services/backupScheduler.ts',
+  'packages/backend/src/services/backupVacuumWorker.ts',
+  'packages/backend/src/services/daemonCadence.ts',
+  'packages/backend/src/services/maintenanceDisk.ts',
+  'packages/backend/src/services/maintenanceRetention.ts',
+  'packages/backend/src/services/maintenanceState.ts',
+  'packages/backend/src/services/maintenanceTicker.ts',
+  'packages/backend/src/services/pendingRestore.ts',
+  'packages/backend/src/services/rawDbSnapshot.ts',
+  'packages/backend/src/services/restore.ts',
+  'packages/backend/src/util/migrationsFolder.ts',
+])
+
+const BOOTSTRAP_ADMIN_AGGREGATE_FILES = new Set([
+  'packages/backend/src/cli/dbCompact.ts',
+  'packages/backend/src/cli/doctor.ts',
+  'packages/backend/src/cli/migrate.ts',
+  'packages/backend/src/cli/migrationReport.ts',
+  'packages/backend/src/cli/rfc295-downgrade-audit.ts',
+  'packages/backend/src/services/rfc295DowngradeAudit.ts',
+])
+
+const RFC346_W9_E_COMPATIBILITY_FILES = new Set([
+  'packages/backend/src/cli/rfc295-downgrade-audit.ts',
+  'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
+  'packages/backend/src/services/backup.ts',
+  'packages/backend/src/services/pendingRestore.ts',
+  'packages/backend/src/services/restore.ts',
+  'packages/backend/src/services/rfc295DowngradeAudit.ts',
+  'packages/backend/src/services/worktreeBackup.ts',
+])
+
 export function targetContextFor(path: string, symbol = ''): TargetOwner {
   const location = moduleLocation(path)
   if (
@@ -372,6 +416,9 @@ export function targetContextFor(path: string, symbol = ''): TargetOwner {
   ) {
     return 'platform'
   }
+  if (SYSTEM_OPERATIONS_INBOUND_FILES.has(path)) return 'system-operations'
+  if (PLATFORM_ADMIN_MECHANISM_FILES.has(path)) return 'platform'
+  if (BOOTSTRAP_ADMIN_AGGREGATE_FILES.has(path)) return 'bootstrap'
   const value = `${path}#${symbol}`.toLowerCase()
   if (/identity|auth|user|permission|grant|oidc|presence/.test(value)) return 'identity-access'
   if (/memory|distill/.test(value)) return 'memory'
@@ -391,7 +438,6 @@ export function targetContextFor(path: string, symbol = ''): TargetOwner {
   if (/eventcenter|eventdelivery|eventsource/.test(value)) return 'event-center'
   if (/catalog/.test(value)) return 'task-catalog'
   if (/agent|workflow|workgroup|plugin|skill|mcp/.test(value)) return 'resource-catalog'
-  if (/backup|restore|maintenance|doctor|migrate/.test(value)) return 'system-operations'
   return 'task-execution'
 }
 
@@ -441,6 +487,7 @@ export function targetRemoveAfterWaveFor(
   symbol: string,
   targetContext: TargetOwner = targetContextFor(path, symbol),
 ): string {
+  if (RFC346_W9_E_COMPATIBILITY_FILES.has(path)) return 'W9-E'
   if (path === 'packages/backend/src/services/scheduler.ts') {
     if (SCHEDULER_W2_B_SYMBOLS.has(symbol)) return 'W2-B'
     if (SCHEDULER_W2_D_SYMBOLS.has(symbol)) return 'W2-D'
@@ -749,7 +796,15 @@ function publicLocation(path: string): { context: string; entrypoint: string } |
 
 function requiredPortLocation(path: string): { context: string } | null {
   const location = moduleLocation(path)
-  return location?.rest === 'composition/required-ports' ? { context: location.context } : null
+  if (location === null) return null
+  if (location.rest === 'composition/required-ports') return { context: location.context }
+  if (
+    location.context === 'system-operations' &&
+    /^application\/ports\/[^/]+$/.test(location.rest)
+  ) {
+    return { context: location.context }
+  }
+  return null
 }
 
 type ObservedEdgeRole =
@@ -804,7 +859,15 @@ function observedContextEdges(
       // manifest owns backend module and legacy-boundary edges only.
       if (!item.toFile.startsWith(BACKEND_PREFIX)) continue
       const toLocation = moduleLocation(item.toFile)
-      if (fromLocation?.context === toLocation?.context) continue
+      const sameContextRequiredImplementation =
+        fromLocation !== null &&
+        fromLocation.context === toLocation?.context &&
+        requiredPortLocation(item.toFile) !== null &&
+        item.edgeKind === 'type' &&
+        fromLocation.rest.startsWith('infrastructure/')
+      if (fromLocation?.context === toLocation?.context && !sameContextRequiredImplementation) {
+        continue
+      }
       if (fromLocation === null && toLocation === null) continue
 
       let role: ObservedEdgeRole
@@ -836,7 +899,8 @@ function observedContextEdges(
         } else if (
           requiredPort !== null &&
           item.edgeKind === 'type' &&
-          /^application\/adapters\/[^/]+-adapter$/.test(fromLocation.rest)
+          (sameContextRequiredImplementation ||
+            /^application\/adapters\/[^/]+-adapter$/.test(fromLocation.rest))
         ) {
           role = 'required-implementation'
         } else if (publicEntry !== null) {
@@ -1923,7 +1987,12 @@ function buildRequiredPorts(
         (entry) => entry.toFile === unit.path && entry.importedName === item.name,
       )
       const consumers = uses
-        .filter((entry) => moduleLocation(entry.fromFile)?.context === location.context)
+        .filter((entry) => {
+          const from = moduleLocation(entry.fromFile)
+          if (from?.context !== location.context) return false
+          if (location.context !== 'system-operations') return true
+          return from.rest.startsWith('application/') && !from.rest.startsWith('application/ports/')
+        })
         .map((entry) => ownerEntryId(entry.fromFile, '$file'))
         .sort()
       const providerAdapters = observedEdges
@@ -1960,7 +2029,9 @@ function buildRequiredPorts(
           ? null
           : location.context === 'development-automation'
             ? 'W4-E8/W5'
-            : 'W4-E9',
+            : location.context === 'system-operations'
+              ? 'W4-E7'
+              : 'W4-E9',
       })
     }
   }

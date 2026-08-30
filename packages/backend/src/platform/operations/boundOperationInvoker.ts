@@ -16,6 +16,7 @@ import type {
   OperationInvoker,
   OperationResult,
 } from '@/platform/operations/contracts'
+import { resolveOperationId } from '@/platform/operations/catalog'
 import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { errorHandler } from '@/util/errors'
 
@@ -201,13 +202,14 @@ export function createBoundOperationInvoker(app: Hono, actor: Actor): OperationI
     throw new BoundOperationInvocationError('operation handler table is not mounted')
   }
   return async (operationId, input = {}) => {
-    const binding = operations.get(operationId)
+    const binding = operations.get(resolveOperationId(operationId))
     if (binding === undefined) {
       throw new BoundOperationInvocationError(`unknown or unmounted operation '${operationId}'`)
     }
     const materialized = materializeRequest(binding, input)
     const context = new Context(materialized.request, { env: {}, path: materialized.path })
     context.set('actor', actor)
+    context.set('operationTransport', 'mcp')
     const request = context.req as typeof context.req & {
       param(name?: string): string | Readonly<Record<string, string>> | undefined
     }

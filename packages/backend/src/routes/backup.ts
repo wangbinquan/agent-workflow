@@ -2,31 +2,40 @@
 // The Settings page "Export backup" button calls this.
 
 import type { Hono } from 'hono'
-import { createBackup } from '@/services/backup'
-import { ensureCredentialsSealed } from '@/services/repoCredentials'
-import type { AppDeps } from '@/server'
-import { registerRoute } from '@/routes/registry'
+import { actorOf } from '@/auth/actor'
+import type {
+  DirectAuthorityBinding,
+  DirectCommandContextFactory,
+} from '@/modules/identity-access/public/participants'
+import type { SystemOperationDescriptors } from '@/modules/system-operations/public/operations'
+import { registerOperationRoute } from '@/routes/operationRoute'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
-export function mountBackupRoutes(app: Hono, deps: AppDeps): void {
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/backup',
-      permissions: ['backup:run'],
-      tokenAccess: 'allow',
-      summary: 'Run a backup',
-    },
-    async (c) => {
-      // RFC-204: seal before the snapshot — same reason as the backup CLI, this
-      // route can be the first thing that runs after an upgrade.
-      ensureCredentialsSealed(deps.db, deps.secretBox, { blockOnCredentialedPath: true })
-      const r = await createBackup({ db: deps.db })
-      return c.json({
-        path: r.path,
-        sizeBytes: r.sizeBytes,
-        contents: r.contents,
-      })
-    },
-  )
+interface BackupRouteSystemOperations {
+  readonly operations: Pick<SystemOperationDescriptors, 'requestBackup'>
+}
+
+interface BackupRouteIdentityAccess {
+  readonly contexts: DirectCommandContextFactory
+  readonly directAuthority: DirectAuthorityBinding
+}
+
+export function mountBackupRoutes(
+  app: Hono,
+  systemOperations: BackupRouteSystemOperations,
+  identityAccess: BackupRouteIdentityAccess,
+): void {
+  registerOperationRoute(app, {
+    descriptor: systemOperations.operations.requestBackup,
+    method: 'POST',
+    path: '/api/backup',
+    tokenAccess: 'allow',
+    decode: () => ({ includeWorktrees: false }),
+    context: (c) =>
+      identityAccess.contexts.fromAuthority(
+        directRequestAuthority(identityAccess.directAuthority, actorOf(c)),
+        'http',
+      ),
+    encode: (c, output) => c.json(output),
+  })
 }

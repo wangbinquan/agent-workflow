@@ -10,6 +10,7 @@ import {
   type HttpMethod,
   type HttpOperationBinding,
   type McpOperationBinding,
+  type OperationAlias,
   type OperationDescriptor,
   type OperationContextKind,
   type OperationId,
@@ -29,7 +30,7 @@ export interface DeclaredHttpOperation {
    * handler.  It is an explicit migration debt, never evidence that the
    * owning application descriptor has been cut over.
    */
-  readonly implementation: 'descriptor' | 'compatibility'
+  readonly implementation: 'descriptor' | 'compatibility' | 'alias'
 }
 
 export interface OperationCatalogRouteProjection extends HttpOperationBinding {
@@ -74,6 +75,7 @@ export interface OperationDescriptorProjection {
 
 export interface OperationCatalogSnapshot {
   readonly declarations: ReadonlyArray<DeclaredHttpOperation>
+  readonly aliases?: ReadonlyArray<OperationAlias>
   readonly descriptors?: ReadonlyArray<OperationDescriptorProjection>
   readonly routes: ReadonlyArray<OperationCatalogRouteProjection>
   readonly tools: ReadonlyArray<OperationCatalogToolProjection>
@@ -82,6 +84,7 @@ export interface OperationCatalogSnapshot {
 const DECLARED_BY_ID = new Map<OperationId, DeclaredHttpOperation>()
 const DECLARED_BY_ROUTE = new Map<string, DeclaredHttpOperation>()
 const ROUTE_DERIVED_DECLARATION_IDS = new Set<OperationId>()
+const ALIASES_BY_ID = new Map<OperationId, OperationAlias>()
 const DESCRIPTORS_BY_ID = new Map<OperationId, OperationDescriptorProjection>()
 const ROUTES_BY_ID = new Map<OperationId, OperationCatalogRouteProjection>()
 const ROUTES_BY_KEY = new Map<string, OperationCatalogRouteProjection>()
@@ -146,10 +149,65 @@ export function registerOperationDescriptor<I, O, C>(
   return next
 }
 
+export function registerOperationAlias(alias: OperationAlias): OperationAlias {
+  assertOperationId(alias.alias)
+  assertOperationId(alias.target)
+  if (alias.alias === alias.target) {
+    throw new OperationCatalogError(`${alias.alias}: operation alias cannot target itself`)
+  }
+  const target = DECLARED_BY_ID.get(alias.target)
+  if (target === undefined) {
+    throw new OperationCatalogError(
+      `${alias.alias}: unknown operation alias target '${alias.target}'`,
+    )
+  }
+  if (target.implementation !== 'descriptor') {
+    throw new OperationCatalogError(
+      `${alias.alias}: operation alias target is not descriptor-backed`,
+    )
+  }
+  const next = Object.freeze({ ...alias })
+  const existing = ALIASES_BY_ID.get(next.alias)
+  if (existing !== undefined) {
+    if (existing.target !== next.target || existing.removeAfter !== next.removeAfter) {
+      throw new OperationCatalogError(`${next.alias}: conflicting operation alias`)
+    }
+    return existing
+  }
+  if (DECLARED_BY_ID.has(next.alias)) {
+    throw new OperationCatalogError(`${next.alias}: operation alias conflicts with a declaration`)
+  }
+  const declaration: DeclaredHttpOperation = Object.freeze({
+    id: next.alias,
+    kind: target.kind,
+    method: target.method,
+    path: target.path,
+    implementation: 'alias',
+  })
+  ALIASES_BY_ID.set(next.alias, next)
+  // Alias declarations deliberately stay out of DECLARED_BY_ROUTE: the target
+  // is the route's only primary and owns its sole handler projection.
+  DECLARED_BY_ID.set(next.alias, declaration)
+  return next
+}
+
+export function allOperationAliases(): ReadonlyArray<OperationAlias> {
+  return Object.freeze([...ALIASES_BY_ID.values()])
+}
+
+export function lookupOperationAlias(id: OperationId): OperationAlias | undefined {
+  return ALIASES_BY_ID.get(id)
+}
+
+/** Resolve at most one compatibility hop to the application primary id. */
+export function resolveOperationId(id: OperationId): OperationId {
+  return ALIASES_BY_ID.get(id)?.target ?? id
+}
+
 export function lookupOperationDescriptor(
   id: OperationId,
 ): OperationDescriptorProjection | undefined {
-  return DESCRIPTORS_BY_ID.get(id)
+  return DESCRIPTORS_BY_ID.get(resolveOperationId(id))
 }
 
 export function declareHttpOperation(input: {
@@ -157,7 +215,7 @@ export function declareHttpOperation(input: {
   readonly kind?: DeclaredHttpOperation['kind']
   readonly method: HttpMethod
   readonly path: string
-  readonly implementation?: DeclaredHttpOperation['implementation']
+  readonly implementation?: Exclude<DeclaredHttpOperation['implementation'], 'alias'>
 }): DeclaredHttpOperation {
   const id = operationId(input.id)
   const next: DeclaredHttpOperation = Object.freeze({
@@ -243,7 +301,7 @@ export function registerHttpOperationProjection(input: {
 export function lookupHttpOperationById(
   id: OperationId,
 ): OperationCatalogRouteProjection | undefined {
-  return ROUTES_BY_ID.get(id)
+  return ROUTES_BY_ID.get(resolveOperationId(id))
 }
 
 export function lookupDeclaredHttpOperation(
@@ -256,7 +314,7 @@ export function lookupDeclaredHttpOperation(
 export function lookupDeclaredHttpOperationById(
   id: OperationId,
 ): DeclaredHttpOperation | undefined {
-  return DECLARED_BY_ID.get(id)
+  return DECLARED_BY_ID.get(resolveOperationId(id))
 }
 
 export function allOperationRoutes(): ReadonlyArray<OperationCatalogRouteProjection> {
@@ -351,6 +409,7 @@ function sameStrings(left: ReadonlyArray<string>, right: ReadonlyArray<string>):
  * each negative fixture without contaminating another app instance.
  */
 export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnapshot): void {
+  const aliases = snapshot.aliases ?? []
   const descriptors = snapshot.descriptors ?? []
   const duplicateDescriptorIds = duplicateValues(descriptors.map((entry) => entry.id))
   if (duplicateDescriptorIds.length > 0) {
@@ -420,7 +479,9 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
     throw new OperationCatalogError(`duplicate operation ids: ${duplicateIds.join(', ')}`)
   }
   const duplicateDeclarationRoutes = duplicateValues(
-    snapshot.declarations.map((entry) => routeKey(entry.method, entry.path)),
+    snapshot.declarations
+      .filter((entry) => entry.implementation !== 'alias')
+      .map((entry) => routeKey(entry.method, entry.path)),
   )
   if (duplicateDeclarationRoutes.length > 0) {
     throw new OperationCatalogError(
@@ -430,6 +491,75 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
 
   const declaredById = new Map(snapshot.declarations.map((entry) => [entry.id, entry]))
   const routesById = new Map(snapshot.routes.map((entry) => [entry.operationId, entry]))
+
+  const aliasesById = new Map<OperationId, OperationAlias>()
+  for (const alias of aliases) {
+    if (!OPERATION_ID_PATTERN.test(alias.alias) || !OPERATION_ID_PATTERN.test(alias.target)) {
+      throw new OperationCatalogError(`${alias.alias}: invalid operation alias id`)
+    }
+    const existing = aliasesById.get(alias.alias)
+    if (existing !== undefined) {
+      if (existing.target !== alias.target) {
+        throw new OperationCatalogError(`${alias.alias}: operation alias is one-to-many`)
+      }
+      throw new OperationCatalogError(`${alias.alias}: duplicate operation alias`)
+    }
+    aliasesById.set(alias.alias, alias)
+  }
+  for (const alias of aliases) {
+    const seen = new Set<OperationId>([alias.alias])
+    let cursor = alias.target
+    while (aliasesById.has(cursor)) {
+      if (seen.has(cursor)) {
+        throw new OperationCatalogError(`${alias.alias}: operation alias cycle`)
+      }
+      seen.add(cursor)
+      cursor = aliasesById.get(cursor)!.target
+    }
+    if (aliasesById.has(alias.target)) {
+      throw new OperationCatalogError(`${alias.alias}: operation alias chain is forbidden`)
+    }
+
+    const declaration = declaredById.get(alias.alias)
+    if (declaration === undefined || declaration.implementation !== 'alias') {
+      throw new OperationCatalogError(`${alias.alias}: missing operation alias declaration`)
+    }
+    const target = declaredById.get(alias.target)
+    if (target === undefined) {
+      throw new OperationCatalogError(
+        `${alias.alias}: unknown operation alias target '${alias.target}'`,
+      )
+    }
+    if (target.implementation !== 'descriptor') {
+      throw new OperationCatalogError(
+        `${alias.alias}: stale operation alias target '${alias.target}'`,
+      )
+    }
+    if (declaration.kind !== target.kind) {
+      throw new OperationCatalogError(`${alias.alias}: operation alias kind mismatch`)
+    }
+    if (declaration.method !== target.method || declaration.path !== target.path) {
+      throw new OperationCatalogError(`${alias.alias}: operation alias binding mismatch`)
+    }
+    const aliasMajor = alias.alias.match(/\.v([1-9][0-9]*)$/)?.[1]
+    const targetMajor = alias.target.match(/\.v([1-9][0-9]*)$/)?.[1]
+    if (aliasMajor !== targetMajor) {
+      throw new OperationCatalogError(`${alias.alias}: operation alias codec major mismatch`)
+    }
+    if (alias.removeAfter !== 'explicit-consumer-zero-decision') {
+      throw new OperationCatalogError(`${alias.alias}: invalid operation alias removal contract`)
+    }
+    if (descriptorsById.has(alias.alias) || routesById.has(alias.alias)) {
+      throw new OperationCatalogError(`${alias.alias}: operation alias cannot own codec or handler`)
+    }
+  }
+  for (const declaration of snapshot.declarations) {
+    if (declaration.implementation === 'alias' && !aliasesById.has(declaration.id)) {
+      throw new OperationCatalogError(`${declaration.id}: stale operation alias declaration`)
+    }
+  }
+
+  const resolvedOperationId = (id: OperationId): OperationId => aliasesById.get(id)?.target ?? id
   const duplicateMountedIds = duplicateValues(snapshot.routes.map((entry) => entry.operationId))
   if (duplicateMountedIds.length > 0) {
     throw new OperationCatalogError(
@@ -546,7 +676,7 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
     }
     for (const id of dependencies) {
       if (tool.binding.kind === 'mcp-local') continue
-      if (!routesById.has(id)) {
+      if (!routesById.has(resolvedOperationId(id))) {
         throw new OperationCatalogError(`${tool.name}: unknown operation dependency '${id}'`)
       }
     }
@@ -557,14 +687,16 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
     // presentation contract. Descriptor-backed operations have no such escape
     // hatch: their route and direct/composite tool projections must be identical.
     const descriptorBacked = dependencies.every(
-      (id) => declaredById.get(id)?.implementation === 'descriptor',
+      (id) => declaredById.get(resolvedOperationId(id))?.implementation === 'descriptor',
     )
     if (
       (tool.binding.kind === 'mcp-direct' || tool.binding.kind === 'mcp-composite') &&
       descriptorBacked
     ) {
       const expectedPermissions = [
-        ...new Set(dependencies.flatMap((id) => routesById.get(id)?.permissions ?? [])),
+        ...new Set(
+          dependencies.flatMap((id) => routesById.get(resolvedOperationId(id))?.permissions ?? []),
+        ),
       ]
       if (!sameStrings(tool.permissions, expectedPermissions)) {
         throw new OperationCatalogError(
@@ -582,6 +714,7 @@ export function validateOperationCatalogSnapshot(snapshot: OperationCatalogSnaps
   }
 
   for (const declared of snapshot.declarations) {
+    if (declared.implementation === 'alias') continue
     if (!routesById.has(declared.id)) {
       throw new OperationCatalogError(`${declared.id}: declared operation has no mounted binding`)
     }
@@ -595,6 +728,7 @@ export function assertOperationCatalogClosed(): void {
   }
   validateOperationCatalogSnapshot({
     declarations: [...DECLARED_BY_ID.values()],
+    aliases: [...ALIASES_BY_ID.values()],
     descriptors: [...DESCRIPTORS_BY_ID.values()],
     routes: [...ROUTES_BY_ID.values()],
     tools: TOOL_PROJECTION,

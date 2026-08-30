@@ -30,7 +30,10 @@ export interface OperationHttpBinding<P extends string, I, O, C> {
   /** Operation output -> established HTTP status/body projection. */
   readonly encode: (context: Context<BlankEnv, P>, output: O) => Promise<Response> | Response
   /** Application error -> established transport error mapping. */
-  readonly mapError?: (error: unknown) => never
+  readonly mapError?: (
+    error: unknown,
+    context: Context<BlankEnv, P>,
+  ) => Promise<Response> | Response
 }
 
 /**
@@ -70,7 +73,7 @@ export function registerOperationRoute<P extends string, I, O, C>(
         )
         return binding.encode(httpContext, output)
       } catch (error) {
-        if (binding.mapError !== undefined) binding.mapError(error)
+        if (binding.mapError !== undefined) return binding.mapError(error, httpContext)
         throw error
       }
     },

@@ -12,6 +12,18 @@ declare const OPERATION_ID: unique symbol
 /** Stable application contract id: `<bounded-context>.<verb-subject>.v<major>`. */
 export type OperationId = string & { readonly [OPERATION_ID]: true }
 
+/**
+ * A temporary stable identity for an operation that has moved to a new
+ * application-owned id. Aliases are data only: they never carry a handler,
+ * codec or admission contract, and are removed only after an explicit
+ * consumer-zero decision.
+ */
+export interface OperationAlias {
+  readonly alias: OperationId
+  readonly target: OperationId
+  readonly removeAfter: 'explicit-consumer-zero-decision'
+}
+
 export type OperationKind =
   | 'command'
   | 'idempotent-command'

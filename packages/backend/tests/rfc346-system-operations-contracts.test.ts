@@ -10,6 +10,7 @@ import type { AdminRestoreCoordinatorPort } from '../src/modules/system-operatio
 import type {
   LocalSystemOperationContext,
   RestoreArtifactRef,
+  StageRestoreInput,
 } from '../src/modules/system-operations/public/types'
 import {
   backupResultViewSchema,
@@ -17,8 +18,18 @@ import {
   requestBackupInputSchema,
   stageRestoreOptionsSchema,
 } from '../src/modules/system-operations/public/types'
+import {
+  createSystemOperationDescriptors,
+  SYSTEM_OPERATION_ALIASES,
+} from '../src/modules/system-operations/public/operations'
+import {
+  buildCanonicalArtifacts,
+  targetContextFor,
+  targetRemoveAfterWaveFor,
+} from './architecture/rfc294Canonical'
 
 const SOURCE_ROOT = join(import.meta.dirname, '../src')
+const REPO_ROOT = join(import.meta.dirname, '../../..')
 const localContext = Object.freeze({}) as LocalSystemOperationContext
 const artifactRef = Object.freeze({}) as RestoreArtifactRef
 
@@ -127,6 +138,76 @@ describe('RFC-346 System Operations contracts', () => {
     expect(queries).not.toContain('type SystemOperationQueryContext')
   })
 
+  test('exports exactly four primary operation ids and four one-to-one legacy aliases', () => {
+    expect(SYSTEM_OPERATION_ALIASES.map((entry) => String(entry.target))).toEqual([
+      'system-operations.request-backup.v1',
+      'system-operations.get-recovery-status.v1',
+      'system-operations.cancel-staged-restore.v1',
+      'system-operations.stage-restore.v1',
+    ])
+    expect(
+      SYSTEM_OPERATION_ALIASES.map((entry) => ({
+        alias: String(entry.alias),
+        target: String(entry.target),
+        removeAfter: entry.removeAfter,
+      })),
+    ).toEqual([
+      {
+        alias: 'legacy-http.post-backup.v1',
+        target: 'system-operations.request-backup.v1',
+        removeAfter: 'explicit-consumer-zero-decision',
+      },
+      {
+        alias: 'legacy-http.read-restore-pending.v1',
+        target: 'system-operations.get-recovery-status.v1',
+        removeAfter: 'explicit-consumer-zero-decision',
+      },
+      {
+        alias: 'legacy-http.delete-restore-pending.v1',
+        target: 'system-operations.cancel-staged-restore.v1',
+        removeAfter: 'explicit-consumer-zero-decision',
+      },
+      {
+        alias: 'legacy-http.post-restore.v1',
+        target: 'system-operations.stage-restore.v1',
+        removeAfter: 'explicit-consumer-zero-decision',
+      },
+    ])
+    expect(new Set(SYSTEM_OPERATION_ALIASES.map((entry) => entry.alias)).size).toBe(4)
+    expect(new Set(SYSTEM_OPERATION_ALIASES.map((entry) => entry.target)).size).toBe(4)
+  })
+
+  test('effect descriptors preserve established conflict errors without widening reads', () => {
+    const application = createSystemOperationsApplication(fakePorts([]))
+    const operations = createSystemOperationDescriptors({
+      commands: application.commands,
+      queries: application.queries,
+      stageRestoreInput: {
+        name: 'rfc346.live-stage-input',
+        version: 1,
+        parse: (value) => value as StageRestoreInput,
+      },
+    })
+    expect(operations.requestBackup.publicErrors).toEqual([
+      'validation-failed',
+      'conflict',
+      'internal-error',
+    ])
+    expect(operations.stageRestore.publicErrors).toEqual([
+      'validation-failed',
+      'conflict',
+      'internal-error',
+    ])
+    expect(operations.getRecoveryStatus.publicErrors).toEqual([
+      'validation-failed',
+      'internal-error',
+    ])
+    expect(operations.cancelStagedRestore.publicErrors).toEqual([
+      'validation-failed',
+      'internal-error',
+    ])
+  })
+
   test('all six use cases call only the two narrow coordinator ports', async () => {
     const log: string[] = []
     const application = createSystemOperationsApplication(fakePorts(log))
@@ -205,9 +286,134 @@ describe('RFC-346 System Operations contracts', () => {
     expect(offenders).toEqual([])
     expect(readdirSync(join(root, 'public')).sort()).toEqual([
       'commands.ts',
+      'operations.ts',
       'queries.ts',
       'types.ts',
     ])
+  })
+
+  test('HTTP routes are thin descriptor adapters and bootstrap composes one module root', () => {
+    const backup = readFileSync(join(SOURCE_ROOT, 'routes/backup.ts'), 'utf8')
+    const restore = readFileSync(join(SOURCE_ROOT, 'routes/restore.ts'), 'utf8')
+    const server = readFileSync(join(SOURCE_ROOT, 'server.ts'), 'utf8')
+    for (const source of [backup, restore]) {
+      expect(source).toContain('registerOperationRoute')
+      expect(source).not.toMatch(
+        /from ['"](?:node:(?:fs|path)|@\/(?:db|services|server|util\/(?:paths|migrationsFolder)))/,
+      )
+      expect(source).not.toMatch(
+        /from ['"]@\/modules\/[^/'"]+\/(?:application|composition|domain|infrastructure)(?:\/|['"])/,
+      )
+      expect(source).toContain('@/modules/identity-access/public/participants')
+      expect(source).toContain('@/modules/system-operations/public/operations')
+      expect(source).not.toContain('AppDeps')
+      expect(source).not.toContain('registerRoute(')
+    }
+    expect(backup).toContain('systemOperations.operations.requestBackup')
+    expect(restore).toContain('systemOperations.operations.getRecoveryStatus')
+    expect(restore).toContain('systemOperations.operations.cancelStagedRestore')
+    expect(restore).toContain('systemOperations.operations.stageRestore')
+    expect(server.match(/composeSystemOperations\s*\(/g)).toHaveLength(1)
+    expect(server).toContain('mountBackupRoutes(app, systemOperations, identityAccess)')
+    expect(server).toContain('mountRestoreRoutes(app, systemOperations, identityAccess)')
+    expect(server).toContain('for (const alias of SYSTEM_OPERATION_ALIASES)')
+  })
+
+  test('canonical ownership is exact and does not swallow maintenance, doctor or migrate', () => {
+    for (const path of [
+      'packages/backend/src/cli/backup.ts',
+      'packages/backend/src/cli/restore.ts',
+      'packages/backend/src/routes/backup.ts',
+      'packages/backend/src/routes/restore.ts',
+    ]) {
+      expect(targetContextFor(path)).toBe('system-operations')
+      expect(targetRemoveAfterWaveFor(path, '$file')).toBe('W4-E7')
+    }
+
+    for (const path of [
+      'packages/backend/src/routes/maintenance.ts',
+      'packages/backend/src/services/backupScheduler.ts',
+      'packages/backend/src/services/maintenanceTicker.ts',
+      'packages/backend/src/services/pendingRestore.ts',
+      'packages/backend/src/services/restore.ts',
+    ]) {
+      expect(targetContextFor(path)).toBe('platform')
+    }
+    for (const path of [
+      'packages/backend/src/cli/dbCompact.ts',
+      'packages/backend/src/cli/doctor.ts',
+      'packages/backend/src/cli/migrate.ts',
+      'packages/backend/src/cli/rfc295-downgrade-audit.ts',
+    ]) {
+      expect(targetContextFor(path)).toBe('bootstrap')
+    }
+
+    expect(
+      targetRemoveAfterWaveFor(
+        'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
+        '$file',
+      ),
+    ).toBe('W9-E')
+    expect(targetRemoveAfterWaveFor('packages/backend/src/services/restore.ts', '$file')).toBe(
+      'W9-E',
+    )
+    expect(
+      targetRemoveAfterWaveFor('packages/backend/src/services/backupScheduler.ts', '$file'),
+    ).toBe('W9')
+
+    expect(
+      targetContextFor(
+        'packages/backend/src/services/taskArchive.ts',
+        'restoreLegacyMovedDirectories',
+      ),
+    ).toBe('task-execution')
+    expect(
+      targetContextFor('packages/backend/src/services/skillVersion.ts', 'restoreSkillVersion'),
+    ).toBe('resource-catalog')
+    expect(targetContextFor('packages/backend/src/util/git.ts', 'restoreBranchRefCas')).toBe(
+      'source-control',
+    )
+  })
+
+  test('canonical registers both coordinator ports and the authority edge as live', () => {
+    const canonical = buildCanonicalArtifacts(REPO_ROOT)
+    const requiredPorts = canonical.crossContextImports.requiredPorts as Array<{
+      id: string
+      status: string
+      consumerOwnerEntryIds: string[]
+      compositionFiles: string[]
+      providerAdapters: Array<{ file: string }>
+    }>
+    for (const id of [
+      'required:system-operations:AdminBackupCoordinatorPort',
+      'required:system-operations:AdminRestoreCoordinatorPort',
+    ]) {
+      const port = requiredPorts.find((entry) => entry.id === id)
+      expect(port?.status).toBe('active')
+      expect(port?.consumerOwnerEntryIds).toContain(
+        'owner:packages/backend/src/modules/system-operations/application/systemOperations.ts#$file',
+      )
+      expect(port?.compositionFiles).toEqual([
+        'packages/backend/src/modules/system-operations/composition.ts',
+      ])
+      expect(port?.providerAdapters.map((entry) => entry.file)).toEqual([
+        'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
+      ])
+    }
+
+    const observedEdges = canonical.crossContextImports.observedEdges as Array<{
+      fromContext: string
+      toContext: string
+      role: string
+    }>
+    expect(
+      observedEdges.some(
+        (edge) =>
+          edge.fromContext === 'system-operations' &&
+          edge.toContext === 'identity-access' &&
+          edge.role === 'authority-type-only',
+      ),
+    ).toBe(true)
   })
 })
 

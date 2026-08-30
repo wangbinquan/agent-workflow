@@ -7,7 +7,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { DbClient } from '../src/db/client'
 import { createLegacyPlatformRecoveryAdapter } from '../src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter'
-import { createRestoreArtifactIngress } from '../src/modules/system-operations/infrastructure/restoreArtifactIngress'
+import {
+  createLiveRestoreStageInputCodec,
+  createRestoreArtifactIngress,
+} from '../src/modules/system-operations/infrastructure/restoreArtifactIngress'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const tmps: string[] = []
@@ -345,10 +348,24 @@ describe('RFC-346 legacy platform adapter', () => {
         return Uint8Array.from([1, 2, 3]).buffer
       },
     })
+    const codec = createLiveRestoreStageInputCodec(ingress)
+    const input = {
+      artifactRef: uploaded,
+      noSafetyBackup: false,
+      noMigrate: false,
+      skipIntegrityCheck: false,
+    }
+    const parsed = codec.parse(input)
+    expect(parsed).toEqual(input)
+    expect(parsed.artifactRef).toBe(uploaded)
+    expect(() => codec.parse({ ...input, artifactRef: Object.freeze({}) })).toThrow(
+      'restore artifact ref is not live',
+    )
     const uploadPath = ingress.pathOf(uploaded)
     expect(readFileSync(uploadPath)).toEqual(Buffer.from([1, 2, 3]))
     ingress.release(uploaded)
     expect(existsSync(uploadPath)).toBe(false)
+    expect(() => codec.parse(input)).toThrow('restore artifact ref is not live')
 
     const localPath = join(home, 'local.tar.gz')
     const local = ingress.ingestLocalPath(localPath)

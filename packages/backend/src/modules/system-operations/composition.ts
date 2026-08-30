@@ -9,8 +9,11 @@ import {
   createSystemOperationsApplication,
   type SystemOperationsApplication,
 } from './application/systemOperations'
+import type { AdminBackupCoordinatorPort } from './application/ports/adminBackupCoordinator'
+import type { AdminRestoreCoordinatorPort } from './application/ports/adminRestoreCoordinator'
 import { createLegacyPlatformRecoveryAdapter } from './infrastructure/legacyPlatformRecoveryAdapter'
 import {
+  createLiveRestoreStageInputCodec,
   createRestoreArtifactIngress,
   type RestoreArtifactIngressHandle,
   type RestoreArtifactRegistry,
@@ -19,12 +22,18 @@ import type {
   ActivateLocalRestoreCommand,
   RequestBackupCommand,
   StageRestoreCommand,
+  SystemOperationCommands,
 } from './public/commands'
+import {
+  createSystemOperationDescriptors,
+  type SystemOperationDescriptors,
+} from './public/operations'
 import type { PlanLocalRestoreQuery } from './public/queries'
 import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
 
 export interface SystemOperationsModule {
   readonly application: SystemOperationsApplication
+  readonly operations: SystemOperationDescriptors
   readonly artifacts: RestoreArtifactIngressHandle
 }
 
@@ -114,9 +123,33 @@ function composeSystemOperationsWithArtifacts(deps: {
   readonly lockPath: string
   readonly resolveRestoreMigrations: () => Promise<string>
 }): SystemOperationsModule {
-  const adapter = createLegacyPlatformRecoveryAdapter(deps)
+  const adapter: Readonly<{
+    backup: AdminBackupCoordinatorPort
+    restore: AdminRestoreCoordinatorPort
+  }> = createLegacyPlatformRecoveryAdapter(deps)
+  const application = createSystemOperationsApplication(adapter)
+  const httpCommands: SystemOperationCommands = Object.freeze({
+    ...application.commands,
+    stageRestore: Object.freeze({
+      async execute(
+        context: Parameters<StageRestoreCommand['execute']>[0],
+        input: Parameters<StageRestoreCommand['execute']>[1],
+      ) {
+        try {
+          return await application.commands.stageRestore.execute(context, input)
+        } finally {
+          deps.artifacts.release(input.artifactRef)
+        }
+      },
+    }),
+  })
   return Object.freeze({
-    application: createSystemOperationsApplication(adapter),
+    application,
+    operations: createSystemOperationDescriptors({
+      commands: httpCommands,
+      queries: application.queries,
+      stageRestoreInput: createLiveRestoreStageInputCodec(deps.artifacts),
+    }),
     artifacts: deps.artifacts,
   })
 }

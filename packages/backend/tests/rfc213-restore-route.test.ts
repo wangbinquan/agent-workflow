@@ -7,15 +7,21 @@ import { removeTempDirSync } from './fixtures/tempDir'
 import { errorHandler } from '../src/util/errors'
 import type { Database } from 'bun:sqlite'
 import { Hono, type MiddlewareHandler } from 'hono'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { openDb } from '../src/db/client'
-import type { AppDeps } from '../src/server'
-import { buildActor, type Actor } from '../src/auth/actor'
+import { openDb, type DbClient } from '../src/db/client'
+import type { Actor } from '../src/auth/actor'
+import {
+  AuthorityClaimRegistry,
+  DirectAuthorityRuntime,
+  DirectOperationContextFactory,
+} from '../src/modules/identity-access/application/operationContext'
+import { composeSystemOperations } from '../src/modules/system-operations/composition'
 import { createBackup } from '../src/services/backup'
 import { hasPendingRestore, stagePendingRestore } from '../src/services/pendingRestore'
 import { mountRestoreRoutes } from '../src/routes/restore'
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -35,24 +41,58 @@ afterEach(() => {
 /** Impl-gate P1-5: the routes are ADMIN-ONLY now — inject an actor the way
  *  multiAuth does (c.set('actor', …)). Default admin keeps the older tests'
  *  behaviour; role='user' exercises the 403 gate. */
-function appWithRoute(role: 'admin' | 'user' = 'admin'): Hono {
+async function appWithRoute(role: 'admin' | 'user' = 'admin'): Promise<Hono> {
+  const appHome = process.env.AGENT_WORKFLOW_HOME
+  if (appHome === undefined) throw new Error('test app home is required')
+  const registry = new AuthorityClaimRegistry()
+  const directAuthority = new DirectAuthorityRuntime(
+    {
+      resolveCurrentSubject: async (userId) => ({
+        userId,
+        username: userId,
+        displayName: userId,
+        role,
+        status: 'active',
+        additionalPermissions: [],
+        accessRevision: 1,
+      }),
+    },
+    registry,
+  )
+  const identity = await admitTestDirectAuthority(directAuthority, {
+    userId: 'u1',
+    source: 'session',
+  })
+  if (identity === null) throw new Error('test authority was not admitted')
+  const actor: Actor = identity.actor
   const app = new Hono()
   const inject: MiddlewareHandler = (c, next) => {
     // RFC-247: the permission gate moved from a server.ts prefix mount INTO the
-    // route declaration, so this harness now exercises it. Build the actor the
+    // route declaration, so this harness now exercises it. Admit the actor the
     // way production does instead of hand-writing an empty permission set —
     // `role: 'admin'` with zero permissions is a state buildActor can never
     // produce, and relying on it made the harness silently gate-free.
-    const actor: Actor = buildActor({
-      user: { id: 'u1', username: 'u1', displayName: 'u1', role, status: 'active' },
-      source: 'daemon',
-    })
     c.set('actor', actor)
     return next()
   }
   app.use('*', inject)
   app.onError(errorHandler)
-  mountRestoreRoutes(app, {} as AppDeps) // route uses Paths + services, not deps
+  mountRestoreRoutes(
+    app,
+    composeSystemOperations({
+      db: {} as DbClient,
+      secretBox: undefined,
+      appHome,
+      resolveRestoreMigrations: async () => MIGRATIONS,
+    }),
+    {
+      contexts: new DirectOperationContextFactory(
+        { id: () => 'rfc213-route', now: () => 1 },
+        registry,
+      ),
+      directAuthority,
+    },
+  )
   return app
 }
 
@@ -66,7 +106,8 @@ describe('POST /api/restore', () => {
 
     const form = new FormData()
     form.append('file', new Blob([readFileSync(backup.path)]), 'backup.tar.gz')
-    const res = await appWithRoute().request('/api/restore', { method: 'POST', body: form })
+    const app = await appWithRoute()
+    const res = await app.request('/api/restore', { method: 'POST', body: form })
     expect(res.status).toBe(200)
     const body = (await res.json()) as { status: string }
     expect(body.status).toBe('staged')
@@ -75,11 +116,33 @@ describe('POST /api/restore', () => {
 
   test('rejects a request with no file', async () => {
     process.env.AGENT_WORKFLOW_HOME = tmp()
-    const res = await appWithRoute().request('/api/restore', {
+    const app = await appWithRoute()
+    const res = await app.request('/api/restore', {
       method: 'POST',
       body: new FormData(),
     })
     expect(res.status).toBe(400)
+  })
+
+  test('preserves the established repeated-stage 400 body and releases the upload', async () => {
+    const appHome = tmp()
+    process.env.AGENT_WORKFLOW_HOME = appHome
+    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const backup = await createBackup({ db, appHome, now: 1 })
+    ;(db as unknown as { $client: Database }).$client.close()
+    stagePendingRestore(backup.path, { appHome, now: 2 })
+
+    const form = new FormData()
+    form.append('file', new Blob([readFileSync(backup.path)]), 'backup.tar.gz')
+    const app = await appWithRoute()
+    const res = await app.request('/api/restore', { method: 'POST', body: form })
+
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({
+      error:
+        'a restore is already staged; cancel it (DELETE /api/restore/pending) before staging another',
+    })
+    expect(readdirSync(join(appHome, '.restore-upload'))).toEqual([])
   })
 })
 
@@ -95,7 +158,8 @@ describe('impl-gate P1-1 — stage-depth validation at the door', () => {
     // a tar without db.sqlite → validation fails); both must 400, never stage.
     const form = new FormData()
     form.append('file', new Blob([Buffer.from('not a tarball at all')]), 'x.tar.gz')
-    const res = await appWithRoute().request('/api/restore', { method: 'POST', body: form })
+    const app = await appWithRoute()
+    const res = await app.request('/api/restore', { method: 'POST', body: form })
     expect(res.status).toBe(400)
     expect(hasPendingRestore(appHome)).toBe(false)
   })
@@ -104,7 +168,7 @@ describe('impl-gate P1-1 — stage-depth validation at the door', () => {
 describe('impl-gate P1-5 — admin gate + pending visibility + cancel', () => {
   test('all three endpoints refuse non-admin with 403', async () => {
     process.env.AGENT_WORKFLOW_HOME = tmp()
-    const app = appWithRoute('user')
+    const app = await appWithRoute('user')
     const post = await app.request('/api/restore', { method: 'POST', body: new FormData() })
     expect(post.status).toBe(403)
     const get = await app.request('/api/restore/pending')
@@ -116,7 +180,7 @@ describe('impl-gate P1-5 — admin gate + pending visibility + cancel', () => {
   test('GET reflects a staged restore; DELETE cancels it', async () => {
     const appHome = tmp()
     process.env.AGENT_WORKFLOW_HOME = appHome
-    const app = appWithRoute()
+    const app = await appWithRoute()
 
     const empty = (await (await app.request('/api/restore/pending')).json()) as {
       pending: unknown

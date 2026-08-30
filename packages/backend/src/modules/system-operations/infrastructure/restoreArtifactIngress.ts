@@ -4,7 +4,14 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { RestoreArtifactRef } from '../public/types'
+import { z } from 'zod'
+import { zodOperationCodec } from '@/platform/operations/codecs'
+import type { VersionedExactCodec } from '@/platform/operations/contracts'
+import {
+  stageRestoreOptionsSchema,
+  type RestoreArtifactRef,
+  type StageRestoreInput,
+} from '../public/types'
 
 export interface RestoreArtifactUpload {
   arrayBuffer(): Promise<ArrayBuffer>
@@ -21,7 +28,9 @@ export interface RestoreArtifactPathResolver {
 }
 
 export interface RestoreArtifactRegistry
-  extends RestoreArtifactIngressHandle, RestoreArtifactPathResolver {}
+  extends RestoreArtifactIngressHandle, RestoreArtifactPathResolver {
+  isLive(ref: unknown): ref is RestoreArtifactRef
+}
 
 interface ArtifactEntry {
   readonly path: string
@@ -61,6 +70,9 @@ export function createRestoreArtifactIngress(deps: {
       if (entry === undefined) throw new Error('restore artifact is no longer available')
       return entry.path
     },
+    isLive(ref): ref is RestoreArtifactRef {
+      return typeof ref === 'object' && ref !== null && entries.has(ref as RestoreArtifactRef)
+    },
     release(ref) {
       const entry = entries.get(ref)
       if (entry === undefined) return
@@ -69,4 +81,18 @@ export function createRestoreArtifactIngress(deps: {
     },
   }
   return Object.freeze(ingress)
+}
+
+/** Exact descriptor codec bound to one composition-owned live ref registry. */
+export function createLiveRestoreStageInputCodec(
+  artifacts: RestoreArtifactRegistry,
+): VersionedExactCodec<StageRestoreInput> {
+  const schema = stageRestoreOptionsSchema
+    .extend({
+      artifactRef: z.custom<RestoreArtifactRef>((value) => artifacts.isLive(value), {
+        message: 'restore artifact ref is not live',
+      }),
+    })
+    .strict()
+  return zodOperationCodec('system-operations.stage-restore.input.v1', schema)
 }

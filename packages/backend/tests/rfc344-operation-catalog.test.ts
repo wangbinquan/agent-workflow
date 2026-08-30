@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { Hono } from 'hono'
+import type { Permission } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import { createBoundOperationInvoker } from '../src/platform/operations/boundOperationInvoker'
 import { ALL_TOOLS } from '../src/mcp/tools'
@@ -13,6 +14,7 @@ import {
   operationDependencies,
   operationId,
   lookupDeclaredHttpOperation,
+  registerOperationAlias,
   registerHttpOperationProjection,
   validateOperationCatalogSnapshot,
   type DeclaredHttpOperation,
@@ -21,6 +23,7 @@ import {
   type OperationCatalogToolProjection,
   type OperationDescriptorProjection,
 } from '../src/platform/operations/catalog'
+import type { OperationAlias } from '../src/platform/operations/contracts'
 import { defineQueryOperation } from '../src/platform/operations/definitions'
 import { invokeOperation, OperationContractViolation } from '../src/platform/operations/invoke'
 import {
@@ -31,11 +34,48 @@ import {
   ValidationError,
 } from '../src/util/errors'
 import { registerRoute, registerRouteMiddleware } from '../src/routes/registry'
-import { DirectOperationContextFactory } from '../src/modules/identity-access/application/operationContext'
+import { registerOperationRoute } from '../src/routes/operationRoute'
+import {
+  AuthorityClaimRegistry,
+  DirectAuthorityRuntime,
+  DirectOperationContextFactory,
+} from '../src/modules/identity-access/application/operationContext'
 import { directMcpOperationAuthority } from '../src/routes/operationAuthority'
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { createDevelopmentActivityWorkerBinding } from '../src/modules/development-automation/composition/activityOperations'
 
 const ROOT = join(import.meta.dir, '..')
+
+async function trustedDirectFixture(patScopes: ReadonlyArray<Permission> = []) {
+  const registry = new AuthorityClaimRegistry()
+  const directAuthority = new DirectAuthorityRuntime(
+    {
+      resolveCurrentSubject: async (userId) => ({
+        userId,
+        username: 'rfc344',
+        displayName: 'RFC 344',
+        role: 'user',
+        status: 'active',
+        additionalPermissions: ['tasks:read'],
+        accessRevision: 7,
+      }),
+    },
+    registry,
+  )
+  const identity = await admitTestDirectAuthority(directAuthority, {
+    userId: 'u-rfc344',
+    source: 'pat',
+    patScopes,
+    patPurpose: 'mcp_only',
+    patId: 'pat-rfc344',
+  })
+  if (identity === null) throw new Error('trusted direct fixture was not admitted')
+  return {
+    directAuthority,
+    contexts: new DirectOperationContextFactory({ id: () => 'op-1', now: () => 1 }, registry),
+    identity,
+  }
+}
 
 const declaration = Object.freeze({
   id: operationId('rfc344.read-probe.v1'),
@@ -74,6 +114,53 @@ const snapshot = (overrides: Partial<OperationCatalogSnapshot> = {}): OperationC
   declarations: [declaration],
   routes: [route],
   tools: [tool],
+  ...overrides,
+})
+
+const aliasTargetDeclaration = Object.freeze({
+  id: operationId('rfc344.alias-primary.v1'),
+  kind: 'query',
+  method: 'GET',
+  path: '/api/rfc344-alias',
+  implementation: 'descriptor',
+} satisfies DeclaredHttpOperation)
+const aliasDeclaration = Object.freeze({
+  ...aliasTargetDeclaration,
+  id: operationId('legacy-http.read-rfc344-alias.v1'),
+  implementation: 'alias',
+} satisfies DeclaredHttpOperation)
+const aliasTargetRoute = Object.freeze({
+  ...route,
+  operationId: aliasTargetDeclaration.id,
+  operationKind: aliasTargetDeclaration.kind,
+  method: aliasTargetDeclaration.method,
+  path: aliasTargetDeclaration.path,
+  legacyHttpAdapter: false,
+} satisfies OperationCatalogRouteProjection)
+const aliasTargetDescriptor = Object.freeze({
+  id: aliasTargetDeclaration.id,
+  kind: 'query',
+  contextKind: 'authenticated-query',
+  summary: aliasTargetRoute.summary,
+  inputCodec: { name: 'rfc344.alias.input', version: 1 },
+  outputCodec: { name: 'rfc344.alias.output', version: 1 },
+  publicErrors: ['internal-error'],
+  permissions: [],
+  publicReason: aliasTargetRoute.publicReason,
+} satisfies OperationDescriptorProjection)
+const operationAlias = Object.freeze({
+  alias: aliasDeclaration.id,
+  target: aliasTargetDeclaration.id,
+  removeAfter: 'explicit-consumer-zero-decision',
+} satisfies OperationAlias)
+const aliasSnapshot = (
+  overrides: Partial<OperationCatalogSnapshot> = {},
+): OperationCatalogSnapshot => ({
+  declarations: [aliasTargetDeclaration, aliasDeclaration],
+  aliases: [operationAlias],
+  descriptors: [aliasTargetDescriptor],
+  routes: [aliasTargetRoute],
+  tools: [],
   ...overrides,
 })
 
@@ -205,6 +292,124 @@ describe('RFC-344 closed operation catalog', () => {
     ).not.toThrow()
   })
 
+  test('accepts one-hop, same-kind, same-major data-only aliases', () => {
+    expect(() => validateOperationCatalogSnapshot(aliasSnapshot())).not.toThrow()
+  })
+
+  test('rejects duplicate, one-to-many, unknown and stale aliases', () => {
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({ aliases: [operationAlias, operationAlias] }),
+      ),
+    ).toThrow(/duplicate operation alias/)
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          aliases: [
+            operationAlias,
+            { ...operationAlias, target: operationId('rfc344.alias-other.v1') },
+          ],
+        }),
+      ),
+    ).toThrow(/one-to-many/)
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          aliases: [{ ...operationAlias, target: operationId('rfc344.alias-unknown.v1') }],
+        }),
+      ),
+    ).toThrow(/unknown operation alias target/)
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          declarations: [
+            { ...aliasTargetDeclaration, implementation: 'compatibility' },
+            aliasDeclaration,
+          ],
+          descriptors: [],
+          routes: [{ ...aliasTargetRoute, legacyHttpAdapter: true }],
+        }),
+      ),
+    ).toThrow(/stale operation alias target/)
+  })
+
+  test('rejects alias cycles, chains, wrong kinds, major drift and owned handlers', () => {
+    const chainedAliasId = operationId('legacy-http.read-rfc344-alias-chain.v1')
+    const chainedDeclaration = {
+      ...aliasDeclaration,
+      id: chainedAliasId,
+    } satisfies DeclaredHttpOperation
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          declarations: [aliasDeclaration, chainedDeclaration],
+          aliases: [
+            { ...operationAlias, target: chainedAliasId },
+            {
+              alias: chainedAliasId,
+              target: operationAlias.alias,
+              removeAfter: operationAlias.removeAfter,
+            },
+          ],
+          descriptors: [],
+          routes: [],
+        }),
+      ),
+    ).toThrow(/operation alias cycle/)
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          declarations: [aliasTargetDeclaration, aliasDeclaration, chainedDeclaration],
+          aliases: [
+            { ...operationAlias, target: chainedAliasId },
+            {
+              alias: chainedAliasId,
+              target: aliasTargetDeclaration.id,
+              removeAfter: operationAlias.removeAfter,
+            },
+          ],
+        }),
+      ),
+    ).toThrow(/operation alias chain/)
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          declarations: [aliasTargetDeclaration, { ...aliasDeclaration, kind: 'command' }],
+        }),
+      ),
+    ).toThrow(/operation alias kind mismatch/)
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          declarations: [
+            aliasTargetDeclaration,
+            { ...aliasDeclaration, path: '/api/rfc344-alias-drift' },
+          ],
+        }),
+      ),
+    ).toThrow(/operation alias binding mismatch/)
+
+    const majorTwoAlias = operationId('legacy-http.read-rfc344-alias.v2')
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          declarations: [aliasTargetDeclaration, { ...aliasDeclaration, id: majorTwoAlias }],
+          aliases: [{ ...operationAlias, alias: majorTwoAlias }],
+        }),
+      ),
+    ).toThrow(/codec major mismatch/)
+    expect(() =>
+      validateOperationCatalogSnapshot(
+        aliasSnapshot({
+          descriptors: [
+            aliasTargetDescriptor,
+            { ...aliasTargetDescriptor, id: operationAlias.alias },
+          ],
+        }),
+      ),
+    ).toThrow(/cannot own codec or handler/)
+  })
+
   test('all 52 tools have one exact direct, parameterized, composite or local binding', () => {
     const toolNames = ALL_TOOLS.map((entry) => entry.name).sort()
     const bindingNames = Object.keys(MCP_TOOL_BINDINGS).sort()
@@ -305,24 +510,11 @@ describe('RFC-344 exact invocation pipeline', () => {
 })
 
 describe('RFC-344 trusted direct authority', () => {
-  test('identity-access mints a branded frozen snapshot instead of exposing the transport Actor', () => {
-    const permissions = new Set(['tasks:read'] as const)
-    const factory = new DirectOperationContextFactory({ id: () => 'op-1', now: () => 1 })
-    const authority = factory.authorityFromAuthenticatedPrincipal({
-      user: {
-        id: 'u-rfc344',
-        username: 'rfc344',
-        displayName: 'RFC 344',
-        role: 'user',
-        status: 'active',
-      },
-      source: 'pat',
-      permissions,
-      purpose: 'mcp_only',
-      patId: 'pat-rfc344',
-      authorityRevision: 7,
-    })
-    permissions.clear()
+  test('credential admission mints one branded handle and frozen compatibility projection', async () => {
+    const permissions: Permission[] = ['tasks:read']
+    const { directAuthority, identity } = await trustedDirectFixture(permissions)
+    const authority = identity.actor
+    permissions.splice(0)
 
     expect(Object.isFrozen(authority)).toBe(true)
     expect(Object.isFrozen(authority.user)).toBe(true)
@@ -330,10 +522,50 @@ describe('RFC-344 trusted direct authority', () => {
     expect(authority.permissions.has('tasks:read')).toBe(true)
     expect(authority.purpose).toBe('mcp_only')
     expect(authority.authorityRevision).toBe(7)
+    expect(directAuthority.authorityForLegacyProjection(authority)).toBe(identity.authority)
   })
 })
 
 describe('RFC-344 direct bound handler invocation', () => {
+  test('resolves an alias to the primary bound handler without a second binding', async () => {
+    const app = new Hono()
+    let calls = 0
+    const descriptor = defineQueryOperation({
+      id: 'rfc344.bound-alias-target.v1',
+      summary: 'Bound alias target fixture',
+      permissions: [],
+      publicReason: 'test-only fixture',
+      publicErrors: ['internal-error'],
+      inputSchema: z.object({}).strict(),
+      outputSchema: z.object({ calls: z.number().int().positive() }).strict(),
+      invoke: () => ({ calls: ++calls }),
+    })
+    registerOperationRoute(app, {
+      descriptor,
+      method: 'GET',
+      path: '/api/rfc344-bound-alias',
+      tokenAccess: 'allow',
+      decode: () => ({}),
+      context: () => ({}),
+      encode: (context, output) => context.json(output),
+    })
+    const alias = operationId('legacy-http.read-rfc344-bound-alias.v1')
+    registerOperationAlias({
+      alias,
+      target: descriptor.id,
+      removeAfter: 'explicit-consumer-zero-decision',
+    })
+    const actor = {
+      user: { id: 'u-rfc344', role: 'admin', status: 'active' },
+      source: 'daemon',
+      permissions: new Set(),
+    } as unknown as Actor
+    const invoke = createBoundOperationInvoker(app, actor)
+
+    await expect(invoke(alias)).resolves.toMatchObject({ body: { calls: 1 } })
+    await expect(invoke(descriptor.id)).resolves.toMatchObject({ body: { calls: 2 } })
+  })
+
   test('calls the registered handler chain by id without entering Hono routing', async () => {
     const app = new Hono()
     app.use('*', () => {
@@ -358,16 +590,8 @@ describe('RFC-344 direct bound handler invocation', () => {
     )
     const operation = lookupDeclaredHttpOperation('POST', '/api/rfc344-bound/:id')
     expect(operation).toBeDefined()
-    const actor = {
-      user: { id: 'u-rfc344', role: 'admin', status: 'active' },
-      source: 'pat',
-      purpose: 'mcp_only',
-      permissions: new Set(),
-    } as unknown as Actor
-    const authority = directMcpOperationAuthority(
-      new DirectOperationContextFactory({ id: () => 'op-mcp', now: () => 1 }),
-      actor,
-    )
+    const { directAuthority, identity } = await trustedDirectFixture()
+    const authority = directMcpOperationAuthority(directAuthority, identity.actor as Actor)
     const result = await createBoundOperationInvoker(app, authority)(operation!.id, {
       params: { id: 'a/b' },
       query: { q: 'value' },
@@ -533,11 +757,12 @@ describe('RFC-344 single inbound root source locks', () => {
     }
 
     const authority = readFileSync(join(ROOT, 'src/routes/operationAuthority.ts'), 'utf8')
-    expect(authority).toContain('authorityFromAuthenticatedPrincipal')
+    expect(authority).not.toContain('authorityFromAuthenticatedPrincipal')
+    expect(authority).toContain('authorityForLegacyProjection')
     expect(authority).toContain('directMcpOperationAuthority')
 
     const server = readFileSync(join(ROOT, 'src/server.ts'), 'utf8')
-    expect(server).toContain('directMcpOperationAuthority(identityAccess.contexts, actor)')
+    expect(server).toContain('directMcpOperationAuthority(identityAccess.directAuthority, actor)')
     expect(server).toContain('const appHome = deps.appHome ?? Paths.root')
     expect(server).not.toContain('dirname(runtimeDeps.configPath)')
 

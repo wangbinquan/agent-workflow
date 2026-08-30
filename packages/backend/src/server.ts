@@ -16,7 +16,7 @@ import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
-import { assertOperationCatalogClosed } from '@/platform/operations/catalog'
+import { assertOperationCatalogClosed, registerOperationAlias } from '@/platform/operations/catalog'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
 import { directMcpOperationAuthority } from '@/routes/operationAuthority'
 import { mountAgentRoutes } from '@/routes/agents'
@@ -37,9 +37,15 @@ import {
 } from '@/services/webhook/dispatcherTypes'
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import {
-  composeIdentityAccess,
+  createIdentityAccessRuntime,
   type IdentityAccessModule,
+  type IdentityAccessRuntime,
 } from '@/modules/identity-access/composition'
+import {
+  composeSystemOperations,
+  type SystemOperationsModule,
+} from '@/modules/system-operations/composition'
+import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
@@ -261,6 +267,8 @@ export interface AppDeps {
   dbVersion: number
   /** Drizzle DB client. */
   db: DbClient
+  /** RFC-347 bootstrap-owned authority/presence runtime shared by HTTP/MCP/WS. */
+  identityAccess?: IdentityAccessRuntime
   /** RFC-340 bootstrap-owned review access/config context shared by REST and MCP dispatch. */
   collaborationContext?: CollaborationCommandContext
   /** RFC-338: indexed/live projection from the off-thread maintenance owner. */
@@ -342,6 +350,7 @@ export interface AppDeps {
  * composition instead of discovering a missing driver only on first request.
  */
 type RuntimeComposedAppDeps = AppDeps & {
+  readonly identityAccess: IdentityAccessRuntime
   readonly schedulerDriver: SchedulerDriverPort
   readonly taskExecutionReadModels: TaskExecutionReadModels
   readonly collaborationContext: CollaborationCommandContext
@@ -517,6 +526,7 @@ function composeFallbackDevelopmentAutomation(
         deps.configPath,
         SYSTEM_USER_ID,
         deps.secretBox,
+        deps.identityAccess,
       ),
       onTerminal: terminalObserver.agent,
     }),
@@ -528,6 +538,7 @@ function composeFallbackDevelopmentAutomation(
         deps.configPath,
         SYSTEM_USER_ID,
         deps.secretBox,
+        deps.identityAccess,
       ),
       onTerminal: terminalObserver.script,
     }),
@@ -540,11 +551,12 @@ function composeFallbackDevelopmentAutomation(
 export function createApp(deps: AppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
-  const identityAccess = composeIdentityAccess(deps.db)
+  const identityAccess = deps.identityAccess ?? createIdentityAccessRuntime({ db: deps.db })
   const taskExecutionRuntime =
     deps.schedulerDriver === undefined || deps.taskExecutionReadModels === undefined
       ? composeTaskExecutionRuntime({
           db: deps.db,
+          identityAccess,
           ...(deps.repositoryPublicationTransport === undefined
             ? {}
             : { repositoryPublicationTransport: deps.repositoryPublicationTransport }),
@@ -558,11 +570,17 @@ export function createApp(deps: AppDeps): Hono {
     throw new Error('task-execution-read-models-not-composed')
   }
   const appHome = deps.appHome ?? Paths.root
+  const systemOperations = composeSystemOperations({
+    db: deps.db,
+    secretBox: deps.secretBox,
+    appHome,
+  })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
       : deps),
     appHome,
+    identityAccess,
     digitalEmployeeCaseDetailProjection:
       deps.digitalEmployeeCaseDetailProjection ??
       composeDevelopmentEmployeeCaseDetailProjection(
@@ -628,7 +646,7 @@ export function createApp(deps: AppDeps): Hono {
   // Authenticated routes — three-track auth (RFC-036): session token / PAT /
   // legacy daemon token. Daemon token still maps to the seeded __system__
   // admin actor so existing single-user deployments stay zero-touch.
-  app.use('/api/*', multiAuth({ db: deps.db, daemonToken: deps.token }))
+  app.use('/api/*', multiAuth({ db: deps.db, daemonToken: deps.token, identityAccess }))
 
   // RFC-247 D16 — the REST half of the token audit. Mounted right after
   // multiAuth so the actor exists, and BEFORE the routes so it observes every
@@ -710,7 +728,7 @@ export function createApp(deps: AppDeps): Hono {
     identityAccess,
     afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
   })
-  mountApiRoutes(app, effectiveDeps, identityAccess, identityUserOperations)
+  mountApiRoutes(app, effectiveDeps, identityAccess, identityUserOperations, systemOperations)
 
   // RFC-344 — tools invoke stable operation ids on this already-mounted app.
   // No second Hono, route mount, module composition, or credential parse.
@@ -718,7 +736,10 @@ export function createApp(deps: AppDeps): Hono {
     db: effectiveDeps.db,
     configPath: effectiveDeps.configPath,
     operationInvokerFor: (actor) =>
-      createBoundOperationInvoker(app, directMcpOperationAuthority(identityAccess.contexts, actor)),
+      createBoundOperationInvoker(
+        app,
+        directMcpOperationAuthority(identityAccess.directAuthority, actor),
+      ),
   })
 
   // RFC-247 T4 — refuse to boot on a coverage mismatch, in either direction.
@@ -777,6 +798,7 @@ export function mountApiRoutes(
   deps: ComposedAppDeps,
   identityAccess: IdentityAccessModule,
   identityUserOperations: IdentityUserOperations,
+  systemOperations: SystemOperationsModule,
 ): void {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -858,6 +880,7 @@ export function mountApiRoutes(
             deps.configPath,
             SYSTEM_USER_ID,
             deps.secretBox,
+            deps.identityAccess,
           ),
           workspace: developmentWorkspace,
           executionContracts,
@@ -958,21 +981,22 @@ export function mountApiRoutes(
     deps,
     digitalEmployee,
     developmentActivityOperations,
-    identityAccess.contexts,
+    identityAccess.directAuthority,
   ) // RFC-310 Digital Employee OS / RFC-344 activity operation
   mountDevelopmentConfigRoutes(
     app,
     deps,
     developmentConfigOperations,
-    identityAccess.contexts,
+    identityAccess.directAuthority,
     deps.developmentAdapterAclIdentity,
   ) // RFC-310 PR-1B / RFC-344
-  mountDevelopmentMissionRoutes(app, developmentMissionOperations, identityAccess.contexts) // RFC-310 legacy drain / RFC-344
+  mountDevelopmentMissionRoutes(app, developmentMissionOperations, identityAccess.directAuthority) // RFC-310 legacy drain / RFC-344
   mountMissionInputUploadRoutes(app, deps) // RFC-310 PR-3
   mountWebhookTriggerRoutes(app, deps) // RFC-257 T8
   mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
-  mountBackupRoutes(app, deps)
-  mountRestoreRoutes(app, deps)
+  mountBackupRoutes(app, systemOperations, identityAccess)
+  mountRestoreRoutes(app, systemOperations, identityAccess)
+  for (const alias of SYSTEM_OPERATION_ALIASES) registerOperationAlias(alias)
   mountWorktreeFilesRoutes(app, deps)
   mountPortArtifactRoutes(app, deps)
   mountReviewRoutes(app, routeDeps)
@@ -987,10 +1011,11 @@ export function mountApiRoutes(
   // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always
   // mounted; OIDC routes self-skip when deps.secretBox is omitted.
   mountAuthRoutes(app, deps, identityAccess)
-  mountOidcAuthRoutes(app, deps)
+  mountOidcAuthRoutes(app, deps, identityAccess)
   mountOidcRoutes(app, deps)
   mountUserRoutes(app, deps, {
     contexts: identityAccess.contexts,
+    directAuthority: identityAccess.directAuthority,
     operations: identityUserOperations,
   })
   mountDocsRoutes(app, deps) // RFC-247 D17
