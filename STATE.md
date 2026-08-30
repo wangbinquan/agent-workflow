@@ -2,6 +2,17 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ✅ **RFC 已实现、待 CI 确认（Implemented / CI pending，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
+> 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表
+> （`INTENT_NODE_TEACHING satisfies {[K in NodeKind]…}` / `INTENT_RESOURCE_TEACHING` 按 intent payload schema 键控 / `INTENT_PLATFORM_RESOURCE_MAP satisfies Record<AclResourceType,…>`）
+> + 平台⇔intent 对账表（29 entry / 24+18 对象节点覆盖棘轮）+ 八个常驻 `@ts-expect-error` 夹具；`services/intent/intentDoc.ts` 改为纯渲染装配（零 kind / 类型 / 字段字面量，
+> 5 个既有契约测试不改断言即绿；全权限 doc 22.7→29.4 KB，仍在 32 KiB 预算内）；hint → 「Requested artifact type」（批准版 D33 文案）；`branchPorts` 进 payload / dump，
+> 四个 sidecar「省略即保留」（另裁①）；remote mcp `oauth` 可创作（另裁②，`clientSecret` 走 ‹secret› 槽，update 省略沿用 / 显式替换）；`inventory/runtimes.md`（design §4 格式）、
+> agent 行端口名、`inventory/platform/<type>.md` 九类真实行（另裁③，可见性同 REST）；`LOOP_EXIT_CONDITION_KINDS` / `OPENCODE_PERMISSION_*` 下沉 shared；前端六处从 `INTENT_RESOURCE_TYPES` 派生。
+> 门：设计门 r1～r12（63 条全折入）；实现门 r1～r5 共 17 条（0 P1：偏离批准版原文 / 一处 draft 期校验缺口 / 测试覆盖 / 文档与实现漂移）全折入，r6 结论见 `verification-report.md` §5。
+> **债（design §10 第 3 条）**：platform-only 九类 loader 暂由 `services/intent/platformInventory.ts` 直接组装各模块 store / composition（`IntentPlatformInventory` 端口与
+> `platformInventory?` 注入 seam 已就位）——因 `server.ts` / `routes/intentSessions.ts` / `services/intent/dispatcher.ts` 正承载 RFC-347 并行 session 的未提交半截重构，本 RFC 不碰这三个文件；RFC-347 落地后换成 bootstrap 注入。
+
 > 📋 **RFC-294 架构设计与实现现状 review 已归档（2026-08-30）：[review-2026-08-30.md](design/RFC-294-backend-layered-target-architecture/review-2026-08-30.md)。**
 > 已同批归档：RFC-294 标 Approved / 索引改 In Progress（A1）、生成式 `status.md` + `bun run architecture:status`（A2）、N1a 去掉 byte-replay 让账本刷新不再需要 repin 提交（A3）、
 > `composition/` 层裁决写进 design §2（C1）、四个新守卫（observed offered 边 ⊆ 设计 DAG / 模块内分层规则 / 零 consumer public symbol 与死 required port 账本 /

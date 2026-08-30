@@ -9,12 +9,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { ReactElement } from 'react'
-import type { IntentProvenanceEntry } from '@agent-workflow/shared'
+import type { IntentProvenanceEntry, IntentResourceType } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { StatusChip } from '@/components/StatusChip'
 
 export interface IntentProvenanceBadgeProps {
-  resourceType: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
+  resourceType: IntentResourceType
   resourceId: string
 }
 

@@ -1,7 +1,17 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import {
   INTENT_MESSAGE_MAX,
+  INTENT_RESOURCE_TYPES,
   IntentSessionSummarySchema,
+  type IntentResourceType,
   type IntentSessionSummary,
 } from '@agent-workflow/shared'
 import { useMutation } from '@tanstack/react-query'
@@ -20,8 +30,28 @@ import {
   WORKGROUP_ICON,
 } from '@/components/icons/resourceIcons'
 
-type ArtifactHint = 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
+type ArtifactHint = IntentResourceType
 type ArtifactHintChoice = 'auto' | ArtifactHint
+type TranslateFn = ReturnType<typeof useTranslation>['t']
+
+// RFC-348 D6 — one entry per shared roster member; a new IntentResourceType fails
+// to compile here until it gets an icon and a label.
+const RESOURCE_TYPE_ICONS = {
+  agent: AGENT_ICON,
+  skill: SKILL_ICON,
+  mcp: MCP_ICON,
+  plugin: PLUGIN_ICON,
+  workflow: WORKFLOW_ICON,
+  workgroup: WORKGROUP_ICON,
+} satisfies Record<IntentResourceType, ReactNode>
+const RESOURCE_TYPE_LABELS = {
+  agent: (t) => t('intent.resourceType.agent'),
+  skill: (t) => t('intent.resourceType.skill'),
+  mcp: (t) => t('intent.resourceType.mcp'),
+  plugin: (t) => t('intent.resourceType.plugin'),
+  workflow: (t) => t('intent.resourceType.workflow'),
+  workgroup: (t) => t('intent.resourceType.workgroup'),
+} satisfies Record<IntentResourceType, (t: TranslateFn) => string>
 
 export function IntentCreateComposer(props: {
   variant: 'inline' | 'dialog'
@@ -146,20 +176,11 @@ export function IntentCreateComposer(props: {
       description: t('intent.hintAutoDescription'),
       icon: <span className="intent-create__sparkle">✦</span>,
     },
-    { value: 'agent' as const, label: t('intent.resourceType.agent'), icon: AGENT_ICON },
-    { value: 'skill' as const, label: t('intent.resourceType.skill'), icon: SKILL_ICON },
-    { value: 'mcp' as const, label: t('intent.resourceType.mcp'), icon: MCP_ICON },
-    { value: 'plugin' as const, label: t('intent.resourceType.plugin'), icon: PLUGIN_ICON },
-    {
-      value: 'workflow' as const,
-      label: t('intent.resourceType.workflow'),
-      icon: WORKFLOW_ICON,
-    },
-    {
-      value: 'workgroup' as const,
-      label: t('intent.resourceType.workgroup'),
-      icon: WORKGROUP_ICON,
-    },
+    ...INTENT_RESOURCE_TYPES.map((type) => ({
+      value: type,
+      label: RESOURCE_TYPE_LABELS[type](t),
+      icon: RESOURCE_TYPE_ICONS[type],
+    })),
   ]
   const footer = (
     <div className="intent-create__footer">

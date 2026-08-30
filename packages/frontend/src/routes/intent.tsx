@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
+import { INTENT_RESOURCE_TYPES, type IntentResourceType } from '@agent-workflow/shared'
 import { Dialog } from '@/components/Dialog'
 import { IntentCreateComposer } from '@/components/intent/IntentCreateComposer'
 import { IntentSessionList } from '@/components/intent/IntentSessionList'
@@ -24,7 +25,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { INTENT_QUERY_KEYS, useIntentSessionsWs } from '@/hooks/useIntentSessionsWs'
 import { Route as RootRoute } from './__root'
 
-type IntentArtifactHint = 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
+// RFC-348 D6 — the roster is the shared INTENT_RESOURCE_TYPES, never a local copy.
+type IntentArtifactHint = IntentResourceType
 
 export interface IntentSearch {
   create?: boolean
@@ -33,7 +35,7 @@ export interface IntentSearch {
   mountId?: string
 }
 
-const ARTIFACT_TYPES = ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup'] as const
+const ARTIFACT_TYPES = INTENT_RESOURCE_TYPES
 
 interface PendingPopGuardOptions {
   isPending: () => boolean

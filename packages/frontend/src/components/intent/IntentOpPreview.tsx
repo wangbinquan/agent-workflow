@@ -29,7 +29,12 @@ import type {
   WorkflowDetail,
   WorkflowTemplateSurface,
 } from '@agent-workflow/shared'
-import { collectWorkflowTemplateSurfaces, WorkflowDefinitionSchema } from '@agent-workflow/shared'
+import {
+  INTENT_RESOURCE_TYPES,
+  collectWorkflowTemplateSurfaces,
+  WorkflowDefinitionSchema,
+  type IntentResourceType,
+} from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { FeedbackStack } from '@/components/FeedbackStack'
@@ -99,9 +104,44 @@ function utf8Size(text: string): number {
   return new TextEncoder().encode(text).length
 }
 
+function toIntentResourceType(value: string): IntentResourceType | null {
+  return (INTENT_RESOURCE_TYPES as readonly string[]).includes(value)
+    ? (value as IntentResourceType)
+    : null
+}
+
+interface OpPreviewRenderInput {
+  readonly props: IntentOpPreviewProps
+  readonly payload: Record<string, unknown>
+  readonly action: string
+}
+
+// RFC-348 D6 — one renderer per shared roster member (`null` = raw JSON only), so
+// a new IntentResourceType fails to compile here until it decides its preview.
+const OP_PREVIEW_RENDERERS = {
+  workflow: ({ props, payload, action }) => (
+    <WorkflowOpPreview
+      op={props.op}
+      payload={payload}
+      action={action}
+      mounts={props.mounts}
+      bundleNames={props.bundleNames}
+    />
+  ),
+  workgroup: ({ props, payload }) => (
+    <WorkgroupOpPreview payload={payload} mounts={props.mounts} bundleNames={props.bundleNames} />
+  ),
+  skill: ({ payload }) => <SkillOpPreview payload={payload} />,
+  agent: ({ props, payload, action }) => (
+    <AgentOpPreview op={props.op} payload={payload} action={action} mounts={props.mounts} />
+  ),
+  mcp: () => null,
+  plugin: () => null,
+} satisfies Record<IntentResourceType, (input: OpPreviewRenderInput) => ReactElement | null>
+
 export function IntentOpPreview(props: IntentOpPreviewProps): ReactElement {
   const { t } = useTranslation()
-  const resourceType = String(props.op.resourceType ?? '')
+  const intentResourceType = toIntentResourceType(String(props.op.resourceType ?? ''))
   const action = String(props.op.action ?? '')
   const payload = (props.op.payload ?? {}) as Record<string, unknown>
 
@@ -118,26 +158,9 @@ export function IntentOpPreview(props: IntentOpPreviewProps): ReactElement {
           </NoticeBanner>
         ) : null}
       </FeedbackStack>
-      {resourceType === 'workflow' ? (
-        <WorkflowOpPreview
-          op={props.op}
-          payload={payload}
-          action={action}
-          mounts={props.mounts}
-          bundleNames={props.bundleNames}
-        />
-      ) : null}
-      {resourceType === 'workgroup' ? (
-        <WorkgroupOpPreview
-          payload={payload}
-          mounts={props.mounts}
-          bundleNames={props.bundleNames}
-        />
-      ) : null}
-      {resourceType === 'skill' ? <SkillOpPreview payload={payload} /> : null}
-      {resourceType === 'agent' ? (
-        <AgentOpPreview op={props.op} payload={payload} action={action} mounts={props.mounts} />
-      ) : null}
+      {intentResourceType === null
+        ? null
+        : OP_PREVIEW_RENDERERS[intentResourceType]({ props, payload, action })}
       <details>
         <summary>{t('intent.previewRawJson')}</summary>
         <pre className="mono" style={{ maxHeight: 240, overflow: 'auto' }}>

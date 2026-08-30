@@ -7,16 +7,17 @@
 
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import type { IntentResourceType } from '@agent-workflow/shared'
 import type { ReactElement } from 'react'
 import { usePermission } from '@/hooks/useActor'
 
 export interface IntentEntryButtonProps {
   variant: 'create' | 'modify'
   /** Artifact hint for the create dialog (e.g. 'workflow'). */
-  hint?: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
+  hint?: IntentResourceType
   /** Modify variant: the element the new session should mount. */
   mount?: {
-    resourceType: 'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup'
+    resourceType: IntentResourceType
     resourceId: string
   }
   /** Match the hosting toolbar: default is the page-level `.btn` (md). */

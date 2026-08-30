@@ -1,6 +1,10 @@
 // RFC-293 — staged, multi-resource working-context editor.
 
-import type { IntentSessionDetail } from '@agent-workflow/shared'
+import {
+  INTENT_RESOURCE_TYPES,
+  type IntentResourceType,
+  type IntentSessionDetail,
+} from '@agent-workflow/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ulid } from 'ulid'
@@ -11,8 +15,10 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { ResourcePicker } from '@/components/ResourcePicker'
 import { Segmented } from '@/components/Segmented'
 
-const MOUNT_TYPES = ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup'] as const
-export type IntentMountType = (typeof MOUNT_TYPES)[number]
+// RFC-348 D6 — derived from the shared roster: a seventh intent type reaches this
+// dialog (and its `Record<IntentMountType, …>` tables) without a hand edit.
+const MOUNT_TYPES = INTENT_RESOURCE_TYPES
+export type IntentMountType = IntentResourceType
 
 const LIST_SOURCES: Record<IntentMountType, { endpoint: string; queryKey: readonly string[] }> = {
   agent: { endpoint: '/api/agents', queryKey: ['agents'] },
@@ -30,14 +36,9 @@ interface MountRow {
 }
 
 type Picks = Record<IntentMountType, string[]>
-const EMPTY_PICKS: Picks = {
-  agent: [],
-  skill: [],
-  mcp: [],
-  plugin: [],
-  workflow: [],
-  workgroup: [],
-}
+const EMPTY_PICKS: Picks = Object.fromEntries(
+  INTENT_RESOURCE_TYPES.map((type) => [type, [] as string[]]),
+) as Picks
 
 export interface IntentMountDialogProps {
   open: boolean
