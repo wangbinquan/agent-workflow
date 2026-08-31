@@ -35,6 +35,7 @@ import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/inte
 import { createIntentSession } from '../src/services/intent/session'
 import { buildIntentDump } from '../src/services/intent/dumpBuilder'
 import { parseHandleWatermark, type IntentContextManifest } from '../src/services/intent/manifest'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import {
   resolveIntentBundle,
   validateDraftChangeset,
@@ -53,7 +54,8 @@ const actor: Actor = {
 }
 
 function deps(over: Partial<ApplyIntentDeps> = {}): ApplyIntentDeps {
-  return { db, appHome, actor, ...over }
+  const resolved = { db, appHome, actor, ...over }
+  return { ...resolved, ...intentApplyResourceBinding(db, resolved.actor) }
 }
 
 function installDraft(

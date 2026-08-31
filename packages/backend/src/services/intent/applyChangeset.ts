@@ -29,100 +29,29 @@
 // op-lock + staged-version roll-forward path.
 
 import { and, eq } from 'drizzle-orm'
-import {
-  INTENT_RESOURCE_TYPES,
-  CreateAgentSchema,
-  CreateMcpSchema,
-  CreateWorkgroupSchema,
-  UpdateAgentSchema,
-  WorkflowDefinitionSchema,
-  migrateWorkflowDefinitionToLatest,
-  type CreateMcp,
-  type CreateWorkgroup,
-  type UpdateWorkgroup,
-  type WorkflowDefinition,
-} from '@agent-workflow/shared'
-import { stringify as stringifyYaml } from 'yaml'
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { formatChangesetIssues, INTENT_RESOURCE_TYPES } from '@agent-workflow/shared'
+import { rmSync } from 'node:fs'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
   intentApplyJournal,
   intentDraftResolutions,
   intentDrafts,
   intentProvenance,
   intentSessions,
-  plugins as pluginsTable,
-  skillOperations,
 } from '@/db/schema'
 import { getAclResourceOwner, listOwnedAclResourceNames } from '@/services/resourceAcl'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import { ulid } from 'ulid'
 import { ZodError } from 'zod'
-import { formatChangesetIssues } from '@agent-workflow/shared'
-import {
-  commitAgentCreateInTx,
-  commitAgentUpdateInTx,
-  getAgentById,
-  prepareAgentCreate,
-  prepareAgentUpdate,
-  type PreparedAgentCreate,
-  type PreparedAgentUpdate,
-} from '@/services/agent'
-import {
-  commitMcpCreateInTx,
-  commitMcpUpdateInTx,
-  getMcpById,
-  prepareMcpCreate,
-  type PreparedMcpCreate,
-  type PreparedMcpUpdate,
-} from '@/services/mcp'
-import {
-  commitPluginCreateInTx,
-  commitPluginPublishInTx,
-  type PreparedPluginCreate,
-} from '@/services/plugin'
-import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
-import { installPlugin, plannedGenerationDir, type InstallResult } from '@/services/pluginInstaller'
-import {
-  commitSkillReadyInTx,
-  compensateManagedSkillStage,
-  stageManagedSkill,
-} from '@/services/skill'
-import { finishOperation } from '@/services/skillOperations'
-import {
-  abortStagedSkillVersion,
-  commitSkillVersionInTx,
-  publishStagedSkillVersion,
-  stageSkillVersion,
-  type StagedSkillVersion,
-} from '@/services/skillVersion'
-import { unmarkSkillBootVerified } from '@/services/skillBootVerify'
-import {
-  broadcastWorkflowCreated,
-  commitWorkflowSaveInTx,
-  insertWorkflowInTx,
-  prepareWorkflowSave,
-  rowToWorkflowDetail,
-  type PreparedWorkflowSave,
-} from '@/services/workflow'
-import {
-  broadcastWorkgroupCreated,
-  commitWorkgroupCreateInTx,
-  commitWorkgroupSaveInTx,
-  prepareWorkgroupCreate,
-  prepareWorkgroupSave,
-  type PreparedWorkgroupCreate,
-  type PreparedWorkgroupSave,
-} from '@/services/workgroups'
-import {
-  assertRefsUsableInTx,
-  extractWorkflowWorkflowRefs,
-  extractWorkflowWorkgroupRefs,
-} from '@/services/resourceRefs'
+import type {
+  IntentApplyResourceParticipantInTx,
+  ResourceRequestContext,
+} from '@/modules/resource-catalog/public/participants'
+import type { VersionedIntentResourceChangesetPlan } from '@/modules/resource-catalog/public/types'
+import { legacyIntentApplyResourceDependencies } from './legacyIntentApplyResourceDependencies'
 import {
   applyCommitMounts,
   createHandleAllocator,
@@ -131,12 +60,10 @@ import {
   mergeHandleWatermarks,
   parseHandleWatermark,
   type IntentContextManifest,
-  type IntentFence,
   type IntentManifestEntry,
 } from './manifest'
 import { resolveIntentBundle, type IntentDecision, type ResolvedIntentOp } from './resolveChangeset'
 import { sessionManifest } from './session'
-import { monotonicNow } from '@/util/time'
 import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
@@ -194,30 +121,6 @@ export async function copyOnlyTargetsFor(
   return out
 }
 
-type PluginRow = typeof pluginsTable.$inferSelect
-
-/**
- * RFC-271 T17 —— 插件基线复核**只读一次**。
- *
- * ⚠️ 分两次读（一次算 hash、一次做整行捕获）会让「两次读之间被人改掉」的窗口
- * 原样复现，而 `commitPluginPublishInTx` 的整行 CAS 正是为堵这个窗口而存在的。
- * 所以这里返回**同一行**，hash 与捕获都从它算。
- */
-async function requirePluginRowForIntent(db: DbClient, id: string): Promise<PluginRow> {
-  const rows = await db.select().from(pluginsTable).where(eq(pluginsTable.id, id)).limit(1)
-  const row = rows[0]
-  if (row === undefined) throw new NotFoundError('plugin-not-found', `plugin '${id}' not found`)
-  return row
-}
-
-/** `pluginOperationConfigHashOf` 要的最小投影（与 plugin.ts 的 rowToPlugin 同源字段）。 */
-function rowToPluginForIntent(row: PluginRow): Parameters<typeof pluginOperationConfigHashOf>[0] {
-  return {
-    ...row,
-    options: JSON.parse(row.optionsJson) as Record<string, unknown>,
-  } as never
-}
-
 export interface ApplyIntentFaults {
   afterPluginInstall?: () => void
   afterSkillStage?: () => void
@@ -232,10 +135,57 @@ export interface ApplyIntentDeps {
   db: DbClient
   appHome: string
   actor: Actor
+  authority: ResourceRequestContext
+  resourceApply: IntentApplyResourceBinding
   /** Plugin installer seam (tests point specs at local fixtures). */
-  pluginInstallOpts?: Parameters<typeof installPlugin>[2]
+  pluginInstallOpts?: {
+    readonly pluginsDir?: string
+    readonly npmBin?: string
+    readonly timeoutMs?: number
+  }
   faults?: ApplyIntentFaults
   log?: Logger
+}
+
+export interface IntentApplyResourceSession {
+  prepare(
+    plan: VersionedIntentResourceChangesetPlan,
+    context: {
+      readonly pendingIds: ReadonlySet<string>
+      readonly pendingAgentNames: ReadonlyMap<string, string>
+      readonly clientMutationId: string
+    },
+  ): Promise<void>
+  prestage(
+    plan: VersionedIntentResourceChangesetPlan,
+    context: { readonly recordArtifact: (artifact: IntentJournalArtifactV1) => void },
+  ): Promise<void>
+  participantInTransaction(
+    tx: DbTxSync,
+    context: {
+      readonly bundleCreatedNames: {
+        readonly workflow: ReadonlySet<string>
+        readonly workgroup: ReadonlySet<string>
+      }
+    },
+  ): IntentApplyResourceParticipantInTx
+  broadcastCommitted(): void
+}
+
+export interface IntentApplyResourceBinding {
+  createSession(options: {
+    readonly db: DbClient
+    readonly appHome: string
+    readonly actor: Actor
+    readonly authority: ResourceRequestContext
+    readonly pluginInstallOpts?: {
+      readonly pluginsDir?: string
+      readonly npmBin?: string
+      readonly timeoutMs?: number
+    }
+    readonly afterPluginInstall?: () => void
+    readonly afterSkillStage?: () => void
+  }): IntentApplyResourceSession
 }
 
 export interface ApplyIntentInput {
@@ -288,39 +238,48 @@ async function occupiedNamesFor(
   return out
 }
 
-type PreparedOp =
-  | { op: ResolvedIntentOp; kind: 'agent-create'; prepared: PreparedAgentCreate }
-  | { op: ResolvedIntentOp; kind: 'agent-update'; prepared: PreparedAgentUpdate }
-  | { op: ResolvedIntentOp; kind: 'mcp-create'; prepared: PreparedMcpCreate }
-  | { op: ResolvedIntentOp; kind: 'mcp-update'; prepared: PreparedMcpUpdate }
-  | {
-      op: ResolvedIntentOp
-      kind: 'plugin-create'
-      spec: string
-      parsed: PreparedPluginCreate['parsed']
+function intentResourcePlanOf(
+  op: ResolvedIntentOp,
+  manifestByHandle: ReadonlyMap<string, IntentManifestEntry>,
+): VersionedIntentResourceChangesetPlan {
+  const payload =
+    op.resourceType === 'plugin' && 'options' in op.payload
+      ? (() => {
+          const { options, ...rest } = op.payload
+          return { ...rest, optionsJson: options }
+        })()
+      : op.payload
+  if (op.action === 'update') {
+    const expectedRevision = op.manifestEntry?.fence
+    if (expectedRevision === undefined || expectedRevision.kind !== op.resourceType) {
+      throw new ConflictError(
+        'intent-baseline-stale',
+        `${op.resourceType} fence missing for intent update`,
+      )
     }
-  | { op: ResolvedIntentOp; kind: 'skill-create' }
-  | { op: ResolvedIntentOp; kind: 'skill-update'; staged: StagedSkillVersion }
-  | {
-      op: ResolvedIntentOp
-      kind: 'plugin-update'
-      spec: string
-      specChanged: boolean
-      captured: PluginRow
-      payload: { options: Record<string, unknown>; description: string; enabled: boolean }
-    }
-  | { op: ResolvedIntentOp; kind: 'workflow-create'; definition: WorkflowDefinition }
-  | { op: ResolvedIntentOp; kind: 'workflow-update'; prepared: PreparedWorkflowSave }
-  | { op: ResolvedIntentOp; kind: 'workgroup-create'; prepared: PreparedWorkgroupCreate }
-  | { op: ResolvedIntentOp; kind: 'workgroup-update'; prepared: PreparedWorkgroupSave }
+    return {
+      kind: op.resourceType,
+      operationId: op.opId,
+      action: 'update',
+      resourceId: op.resourceId,
+      expectedRevision,
+      payload,
+    } as VersionedIntentResourceChangesetPlan
+  }
 
-function agentFenceOf(fence: IntentFence | undefined): {
-  expectedUpdatedAt: number
-  expectedAclRevision: number
-} {
-  if (fence?.kind !== 'agent')
-    throw new ConflictError('intent-baseline-stale', 'agent fence missing')
-  return { expectedUpdatedAt: fence.updatedAt, expectedAclRevision: fence.aclRevision }
+  const copiedFromResourceId =
+    op.copiedFromHandle === undefined
+      ? undefined
+      : manifestByHandle.get(op.copiedFromHandle)?.resourceId
+  return {
+    kind: op.resourceType,
+    operationId: op.opId,
+    action: 'create',
+    resourceId: op.resourceId,
+    fromCopy: op.fromCopy,
+    ...(copiedFromResourceId === undefined ? {} : { copiedFromResourceId }),
+    payload,
+  } as VersionedIntentResourceChangesetPlan
 }
 
 export async function applyIntentChangeset(
@@ -502,11 +461,24 @@ async function applyInner(
     })
   }
 
-  const pluginInstalls = new Map<string, InstallResult>()
-  const skillStages = new Map<string, { skillId: string; opId: string; skillDir: string }>()
-  const skillVersionStages = new Map<string, StagedSkillVersion>()
   let committedReceipt: IntentApplyReceipt | null = null
   try {
+    const resourceSession = deps.resourceApply.createSession({
+      db,
+      appHome: deps.appHome,
+      actor,
+      authority: deps.authority,
+      ...(deps.pluginInstallOpts === undefined
+        ? {}
+        : { pluginInstallOpts: deps.pluginInstallOpts }),
+      ...(deps.faults?.afterPluginInstall === undefined
+        ? {}
+        : { afterPluginInstall: deps.faults.afterPluginInstall }),
+      ...(deps.faults?.afterSkillStage === undefined
+        ? {}
+        : { afterSkillStage: deps.faults.afterSkillStage }),
+    })
+
     // ── preflight (design §9.2/§9.3) ──
     const manifest = sessionManifest(claim.session)
     const changeset = JSON.parse(claim.draft.changesetJson)
@@ -520,397 +492,46 @@ async function applyInner(
       copyOnlyTargets,
     })
     const pendingIds = new Set(
-      bundle.ops.filter((o) => o.action === 'create').map((o) => o.resourceId),
+      bundle.ops.filter((op) => op.action === 'create').map((op) => op.resourceId),
     )
     const pendingAgentNames = new Map(
       bundle.ops
-        .filter((o) => o.action === 'create' && o.resourceType === 'agent')
-        .map((o) => [o.resourceId, (o.payload as { name: string }).name]),
+        .filter((op) => op.action === 'create' && op.resourceType === 'agent')
+        .map((op) => [op.resourceId, (op.payload as { readonly name: string }).name]),
     )
+    const manifestByHandle = new Map(
+      manifest.map((entry): [string, IntentManifestEntry] => [entry.handle, entry]),
+    )
+    const plans = bundle.ops.map((op) => intentResourcePlanOf(op, manifestByHandle))
 
-    const preparedOps: PreparedOp[] = []
-    for (const op of bundle.ops) {
+    for (const plan of plans) {
       try {
-        if (op.action === 'create') {
-          switch (op.resourceType) {
-            case 'agent': {
-              const parsed = CreateAgentSchema.parse(op.payload)
-              const prepared = await prepareAgentCreate(db, parsed, {
-                ownerUserId: actor.user.id,
-                actor,
-                id: op.resourceId,
-                pendingBundleIds: pendingIds,
-              })
-              preparedOps.push({ op, kind: 'agent-create', prepared })
-              break
-            }
-            case 'mcp': {
-              const parsed: CreateMcp = CreateMcpSchema.parse(op.payload)
-              const prepared = await prepareMcpCreate(db, parsed, {
-                ownerUserId: actor.user.id,
-                actor,
-              })
-              preparedOps.push({
-                op,
-                kind: 'mcp-create',
-                prepared: { ...prepared, id: op.resourceId },
-              })
-              break
-            }
-            case 'plugin': {
-              const p = op.payload as {
-                name: string
-                spec: string
-                options: Record<string, unknown>
-                description: string
-                enabled: boolean
-              }
-              preparedOps.push({
-                op,
-                kind: 'plugin-create',
-                spec: p.spec,
-                parsed: {
-                  name: p.name,
-                  spec: p.spec,
-                  options: p.options,
-                  description: p.description,
-                  enabled: p.enabled,
-                },
-              })
-              break
-            }
-            case 'skill':
-              preparedOps.push({ op, kind: 'skill-create' })
-              break
-            case 'workflow': {
-              const definition = migrateWorkflowDefinitionToLatest(
-                WorkflowDefinitionSchema.parse(op.payload.definition),
-              )
-              preparedOps.push({ op, kind: 'workflow-create', definition })
-              break
-            }
-            case 'workgroup': {
-              const parsed: CreateWorkgroup = CreateWorkgroupSchema.parse(op.payload)
-              const prepared = await prepareWorkgroupCreate(db, parsed, {
-                ownerUserId: actor.user.id,
-                actor,
-                pendingAgentNames,
-              })
-              preparedOps.push({
-                op,
-                kind: 'workgroup-create',
-                prepared: { ...prepared, groupId: op.resourceId },
-              })
-              break
-            }
-            default: {
-              // RFC-348 D7 — a seventh IntentResourceType must be handled here, not fall through.
-              const _exhaustive: never = op.resourceType
-              throw new Error(`unhandled intent resource type ${String(_exhaustive)}`)
-            }
-          }
-          continue
-        }
-        // ── updates ──
-        switch (op.resourceType) {
-          case 'agent': {
-            const existing = await getAgentById(db, op.resourceId)
-            if (existing === null) throw new NotFoundError('agent-not-found', 'agent not found')
-            if ((op.payload as { name: string }).name !== existing.name) {
-              throw new ValidationError(
-                'intent-rename-unsupported',
-                'renaming via intent update is not supported; use the finalName slot on a copy, or the rename flow',
-              )
-            }
-            const { name: _name, ...patchBody } = op.payload as Record<string, unknown>
-            // RFC-348 D5 (user ruling ①) — an intent update that OMITS a sidecar keeps
-            // the stored value; the explicit clear forms (`[]` / `{}` / `'normal'` /
-            // `{}`) still clear. The resolve seam always sends `frontmatterExtra`,
-            // which makes prepareAgentUpdate take its explicit-extra path and skip
-            // its own sidecar merge — so the merge happens here, from the row itself.
-            for (const key of [
-              'branchPorts',
-              'outputKinds',
-              'role',
-              'outputWrapperPortNames',
-            ] as const) {
-              if (!(key in patchBody) && existing[key] !== undefined) patchBody[key] = existing[key]
-            }
-            const patch = UpdateAgentSchema.parse(patchBody)
-            const prepared = await prepareAgentUpdate(
-              db,
-              op.resourceId,
-              patch,
-              actor,
-              agentFenceOf(op.manifestEntry?.fence),
-              {
-                pendingBundleIds: pendingIds,
-              },
-            )
-            preparedOps.push({ op, kind: 'agent-update', prepared })
-            break
-          }
-          case 'mcp': {
-            const existing = await getMcpById(db, op.resourceId)
-            if (existing === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
-            const fence = op.manifestEntry?.fence
-            if (fence?.kind !== 'mcp') {
-              throw new ConflictError('intent-baseline-stale', 'mcp fence missing')
-            }
-            const p = op.payload as CreateMcp
-            if (p.type !== existing.type) {
-              throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
-            }
-            // Codex impl-gate P1-2 + RFC-348 D2 (Codex r12 P1#1): update replaces
-            // config WHOLE, so a stored oauth block is carried forward ONLY when the
-            // payload omits it — an explicit `false` / object is the user's edit.
-            const payloadOauth = (p.config as { oauth?: unknown }).oauth
-            const existingOauth = (existing.config as { oauth?: unknown }).oauth
-            const nextConfig =
-              payloadOauth !== undefined || existingOauth === undefined
-                ? p.config
-                : { ...(p.config as Record<string, unknown>), oauth: existingOauth }
-            const set: PreparedMcpUpdate['set'] = {
-              updatedAt: monotonicNow(existing.updatedAt),
-              description: p.description,
-              enabled: p.enabled,
-              config: JSON.stringify(nextConfig),
-            }
-            preparedOps.push({
-              op,
-              kind: 'mcp-update',
-              prepared: {
-                id: op.resourceId,
-                set,
-                expectedConfigHash: fence.configHash,
-                // RFC-271 T12：把授权时看到的 owner 一起带进提交事务。hash 只证明
-                // 「我读到的是这一版」，不是授权——少了这道围栏，直接到达该原语的
-                // 写路径可以拿他人公开资源的 id + 正确 hash 改写别人那一行。
-                expectedOwnerUserId: existing.ownerUserId,
-              },
-            })
-            break
-          }
-          case 'workflow': {
-            const fence = op.manifestEntry?.fence
-            if (fence?.kind !== 'workflow') {
-              throw new ConflictError('intent-baseline-stale', 'workflow fence missing')
-            }
-            const prepared = await prepareWorkflowSave(
-              db,
-              op.resourceId,
-              {
-                expectedVersion: fence.version,
-                clientMutationId: input.clientMutationId,
-                snapshot: {
-                  name: (op.payload as { name: string }).name,
-                  description: (op.payload as { description: string }).description,
-                  definition: migrateWorkflowDefinitionToLatest(
-                    WorkflowDefinitionSchema.parse(op.payload.definition),
-                  ),
-                },
-              },
-              { kind: 'actor', actor },
-            )
-            preparedOps.push({ op, kind: 'workflow-update', prepared })
-            break
-          }
-          case 'workgroup': {
-            const fence = op.manifestEntry?.fence
-            if (fence?.kind !== 'workgroup') {
-              throw new ConflictError('intent-baseline-stale', 'workgroup fence missing')
-            }
-            const snapshot = op.payload as unknown as UpdateWorkgroup['snapshot']
-            const prepared = await prepareWorkgroupSave(
-              db,
-              op.resourceId,
-              {
-                expectedVersion: fence.version,
-                clientMutationId: input.clientMutationId,
-                snapshot,
-              } as UpdateWorkgroup,
-              { kind: 'actor', actor },
-            )
-            preparedOps.push({ op, kind: 'workgroup-update', prepared })
-            break
-          }
-          case 'skill': {
-            // RFC-271 T14：暂存段留到 prestage（它有 FS 副作用），这里只占位。
-            preparedOps.push({ op, kind: 'skill-update', staged: null as never })
-            break
-          }
-          case 'plugin': {
-            // ⚠️ T17：基线必须从**同一次**读到的完整 row 投影算 configHash。
-            // 分两次读（一次算 hash、一次做捕获）会让「读之间被人改掉」的漏洞
-            // 原样复现——那正是 `commitPluginPublishInTx` 的整行 CAS 要防的东西。
-            const captured = await requirePluginRowForIntent(db, op.resourceId)
-            const fence = op.manifestEntry?.fence
-            if (fence?.kind !== 'plugin') {
-              throw new ConflictError('intent-baseline-stale', 'plugin fence missing')
-            }
-            const currentHash = pluginOperationConfigHashOf(rowToPluginForIntent(captured))
-            if (currentHash !== fence.configHash) {
-              throw staleConflictError('plugin', 'the plugin changed; reload before saving')
-            }
-            const p = op.payload as {
-              spec: string
-              options?: Record<string, unknown>
-              description?: string
-              enabled?: boolean
-            }
-            preparedOps.push({
-              op,
-              kind: 'plugin-update',
-              spec: p.spec,
-              specChanged: p.spec !== captured.spec,
-              captured,
-              payload: {
-                options: p.options ?? {},
-                description: p.description ?? captured.description,
-                enabled: p.enabled ?? captured.enabled,
-              },
-            })
-            break
-          }
-          default: {
-            // RFC-348 D7 — compile-time exhaustiveness over IntentResourceType (see the create switch).
-            const _exhaustive: never = op.resourceType
-            void _exhaustive
-            throw new ValidationError(
-              'intent-op-unsupported',
-              `${op.resourceType} update via intent is not supported yet; propose a copy instead`,
-            )
-          }
-        }
-      } catch (err) {
-        // Live-run lesson (deepseek 2026-07-28): a canonical-service schema
-        // rejection (e.g. RFC-060 kind grammar on agent inputs) surfaced as an
-        // unhandled ZodError → HTTP 500. Map it to a typed, op-addressed
-        // validation error so the UI (and the model self-fix loop, via the
-        // commit failure receipt) see actionable field paths. Typed domain
-        // errors pass through; genuinely unknown faults keep failing loud.
-        if (err instanceof ZodError) {
+        await resourceSession.prepare(plan, {
+          pendingIds,
+          pendingAgentNames,
+          clientMutationId: input.clientMutationId,
+        })
+      } catch (error) {
+        // Canonical resource schemas stay an op-addressed 422 at the Intent boundary.
+        if (error instanceof ZodError) {
           throw new ValidationError(
             'intent-op-canonical-invalid',
-            `${op.opId}: ${formatChangesetIssues(err.issues).join('; ')}`,
+            `${plan.operationId}: ${formatChangesetIssues(error.issues).join('; ')}`,
           )
         }
-        throw err
+        throw error
       }
     }
 
     // ── prestage (design §9.4 ①②; record-then-act) ──
-    for (const item of preparedOps) {
-      if (item.kind === 'plugin-create' || (item.kind === 'plugin-update' && item.specChanged)) {
-        // RFC-271 T17：**预铸** generation id，精确路径先落 journal 再安装。
-        const generationId = ulid()
-        const generationDir = plannedGenerationDir(
-          item.op.resourceId,
-          item.spec,
-          generationId,
-          deps.pluginInstallOpts?.pluginsDir,
-        )
-        if (generationDir !== null) {
-          recordArtifact({
-            kind: 'plugin-install',
-            pluginId: item.op.resourceId,
-            generationId,
-            generationDir,
-          })
-        }
-        const install = await installPlugin(item.op.resourceId, item.spec, {
-          ...deps.pluginInstallOpts,
-          generationId,
-        })
-        pluginInstalls.set(item.op.resourceId, install)
-        deps.faults?.afterPluginInstall?.()
-      } else if (item.kind === 'skill-update') {
-        const payload = item.op.payload as {
-          name: string
-          description: string
-          frontmatterExtra: Record<string, unknown>
-          bodyMd: string
-          files: Array<{ path: string; content: string }>
-        }
-        const staged = stageSkillVersion(
-          db,
-          { appHome: deps.appHome },
-          item.op.resourceId,
-          (stagingDir) => {
-            const skillMd = `---\n${stringifyYaml(
-              {
-                name: payload.name,
-                description: payload.description,
-                ...payload.frontmatterExtra,
-              },
-              { lineWidth: 0 },
-            )}---\n\n${payload.bodyMd}\n`
-            writeFileSync(join(stagingDir, 'SKILL.md'), skillMd)
-            for (const file of payload.files ?? []) {
-              const abs = join(stagingDir, file.path)
-              mkdirSync(dirname(abs), { recursive: true })
-              writeFileSync(abs, file.content)
-            }
-          },
-          {
-            source: 'editor',
-            authorUserId: actor.user.id,
-            // T16：owner 围栏显式传入 —— 授权之后、提交之前的 owner 转移必须 409。
-            expectedOwnerUserId: actor.user.id,
-            setDescription: payload.description,
-          },
-        )
-        ;(item as { staged: StagedSkillVersion }).staged = staged
-        skillVersionStages.set(item.op.resourceId, staged)
-        recordArtifact({ kind: 'skill-version-stage', staged })
-        deps.faults?.afterSkillStage?.()
-      } else if (item.kind === 'skill-create') {
-        const payload = item.op.payload as {
-          name: string
-          description: string
-          frontmatterExtra: Record<string, unknown>
-          bodyMd: string
-          files: Array<{ path: string; content: string }>
-        }
-        const stage = await stageManagedSkill(
-          db,
-          { appHome: deps.appHome },
-          {
-            name: payload.name,
-            description: payload.description,
-            ownerUserId: actor.user.id,
-            actor,
-            id: item.op.resourceId,
-          },
-          (filesDir) => {
-            const skillMd = `---\n${stringifyYaml(
-              {
-                name: payload.name,
-                description: payload.description,
-                ...payload.frontmatterExtra,
-              },
-              { lineWidth: 0 },
-            )}---\n\n${payload.bodyMd}\n`
-            writeFileSync(join(filesDir, 'SKILL.md'), skillMd)
-            for (const file of payload.files) {
-              const abs = join(filesDir, file.path)
-              mkdirSync(dirname(abs), { recursive: true })
-              writeFileSync(abs, file.content)
-            }
-          },
-        )
-        skillStages.set(item.op.resourceId, stage)
-        recordArtifact({ kind: 'skill-stage', ...stage })
-        deps.faults?.afterSkillStage?.()
-      }
+    for (const plan of plans) {
+      await resourceSession.prestage(plan, { recordArtifact })
     }
 
     deps.faults?.beforeTx?.()
 
     // ── the big transaction (design §9.4 ③) ──
     const applied: IntentApplyReceipt['applied'] = []
-    const createdWorkflowRows: Array<ReturnType<typeof insertWorkflowInTx>> = []
-    const createdWorkgroups: Array<ReturnType<typeof commitWorkgroupCreateInTx>> = []
     const receipt = dbTxSync(db, (tx) => {
       const cas = tx
         .update(intentApplyJournal)
@@ -943,175 +564,43 @@ async function applyInner(
         )
       }
 
-      // Names this very bundle is about to create, by type. Read from the
-      // RESOLVED payload, so a target renamed through its `finalName` slot at
-      // confirm time is keyed by the name that actually lands in the row —
-      // `resolveIntentBundle` overlays the slot before we get here
-      // (resolveChangeset.ts `nameOf`), and keying off the model's original
-      // name would silently miss the rename.
+      // Names this very bundle is about to create, by type. These are read from
+      // the resolved plans so finalName overlays have already been applied.
       const bundleCreatedNames = { workflow: new Set<string>(), workgroup: new Set<string>() }
-      for (const item of preparedOps) {
-        if (item.op.action !== 'create') continue
+      for (const plan of plans) {
+        if (plan.action !== 'create') continue
         const bucket =
-          item.op.resourceType === 'workflow'
+          plan.kind === 'workflow'
             ? bundleCreatedNames.workflow
-            : item.op.resourceType === 'workgroup'
+            : plan.kind === 'workgroup'
               ? bundleCreatedNames.workgroup
               : null
         if (bucket === null) continue
-        const name = (item.op.payload as { name?: unknown }).name
+        const name = (plan.payload as { readonly name?: unknown }).name
         if (typeof name === 'string' && name.length > 0) bucket.add(name)
       }
 
-      for (const item of preparedOps) {
-        switch (item.kind) {
-          case 'agent-create':
-            commitAgentCreateInTx(tx, item.prepared)
-            break
-          case 'agent-update':
-            commitAgentUpdateInTx(tx, item.prepared)
-            break
-          case 'mcp-create':
-            commitMcpCreateInTx(tx, item.prepared)
-            break
-          case 'mcp-update':
-            commitMcpUpdateInTx(tx, item.prepared)
-            break
-          case 'plugin-create': {
-            const install = pluginInstalls.get(item.op.resourceId)
-            if (install === undefined) throw new Error('plugin install result missing')
-            commitPluginCreateInTx(tx, {
-              id: item.op.resourceId,
-              parsed: item.parsed,
-              initialAcl: {
-                ownerUserId: actor.user.id,
-                visibility: 'private',
-                aclRevision: 0,
-              },
-              install,
-              now: Date.now(),
-            })
-            break
-          }
-          case 'skill-create': {
-            const stage = skillStages.get(item.op.resourceId)
-            if (stage === undefined) throw new Error('skill stage missing')
-            commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
-            break
-          }
-          case 'skill-update': {
-            const staged = skillVersionStages.get(item.op.resourceId)
-            if (staged === undefined) throw new Error('skill version stage missing')
-            commitSkillVersionInTx(tx, staged, {
-              source: 'editor',
-              authorUserId: actor.user.id,
-              expectedOwnerUserId: actor.user.id,
-              setDescription: (item.op.payload as { description: string }).description,
-            })
-            break
-          }
-          case 'plugin-update': {
-            const install = pluginInstalls.get(item.op.resourceId)
-            commitPluginPublishInTx(tx, item.captured, {
-              spec: item.spec,
-              optionsJson: JSON.stringify(item.payload.options),
-              description: item.payload.description,
-              enabled: item.payload.enabled,
-              sourceKind: install?.sourceKind ?? item.captured.sourceKind,
-              cachedPath: install?.cachedPath ?? item.captured.cachedPath,
-              resolvedVersion: install?.resolvedVersion ?? item.captured.resolvedVersion,
-              installedAt: install === undefined ? item.captured.installedAt : Date.now(),
-              updatedAt: monotonicNow(item.captured.updatedAt),
-            })
-            break
-          }
-          case 'workflow-create': {
-            assertRefsUsableInTx(tx, actor, [
-              {
-                type: 'agent',
-                domain: 'id',
-                names: (item.definition.nodes ?? [])
-                  .filter((n) => n.kind === 'agent-single' && typeof n.agentId === 'string')
-                  .map((n) => n.agentId as string),
-              },
-              // RFC-243 §5.3 — call-workflow / call-workgroup select by NAME, and
-              // a name is not an authorization: without these two rows the intent
-              // create path is the only workflow INSERT that lets an actor adopt a
-              // reference to a resource they cannot see (createWorkflow checks all
-              // three at services/workflow.ts:200, copyWorkflow at :278, and the
-              // save path re-diffs them at :526). It was unreachable only because
-              // INTENT.md never taught the two call kinds; teaching them is what
-              // makes it reachable.
-              //
-              // Codex impl-gate P2 — bundle-internal names are excluded rather
-              // than left to in-tx visibility. Same-connection visibility only
-              // covers a target whose op ran EARLIER, so relying on it would make
-              // the fence order-dependent: caller-then-target would 403 while
-              // target-then-caller succeeded, for the same logical bundle, and
-              // nothing in the resolver's dependency graph or in INTENT.md orders
-              // call refs. Excluding them is also the correct ACL answer — the
-              // actor is creating those rows in this very transaction, so there
-              // is no one else's row to hide behind the name.
-              {
-                type: 'workflow',
-                names: extractWorkflowWorkflowRefs(item.definition).filter(
-                  (name) => !bundleCreatedNames.workflow.has(name),
-                ),
-                domain: 'name',
-              },
-              {
-                type: 'workgroup',
-                names: extractWorkflowWorkgroupRefs(item.definition).filter(
-                  (name) => !bundleCreatedNames.workgroup.has(name),
-                ),
-                domain: 'name',
-              },
-            ])
-            const row = insertWorkflowInTx(tx, {
-              // RFC-253 — the intent builder reaches this primitive DIRECTLY (no
-              // route in between), which is exactly why the gate lives here.
-              scriptPrincipal: { kind: 'actor', actor },
-              id: item.op.resourceId,
-              name: (item.op.payload as { name: string }).name,
-              description: (item.op.payload as { description: string }).description,
-              definition: item.definition,
-              ownerUserId: actor.user.id,
-              builtin: false,
-              now: Date.now(),
-            })
-            createdWorkflowRows.push(row)
-            break
-          }
-          case 'workflow-update': {
-            const result = commitWorkflowSaveInTx(tx, item.prepared)
-            if (!result.committed && result.receipt.outcome !== 'already-current') {
-              throw new ConflictError('intent-baseline-stale', 'workflow save did not commit')
-            }
-            break
-          }
-          case 'workgroup-create':
-            createdWorkgroups.push(commitWorkgroupCreateInTx(tx, item.prepared))
-            break
-          case 'workgroup-update': {
-            const result = commitWorkgroupSaveInTx(tx, item.prepared)
-            if (!result.committed && result.receipt.outcome !== 'already-current') {
-              throw new ConflictError('intent-baseline-stale', 'workgroup save did not commit')
-            }
-            break
-          }
+      const resourceParticipant = resourceSession.participantInTransaction(tx, {
+        bundleCreatedNames,
+      })
+      for (const [index, plan] of plans.entries()) {
+        const op = bundle.ops[index]
+        if (op === undefined || op.opId !== plan.operationId) {
+          throw new Error('intent-resource-plan-order-mismatch')
         }
+        resourceParticipant.authorizeAndCommit(deps.authority, plan)
         applied.push({
-          opId: item.op.opId,
-          resourceType: item.op.resourceType,
-          resourceId: item.op.resourceId,
-          action: item.op.action,
-          fromCopy: item.op.fromCopy,
-          name: (item.op.payload as { name: string }).name,
+          opId: op.opId,
+          resourceType: op.resourceType,
+          resourceId: op.resourceId,
+          action: op.action,
+          fromCopy: op.fromCopy,
+          name: (op.payload as { readonly name: string }).name,
         })
         tx.insert(intentProvenance)
           .values({
-            resourceType: item.op.resourceType,
-            resourceId: item.op.resourceId,
+            resourceType: op.resourceType,
+            resourceId: op.resourceId,
             commitId: journalId,
             sessionId: input.sessionId,
             createdAt: Date.now(),
@@ -1134,8 +623,8 @@ async function applyInner(
       const preCommitByHandle = new Map(preCommitManifest.map((entry) => [entry.handle, entry]))
       const copySourceHandles: string[] = []
       const lineageOriginByResourceId = new Map<string, string>()
-      for (const item of preparedOps) {
-        const sourceHandle = item.op.copiedFromHandle
+      for (const op of bundle.ops) {
+        const sourceHandle = op.copiedFromHandle
         if (sourceHandle === undefined) continue
         copySourceHandles.push(sourceHandle)
         const sourceEntry = preCommitByHandle.get(sourceHandle)
@@ -1143,7 +632,7 @@ async function applyInner(
         // rather than failing the commit: the entry is only missing if the
         // session moved under us, which the CAS above already ruled out.
         if (sourceEntry !== undefined) {
-          lineageOriginByResourceId.set(item.op.resourceId, lineageRootOf(sourceEntry))
+          lineageOriginByResourceId.set(op.resourceId, lineageRootOf(sourceEntry))
         }
       }
 
@@ -1159,16 +648,15 @@ async function applyInner(
       // `action` here is the NORMALIZED action (resolveChangeset), so a copy
       // already counts as a create; no second predicate needed.
       const nextManifest = applyCommitMounts(preCommitManifest, {
-        // Read off preparedOps, not the receipt: the receipt's resourceType is
-        // the wire-level string, while these carry the canonical union type.
-        // The two are 1:1 — every prepared op pushes exactly one `applied` row.
-        created: preparedOps
-          .filter((item) => item.op.action === 'create')
-          .map((item) => {
-            const origin = lineageOriginByResourceId.get(item.op.resourceId)
+        // Read off the resolved ops, not the receipt: the receipt's resourceType
+        // is the wire-level string while these carry the canonical union type.
+        created: bundle.ops
+          .filter((op) => op.action === 'create')
+          .map((op) => {
+            const origin = lineageOriginByResourceId.get(op.resourceId)
             return {
-              resourceType: item.op.resourceType,
-              resourceId: item.op.resourceId,
+              resourceType: op.resourceType,
+              resourceId: op.resourceId,
               ...(origin === undefined ? {} : { copiedFromResourceId: origin }),
             }
           }),
@@ -1215,25 +703,18 @@ async function applyInner(
       db,
       deps.appHome,
       {
-        skillStages: [...skillStages.values()],
-        skillVersionStages: [...skillVersionStages.values()],
+        skillStages: artifacts.flatMap((artifact) =>
+          artifact.kind === 'skill-stage'
+            ? [{ skillId: artifact.skillId, opId: artifact.opId }]
+            : [],
+        ),
+        skillVersionStages: artifacts.flatMap((artifact) =>
+          artifact.kind === 'skill-version-stage' ? [artifact.staged] : [],
+        ),
       },
       log,
     )
-    for (const row of createdWorkflowRows) {
-      try {
-        broadcastWorkflowCreated(rowToWorkflowDetail(row))
-      } catch {
-        /* broadcast is fire-and-forget */
-      }
-    }
-    for (const wg of createdWorkgroups) {
-      try {
-        broadcastWorkgroupCreated(wg)
-      } catch {
-        /* broadcast is fire-and-forget */
-      }
-    }
+    resourceSession.broadcastCommitted()
     return receipt
   } catch (error) {
     if (committedReceipt !== null) {
@@ -1281,12 +762,17 @@ async function applyInner(
 
 /** Post-commit publishes. Completed exact operations are skipped; unfinished
  * failures remain observable so convergence can retry them. */
+type IntentStagedSkillVersion = Extract<
+  IntentJournalArtifactV1,
+  { readonly kind: 'skill-version-stage' }
+>['staged']
+
 function rollForwardCommitted(
   db: DbClient,
   appHome: string,
   state: {
     skillStages: Array<{ skillId: string; opId: string }>
-    skillVersionStages: StagedSkillVersion[]
+    skillVersionStages: IntentStagedSkillVersion[]
   },
   log: Logger,
 ): boolean {
@@ -1295,18 +781,14 @@ function rollForwardCommitted(
   // an exact still-active operation has an unfinished publish tail; replaying
   // an old completed artifact after a later edit would unmark the healthy new
   // generation and try to publish stale bytes.
-  const pendingSkillVersions: StagedSkillVersion[] = []
+  const pendingSkillVersions: IntentStagedSkillVersion[] = []
   for (const staged of state.skillVersionStages) {
     if (staged.noop !== null) continue
     if (staged.opId === null) {
       pendingSkillVersions.push(staged)
       continue
     }
-    const op = db
-      .select({ active: skillOperations.active, phase: skillOperations.phase })
-      .from(skillOperations)
-      .where(eq(skillOperations.opId, staged.opId))
-      .get()
+    const op = legacyIntentApplyResourceDependencies.skillOperationState(db, staged.opId)
     if (op?.active === 1 && (op.phase === 'db-committed' || op.phase === 'fs-published')) {
       pendingSkillVersions.push(staged)
       continue
@@ -1323,10 +805,12 @@ function rollForwardCommitted(
 
   // Unmark every pending skill before publishing any of them; otherwise an
   // earlier item can be re-admitted while a later committed item is stale.
-  for (const staged of pendingSkillVersions) unmarkSkillBootVerified(staged.skillId)
+  for (const staged of pendingSkillVersions) {
+    legacyIntentApplyResourceDependencies.unmarkSkillBootVerified(staged.skillId)
+  }
   for (const staged of pendingSkillVersions) {
     try {
-      publishStagedSkillVersion(db, { appHome }, staged)
+      legacyIntentApplyResourceDependencies.publishStagedSkillVersion(db, { appHome }, staged)
     } catch (err) {
       complete = false
       log.warn('intent-skill-publish-replayed-or-failed', {
@@ -1336,11 +820,7 @@ function rollForwardCommitted(
     }
   }
   for (const stage of state.skillStages) {
-    const op = db
-      .select({ active: skillOperations.active, phase: skillOperations.phase })
-      .from(skillOperations)
-      .where(eq(skillOperations.opId, stage.opId))
-      .get()
+    const op = legacyIntentApplyResourceDependencies.skillOperationState(db, stage.opId)
     if (op?.active === 0 && op.phase === 'done') continue
     if (op?.active !== 1 || op.phase !== 'db-committed') {
       complete = false
@@ -1352,7 +832,7 @@ function rollForwardCommitted(
       continue
     }
     try {
-      dbTxSync(db, (tx) => finishOperation(tx, stage.opId))
+      dbTxSync(db, (tx) => legacyIntentApplyResourceDependencies.finishOperation(tx, stage.opId))
     } catch (err) {
       complete = false
       log.warn('intent-skill-finish-replayed-or-failed', {
@@ -1513,16 +993,12 @@ function compensateIntentArtifact(db: DbClient, artifact: IntentJournalArtifact)
       rmSync(artifact.generationDir, { recursive: true, force: true })
       return
     case 'skill-stage':
-      compensateManagedSkillStage(db, artifact)
+      legacyIntentApplyResourceDependencies.compensateManagedSkillStage(db, artifact)
       return
     case 'skill-version-stage': {
-      abortStagedSkillVersion(db, artifact.staged)
+      legacyIntentApplyResourceDependencies.abortStagedSkillVersion(db, artifact.staged)
       if (artifact.staged.opId === null) return
-      const op = db
-        .select({ active: skillOperations.active })
-        .from(skillOperations)
-        .where(eq(skillOperations.opId, artifact.staged.opId))
-        .get()
+      const op = legacyIntentApplyResourceDependencies.skillOperationState(db, artifact.staged.opId)
       // abortStagedSkillVersion intentionally preserves an active op when it
       // cannot prove cleanup. Surface that fact to the journal state machine
       // instead of mistaking its void return for successful compensation.

@@ -53,7 +53,10 @@ import { intentApplyJournal, intentDraftResolutions, intentDrafts } from '@/db/s
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
-import { applyIntentChangeset } from '@/services/intent/applyChangeset'
+import {
+  applyIntentChangeset,
+  type IntentApplyResourceBinding,
+} from '@/services/intent/applyChangeset'
 import { deriveIntentSlots } from '@/services/intent/resolveChangeset'
 import { projectIntentJourney } from '@/services/intent/journey'
 import { listVisibleIntentResources } from '@/services/intent/resourceCatalog'
@@ -91,6 +94,8 @@ import {
   retryIntentWorkingSetChange,
   submitIntentWorkingSetChange,
 } from '@/services/intent/workingSet'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
 /** Zod-validated JSON-record parse — routes never `as`-cast (RFC-054 W1-7). */
 const JsonRecordSchema = z.record(z.string(), z.unknown())
@@ -148,6 +153,10 @@ function encodeIntentListCursor(row: { updatedAt: number; id: string }): string 
 export function mountIntentSessionRoutes(
   app: Hono,
   deps: AppDeps & { readonly identityAccess: IntentDispatchDeps['identityAccess'] },
+  resources: {
+    readonly directAuthority: DirectAuthorityBinding
+    readonly intentApply: IntentApplyResourceBinding
+  },
 ): void {
   const appHome = Paths.root
 
@@ -954,11 +963,14 @@ export function mountIntentSessionRoutes(
         })
       }
       const actor = actorOf(c)
+      const authority = directRequestAuthority(resources.directAuthority, actor)
       const receipt = await applyIntentChangeset(
         {
           db: deps.db,
           appHome,
           actor,
+          authority,
+          resourceApply: resources.intentApply,
         },
         {
           sessionId: c.req.param('id'),

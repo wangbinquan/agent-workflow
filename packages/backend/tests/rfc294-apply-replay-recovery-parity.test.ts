@@ -24,6 +24,7 @@ import {
 } from '@/services/intent/applyChangeset'
 import { applyResourceBundle, convergeResourceBundleApplies } from '@/services/bundle/apply'
 import type { BundleApplyProvider, BundleReceipt } from '@/services/bundle/provider'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_ID = 'rfc294-apply-owner'
@@ -166,7 +167,12 @@ describe('RFC-294 AtomicApply migration parity', () => {
 
     await expect(
       applyIntentChangeset(
-        { db, appHome, actor: actorOf(OWNER_ID) },
+        {
+          db,
+          appHome,
+          actor: actorOf(OWNER_ID),
+          ...intentApplyResourceBinding(db, actorOf(OWNER_ID)),
+        },
         {
           sessionId,
           clientMutationId: pair.intentKey,
@@ -213,7 +219,12 @@ describe('RFC-294 AtomicApply migration parity', () => {
       .where(eq(intentSessions.id, sessionId))
 
     const intentReplay = await applyIntentChangeset(
-      { db, appHome, actor: actorOf(OWNER_ID) },
+      {
+        db,
+        appHome,
+        actor: actorOf(OWNER_ID),
+        ...intentApplyResourceBinding(db, actorOf(OWNER_ID)),
+      },
       {
         sessionId,
         clientMutationId: pair.intentKey,
@@ -254,7 +265,12 @@ describe('RFC-294 AtomicApply migration parity', () => {
 
     await expect(
       applyIntentChangeset(
-        { db, appHome, actor: actorOf('rfc294-other-user') },
+        {
+          db,
+          appHome,
+          actor: actorOf('rfc294-other-user'),
+          ...intentApplyResourceBinding(db, actorOf('rfc294-other-user')),
+        },
         {
           sessionId,
           clientMutationId: pair.intentKey,

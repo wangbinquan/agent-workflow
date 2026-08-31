@@ -25,6 +25,7 @@ import { buildIntentDump } from '../src/services/intent/dumpBuilder'
 import { buildAgentFence, type IntentContextManifest } from '../src/services/intent/manifest'
 import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
 import { createIntentSession } from '../src/services/intent/session'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_bports_000000000'
@@ -85,7 +86,12 @@ function installDraft(
   return { draftRevision: 1, draftHash }
 }
 
-const deps = (): ApplyIntentDeps => ({ db, appHome, actor })
+const deps = (): ApplyIntentDeps => ({
+  db,
+  appHome,
+  actor,
+  ...intentApplyResourceBinding(db, actor),
+})
 
 const createOp = (payload: Record<string, unknown>) => ({
   $schema_version: 1,

@@ -48,6 +48,7 @@ import { composePluginCatalog } from '@/modules/resource-catalog/composition/plu
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
+import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import { composeResourceScopeAuthorizationBinding } from '@/modules/resource-catalog/composition/resourceAcl'
 import type {
   AgentCatalogModule,
@@ -94,6 +95,7 @@ import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
 import { mountTaskClarifyDirectiveRoutes } from '@/routes/taskClarifyDirective'
 import { mountFusionRoutes } from '@/routes/fusions'
 import { mountIntentSessionRoutes } from '@/routes/intentSessions'
+import { legacyIntentApplyResourceDependencies } from '@/services/intent/legacyIntentApplyResourceDependencies'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'
@@ -1010,6 +1012,7 @@ export function mountApiRoutes(
   const developmentConfigOperations = deps.developmentConfigOperations
   const developmentMissionOperations = deps.developmentMissionOperations
   const resourceScopeAuthorization = composeResourceScopeAuthorizationBinding()
+  const intentApply = composeIntentApplyResourceBinding(legacyIntentApplyResourceDependencies)
 
   mountConfigRoutes(app, deps)
   mountMaintenanceRoutes(app, deps)
@@ -1129,7 +1132,10 @@ export function mountApiRoutes(
     directAuthority: identityAccess.directAuthority,
     resourceScopeAuthorization,
   })
-  mountIntentSessionRoutes(app, deps) // RFC-234
+  mountIntentSessionRoutes(app, deps, {
+    directAuthority: identityAccess.directAuthority,
+    intentApply,
+  }) // RFC-234 / RFC-345 T4b
   mountMemoryRoutes(app, deps, {
     contexts: identityAccess.contexts,
     directAuthority: identityAccess.directAuthority,

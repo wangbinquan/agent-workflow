@@ -149,7 +149,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:integration:events:codeHostEventTypeRef', removeAfterWave: 'W4-B' },
   { id: 'public:resource-catalog:commands:ResourceAclCommands', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:participants:IntegrationTriggerResourceSnapshotInTx', removeAfterWave: 'W4-C' },
-  { id: 'public:resource-catalog:participants:IntentApplyResourceParticipantInTx', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:participants:ResourceAuthorizationInTx', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:participants:ResourcePackageApplyScenarioProvider', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:participants:ResourcePackageApplyTx', removeAfterWave: 'W4-C' },

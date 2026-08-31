@@ -25,6 +25,7 @@ import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
 import { createIntentSession } from '../src/services/intent/session'
 import type { IntentContextManifest } from '../src/services/intent/manifest'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291_00000000'
@@ -101,7 +102,8 @@ function installDraft(
 }
 
 function deps(over: Partial<ApplyIntentDeps> = {}): ApplyIntentDeps {
-  return { db, appHome, actor, ...over }
+  const resolved = { db, appHome, actor, ...over }
+  return { ...resolved, ...intentApplyResourceBinding(db, resolved.actor) }
 }
 
 function manifestOf(sessionId: string): IntentContextManifest {

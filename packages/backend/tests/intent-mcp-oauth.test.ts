@@ -21,6 +21,7 @@ import { buildIntentDump } from '../src/services/intent/dumpBuilder'
 import { buildMcpFence, type IntentContextManifest } from '../src/services/intent/manifest'
 import { deriveIntentSlots, validateDraftChangeset } from '../src/services/intent/resolveChangeset'
 import { createIntentSession } from '../src/services/intent/session'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { getMcpById } from '../src/services/mcp'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
@@ -82,7 +83,12 @@ function installDraft(
   return { draftRevision: 1, draftHash }
 }
 
-const deps = (): ApplyIntentDeps => ({ db, appHome, actor })
+const deps = (): ApplyIntentDeps => ({
+  db,
+  appHome,
+  actor,
+  ...intentApplyResourceBinding(db, actor),
+})
 
 const remoteCreate = (config: Record<string, unknown>, name = 'remote-svc') => ({
   $schema_version: 1,

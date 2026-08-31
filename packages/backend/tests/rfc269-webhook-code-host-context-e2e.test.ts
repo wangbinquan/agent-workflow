@@ -43,6 +43,7 @@ import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
 import { Paths } from '../src/util/paths'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'aw-rfc269-local-fixture-token' // gitleaks:allow
@@ -335,7 +336,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     }
     const draft = installIntentDraft(db, session.id, changeset)
     const receipt = await applyIntentChangeset(
-      { db, appHome, actor },
+      { db, appHome, actor, ...intentApplyResourceBinding(db, actor) },
       {
         sessionId: session.id,
         clientMutationId: ulid(),

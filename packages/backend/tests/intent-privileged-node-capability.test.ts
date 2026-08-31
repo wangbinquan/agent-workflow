@@ -51,6 +51,7 @@ import { intentDrafts, intentSessions, users, workflows } from '../src/db/schema
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
 import { createIntentSession } from '../src/services/intent/session'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import type { IntentContextManifest } from '../src/services/intent/manifest'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
@@ -117,7 +118,7 @@ function installDraft(
 }
 
 function deps(actor: Actor): ApplyIntentDeps {
-  return { db, appHome, actor }
+  return { db, appHome, actor, ...intentApplyResourceBinding(db, actor) }
 }
 
 /** As STORED: a real env value, which only ever gets there through the confirm

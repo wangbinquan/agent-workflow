@@ -656,6 +656,67 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(secondScopeGate).toBeGreaterThan(refreshActor)
   })
 
+  test('T4b Intent apply consumes one exact authority pair and one in-tx participant', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const engine = readFileSync(resolve(sourceRoot, 'services/intent/applyChangeset.ts'), 'utf8')
+    const route = readFileSync(resolve(sourceRoot, 'routes/intentSessions.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/intentApply.ts'),
+      'utf8',
+    )
+    const adapter = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts',
+      ),
+      'utf8',
+    )
+    const dependencies = readFileSync(
+      resolve(sourceRoot, 'services/intent/legacyIntentApplyResourceDependencies.ts'),
+      'utf8',
+    )
+
+    const prepare = engine.indexOf('await resourceSession.prepare(plan,')
+    const prestage = engine.indexOf('await resourceSession.prestage(plan,')
+    const bigTransaction = engine.indexOf('const receipt = dbTxSync(db, (tx) =>')
+    const participant = engine.indexOf('resourceSession.participantInTransaction(tx,')
+    const authorize = engine.indexOf('resourceParticipant.authorizeAndCommit(deps.authority, plan)')
+    expect(prepare).toBeGreaterThanOrEqual(0)
+    expect(prestage).toBeGreaterThan(prepare)
+    expect(bigTransaction).toBeGreaterThan(prestage)
+    expect(participant).toBeGreaterThan(bigTransaction)
+    expect(authorize).toBeGreaterThan(participant)
+
+    for (const legacyWriter of [
+      "@/services/agent'",
+      "@/services/mcp'",
+      "@/services/plugin'",
+      "@/services/pluginInstaller'",
+      "@/services/skill'",
+      "@/services/skillVersion'",
+      "@/services/workflow'",
+      "@/services/workgroups'",
+    ]) {
+      expect(engine).not.toContain(legacyWriter)
+      expect(adapter).not.toContain(legacyWriter)
+      expect(dependencies).toContain(legacyWriter)
+    }
+    expect(adapter).toContain('createIntentApplyResourceParticipantInTx({')
+    expect(adapter).toContain('authority !== options.authority')
+    expect(adapter).toContain("throw new Error('foreign-intent-apply-authority')")
+    expect(composition).toContain('composeIntentApplyResourceBinding')
+    expect(composition).toContain('createLegacyIntentApplyResourceSession')
+
+    expect(route).toContain('directRequestAuthority(resources.directAuthority, actor)')
+    expect(route).toContain('resourceApply: resources.intentApply')
+    expect(server).toContain(
+      'composeIntentApplyResourceBinding(legacyIntentApplyResourceDependencies)',
+    )
+    expect(server).toContain('directAuthority: identityAccess.directAuthority')
+    expect(server).toContain('intentApply,')
+  })
+
   test('T5-M active HTTP and MCP compatibility bindings execute the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const route = readFileSync(resolve(sourceRoot, 'routes/mcps.ts'), 'utf8')
@@ -751,7 +812,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .sort()
     expect(legacyConsumers).toEqual([
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
-      'services/intent/applyChangeset.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
       'services/intent/resourceCatalogProjections.ts',
       'services/mcpRuntimeTest.ts',
@@ -862,7 +923,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .sort()
     expect(legacyConsumers).toEqual([
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
-      'services/intent/applyChangeset.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
       'services/intent/resourceCatalogProjections.ts',
       'services/pluginGenerationGc.ts',
@@ -989,7 +1050,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(legacyConsumers).toEqual([
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/execution/closure.ts',
-      'services/intent/applyChangeset.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
       'services/scheduledTasks.ts',
       'services/workgroup/launch.ts',
@@ -1152,7 +1213,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'services/demoSeed.ts',
       'services/dynamicWorkflowRunner.ts',
       'services/fusion.ts',
-      'services/intent/applyChangeset.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
       'services/ref/runtimeRef.ts',
       'services/review.ts',
@@ -1296,7 +1357,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/fusion.ts',
-      'services/intent/applyChangeset.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
       'services/resourcePackage/skillTree.ts',
       'services/skill-zip.ts',
@@ -1307,10 +1368,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .map((path) => path.slice(sourceRoot.length + 1))
       .sort()
     expect(legacyVersionConsumers).toEqual([
+      'cli/start.ts',
       'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/fusion.ts',
-      'services/intent/applyChangeset.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/journalArtifacts.ts',
       'services/skill-zip.ts',
       'services/skill.ts',
@@ -1442,8 +1504,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'routes/tasks.ts',
       'services/backup.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/demoSeed.ts',
       'services/fusion.ts',
-      'services/intent/applyChangeset.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
       'services/scheduledTasks.ts',
       'services/task.ts',
