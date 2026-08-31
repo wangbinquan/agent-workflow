@@ -11,6 +11,10 @@ import type {
   DeliveryChainReadPort,
   DeliveryRow,
 } from '@/modules/code-capability/application/ports/deliveryChainRead'
+import type {
+  CapabilityMatrixReadPort,
+  CapabilityMatrixReadRow,
+} from '@/modules/code-capability/application/ports/capabilityMatrixRead'
 import type { RoundAttemptsReadPort } from '@/modules/code-capability/application/ports/roundAttemptsRead'
 import type { WorkItemProjectionReadPort } from '@/modules/code-capability/application/ports/workItemProjectionRead'
 import { createSqliteDeliveryChainRead } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
@@ -119,43 +123,65 @@ export function createCodeRoundAttemptsQuery(
  * lookups for the five capabilities of one repository, on a page a person opens
  * by hand. The stored value stays as the record of what `enable` observed.
  */
-export function createCodeMatrixQuery(db: DbClient): CodeMatrixQuery {
+function isCapabilityMatrixReadPort(
+  input: DbClient | CapabilityMatrixReadPort,
+): input is CapabilityMatrixReadPort {
+  return 'loadForRepo' in input && typeof input.loadForRepo === 'function'
+}
+
+async function loadCapabilityMatrixRows(
+  input: DbClient | CapabilityMatrixReadPort,
+  repoId: string,
+): Promise<readonly CapabilityMatrixReadRow[]> {
+  if (isCapabilityMatrixReadPort(input)) return await input.loadForRepo(repoId)
+
+  const db = input
+  const cells = await listCapabilityCells(db, repoId)
+  if (cells.length === 0) return []
+
+  // Which code host this repository belongs to. A repository whose endpoint
+  // cannot be resolved is not an error here: `codeHostConfigured` is one of
+  // the facts, and reporting it as missing is the honest answer — the same
+  // one the round would reach.
+  const endpoint = await resolveRepoEndpoint(db, repoId)
+  return await Promise.all(
+    cells.map(
+      async (cell): Promise<CapabilityMatrixReadRow> => ({
+        repoId: cell.repoId,
+        capability: cell.capability,
+        templateId: cell.templateId,
+        enabled: cell.enabled,
+        facts: await gatherReadinessFacts({
+          db,
+          repoId,
+          capability: cell.capability,
+          endpointId: endpoint.ok ? endpoint.endpointId : '',
+          templateId: cell.templateId,
+          enabled: cell.enabled,
+          ...(endpoint.ok ? { provider: endpoint.provider } : {}),
+        }),
+      }),
+    ),
+  )
+}
+
+export function createCodeMatrixQuery(input: DbClient | CapabilityMatrixReadPort): CodeMatrixQuery {
   return {
     async forRepo(repoId) {
-      const cells = await listCapabilityCells(db, repoId)
-      if (cells.length === 0) return []
-
-      // Which code host this repository belongs to. A repository whose endpoint
-      // cannot be resolved is not an error here: `codeHostConfigured` is one of
-      // the facts, and reporting it as missing is the honest answer — the same
-      // one the round would reach.
-      const endpoint = await resolveRepoEndpoint(db, repoId)
-
-      return await Promise.all(
-        cells.map(async (cell): Promise<CodeMatrixRow> => {
-          const facts = await gatherReadinessFacts({
-            db,
-            repoId,
-            capability: cell.capability,
-            endpointId: endpoint.ok ? endpoint.endpointId : '',
-            templateId: cell.templateId,
-            enabled: cell.enabled,
-            ...(endpoint.ok ? { provider: endpoint.provider } : {}),
-          })
-          const derived = deriveReadiness(facts)
-
-          return {
-            repoId: cell.repoId,
-            capability: cell.capability,
-            enabled: cell.enabled,
-            readiness: derived.state,
-            issues: derived.issues,
-            // Paired positionally with `issues` — see `repairActionsFor`.
-            repairActions: repairActionsFor(derived.issues),
-            templateId: cell.templateId,
-          }
-        }),
-      )
+      const rows = await loadCapabilityMatrixRows(input, repoId)
+      return rows.map((row): CodeMatrixRow => {
+        const derived = deriveReadiness(row.facts)
+        return {
+          repoId: row.repoId,
+          capability: row.capability,
+          enabled: row.enabled,
+          readiness: derived.state,
+          issues: derived.issues,
+          // Paired positionally with `issues` — see `repairActionsFor`.
+          repairActions: repairActionsFor(derived.issues),
+          templateId: row.templateId,
+        }
+      })
     },
   }
 }

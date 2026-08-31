@@ -43,6 +43,7 @@ import { ValidationError } from '@/util/errors'
  * which would create a new RFC-317 R1 inbound edge.
  */
 export interface CodeHistoryRouteQueries {
+  readonly matrix: ReturnType<typeof createCodeMatrixQuery>
   readonly workItems: ReturnType<typeof createCodeWorkItemProjectionQuery>
   readonly attempts: ReturnType<typeof createCodeRoundAttemptsQuery>
   readonly deliveries: ReturnType<typeof createCodeDeliveryChainQuery>
@@ -51,6 +52,7 @@ export interface CodeHistoryRouteQueries {
 
 function sqliteCodeHistoryFallback(db: AppDeps['db']): CodeHistoryRouteQueries {
   return Object.freeze({
+    matrix: createCodeMatrixQuery(db),
     workItems: createCodeWorkItemProjectionQuery(db),
     attempts: createCodeRoundAttemptsQuery(db),
     deliveries: createCodeDeliveryChainQuery(db),
@@ -63,7 +65,7 @@ export function mountCodeRoutes(
   deps: AppDeps,
   history: CodeHistoryRouteQueries = sqliteCodeHistoryFallback(deps.db),
 ): void {
-  const matrix = createCodeMatrixQuery(deps.db)
+  const matrix = history.matrix
   const projection = history.workItems
   const attempts = history.attempts
   const deliveries = history.deliveries

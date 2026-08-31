@@ -21,25 +21,22 @@ import type { ReadinessInput } from '@/modules/code-capability/domain/templateLa
 import { resolveCodeHostEndpointId } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { resolveAgentForBinding } from '@/services/codeReviewAgentCaller'
 
-/** T104 后内联自 services/codeCapabilityTrigger（读面自持，writer 已删）。 */
-async function findCapabilityTriggerRow(
-  db: DbClient,
-  key: { endpointId: string; repoId: string; capability: string },
-): Promise<{ triggerId: string; events: readonly string[] } | null> {
-  const rows = await db
-    .select({
-      id: webhookTriggers.id,
-      repoScope: webhookTriggers.repoScope,
-      eventTypes: webhookTriggers.eventTypes,
-    })
-    .from(webhookTriggers)
-    .where(
-      and(
-        eq(webhookTriggers.endpointId, key.endpointId),
-        eq(webhookTriggers.launchKind, 'code-round'),
-        eq(webhookTriggers.launchRefId, key.capability),
-      ),
-    )
+export interface CapabilityTriggerCandidate {
+  readonly id: string
+  readonly repoScope: string
+  readonly eventTypes: string
+}
+
+export interface CapabilityTriggerMatch {
+  readonly triggerId: string
+  readonly events: readonly string[]
+}
+
+/** Select one repository's trigger while tolerating malformed legacy JSON. */
+export function selectCapabilityTrigger(
+  rows: readonly CapabilityTriggerCandidate[],
+  repoId: string,
+): CapabilityTriggerMatch | null {
   for (const row of rows) {
     try {
       const scope: unknown = JSON.parse(row.repoScope)
@@ -47,7 +44,7 @@ async function findCapabilityTriggerRow(
         typeof scope === 'object' && scope !== null
           ? (scope as { paths?: unknown }).paths
           : undefined
-      if (Array.isArray(paths) && paths.includes(key.repoId)) {
+      if (Array.isArray(paths) && paths.includes(repoId)) {
         let events: string[] = []
         try {
           const parsed: unknown = JSON.parse(row.eventTypes)
@@ -66,6 +63,28 @@ async function findCapabilityTriggerRow(
   return null
 }
 
+/** T104 后内联自 services/codeCapabilityTrigger（读面自持，writer 已删）。 */
+async function findCapabilityTriggerRow(
+  db: DbClient,
+  key: { endpointId: string; repoId: string; capability: string },
+): Promise<CapabilityTriggerMatch | null> {
+  const rows = await db
+    .select({
+      id: webhookTriggers.id,
+      repoScope: webhookTriggers.repoScope,
+      eventTypes: webhookTriggers.eventTypes,
+    })
+    .from(webhookTriggers)
+    .where(
+      and(
+        eq(webhookTriggers.endpointId, key.endpointId),
+        eq(webhookTriggers.launchKind, 'code-round'),
+        eq(webhookTriggers.launchRefId, key.capability),
+      ),
+    )
+  return selectCapabilityTrigger(rows, key.repoId)
+}
+
 /**
  * Capabilities that cannot be woken by anything else.
  *
@@ -75,6 +94,19 @@ async function findCapabilityTriggerRow(
  * so it does not need one.
  */
 const NEEDS_WAKE_SOURCE = new Set(['ci-fix'])
+
+export function capabilityRequiresWakeSource(capability: string): boolean {
+  return NEEDS_WAKE_SOURCE.has(capability)
+}
+
+export function capabilityAgentSlots(capability: string): string[] {
+  const parsed = parseCodeCapabilityId(capability)
+  const contract = parsed === undefined ? undefined : lookupStageContract(parsed)
+  if (contract === undefined) return []
+  return [
+    ...new Set(contract.stages.flatMap((stage) => (stage.kind === 'ai' ? [stage.agentSlot] : []))),
+  ].sort()
+}
 
 export interface GatherFactsInput {
   db: DbClient
@@ -132,7 +164,7 @@ export async function gatherReadinessFacts(input: GatherFactsInput): Promise<Rea
     hasTrigger: trigger !== null,
     codeHostConfigured: endpoint.ok,
     invisibleAgentSlots: await invisibleSlots(db, input),
-    requiresWakeSource: NEEDS_WAKE_SOURCE.has(input.capability),
+    requiresWakeSource: capabilityRequiresWakeSource(input.capability),
     // What can start this capability, given it is not woken by an MR event.
     //
     // This was hardcoded `false` while the wake entry point (T35c) was believed
@@ -160,13 +192,7 @@ export async function gatherReadinessFacts(input: GatherFactsInput): Promise<Rea
  * has not mapped is a round that dies at that stage.
  */
 async function invisibleSlots(db: DbClient, input: GatherFactsInput): Promise<string[]> {
-  const capability = parseCodeCapabilityId(input.capability)
-  const contract = capability === undefined ? undefined : lookupStageContract(capability)
-  if (contract === undefined) return []
-
-  const slots = [
-    ...new Set(contract.stages.flatMap((stage) => (stage.kind === 'ai' ? [stage.agentSlot] : []))),
-  ].sort()
+  const slots = capabilityAgentSlots(input.capability)
 
   // Resolved against the binding being SAVED, not the one currently stored.
   // On a first save nothing is stored yet, so reading the cell reported every
