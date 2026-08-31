@@ -1155,7 +1155,7 @@ function assertHumanMembersActiveInTx(
   }
 }
 
-function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
+export function rowToWorkgroup(row: WorkgroupRow, memberRows: MemberRow[]): Workgroup {
   const members: WorkgroupMember[] = memberRows
     .slice()
     .sort(

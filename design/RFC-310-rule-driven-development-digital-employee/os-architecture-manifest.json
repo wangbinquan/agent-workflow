@@ -11,7 +11,7 @@
         "infrastructure",
         "public"
       ],
-      "publicEntries": ["commands.ts", "events.ts", "queries.ts", "types.ts"],
+      "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
         "cli/start.ts -> composition",
         "cli/start.ts -> public/events",
@@ -19,6 +19,7 @@
         "modules/development-automation/composition/digitalEmployeeWorkspace.ts -> public/types",
         "modules/development-automation/composition/employeeCaseDetailProjection.ts -> public/types",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
+        "modules/resource-catalog/composition/integrationTrigger.ts -> public/participants",
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
         "modules/task-execution/composition/required-ports.ts -> public/types",

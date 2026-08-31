@@ -25,6 +25,7 @@ import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { createUser } from '@/services/users'
 import { createWorkflow } from '@/services/workflow'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { withIntegrationTriggerResources } from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -193,7 +194,7 @@ describe('RFC-294 managed background compatibility', () => {
     const claimedByB = await runDueSchedulesOnce(db, {
       now,
       buildLaunch,
-      identityAccess: createIdentityAccessRuntime({ db }),
+      identityAccess: withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
     })
     expect(claimedByB).toEqual([])
     expect(launches).toEqual([])

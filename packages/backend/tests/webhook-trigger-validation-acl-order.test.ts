@@ -28,6 +28,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createUser } from '../src/services/users'
 import { assertTriggerSaveable } from '../src/services/webhook/triggerValidation'
 import { NotFoundError, ValidationError } from '../src/util/errors'
+import { integrationTriggerResourceAuthority } from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -121,6 +122,7 @@ describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
       await assertTriggerSaveable(
         h.db,
         h.outsider,
+        integrationTriggerResourceAuthority(h.db, h.outsider),
         candidateFor(h.workflowId, leakyPayload()),
         null,
       )
@@ -148,6 +150,7 @@ describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
       await assertTriggerSaveable(
         h.db,
         h.outsider,
+        integrationTriggerResourceAuthority(h.db, h.outsider),
         candidateFor('01JMISSINGWORKFLOWID0000', leakyPayload()),
         null,
       )
@@ -162,7 +165,13 @@ describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
     const h = await harness()
     let thrown: unknown
     try {
-      await assertTriggerSaveable(h.db, h.owner, candidateFor(h.workflowId, leakyPayload()), null)
+      await assertTriggerSaveable(
+        h.db,
+        h.owner,
+        integrationTriggerResourceAuthority(h.db, h.owner),
+        candidateFor(h.workflowId, leakyPayload()),
+        null,
+      )
     } catch (err) {
       thrown = err
     }

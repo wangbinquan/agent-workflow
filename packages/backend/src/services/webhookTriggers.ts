@@ -36,6 +36,7 @@ import { migrateTriggerRowTemplateToV2, parseTriggerRow } from '@/services/webho
 import { assertTriggerSaveable } from '@/services/webhook/triggerValidation'
 import { loadConfig } from '@/config'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import type { IntegrationTriggerResourceAuthority } from '@/services/scheduledTasks'
 
 export interface WebhookTriggerServiceDeps {
   db: DbClient
@@ -142,7 +143,8 @@ function toWire(row: Row): WebhookTrigger {
 async function assertSaveable(
   deps: WebhookTriggerServiceDeps,
   actor: Actor,
-  candidate: Parameters<typeof assertTriggerSaveable>[2],
+  resourceAuthority: IntegrationTriggerResourceAuthority,
+  candidate: Parameters<typeof assertTriggerSaveable>[3],
 ): Promise<void> {
   let defaultRuntime: string | null | undefined
   try {
@@ -150,7 +152,7 @@ async function assertSaveable(
   } catch {
     defaultRuntime = undefined
   }
-  await assertTriggerSaveable(deps.db, actor, candidate, defaultRuntime)
+  await assertTriggerSaveable(deps.db, actor, resourceAuthority, candidate, defaultRuntime)
 }
 
 async function loadRowOrThrow(db: DbClient, id: string): Promise<Row> {
@@ -185,6 +187,7 @@ export async function getWebhookTrigger(
 export async function createWebhookTrigger(
   deps: WebhookTriggerServiceDeps,
   actor: Actor,
+  resourceAuthority: IntegrationTriggerResourceAuthority,
   rawBody: unknown,
 ): Promise<WebhookTrigger> {
   // 对齐 scheduled create：建触发器 = 预授权未来 launch，同 launch 权门。
@@ -221,7 +224,7 @@ export async function createWebhookTrigger(
   if (!endpoint) {
     throw new ValidationError('webhook-endpoint-not-found', 'endpoint does not exist')
   }
-  await assertSaveable(deps, actor, {
+  await assertSaveable(deps, actor, resourceAuthority, {
     launchKind: body.launchKind,
     launchRefId: body.launchRefId,
     launchPayload: body.launchPayload,
@@ -257,6 +260,7 @@ export async function createWebhookTrigger(
 export async function updateWebhookTrigger(
   deps: WebhookTriggerServiceDeps,
   actor: Actor,
+  resourceAuthority: IntegrationTriggerResourceAuthority,
   id: string,
   rawBody: unknown,
 ): Promise<WebhookTrigger> {
@@ -309,7 +313,7 @@ export async function updateWebhookTrigger(
       WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT,
     )
   }
-  await assertSaveable(deps, actor, next)
+  await assertSaveable(deps, actor, resourceAuthority, next)
   const launchConfigTouched =
     patch.launchRefId !== undefined ||
     patch.launchPayload !== undefined ||

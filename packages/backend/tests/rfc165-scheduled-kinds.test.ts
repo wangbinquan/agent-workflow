@@ -33,12 +33,12 @@ import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { buildScheduleLaunch } from '../src/services/scheduleLaunch'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { fireSchedule, getScheduledTaskRow } from '../src/services/scheduledTasks'
 import {
-  createScheduledTask,
-  fireSchedule,
-  getScheduledTaskRow,
-  updateScheduledTask,
-} from '../src/services/scheduledTasks'
+  createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
+  updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
+  withIntegrationTriggerResources,
+} from './helpers/integrationTriggerResourceBinding'
 import { createUser } from '../src/services/users'
 import { createWorkflow } from '../src/services/workflow'
 import { createWorkgroup } from '../src/services/workgroups'
@@ -452,7 +452,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       row,
       buildRealScheduleLaunch(db, join(appHome, 'config.json')),
       Date.now(),
-      createIdentityAccessRuntime({ db }),
+      withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
       { kind: 'manual' },
     )
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
@@ -500,7 +500,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
         (await getScheduledTaskRow(db, created.id))!,
         buildRealScheduleLaunch(db, join(appHome, 'config.json')),
         Date.now(),
-        createIdentityAccessRuntime({ db }),
+        withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
         { kind: 'manual' },
       ),
     ).rejects.toMatchObject({ code: 'schedule-payload-invalid' })
@@ -551,7 +551,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       row,
       buildRealScheduleLaunch(db, join(appHome, 'config.json')),
       Date.now(),
-      createIdentityAccessRuntime({ db }),
+      withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
       { kind: 'manual' },
     )
     const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!

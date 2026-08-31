@@ -17,9 +17,8 @@ import { type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import type {
-  CurrentSubjectAccessResolver,
   DelegatedRequestAuthorityFactory,
-  LegacyActorProjectionFactory,
+  RequestAuthority,
 } from '@/modules/identity-access/public/participants'
 import type { GetUserGitCommitIdentity } from '@/modules/identity-access/public/queries'
 import {
@@ -41,7 +40,12 @@ import type {
 import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
 import { cancelExecution, startExecution } from '@/services/execution/executor'
 import type { ExecutionInvoker } from '@/services/execution/types'
-import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
+import {
+  assertIntegrationTriggerSnapshotUsable,
+  assertScheduledTargetUsable,
+  loadIntegrationTriggerResourceSnapshot,
+  type IntegrationTriggerResourceBinding,
+} from '@/services/scheduledTasks'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { markDelivery } from '@/services/webhook/deliveryStore'
 import {
@@ -109,10 +113,12 @@ export type WebhookDispatchDeps = {
   db: DbClient
   identityAccess: Readonly<{
     delegatedRequests: DelegatedRequestAuthorityFactory
-    resolveAuthority: CurrentSubjectAccessResolver
-    legacyProjection: LegacyActorProjectionFactory
     getUserGitCommitIdentity: GetUserGitCommitIdentity
+    integrationTriggerResources: IntegrationTriggerResourceBinding
   }>
+  resolveEventTargetAuthority: (
+    userId: string,
+  ) => Promise<Readonly<{ authority: RequestAuthority; actor: Actor }> | null>
   configPath: string
   secretBox: SecretBox
   schedulerDriver?: SchedulerDriverPort
@@ -1008,8 +1014,7 @@ async function fireTrigger(
       deliveryId: input.deliveryId,
       fireId,
     })
-    const actor = delegated?.actor as Actor | undefined
-    if (actor === undefined) {
+    if (delegated === null) {
       launchGuard?.failed('owner-invalid')
       launchGuard?.release()
       deps.terminalControl?.wake()
@@ -1021,6 +1026,12 @@ async function fireTrigger(
       })
       return
     }
+    const actor: Actor = delegated.actor
+    const resourceAuthority = Object.freeze({
+      authority: delegated.authority,
+      actor,
+      resources: deps.identityAccess.integrationTriggerResources,
+    })
     const rendered = renderWebhookLaunch(effectiveTrigger, effectiveTrigger.row.name, event, space)
     /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
     const recordLaunchFailed = async (msg: string): Promise<void> => {
@@ -1036,14 +1047,26 @@ async function fireTrigger(
         .where(eq(webhookTriggers.id, triggerId))
     }
     try {
-      if (rendered.kind !== 'digital-employee') {
-        await assertScheduledTargetUsable(
+      if (rendered.kind === 'digital-employee') {
+        const snapshot = loadIntegrationTriggerResourceSnapshot(db, resourceAuthority, {
+          kind: 'webhook-digital-employee',
+          employeeDefinitionId: rendered.refId,
+        })
+        await assertIntegrationTriggerSnapshotUsable(
           db,
           actor,
+          snapshot,
+          rendered.intake as unknown as Record<string, unknown>,
+        )
+      } else {
+        await assertScheduledTargetUsable(
+          db,
+          resourceAuthority,
           rendered.kind,
           rendered.payload as unknown as Record<string, unknown>,
           await deps.getDefaultRuntime(),
           { kind: 'context', value: webhookTriggerContextOf(event) },
+          'webhook',
         )
       }
     } catch (err) {
@@ -1355,31 +1378,42 @@ export function createWebhookDispatcher(
       }
     },
     async dispatchEventTarget(input) {
-      const current = await deps.identityAccess.resolveAuthority.resolveCurrentSubject(
-        input.ownerUserId,
-      )
-      const actor =
-        current === null
-          ? null
-          : (deps.identityAccess.legacyProjection.fromResolvedSubject(current) as unknown as Actor)
-      if (actor === null) {
+      const admitted = await deps.resolveEventTargetAuthority(input.ownerUserId)
+      if (admitted === null) {
         throw new ValidationError(
           'event-response-owner-invalid',
           `event response owner is missing or inactive: ${input.ownerUserId}`,
         )
       }
+      const resourceAuthority = Object.freeze({
+        authority: admitted.authority,
+        actor: admitted.actor,
+        resources: deps.identityAccess.integrationTriggerResources,
+      })
       const rendered = renderEventResponseTarget(input.target, input.triggerContext)
-      if (rendered.kind !== 'digital-employee') {
+      if (rendered.kind === 'digital-employee') {
+        const snapshot = loadIntegrationTriggerResourceSnapshot(deps.db, resourceAuthority, {
+          kind: 'webhook-digital-employee',
+          employeeDefinitionId: rendered.refId,
+        })
+        await assertIntegrationTriggerSnapshotUsable(
+          deps.db,
+          admitted.actor,
+          snapshot,
+          rendered.intake as unknown as Record<string, unknown>,
+        )
+      } else {
         await assertScheduledTargetUsable(
           deps.db,
-          actor,
+          resourceAuthority,
           rendered.kind,
           rendered.payload as unknown as Record<string, unknown>,
           await deps.getDefaultRuntime(),
           { kind: 'context', value: input.triggerContext },
+          'webhook',
         )
       }
-      return launchViaExecutor(deps, actor, rendered, {
+      return launchViaExecutor(deps, admitted.actor, rendered, {
         type: 'event',
         eventSubscriptionId: input.eventSubscriptionId,
         eventDeliveryId: input.eventDeliveryId,

@@ -18,9 +18,29 @@ import {
   updateWebhookTrigger,
 } from '@/services/webhookTriggers'
 import { safeJsonOrThrowInvalid } from '@/util/http'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
+import type { IntegrationTriggerResourceBinding } from '@/services/scheduledTasks'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
-export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
+interface WebhookTriggerRouteIdentityAccess {
+  readonly directAuthority: DirectAuthorityBinding
+  readonly integrationTriggerResources: IntegrationTriggerResourceBinding
+}
+
+export function mountWebhookTriggerRoutes(
+  app: Hono,
+  deps: AppDeps,
+  identityAccess: WebhookTriggerRouteIdentityAccess,
+): void {
   const svcDeps = { db: deps.db, configPath: deps.configPath }
+  const resourceAuthority = (c: Parameters<typeof actorOf>[0]) => {
+    const actor = actorOf(c)
+    return Object.freeze({
+      actor,
+      authority: directRequestAuthority(identityAccess.directAuthority, actor),
+      resources: identityAccess.integrationTriggerResources,
+    })
+  }
 
   registerRoute(
     app,
@@ -45,7 +65,12 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) =>
       c.json(
-        await createWebhookTrigger(svcDeps, actorOf(c), await safeJsonOrThrowInvalid(c.req.raw)),
+        await createWebhookTrigger(
+          svcDeps,
+          actorOf(c),
+          resourceAuthority(c),
+          await safeJsonOrThrowInvalid(c.req.raw),
+        ),
         201,
       ),
   )
@@ -76,6 +101,7 @@ export function mountWebhookTriggerRoutes(app: Hono, deps: AppDeps): void {
         await updateWebhookTrigger(
           svcDeps,
           actorOf(c),
+          resourceAuthority(c),
           c.req.param('id'),
           await safeJsonOrThrowInvalid(c.req.raw),
         ),

@@ -49,7 +49,14 @@ import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skil
 import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
-import { composeResourceScopeAuthorizationBinding } from '@/modules/resource-catalog/composition/resourceAcl'
+import {
+  canViewResourceInTx,
+  composeResourceScopeAuthorizationBinding,
+} from '@/modules/resource-catalog/composition/resourceAcl'
+import {
+  composeIntegrationTriggerResourceBinding,
+  type IntegrationTriggerResourceBinding,
+} from '@/modules/resource-catalog/composition/integrationTrigger'
 import type {
   AgentCatalogModule,
   McpCatalogModule,
@@ -129,12 +136,17 @@ import { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import {
   composeDigitalEmployee,
+  composeDigitalEmployeeIntegrationTriggerParticipant,
   composeDigitalEmployeeTaskCatalogSource,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
   readDigitalEmployeeWriterState,
 } from '@/modules/digital-employee/composition'
+import { rowToAgent } from '@/services/agent'
+import { rowToWorkflowDetail } from '@/services/workflow'
+import { rowToWorkgroup } from '@/services/workgroups'
+import { assertNotBuiltin } from '@/services/systemResources'
 import type { EmployeeCaseDetailProjectionParticipant } from '@/modules/digital-employee/public/types'
 import {
   developmentExecutionContractRegistrations,
@@ -384,10 +396,34 @@ export interface AppDeps {
  * composition instead of discovering a missing driver only on first request.
  */
 type RuntimeComposedAppDeps = AppDeps & {
-  readonly identityAccess: IdentityAccessRuntime
+  readonly identityAccess: IntegrationTriggerIdentityAccess
   readonly schedulerDriver: SchedulerDriverPort
   readonly taskExecutionReadModels: TaskExecutionReadModels
   readonly collaborationContext: CollaborationCommandContext
+}
+
+type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
+  readonly integrationTriggerResources: IntegrationTriggerResourceBinding
+}
+
+function hasIntegrationTriggerResources(
+  identityAccess: IdentityAccessRuntime,
+): identityAccess is IntegrationTriggerIdentityAccess {
+  return 'integrationTriggerResources' in identityAccess
+}
+
+function withIntegrationTriggerResources(
+  db: DbClient,
+  identityAccess: IdentityAccessRuntime,
+): IntegrationTriggerIdentityAccess {
+  if (hasIntegrationTriggerResources(identityAccess)) return identityAccess
+  return Object.freeze({
+    ...identityAccess,
+    integrationTriggerResources: composeIntegrationTriggerResourceBinding(
+      { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
+      composeDigitalEmployeeIntegrationTriggerParticipant,
+    ),
+  })
 }
 
 interface RepositoryBootstrap {
@@ -585,7 +621,10 @@ function composeFallbackDevelopmentAutomation(
 export function createApp(deps: AppDeps): Hono {
   const log = createLogger('http')
   const app = new Hono()
-  const identityAccess = deps.identityAccess ?? createIdentityAccessRuntime({ db: deps.db })
+  const identityAccess = withIntegrationTriggerResources(
+    deps.db,
+    deps.identityAccess ?? createIdentityAccessRuntime({ db: deps.db }),
+  )
   const taskExecutionRuntime =
     deps.schedulerDriver === undefined || deps.taskExecutionReadModels === undefined
       ? composeTaskExecutionRuntime({
@@ -869,7 +908,7 @@ export function createApp(deps: AppDeps): Hono {
 export function mountApiRoutes(
   app: Hono,
   deps: ComposedAppDeps,
-  identityAccess: IdentityAccessModule,
+  identityAccess: IdentityAccessModule & IntegrationTriggerIdentityAccess,
   identityUserOperations: IdentityUserOperations,
   systemOperations: SystemOperationsModule,
   mcpRuntimeTests: McpRuntimeTestService,
@@ -889,8 +928,9 @@ export function mountApiRoutes(
   const codeHostConnections = deps.codeHostConnections
   const repositoryPublicationTransport = deps.repositoryPublicationTransport
   const schedulerDriver = deps.schedulerDriver
-  const routeDeps: ComposedAppDeps = {
+  const routeDeps = {
     ...deps,
+    identityAccess,
     repositoryPublicationTransport,
     schedulerDriver,
     taskExecutionReadModels: deps.taskExecutionReadModels,
@@ -1114,7 +1154,7 @@ export function mountApiRoutes(
   ) // RFC-310 PR-1B / RFC-344
   mountDevelopmentMissionRoutes(app, developmentMissionOperations, identityAccess.directAuthority) // RFC-310 legacy drain / RFC-344
   mountMissionInputUploadRoutes(app, deps) // RFC-310 PR-3
-  mountWebhookTriggerRoutes(app, deps) // RFC-257 T8
+  mountWebhookTriggerRoutes(app, deps, identityAccess) // RFC-257 T8
   mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
   mountBackupRoutes(app, systemOperations, identityAccess)
   mountRestoreRoutes(app, systemOperations, identityAccess)

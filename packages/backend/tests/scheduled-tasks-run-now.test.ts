@@ -15,21 +15,18 @@ import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
-import {
-  createScheduledTask,
-  getScheduledTask,
-  runScheduleNow,
-} from '../src/services/scheduledTasks'
+import { getScheduledTask, runScheduleNow } from '../src/services/scheduledTasks'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { createUser } from '../src/services/users'
 import { createWorkflow } from '../src/services/workflow'
 import { NotFoundError } from '../src/util/errors'
 import type { CreateWorkflow, StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
-  createIdentityAccessRuntime,
-  type IdentityAccessRuntime,
-} from '../src/modules/identity-access/composition'
+  createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
+  withIntegrationTriggerResources,
+} from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -79,10 +76,10 @@ describe('RFC-159 T7 — run-now service (pure-launch semantics)', () => {
   let db: DbClient
   let wfId = ''
   let bobId = ''
-  let identityAccess: IdentityAccessRuntime
+  let identityAccess: ReturnType<typeof withIntegrationTriggerResources>
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    identityAccess = createIdentityAccessRuntime({ db })
+    identityAccess = withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db }))
     const bob = await createUser(db, {
       username: 'bob',
       displayName: 'B',

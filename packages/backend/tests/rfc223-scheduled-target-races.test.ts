@@ -17,7 +17,10 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { agents, scheduledTasks, workflows, workgroups } from '../src/db/schema'
 import { createAgent, deleteAgent } from '../src/services/agent'
-import { createScheduledTask, updateScheduledTask } from '../src/services/scheduledTasks'
+import {
+  createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
+  updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
+} from './helpers/integrationTriggerResourceBinding'
 import { createWorkflow, deleteWorkflow } from '../src/services/workflow'
 import { deleteWorkgroup } from '../src/services/workgroups'
 

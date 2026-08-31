@@ -1130,7 +1130,7 @@ function serializeInputs(inputs: AgentInputPort[] | undefined): string {
   return JSON.stringify(AgentInputPortsSchema.parse(inputs ?? []))
 }
 
-function rowToAgent(row: AgentRow): Agent {
+export function rowToAgent(row: AgentRow): Agent {
   const fmExtra = JSON.parse(row.frontmatterExtra) as Record<string, unknown>
   // RFC-005: lift outputKinds back out of frontmatter_extra into a top-level
   // property on the Agent DTO so consumers (review validator, scheduler,

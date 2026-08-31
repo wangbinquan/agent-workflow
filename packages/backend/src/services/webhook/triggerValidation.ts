@@ -6,24 +6,19 @@
 // assertScheduledTargetUsable（ACL/builtin/upload/launch-shape 全复用，等价于
 // 验证「一个典型事件到来时这个触发器能启动」）——fire 期跑的是同一个 gate，
 // 保存期彩排让配置错误在保存时暴露而不是 fire 后逐次失败。
-import { and, eq } from 'drizzle-orm'
-import { z } from 'zod'
-
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import {
-  employeeDefinitionRevisions,
-  employeeDefinitions,
-  employeeTypePackages,
-  workflows,
-} from '@/db/schema'
-import { canViewResource } from '@/services/resourceAcl'
-import { assertScheduledTargetUsable } from '@/services/scheduledTasks'
-import { getWorkflowAclRow } from '@/services/workflow'
+  assertIntegrationTriggerSnapshotUsable,
+  assertScheduledTargetUsable,
+  loadIntegrationTriggerResourceSnapshot,
+  type IntegrationTriggerResourceAuthority,
+} from '@/services/scheduledTasks'
 import { freezeCallClosure } from '@/services/execution/closure'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import { renderWebhookLaunch } from '@/services/webhook/webhookDispatch'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { ValidationError } from '@/util/errors'
+import type { FrozenIntegrationTriggerResourceSnapshot } from '@/modules/resource-catalog/public/types'
 import type {
   CodeHostEvent,
   CodeHostEventType,
@@ -34,8 +29,6 @@ import type {
 } from '@agent-workflow/shared'
 import {
   WebhookWorkflowPayloadTemplateSchema,
-  WorkflowDefinitionSchema,
-  migrateWorkflowDefinitionToLatest,
   webhookPayloadTemplateSchemaFor,
   templateVarIssues,
 } from '@agent-workflow/shared'
@@ -53,16 +46,6 @@ export type TriggerValidationIssue = {
 }
 
 type DefInput = WorkflowDefinition['inputs'][number]
-
-/** Persisted definitions are an untrusted boundary: malformed JSON becomes a typed validation result. */
-function parsePersistedJson(value: string | undefined): unknown {
-  if (value === undefined) return null
-  try {
-    return JSON.parse(value) as unknown
-  } catch {
-    return null
-  }
-}
 
 /** workflow 面：输入映射与 workflow 定义的 kind-aware 对账。 */
 export function validateWorkflowInputMappings(
@@ -132,6 +115,7 @@ export function staticTriggerIssues(
 export async function assertTriggerSaveable(
   db: DbClient,
   actor: Actor,
+  resourceAuthority: IntegrationTriggerResourceAuthority,
   candidate: {
     launchKind: WebhookLaunchKind
     launchRefId: string
@@ -153,6 +137,7 @@ export async function assertTriggerSaveable(
   let workflowInputs: ReadonlyArray<DefInput> | null = null
   let workflowDefinition: WorkflowDefinition | null = null
   let workflowClosureJson: string | null = null
+  let resourceSnapshot: FrozenIntegrationTriggerResourceSnapshot | null = null
   if (candidate.launchKind === 'workflow') {
     // D1 顺序不变量：可见性门必须先于 definition 内容的任何读取与回显。
     // 下面的静态校验层逐字回显 input key 与 kind（unknown-input /
@@ -162,126 +147,26 @@ export async function assertTriggerSaveable(
     // 用 ACL 专用行读：它不解析 definition，坏定义也能正确判 404（与
     // getWorkflowAclRow 的既有用途一致）。完整 gate（builtin / upload /
     // launch-shape）仍留在本函数末尾，这里只前置最小可见性门。
-    const aclRow = await getWorkflowAclRow(db, candidate.launchRefId)
-    if (aclRow === null || !(await canViewResource(db, actor, 'workflow', aclRow))) {
-      throw new NotFoundError('workflow-not-found', 'workflow not found')
+    resourceSnapshot = loadIntegrationTriggerResourceSnapshot(db, resourceAuthority, {
+      kind: 'webhook-workflow',
+      workflowId: candidate.launchRefId,
+    })
+    if (resourceSnapshot.kind !== 'webhook-workflow') {
+      throw new Error('webhook-workflow-snapshot-kind-mismatch')
     }
-    const wf = (
-      await db
-        .select({ definition: workflows.definition })
-        .from(workflows)
-        .where(eq(workflows.id, candidate.launchRefId))
-        .limit(1)
-    )[0]
-    if (wf !== undefined) {
-      const def = WorkflowDefinitionSchema.safeParse(parsePersistedJson(wf.definition))
-      if (def.success) {
-        workflowDefinition = migrateWorkflowDefinitionToLatest(def.data)
-        workflowInputs = workflowDefinition.inputs
-        workflowClosureJson = await freezeCallClosure(
-          db,
-          { id: candidate.launchRefId, definition: workflowDefinition },
-          actor,
-        )
-      } else {
-        workflowInputs = []
-      }
-    }
+    workflowDefinition = resourceSnapshot.workflow.definition
+    workflowInputs = workflowDefinition.inputs
+    workflowClosureJson = await freezeCallClosure(
+      db,
+      { id: candidate.launchRefId, definition: workflowDefinition },
+      actor,
+    )
   }
   if (candidate.launchKind === 'digital-employee') {
-    const employee = (
-      await db
-        .select()
-        .from(employeeDefinitions)
-        .where(eq(employeeDefinitions.id, candidate.launchRefId))
-        .limit(1)
-    )[0]
-    if (
-      employee === undefined ||
-      employee.archivedAt !== null ||
-      employee.currentRevision === null ||
-      !(await canViewResource(db, actor, 'digital_employee', employee))
-    ) {
-      throw new NotFoundError('employee-definition-not-found', 'digital employee not found')
-    }
-    const revision = (
-      await db
-        .select({ contentJson: employeeDefinitionRevisions.contentJson })
-        .from(employeeDefinitionRevisions)
-        .where(
-          and(
-            eq(employeeDefinitionRevisions.employeeId, employee.id),
-            eq(employeeDefinitionRevisions.revision, employee.currentRevision),
-          ),
-        )
-        .limit(1)
-    )[0]
-    const content = parsePersistedJson(revision?.contentJson)
-    if (content === null || typeof content !== 'object' || Array.isArray(content)) {
-      throw new ValidationError(
-        'employee-definition-unavailable',
-        'the current digital employee revision is unavailable',
-      )
-    }
-    const typePackage = (
-      await db
-        .select({ descriptorJson: employeeTypePackages.descriptorJson })
-        .from(employeeTypePackages)
-        .where(
-          and(
-            eq(employeeTypePackages.typeId, employee.typeId),
-            eq(employeeTypePackages.revision, employee.typeRevision),
-            eq(employeeTypePackages.state, 'published'),
-          ),
-        )
-        .limit(1)
-    )[0]
-    const intakeContract = z
-      .object({
-        workIntakeAuthoring: z
-          .object({
-            acceptedKinds: z.array(z.enum(['body', 'files', 'body-and-files', 'external-id'])),
-            targetFields: z.array(
-              z.object({ fieldRef: z.string().min(1), required: z.boolean() }).passthrough(),
-            ),
-          })
-          .passthrough(),
-      })
-      .passthrough()
-      .safeParse(parsePersistedJson(typePackage?.descriptorJson))
-    if (!intakeContract.success) {
-      throw new ValidationError(
-        'employee-intake-contract-unavailable',
-        'the digital employee intake contract is unavailable',
-      )
-    }
-    const employeePayload = payload as {
-      intakeKind: 'body' | 'external-id'
-      target: Record<string, string>
-    }
-    if (
-      !intakeContract.data.workIntakeAuthoring.acceptedKinds.includes(employeePayload.intakeKind)
-    ) {
-      throw new ValidationError(
-        'employee-intake-kind-incompatible',
-        `digital employee does not accept ${employeePayload.intakeKind} intake`,
-      )
-    }
-    const targetFields = intakeContract.data.workIntakeAuthoring.targetFields
-    const allowed = new Set(targetFields.map((field) => field.fieldRef))
-    const unknown = Object.keys(employeePayload.target).filter((key) => !allowed.has(key))
-    const missing = targetFields
-      .filter(
-        (field) => field.required && (employeePayload.target[field.fieldRef] ?? '').trim() === '',
-      )
-      .map((field) => field.fieldRef)
-    if (unknown.length > 0 || missing.length > 0) {
-      throw new ValidationError(
-        'employee-intake-target-incompatible',
-        'digital employee target mapping does not satisfy its intake contract',
-        { unknown, missing },
-      )
-    }
+    resourceSnapshot = loadIntegrationTriggerResourceSnapshot(db, resourceAuthority, {
+      kind: 'webhook-digital-employee',
+      employeeDefinitionId: candidate.launchRefId,
+    })
   }
   const issues = staticTriggerIssues(
     candidate.launchKind,
@@ -323,15 +208,36 @@ export async function assertTriggerSaveable(
       ? { kind: 'scratch' }
       : { kind: 'url', repoUrl: 'https://rehearsal.invalid/repo.git' },
   )
-  if (rendered.kind === 'digital-employee') return
+  if (rendered.kind === 'digital-employee') {
+    if (resourceSnapshot === null) throw new Error('digital-employee-snapshot-missing')
+    await assertIntegrationTriggerSnapshotUsable(
+      db,
+      actor,
+      resourceSnapshot,
+      payload as unknown as Record<string, unknown>,
+    )
+    return
+  }
+  if (rendered.kind === 'workflow') {
+    if (resourceSnapshot === null) throw new Error('webhook-workflow-snapshot-missing')
+    await assertIntegrationTriggerSnapshotUsable(
+      db,
+      actor,
+      resourceSnapshot,
+      rendered.payload as unknown as Record<string, unknown>,
+      { kind: 'event-types', eventTypes: candidate.eventTypes },
+    )
+    return
+  }
   await assertScheduledTargetUsable(
     db,
-    actor,
+    resourceAuthority,
     rendered.kind,
     // 结构化 payload → gate 的宽记录形参（服务层内的唯一桥点）。
     rendered.payload as unknown as Record<string, unknown>,
     defaultRuntime,
     { kind: 'event-types', eventTypes: candidate.eventTypes },
+    'webhook',
   )
 }
 

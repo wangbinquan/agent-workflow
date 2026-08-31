@@ -20,10 +20,8 @@ import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { runDueSchedulesOnce } from '../src/services/scheduledTaskScheduler'
 import { createUser } from '../src/services/users'
 import { createWorkflow } from '../src/services/workflow'
-import {
-  createIdentityAccessRuntime,
-  type IdentityAccessRuntime,
-} from '../src/modules/identity-access/composition'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { withIntegrationTriggerResources } from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAILY = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
@@ -59,11 +57,11 @@ describe('RFC-159 scheduled-task scheduler', () => {
   let db: DbClient
   let wfId = ''
   let ownerId = ''
-  let identityAccess: IdentityAccessRuntime
+  let identityAccess: ReturnType<typeof withIntegrationTriggerResources>
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    identityAccess = createIdentityAccessRuntime({ db })
+    identityAccess = withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db }))
     const owner = await createUser(db, {
       username: 'owner',
       displayName: 'O',

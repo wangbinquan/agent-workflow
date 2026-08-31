@@ -28,6 +28,7 @@ import { createAgent } from '../src/services/agent'
 import { cancelExecution } from '../src/services/execution/executor'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
@@ -196,7 +197,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     })
     const dispatcher = createWebhookDispatcher({
       db,
-      identityAccess: createIdentityAccessRuntime({ db }),
+      ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
       configPath,
       secretBox: box,
       schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,

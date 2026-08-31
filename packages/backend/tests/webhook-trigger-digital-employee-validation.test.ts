@@ -13,6 +13,7 @@ import {
 import { createUser } from '../src/services/users'
 import { assertTriggerSaveable } from '../src/services/webhook/triggerValidation'
 import { ValidationError } from '../src/util/errors'
+import { integrationTriggerResourceAuthority } from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -78,7 +79,15 @@ describe('Webhook Digital Employee trigger validation', () => {
       autoRegisterRepos: false,
     }
 
-    await expect(assertTriggerSaveable(db, actor, candidate, null)).rejects.toMatchObject({
+    await expect(
+      assertTriggerSaveable(
+        db,
+        actor,
+        integrationTriggerResourceAuthority(db, actor),
+        candidate,
+        null,
+      ),
+    ).rejects.toMatchObject({
       code: 'employee-definition-unavailable',
       status: 422,
     })
@@ -94,7 +103,13 @@ describe('Webhook Digital Employee trigger validation', () => {
 
     let thrown: unknown
     try {
-      await assertTriggerSaveable(db, actor, candidate, null)
+      await assertTriggerSaveable(
+        db,
+        actor,
+        integrationTriggerResourceAuthority(db, actor),
+        candidate,
+        null,
+      )
     } catch (error) {
       thrown = error
     }

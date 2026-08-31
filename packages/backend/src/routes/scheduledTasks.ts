@@ -40,6 +40,8 @@ import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { loadConfig } from '@/config'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
 /**
  * RFC-324 —— 排期写权：owner / `write` 授权 / ACL bypass。
@@ -105,8 +107,20 @@ function requireLaunchPermission(actor: Actor): void {
 
 export function mountScheduledTaskRoutes(
   app: Hono,
-  deps: AppDeps & { readonly identityAccess: ScheduleAuthorityRuntime },
+  deps: AppDeps & {
+    readonly identityAccess: ScheduleAuthorityRuntime & {
+      readonly directAuthority: DirectAuthorityBinding
+    }
+  },
 ): void {
+  const resourceAuthority = (c: Parameters<typeof actorOf>[0]) => {
+    const actor = actorOf(c)
+    return Object.freeze({
+      actor,
+      authority: directRequestAuthority(deps.identityAccess.directAuthority, actor),
+      resources: deps.identityAccess.integrationTriggerResources,
+    })
+  }
   registerRoute(
     app,
     {
@@ -174,6 +188,7 @@ export function mountScheduledTaskRoutes(
       }
       const created = await createScheduledTask(deps.db, parsed.data, {
         actor: actorOf(c),
+        resourceAuthority: resourceAuthority(c),
         defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
       })
       return c.json(created, 201)
@@ -233,6 +248,7 @@ export function mountScheduledTaskRoutes(
       }
       const updated = await updateScheduledTask(deps.db, existing.id, parsed.data, {
         actor,
+        resourceAuthority: resourceAuthority(c),
         defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
       })
       return c.json(updated)

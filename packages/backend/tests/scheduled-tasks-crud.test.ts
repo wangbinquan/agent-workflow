@@ -13,12 +13,14 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks, workflows } from '../src/db/schema'
 import {
-  createScheduledTask,
   deleteScheduledTask,
   getScheduledTask,
   listScheduledTasks,
-  updateScheduledTask,
 } from '../src/services/scheduledTasks'
+import {
+  createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
+  updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
+} from './helpers/integrationTriggerResourceBinding'
 import { createWorkflow } from '../src/services/workflow'
 import { NotFoundError, ValidationError } from '../src/util/errors'
 import type { CreateWorkflow } from '@agent-workflow/shared'

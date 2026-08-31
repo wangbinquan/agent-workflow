@@ -15,6 +15,7 @@ import { assertNotBuiltin } from '@/services/systemResources'
 import { getWorkflow } from '@/services/workflow'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { loadWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
+import type { TaskExecutionWorkflowSnapshot } from '@/modules/resource-catalog/public/types'
 
 type LaunchableWorkflow = NonNullable<Awaited<ReturnType<typeof getWorkflow>>>
 
@@ -33,6 +34,19 @@ export async function assertWorkflowLaunchable(
     throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
   }
   assertNotBuiltin('workflow', wf)
+  await assertWorkflowSnapshotLaunchable(db, wf)
+  return wf
+}
+
+/**
+ * Validate an already authorized Resource Catalog snapshot without re-reading
+ * the target row. Integration triggers use this after the participant has
+ * enforced visibility + built-in policy inside its transaction.
+ */
+export async function assertWorkflowSnapshotLaunchable(
+  db: DbClient,
+  wf: TaskExecutionWorkflowSnapshot,
+): Promise<void> {
   // RFC-243 实现门 P1-2: launch is the ENFORCEMENT point of the call-node
   // rules — thread the candidate so 4f/4g (upload inputs / output collisions /
   // unwired inputs / cycles) actually gate here, not only in unit tests.
@@ -47,9 +61,8 @@ export async function assertWorkflowLaunchable(
     const errors = validation.issues.filter((issue) => (issue.severity ?? 'error') === 'error')
     throw new ValidationError(
       'workflow-invalid',
-      `workflow '${workflowId}' failed static validation (${errors.length} error${errors.length === 1 ? '' : 's'})`,
+      `workflow '${wf.id}' failed static validation (${errors.length} error${errors.length === 1 ? '' : 's'})`,
       { issues: validation.issues },
     )
   }
-  return wf
 }

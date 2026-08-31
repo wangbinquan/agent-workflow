@@ -30,6 +30,7 @@ import {
 } from '../src/db/schema'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
 import { createApp } from '../src/server'
 import { cancelExecution } from '../src/services/execution/executor'
@@ -261,7 +262,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
 
   const dispatcher = createWebhookDispatcher({
     db,
-    identityAccess: createIdentityAccessRuntime({ db }),
+    ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     configPath,
     secretBox: box,
     getDefaultRuntime: async () => null,
@@ -505,7 +506,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   await terminalControl.reconcileOnBoot()
   const dispatcher = createWebhookDispatcher({
     db,
-    identityAccess: createIdentityAccessRuntime({ db }),
+    ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     configPath,
     secretBox: box,
     getDefaultRuntime: async () => null,

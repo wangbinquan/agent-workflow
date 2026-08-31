@@ -1,6 +1,9 @@
 import { join } from 'node:path'
+import { and, eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { employeeDefinitionRevisions, employeeDefinitions, employeeTypePackages } from '@/db/schema'
+import type { DbTxSync } from '@/db/txSync'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import {
@@ -71,6 +74,7 @@ import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/typ
 import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
 import type { DigitalEmployeeMaintenanceCommands } from './public/commands'
 import { createDigitalEmployeeResourceCatalogAclAdapters } from './application/adapters/resource-catalog-acl-adapter'
+import { createDigitalEmployeeIntegrationTriggerParticipant } from './application/adapters/integration-trigger-resource-adapter'
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
@@ -97,6 +101,66 @@ export function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
   db: DbClient,
 ): readonly string[] {
   return createSqliteDigitalEmployeeAuthoringStore(db).listTypePackageDescriptorJsons()
+}
+
+/**
+ * Owner composition for the integration-trigger snapshot participant.
+ *
+ * Persistence closures stay inside the Digital Employee owner. Resource Catalog
+ * receives only the branded, data-only participant and therefore cannot import
+ * employee tables, authoring stores, or schema-shaped rows.
+ */
+export function composeDigitalEmployeeIntegrationTriggerParticipant(tx: DbTxSync) {
+  return createDigitalEmployeeIntegrationTriggerParticipant({
+    loadIdentity(employeeDefinitionId) {
+      return (
+        tx
+          .select({
+            id: employeeDefinitions.id,
+            ownerUserId: employeeDefinitions.ownerUserId,
+            visibility: employeeDefinitions.visibility,
+            archivedAt: employeeDefinitions.archivedAt,
+            currentRevision: employeeDefinitions.currentRevision,
+            typeId: employeeDefinitions.typeId,
+            typeRevision: employeeDefinitions.typeRevision,
+          })
+          .from(employeeDefinitions)
+          .where(eq(employeeDefinitions.id, employeeDefinitionId))
+          .get() ?? null
+      )
+    },
+    loadDefinitionRevisionJson(employeeDefinitionId, revision) {
+      return (
+        tx
+          .select({ contentJson: employeeDefinitionRevisions.contentJson })
+          .from(employeeDefinitionRevisions)
+          .where(
+            and(
+              eq(employeeDefinitionRevisions.employeeId, employeeDefinitionId),
+              eq(employeeDefinitionRevisions.revision, revision),
+            ),
+          )
+          .get()?.contentJson ?? null
+      )
+    },
+    loadTypePackage({ typeId, typeRevision }) {
+      return (
+        tx
+          .select({
+            state: employeeTypePackages.state,
+            descriptorJson: employeeTypePackages.descriptorJson,
+          })
+          .from(employeeTypePackages)
+          .where(
+            and(
+              eq(employeeTypePackages.typeId, typeId),
+              eq(employeeTypePackages.revision, typeRevision),
+            ),
+          )
+          .get() ?? null
+      )
+    },
+  })
 }
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &

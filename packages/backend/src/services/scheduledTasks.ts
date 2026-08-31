@@ -36,30 +36,36 @@ import { ulid } from 'ulid'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
-import { agents, resourceGrants, scheduledTasks, users, workflows, workgroups } from '@/db/schema'
-import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
+import { resourceGrants, scheduledTasks, users } from '@/db/schema'
+import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import {
   canEditAccess,
   canGovernAccess,
-  canViewResource,
-  canViewResourceInTx,
   grantsOfResourceWhere,
   listGrantedResourceIds,
   listResourceGrants,
   loadGrantLevel,
 } from '@/services/resourceAcl'
-import { assertNotBuiltin } from '@/services/systemResources'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { runGit } from '@/util/git'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
-import { getWorkflow } from '@/services/workflow'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
 import { freezeCallClosure } from '@/services/execution/closure'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
+import type {
+  IntegrationTriggerResourceSnapshotInTx,
+  ResourceRequestContext,
+} from '@/modules/resource-catalog/public/participants'
+import type {
+  DigitalEmployeeTriggerSnapshot,
+  FrozenIntegrationTriggerResourceSnapshot,
+  IntegrationTriggerResourceRequest,
+  TaskExecutionWorkflowSnapshot,
+} from '@/modules/resource-catalog/public/types'
 
 /** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
@@ -79,10 +85,25 @@ export type ScheduleAuthorityInvocation =
   | { readonly kind: 'manual' }
 export type ScheduleAuthorityRuntime = Readonly<{
   delegatedRequests: DelegatedRequestAuthorityFactory
+  integrationTriggerResources: IntegrationTriggerResourceBinding
 }>
 
+export interface IntegrationTriggerResourceBinding {
+  inTransaction(
+    tx: DbTxSync,
+    pair: Readonly<{ readonly authority: ResourceRequestContext; readonly actor: Actor }>,
+  ): IntegrationTriggerResourceSnapshotInTx
+}
+
+/** Exact opaque handle and the current actor projection admitted with it. */
+export interface IntegrationTriggerResourceAuthority {
+  readonly authority: ResourceRequestContext
+  readonly actor: Actor
+  readonly resources: IntegrationTriggerResourceBinding
+}
+
 type Row = typeof scheduledTasks.$inferSelect
-type LaunchableWorkflow = Awaited<ReturnType<typeof assertWorkflowLaunchable>>
+type LaunchableWorkflow = TaskExecutionWorkflowSnapshot
 
 /**
  * RFC-165 (F18/N3): per-field tolerant JSON parsing. One legacy / corrupt row
@@ -306,162 +327,158 @@ export async function getScheduledTaskRow(db: DbClient, id: string): Promise<Row
   return rows[0] ?? null
 }
 
-/**
- * RFC-165 §9b create/repair-time LIGHT gate per kind: the target must exist,
- * be visible to the actor, and not be builtin. Full launch validation
- * (host snapshot / readiness / space rules) runs at fire time via the
- * kind's launch service.
- *
- * RFC-257 (design §5.2, gate F-19): exported — webhook fires re-run the SAME
- * gate against the trigger owner's rebuilt actor on every event, deliberately
- * mirroring fireSchedule rather than the JSON-route assertWorkflowLaunchable.
- */
-export async function assertScheduledTargetUsable(
+function loadIntegrationTriggerResourceSnapshotInTx(
+  tx: DbTxSync,
+  resourceAuthority: IntegrationTriggerResourceAuthority,
+  request: IntegrationTriggerResourceRequest,
+): FrozenIntegrationTriggerResourceSnapshot {
+  const snapshots = resourceAuthority.resources
+    .inTransaction(tx, resourceAuthority)
+    .loadAuthorized(resourceAuthority.authority, [request])
+  const snapshot = snapshots[0]
+  if (snapshot === undefined) throw new Error('integration-trigger-snapshot-missing')
+  return snapshot
+}
+
+export function loadIntegrationTriggerResourceSnapshot(
+  db: DbClient,
+  resourceAuthority: IntegrationTriggerResourceAuthority,
+  request: IntegrationTriggerResourceRequest,
+): FrozenIntegrationTriggerResourceSnapshot {
+  return dbTxSync(db, (tx) =>
+    loadIntegrationTriggerResourceSnapshotInTx(tx, resourceAuthority, request),
+  )
+}
+
+function assertDigitalEmployeeIntake(
+  employee: DigitalEmployeeTriggerSnapshot,
+  body: Record<string, unknown>,
+): void {
+  const intakeKind = body['intakeKind'] ?? body['kind']
+  const target = body['target']
+  if (
+    (intakeKind !== 'body' && intakeKind !== 'external-id') ||
+    target === null ||
+    typeof target !== 'object' ||
+    Array.isArray(target)
+  ) {
+    throw new ValidationError('webhook-trigger-invalid', 'invalid digital employee intake')
+  }
+  if (!employee.intake.acceptedKinds.includes(intakeKind)) {
+    throw new ValidationError(
+      'employee-intake-kind-incompatible',
+      `digital employee does not accept ${intakeKind} intake`,
+    )
+  }
+  const values = target as Record<string, unknown>
+  const allowed = new Set(employee.intake.targetFields.map((field) => field.fieldRef))
+  const unknown = Object.keys(values).filter((key) => !allowed.has(key))
+  const missing = employee.intake.targetFields
+    .filter((field) => {
+      const value = values[field.fieldRef]
+      return field.required && (typeof value !== 'string' || value.trim() === '')
+    })
+    .map((field) => field.fieldRef)
+  if (unknown.length > 0 || missing.length > 0) {
+    throw new ValidationError(
+      'employee-intake-target-incompatible',
+      'digital employee target mapping does not satisfy its intake contract',
+      { unknown, missing },
+    )
+  }
+}
+
+export async function assertIntegrationTriggerSnapshotUsable(
   db: DbClient,
   actor: Actor,
-  kind: ScheduledLaunchKind,
+  snapshot: FrozenIntegrationTriggerResourceSnapshot,
   body: Record<string, unknown>,
-  _defaultRuntime?: string | null,
   triggerSource: TriggerDependencySource = { kind: 'none' },
 ): Promise<void> {
-  if (kind === 'workflow') {
+  if (snapshot.kind === 'scheduled-workflow' || snapshot.kind === 'webhook-workflow') {
+    const target = snapshot.workflow
     // Preserve the RFC-159 schedule-specific incompatibility as the first
-    // visible error after the ACL/builtin gates. A required upload is
-    // unschedulable regardless of any additional static workflow issue.
-    const target = await getWorkflow(db, body['workflowId'] as string)
-    if (target === null || !(await canViewResource(db, actor, 'workflow', target))) {
-      throw new NotFoundError('workflow-not-found', 'workflow not found')
-    }
-    assertNotBuiltin('workflow', target)
+    // visible error after the participant's ACL/builtin gates.
     assertNoRequiredUploadInput(target)
-
     const closureJson = await freezeCallClosure(
       db,
       { id: target.id, definition: target.definition },
       actor,
     )
-    assertTriggerPreflight({
-      root: target.definition,
-      closureJson,
-      source: triggerSource,
-    })
-
-    await assertWorkflowLaunchable(db, actor, body['workflowId'] as string)
+    assertTriggerPreflight({ root: target.definition, closureJson, source: triggerSource })
+    await assertWorkflowSnapshotLaunchable(db, target)
     assertWorkflowLaunchInputs(
       target.definition.inputs,
       (body['inputs'] as Record<string, string> | undefined) ?? {},
     )
     return
   }
-  if (kind === 'agent') {
-    const { getAgentById } = await import('@/services/agent')
-    const agentId = body['agentId'] as string
-    const agent = await getAgentById(db, agentId)
-    if (agent === null || !(await canViewResource(db, actor, 'agent', agent))) {
-      throw new NotFoundError('agent-not-found', 'agent not found')
-    }
-    assertNotBuiltin('agent', agent)
-    await assertAgentResourceIntegrity(db, [agent.id])
-    // RFC-223 PR-7: identity arrived as the required canonical id. Refresh the
-    // optional name snapshot from that exact row; never resolve or trust a
-    // client-provided display name.
-    body['agentName'] = agent.name
-    // RFC-218 (design P2-2): with description/inputs both schema-optional, a
-    // payload that must fail EVERY fire (neither field / unknown keys /
-    // missing required ports / blocker agent / upload ports — scheduled fires
-    // are JSON, so path<ext> ports can never bind files) must be refused at
-    // save time, not discovered fire after fire. Same matrix as launch.
+  if (snapshot.kind === 'scheduled-agent') {
+    await assertAgentResourceIntegrity(db, [snapshot.agent.id])
+    body['agentName'] = snapshot.agent.name
     const { validateAgentLaunchShape } = await import('@/services/agentLaunch')
     validateAgentLaunchShape(
-      agent.inputs,
+      snapshot.agent.inputs,
       body as { description?: string; inputs?: Record<string, string> },
       { multipart: false },
     )
     return
   }
-  const { getWorkgroupById } = await import('@/services/workgroups')
-  const workgroupId = body['workgroupId'] as string
-  const group = await getWorkgroupById(db, workgroupId)
-  if (group === null || !(await canViewResource(db, actor, 'workgroup', group))) {
-    throw new NotFoundError('workgroup-not-found', 'workgroup not found')
+  if (snapshot.kind === 'scheduled-workgroup') {
+    const memberAgentIds = snapshot.workgroup.members.flatMap((member) =>
+      member.memberType === 'agent' &&
+      typeof member.agentId === 'string' &&
+      member.agentId.length > 0
+        ? [member.agentId]
+        : [],
+    )
+    await assertAgentResourceIntegrity(db, memberAgentIds)
+    body['workgroupName'] = snapshot.workgroup.name
+    return
   }
-  const memberAgentIds = group.members.flatMap((member) =>
-    member.memberType === 'agent' && typeof member.agentId === 'string' && member.agentId.length > 0
-      ? [member.agentId]
-      : [],
-  )
-  await assertAgentResourceIntegrity(db, memberAgentIds)
-  body['workgroupName'] = group.name
+  assertDigitalEmployeeIntake(snapshot.employee, body)
+}
+
+function scheduledResourceRequest(
+  kind: ScheduledLaunchKind,
+  body: Record<string, unknown>,
+  source: 'schedule' | 'webhook',
+): IntegrationTriggerResourceRequest {
+  if (kind === 'workflow') {
+    return source === 'schedule'
+      ? { kind: 'scheduled-workflow', workflowId: body['workflowId'] as string }
+      : { kind: 'webhook-workflow', workflowId: body['workflowId'] as string }
+  }
+  if (kind === 'agent') return { kind: 'scheduled-agent', agentId: body['agentId'] as string }
+  return { kind: 'scheduled-workgroup', workgroupId: body['workgroupId'] as string }
 }
 
 /**
- * Final scheduled-target identity fence. This deliberately re-checks only the
- * invariants that can race an already-completed async launch-shape check:
- * exact canonical-id existence, current ACL visibility, and the immutable
- * built-in marker. It runs in the same dbTxSync as INSERT/UPDATE so target
- * delete guards and schedule writes have one serial order.
+ * Current-owner launch validation over one Resource Catalog snapshot. Webhook
+ * agent/workgroup launches deliberately reuse the scheduled variants; workflow
+ * keeps a distinct request kind for exact consumer accounting.
  */
-function assertScheduledTargetUsableInTx(
-  tx: DbTxSync,
-  actor: Actor,
+export async function assertScheduledTargetUsable(
+  db: DbClient,
+  resourceAuthority: IntegrationTriggerResourceAuthority,
   kind: ScheduledLaunchKind,
   body: Record<string, unknown>,
-): void {
-  if (kind === 'workflow') {
-    const workflowId = body['workflowId'] as string
-    const row = tx
-      .select({
-        id: workflows.id,
-        ownerUserId: workflows.ownerUserId,
-        visibility: workflows.visibility,
-        builtin: workflows.builtin,
-      })
-      .from(workflows)
-      .where(eq(workflows.id, workflowId))
-      .get()
-    if (row === undefined || !canViewResourceInTx(tx, actor, 'workflow', row)) {
-      throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
-    }
-    assertNotBuiltin('workflow', row)
-    return
-  }
-
-  if (kind === 'agent') {
-    const agentId = body['agentId'] as string
-    const row = tx
-      .select({
-        id: agents.id,
-        name: agents.name,
-        ownerUserId: agents.ownerUserId,
-        visibility: agents.visibility,
-        builtin: agents.builtin,
-      })
-      .from(agents)
-      .where(eq(agents.id, agentId))
-      .get()
-    if (row === undefined || !canViewResourceInTx(tx, actor, 'agent', row)) {
-      throw new NotFoundError('agent-not-found', 'agent not found')
-    }
-    assertNotBuiltin('agent', row)
-    body['agentName'] = row.name
-    return
-  }
-
-  const workgroupId = body['workgroupId'] as string
-  const row = tx
-    .select({
-      id: workgroups.id,
-      name: workgroups.name,
-      ownerUserId: workgroups.ownerUserId,
-      visibility: workgroups.visibility,
-    })
-    .from(workgroups)
-    .where(eq(workgroups.id, workgroupId))
-    .get()
-  if (row === undefined || !canViewResourceInTx(tx, actor, 'workgroup', row)) {
-    throw new NotFoundError('workgroup-not-found', 'workgroup not found')
-  }
-  body['workgroupName'] = row.name
+  _defaultRuntime?: string | null,
+  triggerSource: TriggerDependencySource = { kind: 'none' },
+  source: 'schedule' | 'webhook' = 'schedule',
+): Promise<void> {
+  const snapshot = loadIntegrationTriggerResourceSnapshot(
+    db,
+    resourceAuthority,
+    scheduledResourceRequest(kind, body, source),
+  )
+  await assertIntegrationTriggerSnapshotUsable(
+    db,
+    resourceAuthority.actor,
+    snapshot,
+    body,
+    triggerSource,
+  )
 }
 
 export async function createScheduledTask(
@@ -469,6 +486,7 @@ export async function createScheduledTask(
   input: CreateScheduledTask,
   opts: {
     actor: Actor
+    resourceAuthority: IntegrationTriggerResourceAuthority
     beforeWriteTx?: () => Promise<void>
     defaultRuntime?: string | null
   },
@@ -483,7 +501,7 @@ export async function createScheduledTask(
   // the full launch validation (host snapshot, readiness) at fire time.
   await assertScheduledTargetUsable(
     db,
-    opts.actor,
+    opts.resourceAuthority,
     kind,
     body as unknown as Record<string, unknown>,
     opts.defaultRuntime,
@@ -493,12 +511,17 @@ export async function createScheduledTask(
   const id = ulid()
   await opts.beforeWriteTx?.()
   dbTxSync(db, (tx) => {
-    assertScheduledTargetUsableInTx(
+    const target = loadIntegrationTriggerResourceSnapshotInTx(
       tx,
-      opts.actor,
-      kind,
-      body as unknown as Record<string, unknown>,
+      opts.resourceAuthority,
+      scheduledResourceRequest(kind, body as unknown as Record<string, unknown>, 'schedule'),
     )
+    if (target.kind === 'scheduled-agent') {
+      ;(body as unknown as Record<string, unknown>)['agentName'] = target.agent.name
+    }
+    if (target.kind === 'scheduled-workgroup') {
+      ;(body as unknown as Record<string, unknown>)['workgroupName'] = target.workgroup.name
+    }
     tx.insert(scheduledTasks)
       .values({
         id,
@@ -531,6 +554,7 @@ export async function updateScheduledTask(
   patch: UpdateScheduledTask,
   opts: {
     actor: Actor
+    resourceAuthority: IntegrationTriggerResourceAuthority
     beforeWriteTx?: () => Promise<void>
     defaultRuntime?: string | null
   },
@@ -618,7 +642,7 @@ export async function updateScheduledTask(
   if ((enabled || patch.launchPayload !== undefined) && patchedPayload !== null) {
     await assertScheduledTargetUsable(
       db,
-      opts.actor,
+      opts.resourceAuthority,
       existing.launchKind,
       patchedPayload as unknown as Record<string, unknown>,
       opts.defaultRuntime,
@@ -683,12 +707,21 @@ export async function updateScheduledTask(
           `scheduled task '${id}' has an unreadable launchPayload — supply a full launchPayload to repair it`,
         )
       }
-      assertScheduledTargetUsableInTx(
+      const target = loadIntegrationTriggerResourceSnapshotInTx(
         tx,
-        opts.actor,
-        finalKind.data,
-        finalPayload as Record<string, unknown>,
+        opts.resourceAuthority,
+        scheduledResourceRequest(
+          finalKind.data,
+          finalPayload as Record<string, unknown>,
+          'schedule',
+        ),
       )
+      if (target.kind === 'scheduled-agent') {
+        ;(finalPayload as Record<string, unknown>)['agentName'] = target.agent.name
+      }
+      if (target.kind === 'scheduled-workgroup') {
+        ;(finalPayload as Record<string, unknown>)['workgroupName'] = target.workgroup.name
+      }
     }
     const set: Partial<typeof scheduledTasks.$inferInsert> = { updatedAt: now }
     if (patch.name !== undefined) set.name = patch.name
@@ -958,17 +991,22 @@ export async function fireSchedule(
     scheduleId: row.id,
     invocation,
   })
-  const actor = delegated?.actor as Actor | undefined
-  if (actor === undefined) {
+  if (delegated === null) {
     throw new ValidationError('owner-inactive', `owner '${row.ownerUserId}' is not an active user`)
   }
+  const actor: Actor = delegated.actor
+  const resourceAuthority = Object.freeze({
+    authority: delegated.authority,
+    actor,
+    resources: identityAccess.integrationTriggerResources,
+  })
   // RFC-224: save-time acceptance is not a launch capability. Re-evaluate the
   // canonical target and its effective runtime on every fire, using the daemon
   // default that is current for this tick/run-now request. The launch services
   // retain their own final gates, but this shared preflight also protects
   // injected ScheduleLaunch implementations and rejects before any launch
   // side effect.
-  await assertScheduledTargetUsable(db, actor, kind, bodyWithName, defaultRuntime)
+  await assertScheduledTargetUsable(db, resourceAuthority, kind, bodyWithName, defaultRuntime)
 
   const launch = buildLaunch(row.ownerUserId, row.id)
   const task = await launch(kind, bodyWithName, actor)

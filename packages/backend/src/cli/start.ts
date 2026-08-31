@@ -116,17 +116,26 @@ import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { startMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import { composeResourceScopeAuthorizationBinding } from '@/modules/resource-catalog/composition/resourceAcl'
+import {
+  canViewResourceInTx,
+  composeResourceScopeAuthorizationBinding,
+} from '@/modules/resource-catalog/composition/resourceAcl'
+import { composeIntegrationTriggerResourceBinding } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeEventCenter, startEventCenterWorker } from '@/modules/event-center/composition'
 import {
   activateDigitalEmployeeOsWriter,
   composeDigitalEmployee,
+  composeDigitalEmployeeIntegrationTriggerParticipant,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
   refreshDigitalEmployeeWriterState,
   startDigitalEmployeeOsWorker,
 } from '@/modules/digital-employee/composition'
+import { rowToAgent } from '@/services/agent'
+import { rowToWorkflowDetail } from '@/services/workflow'
+import { rowToWorkgroup } from '@/services/workgroups'
+import { assertNotBuiltin } from '@/services/systemResources'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
   developmentExecutionContractRegistrations,
@@ -595,6 +604,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       },
     },
   })
+  const integrationIdentityAccess = Object.freeze({
+    ...identityAccess,
+    integrationTriggerResources: composeIntegrationTriggerResourceBinding(
+      { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
+      composeDigitalEmployeeIntegrationTriggerParticipant,
+    ),
+  })
   const taskExecutionRuntime = composeTaskExecutionRuntime({
     db,
     identityAccess,
@@ -917,7 +933,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const digitalEmployeeWorkStart = createDeferredDigitalEmployeeWorkStart()
   const webhookDispatcher = createWebhookDispatcher({
     db,
-    identityAccess,
+    identityAccess: integrationIdentityAccess,
+    resolveEventTargetAuthority: async (userId) => {
+      const admitted = await identityAccess.localOperator.forLegacyHttpUser(userId)
+      if (admitted === null) return null
+      return Object.freeze({
+        authority: admitted.commandContext().authority,
+        actor: admitted.actor,
+      })
+    },
     configPath: Paths.config,
     secretBox,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
@@ -1226,7 +1250,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     opencodeVersion: null,
     dbVersion,
     db,
-    identityAccess,
+    identityAccess: integrationIdentityAccess,
     maintenanceStatus: maintenanceService.status,
     secretBox,
     repositoryPublicationTransport,
@@ -1598,13 +1622,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // building deps live (buildStartTaskDeps) so scheduled launches match manual ones.
   const scheduledTaskTicker = startScheduledTaskLoop({
     db,
-    identityAccess,
+    identityAccess: integrationIdentityAccess,
     loadConfig: () => loadConfig(Paths.config),
     buildLaunch: buildScheduleLaunch(
       db,
       taskExecutionRuntime.schedulerDriver,
       Paths.config,
-      identityAccess,
+      integrationIdentityAccess,
     ),
   })
 

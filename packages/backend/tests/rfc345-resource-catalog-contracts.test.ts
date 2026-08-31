@@ -717,6 +717,109 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('intentApply,')
   })
 
+  test('T4c integration triggers consume five snapshots through exact direct and delegated pairs', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const publicParticipant = readFileSync(
+      resolve(sourceRoot, 'modules/digital-employee/public/participants.ts'),
+      'utf8',
+    )
+    const digitalEmployeeAdapter = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/digital-employee/application/adapters/integration-trigger-resource-adapter.ts',
+      ),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/integrationTrigger.ts'),
+      'utf8',
+    )
+    const adapter = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts',
+      ),
+      'utf8',
+    )
+    const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
+    const triggerValidation = readFileSync(
+      resolve(sourceRoot, 'services/webhook/triggerValidation.ts'),
+      'utf8',
+    )
+    const webhookDispatch = readFileSync(
+      resolve(sourceRoot, 'services/webhook/webhookDispatch.ts'),
+      'utf8',
+    )
+    const scheduledRoute = readFileSync(resolve(sourceRoot, 'routes/scheduledTasks.ts'), 'utf8')
+    const webhookRoute = readFileSync(resolve(sourceRoot, 'routes/webhookTriggers.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+    const cliStart = readFileSync(resolve(sourceRoot, 'cli/start.ts'), 'utf8')
+
+    expect(publicParticipant).toContain('DigitalEmployeeIntegrationTriggerParticipant')
+    expect(publicParticipant).toContain("'digital-employee-integration-trigger-participant'")
+    expect(publicParticipant).toContain('readonly archivedAt: number | null')
+    expect(digitalEmployeeAdapter).toContain('trustedIntegrationTriggerParticipants')
+    expect(digitalEmployeeAdapter).toContain('Object.freeze({')
+
+    expect(composition).toContain('IntegrationTriggerResourceAuthorityPair')
+    expect(composition).toContain('inTransaction(')
+    expect(composition).toContain('authority: pair.authority')
+    expect(composition).toContain('actor: pair.actor')
+    expect(composition).toContain('createIntegrationTriggerResourceSnapshotInTx(')
+    for (const variant of [
+      'scheduledWorkflow(authority, request)',
+      'scheduledAgent(authority, request)',
+      'scheduledWorkgroup(authority, request)',
+      'webhookWorkflow(authority, request)',
+      'webhookDigitalEmployee(authority, request)',
+    ]) {
+      expect(adapter).toContain(variant)
+    }
+    for (const legacyImport of [
+      '@/services/',
+      '@/modules/digital-employee/public/',
+      '@/modules/digital-employee/infrastructure/',
+    ]) {
+      expect(adapter).not.toContain(legacyImport)
+    }
+
+    const employeeIdentity = adapter.indexOf(
+      'options.digitalEmployees.loadIdentity(request.employeeDefinitionId)',
+    )
+    const employeeAcl = adapter.indexOf(
+      "canViewResourceInTx(options.tx, actor, 'digital_employee'",
+      employeeIdentity,
+    )
+    const employeeContent = adapter.indexOf(
+      'options.digitalEmployees.loadCurrentSnapshot(request.employeeDefinitionId)',
+      employeeAcl,
+    )
+    expect(employeeIdentity).toBeGreaterThanOrEqual(0)
+    expect(employeeAcl).toBeGreaterThan(employeeIdentity)
+    expect(employeeContent).toBeGreaterThan(employeeAcl)
+
+    expect(schedules).toContain("kind: 'scheduled-workflow'")
+    expect(schedules).toContain("kind: 'scheduled-agent'")
+    expect(schedules).toContain("kind: 'scheduled-workgroup'")
+    expect(schedules).toContain('identityAccess.delegatedRequests.forSchedule({')
+    expect(webhookDispatch).toContain('deps.identityAccess.delegatedRequests.forWebhook({')
+    expect(webhookDispatch).toContain('deps.resolveEventTargetAuthority(input.ownerUserId)')
+    expect(webhookDispatch).not.toContain('buildActor({')
+    expect(triggerValidation).toContain("kind: 'webhook-workflow'")
+    expect(triggerValidation).toContain("kind: 'webhook-digital-employee'")
+
+    for (const route of [scheduledRoute, webhookRoute]) {
+      expect(route).toContain('directRequestAuthority(')
+      expect(route).toContain('integrationTriggerResources')
+    }
+    expect(server).toContain('composeIntegrationTriggerResourceBinding(')
+    expect(composition).toContain('digitalEmployees: digitalEmployeesInTx(tx)')
+    expect(server).toContain('composeDigitalEmployeeIntegrationTriggerParticipant,')
+    expect(cliStart).toContain('const integrationIdentityAccess = Object.freeze({')
+    expect(cliStart).toContain('identityAccess: integrationIdentityAccess')
+    expect(cliStart).toContain('resolveEventTargetAuthority: async (userId) =>')
+  })
+
   test('T5-M active HTTP and MCP compatibility bindings execute the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const route = readFileSync(resolve(sourceRoot, 'routes/mcps.ts'), 'utf8')

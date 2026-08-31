@@ -45,7 +45,10 @@ import {
   validateAgentLaunchShape,
 } from '../src/services/agentLaunch'
 import { createRuntime } from '../src/services/runtimeRegistry'
-import { createScheduledTask } from '../src/services/scheduledTasks'
+import {
+  createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
+  updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
+} from './helpers/integrationTriggerResourceBinding'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { createUser } from '../src/services/users'
 import {
@@ -575,7 +578,6 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
       },
       { actor: actor() },
     )
-    const { updateScheduledTask } = await import('../src/services/scheduledTasks')
     // Result stays disabled — the payload replacement must STILL be shape-
     // checked (description on a ported agent can never fire successfully).
     await expect(

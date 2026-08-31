@@ -26,6 +26,7 @@ import {
   renderedLaunchPayload,
 } from '../src/services/webhook/webhookDispatch'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 4))
@@ -84,7 +85,7 @@ async function harness() {
   const canceled: string[] = []
   const dispatcher = createWebhookDispatcher({
     db,
-    identityAccess: createIdentityAccessRuntime({ db }),
+    ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
     configPath: '/nonexistent/config.json',
     secretBox: box,
     getDefaultRuntime: async () => null,
