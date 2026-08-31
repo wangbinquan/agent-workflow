@@ -31,6 +31,35 @@ export const LanguageSchema = z.enum(['zh-CN', 'en-US'])
 export type Language = z.infer<typeof LanguageSchema>
 export const ThemeSchema = z.enum(['system', 'light', 'dark'])
 
+// RFC-349 — database provider selection. SQLite remains the zero-config
+// default; PostgreSQL is always an external server addressed through an
+// environment-variable reference so config/status/receipts never contain the
+// connection secret itself.
+export const SqliteDatabaseConfigSchema = z
+  .object({
+    provider: z.literal('sqlite'),
+  })
+  .strict()
+
+export const PostgresqlDatabaseConfigSchema = z
+  .object({
+    provider: z.literal('postgresql'),
+    urlEnv: z
+      .string()
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'must be an environment variable name')
+      .default('AGENT_WORKFLOW_DATABASE_URL'),
+    poolMax: z.number().int().min(1).max(256).default(16),
+    connectTimeoutMs: z.number().int().min(100).max(300_000).default(10_000),
+    statementTimeoutMs: z.number().int().min(100).max(3_600_000).default(60_000),
+    idleTimeoutMs: z.number().int().min(1_000).max(3_600_000).default(30_000),
+  })
+  .strict()
+
+export const DatabaseConfigSchema = z
+  .discriminatedUnion('provider', [SqliteDatabaseConfigSchema, PostgresqlDatabaseConfigSchema])
+  .default({ provider: 'sqlite' })
+export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>
+
 export const WorktreeGcSchema = z.object({
   enabled: z.boolean(),
   olderThanDays: z.number().int().positive().optional(),
@@ -317,6 +346,11 @@ export const ConfigSchema = z.object({
       maxTreesPerSweep: z.number().int().min(1).max(1000).default(50),
     })
     .default({ enabled: false, retentionDays: 90, maxTreesPerSweep: 50 }),
+
+  /** RFC-349: live database provider. The existing flat sqlite* tuning fields
+   * remain the SQLite adapter's settings; PostgreSQL-specific pool settings
+   * live only inside this discriminated union. */
+  database: DatabaseConfigSchema,
 
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
@@ -733,6 +767,7 @@ export const DEFAULT_CONFIG: Config = {
   eventStreamRetentionDays: 30,
   webhookTriggerFiresRetentionDays: 90,
   taskArchive: { enabled: false, retentionDays: 90, maxTreesPerSweep: 50 },
+  database: { provider: 'sqlite' },
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 600_000,

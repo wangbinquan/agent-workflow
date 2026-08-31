@@ -2135,6 +2135,7 @@ export interface Resources {
       systemAgents: string
       limits: string
       recovery: string
+      database: string
       gc: string
       git: string
       codeHosts: string
@@ -2142,6 +2143,77 @@ export interface Resources {
       appearance: string
       rendering: string
       authentication: string
+    }
+    database: {
+      runtimeTitle: string
+      runtimeHint: string
+      loadingRuntime: string
+      liveProvider: string
+      generation: string
+      fingerprint: string
+      schemaDigest: string
+      sourceSize: string
+      sourceUnavailable: string
+      unavailable: string
+      rows: string
+      rowsUnknown: string
+      targetTitle: string
+      targetHint: string
+      alreadyPostgresql: string
+      alreadyPostgresqlHint: string
+      externalServerTitle: string
+      externalServer: string
+      maintenanceWindow: string
+      archiveSix: string
+      rollbackHorizon: string
+      urlEnv: string
+      urlEnvHint: string
+      poolMax: string
+      connectTimeout: string
+      statementTimeout: string
+      idleTimeout: string
+      fixFields: string
+      preflightRequired: string
+      preflightReady: string
+      testing: string
+      testConnection: string
+      migrating: string
+      start: string
+      operationTitle: string
+      operationHint: string
+      loadingOperations: string
+      noOperation: string
+      noOperationHint: string
+      progress: string
+      currentTable: string
+      rowsCopied: string
+      bytesCopied: string
+      tablePlan: string
+      rollbackStatus: string
+      rollbackReasons: {
+        'target-has-no-live-write': string
+        'pointer-not-switched': string
+        'cutover-in-progress': string
+        'reverse-migration-required': string
+        'operation-finalized': string
+        'operation-rolled-back': string
+      }
+      resume: string
+      cancel: string
+      rollback: string
+      finalize: string
+      archiveTitle: string
+      archiveHint: string
+      confirmTitle: string
+      rollbackTitle: string
+      finalizeTitle: string
+      cancelTitle: string
+      confirmDescriptions: {
+        cancel: string
+        rollback: string
+        finalize: string
+      }
+      typeMigrate: string
     }
     cardGroups: {
       limitsBudgetsTitle: string
@@ -2250,6 +2322,7 @@ export interface Resources {
     tabSystemAgents: string
     tabLimits: string
     tabRecovery: string
+    tabDatabase: string
     tabGc: string
     tabGit: string
     tabCodeHosts: string
@@ -9108,6 +9181,7 @@ export const zhCN: Resources = {
       systemAgents: '设置内置自动化 Agent 的运行时与输出规则。',
       limits: '统一设置工作流与数字员工的任务、token、超时、并发和重试边界。',
       recovery: '创建备份并配置恢复行为。',
+      database: '查看当前数据库 provider，并把 SQLite 一键迁移到外置 PostgreSQL。',
       gc: '控制数据保留与自动清理。',
       git: '控制平台代理提交排除、submodule 与后台刷新。',
       codeHosts: '配置 GitLab / GitHub 的出站凭据',
@@ -9115,6 +9189,77 @@ export const zhCN: Resources = {
       appearance: '选择主题与界面语言。',
       rendering: '配置外部图表渲染服务。',
       authentication: '管理 OIDC 登录提供商。',
+    },
+    database: {
+      runtimeTitle: '当前数据库',
+      runtimeHint: '经校验的 generation pointer 才是切换依据；只改配置不能切换 provider。',
+      loadingRuntime: '正在读取当前数据库 generation…',
+      liveProvider: '当前 provider',
+      generation: 'Generation',
+      fingerprint: '非秘密指纹',
+      schemaDigest: 'Schema contract',
+      sourceSize: '保留的 SQLite 源库',
+      sourceUnavailable: '未保留或不可用',
+      unavailable: '不可用',
+      rows: '行',
+      rowsUnknown: '预检后显示行数',
+      targetTitle: '外置 PostgreSQL 目标',
+      targetHint: '平台只携带 client adapter 与 migrations，不携带 PostgreSQL server。',
+      alreadyPostgresql: 'PostgreSQL 已是当前数据库',
+      alreadyPostgresqlHint: '可在下方 operation 中 finalize 或恢复；不能再发起一次正向迁移。',
+      externalServerTitle: '迁移前请确认',
+      externalServer: '请另行准备 PostgreSQL 15–18；本二进制不会内嵌、安装或启动数据库服务。',
+      maintenanceWindow: 'V1 在复制与校验期间会关闭业务写入；这是维护窗口，不是零停机。',
+      archiveSix: '6 张 legacy code 表会归档并校验，但不会进入 178 张活动表的 PostgreSQL target。',
+      rollbackHorizon: '只有 PostgreSQL 第一笔业务写入前可以即时回滚；之后必须做反向逻辑迁移。',
+      urlEnv: '连接 URL 环境变量名',
+      urlEnvHint: '填写 AGENT_WORKFLOW_DATABASE_URL 这类变量名；页面永远不会回显 URL 或密码。',
+      poolMax: '连接池上限',
+      connectTimeout: '连接超时（ms）',
+      statementTimeout: '语句超时（ms）',
+      idleTimeout: '空闲超时（ms）',
+      fixFields: '请修正上方每一个无效的目标字段。',
+      preflightRequired: '开始迁移前，必须先对当前这组目标参数完成检测。',
+      preflightReady: '目标预检已通过',
+      testing: '检测中…',
+      testConnection: '检测目标',
+      migrating: '迁移执行中…',
+      start: '检测并迁移',
+      operationTitle: '迁移 operation',
+      operationHint: '业务 admission 关闭期间及进程重启后，持久化进度仍可独立读取。',
+      loadingOperations: '正在读取迁移 operation…',
+      noOperation: '还没有数据库迁移 operation',
+      noOperationHint: '先检测一套空的外置 PostgreSQL 数据库，再执行一键迁移。',
+      progress: '{{completed}}/{{total}} 张表 · {{percent}}%',
+      currentTable: '当前表',
+      rowsCopied: '已复制行数',
+      bytesCopied: '归档字节',
+      tablePlan: '表计划',
+      rollbackStatus: '回滚边界',
+      rollbackReasons: {
+        'target-has-no-live-write': '可回滚：PostgreSQL 尚未接收业务写入。',
+        'pointer-not-switched': '当前 pointer 仍是 SQLite；此时应取消或续跑。',
+        'cutover-in-progress': '正在完成切换；取消与回滚暂时被 fence。',
+        'reverse-migration-required': '已关闭：PostgreSQL 已接收业务写入，旧 SQLite 不能再冒充无损回滚。',
+        'operation-finalized': '已关闭：迁移 receipt 已 finalize。',
+        'operation-rolled-back': '该 operation 已回滚到 SQLite。',
+      },
+      resume: '继续迁移',
+      cancel: '安全取消',
+      rollback: '回滚到 SQLite',
+      finalize: '完成迁移',
+      archiveTitle: '仅归档的 legacy 表',
+      archiveHint: '这些表的逻辑 chunk 与 digest 会保留在迁移归档中；它们是唯一批准不进入 target 的表。',
+      confirmTitle: '开始数据库迁移？',
+      rollbackTitle: '回滚到 SQLite？',
+      finalizeTitle: '完成数据库迁移？',
+      cancelTitle: '取消数据库迁移？',
+      confirmDescriptions: {
+        cancel: '系统只会在切换前的安全 checkpoint 结算取消，并保持 SQLite 可用。',
+        rollback: '系统将冻结写入，原子确认 PostgreSQL 没有业务首写，退役目标 generation，再恢复 SQLite。',
+        finalize: 'Finalize 会关闭即时回滚流程并写入最终 receipt；产物仍按既有保留规则处理。',
+      },
+      typeMigrate: '输入 MIGRATE 确认',
     },
     cardGroups: {
       limitsBudgetsTitle: '任务预算',
@@ -9226,6 +9371,7 @@ export const zhCN: Resources = {
     tabSystemAgents: '系统 Agent',
     tabLimits: '限额',
     tabRecovery: '恢复',
+    tabDatabase: '数据库',
     tabGc: 'GC',
     tabGit: 'Git',
     tabCodeHosts: '代码平台',

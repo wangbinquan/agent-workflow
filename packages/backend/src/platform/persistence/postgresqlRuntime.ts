@@ -1,0 +1,328 @@
+// RFC-349 — external PostgreSQL pool/runtime adapter built on Bun.SQL.
+// The connection URL is resolved once from the configured environment-variable
+// name and is never retained in status, errors, logs, manifests or receipts.
+
+import { createHash } from 'node:crypto'
+import { SQL } from 'bun'
+import type { DatabaseConfig } from '@agent-workflow/shared'
+import type { DatabaseHealth, DatabaseRuntime } from './runtime'
+
+type PostgresqlConfig = Extract<DatabaseConfig, { provider: 'postgresql' }>
+
+export interface SqlRows extends PromiseLike<readonly Record<string, unknown>[]> {
+  values(): Promise<readonly (readonly unknown[])[]>
+}
+
+export interface PostgresqlReservedConnection {
+  unsafe(query: string, parameters?: readonly unknown[]): SqlRows
+  release(): void
+}
+
+export interface PostgresqlPool {
+  reserve(options?: { readonly signal?: AbortSignal }): Promise<PostgresqlReservedConnection>
+  unsafe(query: string, parameters?: readonly unknown[]): SqlRows
+  close(options?: { readonly timeout?: number }): Promise<void>
+}
+
+export interface PostgresqlPoolOptions {
+  readonly url: string
+  readonly max: number
+  readonly idleTimeout: number
+  readonly connectionTimeout: number
+}
+
+export interface PostgresqlAdvisoryLock {
+  readonly operationId: string
+  release(): Promise<void>
+}
+
+export interface PostgresqlDatabaseRuntime extends DatabaseRuntime {
+  readonly provider: 'postgresql'
+  readiness(): Promise<
+    DatabaseHealth & {
+      readonly ok: true
+      readonly databaseFingerprint: string
+      readonly serverVersion: string
+      readonly errorCategory: null
+    }
+  >
+  acquireMigrationAdvisoryLock(operationId: string): Promise<PostgresqlAdvisoryLock | null>
+  /** Bootstrap/infrastructure-only capability. Never export through a module public surface. */
+  providerPool(): PostgresqlPool
+}
+
+export class PostgresqlRuntimeError extends Error {
+  constructor(
+    public readonly code:
+      | 'postgresql-url-env-missing'
+      | 'postgresql-url-invalid'
+      | 'postgresql-readiness-failed'
+      | 'postgresql-runtime-closed'
+      | 'postgresql-advisory-lock-failed',
+    message: string,
+  ) {
+    super(message)
+    this.name = 'PostgresqlRuntimeError'
+  }
+}
+
+function seconds(milliseconds: number): number {
+  return Math.max(1, Math.ceil(milliseconds / 1000))
+}
+
+function safeUrl(
+  config: PostgresqlConfig,
+  env: Readonly<Record<string, string | undefined>>,
+): string {
+  const value = env[config.urlEnv]
+  if (value === undefined || value.trim() === '') {
+    throw new PostgresqlRuntimeError(
+      'postgresql-url-env-missing',
+      `PostgreSQL connection environment variable is missing: ${config.urlEnv}`,
+    )
+  }
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') throw new Error()
+  } catch {
+    throw new PostgresqlRuntimeError(
+      'postgresql-url-invalid',
+      `PostgreSQL connection environment variable is not a postgresql:// URL: ${config.urlEnv}`,
+    )
+  }
+  return value
+}
+
+function defaultPoolFactory(options: PostgresqlPoolOptions): PostgresqlPool {
+  return new SQL({
+    url: options.url,
+    max: options.max,
+    idleTimeout: options.idleTimeout,
+    connectionTimeout: options.connectionTimeout,
+  }) as unknown as PostgresqlPool
+}
+
+function urlWithServerTimeouts(url: string, config: PostgresqlConfig): string {
+  const parsed = new URL(url)
+  const existing = parsed.searchParams.get('options')?.trim()
+  const settings = [
+    existing,
+    `-c statement_timeout=${config.statementTimeoutMs}`,
+    `-c lock_timeout=${config.statementTimeoutMs}`,
+    `-c idle_in_transaction_session_timeout=${config.idleTimeoutMs}`,
+    '-c search_path=agent_workflow,public',
+    '-c timezone=UTC',
+  ]
+    .filter((value): value is string => value !== undefined && value !== '')
+    .join(' ')
+  parsed.searchParams.set('options', settings)
+  return parsed.toString()
+}
+
+function fingerprint(row: Record<string, unknown>): string {
+  const stable = [
+    String(row.database_name ?? ''),
+    String(row.server_address ?? ''),
+    String(row.server_port ?? ''),
+    String(row.server_version_num ?? ''),
+  ].join('\0')
+  return `pg:${createHash('sha256').update(stable).digest('hex').slice(0, 24)}`
+}
+
+function errorCategory(error: unknown): DatabaseHealth['errorCategory'] {
+  if (error instanceof DOMException && error.name === 'TimeoutError') return 'timeout'
+  if (error instanceof Error && /timeout/i.test(error.name)) return 'timeout'
+  return 'unavailable'
+}
+
+async function configureConnection(
+  connection: PostgresqlReservedConnection,
+  config: PostgresqlConfig,
+): Promise<void> {
+  await connection.unsafe(
+    "SELECT set_config('statement_timeout', $1, false), " +
+      "set_config('lock_timeout', $2, false), " +
+      "set_config('idle_in_transaction_session_timeout', $3, false), " +
+      "set_config('search_path', $4, false), " +
+      "set_config('timezone', $5, false)",
+    [
+      String(config.statementTimeoutMs),
+      String(config.statementTimeoutMs),
+      String(config.idleTimeoutMs),
+      'agent_workflow,public',
+      'UTC',
+    ],
+  )
+}
+
+export function createPostgresqlDatabaseRuntime(input: {
+  readonly config: PostgresqlConfig
+  readonly generationId: string
+  readonly env?: Readonly<Record<string, string | undefined>>
+  readonly poolFactory?: (options: PostgresqlPoolOptions) => PostgresqlPool
+}): PostgresqlDatabaseRuntime {
+  const url = safeUrl(input.config, input.env ?? process.env)
+  const factory = input.poolFactory ?? defaultPoolFactory
+  // Bun.SQL is lazy: constructing this object does not open a connection. The
+  // URL is captured only by the native pool closure and never copied to an
+  // observable DTO/error field owned by agent-workflow.
+  const pool = factory({
+    url: urlWithServerTimeouts(url, input.config),
+    max: input.config.poolMax,
+    idleTimeout: seconds(input.config.idleTimeoutMs),
+    connectionTimeout: seconds(input.config.connectTimeoutMs),
+  })
+  let closed = false
+
+  const health = async (): Promise<DatabaseHealth> => {
+    if (closed) {
+      return {
+        provider: 'postgresql',
+        generationId: input.generationId,
+        ok: false,
+        latencyMs: 0,
+        databaseFingerprint: null,
+        serverVersion: null,
+        errorCategory: 'closed',
+      }
+    }
+    const startedAt = performance.now()
+    let connection: PostgresqlReservedConnection | undefined
+    try {
+      connection = await pool.reserve({
+        signal: AbortSignal.timeout(input.config.connectTimeoutMs),
+      })
+      await configureConnection(connection, input.config)
+      const rows = await connection.unsafe(
+        'SELECT current_database() AS database_name, ' +
+          'inet_server_addr()::text AS server_address, ' +
+          'inet_server_port() AS server_port, ' +
+          "current_setting('server_version_num') AS server_version_num, " +
+          'version() AS server_version',
+      )
+      const row = rows[0]
+      if (row === undefined) throw new Error('empty readiness result')
+      return {
+        provider: 'postgresql',
+        generationId: input.generationId,
+        ok: true,
+        latencyMs: Math.max(0, performance.now() - startedAt),
+        databaseFingerprint: fingerprint(row),
+        serverVersion: String(row.server_version ?? ''),
+        errorCategory: null,
+      }
+    } catch (error) {
+      return {
+        provider: 'postgresql',
+        generationId: input.generationId,
+        ok: false,
+        latencyMs: Math.max(0, performance.now() - startedAt),
+        databaseFingerprint: null,
+        serverVersion: null,
+        errorCategory: errorCategory(error),
+      }
+    } finally {
+      connection?.release()
+    }
+  }
+
+  const runtime: PostgresqlDatabaseRuntime = {
+    provider: 'postgresql',
+    generationId: input.generationId,
+    health,
+    async readiness() {
+      const result = await health()
+      if (!result.ok) {
+        throw new PostgresqlRuntimeError(
+          'postgresql-readiness-failed',
+          `PostgreSQL readiness failed (${result.errorCategory ?? 'unavailable'})`,
+        )
+      }
+      return result as DatabaseHealth & {
+        readonly ok: true
+        readonly databaseFingerprint: string
+        readonly serverVersion: string
+        readonly errorCategory: null
+      }
+    },
+    async acquireMigrationAdvisoryLock(operationId) {
+      if (!/^dbm_[A-Za-z0-9_-]{8,128}$/.test(operationId)) {
+        throw new PostgresqlRuntimeError(
+          'postgresql-advisory-lock-failed',
+          'invalid PostgreSQL migration advisory-lock operation id',
+        )
+      }
+      if (closed) {
+        throw new PostgresqlRuntimeError(
+          'postgresql-runtime-closed',
+          'PostgreSQL runtime is closed',
+        )
+      }
+      const connection = await pool.reserve({
+        signal: AbortSignal.timeout(input.config.connectTimeoutMs),
+      })
+      let held = false
+      try {
+        await configureConnection(connection, input.config)
+        const rows = await connection.unsafe(
+          'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired',
+          [operationId],
+        )
+        held = rows[0]?.acquired === true
+        if (!held) {
+          connection.release()
+          return null
+        }
+        let released = false
+        return Object.freeze({
+          operationId,
+          async release() {
+            if (released) return
+            released = true
+            try {
+              await connection.unsafe(
+                'SELECT pg_advisory_unlock(hashtextextended($1, 0)) AS released',
+                [operationId],
+              )
+            } finally {
+              connection.release()
+            }
+          },
+        })
+      } catch {
+        if (held) {
+          try {
+            await connection.unsafe(
+              'SELECT pg_advisory_unlock(hashtextextended($1, 0)) AS released',
+              [operationId],
+            )
+          } catch {
+            // The session-scoped advisory lock is released by PostgreSQL when
+            // this reserved connection closes. Never retain a poisoned pool
+            // connection merely because the explicit unlock also failed.
+          }
+        }
+        connection.release()
+        throw new PostgresqlRuntimeError(
+          'postgresql-advisory-lock-failed',
+          `PostgreSQL migration advisory lock failed for ${operationId}`,
+        )
+      }
+    },
+    providerPool() {
+      if (closed) {
+        throw new PostgresqlRuntimeError(
+          'postgresql-runtime-closed',
+          'PostgreSQL runtime is closed',
+        )
+      }
+      return pool
+    },
+    async close() {
+      if (closed) return
+      closed = true
+      await pool.close({ timeout: seconds(input.config.idleTimeoutMs) })
+    },
+  }
+  return Object.freeze(runtime)
+}

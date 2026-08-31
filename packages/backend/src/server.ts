@@ -22,6 +22,7 @@ import { directMcpOperationAuthority, directOperationAuthority } from '@/routes/
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
+import { mountDatabaseMigrationRoutes } from '@/routes/databaseMigrations'
 import { mountRestoreRoutes } from '@/routes/restore'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountRepoGroupRoutes } from '@/routes/repoGroups'
@@ -60,6 +61,7 @@ import {
   composeSystemOperations,
   type SystemOperationsModule,
 } from '@/modules/system-operations/composition'
+import type { DatabaseMigrationModule } from '@/modules/system-operations/databaseMigrationComposition'
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
@@ -291,6 +293,12 @@ export interface AppDeps {
   dbVersion: number
   /** Drizzle DB client. */
   db: DbClient
+  /**
+   * RFC-349 bootstrap-owned database migration application. Production and
+   * contract harnesses inject one composition root with their own admission
+   * and durable paths; route mounting never constructs provider mechanisms.
+   */
+  databaseMigration?: DatabaseMigrationModule
   /** RFC-347 bootstrap-owned authority/presence runtime shared by HTTP/MCP/WS. */
   identityAccess?: IdentityAccessRuntime
   /** RFC-340 bootstrap-owned review access/config context shared by REST and MCP dispatch. */
@@ -1107,6 +1115,9 @@ export function mountApiRoutes(
   mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
   mountBackupRoutes(app, systemOperations, identityAccess)
   mountRestoreRoutes(app, systemOperations, identityAccess)
+  if (deps.databaseMigration !== undefined) {
+    mountDatabaseMigrationRoutes(app, deps.databaseMigration.operations, identityAccess)
+  }
   for (const alias of SYSTEM_OPERATION_ALIASES) registerOperationAlias(alias)
   mountWorktreeFilesRoutes(app, deps)
   mountPortArtifactRoutes(app, deps)

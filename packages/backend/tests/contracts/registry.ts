@@ -23,6 +23,8 @@
 import { z } from 'zod'
 import {
   AgentSchema,
+  databaseMigrationListViewSchema,
+  databaseRuntimeOverviewSchema,
   ErrorResponseSchema,
   McpSchema,
   MaintenanceStatusSchema,
@@ -881,6 +883,25 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'DELETE', path: '/api/runtimes/:name' },
   { method: 'POST', path: '/api/runtimes/:name/probe' },
   { method: 'POST', path: '/api/runtimes/:name/enabled' },
+
+  // ---- RFC-349 database provider + one-click migration ----
+  {
+    method: 'GET',
+    path: '/api/database',
+    happy: { schema: databaseRuntimeOverviewSchema },
+  },
+  { method: 'POST', path: '/api/database/migrations/preflight' },
+  {
+    method: 'GET',
+    path: '/api/database/migrations',
+    happy: { schema: databaseMigrationListViewSchema },
+  },
+  { method: 'POST', path: '/api/database/migrations' },
+  { method: 'GET', path: '/api/database/migrations/:id' },
+  { method: 'POST', path: '/api/database/migrations/:id/resume' },
+  { method: 'POST', path: '/api/database/migrations/:id/cancel' },
+  { method: 'POST', path: '/api/database/migrations/:id/rollback' },
+  { method: 'POST', path: '/api/database/migrations/:id/finalize' },
 
   // ---- backup ----
   { method: 'POST', path: '/api/backup' },

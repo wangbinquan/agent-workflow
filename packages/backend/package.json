@@ -17,6 +17,8 @@
     "test": "bun test --isolate --randomize",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
+    "db:rfc349-contract": "bun run scripts/rfc349-schema-contract.ts",
+    "db:rfc349-postgresql-schema": "bun run scripts/rfc349-postgresql-schema.ts",
     "perf:sweep": "bun run scripts/perf-sweep.ts"
   },
   "dependencies": {

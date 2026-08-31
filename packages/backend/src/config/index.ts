@@ -249,6 +249,26 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** Discriminated config objects deep-merge only while their discriminator is
+ * unchanged. Merging a PostgreSQL payload over the SQLite variant (or vice
+ * versa) would retain forbidden keys and make a valid provider switch fail. */
+function mergeNestedConfigValue(
+  key: string,
+  base: unknown,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!isPlainObject(base)) return patch
+  if (
+    key === 'database' &&
+    typeof patch.provider === 'string' &&
+    typeof base.provider === 'string' &&
+    patch.provider !== base.provider
+  ) {
+    return patch
+  }
+  return { ...base, ...patch }
+}
+
 /** Merge defaults under unknown raw input (shallow + nested for known objects). */
 function mergeDefaults(raw: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = { ...DEFAULT_CONFIG }
@@ -259,7 +279,7 @@ function mergeDefaults(raw: unknown): Record<string, unknown> {
     if (v === undefined) continue
     if (NESTED_CONFIG_KEYS.has(k) && isPlainObject(v)) {
       const base = defaults[k]
-      out[k] = isPlainObject(base) ? { ...base, ...v } : v
+      out[k] = mergeNestedConfigValue(k, base, v)
     } else {
       out[k] = v
     }
@@ -284,7 +304,7 @@ function mergePatch(current: Config, patch: ConfigPatch): Config {
     // sibling fields for every nested key someone forgot to add.
     if (NESTED_CONFIG_KEYS.has(k) && isPlainObject(v)) {
       const base = (current as unknown as Record<string, unknown>)[k]
-      ;(next as Record<string, unknown>)[k] = isPlainObject(base) ? { ...base, ...v } : v
+      ;(next as Record<string, unknown>)[k] = mergeNestedConfigValue(k, base, v)
     } else {
       ;(next as Record<string, unknown>)[k] = v
     }

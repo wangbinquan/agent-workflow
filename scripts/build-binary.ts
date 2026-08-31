@@ -44,10 +44,12 @@ const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.t
 // RFC-311 实现门 P0-1:`new Worker(new URL('./x.ts', import.meta.url))` 不被
 // bundler 追踪——worker 必须显式作为**额外入口**参与 --compile,否则发布版单
 // 二进制里它 ModuleNotFound,备份的 off-thread VACUUM 每次都落到回退路径。
-// 新增 worker 时把文件加进这个清单(backup.ts 侧仍保留能力等价的同线程回退)。
+// 新增 worker 时把文件加进这个清单。是否允许同线程回退由能力本身决定：数据库
+// 迁移读取器明确 fail-closed，绝不能因 Worker 丢失而把 184 表扫描退回 daemon 主线程。
 const WORKER_ENTRIES = [
   join(backendSrc, 'services', 'backupVacuumWorker.ts'),
   join(backendSrc, 'platform', 'background', 'maintenanceWorker.ts'),
+  join(backendSrc, 'platform', 'persistence', 'sqliteLogicalSourceWorker.ts'),
 ]
 // Test-only external executables are owned by the unified system mock package.
 const stubEntry = join(repoRoot, 'packages', 'system-mocks', 'src', 'runtime', 'dispatch.ts')

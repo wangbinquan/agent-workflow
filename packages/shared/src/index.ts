@@ -10,6 +10,7 @@ export * from './schemas/cachedRepo'
 export * from './schemas/clarify'
 export * from './schemas/config'
 export * from './schemas/maintenance' // RFC-338
+export * from './schemas/databaseMigration' // RFC-349
 export * from './settingsNumericBounds'
 export * from './schemas/auth'
 export * from './schemas/oidcProvider'

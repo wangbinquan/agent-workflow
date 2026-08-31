@@ -40,6 +40,7 @@ import {
   type SettingsConfigDraftMutateOptions,
 } from '@/components/settings/SettingsDraftProvider'
 import { SettingsCard } from '@/components/settings/SettingsCard'
+import { DatabaseMigrationSection } from '@/components/settings/DatabaseMigrationSection'
 import {
   useFusionAgentDraft,
   type FusionAgentDraftController,
@@ -135,6 +136,7 @@ export type SettingsTab =
   | 'systemAgents'
   | 'limits'
   | 'recovery'
+  | 'database'
   | 'gc'
   | 'git'
   | 'network'
@@ -149,6 +151,7 @@ export const SETTINGS_TABS = [
   'systemAgents',
   'limits',
   'recovery',
+  'database',
   'gc',
   'git',
   'network',
@@ -181,6 +184,7 @@ function configScopeForSettingsTab(tab: SettingsTab): SettingsConfigScopeId | un
     case 'rendering':
       return SETTINGS_CONFIG_SCOPE_IDS.rendering
     case 'runtime':
+    case 'database':
     case 'authentication':
     // RFC-269: 凭据不在 config.json 里（DB + secretBox），所以没有 config scope。
     // eslint-disable-next-line no-fallthrough -- 空 case 串联，无语句可落空
@@ -346,6 +350,11 @@ function SettingsPage() {
           description: t('settings.sectionDescriptions.recovery'),
         },
         {
+          key: 'database',
+          label: t('settings.tabDatabase'),
+          description: t('settings.sectionDescriptions.database'),
+        },
+        {
           key: 'git',
           label: t('settings.tabGit'),
           description: t('settings.sectionDescriptions.git'),
@@ -422,6 +431,7 @@ function SettingsPage() {
         )}
         {tab === 'limits' && <LimitsTab config={config.data} />}
         {tab === 'recovery' && <RecoveryTab config={config.data} />}
+        {tab === 'database' && <DatabaseMigrationSection config={config.data} />}
         {tab === 'git' && <GitTab config={config.data} />}
         {tab === 'gc' && <GcTab config={config.data} />}
         {tab === 'network' && <NetworkTab config={config.data} />}

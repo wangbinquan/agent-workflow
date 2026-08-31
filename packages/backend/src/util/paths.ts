@@ -81,6 +81,17 @@ export const Paths = {
   get backupsDir() {
     return join(appHome(), 'backups')
   },
+  /** RFC-349: database-provider migration control plane. This state lives
+   * outside either business database so it remains readable during freeze,
+   * cutover and recovery. */
+  get databaseMigrationsDir() {
+    return join(appHome(), 'database-migrations')
+  },
+  /** RFC-349: the only boot-time authority for an explicit live generation.
+   * Missing means the backwards-compatible legacy SQLite generation. */
+  get databaseGenerationPointer() {
+    return join(appHome(), 'database-generation.json')
+  },
   /** RFC-311 T19：终态任务归档出库后的落盘根目录(每棵任务树一个子目录)。
    *  归档即从库里删除,界面 404 与不存在同形;这里是唯一的考古入口。 */
   get taskArchiveDir() {
@@ -93,5 +104,10 @@ export const Paths = {
    */
   get migrationsDir() {
     return resolve(import.meta.dirname, '..', '..', 'db', 'migrations')
+  },
+  /** RFC-349: PostgreSQL owns an independent immutable migration history; the
+   * SQLite SQL chain is never replayed into PostgreSQL. */
+  get postgresqlMigrationsDir() {
+    return resolve(import.meta.dirname, '..', '..', 'db', 'postgresql-migrations')
   },
 }

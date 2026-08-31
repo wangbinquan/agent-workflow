@@ -18110,6 +18110,87 @@ fieldset.settings-card {
   min-inline-size: 0;
 }
 
+/* RFC-349 — provider/migration facts use the existing settings card chrome;
+   this layout only keeps long generation/digest values bounded and responsive. */
+.database-migration-settings {
+  min-width: 0;
+}
+
+.database-migration-summary,
+.database-migration-operation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.database-migration-summary > div,
+.database-migration-operation__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.database-migration-operation__heading code,
+.database-migration-facts code,
+.database-migration-table-list {
+  overflow-wrap: anywhere;
+}
+
+.database-migration-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.database-migration-facts > div {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.database-migration-facts dt {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+
+.database-migration-facts dd {
+  margin: var(--space-1) 0 0;
+}
+
+.database-migration-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.database-migration-progress progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.database-migration-table-list {
+  display: block;
+  line-height: 1.8;
+  white-space: normal;
+}
+
+@media (max-width: 720px) {
+  .database-migration-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .database-migration-summary > div,
+  .database-migration-operation__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 /* RFC-321 — deterministic SSH-to-HTTP publication mappings. The controls use
    the shared form primitives; these rules only provide a dense responsive row. */
 .code-host-transport-mappings {

@@ -19,6 +19,7 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
+import { composeDatabaseMigrationModule } from '../../src/modules/system-operations/databaseMigrationComposition'
 import { createApp } from '../../src/server'
 import { getWorkflow } from '../../src/services/workflow'
 import { createUser } from '../../src/services/users'
@@ -77,15 +78,38 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   // Pre-seed a minimal config.json so /api/config has something to GET. The
   // path lives under our temp home so PUT /api/config does not splatter the
   // developer's real home.
-  writeFileSync(join(homePath, 'config.json'), JSON.stringify({ $schema_version: 1 }), 'utf-8')
+  const configPath = join(homePath, 'config.json')
+  const sqlitePath = join(homePath, 'db.sqlite')
+  writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }), 'utf-8')
+  const sqlite = (db as unknown as { readonly $client: { serialize(): Uint8Array } }).$client
+  writeFileSync(sqlitePath, sqlite.serialize())
+  const databaseMigration = composeDatabaseMigrationModule({
+    sqlitePath,
+    operationsRoot: join(homePath, 'database-migrations'),
+    generationPointerPath: join(homePath, 'database-generation.json'),
+    configPath,
+    admission: {
+      async freezeAndDrain() {
+        throw new Error('contract-harness-database-migration-admission')
+      },
+      async reopenSqlite() {},
+      async activatePostgresql() {
+        throw new Error('contract-harness-database-migration-admission')
+      },
+      async openPostgresqlAdmission() {
+        throw new Error('contract-harness-database-migration-admission')
+      },
+    },
+  })
 
   const app = createApp({
     token: DAEMON_TOKEN,
-    configPath: join(homePath, 'config.json'),
+    configPath,
     opencodeVersion: '1.15.5',
     dbVersion: 28,
     db,
     secretBox,
+    databaseMigration,
   })
 
   // RFC-036 — one real user (id stable for `/api/users/:id` & PAT/identity

@@ -15,10 +15,13 @@ import {
   integer,
   primaryKey,
   real,
-  sqliteTable,
+  sqliteTable as physicalSqliteTable,
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
+import { providerAwareSqliteTable } from './providerSchema'
+
+const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
 // -----------------------------------------------------------------------------
 // agents — DB is source of truth. Frontmatter fields are split into columns.

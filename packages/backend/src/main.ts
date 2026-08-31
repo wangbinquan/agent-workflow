@@ -16,6 +16,7 @@ import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { dbCompactCommand } from './cli/dbCompact'
+import { databaseCommand } from './cli/database'
 import { doctorCommand, formatDoctor } from './cli/doctor'
 import { migrateCommand } from './cli/migrate'
 import { migrationReportCommand } from './cli/migrationReport'
@@ -34,6 +35,7 @@ import { openDb } from './db/client'
 import { createIdentityAccessRuntime } from './modules/identity-access/composition'
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
 import { composeLocalSystemOperations } from './modules/system-operations/composition'
+import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/databaseMigrationComposition'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
@@ -114,6 +116,11 @@ async function main(): Promise<void> {
   let localSystemOperations: ReturnType<typeof composeLocalSystemOperations> | undefined
   const requireLocalSystemOperations = () =>
     (localSystemOperations ??= composeLocalSystemOperations())
+  let localDatabaseMigrationOperations:
+    | ReturnType<typeof composeLocalDatabaseMigrationOperations>
+    | undefined
+  const requireLocalDatabaseMigrationOperations = () =>
+    (localDatabaseMigrationOperations ??= composeLocalDatabaseMigrationOperations())
 
   switch (sub) {
     case MANAGED_PROCESS_LAUNCHER_SUBCOMMAND: {
@@ -237,11 +244,16 @@ async function main(): Promise<void> {
     // RFC-311 T20 —— 停机回收 DB 内部空洞。只提供 CLI:VACUUM 持写锁重写整库,
     // 几 GB 上是分钟级,跑在 daemon 的单条同步连接上等于全站冻结那么久。
     case 'db': {
-      if (Bun.argv[3] !== 'compact') {
-        console.error('usage: agent-workflow db compact')
-        process.exit(2)
+      if (Bun.argv[3] === 'compact') {
+        const result = dbCompactCommand()
+        process.stdout.write(result.output)
+        if (result.status !== 'ok') process.exit(1)
+        break
       }
-      const result = dbCompactCommand()
+      const result = await databaseCommand(
+        Bun.argv.slice(3),
+        requireLocalDatabaseMigrationOperations(),
+      )
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(1)
       break
@@ -351,6 +363,14 @@ async function main(): Promise<void> {
       console.log('  migrate                           apply pending DB migrations')
       console.log(
         '  db compact                        reclaim free pages (VACUUM; daemon must be stopped)',
+      )
+      console.log(
+        '  db migrate --to postgresql --url-env NAME --auto',
+        'migrate SQLite to external PostgreSQL',
+      )
+      console.log(
+        '  db migration status|resume|cancel|finalize ID',
+        'operate a durable database migration',
       )
       console.log(
         '  migration-report [--json]         RFC-310 legacy asset migration analysis (read-only)',
