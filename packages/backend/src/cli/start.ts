@@ -9,6 +9,7 @@ import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
+  composeSqliteDevelopmentAdmissionLookup,
   createDevelopmentMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
 import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
@@ -967,9 +968,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // development-automation composition. HTTP and MCP receive this participant;
   // boot recovery, terminal callbacks and wake sweeps drive the same instance.
   const developmentMissionStore = createSqliteMissionStore(db)
+  const developmentAdmissionLookup = composeSqliteDevelopmentAdmissionLookup(db)
   const developmentAutomation = composeDevelopmentAutomation({
     db,
     appHome: Paths.root,
+    admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunner(db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
@@ -1269,6 +1272,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     db,
     executionContracts: employeeExecutionContracts,
     codeHistoryQueries,
+    developmentAdmissionLookup,
     identityAccess: integrationIdentityAccess,
     maintenanceStatus: maintenanceService.status,
     secretBox,

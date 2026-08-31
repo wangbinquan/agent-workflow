@@ -16,6 +16,7 @@ import {
   type LaunchDeps,
 } from '../application/commands/launchMission'
 import type { DevelopmentAutomationModule } from '../composition'
+import type { AdmissionLookup } from '../application/ports/admissionLookup'
 import { runCutoverCommand, adoptActiveMr } from '../application/cutover'
 import { readEvidenceFileRange, EVIDENCE_READ_MAX_BYTES } from '../application/pipelineEvidenceRead'
 import { projectMissionJourney } from '../domain/journeyProjection'
@@ -38,7 +39,6 @@ import {
   type MissionPageCursor,
 } from '../infrastructure/missionReadModels'
 import { createSqliteFactSnapshotReader } from '../infrastructure/sqliteReconcilerReaders'
-import { createSqliteAdmissionLookup } from '../infrastructure/sqliteAdmissionLookup'
 import { createSqliteCutoverStore } from '../infrastructure/sqliteCutoverStore'
 import { createSqliteMissionStore } from '../infrastructure/sqliteMissionStore'
 import { insertUploadPlan } from '../infrastructure/sqliteUploadPlanStore'
@@ -104,6 +104,7 @@ function decodeMissionCursor(raw: string): MissionPageCursor | null {
 export interface DevelopmentMissionOperationCompositionDeps {
   readonly db: DbClient
   readonly secretBox?: SecretBox
+  readonly admissionLookup: AdmissionLookup
   /** Bootstrap-owned daemon participant shared by REST, MCP and recovery. */
   readonly automation: DevelopmentAutomationModule
   readonly legacyAdmissionsEnabled: () => boolean
@@ -119,7 +120,7 @@ export function composeDevelopmentMissionOperations(
   const automation = deps.automation
   const launchDeps: LaunchDeps = {
     store: missionStore,
-    lookup: createSqliteAdmissionLookup(deps.db),
+    lookup: deps.admissionLookup,
     now: () => Date.now(),
     uploadAdmission: {
       sessions: uploadSessions,

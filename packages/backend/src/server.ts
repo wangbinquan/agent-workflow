@@ -201,8 +201,10 @@ import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/developme
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentAutomation,
+  composeSqliteDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
   createDevelopmentMissionCodeHostEventContinuation,
+  type DevelopmentAdmissionLookup,
   type DevelopmentAutomationModule,
 } from '@/modules/development-automation/composition'
 import {
@@ -333,6 +335,8 @@ export interface AppDeps {
    * omit it and retain the SQLite compatibility composition.
    */
   codeHistoryQueries?: CodeHistoryRouteQueries
+  /** RFC-349 bootstrap-selected admission lookup shared by reconcile and HTTP launch. */
+  developmentAdmissionLookup?: DevelopmentAdmissionLookup
   /**
    * RFC-349 bootstrap-owned database migration application. Production and
    * contract harnesses inject one composition root with their own admission
@@ -430,6 +434,7 @@ type RuntimeComposedAppDeps = AppDeps & {
   readonly collaborationContext: CollaborationCommandContext
   readonly executionContracts: ReturnType<typeof composeExecutionContract>
   readonly codeHistoryQueries: CodeHistoryRouteQueries
+  readonly developmentAdmissionLookup: DevelopmentAdmissionLookup
 }
 
 type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
@@ -615,6 +620,7 @@ function composeFallbackDevelopmentAutomation(
   const automation = composeDevelopmentAutomation({
     db: deps.db,
     appHome,
+    admissionLookup: deps.developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunner(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
@@ -706,6 +712,8 @@ export function createApp(deps: AppDeps): Hono {
         implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
       }),
     codeHistoryQueries: deps.codeHistoryQueries ?? composeSqliteCodeHistoryQueries(deps.db),
+    developmentAdmissionLookup:
+      deps.developmentAdmissionLookup ?? composeSqliteDevelopmentAdmissionLookup(deps.db),
     collaborationContext:
       deps.collaborationContext ??
       createCollaborationCommandContext({
@@ -728,6 +736,7 @@ export function createApp(deps: AppDeps): Hono {
     composeFallbackDevelopmentAutomation({ ...runtimeDeps, ...repositoryBootstrap }, appHome)
   const developmentMissionOperations = composeDevelopmentMissionOperations({
     db: runtimeDeps.db,
+    admissionLookup: runtimeDeps.developmentAdmissionLookup,
     ...(runtimeDeps.secretBox === undefined ? {} : { secretBox: runtimeDeps.secretBox }),
     automation: developmentAutomation,
     legacyAdmissionsEnabled: () =>

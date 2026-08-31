@@ -2,9 +2,11 @@
 // global precedence and returns the same provider-neutral revision content.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlAdmissionLookup } from '@/modules/development-automation/infrastructure/postgresqlAdmissionLookup'
+import { composePostgresqlDevelopmentAdmissionLookup } from '@/modules/development-automation/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -12,6 +14,26 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+
+const COMPOSITION_SOURCE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'development-automation',
+  'composition.ts',
+)
+const MISSION_OPERATIONS_SOURCE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'development-automation',
+  'composition',
+  'missionOperations.ts',
+)
+const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'server.ts')
+const START_SOURCE = resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts')
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -51,7 +73,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    lookup: createPostgresqlAdmissionLookup(createPostgresqlDatabaseClient(runtime)),
+    lookup: composePostgresqlDevelopmentAdmissionLookup(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }
@@ -61,6 +83,26 @@ afterEach(() => {
 })
 
 describe('RFC-349 PostgreSQL development admission lookup', () => {
+  test('bootstrap injects one selected lookup into reconcile and HTTP launch', () => {
+    const composition = readFileSync(COMPOSITION_SOURCE, 'utf8')
+    const missionOperations = readFileSync(MISSION_OPERATIONS_SOURCE, 'utf8')
+    const server = readFileSync(SERVER_SOURCE, 'utf8')
+    const start = readFileSync(START_SOURCE, 'utf8')
+
+    expect(composition).toContain(
+      'const lookup = deps.admissionLookup ?? composeSqliteDevelopmentAdmissionLookup(deps.db)',
+    )
+    expect(missionOperations).toContain('lookup: deps.admissionLookup')
+    expect(missionOperations).not.toContain('createSqliteAdmissionLookup')
+    expect(server).toContain('admissionLookup: deps.developmentAdmissionLookup')
+    expect(server).toContain('admissionLookup: runtimeDeps.developmentAdmissionLookup')
+    expect(start).toContain(
+      'const developmentAdmissionLookup = composeSqliteDevelopmentAdmissionLookup(db)',
+    )
+    expect(start).toContain('admissionLookup: developmentAdmissionLookup')
+    expect(start).toContain('developmentAdmissionLookup,')
+  })
+
   test('returns the repository assignment without consulting wider scopes', async () => {
     const fake = fixture([
       [['repository', 'employee-1', 3, 'selection-1', 4, 'execution-1', 5, 'gitlab-issue']],

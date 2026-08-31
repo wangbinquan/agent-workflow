@@ -13,6 +13,7 @@
 import { join } from 'node:path'
 
 import type { DbClient } from '@/db/client'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { runMissionReconcile, type ReconcileOutcome } from './application/missionReconciler'
 import {
   createDeferredMissionDrive,
@@ -44,6 +45,7 @@ import type {
   RepoRemotePort,
   ScriptActionLauncherPort,
 } from './application/ports/reconcilerPorts'
+import type { AdmissionLookup } from './application/ports/admissionLookup'
 import {
   createAttemptContextStore,
   createWorkspaceValidationAdapter,
@@ -61,6 +63,7 @@ import {
   type RequirementSourceRunnerDep,
 } from './infrastructure/requirementMaterializer'
 import { createSqliteAdmissionLookup } from './infrastructure/sqliteAdmissionLookup'
+import { createPostgresqlAdmissionLookup } from './infrastructure/postgresqlAdmissionLookup'
 import {
   createSqliteFactSnapshotReader,
   listFencedMissionIds,
@@ -107,12 +110,24 @@ const PIPELINE_IMPORT_BUDGET = {
   maxTotalBytes: 16 * 1024 * 1024 * 1024,
 } as const
 
+export type DevelopmentAdmissionLookup = AdmissionLookup
+
+export function composeSqliteDevelopmentAdmissionLookup(db: DbClient): AdmissionLookup {
+  return createSqliteAdmissionLookup(db)
+}
+
+export function composePostgresqlDevelopmentAdmissionLookup(
+  db: PostgresqlDatabaseClient,
+): AdmissionLookup {
+  return createPostgresqlAdmissionLookup(db)
+}
+
 /** Worker-bootstrap composition for the context-owned maintenance slice. */
 export function composeDevelopmentAutomationMaintenanceCommands(
   db: DbClient,
 ): DevelopmentAutomationMaintenanceCommands {
   const uploads = createSqliteUploadSessionStore(db)
-  const lookup = createSqliteAdmissionLookup(db)
+  const lookup = composeSqliteDevelopmentAdmissionLookup(db)
   return {
     sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
     sweepRetention: (now) =>
@@ -176,6 +191,8 @@ export interface DevelopmentAutomationModule {
 export function composeDevelopmentAutomation(deps: {
   readonly db: DbClient
   readonly appHome: string
+  /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
+  readonly admissionLookup?: AdmissionLookup
   /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
   readonly requirementSource?: RequirementSourceRunnerDep
   /** task-execution 模块组装的 agent 执行 runner；不注入 = 动作发射诚实 blocked。 */
@@ -201,7 +218,7 @@ export function composeDevelopmentAutomation(deps: {
 }): DevelopmentAutomationModule {
   const now = (): number => Date.now()
   const store = createSqliteMissionStore(deps.db)
-  const lookup = createSqliteAdmissionLookup(deps.db)
+  const lookup = deps.admissionLookup ?? composeSqliteDevelopmentAdmissionLookup(deps.db)
   const snapshots = createSqliteFactSnapshotReader(deps.db)
   const evidence = new EvidenceStore(join(deps.appHome, 'evidence'))
   const materializer = createRequirementMaterializer({
