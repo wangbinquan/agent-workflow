@@ -6,7 +6,7 @@ import {
   filterVisibleRows,
   requireResourceEdit,
   requireResourceGovern,
-} from '@/services/resourceAcl'
+} from './resourceAcl'
 import { monotonicNow } from '@/util/time'
 import { createSkillAclIdentityParticipant } from '../application/participants/skillAclIdentity'
 import { createSkillApplication } from '../application/skills/skillApplication'

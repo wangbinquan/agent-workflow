@@ -1851,6 +1851,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(import.meta.dir, 'architecture/rfc294-review-public-consumer-ledger.test.ts'),
       'utf8',
     )
+    const moduleRoot = resolve(sourceRoot, 'modules/resource-catalog')
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name)
+        return entry.isDirectory() ? walk(path) : entry.name.endsWith('.ts') ? [path] : []
+      })
+    const moduleSources = walk(moduleRoot)
+      .map((path) => readFileSync(path, 'utf8'))
+      .join('\n')
 
     expect(commands).not.toContain('ResourceAclCommands')
     for (const internalCommand of [
@@ -1908,5 +1917,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
     expect(ledger).not.toContain('public:resource-catalog:')
     expect(existsSync(resolve(sourceRoot, 'services/resourceAccessPolicy.ts'))).toBe(false)
+    expect(moduleSources).not.toContain("from '@/services/resourceAcl'")
   })
 })

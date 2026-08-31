@@ -5,7 +5,7 @@ import {
   filterVisibleRows,
   requireResourceEdit,
   requireResourceGovern,
-} from '@/services/resourceAcl'
+} from './resourceAcl'
 import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemResources'
 import { createWorkflowAclIdentityParticipant } from '../application/participants/workflowAclIdentity'
 import { createWorkflowApplication } from '../application/workflows/workflowApplication'

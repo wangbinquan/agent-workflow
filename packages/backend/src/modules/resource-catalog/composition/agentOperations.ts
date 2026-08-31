@@ -5,7 +5,7 @@ import {
   filterVisibleRows,
   requireResourceEdit,
   requireResourceGovern,
-} from '@/services/resourceAcl'
+} from './resourceAcl'
 import { assertNotBuiltin, excludeBuiltinAgents } from '@/services/systemResources'
 import { monotonicNow } from '@/util/time'
 import { createAgentApplication } from '../application/agents/agentApplication'
