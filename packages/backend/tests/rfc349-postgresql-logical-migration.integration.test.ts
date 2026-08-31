@@ -2,7 +2,7 @@
 // database. This is the real-driver acceptance path; ordinary unit runs skip it.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { Database } from 'bun:sqlite'
+import type { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,13 +13,20 @@ import { createDatabaseMigrationRunner } from '@/modules/system-operations/appli
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
 import { createSqliteMigrationSafetyBackup } from '@/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup'
 import { readLogicalArtifactManifest } from '@/platform/persistence/logicalDatabaseArtifact'
+import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
+import {
+  openVerifiedLogicalDatabaseArtifactSource,
+  restoreLogicalDatabaseArtifact,
+} from '@/platform/persistence/logicalDatabaseRestore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
+import { createSqliteLogicalTarget } from '@/platform/persistence/sqliteLogicalTarget'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
@@ -147,6 +154,74 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
           firstLiveWriteAt: expect.any(Number),
           rollback: { eligible: false, reason: 'reverse-migration-required' },
         })
+
+        const migrationManifest = controlPlane.readManifest('dbm_real_postgresql_01')
+        const preservedArchive = openVerifiedLogicalDatabaseArtifactSource({
+          artifactRoot: join(operationsDir, 'dbm_real_postgresql_01'),
+          expectedManifestDigest: migrationManifest.payload.logicalBackupDigest!,
+          expectedLegacyArchiveFileDigest: migrationManifest.payload.legacyArchiveDigest!,
+          contract,
+        })
+        const postgresqlSource = await openPostgresqlLogicalSource({
+          runtime,
+          generationId: runtime.generationId,
+          contract,
+        })
+        try {
+          const postgresqlSnapshot = await postgresqlSource.preflight()
+          const postgresqlBackupRoot = join(root, 'postgresql-logical-backup')
+          const backup = await exportLogicalDatabaseArtifact({
+            operationId: 'dbm_real_postgresql_backup_01',
+            sourceProvider: 'postgresql',
+            sourceGenerationId: runtime.generationId,
+            source: {
+              provider: 'postgresql',
+              assertUnchanged: () => postgresqlSource.assertUnchanged(postgresqlSnapshot),
+              readChunk: (table, afterKey, limit) =>
+                postgresqlSource.readChunk(table, afterKey, limit),
+            },
+            expectedTableRows: postgresqlSnapshot.tableRows,
+            contract,
+            artifactRoot: postgresqlBackupRoot,
+            preservedArchive,
+            chunkRows: 25,
+          })
+          expect(backup.archiveRows).toBe(1)
+
+          const restored = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
+          const restoredSqlite = (restored as unknown as { $client: Database }).$client
+          const sqliteTarget = createSqliteLogicalTarget({
+            database: restoredSqlite,
+            operationId: 'dbm_real_sqlite_restore_01',
+            contract,
+            checkpointRoot: join(root, 'sqlite-logical-restore'),
+            initialState: 'fresh-migrated',
+            ownsDatabase: true,
+          })
+          try {
+            const restore = await restoreLogicalDatabaseArtifact({
+              artifactRoot: postgresqlBackupRoot,
+              expectedManifestDigest: backup.manifest.digest,
+              expectedLegacyArchiveFileDigest: backup.legacyArchiveFileDigest,
+              restoreOperationId: 'dbm_real_sqlite_restore_01',
+              contract,
+              target: sqliteTarget,
+            })
+            expect(restore.archiveRowsPreserved).toBe(1)
+            expect(
+              restoredSqlite.query("SELECT id FROM agents WHERE id = 'agent-rfc349'").get(),
+            ).toEqual({ id: 'agent-rfc349' })
+            expect(
+              restoredSqlite
+                .query("SELECT count(*) AS count FROM code_artifacts WHERE id = 'legacy-rfc349'")
+                .get(),
+            ).toEqual({ count: 0 })
+          } finally {
+            await sqliteTarget.close()
+          }
+        } finally {
+          await postgresqlSource.close()
+        }
 
         expect((await runner.finalize('dbm_real_postgresql_01')).phase).toBe('finalized')
       } finally {

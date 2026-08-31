@@ -113,7 +113,10 @@ export function openSqliteLogicalSource(input: {
       )
     }
     try {
-      assertExactSchemaRoster(tableNames(db))
+      assertExactSchemaRoster(
+        tableNames(db),
+        input.contract.tables.map((table) => table.sourceTable),
+      )
     } catch {
       throw new SqliteLogicalSourceError(
         'sqlite-source-schema',

@@ -9,8 +9,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  countEmbeddedPostgresqlSqlMigrations,
+  embeddedPostgresqlMigrationBundleDigest,
   extractFilesTo,
   extractMigrationsTo,
+  extractPostgresqlMigrationsTo,
   getEmbeddedAsset,
   getEmbeddedFrontendResponse,
   IS_EMBEDDED,
@@ -36,6 +39,9 @@ describe('embed (dev stub)', () => {
     try {
       expect(await extractMigrationsTo(join(dir, 'm1'))).toBe(0)
       expect(await extractMigrationsTo(join(dir, 'm1'))).toBe(0)
+      expect(await extractPostgresqlMigrationsTo(join(dir, 'pg1'))).toBe(0)
+      expect(countEmbeddedPostgresqlSqlMigrations()).toBe(0)
+      expect(embeddedPostgresqlMigrationBundleDigest()).toBe('')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

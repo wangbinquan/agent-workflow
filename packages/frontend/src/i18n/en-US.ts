@@ -2626,7 +2626,8 @@ export const enUS: Resources = {
     },
     database: {
       runtimeTitle: 'Live database',
-      runtimeHint: 'The verified generation pointer is authoritative; configuration alone cannot switch providers.',
+      runtimeHint:
+        'The verified generation pointer is authoritative; configuration alone cannot switch providers.',
       loadingRuntime: 'Reading the live database generation…',
       liveProvider: 'Live provider',
       generation: 'Generation',
@@ -2640,14 +2641,20 @@ export const enUS: Resources = {
       targetTitle: 'External PostgreSQL target',
       targetHint: 'The platform ships the client adapter and migrations, not a PostgreSQL server.',
       alreadyPostgresql: 'PostgreSQL is already live',
-      alreadyPostgresqlHint: 'Use the operation status below for finalize or recovery. Starting another forward migration is disabled.',
+      alreadyPostgresqlHint:
+        'Use the operation status below for finalize or recovery. Starting another forward migration is disabled.',
       externalServerTitle: 'Review before migrating',
-      externalServer: 'Provision PostgreSQL 15–18 separately; this binary does not bundle, install, or start the server.',
-      maintenanceWindow: 'V1 closes business writes during copy and verification; this is a maintenance window, not zero downtime.',
-      archiveSix: 'Six legacy code tables are archived and verified but are not created in the 178-table active target.',
-      rollbackHorizon: 'Instant rollback is available only until the first PostgreSQL business write; afterwards a reverse logical migration is required.',
+      externalServer:
+        'Provision PostgreSQL 15–18 separately; this binary does not bundle, install, or start the server.',
+      maintenanceWindow:
+        'V1 closes business writes during copy and verification; this is a maintenance window, not zero downtime.',
+      archiveSix:
+        'Six legacy code tables are archived and verified but are not created in the 178-table active target.',
+      rollbackHorizon:
+        'Instant rollback is available only until the first PostgreSQL business write; afterwards a reverse logical migration is required.',
       urlEnv: 'Connection URL environment variable',
-      urlEnvHint: 'Enter a variable name such as AGENT_WORKFLOW_DATABASE_URL. The URL and password are never returned by this page.',
+      urlEnvHint:
+        'Enter a variable name such as AGENT_WORKFLOW_DATABASE_URL. The URL and password are never returned by this page.',
       poolMax: 'Pool maximum',
       connectTimeout: 'Connect timeout (ms)',
       statementTimeout: 'Statement timeout (ms)',
@@ -2660,10 +2667,12 @@ export const enUS: Resources = {
       migrating: 'Migration running…',
       start: 'Detect and migrate',
       operationTitle: 'Migration operation',
-      operationHint: 'Durable progress remains readable while business admission is closed and after a restart.',
+      operationHint:
+        'Durable progress remains readable while business admission is closed and after a restart.',
       loadingOperations: 'Reading migration operations…',
       noOperation: 'No database migration operation',
-      noOperationHint: 'Test an empty external PostgreSQL database, then start the one-click migration.',
+      noOperationHint:
+        'Test an empty external PostgreSQL database, then start the one-click migration.',
       progress: '{{completed}}/{{total}} tables · {{percent}}%',
       currentTable: 'Current table',
       rowsCopied: 'Rows copied',
@@ -2673,8 +2682,10 @@ export const enUS: Resources = {
       rollbackReasons: {
         'target-has-no-live-write': 'Eligible: PostgreSQL has not accepted a business write.',
         'pointer-not-switched': 'The live pointer is still SQLite; cancel or resume instead.',
-        'cutover-in-progress': 'Cutover is settling; cancellation and rollback are temporarily fenced.',
-        'reverse-migration-required': 'Closed: PostgreSQL accepted a business write, so stale SQLite cannot be restored losslessly.',
+        'cutover-in-progress':
+          'Cutover is settling; cancellation and rollback are temporarily fenced.',
+        'reverse-migration-required':
+          'Closed: PostgreSQL accepted a business write, so stale SQLite cannot be restored losslessly.',
         'operation-finalized': 'Closed: the migration receipt has been finalized.',
         'operation-rolled-back': 'The operation was already rolled back to SQLite.',
       },
@@ -2682,16 +2693,28 @@ export const enUS: Resources = {
       cancel: 'Cancel safely',
       rollback: 'Roll back to SQLite',
       finalize: 'Finalize migration',
+      artifacts: 'Verified migration artifacts',
+      downloadingArtifact: 'Downloading…',
+      artifactKinds: {
+        'logical-backup': 'Download logical backup manifest',
+        'legacy-archive': 'Download legacy archive manifest',
+        verification: 'Download verification receipt',
+        receipt: 'Download final receipt',
+        'rollback-receipt': 'Download rollback receipt',
+      },
       archiveTitle: 'Archive-only legacy tables',
-      archiveHint: 'Their logical chunks and digests remain in the migration archive; they are the only approved target omissions.',
+      archiveHint:
+        'Their logical chunks and digests remain in the migration archive; they are the only approved target omissions.',
       confirmTitle: 'Start the database migration?',
       rollbackTitle: 'Roll back to SQLite?',
       finalizeTitle: 'Finalize the migration?',
       cancelTitle: 'Cancel the migration?',
       confirmDescriptions: {
         cancel: 'Cancellation settles only at a safe pre-cutover checkpoint and keeps SQLite live.',
-        rollback: 'The system will freeze admission, atomically prove no PostgreSQL live write, retire the target generation, and restore SQLite.',
-        finalize: 'Finalization closes the instant rollback workflow and writes the final receipt. Existing retention rules still govern artifacts.',
+        rollback:
+          'The system will freeze admission, atomically prove no PostgreSQL live write, retire the target generation, and restore SQLite.',
+        finalize:
+          'Finalization closes the instant rollback workflow and writes the final receipt. Existing retention rules still govern artifacts.',
       },
       typeMigrate: 'Type MIGRATE to confirm',
     },

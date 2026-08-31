@@ -10,6 +10,7 @@ import {
 } from '@agent-workflow/shared'
 import {
   DatabaseMigrationSection,
+  availableDatabaseMigrationArtifacts,
   databaseMigrationFieldErrors,
   databaseMigrationTargetFromDraft,
 } from '../src/components/settings/DatabaseMigrationSection'
@@ -87,6 +88,19 @@ describe('RFC-349 database Settings', () => {
     )
     expect(source).toContain("key: 'database'")
     expect(source).toContain('<DatabaseMigrationSection config={config.data} />')
+    const section = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '..',
+        'src',
+        'components',
+        'settings',
+        'DatabaseMigrationSection.tsx',
+      ),
+      'utf8',
+    )
+    expect(section).toContain("await api.post('/api/database/migrations'")
+    expect(section).not.toContain('deadlineMs: Number.POSITIVE_INFINITY')
   })
 
   test('all target constraints are modeled before submission and raw URLs are rejected', () => {
@@ -130,5 +144,30 @@ describe('RFC-349 database Settings', () => {
     })
     expect(view.getByTestId('database-url-env').getAttribute('aria-invalid')).toBe('true')
     expect(view.container.textContent).not.toContain('user:secret')
+  })
+
+  test('reveals only artifacts whose durable phase anchor already exists', () => {
+    expect(availableDatabaseMigrationArtifacts(operation)).toEqual([])
+    expect(availableDatabaseMigrationArtifacts({ ...operation, phase: 'verifying' })).toEqual([
+      'logical-backup',
+      'legacy-archive',
+    ])
+    expect(
+      availableDatabaseMigrationArtifacts({ ...operation, phase: 'cutover-prepared' }),
+    ).toEqual(['logical-backup', 'legacy-archive', 'verification'])
+    expect(availableDatabaseMigrationArtifacts({ ...operation, phase: 'finalized' })).toEqual([
+      'logical-backup',
+      'legacy-archive',
+      'verification',
+      'receipt',
+    ])
+    expect(
+      availableDatabaseMigrationArtifacts({
+        ...operation,
+        phase: 'accepting-writes',
+        rolledBackAt: 3,
+        rollbackReceiptDigest: `sha256:${'d'.repeat(64)}`,
+      }),
+    ).toContain('rollback-receipt')
   })
 })

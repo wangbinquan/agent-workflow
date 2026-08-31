@@ -1,12 +1,17 @@
 import type {
   ActivateLocalRestoreInput,
   CancelStagedRestoreResult,
+  DatabaseMigrationOperationInput,
+  DatabaseMigrationPreflightInput,
+  DatabaseMigrationPreflightView,
+  DatabaseMigrationStatusView,
   LocalRestoreActivationResult,
   LocalSystemOperationContext,
   RequestBackupInput,
   BackupResultView,
   StageRestoreInput,
   StageRestoreResult,
+  StartDatabaseMigrationInput,
 } from './types'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 
@@ -40,4 +45,43 @@ export interface SystemOperationCommands {
   readonly stageRestore: StageRestoreCommand
   readonly cancelStagedRestore: CancelStagedRestoreCommand
   readonly activateLocalRestore: ActivateLocalRestoreCommand
+}
+
+export interface DatabaseMigrationCommands {
+  readonly preflight: {
+    execute(
+      context: CommandContext | LocalSystemOperationContext,
+      input: DatabaseMigrationPreflightInput,
+    ): Promise<DatabaseMigrationPreflightView>
+  }
+  readonly start: {
+    execute(
+      context: CommandContext | LocalSystemOperationContext,
+      input: StartDatabaseMigrationInput,
+    ): Promise<DatabaseMigrationStatusView>
+  }
+  readonly resume: {
+    execute(
+      context: CommandContext | LocalSystemOperationContext,
+      input: DatabaseMigrationOperationInput,
+    ): Promise<DatabaseMigrationStatusView>
+  }
+  readonly cancel: {
+    execute(
+      context: CommandContext | LocalSystemOperationContext,
+      input: DatabaseMigrationOperationInput,
+    ): Promise<DatabaseMigrationStatusView>
+  }
+  readonly rollback: {
+    execute(
+      context: CommandContext | LocalSystemOperationContext,
+      input: DatabaseMigrationOperationInput,
+    ): Promise<DatabaseMigrationStatusView>
+  }
+  readonly finalize: {
+    execute(
+      context: CommandContext | LocalSystemOperationContext,
+      input: DatabaseMigrationOperationInput,
+    ): Promise<DatabaseMigrationStatusView>
+  }
 }

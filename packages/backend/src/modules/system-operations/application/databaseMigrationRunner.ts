@@ -3,7 +3,7 @@
 // not assemble phases, provider operations or cutover rules themselves.
 
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type {
   DatabaseMigrationControlPlane,
   DatabaseMigrationStatusView,
@@ -15,6 +15,7 @@ import type {
   DatabaseMigrationProgress,
 } from '../domain/databaseMigration'
 import {
+  createLegacyArchiveManifest,
   createLogicalArtifactManifest,
   createLogicalTableChunk,
   logicalChunkPath,
@@ -127,7 +128,7 @@ function targetGenerationId(operationId: string): string {
   return `dbg_pg_${operationId.slice(4)}`
 }
 
-function failureFor(
+export function classifyDatabaseMigrationFailure(
   error: unknown,
 ): Pick<DatabaseMigrationFailure, 'category' | 'detailCode' | 'retryable'> {
   const name = error instanceof Error ? error.name : 'unknown'
@@ -145,7 +146,15 @@ function failureFor(
   if (code.includes('integrity') || code.includes('schema')) {
     return { category: 'source-integrity', detailCode, retryable: false }
   }
-  if (code.includes('unreachable') || code.includes('readiness')) {
+  const connectivityCode = code.toLowerCase()
+  if (
+    connectivityCode.includes('unreachable') ||
+    connectivityCode.includes('readiness') ||
+    connectivityCode.includes('connection') ||
+    connectivityCode.includes('socket') ||
+    connectivityCode.includes('timeout') ||
+    connectivityCode.includes('econnrefused')
+  ) {
     return { category: 'target-unreachable', detailCode, retryable: true }
   }
   if (code.includes('chunk-mismatch') || code.includes('verification')) {
@@ -228,6 +237,60 @@ export function createDatabaseMigrationRunner(deps: {
         activatedAt: switched?.committedAt ?? now(),
       },
     })
+  }
+
+  const restoreSqliteAfterTargetRetired = async (
+    operationId: string,
+    generationId: string,
+  ): Promise<DatabaseMigrationStatusView> => {
+    const manifest = deps.controlPlane.readManifest(operationId)
+    const rolledBackAt = now()
+    const receiptDigest = writeDurableLogicalArtifact(
+      join(deps.operationRoot(operationId), 'rollback-receipt.json'),
+      {
+        version: 1,
+        operationId,
+        sourceGenerationId: manifest.payload.source.generationId,
+        retiredTargetGenerationId: generationId,
+        schemaDigest: deps.contract.digest,
+        verificationDigest: manifest.payload.verificationDigest,
+        firstLiveWriteAt: null,
+        rolledBackAt,
+      },
+    )
+    writeDatabaseGenerationAtomic({
+      pointerPath: deps.generationPointerPath,
+      payload: {
+        version: 1,
+        generationId: manifest.payload.source.generationId,
+        provider: 'sqlite',
+        operationId: null,
+        schemaDigest: deps.contract.digest,
+        manifestDigest: null,
+        activatedAt: rolledBackAt,
+      },
+    })
+    const status = deps.controlPlane.markRolledBack(operationId, receiptDigest, rolledBackAt)
+    await deps.admission.reopenSqlite({
+      operationId,
+      sourceGenerationId: manifest.payload.source.generationId,
+    })
+    return status
+  }
+
+  const recordTargetLiveWrite = async (
+    operationId: string,
+    generationId: string,
+  ): Promise<DatabaseMigrationStatusView> => {
+    const firstLiveWriteAt = await deps.target.firstLiveWriteAt(generationId)
+    if (firstLiveWriteAt !== null) {
+      const manifest = deps.controlPlane.readManifest(operationId)
+      if (manifest.payload.firstLiveWriteAt === null) {
+        deps.controlPlane.markFirstLiveWrite(operationId, firstLiveWriteAt)
+      }
+      refreshPointer(operationId)
+    }
+    return deps.controlPlane.get(operationId)
   }
 
   const copy = async (
@@ -330,13 +393,11 @@ export function createDatabaseMigrationRunner(deps: {
     const archiveEntries = entries.filter((entry) => entry.disposition === 'ARCHIVE_THEN_OMIT')
     const archiveDigest = writeDurableLogicalArtifact(
       join(operationRoot, 'legacy-archive', 'manifest.json'),
-      {
-        version: 1,
+      createLegacyArchiveManifest({
         operationId,
         schemaDigest: deps.contract.digest,
         tables: archiveEntries,
-        digest: digestDatabaseArtifact(canonicalSchemaJson(archiveEntries)),
-      },
+      }),
     )
     return { manifest: artifactManifest, archiveDigest }
   }
@@ -351,6 +412,10 @@ export function createDatabaseMigrationRunner(deps: {
         )
       }
       if (manifest.payload.rolledBackAt !== null) {
+        await deps.admission.reopenSqlite({
+          operationId,
+          sourceGenerationId: manifest.payload.source.generationId,
+        })
         return deps.controlPlane.get(operationId)
       }
       if (manifest.payload.failure !== null) {
@@ -454,12 +519,11 @@ export function createDatabaseMigrationRunner(deps: {
               break
             }
             case 'cutover-prepared':
-              refreshPointer(operationId)
               advance(operationId, 'switched')
-              refreshPointer(operationId)
               break
             case 'switched': {
               const generationId = targetGenerationId(operationId)
+              refreshPointer(operationId)
               await deps.target.activateGeneration(generationId, now())
               await deps.targetRuntime.readiness()
               advance(operationId, 'health-checked')
@@ -482,7 +546,7 @@ export function createDatabaseMigrationRunner(deps: {
       } catch (error) {
         const current = deps.controlPlane.readManifest(operationId)
         if (current.payload.failure === null) {
-          const failure = failureFor(error)
+          const failure = classifyDatabaseMigrationFailure(error)
           deps.controlPlane.fail(operationId, {
             ...owner(current),
             ...failure,
@@ -491,7 +555,23 @@ export function createDatabaseMigrationRunner(deps: {
             now: now(),
           })
         }
-        if (BEFORE_SWITCH.has(current.payload.phase)) {
+        if (
+          current.payload.phase === 'switched' ||
+          current.payload.phase === 'health-checked' ||
+          current.payload.phase === 'accepting-writes'
+        ) {
+          try {
+            const generationId = targetGenerationId(operationId)
+            if (await deps.target.retireGenerationIfUnwritten(generationId)) {
+              await restoreSqliteAfterTargetRetired(operationId, generationId)
+            } else {
+              await recordTargetLiveWrite(operationId, generationId)
+            }
+          } catch {
+            // The original migration failure remains authoritative. A later
+            // recovery pass resumes the idempotent target/pointer rollback.
+          }
+        } else if (BEFORE_SWITCH.has(current.payload.phase)) {
           try {
             await deps.admission.reopenSqlite({
               operationId,
@@ -511,7 +591,9 @@ export function createDatabaseMigrationRunner(deps: {
         return deps.controlPlane.get(operationId)
       }
       if (
-        manifest.payload.phase === 'accepting-writes' &&
+        (manifest.payload.phase === 'switched' ||
+          manifest.payload.phase === 'health-checked' ||
+          manifest.payload.phase === 'accepting-writes') &&
         manifest.payload.firstLiveWriteAt === null
       ) {
         const firstLiveWriteAt = await deps.target.firstLiveWriteAt(targetGenerationId(operationId))
@@ -526,7 +608,13 @@ export function createDatabaseMigrationRunner(deps: {
 
     async rollback(operationId) {
       let status = await runner.status(operationId)
-      if (status.rolledBackAt !== null) return status
+      if (status.rolledBackAt !== null) {
+        await deps.admission.reopenSqlite({
+          operationId,
+          sourceGenerationId: status.sourceGenerationId,
+        })
+        return status
+      }
       if (!status.rollback.eligible) {
         throw new DatabaseMigrationRunnerError(
           'database-migration-rollback-not-eligible',
@@ -544,50 +632,13 @@ export function createDatabaseMigrationRunner(deps: {
       try {
         targetRetired = await deps.target.retireGenerationIfUnwritten(generationId)
         if (!targetRetired) {
-          const firstLiveWriteAt = await deps.target.firstLiveWriteAt(generationId)
-          if (firstLiveWriteAt !== null) {
-            status = deps.controlPlane.markFirstLiveWrite(operationId, firstLiveWriteAt)
-            refreshPointer(operationId)
-          }
+          status = await recordTargetLiveWrite(operationId, generationId)
           throw new DatabaseMigrationRunnerError(
             'database-migration-rollback-not-eligible',
             `instant rollback is not eligible: ${status.rollback.reason}`,
           )
         }
-
-        const manifest = deps.controlPlane.readManifest(operationId)
-        const rolledBackAt = now()
-        const receiptDigest = writeDurableLogicalArtifact(
-          join(deps.operationRoot(operationId), 'rollback-receipt.json'),
-          {
-            version: 1,
-            operationId,
-            sourceGenerationId: manifest.payload.source.generationId,
-            retiredTargetGenerationId: generationId,
-            schemaDigest: deps.contract.digest,
-            verificationDigest: manifest.payload.verificationDigest,
-            firstLiveWriteAt: null,
-            rolledBackAt,
-          },
-        )
-        writeDatabaseGenerationAtomic({
-          pointerPath: deps.generationPointerPath,
-          payload: {
-            version: 1,
-            generationId: manifest.payload.source.generationId,
-            provider: 'sqlite',
-            operationId: null,
-            schemaDigest: deps.contract.digest,
-            manifestDigest: null,
-            activatedAt: rolledBackAt,
-          },
-        })
-        status = deps.controlPlane.markRolledBack(operationId, receiptDigest, rolledBackAt)
-        await deps.admission.reopenSqlite({
-          operationId,
-          sourceGenerationId: manifest.payload.source.generationId,
-        })
-        return status
+        return await restoreSqliteAfterTargetRetired(operationId, generationId)
       } catch (error) {
         if (!targetRetired) {
           try {

@@ -9,6 +9,9 @@ import { statMetadataIsAuthoritative } from '@/util/fileTrust'
 import { loadConfig } from '@/config'
 import { quickCheckDbFile } from '@/db/integrity'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
+import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
+import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { capabilitiesFromVersion, MIN_GIT_VERSION, parseGitVersion } from '@/services/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
@@ -23,6 +26,164 @@ export interface CheckResult {
 export interface DoctorResult {
   ok: boolean
   checks: CheckResult[]
+}
+
+function safeDoctorCount(value: unknown): number {
+  const count = Number(value)
+  return Number.isSafeInteger(count) && count >= 0 ? count : 0
+}
+
+export async function checkPostgresqlLifecycleHealth(
+  runtime: PostgresqlDatabaseRuntime,
+): Promise<CheckResult> {
+  try {
+    const rows = await runtime
+      .providerPool()
+      .unsafe(
+        'SELECT ' +
+          "count(*) FILTER (WHERE status = 'interrupted') AS interrupted, " +
+          "count(*) FILTER (WHERE status = 'failed') AS failed, " +
+          "count(*) FILTER (WHERE status = 'awaiting_review') AS awaiting_review, " +
+          "count(*) FILTER (WHERE status = 'awaiting_human') AS awaiting_human, " +
+          'count(*) FILTER (WHERE auto_recovery_suspended = TRUE) AS quarantined, ' +
+          '(SELECT count(*) FROM agent_workflow.lifecycle_alerts WHERE resolved_at IS NULL) AS open_alerts ' +
+          'FROM agent_workflow.tasks',
+      )
+    const row = rows[0] ?? {}
+    return evaluateLifecycleHealth({
+      interrupted: safeDoctorCount(row.interrupted),
+      failed: safeDoctorCount(row.failed),
+      awaitingReview: safeDoctorCount(row.awaiting_review),
+      awaitingHuman: safeDoctorCount(row.awaiting_human),
+      quarantined: safeDoctorCount(row.quarantined),
+      openAlerts: safeDoctorCount(row.open_alerts),
+    })
+  } catch (error) {
+    return {
+      name: 'lifecycle',
+      ok: true,
+      message: `(unavailable: ${error instanceof Error ? error.message : String(error)})`,
+    }
+  }
+}
+
+export async function checkPostgresqlSealedCredentials(
+  runtime: PostgresqlDatabaseRuntime,
+): Promise<CheckResult> {
+  try {
+    const rows = await runtime
+      .providerPool()
+      .unsafe(
+        'SELECT url_enc AS "urlEnc" FROM agent_workflow.cached_repos WHERE url_enc IS NOT NULL AND url_enc != \'\'',
+      )
+    if (rows.length === 0) {
+      return { name: 'repo credentials', ok: true, message: 'no sealed credentials' }
+    }
+    if (!existsSync(Paths.secretKeyFile)) {
+      return {
+        name: 'repo credentials',
+        ok: false,
+        message: `${rows.length} sealed repo credential(s) but secret.key is MISSING — re-launch those repos to re-enter (restored from another machine?)`,
+      }
+    }
+    const box = createSecretBox(Paths.secretKeyFile)
+    let bricked = 0
+    for (const row of rows) {
+      try {
+        box.unseal(String(row.urlEnc ?? ''))
+      } catch {
+        bricked += 1
+      }
+    }
+    if (bricked > 0) {
+      return {
+        name: 'repo credentials',
+        ok: false,
+        message: `${bricked}/${rows.length} sealed repo credential(s) cannot be decrypted (lost/mismatched secret.key) — re-launch those repos to re-enter`,
+      }
+    }
+    return { name: 'repo credentials', ok: true, message: `${rows.length} sealed, all decryptable` }
+  } catch (error) {
+    return {
+      name: 'repo credentials',
+      ok: true,
+      message: `(unavailable: ${error instanceof Error ? error.message : String(error)})`,
+    }
+  }
+}
+
+/** RFC-349: inspect the verified live provider. A retained pre-cutover SQLite
+ * file is recovery evidence after PostgreSQL activation, not the live DB. */
+export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
+  let config: ReturnType<typeof loadConfig>
+  try {
+    config = loadConfig(Paths.config)
+  } catch (error) {
+    return [
+      {
+        name: 'database provider',
+        ok: false,
+        message: `configuration unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      },
+    ]
+  }
+  if (config.database.provider === 'sqlite' && !existsSync(Paths.db)) {
+    return [
+      {
+        name: 'database provider',
+        ok: true,
+        message: 'SQLite (no database yet)',
+      },
+      checkLifecycleHealth(),
+      checkSealedCredentials(),
+    ]
+  }
+
+  let resolved: ReturnType<typeof resolveDatabaseProviderRuntime>
+  try {
+    const contract = buildLogicalSchemaContract()
+    resolved = resolveDatabaseProviderRuntime({
+      config: config.database,
+      sqlitePath: Paths.db,
+      generationPointerPath: Paths.databaseGenerationPointer,
+      operationsRoot: Paths.databaseMigrationsDir,
+      contract,
+    })
+  } catch (error) {
+    return [
+      {
+        name: 'database provider',
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]
+  }
+
+  try {
+    const report = await resolved.operations.doctor()
+    const details = report.checks
+      .map((check) => `${check.code}=${check.ok ? 'ok' : check.message}`)
+      .join(', ')
+    const providerCheck: CheckResult = {
+      name: 'database provider',
+      ok: report.ok,
+      message:
+        `${report.provider} generation ${report.generationId}: ${details}` +
+        (!report.ok && report.provider === 'sqlite'
+          ? ' — recover: agent-workflow restore <backup>'
+          : ''),
+    }
+    if (resolved.provider === 'sqlite') {
+      return [providerCheck, checkLifecycleHealth(), checkSealedCredentials()]
+    }
+    return [
+      providerCheck,
+      await checkPostgresqlLifecycleHealth(resolved.runtime),
+      await checkPostgresqlSealedCredentials(resolved.runtime),
+    ]
+  } finally {
+    await resolved.close()
+  }
 }
 
 export async function doctorCommand(): Promise<DoctorResult> {
@@ -72,17 +233,12 @@ export async function doctorCommand(): Promise<DoctorResult> {
   // 6. migrations present
   checks.push(checkMigrations())
 
-  // 7. RFC-108 T16 (AR-20): lifecycle health — surface recoverable/parked tasks
-  // + open alerts so an operator running `doctor` sees a stuck fleet without
-  // opening the UI. Informational (never fails doctor — these are recoverable
-  // runtime states, not setup errors).
-  checks.push(checkLifecycleHealth())
+  // 7. RFC-108/RFC-213/RFC-349: provider-aware integrity, lifecycle and
+  // sealed-credential decryptability. PostgreSQL never probes retained SQLite.
+  checks.push(...(await checkConfiguredDatabase()))
 
-  // 8. RFC-213: DB integrity (fails doctor on corruption) + backup health (info)
-  // + sealed-credential decryptability (AC-12: cross-machine restore brick).
-  checks.push(checkDbIntegrity())
+  // 8. Backup inventory is filesystem-owned and provider-neutral.
   checks.push(checkBackups())
-  checks.push(checkSealedCredentials())
 
   const ok = checks.every((c) => c.ok)
   return { ok, checks }

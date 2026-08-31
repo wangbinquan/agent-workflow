@@ -12,6 +12,9 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, statSync } from 'node:fs'
 
+import { loadConfig } from '@/config'
+import { resolveDatabaseProviderSelection } from '@/platform/persistence/databaseProviderRuntime'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { isProcessAlive } from '@/util/process'
 import { readPidFromLock } from '@/util/lock'
 import { Paths } from '@/util/paths'
@@ -34,6 +37,20 @@ export function dbCompactCommand(): DbCompactResult {
         `daemon is running (pid ${pid}) — VACUUM rewrites the whole database while holding\n` +
         `the write lock, which would freeze every request for the duration.\n` +
         `Stop it first:  agent-workflow stop\n`,
+    }
+  }
+  const generation = resolveDatabaseProviderSelection({
+    config: loadConfig(Paths.config).database,
+    generationPointerPath: Paths.databaseGenerationPointer,
+    operationsRoot: Paths.databaseMigrationsDir,
+    contract: buildLogicalSchemaContract(),
+  })
+  if (generation.payload.provider === 'postgresql') {
+    return {
+      status: 'ok',
+      output:
+        `live database is PostgreSQL generation ${generation.payload.generationId}; ` +
+        '`db compact` is SQLite-only. PostgreSQL storage reclamation is owned by autovacuum/operator policy.\n',
     }
   }
   const dbPath = Paths.db

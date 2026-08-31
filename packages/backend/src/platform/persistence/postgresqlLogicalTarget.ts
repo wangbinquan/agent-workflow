@@ -20,6 +20,7 @@ import {
   POSTGRESQL_METADATA_SCHEMA,
   type PostgresqlSchemaPlan,
 } from './postgresqlSchema'
+import { verifyPostgresqlMigrationHistory } from './postgresqlMigrationHistory'
 
 export class PostgresqlLogicalTargetError extends Error {
   constructor(
@@ -158,6 +159,7 @@ export async function openPostgresqlLogicalTarget(input: {
       'PostgreSQL target plan and logical contract differ',
     )
   }
+  await verifyPostgresqlMigrationHistory({ plan: input.plan })
   const connection = await input.runtime.providerPool().reserve()
   const lockKey = `rfc349-copy:${input.operationId}`
   const lockRows = await connection.unsafe(
@@ -423,10 +425,13 @@ export async function openPostgresqlLogicalTarget(input: {
         `SELECT state, first_live_write_at FROM ${metadataTable('database_generations')} WHERE generation_id = $1 AND operation_id = $2`,
         [generationId, input.operationId],
       )
-      if (rows.length !== 1 || !['active', 'retired'].includes(String(rows[0]?.state))) {
+      if (
+        rows.length !== 1 ||
+        !['prepared', 'active', 'retired'].includes(String(rows[0]?.state))
+      ) {
         throw new PostgresqlLogicalTargetError(
           'postgresql-target-generation-fence',
-          'PostgreSQL target active/retired generation marker is missing',
+          'PostgreSQL target generation marker is missing',
         )
       }
       const value = rows[0]?.first_live_write_at
@@ -435,7 +440,7 @@ export async function openPostgresqlLogicalTarget(input: {
 
     async retireGenerationIfUnwritten(generationId) {
       const retired = await connection.unsafe(
-        `UPDATE ${metadataTable('database_generations')} SET state = 'retired' WHERE generation_id = $1 AND operation_id = $2 AND state = 'active' AND first_live_write_at IS NULL RETURNING generation_id`,
+        `UPDATE ${metadataTable('database_generations')} SET state = 'retired' WHERE generation_id = $1 AND operation_id = $2 AND state IN ('prepared', 'active') AND first_live_write_at IS NULL RETURNING generation_id`,
         [generationId, input.operationId],
       )
       if (retired.length === 1) return true

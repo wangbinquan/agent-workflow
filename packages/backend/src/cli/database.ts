@@ -6,13 +6,25 @@ import { createHash } from 'node:crypto'
 import type { Lock } from '@/util/lock'
 import { acquireLock, DaemonLockHeldError } from '@/util/lock'
 import { Paths } from '@/util/paths'
-import type { LocalDatabaseMigrationOperations } from '@/modules/system-operations/databaseMigrationComposition'
+import type { DatabaseMigrationCommands } from '@/modules/system-operations/public/commands'
+import type { DatabaseMigrationQueries } from '@/modules/system-operations/public/queries'
 import type {
+  DatabaseMigrationArtifactKind,
+  DatabaseMigrationLegacyTableView,
   DatabaseMigrationPreflightView,
   DatabaseMigrationStatusView,
   DatabaseMigrationTargetView,
   DatabaseRuntimeOverview,
-} from '@/modules/system-operations/public/databaseMigrationTypes'
+  LocalSystemOperationContext,
+} from '@/modules/system-operations/public/types'
+
+export interface LocalDatabaseMigrationOperations {
+  readonly context: LocalSystemOperationContext
+  readonly application: Readonly<{
+    readonly commands: DatabaseMigrationCommands
+    readonly queries: DatabaseMigrationQueries
+  }>
+}
 
 export interface DatabaseCliResult {
   readonly status: 'ok' | 'error'
@@ -25,7 +37,10 @@ const USAGE =
   '  agent-workflow db preflight --to postgresql --url-env NAME [pool/timeout flags] [--json]\n' +
   '  agent-workflow db migrate --to postgresql --url-env NAME --auto [pool/timeout flags] [--json]\n' +
   '  agent-workflow db migration status <operation-id> [--json]\n' +
-  '  agent-workflow db migration resume|cancel|rollback|finalize <operation-id> [--json]\n'
+  '  agent-workflow db migration resume|cancel|rollback|finalize <operation-id> [--json]\n' +
+  '  agent-workflow db migration artifact <operation-id> logical-backup|legacy-archive|verification|receipt|rollback-receipt\n' +
+  '  agent-workflow db legacy inspect <operation-id> <table> [--json]\n' +
+  '  agent-workflow db legacy export <operation-id> <table> --chunk N\n'
 
 function flag(argv: readonly string[], name: string): string | undefined {
   const index = argv.indexOf(name)
@@ -51,6 +66,16 @@ function integerFlag(
   return parsed
 }
 
+function requiredChunkFlag(argv: readonly string[]): number {
+  const raw = flag(argv, '--chunk')
+  if (raw === undefined) throw new Error('--chunk is required')
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error('--chunk must be a non-negative integer')
+  }
+  return parsed
+}
+
 function targetFromArgs(argv: readonly string[]): DatabaseMigrationTargetView {
   if (flag(argv, '--to') !== 'postgresql') {
     throw new Error('--to postgresql is required (SQLite remains the default provider)')
@@ -60,13 +85,7 @@ function targetFromArgs(argv: readonly string[]): DatabaseMigrationTargetView {
     urlEnv: flag(argv, '--url-env') ?? 'AGENT_WORKFLOW_DATABASE_URL',
     poolMax: integerFlag(argv, '--pool-max', 16, 1, 256),
     connectTimeoutMs: integerFlag(argv, '--connect-timeout-ms', 10_000, 1_000, 120_000),
-    statementTimeoutMs: integerFlag(
-      argv,
-      '--statement-timeout-ms',
-      60_000,
-      1_000,
-      3_600_000,
-    ),
+    statementTimeoutMs: integerFlag(argv, '--statement-timeout-ms', 60_000, 1_000, 3_600_000),
     idleTimeoutMs: integerFlag(argv, '--idle-timeout-ms', 30_000, 1_000, 600_000),
   }
 }
@@ -124,6 +143,18 @@ export function formatDatabasePreflight(preflight: DatabaseMigrationPreflightVie
     `  target size:  ${formatBytes(preflight.databaseBytes)}`,
     `  source:       ${formatBytes(preflight.sourceBytes)}, ${preflight.sourceRows} rows`,
     `  tables:       ${preflight.tableCounts.source} source (${preflight.tableCounts.active} active + ${preflight.tableCounts.archiveOnly} archive-only)`,
+  ].join('\n')
+}
+
+export function formatLegacyTableInspection(table: DatabaseMigrationLegacyTableView): string {
+  return [
+    `legacy archive ${table.operationId}/${table.table}:`,
+    `  rows:         ${table.rowCount}`,
+    `  chunks:       ${table.chunkCount}`,
+    `  blob bytes:   ${formatBytes(table.blobBytes)}`,
+    `  first key:    ${table.firstKey?.join(', ') ?? 'none'}`,
+    `  last key:     ${table.lastKey?.join(', ') ?? 'none'}`,
+    `  root digest:  ${table.rootDigest}`,
   ].join('\n')
 }
 
@@ -204,6 +235,15 @@ export async function databaseCommand(
       if (action === 'status') {
         return render(await operations.application.queries.get.execute(operations.context, input))
       }
+      if (action === 'artifact') {
+        const kind = argv[3] as DatabaseMigrationArtifactKind | undefined
+        if (kind === undefined) throw new Error('database migration artifact kind is required')
+        const artifact = await operations.application.queries.readArtifact.execute(
+          operations.context,
+          { operationId, kind },
+        )
+        return { status: 'ok', output: artifact.json }
+      }
       if (action === 'resume') {
         return render(
           await withOfflineLock(
@@ -235,6 +275,32 @@ export async function databaseCommand(
             lockFactory,
           ),
         )
+      }
+    }
+    if (argv[0] === 'legacy') {
+      const action = argv[1]
+      const operationId = argv[2]
+      const table = argv[3]
+      if (operationId === undefined) throw new Error('database migration operation id is required')
+      if (table === undefined) throw new Error('legacy archive table is required')
+      if (action === 'inspect') {
+        const inspection = await operations.application.queries.inspectLegacyTable.execute(
+          operations.context,
+          { operationId, table },
+        )
+        return {
+          status: 'ok',
+          output: json
+            ? `${JSON.stringify(inspection)}\n`
+            : `${formatLegacyTableInspection(inspection)}\n`,
+        }
+      }
+      if (action === 'export') {
+        const artifact = await operations.application.queries.readLegacyChunk.execute(
+          operations.context,
+          { operationId, table, chunkIndex: requiredChunkFlag(argv) },
+        )
+        return { status: 'ok', output: artifact.json }
       }
     }
     return { status: 'error', output: USAGE }

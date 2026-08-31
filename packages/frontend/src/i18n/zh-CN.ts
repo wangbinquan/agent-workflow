@@ -2202,6 +2202,15 @@ export interface Resources {
       cancel: string
       rollback: string
       finalize: string
+      artifacts: string
+      downloadingArtifact: string
+      artifactKinds: {
+        'logical-backup': string
+        'legacy-archive': string
+        verification: string
+        receipt: string
+        'rollback-receipt': string
+      }
       archiveTitle: string
       archiveHint: string
       confirmTitle: string
@@ -9240,7 +9249,8 @@ export const zhCN: Resources = {
         'target-has-no-live-write': '可回滚：PostgreSQL 尚未接收业务写入。',
         'pointer-not-switched': '当前 pointer 仍是 SQLite；此时应取消或续跑。',
         'cutover-in-progress': '正在完成切换；取消与回滚暂时被 fence。',
-        'reverse-migration-required': '已关闭：PostgreSQL 已接收业务写入，旧 SQLite 不能再冒充无损回滚。',
+        'reverse-migration-required':
+          '已关闭：PostgreSQL 已接收业务写入，旧 SQLite 不能再冒充无损回滚。',
         'operation-finalized': '已关闭：迁移 receipt 已 finalize。',
         'operation-rolled-back': '该 operation 已回滚到 SQLite。',
       },
@@ -9248,15 +9258,26 @@ export const zhCN: Resources = {
       cancel: '安全取消',
       rollback: '回滚到 SQLite',
       finalize: '完成迁移',
+      artifacts: '经校验的迁移产物',
+      downloadingArtifact: '下载中…',
+      artifactKinds: {
+        'logical-backup': '下载逻辑备份清单',
+        'legacy-archive': '下载 legacy 归档清单',
+        verification: '下载校验 receipt',
+        receipt: '下载最终 receipt',
+        'rollback-receipt': '下载回滚 receipt',
+      },
       archiveTitle: '仅归档的 legacy 表',
-      archiveHint: '这些表的逻辑 chunk 与 digest 会保留在迁移归档中；它们是唯一批准不进入 target 的表。',
+      archiveHint:
+        '这些表的逻辑 chunk 与 digest 会保留在迁移归档中；它们是唯一批准不进入 target 的表。',
       confirmTitle: '开始数据库迁移？',
       rollbackTitle: '回滚到 SQLite？',
       finalizeTitle: '完成数据库迁移？',
       cancelTitle: '取消数据库迁移？',
       confirmDescriptions: {
         cancel: '系统只会在切换前的安全 checkpoint 结算取消，并保持 SQLite 可用。',
-        rollback: '系统将冻结写入，原子确认 PostgreSQL 没有业务首写，退役目标 generation，再恢复 SQLite。',
+        rollback:
+          '系统将冻结写入，原子确认 PostgreSQL 没有业务首写，退役目标 generation，再恢复 SQLite。',
         finalize: 'Finalize 会关闭即时回滚流程并写入最终 receipt；产物仍按既有保留规则处理。',
       },
       typeMigrate: '输入 MIGRATE 确认',

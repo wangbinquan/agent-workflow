@@ -16,31 +16,24 @@
 // `createBackup`.
 
 import type { Database } from 'bun:sqlite'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
+import {
+  createPortableBackupArchive,
+  type PortableBackupResult,
+} from '@/services/portableBackupArchive'
+import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
+import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
+import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
 import { listWorkflows } from '@/services/workflow'
 import { captureWorktrees } from '@/services/worktreeBackup'
-import { tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
-import {
-  type BackupKind,
-  type BackupManifest,
-  currentAppVersion,
-  readDbMigrationIdentity,
-  writeManifest,
-} from './backupManifest'
+import { type BackupKind, readDbMigrationIdentity } from './backupManifest'
 
 const log = createLogger('backup')
 
@@ -134,18 +127,7 @@ export interface BackupOptions {
   now?: number
 }
 
-export interface BackupResult {
-  /** Absolute path to the tarball. */
-  path: string
-  sizeBytes: number
-  /** Per-component counters returned for tests / status output. */
-  contents: {
-    workflows: number
-    skills: number
-    config: boolean
-    db: boolean
-  }
-}
+export type BackupResult = PortableBackupResult
 
 /**
  * Build a fresh tarball under `${appHome}/backups/`. Throws on I/O failure
@@ -153,129 +135,100 @@ export interface BackupResult {
  */
 export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
   const appHome = opts.appHome ?? Paths.root
-  const backupsDir = join(appHome, 'backups')
-  mkdirSync(backupsDir, { recursive: true })
-
-  const ts = stampForFilename(opts.now ?? Date.now())
-  const stagingDir = join(backupsDir, `.staging-${ts}`)
-  // RFC-213: name scheduled/auto backups by kind so retention can find + rotate
-  // them; manual keeps the historical `agent-workflow-<ts>` name (protected).
-  const kind = opts.kind ?? 'manual'
-  const stem = kind === 'manual' ? 'agent-workflow' : kind
-  const outPath = join(backupsDir, `${stem}-${ts}.tar.gz`)
-  if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true })
-  mkdirSync(stagingDir, { recursive: true })
-
-  const contents: BackupResult['contents'] = {
-    workflows: 0,
-    skills: 0,
-    config: false,
-    db: false,
+  const contract = buildLogicalSchemaContract()
+  const generation = readDatabaseGeneration({
+    pointerPath: join(appHome, 'database-generation.json'),
+    migrationsDir: join(appHome, 'database-migrations'),
+    expectedSchemaDigest: contract.digest,
+  })
+  if (generation.payload.provider !== 'sqlite') {
+    throw new Error(
+      'backup: the legacy SQLite adapter cannot snapshot a live PostgreSQL generation',
+    )
   }
 
-  try {
-    // 1. SQLite via VACUUM INTO. The path must be inside a directory the
-    //    daemon can write to; staging is a tmp dir we'll tar shortly.
-    const sqlite = (opts.db as unknown as { $client: Database }).$client
-    if (typeof sqlite?.exec !== 'function') {
-      throw new Error('backup: drizzle client does not expose $client')
-    }
-    const dbDest = join(stagingDir, 'db.sqlite')
-    // RFC-311 (audit L3-1): run the whole-file copy on a worker thread with
-    // its own read-only connection so the daemon's synchronous connection —
-    // and with it every HTTP/WS request — is not frozen for the multi-GB
-    // read+rewrite. In-memory databases (tests) have no file to reopen, so
-    // they keep the historical same-thread path.
-    const dbFile =
-      (sqlite.query('PRAGMA database_list;').get() as { file?: string } | null)?.file ?? ''
-    if (dbFile === '') {
-      sqlite.exec(`VACUUM INTO '${dbDest.replaceAll("'", "''")}'`)
-    } else {
-      await vacuumIntoOffThread(sqlite, dbFile, dbDest)
-    }
-    contents.db = true
-
-    // 2. config.json (skip if missing — first-run safety).
-    const configSrc = join(appHome, 'config.json')
-    if (existsSync(configSrc)) {
-      cpSync(configSrc, join(stagingDir, 'config.json'))
-      contents.config = true
-    }
-
-    // 3. skills/ — file system is the source of truth.
-    const skillsSrc = join(appHome, 'skills')
-    if (existsSync(skillsSrc)) {
-      const skillsDest = join(stagingDir, 'skills')
-      cpSync(skillsSrc, skillsDest, { recursive: true })
-      contents.skills = countDirEntries(skillsDest)
-    }
-
-    // 4. workflows/ — one YAML per row.
-    const workflowsDest = join(stagingDir, 'workflows')
-    mkdirSync(workflowsDest, { recursive: true })
-    const all = await listWorkflows(opts.db)
-    for (const wf of all) {
-      // RFC-199: listWorkflows already captured the immutable row used for
-      // this export. Never re-read by id and accidentally serialize a later
-      // revision under the earlier enumeration.
-      const yaml = stringifyWorkflowYaml(wf)
-      writeFileSync(join(workflowsDest, `${wf.id}.yaml`), yaml, 'utf-8')
-      contents.workflows += 1
-    }
-
-    // 4b. RFC-213 G4a: capture non-terminal tasks' worktree working state.
-    const includeWorktrees = opts.includeWorktrees === true
-    if (includeWorktrees) {
-      const wt = await captureWorktrees(opts.db, stagingDir)
-      log.info('backup captured worktrees', {
-        captured: wt.captured.length,
-        skipped: wt.skipped.length,
-      })
-    }
-
-    // 5. RFC-213 manifest — migration identity read from the just-VACUUM'd
-    //    snapshot (dbDest), so restore's version gate compares like-for-like.
-    const manifest: BackupManifest = {
-      manifestVersion: 1,
-      kind: opts.kind ?? 'manual',
-      createdAt: opts.now ?? Date.now(),
-      appVersion: currentAppVersion(),
-      includesWorktrees: includeWorktrees,
-      migration: readDbMigrationIdentity(dbDest) ?? { lastHash: null, lastCreatedAt: null },
-    }
-    writeManifest(stagingDir, manifest)
-
-    // 6. tarball.
-    await tarGz(stagingDir, outPath)
-    log.info('backup created', {
-      path: outPath,
-      workflows: contents.workflows,
-      skills: contents.skills,
-    })
-  } finally {
-    if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true })
-  }
-
-  const sizeBytes = statSync(outPath).size
-  return { path: outPath, sizeBytes, contents }
-}
-
-function stampForFilename(now: number): string {
-  return new Date(now).toISOString().replace(/[:.]/g, '-').replace(/Z$/, '')
-}
-
-function countDirEntries(dir: string): number {
-  if (!existsSync(dir)) return 0
-  let n = 0
-  const stack: string[] = [dir]
-  while (stack.length > 0) {
-    const cur = stack.pop()!
-    const entries = readdirSync(cur, { withFileTypes: true })
-    for (const e of entries) {
-      const child = join(cur, e.name)
-      if (e.isDirectory()) stack.push(child)
-      else n += 1
-    }
-  }
-  return n
+  return await createPortableBackupArchive({
+    appHome,
+    kind: opts.kind,
+    includeWorktrees: opts.includeWorktrees,
+    now: opts.now,
+    application: {
+      async exportWorkflows(destination) {
+        let count = 0
+        for (const wf of await listWorkflows(opts.db)) {
+          // RFC-199: listWorkflows already captured the immutable row used for
+          // this export. Never re-read by id and serialize a later revision.
+          writeFileSync(join(destination, `${wf.id}.yaml`), stringifyWorkflowYaml(wf), 'utf-8')
+          count += 1
+        }
+        return count
+      },
+      async captureWorktrees(stagingDirectory) {
+        const result = await captureWorktrees(opts.db, stagingDirectory)
+        log.info('backup captured worktrees', {
+          captured: result.captured.length,
+          skipped: result.skipped.length,
+        })
+      },
+    },
+    async exportDatabase({ stagingDirectory, logicalArtifactRoot, operationId }) {
+      // 1. SQLite via VACUUM INTO. The path must be inside a directory the
+      //    daemon can write to; staging is a tmp dir we'll tar shortly.
+      const sqlite = (opts.db as unknown as { $client: Database }).$client
+      if (typeof sqlite?.exec !== 'function') {
+        throw new Error('backup: drizzle client does not expose $client')
+      }
+      const dbDest = join(stagingDirectory, 'db.sqlite')
+      // RFC-311 (audit L3-1): run the whole-file copy on a worker thread with
+      // its own read-only connection so the daemon's synchronous connection —
+      // and with it every HTTP/WS request — is not frozen for the multi-GB
+      // read+rewrite. In-memory databases (tests) have no file to reopen, so
+      // they keep the historical same-thread path.
+      const dbFile =
+        (sqlite.query('PRAGMA database_list;').get() as { file?: string } | null)?.file ?? ''
+      if (dbFile === '') {
+        sqlite.exec(`VACUUM INTO '${dbDest.replaceAll("'", "''")}'`)
+      } else {
+        await vacuumIntoOffThread(sqlite, dbFile, dbDest)
+      }
+      // RFC-349: the portable payload is read from the immutable VACUUM
+      // snapshot, never from the live synchronous connection.
+      const logicalSource = openSqliteLogicalSource({ path: dbDest, contract })
+      let logicalBackup: Awaited<ReturnType<typeof exportLogicalDatabaseArtifact>>
+      try {
+        const sourceSnapshot = await logicalSource.preflight()
+        logicalBackup = await exportLogicalDatabaseArtifact({
+          operationId,
+          sourceProvider: 'sqlite',
+          sourceGenerationId: generation.payload.generationId,
+          source: {
+            provider: 'sqlite',
+            assertUnchanged: () => logicalSource.assertUnchanged(sourceSnapshot),
+            readChunk: (table, afterKey, limit) => logicalSource.readChunk(table, afterKey, limit),
+          },
+          expectedTableRows: sourceSnapshot.tableRows,
+          contract,
+          artifactRoot: logicalArtifactRoot,
+          now: () => opts.now ?? Date.now(),
+        })
+      } finally {
+        await logicalSource.close()
+      }
+      return {
+        migration: readDbMigrationIdentity(dbDest) ?? {
+          lastHash: null,
+          lastCreatedAt: null,
+        },
+        database: {
+          format: 'agent-workflow-logical-database-v1',
+          provider: 'sqlite',
+          sourceGenerationId: generation.payload.generationId,
+          schemaDigest: contract.digest,
+          logicalPath: 'database/logical',
+          envelopeFileDigest: logicalBackup.envelopeFileDigest,
+          rawSqlitePath: 'db.sqlite',
+        },
+      }
+    },
+  })
 }

@@ -1,12 +1,17 @@
 import type { DatabaseMigrationCoordinatorPort } from './ports/databaseMigrationCoordinator'
-import type { DatabaseMigrationCommands } from '../public/databaseMigrationCommands'
-import type { DatabaseMigrationQueries } from '../public/databaseMigrationQueries'
+import type { DatabaseMigrationCommands } from '../public/commands'
+import type { DatabaseMigrationQueries } from '../public/queries'
 import {
+  databaseMigrationArtifactInputSchema,
+  databaseMigrationArtifactViewSchema,
+  databaseMigrationLegacyChunkInputSchema,
+  databaseMigrationLegacyTableInputSchema,
+  databaseMigrationLegacyTableViewSchema,
   databaseMigrationListViewSchema,
   databaseMigrationPreflightViewSchema,
   databaseMigrationStatusViewSchema,
   databaseRuntimeOverviewSchema,
-} from '../public/databaseMigrationTypes'
+} from '../public/types'
 
 export interface DatabaseMigrationApplication {
   readonly commands: DatabaseMigrationCommands
@@ -62,6 +67,29 @@ export function createDatabaseMigrationApplication(
     list: {
       async execute() {
         return databaseMigrationListViewSchema.parse({ operations: await coordinator.list() })
+      },
+    },
+    readArtifact: {
+      async execute(_context, input) {
+        return databaseMigrationArtifactViewSchema.parse(
+          await coordinator.readArtifact(databaseMigrationArtifactInputSchema.parse(input)),
+        )
+      },
+    },
+    inspectLegacyTable: {
+      async execute(_context, input) {
+        return databaseMigrationLegacyTableViewSchema.parse(
+          await coordinator.inspectLegacyTable(
+            databaseMigrationLegacyTableInputSchema.parse(input),
+          ),
+        )
+      },
+    },
+    readLegacyChunk: {
+      async execute(_context, input) {
+        return databaseMigrationArtifactViewSchema.parse(
+          await coordinator.readLegacyChunk(databaseMigrationLegacyChunkInputSchema.parse(input)),
+        )
       },
     },
   }

@@ -14,7 +14,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createApp } from '../src/server'
+import {
+  digestDatabaseArtifact,
+  writeDatabaseGenerationAtomic,
+} from '../src/platform/persistence/generationStore'
+import { readLogicalDatabaseBackupEnvelope } from '../src/platform/persistence/logicalDatabaseExport'
+import { buildLogicalSchemaContract } from '../src/platform/persistence/schemaContract'
 import { createBackup } from '../src/services/backup'
+import { readManifest } from '../src/services/backupManifest'
 import { createWorkflow } from '../src/services/workflow'
 import { tarBin } from '../src/util/archive'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -103,6 +110,59 @@ describe('createBackup', () => {
     expect(members.some((m) => m.endsWith('config.json'))).toBe(true)
     expect(members.some((m) => m.includes('skills/demo/SKILL.md'))).toBe(true)
     expect(members.filter((m) => m.endsWith('.yaml')).length).toBe(2)
+    expect(members.some((m) => m.endsWith('database/logical/logical-backup.json'))).toBe(true)
+
+    const unpacked = join(h.appHome, 'unpacked-layout')
+    await extractTar(r.path, unpacked)
+    const manifest = readManifest(unpacked)
+    expect(manifest).toMatchObject({
+      manifestVersion: 2,
+      database: {
+        format: 'agent-workflow-logical-database-v1',
+        provider: 'sqlite',
+        sourceGenerationId: 'dbg_legacy_sqlite',
+        logicalPath: 'database/logical',
+        rawSqlitePath: 'db.sqlite',
+      },
+    })
+    if (manifest?.manifestVersion !== 2) throw new Error('expected backup manifest v2')
+    expect(
+      readLogicalDatabaseBackupEnvelope({
+        artifactRoot: join(unpacked, manifest.database.logicalPath),
+        expectedFileDigest: manifest.database.envelopeFileDigest,
+      }).payload,
+    ).toMatchObject({
+      sourceProvider: 'sqlite',
+      sourceGenerationId: 'dbg_legacy_sqlite',
+      schemaDigest: manifest.database.schemaDigest,
+      activeTableCount: 178,
+      archiveOnlyTableCount: 6,
+    })
+  })
+
+  test('legacy SQLite backup adapter refuses a live PostgreSQL pointer instead of snapshotting stale db.sqlite', async () => {
+    const contract = buildLogicalSchemaContract()
+    const operationId = 'dbm_backup_source_01'
+    const operationRoot = join(h.appHome, 'database-migrations', operationId)
+    mkdirSync(operationRoot, { recursive: true })
+    const manifestBody = '{}\n'
+    writeFileSync(join(operationRoot, 'manifest.json'), manifestBody)
+    writeDatabaseGenerationAtomic({
+      pointerPath: join(h.appHome, 'database-generation.json'),
+      payload: {
+        version: 1,
+        generationId: 'dbg_postgresql_live_01',
+        provider: 'postgresql',
+        operationId,
+        schemaDigest: contract.digest,
+        manifestDigest: digestDatabaseArtifact(manifestBody),
+        activatedAt: 1,
+      },
+    })
+
+    await expect(createBackup({ db: h.db, appHome: h.appHome })).rejects.toThrow(
+      'cannot snapshot a live PostgreSQL generation',
+    )
   })
 
   test('excludes worktrees, runs, logs, token', async () => {

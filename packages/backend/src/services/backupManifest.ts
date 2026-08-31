@@ -27,8 +27,7 @@ export interface MigrationIdentity {
   lastCreatedAt: number | null
 }
 
-export interface BackupManifest {
-  manifestVersion: 1
+interface BackupManifestBase {
   kind: BackupKind
   createdAt: number
   /** Binary that produced the backup. `pre-migration` restore refuses forward-roll
@@ -37,6 +36,27 @@ export interface BackupManifest {
   includesWorktrees: boolean
   migration: MigrationIdentity
 }
+
+export interface BackupManifestV1 extends BackupManifestBase {
+  manifestVersion: 1
+}
+
+export interface LogicalBackupDatabaseManifest {
+  readonly format: 'agent-workflow-logical-database-v1'
+  readonly provider: 'sqlite' | 'postgresql'
+  readonly sourceGenerationId: string
+  readonly schemaDigest: string
+  readonly logicalPath: 'database/logical'
+  readonly envelopeFileDigest: string
+  readonly rawSqlitePath: 'db.sqlite' | null
+}
+
+export interface BackupManifestV2 extends BackupManifestBase {
+  manifestVersion: 2
+  database: LogicalBackupDatabaseManifest
+}
+
+export type BackupManifest = BackupManifestV1 | BackupManifestV2
 
 /** The running binary's identity for the pre-migration gate. Impl-gate P1-3
  *  (2026-07-22): was `env ?? '0.0.0'` with nothing setting the env — every two
@@ -101,9 +121,30 @@ export function readManifest(dir: string): BackupManifest | null {
   const path = join(dir, MANIFEST_FILENAME)
   if (!existsSync(path)) return null
   try {
-    const m = JSON.parse(readFileSync(path, 'utf-8')) as BackupManifest
-    if (m.manifestVersion !== 1 || typeof m.kind !== 'string' || m.migration == null) return null
-    return m
+    const m = JSON.parse(readFileSync(path, 'utf-8')) as Partial<BackupManifest>
+    if (
+      (m.manifestVersion !== 1 && m.manifestVersion !== 2) ||
+      typeof m.kind !== 'string' ||
+      m.migration == null
+    ) {
+      return null
+    }
+    if (m.manifestVersion === 2) {
+      const database = m.database
+      if (
+        database == null ||
+        database.format !== 'agent-workflow-logical-database-v1' ||
+        (database.provider !== 'sqlite' && database.provider !== 'postgresql') ||
+        typeof database.sourceGenerationId !== 'string' ||
+        !/^sha256:[a-f0-9]{64}$/.test(database.schemaDigest) ||
+        database.logicalPath !== 'database/logical' ||
+        !/^sha256:[a-f0-9]{64}$/.test(database.envelopeFileDigest) ||
+        (database.rawSqlitePath !== 'db.sqlite' && database.rawSqlitePath !== null)
+      ) {
+        return null
+      }
+    }
+    return m as BackupManifest
   } catch {
     return null
   }

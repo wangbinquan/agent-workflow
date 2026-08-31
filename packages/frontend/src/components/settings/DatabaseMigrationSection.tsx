@@ -12,11 +12,12 @@ import {
   databaseMigrationTargetSchema,
   databaseRuntimeOverviewSchema,
   type Config,
+  type DatabaseMigrationArtifactKind,
   type DatabaseMigrationPreflightView,
   type DatabaseMigrationStatusView,
   type DatabaseMigrationTargetView,
 } from '@agent-workflow/shared'
-import { api, apiRequest } from '@/api/client'
+import { api } from '@/api/client'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -25,6 +26,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { SettingsCard } from '@/components/settings/SettingsCard'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
+import { DOWNLOAD_DEADLINE_MS, saveBlobAs } from '@/lib/download'
 
 const OVERVIEW_QUERY = ['database-runtime-overview'] as const
 const MIGRATIONS_QUERY = ['database-migrations'] as const
@@ -63,7 +65,11 @@ export function databaseMigrationFieldErrors(
   const errors: Partial<Record<keyof MigrationDraft, string>> = {}
   for (const issue of parsed.error.issues) {
     const key = issue.path[0]
-    if (typeof key === 'string' && key in draft && errors[key as keyof MigrationDraft] === undefined) {
+    if (
+      typeof key === 'string' &&
+      key in draft &&
+      errors[key as keyof MigrationDraft] === undefined
+    ) {
       errors[key as keyof MigrationDraft] = issue.message
     }
   }
@@ -102,7 +108,39 @@ function phaseKind(status: DatabaseMigrationStatusView): StatusChipKind {
 function statusPercent(status: DatabaseMigrationStatusView): number {
   if (status.phase === 'finalized' || status.phase === 'accepting-writes') return 100
   if (status.progress.tablesTotal === 0) return 0
-  return Math.min(99, Math.floor((status.progress.tablesCompleted / status.progress.tablesTotal) * 100))
+  return Math.min(
+    99,
+    Math.floor((status.progress.tablesCompleted / status.progress.tablesTotal) * 100),
+  )
+}
+
+const MIGRATION_PHASE_ORDER: readonly DatabaseMigrationStatusView['phase'][] = [
+  'planned',
+  'preflighted',
+  'source-frozen',
+  'backed-up',
+  'target-prepared',
+  'copying',
+  'verifying',
+  'cutover-prepared',
+  'switched',
+  'health-checked',
+  'accepting-writes',
+  'finalized',
+]
+
+export function availableDatabaseMigrationArtifacts(
+  status: DatabaseMigrationStatusView,
+): readonly DatabaseMigrationArtifactKind[] {
+  const phase = MIGRATION_PHASE_ORDER.indexOf(status.phase)
+  const kinds: DatabaseMigrationArtifactKind[] = []
+  if (phase >= MIGRATION_PHASE_ORDER.indexOf('verifying')) {
+    kinds.push('logical-backup', 'legacy-archive')
+  }
+  if (phase >= MIGRATION_PHASE_ORDER.indexOf('cutover-prepared')) kinds.push('verification')
+  if (status.phase === 'finalized') kinds.push('receipt')
+  if (status.rolledBackAt !== null) kinds.push('rollback-receipt')
+  return Object.freeze(kinds)
 }
 
 type Confirmation =
@@ -122,6 +160,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
   const [preflight, setPreflight] = useState<DatabaseMigrationPreflightView | null>(null)
   const [preflightTargetKey, setPreflightTargetKey] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [downloadingArtifact, setDownloadingArtifact] =
+    useState<DatabaseMigrationArtifactKind | null>(null)
+  const [artifactError, setArtifactError] = useState<unknown>(null)
   const fieldErrors = useMemo(() => databaseMigrationFieldErrors(draft), [draft])
   const target = databaseMigrationTargetFromDraft(draft)
 
@@ -167,12 +208,12 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
   const startMutation = useMutation({
     mutationFn: async (nextTarget: DatabaseMigrationTargetView) =>
       databaseMigrationStatusViewSchema.parse(
-        await apiRequest('/api/database/migrations', {
-          method: 'POST',
-          body: { idempotencyKey: startIdempotencyKey(nextTarget), target: nextTarget },
-          // Migration duration scales with source size. Durable status polling
-          // is the timeout/recovery contract; a fixed browser deadline is not.
-          deadlineMs: Number.POSITIVE_INFINITY,
+        // The daemon returns the durable planned status (202) before copy;
+        // this request must retain the ordinary bounded JSON deadline. The
+        // two-second query above is the progress/recovery transport.
+        await api.post('/api/database/migrations', {
+          idempotencyKey: startIdempotencyKey(nextTarget),
+          target: nextTarget,
         }),
       ),
     onSuccess: refresh,
@@ -217,6 +258,27 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
     setConfirmation({ kind: 'start', target: nextTarget })
   }
 
+  const downloadArtifact = async (
+    operationId: string,
+    kind: DatabaseMigrationArtifactKind,
+  ): Promise<void> => {
+    if (downloadingArtifact !== null) return
+    setDownloadingArtifact(kind)
+    setArtifactError(null)
+    try {
+      const blob = await api.getBlob(
+        `/api/database/migrations/${encodeURIComponent(operationId)}/artifacts/${encodeURIComponent(kind)}`,
+        undefined,
+        { deadlineMs: DOWNLOAD_DEADLINE_MS },
+      )
+      saveBlobAs(blob, `${operationId}-${kind}.json`)
+    } catch (error) {
+      setArtifactError(error)
+    } finally {
+      setDownloadingArtifact(null)
+    }
+  }
+
   const confirmTitle =
     confirmation?.kind === 'start'
       ? t('settings.database.confirmTitle')
@@ -227,7 +289,10 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
           : t('settings.database.cancelTitle')
 
   return (
-    <div className="form-grid database-migration-settings" data-testid="database-migration-settings">
+    <div
+      className="form-grid database-migration-settings"
+      data-testid="database-migration-settings"
+    >
       <SettingsCard
         title={t('settings.database.runtimeTitle')}
         hint={t('settings.database.runtimeHint')}
@@ -247,15 +312,23 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
             <dl className="database-migration-facts">
               <div>
                 <dt>{t('settings.database.generation')}</dt>
-                <dd><code>{overview.data.generationId}</code></dd>
+                <dd>
+                  <code>{overview.data.generationId}</code>
+                </dd>
               </div>
               <div>
                 <dt>{t('settings.database.fingerprint')}</dt>
-                <dd><code>{overview.data.databaseFingerprint ?? t('settings.database.unavailable')}</code></dd>
+                <dd>
+                  <code>
+                    {overview.data.databaseFingerprint ?? t('settings.database.unavailable')}
+                  </code>
+                </dd>
               </div>
               <div>
                 <dt>{t('settings.database.schemaDigest')}</dt>
-                <dd><code>{overview.data.schemaDigest}</code></dd>
+                <dd>
+                  <code>{overview.data.schemaDigest}</code>
+                </dd>
               </div>
               <div>
                 <dt>{t('settings.database.sourceSize')}</dt>
@@ -301,7 +374,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
             onChange={(urlEnv) => setDraft({ ...draft, urlEnv })}
             autoComplete="off"
             aria-invalid={fieldErrors.urlEnv !== undefined}
-            aria-errormessage={fieldErrors.urlEnv === undefined ? undefined : 'database-url-env-error'}
+            aria-errormessage={
+              fieldErrors.urlEnv === undefined ? undefined : 'database-url-env-error'
+            }
             data-testid="database-url-env"
           />
         </Field>
@@ -318,7 +393,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
               min={1}
               max={256}
               aria-invalid={fieldErrors.poolMax !== undefined}
-              aria-errormessage={fieldErrors.poolMax === undefined ? undefined : 'database-pool-max-error'}
+              aria-errormessage={
+                fieldErrors.poolMax === undefined ? undefined : 'database-pool-max-error'
+              }
             />
           </Field>
           <Field
@@ -334,7 +411,11 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
               max={120_000}
               step={1_000}
               aria-invalid={fieldErrors.connectTimeoutMs !== undefined}
-              aria-errormessage={fieldErrors.connectTimeoutMs === undefined ? undefined : 'database-connect-timeout-error'}
+              aria-errormessage={
+                fieldErrors.connectTimeoutMs === undefined
+                  ? undefined
+                  : 'database-connect-timeout-error'
+              }
             />
           </Field>
           <Field
@@ -350,7 +431,11 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
               max={3_600_000}
               step={1_000}
               aria-invalid={fieldErrors.statementTimeoutMs !== undefined}
-              aria-errormessage={fieldErrors.statementTimeoutMs === undefined ? undefined : 'database-statement-timeout-error'}
+              aria-errormessage={
+                fieldErrors.statementTimeoutMs === undefined
+                  ? undefined
+                  : 'database-statement-timeout-error'
+              }
             />
           </Field>
           <Field
@@ -366,7 +451,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
               max={600_000}
               step={1_000}
               aria-invalid={fieldErrors.idleTimeoutMs !== undefined}
-              aria-errormessage={fieldErrors.idleTimeoutMs === undefined ? undefined : 'database-idle-timeout-error'}
+              aria-errormessage={
+                fieldErrors.idleTimeoutMs === undefined ? undefined : 'database-idle-timeout-error'
+              }
             />
           </Field>
         </div>
@@ -435,10 +522,25 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
               <progress max={100} value={statusPercent(latest)} />
             </label>
             <dl className="database-migration-facts">
-              <div><dt>{t('settings.database.currentTable')}</dt><dd>{latest.progress.table ?? '—'}</dd></div>
-              <div><dt>{t('settings.database.rowsCopied')}</dt><dd>{latest.progress.rowsCopied.toLocaleString()}</dd></div>
-              <div><dt>{t('settings.database.bytesCopied')}</dt><dd>{formatBytes(latest.progress.bytesCopied)}</dd></div>
-              <div><dt>{t('settings.database.tablePlan')}</dt><dd>{latest.tableCounts.source} = {latest.tableCounts.active} + {latest.tableCounts.archiveOnly}</dd></div>
+              <div>
+                <dt>{t('settings.database.currentTable')}</dt>
+                <dd>{latest.progress.table ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('settings.database.rowsCopied')}</dt>
+                <dd>{latest.progress.rowsCopied.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>{t('settings.database.bytesCopied')}</dt>
+                <dd>{formatBytes(latest.progress.bytesCopied)}</dd>
+              </div>
+              <div>
+                <dt>{t('settings.database.tablePlan')}</dt>
+                <dd>
+                  {latest.tableCounts.source} = {latest.tableCounts.active} +{' '}
+                  {latest.tableCounts.archiveOnly}
+                </dd>
+              </div>
             </dl>
             {latest.failure !== null && (
               <NoticeBanner tone="error" title={latest.failure.category}>
@@ -468,7 +570,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
                 <button
                   type="button"
                   className="btn"
-                  onClick={() => setConfirmation({ kind: 'cancel', operationId: latest.operationId })}
+                  onClick={() =>
+                    setConfirmation({ kind: 'cancel', operationId: latest.operationId })
+                  }
                   disabled={operationMutation.isPending}
                 >
                   {t('settings.database.cancel')}
@@ -478,7 +582,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
                 <button
                   type="button"
                   className="btn btn--danger"
-                  onClick={() => setConfirmation({ kind: 'rollback', operationId: latest.operationId })}
+                  onClick={() =>
+                    setConfirmation({ kind: 'rollback', operationId: latest.operationId })
+                  }
                   disabled={operationMutation.isPending}
                 >
                   {t('settings.database.rollback')}
@@ -488,13 +594,33 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
                 <button
                   type="button"
                   className="btn btn--primary"
-                  onClick={() => setConfirmation({ kind: 'finalize', operationId: latest.operationId })}
+                  onClick={() =>
+                    setConfirmation({ kind: 'finalize', operationId: latest.operationId })
+                  }
                   disabled={operationMutation.isPending}
                 >
                   {t('settings.database.finalize')}
                 </button>
               )}
             </div>
+            {availableDatabaseMigrationArtifacts(latest).length > 0 && (
+              <div className="form-actions" aria-label={t('settings.database.artifacts')}>
+                {availableDatabaseMigrationArtifacts(latest).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() => void downloadArtifact(latest.operationId, kind)}
+                    disabled={downloadingArtifact !== null}
+                  >
+                    {downloadingArtifact === kind
+                      ? t('settings.database.downloadingArtifact')
+                      : t(`settings.database.artifactKinds.${kind}`)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {artifactError !== null && <ErrorBanner error={artifactError} />}
             {operationMutation.error !== null && <ErrorBanner error={operationMutation.error} />}
           </div>
         )}
@@ -526,7 +652,11 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
           )
         }
         confirmLabel={t('common.confirm')}
-        tone={confirmation?.kind === 'rollback' || confirmation?.kind === 'cancel' ? 'danger' : 'default'}
+        tone={
+          confirmation?.kind === 'rollback' || confirmation?.kind === 'cancel'
+            ? 'danger'
+            : 'default'
+        }
         confirmInput={
           confirmation?.kind === 'start'
             ? {

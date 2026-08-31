@@ -37,7 +37,7 @@ import { createIdentityAccessRuntime } from './modules/identity-access/compositi
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
 import { composeResourcePackageOperations } from './modules/resource-catalog/composition/resourcePackageOperations'
 import { composeLocalSystemOperations } from './modules/system-operations/composition'
-import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/databaseMigrationComposition'
+import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/composition/databaseMigration'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,

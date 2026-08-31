@@ -46,6 +46,15 @@ export interface WorktreeCaptureResult {
   skipped: { taskId: string; reason: string }[]
 }
 
+/** Provider-neutral row shape consumed by the filesystem archive mechanism. */
+export interface WorktreeCaptureRow {
+  readonly id: string
+  readonly worktreePath: string
+  readonly branch: string
+  readonly repoPath: string
+  readonly baseCommit: string | null
+}
+
 /** Bytes under `dir`, skipping a top-level `.git`. */
 function dirSizeExclGit(dir: string): number {
   let total = 0
@@ -75,27 +84,17 @@ function dirSizeExclGit(dir: string): number {
 }
 
 /**
- * Capture non-terminal tasks' worktrees into `${stagingDir}/worktrees/`. Each
- * becomes `<taskId>.tar.gz` (working tree minus .git) + `<taskId>.json` (meta).
+ * Capture already-selected worktree rows into `${stagingDir}/worktrees/`.
+ * Each becomes `<taskId>.tar.gz` (working tree minus .git) +
+ * `<taskId>.json` (meta). Database adapters own the live-status query; this
+ * mechanism owns only the filesystem archive behavior.
  */
-export async function captureWorktrees(
-  db: DbClient,
+export async function captureWorktreeRows(
+  rows: readonly WorktreeCaptureRow[],
   stagingDir: string,
   opts?: { maxBytes?: number },
 ): Promise<WorktreeCaptureResult> {
   const maxBytes = opts?.maxBytes ?? DEFAULT_MAX_WORKTREE_BYTES
-  const rows = db
-    .select({
-      id: tasks.id,
-      worktreePath: tasks.worktreePath,
-      branch: tasks.branch,
-      repoPath: tasks.repoPath,
-      baseCommit: tasks.baseCommit,
-    })
-    .from(tasks)
-    .where(inArray(tasks.status, [...LIVE_WORKTREE_TASK_STATUSES]))
-    .all()
-
   const wtDir = join(stagingDir, 'worktrees')
   mkdirSync(wtDir, { recursive: true })
   const captured: string[] = []
@@ -144,6 +143,30 @@ export async function captureWorktrees(
   }
   log.info('worktrees captured', { captured: captured.length, skipped: skipped.length })
   return { captured, skipped }
+}
+
+/**
+ * SQLite compatibility entrypoint: select non-terminal tasks with the
+ * historical Drizzle query, then delegate to the provider-neutral archive
+ * mechanism above.
+ */
+export async function captureWorktrees(
+  db: DbClient,
+  stagingDir: string,
+  opts?: { maxBytes?: number },
+): Promise<WorktreeCaptureResult> {
+  const rows = db
+    .select({
+      id: tasks.id,
+      worktreePath: tasks.worktreePath,
+      branch: tasks.branch,
+      repoPath: tasks.repoPath,
+      baseCommit: tasks.baseCommit,
+    })
+    .from(tasks)
+    .where(inArray(tasks.status, [...LIVE_WORKTREE_TASK_STATUSES]))
+    .all()
+  return await captureWorktreeRows(rows, stagingDir, opts)
 }
 
 export interface WorktreeReconstructResult {

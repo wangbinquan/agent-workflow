@@ -2,11 +2,11 @@
 
 import { applyConfigPatch } from '@/config'
 import { Paths } from '@/util/paths'
-import { createDatabaseMigrationApplication } from './application/databaseMigrationApplication'
-import type { DatabaseMigrationAdmissionPort } from './application/databaseMigrationRunner'
-import { createDatabaseMigrationCoordinator } from './infrastructure/databaseMigrationCoordinator'
-import { createDatabaseMigrationOperationDescriptors } from './public/databaseMigrationOperations'
-import type { LocalSystemOperationContext } from './public/types'
+import { createDatabaseMigrationApplication } from '../application/databaseMigrationApplication'
+import type { DatabaseMigrationAdmissionPort } from '../application/databaseMigrationRunner'
+import { createDatabaseMigrationCoordinator } from '../infrastructure/databaseMigrationCoordinator'
+import { createDatabaseMigrationOperationDescriptors } from '../public/operations'
+import type { LocalSystemOperationContext } from '../public/types'
 
 export interface DatabaseMigrationModule {
   readonly application: ReturnType<typeof createDatabaseMigrationApplication>
@@ -20,12 +20,19 @@ export function composeDatabaseMigrationModule(input: {
   readonly operationsRoot?: string
   readonly generationPointerPath?: string
   readonly configPath?: string
+  readonly executionMode?: 'inline' | 'background'
+  readonly onBackgroundFailure?: (input: {
+    readonly operationId: string
+    readonly error: unknown
+  }) => void
 }): DatabaseMigrationModule {
   const coordinator = createDatabaseMigrationCoordinator({
     sqlitePath: input.sqlitePath ?? Paths.db,
     operationsRoot: input.operationsRoot ?? Paths.databaseMigrationsDir,
     generationPointerPath: input.generationPointerPath ?? Paths.databaseGenerationPointer,
     admission: input.admission,
+    executionMode: input.executionMode,
+    onBackgroundFailure: input.onBackgroundFailure,
     activateTargetConfig(target) {
       applyConfigPatch(input.configPath ?? Paths.config, { database: target })
     },

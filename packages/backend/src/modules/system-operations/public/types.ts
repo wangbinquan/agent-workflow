@@ -2,6 +2,40 @@
 
 import { z } from 'zod'
 
+// RFC-349 — the system-operations public contract is shared byte-for-byte with
+// Settings. Keep provider clients and raw connection URLs outside this surface.
+export {
+  databaseMigrationArtifactInputSchema,
+  databaseMigrationArtifactKindSchema,
+  databaseMigrationArtifactViewSchema,
+  databaseMigrationLegacyChunkInputSchema,
+  databaseMigrationLegacyTableInputSchema,
+  databaseMigrationLegacyTableViewSchema,
+  databaseMigrationListViewSchema,
+  databaseMigrationOperationInputSchema,
+  databaseMigrationPreflightInputSchema,
+  databaseMigrationPreflightViewSchema,
+  databaseMigrationStatusViewSchema,
+  databaseMigrationTableCountsSchema,
+  databaseMigrationTargetSchema,
+  databaseRuntimeOverviewSchema,
+  startDatabaseMigrationInputSchema,
+  type DatabaseMigrationArtifactInput,
+  type DatabaseMigrationArtifactKind,
+  type DatabaseMigrationArtifactView,
+  type DatabaseMigrationLegacyChunkInput,
+  type DatabaseMigrationLegacyTableInput,
+  type DatabaseMigrationLegacyTableView,
+  type DatabaseMigrationListView,
+  type DatabaseMigrationOperationInput,
+  type DatabaseMigrationPreflightInput,
+  type DatabaseMigrationPreflightView,
+  type DatabaseMigrationStatusView,
+  type DatabaseMigrationTargetView,
+  type DatabaseRuntimeOverview,
+  type StartDatabaseMigrationInput,
+} from '@agent-workflow/shared'
+
 // Authority-bearing contexts stay on executable commands/queries. This file
 // remains DTO/ref-only so request authority cannot leak through public types.
 declare const localSystemOperationContextBrand: unique symbol

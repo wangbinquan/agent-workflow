@@ -11,7 +11,13 @@
 
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { FRONTEND_FILES, IS_EMBEDDED, MIGRATION_FILES } from './embed.generated'
+import {
+  FRONTEND_FILES,
+  IS_EMBEDDED,
+  MIGRATION_FILES,
+  POSTGRESQL_MIGRATION_BUNDLE_DIGEST,
+  POSTGRESQL_MIGRATION_FILES,
+} from './embed.generated'
 
 export { IS_EMBEDDED }
 
@@ -29,11 +35,19 @@ export function listEmbeddedFrontendPaths(): string[] {
  * `meta/_journal.json` is metadata, not a migration).
  */
 export function countEmbeddedSqlMigrations(): number {
-  let count = 0
-  for (const rel of Object.keys(MIGRATION_FILES)) {
-    if (rel.endsWith('.sql')) count++
-  }
-  return count
+  return countSqlFiles(MIGRATION_FILES)
+}
+
+export function countEmbeddedPostgresqlSqlMigrations(): number {
+  return countSqlFiles(POSTGRESQL_MIGRATION_FILES)
+}
+
+export function embeddedPostgresqlMigrationBundleDigest(): string {
+  return POSTGRESQL_MIGRATION_BUNDLE_DIGEST
+}
+
+function countSqlFiles(files: Readonly<Record<string, string>>): number {
+  return Object.keys(files).filter((rel) => rel.endsWith('.sql')).length
 }
 
 export interface EmbeddedAsset {
@@ -86,6 +100,11 @@ export async function getEmbeddedFrontendResponse(
  */
 export async function extractMigrationsTo(targetDir: string): Promise<number> {
   return extractFilesTo(targetDir, MIGRATION_FILES)
+}
+
+/** Extract the independent PostgreSQL history carried by a compiled binary. */
+export async function extractPostgresqlMigrationsTo(targetDir: string): Promise<number> {
+  return extractFilesTo(targetDir, POSTGRESQL_MIGRATION_FILES)
 }
 
 /**

@@ -2,11 +2,14 @@
 // and mutating commands hold the daemon lock for the whole operation.
 
 import { describe, expect, test } from 'bun:test'
-import { databaseCommand, formatDatabaseMigrationStatus } from '@/cli/database'
+import {
+  databaseCommand,
+  formatDatabaseMigrationStatus,
+  type LocalDatabaseMigrationOperations,
+} from '@/cli/database'
 import { createDatabaseMigrationApplication } from '@/modules/system-operations/application/databaseMigrationApplication'
 import type { DatabaseMigrationCoordinatorPort } from '@/modules/system-operations/application/ports/databaseMigrationCoordinator'
-import type { LocalDatabaseMigrationOperations } from '@/modules/system-operations/databaseMigrationComposition'
-import type { DatabaseMigrationStatusView } from '@/modules/system-operations/public/databaseMigrationTypes'
+import type { DatabaseMigrationStatusView } from '@/modules/system-operations/public/types'
 import type { LocalSystemOperationContext } from '@/modules/system-operations/public/types'
 import { DaemonLockHeldError, type Lock } from '@/util/lock'
 
@@ -74,6 +77,28 @@ const preflight = {
   sourceRows: 12_345,
   tableCounts: status.tableCounts,
 }
+const artifactDigest = `sha256:${'c'.repeat(64)}`
+const receiptArtifact = {
+  operationId: status.operationId,
+  kind: 'receipt' as const,
+  fileName: `${status.operationId}-receipt.json`,
+  contentType: 'application/json; charset=utf-8' as const,
+  byteLength: 3,
+  digest: artifactDigest,
+  fileDigest: artifactDigest,
+  json: '{}\n',
+}
+const legacyInspection = {
+  operationId: status.operationId,
+  table: 'code_artifacts',
+  disposition: 'ARCHIVE_THEN_OMIT' as const,
+  rowCount: 2,
+  chunkCount: 1,
+  firstKey: ['{"type":"text","value":"a"}'],
+  lastKey: ['{"type":"text","value":"b"}'],
+  rootDigest: artifactDigest,
+  blobBytes: 0,
+}
 
 function fixture() {
   const calls: Array<{ action: string; input: unknown }> = []
@@ -113,6 +138,18 @@ function fixture() {
       calls.push({ action: 'overview', input: {} })
       return overview
     },
+    async readArtifact(input) {
+      calls.push({ action: 'readArtifact', input })
+      return receiptArtifact
+    },
+    async inspectLegacyTable(input) {
+      calls.push({ action: 'inspectLegacyTable', input })
+      return legacyInspection
+    },
+    async readLegacyChunk(input) {
+      calls.push({ action: 'readLegacyChunk', input })
+      return { ...receiptArtifact, kind: 'legacy-archive-chunk' as const }
+    },
     async resumeInterrupted() {
       return null
     },
@@ -121,7 +158,6 @@ function fixture() {
   const operations: LocalDatabaseMigrationOperations = {
     context: {} as LocalSystemOperationContext,
     application,
-    coordinator,
   }
   let acquired = 0
   let released = 0
@@ -249,5 +285,46 @@ describe('RFC-349 database CLI', () => {
     expect(output).toContain('184 source (178 active + 6 archive-only)')
     expect(output).toContain('rows=12345')
     expect(output).toContain('rollback:')
+  })
+
+  test('inspects and exports only bounded verified legacy artifacts without the daemon lock', async () => {
+    const fake = fixture()
+    const operationId = status.operationId
+    expect(
+      await databaseCommand(
+        ['legacy', 'inspect', operationId, 'code_artifacts'],
+        fake.operations,
+        fake.lockFactory,
+      ),
+    ).toMatchObject({
+      status: 'ok',
+      output: expect.stringContaining('chunks:       1'),
+    })
+    expect(
+      await databaseCommand(
+        ['legacy', 'export', operationId, 'code_artifacts', '--chunk', '0'],
+        fake.operations,
+        fake.lockFactory,
+      ),
+    ).toEqual({ status: 'ok', output: '{}\n' })
+    expect(
+      await databaseCommand(
+        ['migration', 'artifact', operationId, 'receipt'],
+        fake.operations,
+        fake.lockFactory,
+      ),
+    ).toEqual({ status: 'ok', output: '{}\n' })
+    expect(fake.calls).toEqual([
+      {
+        action: 'inspectLegacyTable',
+        input: { operationId, table: 'code_artifacts' },
+      },
+      {
+        action: 'readLegacyChunk',
+        input: { operationId, table: 'code_artifacts', chunkIndex: 0 },
+      },
+      { action: 'readArtifact', input: { operationId, kind: 'receipt' } },
+    ])
+    expect(fake.acquired).toBe(0)
   })
 })

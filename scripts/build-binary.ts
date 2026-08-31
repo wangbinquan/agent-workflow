@@ -3,7 +3,8 @@
 //
 // Steps:
 //   1. `bun --filter @agent-workflow/frontend build` → packages/frontend/dist/
-//   2. Walk that dist + packages/backend/db/migrations and render an in-memory
+//   2. Walk that dist + the independent SQLite/PostgreSQL migration histories
+//      and render an in-memory
 //      embed.generated.ts with `import … with { type: 'file' }` declarations
 //      for every file. The runtime helpers in packages/backend/src/embed.ts
 //      read from those imports.
@@ -20,7 +21,8 @@
 //   - The binary name follows the design.md convention: macos / linux + arm64
 //     / x86_64. (`process.arch` returns 'x64' for x86_64; we rename it.)
 
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join, posix, relative, resolve } from 'node:path'
@@ -28,6 +30,7 @@ import { basename, dirname, join, posix, relative, resolve } from 'node:path'
 const repoRoot = resolve(import.meta.dirname, '..')
 const frontendDist = join(repoRoot, 'packages', 'frontend', 'dist')
 const migrationsDir = join(repoRoot, 'packages', 'backend', 'db', 'migrations')
+const postgresqlMigrationsDir = join(repoRoot, 'packages', 'backend', 'db', 'postgresql-migrations')
 const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 // RFC-029: opencode plugin .mjs files that need to ride along inside the
 // binary so the runner can copy them into per-run dirs at task time.
@@ -112,6 +115,18 @@ function hashCode(s: string): number {
   return h
 }
 
+function fileBundleDigest(root: string, files: readonly string[]): string {
+  const hash = createHash('sha256')
+  for (const abs of files) {
+    const rel = relative(root, abs).split(/[\\/]/).join(posix.sep)
+    hash.update(rel)
+    hash.update('\0')
+    hash.update(readFileSync(abs))
+    hash.update('\0')
+  }
+  return `sha256:${hash.digest('hex')}`
+}
+
 async function run(cmd: string[], cwd: string, env?: Record<string, string>): Promise<void> {
   process.stdout.write(`\n$ ${cmd.join(' ')}\n`)
   const proc = Bun.spawn(cmd, {
@@ -149,12 +164,14 @@ function renderGenerated(
   readonly counts: {
     readonly frontendCount: number
     readonly migrationCount: number
+    readonly postgresqlMigrationCount: number
     readonly pluginCount: number
     readonly grammarCount: number
   }
 } {
   const frontFiles = walkFiles(frontendDist)
   const migFiles = walkFiles(migrationsDir)
+  const postgresqlMigFiles = walkFiles(postgresqlMigrationsDir)
   // RFC-029: only `.mjs` plugin assets get embedded (the .ts source is
   // dev-time only; the runner copies the .mjs into the per-run dir).
   const pluginFiles = walkFiles(pluginsDir).filter((p) => p.endsWith('.mjs'))
@@ -172,6 +189,15 @@ function renderGenerated(
     const id = safeIdent('fe', rel)
     lines.push(`import ${id} from '${relImport(abs)}' with { type: 'file' }`)
     frontEntries.push([rel, id])
+  }
+  lines.push('')
+
+  const postgresqlMigEntries: Array<[string, string]> = []
+  for (const abs of postgresqlMigFiles) {
+    const rel = relative(postgresqlMigrationsDir, abs).split(/[\\/]/).join(posix.sep)
+    const id = safeIdent('pgmig', rel)
+    lines.push(`import ${id} from '${relImport(abs)}' with { type: 'file' }`)
+    postgresqlMigEntries.push([rel, id])
   }
   lines.push('')
 
@@ -214,6 +240,15 @@ function renderGenerated(
   lines.push('}')
   lines.push('')
 
+  lines.push('export const POSTGRESQL_MIGRATION_FILES: Record<string, string> = {')
+  for (const [rel, id] of postgresqlMigEntries) lines.push(`  ${JSON.stringify(rel)}: ${id},`)
+  lines.push('}')
+  lines.push('')
+  lines.push(
+    `export const POSTGRESQL_MIGRATION_BUNDLE_DIGEST = ${JSON.stringify(fileBundleDigest(postgresqlMigrationsDir, postgresqlMigFiles))}`,
+  )
+  lines.push('')
+
   lines.push('export const PLUGIN_FILES: Record<string, string> = {')
   for (const [rel, id] of pluginEntries) lines.push(`  ${JSON.stringify(rel)}: ${id},`)
   lines.push('}')
@@ -240,6 +275,7 @@ function renderGenerated(
     counts: {
       frontendCount: frontEntries.length,
       migrationCount: migEntries.length,
+      postgresqlMigrationCount: postgresqlMigEntries.length,
       pluginCount: pluginEntries.length,
       grammarCount: grammarEntries.length,
     },
@@ -355,7 +391,7 @@ async function main(): Promise<void> {
   const generated = renderGenerated(managedProcessLauncherSource, gitCredentialHelperSource)
   const counts = generated.counts
   process.stdout.write(
-    `\nprepared virtual ${generatedPath}: ${counts.frontendCount} frontend files + ${counts.migrationCount} migration files + ${counts.pluginCount} opencode-plugin files + ${counts.grammarCount} grammar wasms\n`,
+    `\nprepared virtual ${generatedPath}: ${counts.frontendCount} frontend files + ${counts.migrationCount} SQLite migration files + ${counts.postgresqlMigrationCount} PostgreSQL migration files + ${counts.pluginCount} opencode-plugin files + ${counts.grammarCount} grammar wasms\n`,
   )
 
   // 3. bun build --compile.

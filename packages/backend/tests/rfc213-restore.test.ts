@@ -200,6 +200,38 @@ describe('RFC-213 restore — crash-safe swap over a live WAL', () => {
 })
 
 describe('RFC-213 restore refusals leave the live DB untouched', () => {
+  test('a valid raw SQLite payload that differs from its logical snapshot is refused', async () => {
+    const appHome = tmp('rfc349-raw-logical-mismatch-')
+    const dbPath = join(appHome, 'db.sqlite')
+    await seedWorkflows(dbPath, 2)
+
+    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const backup = await createBackup({ db, appHome, now: 1 })
+    sqliteOf(db).close()
+    const liveBytes = readFileSync(dbPath)
+    const liveCounts = allTableCounts(dbPath)
+
+    // Keep both the V2 manifest and logical artifact valid, but alter only the
+    // raw SQLite extra. quick_check still passes; the cross-payload comparison
+    // must catch the row-level split before a safety backup or live swap occurs.
+    const staging = tmp('rfc349-raw-logical-mismatch-stage-')
+    await extractTarGz(backup.path, staging)
+    const raw = new Database(join(staging, 'db.sqlite'))
+    raw.exec('DELETE FROM workflows WHERE id = (SELECT id FROM workflows LIMIT 1);')
+    raw.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+    raw.close()
+    expect(allTableCounts(join(staging, 'db.sqlite')).workflows).toBe(1)
+
+    const mismatchedTar = join(appHome, 'raw-logical-mismatch.tar.gz')
+    await tarGz(staging, mismatchedTar)
+
+    await expect(
+      restoreBackup(mismatchedTar, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 }),
+    ).rejects.toThrow('restore refused: raw and logical database payload verification failed')
+    expect(readFileSync(dbPath)).toEqual(liveBytes)
+    expect(allTableCounts(dbPath)).toEqual(liveCounts)
+  })
+
   test('a corrupt incoming backup is refused (RestoreIntegrityError)', async () => {
     const appHome = tmp('rfc213-corrupt-')
     const dbPath = join(appHome, 'db.sqlite')

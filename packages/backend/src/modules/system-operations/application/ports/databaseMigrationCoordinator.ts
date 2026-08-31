@@ -1,4 +1,9 @@
 import type {
+  DatabaseMigrationArtifactInput,
+  DatabaseMigrationArtifactView,
+  DatabaseMigrationLegacyChunkInput,
+  DatabaseMigrationLegacyTableInput,
+  DatabaseMigrationLegacyTableView,
   DatabaseMigrationOperationInput,
   DatabaseMigrationPreflightInput,
   DatabaseMigrationPreflightView,
@@ -6,7 +11,7 @@ import type {
   DatabaseMigrationTargetView,
   DatabaseRuntimeOverview,
   StartDatabaseMigrationInput,
-} from '../../public/databaseMigrationTypes'
+} from '../../public/types'
 
 export interface DatabaseMigrationCoordinatorPort {
   start(input: StartDatabaseMigrationInput): Promise<DatabaseMigrationStatusView>
@@ -18,6 +23,13 @@ export interface DatabaseMigrationCoordinatorPort {
   get(input: DatabaseMigrationOperationInput): Promise<DatabaseMigrationStatusView>
   list(): Promise<readonly DatabaseMigrationStatusView[]>
   overview(): Promise<DatabaseRuntimeOverview>
+  readArtifact(input: DatabaseMigrationArtifactInput): Promise<DatabaseMigrationArtifactView>
+  inspectLegacyTable(
+    input: DatabaseMigrationLegacyTableInput,
+  ): Promise<DatabaseMigrationLegacyTableView>
+  readLegacyChunk(input: DatabaseMigrationLegacyChunkInput): Promise<DatabaseMigrationArtifactView>
   /** Boot-only recovery hook; not exported through the public command surface. */
-  resumeInterrupted(target: DatabaseMigrationTargetView): Promise<DatabaseMigrationStatusView | null>
+  resumeInterrupted(
+    target: DatabaseMigrationTargetView,
+  ): Promise<DatabaseMigrationStatusView | null>
 }

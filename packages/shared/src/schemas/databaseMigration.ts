@@ -27,9 +27,7 @@ export const databaseMigrationTableCountsSchema = z
 export const databaseMigrationPreflightInputSchema = z
   .object({ target: databaseMigrationTargetSchema })
   .strict()
-export type DatabaseMigrationPreflightInput = z.infer<
-  typeof databaseMigrationPreflightInputSchema
->
+export type DatabaseMigrationPreflightInput = z.infer<typeof databaseMigrationPreflightInputSchema>
 
 export const databaseMigrationPreflightViewSchema = z
   .object({
@@ -49,9 +47,7 @@ export const databaseMigrationPreflightViewSchema = z
     tableCounts: databaseMigrationTableCountsSchema,
   })
   .strict()
-export type DatabaseMigrationPreflightView = z.infer<
-  typeof databaseMigrationPreflightViewSchema
->
+export type DatabaseMigrationPreflightView = z.infer<typeof databaseMigrationPreflightViewSchema>
 
 export const databaseRuntimeOverviewSchema = z
   .object({
@@ -60,7 +56,10 @@ export const databaseRuntimeOverviewSchema = z
     schemaDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     databaseFingerprint: z.string().min(1).max(256).nullable(),
     serverVersion: z.string().min(1).max(256).nullable(),
-    operationId: z.string().regex(/^dbm_[A-Za-z0-9_-]{8,128}$/).nullable(),
+    operationId: z
+      .string()
+      .regex(/^dbm_[A-Za-z0-9_-]{8,128}$/)
+      .nullable(),
     target: databaseMigrationTargetSchema.nullable(),
     source: z
       .object({
@@ -86,8 +85,78 @@ export type StartDatabaseMigrationInput = z.infer<typeof startDatabaseMigrationI
 export const databaseMigrationOperationInputSchema = z
   .object({ operationId: z.string().regex(/^dbm_[A-Za-z0-9_-]{8,128}$/) })
   .strict()
-export type DatabaseMigrationOperationInput = z.infer<
-  typeof databaseMigrationOperationInputSchema
+export type DatabaseMigrationOperationInput = z.infer<typeof databaseMigrationOperationInputSchema>
+
+export const databaseMigrationArtifactKindSchema = z.enum([
+  'logical-backup',
+  'legacy-archive',
+  'verification',
+  'receipt',
+  'rollback-receipt',
+])
+export type DatabaseMigrationArtifactKind = z.infer<typeof databaseMigrationArtifactKindSchema>
+
+export const databaseMigrationArtifactInputSchema = databaseMigrationOperationInputSchema
+  .extend({ kind: databaseMigrationArtifactKindSchema })
+  .strict()
+export type DatabaseMigrationArtifactInput = z.infer<typeof databaseMigrationArtifactInputSchema>
+
+const databaseMigrationDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)
+
+/**
+ * A verified JSON artifact. `digest` is the durable operation/content anchor;
+ * `fileDigest` covers the exact UTF-8 bytes returned in `json`.
+ */
+export const databaseMigrationArtifactViewSchema = z
+  .object({
+    operationId: z.string().regex(/^dbm_[A-Za-z0-9_-]{8,128}$/),
+    kind: z.enum([
+      'logical-backup',
+      'legacy-archive',
+      'legacy-archive-chunk',
+      'verification',
+      'receipt',
+      'rollback-receipt',
+    ]),
+    fileName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}\.json$/),
+    contentType: z.literal('application/json; charset=utf-8'),
+    byteLength: z.number().int().nonnegative(),
+    digest: databaseMigrationDigestSchema,
+    fileDigest: databaseMigrationDigestSchema,
+    json: z.string(),
+  })
+  .strict()
+export type DatabaseMigrationArtifactView = z.infer<typeof databaseMigrationArtifactViewSchema>
+
+export const databaseMigrationLegacyTableInputSchema = databaseMigrationOperationInputSchema
+  .extend({ table: z.string().regex(/^[a-z][a-z0-9_]{0,127}$/) })
+  .strict()
+export type DatabaseMigrationLegacyTableInput = z.infer<
+  typeof databaseMigrationLegacyTableInputSchema
+>
+
+export const databaseMigrationLegacyTableViewSchema = z
+  .object({
+    operationId: z.string().regex(/^dbm_[A-Za-z0-9_-]{8,128}$/),
+    table: z.string().regex(/^[a-z][a-z0-9_]{0,127}$/),
+    disposition: z.literal('ARCHIVE_THEN_OMIT'),
+    rowCount: z.number().int().nonnegative(),
+    chunkCount: z.number().int().nonnegative(),
+    firstKey: z.array(z.string()).nullable(),
+    lastKey: z.array(z.string()).nullable(),
+    rootDigest: databaseMigrationDigestSchema,
+    blobBytes: z.number().int().nonnegative(),
+  })
+  .strict()
+export type DatabaseMigrationLegacyTableView = z.infer<
+  typeof databaseMigrationLegacyTableViewSchema
+>
+
+export const databaseMigrationLegacyChunkInputSchema = databaseMigrationLegacyTableInputSchema
+  .extend({ chunkIndex: z.number().int().nonnegative() })
+  .strict()
+export type DatabaseMigrationLegacyChunkInput = z.infer<
+  typeof databaseMigrationLegacyChunkInputSchema
 >
 
 export const databaseMigrationStatusViewSchema = z

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   createLogicalArtifactManifest,
   createLogicalTableChunk,
+  compareCanonicalLogicalKeys,
   decodeLogicalValue,
   encodeLogicalRow,
   encodeLogicalValue,
@@ -124,6 +125,21 @@ describe('RFC-349 provider-neutral logical artifact', () => {
     expect(() =>
       encodeLogicalValue('fixture_rows', column('payload', 'json-text'), '{broken'),
     ).toThrow('invalid JSON')
+    expect(
+      compareCanonicalLogicalKeys(
+        [{ type: 'integer', value: '9007199254740992' }],
+        [{ type: 'integer', value: '9007199254740993' }],
+      ),
+    ).toBe(-1)
+    expect(
+      compareCanonicalLogicalKeys([{ type: 'text', value: 'z' }], [{ type: 'text', value: 'é' }]),
+    ).toBe(-1)
+    expect(() =>
+      compareCanonicalLogicalKeys(
+        [{ type: 'text', value: '1' }],
+        [{ type: 'integer', value: '1' }],
+      ),
+    ).toThrow('incompatible scalar types')
   })
 
   test('binds chunk and manifest digests to exact row order and bytes', () => {

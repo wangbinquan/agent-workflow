@@ -8,12 +8,14 @@ import { join } from 'node:path'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { createDatabaseMigrationControlPlane } from '../application/databaseMigrationControlPlane'
 import {
+  classifyDatabaseMigrationFailure,
   createDatabaseMigrationRunner,
   type DatabaseMigrationAdmissionPort,
   type DatabaseMigrationSafetyBackupPort,
 } from '../application/databaseMigrationRunner'
 import type { DatabaseMigrationCoordinatorPort } from '../application/ports/databaseMigrationCoordinator'
 import { createFileDatabaseMigrationStore } from './fileDatabaseMigrationStore'
+import { createDatabaseMigrationArtifactReader } from './databaseMigrationArtifactReader'
 import { createSqliteMigrationSafetyBackup } from './sqliteMigrationSafetyBackup'
 import type {
   DatabaseMigrationOperationInput,
@@ -23,7 +25,7 @@ import type {
   DatabaseMigrationTargetView,
   DatabaseRuntimeOverview,
   StartDatabaseMigrationInput,
-} from '../public/databaseMigrationTypes'
+} from '../public/types'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
@@ -66,6 +68,13 @@ export interface DatabaseMigrationCoordinatorOptions {
   readonly activateTargetConfig: (target: DatabaseMigrationTargetView) => Promise<void> | void
   /** Restore the provider selector only after a durable instant rollback. */
   readonly activateSourceConfig: () => Promise<void> | void
+  /** HTTP/Settings returns the durable planned status and runs in-process in
+   * the background; offline CLI and boot recovery keep inline completion. */
+  readonly executionMode?: 'inline' | 'background'
+  readonly onBackgroundFailure?: (input: {
+    readonly operationId: string
+    readonly error: unknown
+  }) => void
   readonly now?: () => number
 }
 
@@ -101,12 +110,17 @@ export function createDatabaseMigrationCoordinator(
   const plan = buildPostgresqlSchemaPlan(contract)
   const store = createFileDatabaseMigrationStore({ root: options.operationsRoot })
   const controlPlane = createDatabaseMigrationControlPlane({ store })
+  const artifactReader = createDatabaseMigrationArtifactReader({
+    operationsRoot: options.operationsRoot,
+    controlPlane,
+    contract,
+  })
   const safetyBackup = options.safetyBackup ?? createSqliteMigrationSafetyBackup()
   const now = options.now ?? Date.now
   // A daemon owns one coordinator instance. Keep execution singular so
   // duplicate resume requests cannot race the same durable owner fence, and
   // let the active runner settle cancellation at a safe phase/chunk boundary.
-  const activeRuns = new Set<string>()
+  const activeRuns = new Map<string, Promise<DatabaseMigrationStatusView>>()
 
   const liveGeneration = () =>
     readDatabaseGeneration({
@@ -241,17 +255,49 @@ export function createDatabaseMigrationCoordinator(
     }
   }
 
-  const runOperation = async (
+  const runOperation = (
     operationId: string,
     runOptions?: { readonly resumeFailed?: boolean },
   ): Promise<DatabaseMigrationStatusView> => {
-    if (activeRuns.has(operationId)) return controlPlane.get(operationId)
-    activeRuns.add(operationId)
-    try {
-      return await withRunner(operationId, (runner) => runner.run(operationId, runOptions))
-    } finally {
-      activeRuns.delete(operationId)
-    }
+    const active = activeRuns.get(operationId)
+    if (active !== undefined) return active
+    const run = (async () => {
+      try {
+        return await withRunner(operationId, (runner) => runner.run(operationId, runOptions))
+      } catch (error) {
+        // Source Worker / PostgreSQL runtime / history / target construction
+        // happens before a runner exists. Persist those failures too; otherwise
+        // a connection refusal or missing compiled asset strands the operation
+        // forever in `planned` with no resumable failure receipt.
+        const manifest = controlPlane.readManifest(operationId)
+        if (manifest.payload.failure === null) {
+          const failure = classifyDatabaseMigrationFailure(error)
+          controlPlane.fail(operationId, {
+            ownerId: manifest.payload.owner.id,
+            ownerFence: manifest.payload.owner.fence,
+            ...failure,
+            retryCount: 0,
+            nextRetryAt: failure.retryable ? now() + 1_000 : null,
+            now: now(),
+          })
+        }
+        throw error
+      } finally {
+        activeRuns.delete(operationId)
+      }
+    })()
+    activeRuns.set(operationId, run)
+    return run
+  }
+
+  const executeOperation = async (
+    operationId: string,
+    runOptions?: { readonly resumeFailed?: boolean },
+  ): Promise<DatabaseMigrationStatusView> => {
+    const run = runOperation(operationId, runOptions)
+    if (options.executionMode !== 'background') return await run
+    void run.catch((error) => options.onBackgroundFailure?.({ operationId, error }))
+    return controlPlane.get(operationId)
   }
 
   const coordinator: DatabaseMigrationCoordinatorPort = {
@@ -299,7 +345,16 @@ export function createDatabaseMigrationCoordinator(
             'idempotent migration start reused an operation with a different target config',
           )
         }
-        return await coordinator.get({ operationId: duplicate.payload.operationId })
+        const status = await coordinator.get({ operationId: duplicate.payload.operationId })
+        if (
+          status.failure === null &&
+          status.rolledBackAt === null &&
+          status.phase !== 'accepting-writes' &&
+          status.phase !== 'finalized'
+        ) {
+          return await executeOperation(status.operationId)
+        }
+        return status
       }
       const sourceGenerationId = assertSqliteSource()
       const sourceSnapshot = await inspectSqliteSource()
@@ -324,12 +379,12 @@ export function createDatabaseMigrationCoordinator(
           'idempotent migration start reused an operation with a different target config',
         )
       }
-      return await runOperation(status.operationId)
+      return await executeOperation(status.operationId)
     },
 
     async resume(input: DatabaseMigrationOperationInput) {
       assertSqliteSource()
-      return await runOperation(input.operationId, { resumeFailed: true })
+      return await executeOperation(input.operationId, { resumeFailed: true })
     },
 
     async cancel(input: DatabaseMigrationOperationInput) {
@@ -439,6 +494,18 @@ export function createDatabaseMigrationCoordinator(
           archiveOnly: contract.archiveOnlyTableCount,
         }),
       })
+    },
+
+    async readArtifact(input) {
+      return artifactReader.readArtifact(input)
+    },
+
+    async inspectLegacyTable(input) {
+      return artifactReader.inspectLegacyTable(input)
+    },
+
+    async readLegacyChunk(input) {
+      return artifactReader.readLegacyChunk(input)
     },
 
     async resumeInterrupted(target: DatabaseMigrationTargetView) {

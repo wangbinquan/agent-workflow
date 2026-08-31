@@ -33,6 +33,10 @@ import { quickCheckDbFile } from '@/db/integrity'
 import { recordRecoveryEvent } from '@/services/recovery'
 import { extractTarGz, tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
+import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
+import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logicalDatabaseExport'
+import { verifyLogicalDatabaseSourceMatchesArtifact } from '@/platform/persistence/logicalDatabaseRestore'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { Paths } from '@/util/paths'
 import {
   type BackupManifest,
@@ -44,6 +48,59 @@ import { rawCopyDb } from './rawDbSnapshot'
 import { reconstructWorktrees } from './worktreeBackup'
 
 const log = createLogger('restore')
+
+async function verifyPortableDatabasePayload(
+  staging: string,
+  manifest: BackupManifest | null,
+  prefix: 'stage refused' | 'restore refused',
+): Promise<void> {
+  if (manifest?.manifestVersion !== 2) return
+  const contract = buildLogicalSchemaContract()
+  const database = manifest.database
+  if (
+    database.provider !== 'sqlite' ||
+    database.rawSqlitePath !== 'db.sqlite' ||
+    database.schemaDigest !== contract.digest
+  ) {
+    throw new Error(
+      `${prefix}: this restore path requires a matching SQLite raw+logical database payload`,
+    )
+  }
+  const artifactRoot = join(staging, database.logicalPath)
+  const envelope = readLogicalDatabaseBackupEnvelope({
+    artifactRoot,
+    expectedFileDigest: database.envelopeFileDigest,
+  })
+  if (
+    envelope.payload.sourceProvider !== database.provider ||
+    envelope.payload.sourceGenerationId !== database.sourceGenerationId ||
+    envelope.payload.schemaDigest !== database.schemaDigest
+  ) {
+    throw new Error(`${prefix}: logical database envelope differs from the backup manifest`)
+  }
+
+  const rawPath = join(staging, database.rawSqlitePath)
+  const source = openSqliteLogicalSource({ path: rawPath, contract })
+  try {
+    const snapshot = await source.preflight()
+    await verifyLogicalDatabaseSourceMatchesArtifact({
+      artifactRoot,
+      expectedManifestDigest: envelope.payload.logicalManifestDigest,
+      expectedLegacyArchiveFileDigest: envelope.payload.legacyArchiveFileDigest,
+      contract,
+      source: {
+        provider: 'sqlite',
+        assertUnchanged: () => source.assertUnchanged(snapshot),
+        readChunk: (table, afterKey, limit) => source.readChunk(table, afterKey, limit),
+      },
+      expectedTableRows: snapshot.tableRows,
+    })
+  } catch {
+    throw new Error(`${prefix}: raw and logical database payload verification failed`)
+  } finally {
+    await source.close()
+  }
+}
 
 export type RestoreDirection = 'same' | 'forward' | 'downgrade'
 
@@ -240,6 +297,7 @@ export async function validateBackupForStage(
       const check = quickCheckDbFile(incomingDb)
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
+    await verifyPortableDatabasePayload(staging, manifest, 'stage refused')
     assertBackupSkillsPayload(staging, incomingDb, 'stage refused')
     return { manifest, backupLastCreatedAt, currentMaxWhen, direction }
   } finally {
@@ -410,6 +468,7 @@ export async function restoreBackup(
       const check = quickCheckDbFile(incomingDb)
       if (!check.ok) throw new RestoreIntegrityError(check.errors)
     }
+    await verifyPortableDatabasePayload(staging, manifest, 'restore refused')
 
     // RFC-223 PR-5: an old DB and its name-keyed skills tree are one restore
     // generation. After 0116 has renamed live roots to immutable ids, restoring

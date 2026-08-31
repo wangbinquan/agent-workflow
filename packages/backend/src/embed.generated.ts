@@ -30,6 +30,12 @@ export const FRONTEND_FILES: Record<string, string> = {}
 /** migrations-rel-path -> embedded file path. */
 export const MIGRATION_FILES: Record<string, string> = {}
 
+/** PostgreSQL migrations-rel-path -> embedded file path. */
+export const POSTGRESQL_MIGRATION_FILES: Record<string, string> = {}
+
+/** Content digest of the complete embedded PostgreSQL migration history. */
+export const POSTGRESQL_MIGRATION_BUNDLE_DIGEST = ''
+
 /**
  * RFC-029: opencode plugin asset table. Each entry maps a filename (no
  * path) to the embedded `/$bunfs/...` path at runtime. The runner copies

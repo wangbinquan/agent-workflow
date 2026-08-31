@@ -10,6 +10,7 @@ import {
   POSTGRESQL_METADATA_SCHEMA,
   type PostgresqlSchemaPlan,
 } from './postgresqlSchema'
+import { verifyPostgresqlMigrationHistory } from './postgresqlMigrationHistory'
 
 export class PostgresqlMigrationError extends Error {
   constructor(
@@ -115,6 +116,7 @@ export async function migratePostgresqlSchema(input: {
   readonly now?: () => number
 }): Promise<PostgresqlMigrationReceipt> {
   const plan = input.plan ?? buildPostgresqlSchemaPlan()
+  if (input.plan === undefined) await verifyPostgresqlMigrationHistory({ plan })
   const connection = await input.runtime.providerPool().reserve()
   const lockKey = `rfc349-schema:${plan.contractDigest}`
   let locked = false

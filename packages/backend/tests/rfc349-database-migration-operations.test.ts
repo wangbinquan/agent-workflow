@@ -2,14 +2,17 @@
 // raw PostgreSQL URLs cannot enter its DTOs or observable operation status.
 
 import { describe, expect, test } from 'bun:test'
+import { Hono } from 'hono'
 import { createDatabaseMigrationApplication } from '@/modules/system-operations/application/databaseMigrationApplication'
 import type { DatabaseMigrationCoordinatorPort } from '@/modules/system-operations/application/ports/databaseMigrationCoordinator'
-import { createDatabaseMigrationOperationDescriptors } from '@/modules/system-operations/public/databaseMigrationOperations'
+import { createDatabaseMigrationOperationDescriptors } from '@/modules/system-operations/public/operations'
 import {
   databaseMigrationStatusViewSchema,
   startDatabaseMigrationInputSchema,
   type DatabaseMigrationStatusView,
-} from '@/modules/system-operations/public/databaseMigrationTypes'
+} from '@/modules/system-operations/public/types'
+import { mountDatabaseMigrationRoutes } from '@/routes/databaseMigrations'
+import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 
 const target = {
   provider: 'postgresql' as const,
@@ -76,6 +79,28 @@ const preflight = {
   sourceRows: 0,
   tableCounts: status.tableCounts,
 }
+const digest = `sha256:${'b'.repeat(64)}`
+const artifact = {
+  operationId: status.operationId,
+  kind: 'receipt' as const,
+  fileName: `${status.operationId}-receipt.json`,
+  contentType: 'application/json; charset=utf-8' as const,
+  byteLength: 3,
+  digest,
+  fileDigest: digest,
+  json: '{}\n',
+}
+const legacyTable = {
+  operationId: status.operationId,
+  table: 'code_artifacts',
+  disposition: 'ARCHIVE_THEN_OMIT' as const,
+  rowCount: 2,
+  chunkCount: 1,
+  firstKey: ['{"type":"text","value":"a"}'],
+  lastKey: ['{"type":"text","value":"b"}'],
+  rootDigest: digest,
+  blobBytes: 0,
+}
 
 function fixture() {
   const calls: string[] = []
@@ -116,6 +141,18 @@ function fixture() {
       calls.push('overview')
       return overview
     },
+    async readArtifact() {
+      calls.push('readArtifact')
+      return artifact
+    },
+    async inspectLegacyTable() {
+      calls.push('inspectLegacyTable')
+      return legacyTable
+    },
+    async readLegacyChunk() {
+      calls.push('readLegacyChunk')
+      return { ...artifact, kind: 'legacy-archive-chunk' as const }
+    },
     async resumeInterrupted() {
       return null
     },
@@ -137,9 +174,9 @@ describe('RFC-349 database migration public operations', () => {
       idempotencyKey: 'settings:2026-08-31:01',
       target,
     })
-    expect(
-      await descriptors.start.invoke({} as never, input),
-    ).toEqual(databaseMigrationStatusViewSchema.parse(status))
+    expect(await descriptors.start.invoke({} as never, input)).toEqual(
+      databaseMigrationStatusViewSchema.parse(status),
+    )
     expect(calls).toEqual(['start'])
     expect(() => descriptors.start.input.parse({ ...input, unexpected: true })).toThrow()
   })
@@ -147,9 +184,7 @@ describe('RFC-349 database migration public operations', () => {
   test('exposes safe runtime overview and target preflight without a connection URL', async () => {
     const { descriptors, calls } = fixture()
     expect(await descriptors.overview.invoke({} as never, {})).toEqual(overview)
-    expect(
-      await descriptors.preflight.invoke({} as never, { target }),
-    ).toEqual(preflight)
+    expect(await descriptors.preflight.invoke({} as never, { target })).toEqual(preflight)
     expect(calls).toEqual(['overview', 'preflight'])
     expect(JSON.stringify({ overview, preflight })).not.toContain('postgresql://')
   })
@@ -170,7 +205,7 @@ describe('RFC-349 database migration public operations', () => {
     expect(JSON.stringify(status)).not.toContain('postgresql://')
   })
 
-  test('exposes status/list/resume/cancel/rollback/finalize through the same application owner', async () => {
+  test('exposes status, lifecycle and verified archive reads through the same application owner', async () => {
     const { descriptors, calls } = fixture()
     const context = {} as never
     const operation = { operationId: status.operationId }
@@ -180,6 +215,40 @@ describe('RFC-349 database migration public operations', () => {
     await descriptors.cancel.invoke(context, operation)
     await descriptors.rollback.invoke(context, operation)
     await descriptors.finalize.invoke(context, operation)
-    expect(calls).toEqual(['get', 'list', 'resume', 'cancel', 'rollback', 'finalize'])
+    await descriptors.readArtifact.invoke(context, { ...operation, kind: 'receipt' })
+    await descriptors.inspectLegacyTable.invoke(context, {
+      ...operation,
+      table: 'code_artifacts',
+    })
+    await descriptors.readLegacyChunk.invoke(context, {
+      ...operation,
+      table: 'code_artifacts',
+      chunkIndex: 0,
+    })
+    expect(calls).toEqual([
+      'get',
+      'list',
+      'resume',
+      'cancel',
+      'rollback',
+      'finalize',
+      'readArtifact',
+      'inspectLegacyTable',
+      'readLegacyChunk',
+    ])
+  })
+
+  test('mounts artifact and bounded legacy reads as descriptor-backed HTTP routes', () => {
+    resetRouteMetaRegistry()
+    try {
+      const { descriptors } = fixture()
+      mountDatabaseMigrationRoutes(new Hono(), descriptors, {} as never)
+      const routes = allRouteMeta().map((route) => `${route.method} ${route.path}`)
+      expect(routes).toContain('GET /api/database/migrations/:id/artifacts/:kind')
+      expect(routes).toContain('GET /api/database/migrations/:id/legacy/:table')
+      expect(routes).toContain('GET /api/database/migrations/:id/legacy/:table/chunks/:chunk')
+    } finally {
+      resetRouteMetaRegistry()
+    }
   })
 })

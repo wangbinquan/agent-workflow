@@ -19,6 +19,9 @@ describe('binary build virtual embed isolation', () => {
     expect(source).toContain(
       'const generated = renderGenerated(managedProcessLauncherSource, gitCredentialHelperSource)',
     )
+    expect(source).toContain("'postgresql-migrations'")
+    expect(source).toContain('POSTGRESQL_MIGRATION_FILES')
+    expect(source).toContain('POSTGRESQL_MIGRATION_BUNDLE_DIGEST')
     expect(source).not.toMatch(/writeFileSync\s*\(\s*generatedPath/)
   })
 })

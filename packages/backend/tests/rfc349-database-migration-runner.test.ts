@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createDatabaseMigrationControlPlane } from '@/modules/system-operations/application/databaseMigrationControlPlane'
 import {
+  classifyDatabaseMigrationFailure,
   createDatabaseMigrationRunner,
   type DatabaseMigrationAdmissionPort,
 } from '@/modules/system-operations/application/databaseMigrationRunner'
@@ -94,6 +95,7 @@ function harness(
     failFirstChunk?: boolean
     firstLiveWriteAt?: number | null
     cancelAfterFirstChunk?: boolean
+    failAt?: 'target-activation' | 'target-readiness' | 'admission-activation' | 'admission-open'
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), 'rfc349-runner-'))
@@ -148,6 +150,11 @@ function harness(
     },
     activateGeneration: async () => {
       calls.push('target:active')
+      if (options.failAt === 'target-activation') {
+        throw Object.assign(new Error('target activation failed'), {
+          code: 'target-activation-failed',
+        })
+      }
     },
     firstLiveWriteAt: async () => options.firstLiveWriteAt ?? null,
     retireGenerationIfUnwritten: async () => {
@@ -171,15 +178,22 @@ function harness(
       serverVersion: 'PostgreSQL 17',
       errorCategory: null,
     }),
-    readiness: async () => ({
-      provider: 'postgresql',
-      generationId: 'dbg_target_0001',
-      ok: true as const,
-      latencyMs: 1,
-      databaseFingerprint: 'pg:fixture',
-      serverVersion: 'PostgreSQL 17',
-      errorCategory: null,
-    }),
+    readiness: async () => {
+      if (options.failAt === 'target-readiness') {
+        throw Object.assign(new Error('target readiness failed'), {
+          code: 'target-readiness-failed',
+        })
+      }
+      return {
+        provider: 'postgresql',
+        generationId: 'dbg_target_0001',
+        ok: true as const,
+        latencyMs: 1,
+        databaseFingerprint: 'pg:fixture',
+        serverVersion: 'PostgreSQL 17',
+        errorCategory: null,
+      }
+    },
     acquireMigrationAdvisoryLock: async () => null,
     providerPool: () => {
       throw new Error('not used by runner fixture')
@@ -195,9 +209,19 @@ function harness(
     },
     activatePostgresql: async () => {
       calls.push('admission:postgresql')
+      if (options.failAt === 'admission-activation') {
+        throw Object.assign(new Error('admission activation failed'), {
+          code: 'admission-activation-failed',
+        })
+      }
     },
     openPostgresqlAdmission: async () => {
       calls.push('admission:open')
+      if (options.failAt === 'admission-open') {
+        throw Object.assign(new Error('admission open failed'), {
+          code: 'admission-open-failed',
+        })
+      }
     },
   }
   controlPlane.start({
@@ -239,6 +263,20 @@ function harness(
 }
 
 describe('RFC-349 database migration runner', () => {
+  test('classifies connection/socket failures as retryable target outages', () => {
+    expect(
+      classifyDatabaseMigrationFailure(
+        Object.assign(new Error('redacted connection failure'), {
+          code: 'FailedToOpenSocket',
+        }),
+      ),
+    ).toEqual({
+      category: 'target-unreachable',
+      detailCode: 'failedtoopensocket',
+      retryable: true,
+    })
+  })
+
   test('one action runs all safe phases, writes a verified pointer and leaves finalize explicit', async () => {
     const fixture = harness()
     const status = await fixture.runner.run('dbm_operation_01')
@@ -301,6 +339,60 @@ describe('RFC-349 database migration runner', () => {
       'target:chunk:0',
       'admission:sqlite',
     ])
+  })
+
+  for (const [failAt, failedPhase] of [
+    ['target-activation', 'switched'],
+    ['target-readiness', 'switched'],
+    ['admission-activation', 'health-checked'],
+    ['admission-open', 'accepting-writes'],
+  ] as const) {
+    test(`${failAt} failure before a live write atomically restores SQLite`, async () => {
+      const fixture = harness({ failAt })
+      await expect(fixture.runner.run('dbm_operation_01')).rejects.toThrow('failed')
+
+      const status = fixture.controlPlane.get('dbm_operation_01')
+      expect(status).toMatchObject({
+        phase: failedPhase,
+        failure: { phase: failedPhase },
+        firstLiveWriteAt: null,
+        rolledBackAt: expect.any(Number),
+        rollback: { eligible: false, reason: 'operation-rolled-back' },
+      })
+      expect(fixture.calls).toContain('target:retired')
+      expect(fixture.calls.at(-1)).toBe('admission:sqlite')
+      expect(
+        readDatabaseGeneration({
+          pointerPath: join(fixture.root, 'database-generation.json'),
+          migrationsDir: fixture.migrationsDir,
+          expectedSchemaDigest: DIGEST,
+        }).payload,
+      ).toMatchObject({ provider: 'sqlite', generationId: 'dbg_source_0001' })
+      expect(
+        existsSync(join(fixture.migrationsDir, 'dbm_operation_01', 'rollback-receipt.json')),
+      ).toBe(true)
+    })
+  }
+
+  test('a target live write wins the recovery CAS and permanently blocks stale SQLite fallback', async () => {
+    const fixture = harness({ failAt: 'target-readiness', firstLiveWriteAt: 99 })
+    await expect(fixture.runner.run('dbm_operation_01')).rejects.toThrow('target readiness failed')
+
+    expect(fixture.controlPlane.get('dbm_operation_01')).toMatchObject({
+      phase: 'switched',
+      failure: { phase: 'switched' },
+      firstLiveWriteAt: 99,
+      rolledBackAt: null,
+      rollback: { eligible: false, reason: 'reverse-migration-required' },
+    })
+    expect(fixture.calls).not.toContain('admission:sqlite')
+    expect(
+      readDatabaseGeneration({
+        pointerPath: join(fixture.root, 'database-generation.json'),
+        migrationsDir: fixture.migrationsDir,
+        expectedSchemaDigest: DIGEST,
+      }).payload.provider,
+    ).toBe('postgresql')
   })
 
   test('instant rollback retires an unwritten target and atomically restores SQLite', async () => {

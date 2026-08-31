@@ -100,6 +100,18 @@ const LogicalTableArtifactEntrySchema = z
 
 export type LogicalTableArtifactEntry = z.infer<typeof LogicalTableArtifactEntrySchema>
 
+const LegacyArchiveManifestSchema = z
+  .object({
+    version: z.literal(1),
+    operationId: OperationIdSchema,
+    schemaDigest: DigestSchema,
+    tables: z.array(LogicalTableArtifactEntrySchema),
+    digest: DigestSchema,
+  })
+  .strict()
+
+export type LegacyArchiveManifest = z.infer<typeof LegacyArchiveManifestSchema>
+
 const LogicalDatabaseArtifactPayloadSchema = z
   .object({
     version: z.literal(1),
@@ -228,6 +240,64 @@ export function decodeLogicalValue(value: CanonicalLogicalValue): unknown {
     case 'bytes':
       return Buffer.from(value.value, 'base64')
   }
+}
+
+export function compareCanonicalLogicalKeys(
+  left: readonly CanonicalLogicalValue[],
+  right: readonly CanonicalLogicalValue[],
+): number {
+  if (left.length !== right.length) {
+    throw new LogicalDatabaseCodecError(
+      'logical-codec-row-shape',
+      'logical database migration keys have different shapes',
+    )
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftValue = left[index]!
+    const rightValue = right[index]!
+    if (
+      leftValue.type !== rightValue.type ||
+      leftValue.type === 'null' ||
+      rightValue.type === 'null'
+    ) {
+      throw new LogicalDatabaseCodecError(
+        'logical-codec-row-shape',
+        'logical database migration keys have incompatible scalar types',
+      )
+    }
+    let compared = 0
+    switch (leftValue.type) {
+      case 'boolean':
+        compared = Number(leftValue.value) - Number((rightValue as typeof leftValue).value)
+        break
+      case 'integer': {
+        const leftInteger = BigInt(leftValue.value)
+        const rightInteger = BigInt((rightValue as typeof leftValue).value)
+        compared = leftInteger < rightInteger ? -1 : leftInteger > rightInteger ? 1 : 0
+        break
+      }
+      case 'real': {
+        const leftReal = Number(leftValue.value)
+        const rightReal = Number((rightValue as typeof leftValue).value)
+        compared = leftReal < rightReal ? -1 : leftReal > rightReal ? 1 : 0
+        break
+      }
+      case 'text':
+        compared = Buffer.compare(
+          Buffer.from(leftValue.value, 'utf8'),
+          Buffer.from((rightValue as typeof leftValue).value, 'utf8'),
+        )
+        break
+      case 'bytes':
+        compared = Buffer.compare(
+          Buffer.from(leftValue.value, 'base64'),
+          Buffer.from((rightValue as typeof leftValue).value, 'base64'),
+        )
+        break
+    }
+    if (compared !== 0) return compared < 0 ? -1 : 1
+  }
+  return 0
 }
 
 export function encodeLogicalRow(
@@ -442,6 +512,54 @@ export function readLogicalArtifactManifest(path: string): LogicalDatabaseArtifa
     throw new LogicalDatabaseCodecError(
       'logical-artifact-corrupt',
       `logical database manifest is unreadable: ${path}`,
+    )
+  }
+}
+
+export function createLegacyArchiveManifest(input: {
+  readonly operationId: string
+  readonly schemaDigest: string
+  readonly tables: readonly LogicalTableArtifactEntry[]
+}): LegacyArchiveManifest {
+  const tables = [...input.tables].sort((left, right) => left.table.localeCompare(right.table))
+  if (tables.some((table) => table.disposition !== 'ARCHIVE_THEN_OMIT')) {
+    throw new LogicalDatabaseCodecError(
+      'logical-artifact-corrupt',
+      'legacy archive manifest can only contain ARCHIVE_THEN_OMIT tables',
+    )
+  }
+  return LegacyArchiveManifestSchema.parse({
+    version: 1,
+    operationId: input.operationId,
+    schemaDigest: input.schemaDigest,
+    tables,
+    digest: digestSchemaContract(tables),
+  })
+}
+
+export function verifyLegacyArchiveManifest(value: unknown): LegacyArchiveManifest {
+  const parsed = LegacyArchiveManifestSchema.safeParse(value)
+  if (
+    !parsed.success ||
+    parsed.data.tables.some((table) => table.disposition !== 'ARCHIVE_THEN_OMIT') ||
+    digestSchemaContract(parsed.data.tables) !== parsed.data.digest
+  ) {
+    throw new LogicalDatabaseCodecError(
+      'logical-artifact-corrupt',
+      'legacy archive manifest failed validation or digest verification',
+    )
+  }
+  return parsed.data
+}
+
+export function readLegacyArchiveManifest(path: string): LegacyArchiveManifest {
+  try {
+    return verifyLegacyArchiveManifest(JSON.parse(readFileSync(path, 'utf8')))
+  } catch (error) {
+    if (error instanceof LogicalDatabaseCodecError) throw error
+    throw new LogicalDatabaseCodecError(
+      'logical-artifact-corrupt',
+      `legacy archive manifest is unreadable: ${path}`,
     )
   }
 }

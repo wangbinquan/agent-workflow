@@ -41,9 +41,7 @@ export const DatabaseMigrationTargetConfigSchema = z
   })
   .strict()
 
-export type DatabaseMigrationTargetConfig = z.infer<
-  typeof DatabaseMigrationTargetConfigSchema
->
+export type DatabaseMigrationTargetConfig = z.infer<typeof DatabaseMigrationTargetConfigSchema>
 
 const DatabaseMigrationProgressSchema = z
   .object({
@@ -650,10 +648,14 @@ export function markDatabaseFirstLiveWrite(
       'a rolled-back generation cannot record a live write',
     )
   }
-  if (current.payload.phase !== 'accepting-writes') {
+  if (
+    current.payload.phase !== 'switched' &&
+    current.payload.phase !== 'health-checked' &&
+    current.payload.phase !== 'accepting-writes'
+  ) {
     throw new DatabaseMigrationStateError(
       'migration-invalid-transition',
-      'first live write marker requires accepting-writes phase',
+      'first live write marker requires a switched PostgreSQL generation',
     )
   }
   if (current.payload.firstLiveWriteAt !== null) return current

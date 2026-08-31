@@ -13,9 +13,14 @@
 // `Can't find meta/_journal.json file`（2026-08-25 在 dist 二进制上实测）。
 // 判据与回归防护见 packages/backend/tests/cli-embedded-migrations.test.ts。
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { extractMigrationsTo, IS_EMBEDDED } from '@/embed'
+import {
+  embeddedPostgresqlMigrationBundleDigest,
+  extractMigrationsTo,
+  extractPostgresqlMigrationsTo,
+  IS_EMBEDDED,
+} from '@/embed'
 import { Paths } from '@/util/paths'
 
 export interface ResolveMigrationsOptions {
@@ -47,6 +52,32 @@ export async function resolveMigrationsFolder(
   const dir = join(Paths.root, 'runtime', 'migrations')
   if (opts.force === true || !existsSync(join(dir, 'meta', '_journal.json'))) {
     const count = await extractMigrationsTo(dir)
+    opts.onExtracted?.(count, dir)
+  }
+  return dir
+}
+
+/**
+ * Resolve the independent PostgreSQL migration history. A compiled binary
+ * writes a content marker only after the complete bundle was extracted, so a
+ * newer binary or an interrupted extraction can never reuse a stale history.
+ */
+export async function resolvePostgresqlMigrationsFolder(
+  opts: ResolveMigrationsOptions = {},
+): Promise<string> {
+  if (!IS_EMBEDDED) return Paths.postgresqlMigrationsDir
+  const dir = join(Paths.root, 'runtime', 'postgresql-migrations')
+  const marker = join(dir, '.bundle-digest')
+  const expectedDigest = embeddedPostgresqlMigrationBundleDigest()
+  const currentDigest = existsSync(marker) ? readFileSync(marker, 'utf8').trim() : ''
+  if (
+    opts.force === true ||
+    expectedDigest.length === 0 ||
+    currentDigest !== expectedDigest ||
+    !existsSync(join(dir, 'meta', '_journal.json'))
+  ) {
+    const count = await extractPostgresqlMigrationsTo(dir)
+    if (expectedDigest.length > 0) await Bun.write(marker, `${expectedDigest}\n`)
     opts.onExtracted?.(count, dir)
   }
   return dir

@@ -77,7 +77,7 @@ import {
   composeSystemOperations,
   type SystemOperationsModule,
 } from '@/modules/system-operations/composition'
-import type { DatabaseMigrationModule } from '@/modules/system-operations/databaseMigrationComposition'
+import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
