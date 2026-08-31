@@ -2,17 +2,23 @@
 // Promise port and revision/closure behavior as the SQLite adapter.
 
 import { afterEach, describe, expect, test } from 'bun:test'
+import { resolve } from 'node:path'
 
+import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { createPostgresqlExecutionContractResourceAdapter } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { createApp } from '@/server'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+
+const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const DAEMON_TOKEN = 'a'.repeat(64)
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -62,6 +68,33 @@ afterEach(() => {
 })
 
 describe('RFC-349 PostgreSQL execution-contract adapter', () => {
+  test('HTTP bootstrap preserves the injected provider-neutral composition root', async () => {
+    const executionContracts = composeExecutionContract({
+      appHome: '/not-used-by-this-query',
+      registrations: [],
+      resources: {
+        async inspect() {
+          return null
+        },
+      },
+    })
+    const app = createApp({
+      token: DAEMON_TOKEN,
+      configPath: '',
+      opencodeVersion: null,
+      dbVersion: 1,
+      db: createInMemoryDb(MIGRATIONS),
+      executionContracts,
+    })
+
+    const response = await app.request('/api/execution-contracts', {
+      headers: { Authorization: `Bearer ${DAEMON_TOKEN}` },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ items: [] })
+  })
+
   test('composition accepts the provider-neutral resource port without a SQLite client', () => {
     const module = composeExecutionContract({
       appHome: '/not-used-by-this-query',

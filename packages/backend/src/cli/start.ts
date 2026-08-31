@@ -1244,6 +1244,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     },
   })
 
+  // RFC-349 T5 — compose this provider-neutral participant once at daemon
+  // bootstrap. HTTP and the Digital Employee worker must not independently
+  // choose or reopen a database provider.
+  const employeeExecutionContracts = composeExecutionContract({
+    db,
+    appHome: Paths.root,
+    registrations: developmentExecutionContractRegistrations,
+    implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
+  })
+
   // 7. HTTP server.
   const app = createApp({
     token,
@@ -1255,6 +1265,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     opencodeVersion: null,
     dbVersion,
     db,
+    executionContracts: employeeExecutionContracts,
     identityAccess: integrationIdentityAccess,
     maintenanceStatus: maintenanceService.status,
     secretBox,
@@ -1483,12 +1494,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   const employeeEventCenter = employeeHttpEventCenter
   const employeeDelivery = buildDevelopmentDeliveryDeps(db, secretBox)
-  const employeeExecutionContracts = composeExecutionContract({
-    db,
-    appHome: Paths.root,
-    registrations: developmentExecutionContractRegistrations,
-    implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
-  })
   const employeeOs = composeDigitalEmployee({
     db,
     appHome: Paths.root,

@@ -320,6 +320,13 @@ export interface AppDeps {
   /** Drizzle DB client. */
   db: DbClient
   /**
+   * RFC-349 provider-neutral execution-contract projection. Production
+   * bootstrap injects the selected provider adapter once so HTTP and the
+   * Digital Employee worker share the same application participant. Direct
+   * createApp tests may omit it and retain the SQLite compatibility path.
+   */
+  executionContracts?: ReturnType<typeof composeExecutionContract>
+  /**
    * RFC-349 bootstrap-owned database migration application. Production and
    * contract harnesses inject one composition root with their own admission
    * and durable paths; route mounting never constructs provider mechanisms.
@@ -414,6 +421,7 @@ type RuntimeComposedAppDeps = AppDeps & {
   readonly schedulerDriver: SchedulerDriverPort
   readonly taskExecutionReadModels: TaskExecutionReadModels
   readonly collaborationContext: CollaborationCommandContext
+  readonly executionContracts: ReturnType<typeof composeExecutionContract>
 }
 
 type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
@@ -681,6 +689,14 @@ export function createApp(deps: AppDeps): Hono {
       ),
     schedulerDriver,
     taskExecutionReadModels,
+    executionContracts:
+      deps.executionContracts ??
+      composeExecutionContract({
+        db: deps.db,
+        appHome,
+        registrations: developmentExecutionContractRegistrations,
+        implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
+      }),
     collaborationContext:
       deps.collaborationContext ??
       createCollaborationCommandContext({
@@ -988,12 +1004,7 @@ export function mountApiRoutes(
     }),
     conflictMerge: bindConflictMergeParticipant(),
   })
-  const executionContracts = composeExecutionContract({
-    db: deps.db,
-    appHome,
-    registrations: developmentExecutionContractRegistrations,
-    implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
-  })
+  const executionContracts = deps.executionContracts
   const eventCenter = deps.digitalEmployeeEventCenter ?? composeApplicationEventCenter(deps)
   const digitalEmployee = composeDigitalEmployee({
     db: deps.db,

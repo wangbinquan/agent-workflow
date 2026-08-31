@@ -23,7 +23,7 @@ import ts from 'typescript'
 const SERVER_TS = resolve(import.meta.dir, '..', '..', 'src', 'server.ts')
 
 /**
- * RFC-344 identity operation cutover 后 `mountApiRoutes` 体内的装配调用：13 次。
+ * RFC-344 identity operation cutover 后 `mountApiRoutes` 体内的装配调用：12 次。
  *
  * **只减不增**：多一次 ⇒ 红（新模块的装配请落在 bootstrap，别再往路由函数里塞）；
  * 少一次却不销账 ⇒ 也红。
@@ -38,7 +38,6 @@ const ASSEMBLY_CALLS_IN_MOUNT: readonly string[] = [
   'composeDigitalEmployeeBuiltinToolCatalog',
   'composeDigitalEmployeeExecution',
   'composeDigitalEmployeeTaskCatalogSource',
-  'composeExecutionContract',
   'composeTaskCatalog',
   'composeTaskExecutionCatalogSources',
   'createEmployeeInputArtifactStore',
