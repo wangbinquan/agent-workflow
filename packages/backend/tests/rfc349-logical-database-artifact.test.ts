@@ -13,6 +13,7 @@ import {
   readLogicalTableChunk,
   summarizeLogicalTableChunks,
   verifyLogicalTableChunk,
+  writeDurableLogicalArtifact,
   writeLogicalArtifactManifest,
   writeLogicalTableChunk,
 } from '@/platform/persistence/logicalDatabaseArtifact'
@@ -99,6 +100,34 @@ afterEach(() => {
 })
 
 describe('RFC-349 provider-neutral logical artifact', () => {
+  test('opens durable temporary files write-capable before syncing them', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc349-artifact-sync-'))
+    roots.push(root)
+    const calls: string[] = []
+    const output = join(root, 'artifact.json')
+    let openedPath: string | undefined
+    let openedFlags: string | undefined
+
+    writeDurableLogicalArtifact(
+      output,
+      { version: 1 },
+      {
+        open: (path, flags) => {
+          openedPath = path
+          openedFlags = flags
+          calls.push('open')
+          return 349
+        },
+        fsync: (handle) => calls.push(`fsync:${handle}`),
+        close: (handle) => calls.push(`close:${handle}`),
+      },
+    )
+
+    expect(openedPath?.startsWith(`${output}.tmp-`)).toBe(true)
+    expect(openedFlags).toBe('r+')
+    expect(calls).toEqual(['open', 'fsync:349', 'close:349'])
+  })
+
   test('round-trips lossless scalar tags without JS integer coercion', () => {
     const integer = encodeLogicalValue(
       'fixture_rows',

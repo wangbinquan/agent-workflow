@@ -85,6 +85,7 @@ import {
   type IsoHandle,
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
+import { ORCHESTRATOR_AGENT_ID } from '@/services/orchestratorAgent'
 import {
   continuesClarifyLineage,
   frozenRuntimeOfSession,
@@ -272,7 +273,10 @@ export async function executeWorkgroupHostMechanics(
   collaboration: CollaborationNodeGatePort,
 ): Promise<WorkgroupHostRunResult> {
   const { db, taskId, task, opts, log, definition } = state
-  const injection = await state.taskExecutionResources.injection(req.agent.id)
+  const injection =
+    req.agent.id === ORCHESTRATOR_AGENT_ID
+      ? resolveSyntheticTaskExecutionInjection(req.agent)
+      : await state.taskExecutionResources.injection(req.agent.id)
   if (injection.kind === 'failed') {
     await setNodeRunStatus({
       db,

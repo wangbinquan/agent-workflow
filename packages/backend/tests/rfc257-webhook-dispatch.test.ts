@@ -14,6 +14,9 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import {
   cachedRepos,
+  employeeDefinitionRevisions,
+  employeeDefinitions,
+  employeeTypePackages,
   tasks,
   webhookDeliveries,
   webhookEndpoints,
@@ -843,6 +846,40 @@ describe('RFC-257 · gate 失败归因（launch-failed vs skipped-owner-invalid�
 describe('RFC-310 Event Center WorkStart · Digital Employee', () => {
   test('one EventDelivery starts one Case with exact provenance and records the Case result', async () => {
     const h = await harness()
+    const now = Date.now()
+    await h.db.insert(employeeTypePackages).values({
+      typeId: 'event-work-start-fixture',
+      revision: 1,
+      descriptorJson: JSON.stringify({
+        workIntakeAuthoring: {
+          acceptedKinds: ['body'],
+          targetFields: [{ fieldRef: 'repositoryId', required: true }],
+        },
+      }),
+      descriptorDigest: 'event-work-start-fixture',
+      state: 'published',
+      registeredAt: now,
+    })
+    await h.db.insert(employeeDefinitions).values({
+      id: 'employee-1',
+      name: 'event work-start employee',
+      typeId: 'event-work-start-fixture',
+      typeRevision: 1,
+      configurationJson: '{}',
+      currentRevision: 1,
+      ownerUserId: h.ownerId,
+      visibility: 'private',
+      createdAt: now,
+      updatedAt: now,
+    })
+    await h.db.insert(employeeDefinitionRevisions).values({
+      employeeId: 'employee-1',
+      revision: 1,
+      contentJson: '{}',
+      contentDigest: 'event-work-start-definition',
+      createdAt: now,
+      createdBy: h.ownerId,
+    })
     const triggerId = await insertTrigger(h, {
       launchKind: 'digital-employee',
       launchRefId: 'employee-1',

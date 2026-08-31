@@ -393,7 +393,23 @@ function fsyncDirectory(path: string): void {
   }
 }
 
-function durableWriteOnce(path: string, body: string): void {
+export interface DurableLogicalArtifactSyncMechanics {
+  readonly open: (path: string, flags: 'r+') => number
+  readonly fsync: (handle: number) => void
+  readonly close: (handle: number) => void
+}
+
+const DEFAULT_DURABLE_LOGICAL_ARTIFACT_SYNC_MECHANICS: DurableLogicalArtifactSyncMechanics = {
+  open: openSync,
+  fsync: fsyncSync,
+  close: closeSync,
+}
+
+function durableWriteOnce(
+  path: string,
+  body: string,
+  syncMechanics: DurableLogicalArtifactSyncMechanics = DEFAULT_DURABLE_LOGICAL_ARTIFACT_SYNC_MECHANICS,
+): void {
   mkdirSync(dirname(path), { recursive: true })
   if (existsSync(path)) {
     if (readFileSync(path, 'utf8') === body) return
@@ -406,11 +422,13 @@ function durableWriteOnce(path: string, body: string): void {
   let installed = false
   try {
     writeFileSync(temporary, body, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
-    const handle = openSync(temporary, 'r')
+    // FlushFileBuffers on Windows requires a write-capable handle. The file is
+    // already exclusively created above, so r+ preserves write-once semantics.
+    const handle = syncMechanics.open(temporary, 'r+')
     try {
-      fsyncSync(handle)
+      syncMechanics.fsync(handle)
     } finally {
-      closeSync(handle)
+      syncMechanics.close(handle)
     }
     renameSync(temporary, path)
     installed = true
@@ -420,9 +438,13 @@ function durableWriteOnce(path: string, body: string): void {
   }
 }
 
-export function writeDurableLogicalArtifact(path: string, value: unknown): string {
+export function writeDurableLogicalArtifact(
+  path: string,
+  value: unknown,
+  syncMechanics: DurableLogicalArtifactSyncMechanics = DEFAULT_DURABLE_LOGICAL_ARTIFACT_SYNC_MECHANICS,
+): string {
   const body = canonicalSchemaJson(value)
-  durableWriteOnce(path, body)
+  durableWriteOnce(path, body, syncMechanics)
   return `sha256:${sha256Hex(body)}`
 }
 

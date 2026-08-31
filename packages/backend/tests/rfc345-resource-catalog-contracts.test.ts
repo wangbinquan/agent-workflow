@@ -850,7 +850,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(execution).not.toContain(legacyResourceImport)
     }
     expect(execution.split('taskExecutionResources.injection(').length - 1).toBe(5)
-    expect(execution.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(2)
+    expect(execution.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(3)
+    expect(node).toContain('req.agent.id === ORCHESTRATOR_AGENT_ID')
     expect(wrapperData).toContain('WrapperFanoutAgentResolution')
     expect(wrapper).toContain("return resolution.kind === 'ok'")
     expect(fanout).toContain('agentFailures.get(innerAgentId)')
@@ -1871,7 +1872,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(queries).not.toContain(retiredQuery)
     }
     expect(participants).not.toContain('export interface ResourceAuthorizationInTx')
-    expect(authorization).toContain('interface ResourceAuthorizationInTx')
+    expect(authorization).toContain('interface ResourceAccessEvaluator')
     expect(authorization).not.toContain('trustedResourceAuthorizations')
     expect(catalogQuery).toContain('interface SqliteResourceCatalogQuery')
     expect(catalogQuery).not.toContain("from '../public/queries'")
