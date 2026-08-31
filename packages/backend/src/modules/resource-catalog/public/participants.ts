@@ -4,7 +4,6 @@ import type {
 } from '@/modules/identity-access/public/participants'
 import type {
   AgentPackageMutation,
-  AgentAclIdentity,
   CapabilityTemplatePackageMutation,
   FrozenIntegrationTriggerResourceSnapshot,
   FrozenTaskExecutionResourceSnapshot,
@@ -13,8 +12,6 @@ import type {
   McpAclIdentity,
   McpPackageMutation,
   PluginPackageMutation,
-  PluginAclIdentity,
-  WorkgroupAclIdentity,
   PreparedAgentPackageMutation,
   PreparedCapabilityTemplatePackageMutation,
   PreparedMcpPackageMutation,
@@ -26,11 +23,9 @@ import type {
   ResourcePackageApplyScenarioPlan,
   ResourcePackageMutationReceipt,
   ResourceScopeAccess,
-  SkillAclIdentity,
   SkillPackageMutation,
   TaskExecutionResourceRequest,
   VersionedIntentResourceChangesetPlan,
-  WorkflowAclIdentity,
   WorkflowPackageMutation,
   WorkgroupPackageMutation,
 } from './types'
@@ -66,44 +61,10 @@ declare const resourcePackageAuditInTxBrand: unique symbol
 declare const resourcePackageApplyScenarioTxBrand: unique symbol
 declare const resourcePackageApplyTxBrand: unique symbol
 declare const mcpAclIdentityParticipantBrand: unique symbol
-declare const agentAclIdentityParticipantBrand: unique symbol
-declare const pluginAclIdentityParticipantBrand: unique symbol
-declare const skillAclIdentityParticipantBrand: unique symbol
-declare const workflowAclIdentityParticipantBrand: unique symbol
-declare const workgroupAclIdentityParticipantBrand: unique symbol
 
 export interface McpAclIdentityParticipant {
   readonly [mcpAclIdentityParticipantBrand]: 'mcp-acl-identity-participant'
   load(id: string): Promise<McpAclIdentity | null>
-  nextUpdatedAt(id: string): Promise<number>
-}
-
-export interface AgentAclIdentityParticipant {
-  readonly [agentAclIdentityParticipantBrand]: 'agent-acl-identity-participant'
-  load(id: string): Promise<AgentAclIdentity | null>
-  nextUpdatedAt(id: string): Promise<number>
-}
-
-export interface PluginAclIdentityParticipant {
-  readonly [pluginAclIdentityParticipantBrand]: 'plugin-acl-identity-participant'
-  load(id: string): Promise<PluginAclIdentity | null>
-  nextUpdatedAt(id: string): Promise<number>
-}
-
-export interface SkillAclIdentityParticipant {
-  readonly [skillAclIdentityParticipantBrand]: 'skill-acl-identity-participant'
-  load(id: string): Promise<SkillAclIdentity | null>
-  nextUpdatedAt(id: string): Promise<number>
-}
-
-export interface WorkflowAclIdentityParticipant {
-  readonly [workflowAclIdentityParticipantBrand]: 'workflow-acl-identity-participant'
-  load(id: string): Promise<WorkflowAclIdentity | null>
-}
-
-export interface WorkgroupAclIdentityParticipant {
-  readonly [workgroupAclIdentityParticipantBrand]: 'workgroup-acl-identity-participant'
-  load(id: string): Promise<WorkgroupAclIdentity | null>
   nextUpdatedAt(id: string): Promise<number>
 }
 

@@ -10,7 +10,6 @@ import { nextResourceCopyName } from '@/services/resourceCopyName'
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 import { monotonicNow } from '@/util/time'
 import { WORKGROUPS_CHANNEL, workgroupsBroadcaster } from '@/ws/broadcaster'
-import { createWorkgroupAclIdentityParticipant } from '../application/participants/workgroupAclIdentity'
 import { assertNameUnchangedForEditor } from '../application/resourceAccess'
 import { createWorkgroupApplication } from '../application/workgroups/workgroupApplication'
 import type {
@@ -25,6 +24,7 @@ import {
 import {
   canViewResource,
   canViewResourceInTx,
+  composeResourceAclOperationApplication,
   filterVisibleRows,
   requireResourceEdit,
   requireResourceGovern,
@@ -135,11 +135,24 @@ export function composeWorkgroupCatalog(
     ids: Object.freeze({ next: input.id ?? ulid }),
     clock,
   })
-  const aclIdentity = createWorkgroupAclIdentityParticipant({ repository, clock })
-  const operations = createWorkgroupOperationDescriptors(application.commands, application.queries)
+  const acl = composeResourceAclOperationApplication<WorkgroupOperationContext, Workgroup>({
+    db: input.db,
+    type: 'workgroup',
+    load: (id) => repository.get(id),
+    afterUpdated: (workgroupId) => {
+      workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
+        type: 'workgroup.acl.updated',
+        workgroupId,
+      })
+    },
+  })
+  const operations = createWorkgroupOperationDescriptors(
+    application.commands,
+    application.queries,
+    acl,
+  )
   return Object.freeze({
     queries: application.queries,
     operations,
-    participants: Object.freeze({ aclIdentity }),
   })
 }

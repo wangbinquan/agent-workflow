@@ -36,17 +36,6 @@ export interface GetAgentCatalogInput {
   readonly id: string
 }
 
-/** Purpose-specific identity used by the generic ACL transport adapter. */
-export interface AgentAclIdentity {
-  readonly id: string
-  readonly name: string
-  readonly ownerUserId: string | null
-  readonly visibility: ResourceVisibility
-  readonly builtin: boolean
-  readonly aclRevision: number
-  readonly updatedAt: number
-}
-
 export interface AgentReferenceLabelsInput {
   readonly agents: readonly AgentCatalogResource[]
   readonly visibleAgentIds: readonly string[]
@@ -147,16 +136,6 @@ export interface RestoreSkillVersionCatalogReceipt {
   readonly token: string | null
 }
 
-/** Purpose-specific identity used by the generic ACL transport adapter. */
-export interface SkillAclIdentity {
-  readonly id: string
-  readonly name: string
-  readonly ownerUserId: string | null
-  readonly visibility: ResourceVisibility
-  readonly aclRevision: number
-  readonly updatedAt: number
-}
-
 /** T5-WF aggregate contract. Persistence rows and raw submissions stay private. */
 export type WorkflowCatalogDetail = WorkflowDetail
 
@@ -196,30 +175,11 @@ export interface GetPluginCatalogInput {
   readonly id: string
 }
 
-/** Purpose-specific identity used by the generic ACL transport adapter. */
-export interface PluginAclIdentity {
-  readonly id: string
-  readonly name: string
-  readonly ownerUserId: string | null
-  readonly visibility: ResourceVisibility
-  readonly aclRevision: number
-  readonly updatedAt: number
-}
-
 /** T5-WG aggregate contract. Roster persistence and SQLite rows stay private. */
 export type WorkgroupCatalogDetail = WorkgroupDetail
 
 export interface GetWorkgroupCatalogInput {
   readonly id: string
-}
-
-/** Purpose-specific identity used by the generic ACL transport adapter. */
-export interface WorkgroupAclIdentity {
-  readonly id: string
-  readonly name: string
-  readonly ownerUserId: string | null
-  readonly visibility: ResourceVisibility
-  readonly updatedAt: number
 }
 
 export type TaskExecutionAgentSnapshot = Pick<

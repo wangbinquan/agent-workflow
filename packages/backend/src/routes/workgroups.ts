@@ -23,10 +23,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { WorkgroupOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type {
-  WorkgroupAclIdentityParticipant,
-  WorkgroupOperationContext,
-} from '@/modules/resource-catalog/public/participants'
+import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { WorkgroupQueries } from '@/modules/resource-catalog/public/queries'
 import type { WorkgroupCatalogDetail } from '@/modules/resource-catalog/public/types'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
@@ -40,8 +37,6 @@ import { startExecution } from '@/services/execution/executor'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { mountAclEndpoints } from './resourceAcl'
-import { WORKGROUPS_CHANNEL, workgroupsBroadcaster } from '@/ws/broadcaster'
 import {
   evaluateAgentResourceIntegrity,
   loadAgentResourceInventory,
@@ -51,7 +46,6 @@ import { safeJsonOrEmpty } from '@/util/http'
 export interface WorkgroupRouteDependencies {
   readonly queries: WorkgroupQueries
   readonly operations: WorkgroupOperationDescriptors
-  readonly aclIdentity: WorkgroupAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => WorkgroupOperationContext
 }
 
@@ -60,7 +54,7 @@ export function mountWorkgroupRoutes(
   deps: AppDeps,
   module: WorkgroupRouteDependencies,
 ): void {
-  const { queries, operations, aclIdentity } = module
+  const { queries, operations } = module
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleWorkgroup(actor: Actor, id: string): Promise<WorkgroupCatalogDetail> {
@@ -294,16 +288,29 @@ export function mountWorkgroupRoutes(
   )
 
   // RFC-099 / RFC-223 — GET/PUT /api/workgroups/:id/acl
-  mountAclEndpoints(app, deps, {
-    type: 'workgroup',
-    base: '/api/workgroups',
-    param: 'id',
-    load: (_db, id) => aclIdentity.load(id),
-    afterUpdate: (workgroupId) => {
-      workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
-        type: 'workgroup.acl.updated',
-        workgroupId,
-      })
-    },
+  registerOperationRoute(app, {
+    descriptor: operations.getAcl,
+    method: 'GET',
+    path: '/api/workgroups/:id/acl',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
+  })
+
+  registerOperationRoute(app, {
+    descriptor: operations.updateAcl,
+    method: 'PUT',
+    path: '/api/workgroups/:id/acl',
+    tokenAccess: 'never',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
   })
 }

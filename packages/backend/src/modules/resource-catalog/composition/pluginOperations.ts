@@ -12,10 +12,10 @@ import type {
   PluginOperationCoordinatorPort,
 } from '../application/plugins/ports'
 import type { PluginOperationContext } from '../public/participants'
-import { createPluginAclIdentityParticipant } from '../application/participants/pluginAclIdentity'
 import { createSqlitePluginRepository } from '../infrastructure/sqlitePluginRepository'
 import {
   canViewResource,
+  composeResourceAclOperationApplication,
   discloseRefs,
   filterVisibleRows,
   requireResourceEdit,
@@ -80,15 +80,24 @@ export function composePluginCatalog(
     id: input.id ?? ulid,
     now: input.now ?? Date.now,
   })
-  const aclIdentity = createPluginAclIdentityParticipant({ repository, clock })
+  const acl = composeResourceAclOperationApplication<PluginOperationContext, Plugin>({
+    db: input.db,
+    type: 'plugin',
+    load: (id) => repository.get(id),
+    linearizer: {
+      runExclusive: (resourceId, task) => input.coordinator.runExclusive(resourceId, task),
+      loadById: (resourceId) => repository.get(resourceId),
+      nextUpdatedAt: async (row) => clock.nextUpdatedAt(row),
+    },
+  })
   const operations = createPluginOperationDescriptors(
     application.commands,
     application.updateCommands,
     application.queries,
+    acl,
   )
   return Object.freeze({
     queries: application.queries,
     operations,
-    participants: Object.freeze({ aclIdentity }),
   })
 }

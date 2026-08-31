@@ -1130,7 +1130,6 @@ export function mountApiRoutes(
     queries: agentCatalog.queries,
     referenceQueries: agentCatalog.referenceQueries,
     operations: agentCatalog.operations,
-    aclIdentity: agentCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
   mountMcpRoutes(app, deps, {
@@ -1143,7 +1142,6 @@ export function mountApiRoutes(
   mountPluginRoutes(app, deps, {
     queries: pluginCatalog.queries,
     operations: pluginCatalog.operations,
-    aclIdentity: pluginCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
   mountSkillRoutes(app, deps, {
@@ -1153,7 +1151,6 @@ export function mountApiRoutes(
     fileQueries: skillCatalog.fileQueries,
     versionQueries: skillCatalog.versionQueries,
     operations: skillCatalog.operations,
-    aclIdentity: skillCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
   mountRepoRoutes(app, deps)
@@ -1162,13 +1159,11 @@ export function mountApiRoutes(
   mountWorkflowRoutes(app, deps, {
     queries: workflowCatalog.queries,
     operations: workflowCatalog.operations,
-    aclIdentity: workflowCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
   mountWorkgroupRoutes(app, routeDeps, {
     queries: workgroupCatalog.queries,
     operations: workgroupCatalog.operations,
-    aclIdentity: workgroupCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   }) // RFC-164
   // RFC-271 配置包：导出六条 + 导入两条。需要 secretBox 来签 previewToken——

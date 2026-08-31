@@ -6,36 +6,33 @@ import {
   PluginOperationRequestSchema,
   RenamePluginRequestSchema,
   UpdatePluginRequestSchema,
-  type ResourceAcl,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import type { PluginOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type {
-  PluginAclIdentityParticipant,
-  PluginOperationContext,
-} from '@/modules/resource-catalog/public/participants'
+import type { PluginOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { PluginQueries } from '@/modules/resource-catalog/public/queries'
 import type { PluginCatalogResource } from '@/modules/resource-catalog/public/types'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { serializePluginFor } from '@/services/tokenRedaction'
-import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { mountAclEndpoints } from './resourceAcl'
 import { safeJsonOrEmpty } from '@/util/http'
 
 export interface PluginRouteDependencies {
   readonly queries: PluginQueries
   readonly operations: PluginOperationDescriptors
-  readonly aclIdentity: PluginAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => PluginOperationContext
 }
 
-export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteDependencies): void {
-  const { queries, operations, aclIdentity } = module
+export function mountPluginRoutes(
+  app: Hono,
+  _deps: AppDeps,
+  module: PluginRouteDependencies,
+): void {
+  const { queries, operations } = module
 
   async function loadVisiblePlugin(actor: Actor, id: string): Promise<PluginCatalogResource> {
     const plugin = await queries.get(module.authorityFor(actor), { id })
@@ -214,17 +211,30 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
     },
   })
 
-  mountAclEndpoints(app, deps, {
-    type: 'plugin',
-    base: '/api/plugins',
-    param: 'id',
-    load: (_db, id) => aclIdentity.load(id),
-    coordinator: {
-      runExclusive: (resourceId: string, task: () => Promise<ResourceAcl>) =>
-        pluginOperationCoordinator.runExclusive(resourceId, task),
-      loadById: (_db, resourceId) => aclIdentity.load(resourceId),
-      nextUpdatedAt: (row) => aclIdentity.nextUpdatedAt(row.id),
-    },
+  registerOperationRoute(app, {
+    descriptor: operations.getAcl,
+    method: 'GET',
+    path: '/api/plugins/:id/acl',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
+  })
+
+  registerOperationRoute(app, {
+    descriptor: operations.updateAcl,
+    method: 'PUT',
+    path: '/api/plugins/:id/acl',
+    tokenAccess: 'never',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
   })
 }
 

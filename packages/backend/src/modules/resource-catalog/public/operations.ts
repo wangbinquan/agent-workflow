@@ -19,6 +19,7 @@ import {
   PluginUpgradeResultSchema,
   RenamePluginRequestSchema,
   RenameAgentRequestSchema,
+  ResourceAclSchema,
   ResourceVisibilitySchema,
   SkillContentSchema,
   SkillSchema,
@@ -40,6 +41,8 @@ import {
   WorkgroupDetailSchema,
   type Workgroup,
   type FileNode,
+  type Permission,
+  type ResourceAcl,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
@@ -74,6 +77,7 @@ import type {
   DeleteWorkflowCatalogReceipt,
   DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
+  GetResourceAclCatalogInput,
   RenameAgentCatalogInput,
   RenameMcpCatalogInput,
   RenamePluginCatalogInput,
@@ -82,6 +86,7 @@ import type {
   UpdateAgentCatalogInput,
   UpdateMcpCatalogInput,
   UpdatePluginCatalogInput,
+  UpdateResourceAclCatalogInput,
   UpdateWorkflowCatalogInput,
   UpdateWorkflowCatalogReceipt,
   UpdateWorkgroupCatalogInput,
@@ -91,17 +96,12 @@ import type {
 } from '../domain/catalogOperationTypes'
 import type { SkillFileCommands, SkillVersionCommands } from './commands'
 import type {
-  AgentAclIdentityParticipant,
   AgentOperationContext,
   McpAclIdentityParticipant,
   McpOperationContext,
-  PluginAclIdentityParticipant,
   PluginOperationContext,
-  SkillAclIdentityParticipant,
   SkillOperationContext,
-  WorkflowAclIdentityParticipant,
   WorkflowOperationContext,
-  WorkgroupAclIdentityParticipant,
   WorkgroupOperationContext,
 } from './participants'
 import type {
@@ -305,6 +305,73 @@ const AGENT_PUBLIC_ERRORS = Object.freeze([
 const jsonBodySubmissionSchema = z
   .object({ kind: z.literal('json-body'), body: z.string() })
   .strict()
+
+interface ResourceAclCommands<Context> {
+  update(authority: Context, input: UpdateResourceAclCatalogInput): Promise<ResourceAcl>
+}
+
+interface ResourceAclQueries<Context> {
+  get(authority: Context, input: GetResourceAclCatalogInput): Promise<ResourceAcl>
+}
+
+interface ResourceAclOperationApplication<Context> {
+  readonly commands: ResourceAclCommands<Context>
+  readonly queries: ResourceAclQueries<Context>
+}
+
+interface ResourceAclOperationDescriptors<Context> {
+  readonly getAcl: QueryOperationDescriptor<GetResourceAclCatalogInput, ResourceAcl, Context>
+  readonly updateAcl: CommandOperationDescriptor<
+    UpdateResourceAclCatalogInput,
+    ResourceAcl,
+    Context
+  >
+}
+
+const RESOURCE_ACL_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'internal-error',
+] as const)
+const getResourceAclInputSchema = z.object({ id: z.string().min(1) }).strict()
+const updateResourceAclInputSchema = z
+  .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
+  .strict()
+
+function createResourceAclOperationDescriptors<Context>(input: {
+  readonly getId: string
+  readonly updateId: string
+  readonly noun: string
+  readonly readPermission: Permission
+  readonly updatePermission: Permission
+  readonly application: ResourceAclOperationApplication<Context>
+}): ResourceAclOperationDescriptors<Context> {
+  return Object.freeze({
+    getAcl: defineQueryOperation({
+      id: input.getId,
+      summary: `Read the ACL of one ${input.noun}`,
+      permissions: [input.readPermission],
+      publicErrors: RESOURCE_ACL_PUBLIC_ERRORS,
+      inputSchema: getResourceAclInputSchema,
+      outputSchema: ResourceAclSchema,
+      invoke: (authority: Context, operationInput: GetResourceAclCatalogInput) =>
+        input.application.queries.get(authority, operationInput),
+    }),
+    updateAcl: defineCommandOperation({
+      id: input.updateId,
+      summary: `Replace the ACL of one ${input.noun}`,
+      permissions: [input.updatePermission],
+      publicErrors: RESOURCE_ACL_PUBLIC_ERRORS,
+      inputSchema: updateResourceAclInputSchema,
+      outputSchema: ResourceAclSchema,
+      invoke: (authority: Context, operationInput: UpdateResourceAclCatalogInput) =>
+        input.application.commands.update(authority, operationInput),
+    }),
+  })
+}
+
 const emptyAgentInputSchema = z.object({}).strict()
 const getAgentInputSchema = z.object({ id: z.string().min(1) }).strict()
 const updateAgentInputSchema = z
@@ -323,7 +390,7 @@ const renameAgentInputSchema = z
 const agentCatalogResourceSchema = AgentSchema.extend({ name: z.string().min(1).max(128) })
 const deleteAgentReceiptSchema = z.object({ deleted: agentCatalogResourceSchema }).strict()
 
-export interface AgentOperationDescriptors {
+export interface AgentOperationDescriptors extends ResourceAclOperationDescriptors<AgentOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
     AgentCatalogResource[],
@@ -360,16 +427,23 @@ export interface AgentCatalogModule {
   readonly queries: AgentQueries
   readonly referenceQueries: AgentReferenceQueries
   readonly operations: AgentOperationDescriptors
-  readonly participants: Readonly<{
-    aclIdentity: AgentAclIdentityParticipant
-  }>
 }
 
 export function createAgentOperationDescriptors(
   commands: AgentCommands,
   queries: AgentQueries,
+  acl: ResourceAclOperationApplication<AgentOperationContext>,
 ): AgentOperationDescriptors {
+  const aclOperations = createResourceAclOperationDescriptors({
+    getId: 'agent-catalog.get-agent-acl.v1',
+    updateId: 'agent-catalog.update-agent-acl.v1',
+    noun: 'agent',
+    readPermission: 'agents:read',
+    updatePermission: 'agents:update',
+    application: acl,
+  })
   return Object.freeze({
+    ...aclOperations,
     list: defineQueryOperation({
       id: 'agent-catalog.list-agents.v1',
       summary: 'List agents visible to the caller',
@@ -498,7 +572,7 @@ const restoreSkillVersionReceiptSchema = z
   })
   .strict()
 
-export interface SkillOperationDescriptors {
+export interface SkillOperationDescriptors extends ResourceAclOperationDescriptors<SkillOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
     SkillCatalogResource[],
@@ -578,9 +652,6 @@ export interface SkillCatalogModule {
   readonly fileQueries: SkillFileQueries
   readonly versionQueries: SkillVersionQueries
   readonly operations: SkillOperationDescriptors
-  readonly participants: Readonly<{
-    aclIdentity: SkillAclIdentityParticipant
-  }>
 }
 
 export function createSkillOperationDescriptors(
@@ -590,8 +661,18 @@ export function createSkillOperationDescriptors(
   fileQueries: SkillFileQueries,
   versionCommands: SkillVersionCommands,
   versionQueries: SkillVersionQueries,
+  acl: ResourceAclOperationApplication<SkillOperationContext>,
 ): SkillOperationDescriptors {
+  const aclOperations = createResourceAclOperationDescriptors({
+    getId: 'skill-catalog.get-skill-acl.v1',
+    updateId: 'skill-catalog.update-skill-acl.v1',
+    noun: 'skill',
+    readPermission: 'skills:read',
+    updatePermission: 'skills:update',
+    application: acl,
+  })
   return Object.freeze({
+    ...aclOperations,
     list: defineQueryOperation({
       id: 'skill-catalog.list-skills.v1',
       summary: 'List skills visible to the caller',
@@ -839,7 +920,7 @@ const exactMcpResourceSchema = z.discriminatedUnion('type', [
 ])
 const deleteMcpReceiptSchema = z.object({ deleted: exactMcpResourceSchema }).strict()
 
-export interface McpOperationDescriptors {
+export interface McpOperationDescriptors extends ResourceAclOperationDescriptors<McpOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
     McpCatalogResource[],
@@ -883,8 +964,18 @@ export interface McpCatalogModule {
 export function createMcpOperationDescriptors(
   commands: McpCommands,
   queries: McpQueries,
+  acl: ResourceAclOperationApplication<McpOperationContext>,
 ): McpOperationDescriptors {
+  const aclOperations = createResourceAclOperationDescriptors({
+    getId: 'mcp-catalog.get-mcp-acl.v1',
+    updateId: 'mcp-catalog.update-mcp-acl.v1',
+    noun: 'mcp',
+    readPermission: 'mcps:read',
+    updatePermission: 'mcps:update',
+    application: acl,
+  })
   return Object.freeze({
+    ...aclOperations,
     list: defineQueryOperation({
       id: 'mcp-catalog.list-mcps.v1',
       summary: 'List MCP servers visible to the caller',
@@ -975,7 +1066,7 @@ const upgradePluginInputSchema = z
   .strict()
 const deletePluginReceiptSchema = z.object({ deleted: PluginOperationResourceSchema }).strict()
 
-export interface PluginOperationDescriptors {
+export interface PluginOperationDescriptors extends ResourceAclOperationDescriptors<PluginOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
     PluginCatalogResource[],
@@ -1021,17 +1112,24 @@ export interface PluginOperationDescriptors {
 export interface PluginCatalogModule {
   readonly queries: PluginQueries
   readonly operations: PluginOperationDescriptors
-  readonly participants: Readonly<{
-    aclIdentity: PluginAclIdentityParticipant
-  }>
 }
 
 export function createPluginOperationDescriptors(
   commands: PluginCommands,
   updateCommands: PluginUpdateCommands,
   queries: PluginQueries,
+  acl: ResourceAclOperationApplication<PluginOperationContext>,
 ): PluginOperationDescriptors {
+  const aclOperations = createResourceAclOperationDescriptors({
+    getId: 'plugin-catalog.get-plugin-acl.v1',
+    updateId: 'plugin-catalog.update-plugin-acl.v1',
+    noun: 'plugin',
+    readPermission: 'plugins:read',
+    updatePermission: 'plugins:update',
+    application: acl,
+  })
   return Object.freeze({
+    ...aclOperations,
     list: defineQueryOperation({
       id: 'plugin-catalog.list-plugins.v1',
       summary: 'List plugins visible to the caller',
@@ -1152,7 +1250,7 @@ const deleteWorkflowReceiptSchema = z
   })
   .strict()
 
-export interface WorkflowOperationDescriptors {
+export interface WorkflowOperationDescriptors extends ResourceAclOperationDescriptors<WorkflowOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
     Workflow[],
@@ -1188,16 +1286,23 @@ export interface WorkflowOperationDescriptors {
 export interface WorkflowCatalogModule {
   readonly queries: WorkflowQueries
   readonly operations: WorkflowOperationDescriptors
-  readonly participants: Readonly<{
-    aclIdentity: WorkflowAclIdentityParticipant
-  }>
 }
 
 export function createWorkflowOperationDescriptors(
   commands: WorkflowCommands,
   queries: WorkflowQueries,
+  acl: ResourceAclOperationApplication<WorkflowOperationContext>,
 ): WorkflowOperationDescriptors {
+  const aclOperations = createResourceAclOperationDescriptors({
+    getId: 'workflow-catalog.get-workflow-acl.v1',
+    updateId: 'workflow-catalog.update-workflow-acl.v1',
+    noun: 'workflow',
+    readPermission: 'workflows:read',
+    updatePermission: 'workflows:update',
+    application: acl,
+  })
   return Object.freeze({
+    ...aclOperations,
     list: defineQueryOperation({
       id: 'workflow-catalog.list-workflows.v1',
       summary: 'List workflows visible to the caller',
@@ -1292,7 +1397,7 @@ const deleteWorkgroupReceiptSchema = z
   })
   .strict()
 
-export interface WorkgroupOperationDescriptors {
+export interface WorkgroupOperationDescriptors extends ResourceAclOperationDescriptors<WorkgroupOperationContext> {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
     Workgroup[],
@@ -1333,16 +1438,23 @@ export interface WorkgroupOperationDescriptors {
 export interface WorkgroupCatalogModule {
   readonly queries: WorkgroupQueries
   readonly operations: WorkgroupOperationDescriptors
-  readonly participants: Readonly<{
-    aclIdentity: WorkgroupAclIdentityParticipant
-  }>
 }
 
 export function createWorkgroupOperationDescriptors(
   commands: WorkgroupCommands,
   queries: WorkgroupQueries,
+  acl: ResourceAclOperationApplication<WorkgroupOperationContext>,
 ): WorkgroupOperationDescriptors {
+  const aclOperations = createResourceAclOperationDescriptors({
+    getId: 'workgroup-catalog.get-workgroup-acl.v1',
+    updateId: 'workgroup-catalog.update-workgroup-acl.v1',
+    noun: 'workgroup',
+    readPermission: 'workgroups:read',
+    updatePermission: 'workgroups:update',
+    application: acl,
+  })
   return Object.freeze({
+    ...aclOperations,
     list: defineQueryOperation({
       id: 'workgroup-catalog.list-workgroups.v1',
       summary: 'List workgroups visible to the caller',

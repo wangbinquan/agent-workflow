@@ -3,18 +3,13 @@ import type { DbClient } from '@/db/client'
 import { assertDeleteConfirm, assertTokenDeleteConfirm } from '@/services/deleteConfirm'
 import {
   canViewResource,
+  composeResourceAclOperationApplication,
   filterVisibleRows,
   requireResourceEdit,
   requireResourceGovern,
 } from './resourceAcl'
-import { monotonicNow } from '@/util/time'
-import { createSkillAclIdentityParticipant } from '../application/participants/skillAclIdentity'
 import { createSkillApplication } from '../application/skills/skillApplication'
-import type {
-  SkillAccessPort,
-  SkillDeleteConfirmationPort,
-  SkillMutationClock,
-} from '../application/skills/ports'
+import type { SkillAccessPort, SkillDeleteConfirmationPort } from '../application/skills/ports'
 import { createSqliteSkillRepository } from '../infrastructure/sqliteSkillRepository'
 import { createSkillOperationDescriptors, type SkillCatalogModule } from '../public/operations'
 import type { SkillOperationContext } from '../public/participants'
@@ -45,10 +40,11 @@ export function composeSkillCatalog(
       assertTokenDeleteConfirm(body, expectedPath, 'skill file', source),
   } satisfies SkillDeleteConfirmationPort)
   const application = createSkillApplication({ repository, access, confirmations })
-  const clock: SkillMutationClock = Object.freeze({
-    nextUpdatedAt: (skill) => monotonicNow(skill.updatedAt),
-  } satisfies SkillMutationClock)
-  const aclIdentity = createSkillAclIdentityParticipant({ repository, clock })
+  const acl = composeResourceAclOperationApplication<SkillOperationContext, Skill>({
+    db: input.db,
+    type: 'skill',
+    load: (id) => repository.get(id),
+  })
   const operations = createSkillOperationDescriptors(
     application.commands,
     application.queries,
@@ -56,6 +52,7 @@ export function composeSkillCatalog(
     application.fileQueries,
     application.versionCommands,
     application.versionQueries,
+    acl,
   )
   return Object.freeze({
     fileCommands: application.fileCommands,
@@ -64,6 +61,5 @@ export function composeSkillCatalog(
     fileQueries: application.fileQueries,
     versionQueries: application.versionQueries,
     operations,
-    participants: Object.freeze({ aclIdentity }),
   })
 }

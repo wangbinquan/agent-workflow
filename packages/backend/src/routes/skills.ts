@@ -24,10 +24,7 @@ import type {
   SkillVersionCommands,
 } from '@/modules/resource-catalog/public/commands'
 import type { SkillOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type {
-  SkillAclIdentityParticipant,
-  SkillOperationContext,
-} from '@/modules/resource-catalog/public/participants'
+import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
 import type {
   SkillFileQueries,
   SkillQueries,
@@ -41,7 +38,7 @@ import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { Paths } from '@/util/paths'
 import { commitSkillZipBuffer, parseSkillZipBuffer, ZIP_LIMITS } from '@/services/skill-zip'
 import { GoneError, NotFoundError, ValidationError } from '@/util/errors'
-import { mountAclEndpoints } from './resourceAcl'
+import { safeJsonOrEmpty } from '@/util/http'
 
 export interface SkillRouteDependencies {
   readonly fileCommands: SkillFileCommands
@@ -50,12 +47,11 @@ export interface SkillRouteDependencies {
   readonly fileQueries: SkillFileQueries
   readonly versionQueries: SkillVersionQueries
   readonly operations: SkillOperationDescriptors
-  readonly aclIdentity: SkillAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => SkillOperationContext
 }
 
 export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDependencies): void {
-  const { queries, operations, aclIdentity } = module
+  const { queries, operations } = module
   const zipFsOpts = { appHome: Paths.root }
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
@@ -378,11 +374,30 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
   })
 
   // RFC-099 / RFC-223 — GET/PUT /api/skills/:id/acl
-  mountAclEndpoints(app, deps, {
-    type: 'skill',
-    base: '/api/skills',
-    param: 'id',
-    load: (_db, id) => aclIdentity.load(id),
+  registerOperationRoute(app, {
+    descriptor: operations.getAcl,
+    method: 'GET',
+    path: '/api/skills/:id/acl',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
+  })
+
+  registerOperationRoute(app, {
+    descriptor: operations.updateAcl,
+    method: 'PUT',
+    path: '/api/skills/:id/acl',
+    tokenAccess: 'never',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
   })
 }
 

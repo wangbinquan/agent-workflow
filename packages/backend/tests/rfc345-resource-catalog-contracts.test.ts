@@ -1,6 +1,5 @@
-// RFC-345 T1 — the resource-catalog contract is additive, but it still needs
-// executable drift locks: four canonical rosters, correlated summaries, four
-// purpose-specific participants and seven package participants.
+// RFC-345 — executable drift locks for canonical rosters, exact public
+// contracts, production descriptor bindings, and purpose-specific participants.
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -63,16 +62,13 @@ import type {
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
+  WorkflowQueries,
   WorkgroupQueries,
 } from '../src/modules/resource-catalog/public/queries'
 import type {
-  AgentAclIdentityParticipant,
   IntegrationTriggerResourceSnapshotInTx,
   IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
-  PluginAclIdentityParticipant,
-  SkillAclIdentityParticipant,
-  WorkgroupAclIdentityParticipant,
   ResourcePackageApplyScenarioProvider,
   ResourcePackageApplyTx,
   ResourcePackageMutationParticipants,
@@ -90,6 +86,8 @@ import type {
   ResourcePackageOperationDescriptors,
   SkillCatalogModule,
   SkillOperationDescriptors,
+  WorkflowCatalogModule,
+  WorkflowOperationDescriptors,
   WorkgroupCatalogModule,
   WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
@@ -200,32 +198,25 @@ assertType<Equal<Extract<keyof IntegrationTriggerResourceSnapshotInTx, string>, 
 assertType<Equal<Extract<keyof ResourceScopeAuthorizationInTx, string>, 'accessOf'>>(true)
 assertType<Equal<Extract<keyof AgentQueries, string>, 'list' | 'get'>>(true)
 assertType<Equal<Extract<keyof AgentReferenceQueries, string>, 'labels'>>(true)
-assertType<Equal<Extract<keyof AgentAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
-  true,
-)
 assertType<
   Equal<
     Extract<keyof AgentOperationDescriptors, string>,
-    'list' | 'get' | 'create' | 'update' | 'delete' | 'rename'
+    'getAcl' | 'updateAcl' | 'list' | 'get' | 'create' | 'update' | 'delete' | 'rename'
   >
 >(true)
 assertType<
-  Equal<
-    Extract<keyof AgentCatalogModule, string>,
-    'queries' | 'referenceQueries' | 'operations' | 'participants'
-  >
+  Equal<Extract<keyof AgentCatalogModule, string>, 'queries' | 'referenceQueries' | 'operations'>
 >(true)
 assertType<Equal<Extract<keyof SkillFileCommands, string>, 'write' | 'delete'>>(true)
 assertType<Equal<Extract<keyof SkillVersionCommands, string>, 'restore'>>(true)
 assertType<Equal<Extract<keyof SkillQueries, string>, 'list' | 'get' | 'content'>>(true)
 assertType<Equal<Extract<keyof SkillFileQueries, string>, 'list' | 'read'>>(true)
 assertType<Equal<Extract<keyof SkillVersionQueries, string>, 'list' | 'diff' | 'content'>>(true)
-assertType<Equal<Extract<keyof SkillAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
-  true,
-)
 assertType<
   Equal<
     Extract<keyof SkillOperationDescriptors, string>,
+    | 'getAcl'
+    | 'updateAcl'
     | 'list'
     | 'get'
     | 'create'
@@ -245,13 +236,7 @@ assertType<
 assertType<
   Equal<
     Extract<keyof SkillCatalogModule, string>,
-    | 'fileCommands'
-    | 'versionCommands'
-    | 'queries'
-    | 'fileQueries'
-    | 'versionQueries'
-    | 'operations'
-    | 'participants'
+    'fileCommands' | 'versionCommands' | 'queries' | 'fileQueries' | 'versionQueries' | 'operations'
   >
 >(true)
 assertType<Equal<Extract<keyof McpQueries, string>, 'list' | 'get'>>(true)
@@ -259,38 +244,45 @@ assertType<Equal<Extract<keyof McpAclIdentityParticipant, string>, 'load' | 'nex
 assertType<
   Equal<
     Extract<keyof McpOperationDescriptors, string>,
-    'list' | 'get' | 'create' | 'update' | 'delete' | 'rename'
+    'getAcl' | 'updateAcl' | 'list' | 'get' | 'create' | 'update' | 'delete' | 'rename'
   >
 >(true)
 assertType<
   Equal<Extract<keyof McpCatalogModule, string>, 'queries' | 'operations' | 'participants'>
 >(true)
 assertType<Equal<Extract<keyof PluginQueries, string>, 'list' | 'get'>>(true)
-assertType<Equal<Extract<keyof PluginAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
-  true,
-)
 assertType<
   Equal<
     Extract<keyof PluginOperationDescriptors, string>,
-    'list' | 'get' | 'create' | 'update' | 'delete' | 'rename' | 'checkUpdate' | 'upgrade'
+    | 'getAcl'
+    | 'updateAcl'
+    | 'list'
+    | 'get'
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'rename'
+    | 'checkUpdate'
+    | 'upgrade'
   >
 >(true)
+assertType<Equal<Extract<keyof PluginCatalogModule, string>, 'queries' | 'operations'>>(true)
+assertType<Equal<Extract<keyof WorkflowQueries, string>, 'list' | 'get'>>(true)
 assertType<
-  Equal<Extract<keyof PluginCatalogModule, string>, 'queries' | 'operations' | 'participants'>
+  Equal<
+    Extract<keyof WorkflowOperationDescriptors, string>,
+    'getAcl' | 'updateAcl' | 'list' | 'get' | 'create' | 'copy' | 'update' | 'delete'
+  >
 >(true)
+assertType<Equal<Extract<keyof WorkflowCatalogModule, string>, 'queries' | 'operations'>>(true)
 assertType<Equal<Extract<keyof WorkgroupQueries, string>, 'list' | 'get'>>(true)
-assertType<Equal<Extract<keyof WorkgroupAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
-  true,
-)
 assertType<
   Equal<
     Extract<keyof WorkgroupOperationDescriptors, string>,
-    'list' | 'get' | 'create' | 'copy' | 'update' | 'delete' | 'rename'
+    'getAcl' | 'updateAcl' | 'list' | 'get' | 'create' | 'copy' | 'update' | 'delete' | 'rename'
   >
 >(true)
-assertType<
-  Equal<Extract<keyof WorkgroupCatalogModule, string>, 'queries' | 'operations' | 'participants'>
->(true)
+assertType<Equal<Extract<keyof WorkgroupCatalogModule, string>, 'queries' | 'operations'>>(true)
 
 const agentResourceTypeProbe: AgentCatalogResource | null = null
 const skillResourceTypeProbe: SkillCatalogResource | null = null
@@ -910,6 +902,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       "import type { McpQueries } from '@/modules/resource-catalog/public/queries'",
     )
     expect(route).toContain('McpAclIdentityParticipant')
+    expect(route).not.toContain('mountAclEndpoints')
     for (const consumer of [
       'descriptor: operations.create',
       'descriptor: operations.update',
@@ -917,10 +910,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.rename',
       'descriptor: operations.list',
       'descriptor: operations.get',
+      'descriptor: operations.getAcl',
+      'descriptor: operations.updateAcl',
       'queries.list(',
       'queries.get(',
       'aclIdentity.load(',
-      'aclIdentity.nextUpdatedAt(',
     ]) {
       expect(route).toContain(consumer)
     }
@@ -936,6 +930,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createSqliteMcpRepository')
     expect(composition).toContain('createMcpApplication')
+    expect(composition).toContain('composeResourceAclOperationApplication')
     for (const operationId of [
       'mcp-catalog.list-mcps.v1',
       'mcp-catalog.get-mcp.v1',
@@ -1006,7 +1001,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).not.toContain("from '@/services/pluginInstaller'")
     expect(route).toContain('PluginOperationDescriptors')
     expect(route).toContain('PluginQueries')
-    expect(route).toContain('PluginAclIdentityParticipant')
+    expect(route).not.toContain('PluginAclIdentityParticipant')
+    expect(route).not.toContain('mountAclEndpoints')
     for (const consumer of [
       'descriptor: operations.create',
       'descriptor: operations.update',
@@ -1016,9 +1012,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.upgrade',
       'descriptor: operations.list',
       'descriptor: operations.get',
+      'descriptor: operations.getAcl',
+      'descriptor: operations.updateAcl',
       'queries.get(',
-      'aclIdentity.load(',
-      'aclIdentity.nextUpdatedAt(',
     ]) {
       expect(route).toContain(consumer)
     }
@@ -1039,6 +1035,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createSqlitePluginRepository')
     expect(composition).toContain('createPluginApplication')
+    expect(composition).toContain('composeResourceAclOperationApplication')
     expect(composition).toContain('createLegacyPluginInstaller')
     expect(composition).toContain('application.commands')
     expect(composition).toContain('application.updateCommands')
@@ -1064,7 +1061,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('composePluginCatalog({')
     expect(server).toContain('operations: pluginCatalog.operations')
     expect(server).toContain('queries: pluginCatalog.queries')
-    expect(server).toContain('aclIdentity: pluginCatalog.participants.aclIdentity')
+    expect(server).not.toContain('aclIdentity: pluginCatalog.participants.aclIdentity')
 
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -1124,7 +1121,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).not.toContain("from '@/services/workgroups'")
     expect(route).toContain('WorkgroupOperationDescriptors')
     expect(route).toContain('WorkgroupQueries')
-    expect(route).toContain('WorkgroupAclIdentityParticipant')
+    expect(route).not.toContain('WorkgroupAclIdentityParticipant')
+    expect(route).not.toContain('mountAclEndpoints')
     for (const consumer of [
       'descriptor: operations.create',
       'descriptor: operations.copy',
@@ -1133,8 +1131,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.rename',
       'descriptor: operations.list',
       'descriptor: operations.get',
+      'descriptor: operations.getAcl',
+      'descriptor: operations.updateAcl',
       'queries.get(',
-      'aclIdentity.load(',
     ]) {
       expect(route).toContain(consumer)
     }
@@ -1158,6 +1157,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createSqliteWorkgroupRepository')
     expect(composition).toContain('createWorkgroupApplication')
+    expect(composition).toContain('composeResourceAclOperationApplication')
     expect(operations).toContain('inputSchema: deleteWorkgroupInputSchema')
     expect(operations).toContain('deletion: jsonBodySubmissionSchema')
 
@@ -1197,7 +1197,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('composeWorkgroupCatalog({ db: effectiveDeps.db })')
     expect(server).toContain('operations: workgroupCatalog.operations')
     expect(server).toContain('queries: workgroupCatalog.queries')
-    expect(server).toContain('aclIdentity: workgroupCatalog.participants.aclIdentity')
+    expect(server).not.toContain('aclIdentity: workgroupCatalog.participants.aclIdentity')
 
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -1250,7 +1250,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).toContain('AgentOperationDescriptors')
     expect(route).toContain('AgentQueries')
     expect(route).toContain('AgentReferenceQueries')
-    expect(route).toContain('AgentAclIdentityParticipant')
+    expect(route).not.toContain('AgentAclIdentityParticipant')
+    expect(route).not.toContain('mountAclEndpoints')
     for (const consumer of [
       'descriptor: operations.create',
       'descriptor: operations.update',
@@ -1258,8 +1259,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.rename',
       'descriptor: operations.list',
       'descriptor: operations.get',
+      'descriptor: operations.getAcl',
+      'descriptor: operations.updateAcl',
       'referenceQueries.labels(',
-      'aclIdentity.load(',
     ]) {
       expect(route).toContain(consumer)
     }
@@ -1283,15 +1285,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('const commands = Object.freeze')
     expect(application).toContain('const queries: AgentQueries = Object.freeze')
     expect(application).toContain('const referenceQueries: AgentReferenceQueries = Object.freeze')
-    expect(
-      readFileSync(
-        resolve(
-          sourceRoot,
-          'modules/resource-catalog/application/participants/agentAclIdentity.ts',
-        ),
-        'utf8',
-      ),
-    ).toContain('builtin: row.builtin === true')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
     expect(repository).toContain("from '@/services/agent'")
@@ -1299,7 +1292,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).toContain('loadClosureRefNames(')
     expect(composition).toContain('createSqliteAgentRepository')
     expect(composition).toContain('createAgentApplication')
-    expect(composition).toContain('createAgentAclIdentityParticipant')
+    expect(composition).toContain('composeResourceAclOperationApplication')
 
     const updateCommandStart = application.indexOf('async update(')
     const parseUpdate = application.indexOf('parseUpdateSubmission(input)', updateCommandStart)
@@ -1359,7 +1352,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('operations: agentCatalog.operations')
     expect(server).toContain('queries: agentCatalog.queries')
     expect(server).toContain('referenceQueries: agentCatalog.referenceQueries')
-    expect(server).toContain('aclIdentity: agentCatalog.participants.aclIdentity')
+    expect(server).not.toContain('aclIdentity: agentCatalog.participants.aclIdentity')
 
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -1432,10 +1425,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'SkillQueries',
       'SkillFileQueries',
       'SkillVersionQueries',
-      'SkillAclIdentityParticipant',
     ]) {
       expect(route).toContain(contract)
     }
+    expect(route).not.toContain('SkillAclIdentityParticipant')
+    expect(route).not.toContain('mountAclEndpoints')
     for (const consumer of [
       'descriptor: operations.create',
       'descriptor: operations.save',
@@ -1451,7 +1445,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.diffVersions',
       'descriptor: operations.getVersionContent',
       'descriptor: operations.restoreVersion',
-      'aclIdentity.load(',
+      'descriptor: operations.getAcl',
+      'descriptor: operations.updateAcl',
     ]) {
       expect(route).toContain(consumer)
     }
@@ -1472,7 +1467,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).toContain('explicit compatibility island')
     expect(composition).toContain('createSqliteSkillRepository')
     expect(composition).toContain('createSkillApplication')
-    expect(composition).toContain('createSkillAclIdentityParticipant')
+    expect(composition).toContain('composeResourceAclOperationApplication')
 
     const deleteCommandStart = application.indexOf('async delete(')
     const loadVisible = application.indexOf(
@@ -1527,7 +1522,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('queries: skillCatalog.queries')
     expect(server).toContain('fileQueries: skillCatalog.fileQueries')
     expect(server).toContain('versionQueries: skillCatalog.versionQueries')
-    expect(server).toContain('aclIdentity: skillCatalog.participants.aclIdentity')
+    expect(server).not.toContain('aclIdentity: skillCatalog.participants.aclIdentity')
 
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -1579,13 +1574,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/composition/workflowOperations.ts'),
       'utf8',
     )
-    const participant = readFileSync(
-      resolve(
-        sourceRoot,
-        'modules/resource-catalog/application/participants/workflowAclIdentity.ts',
-      ),
-      'utf8',
-    )
     const operations = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
       'utf8',
@@ -1600,13 +1588,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).not.toContain("from '@/services/workflow'")
     expect(route).toContain("from '@/services/workflow.validator'")
     expect(route).toContain("from '@/services/resourceRefs'")
-    for (const contract of [
-      'WorkflowOperationDescriptors',
-      'WorkflowQueries',
-      'WorkflowAclIdentityParticipant',
-    ]) {
+    for (const contract of ['WorkflowOperationDescriptors', 'WorkflowQueries']) {
       expect(route).toContain(contract)
     }
+    expect(route).not.toContain('WorkflowAclIdentityParticipant')
+    expect(route).not.toContain('mountAclEndpoints')
     for (const consumer of [
       'descriptor: operations.create',
       'descriptor: operations.copy',
@@ -1614,7 +1600,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.delete',
       'descriptor: operations.list',
       'descriptor: operations.get',
-      'aclIdentity.load(',
+      'descriptor: operations.getAcl',
+      'descriptor: operations.updateAcl',
     ]) {
       expect(route).toContain(consumer)
     }
@@ -1629,9 +1616,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).toContain('explicit compatibility island')
     expect(composition).toContain('createSqliteWorkflowRepository')
     expect(composition).toContain('createWorkflowApplication')
-    expect(composition).toContain('createWorkflowAclIdentityParticipant')
-    expect(participant).toContain('trustedWorkflowAclIdentityParticipants')
-    expect(participant).toContain('Object.freeze')
+    expect(composition).toContain('composeResourceAclOperationApplication')
 
     const deleteCommandStart = application.indexOf('async delete(')
     const loadVisible = application.indexOf(
@@ -1672,7 +1657,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('composeWorkflowCatalog({ db: effectiveDeps.db })')
     expect(server).toContain('operations: workflowCatalog.operations')
     expect(server).toContain('queries: workflowCatalog.queries')
-    expect(server).toContain('aclIdentity: workflowCatalog.participants.aclIdentity')
+    expect(server).not.toContain('aclIdentity: workflowCatalog.participants.aclIdentity')
 
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -1815,23 +1800,47 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
   test('T8 binds classic aggregates and ResourcePackage through exact descriptors', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const routeCases = [
-      ['agents.ts', 6],
-      ['mcps.ts', 6],
-      ['plugins.ts', 8],
-      ['skills.ts', 14],
-      ['workflows.ts', 6],
-      ['workgroups.ts', 7],
+      ['agents.ts', 'agent', 8],
+      ['mcps.ts', 'mcp', 8],
+      ['plugins.ts', 'plugin', 10],
+      ['skills.ts', 'skill', 16],
+      ['workflows.ts', 'workflow', 8],
+      ['workgroups.ts', 'workgroup', 9],
     ] as const
-    for (const [file, expectedBindings] of routeCases) {
+    for (const [file, resource, expectedBindings] of routeCases) {
       const route = readFileSync(resolve(sourceRoot, 'routes', file), 'utf8')
       expect(route.split('registerOperationRoute(app, {').length - 1).toBe(expectedBindings)
       expect(route).toContain('descriptor: operations.')
+      expect(route).toContain('descriptor: operations.getAcl')
+      expect(route).toContain('descriptor: operations.updateAcl')
+      expect(route).not.toContain('mountAclEndpoints')
+
+      const catalog = resource === 'mcp' ? 'mcp' : resource
+      const operationPrefix = `${catalog}-catalog`
+      const operations = readFileSync(
+        resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
+        'utf8',
+      )
+      expect(operations).toContain(`${operationPrefix}.get-${resource}-acl.v1`)
+      expect(operations).toContain(`${operationPrefix}.update-${resource}-acl.v1`)
     }
 
     const packageRoute = readFileSync(resolve(sourceRoot, 'routes/resourcePackages.ts'), 'utf8')
     const packageCli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
     const bindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
     const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+    const aclApplication = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/resourceAcl.ts'),
+      'utf8',
+    )
+    const aclComposition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/resourceAcl.ts'),
+      'utf8',
+    )
+    const publicParticipants = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/participants.ts'),
+      'utf8',
+    )
 
     expect(packageRoute.split('registerOperationRoute(app, {').length - 1).toBe(9)
     expect(packageRoute).not.toContain('registerRoute(')
@@ -1842,6 +1851,69 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     for (const catalog of ['agent', 'mcp', 'plugin', 'skill', 'workflow', 'workgroup']) {
       expect(server).toContain(`operations: ${catalog}Catalog.operations`)
     }
+
+    const initialLoad = aclApplication.indexOf('const row = await loadVisible(authority, input.id)')
+    const parseSubmission = aclApplication.indexOf(
+      'const body = parseResourceAclSubmission(input)',
+      initialLoad,
+    )
+    const freshVisibility = aclApplication.indexOf(
+      'if (!(await deps.canView(authority, fresh))) throw notFound()',
+      parseSubmission,
+    )
+    const builtinGuard = aclApplication.indexOf('deps.assertMutable(fresh)', freshVisibility)
+    const update = aclApplication.indexOf(
+      'return deps.update(authority, fresh, body, updatedAt)',
+      builtinGuard,
+    )
+    const afterUpdated = aclApplication.indexOf('await deps.afterUpdated?.(row.id)', update)
+    expect(initialLoad).toBeGreaterThanOrEqual(0)
+    expect(parseSubmission).toBeGreaterThan(initialLoad)
+    expect(freshVisibility).toBeGreaterThan(parseSubmission)
+    expect(builtinGuard).toBeGreaterThan(freshVisibility)
+    expect(update).toBeGreaterThan(builtinGuard)
+    expect(afterUpdated).toBeGreaterThan(update)
+    expect(aclApplication).toContain('deps.linearizer.runExclusive')
+    expect(aclComposition).toContain("triggerRevalidation(db, 'resource-acl-changed')")
+    expect(aclComposition).toContain('assertNotBuiltin(input.type, row)')
+
+    for (const retired of ['Agent', 'Skill', 'Plugin', 'Workflow', 'Workgroup']) {
+      expect(publicParticipants).not.toContain(`${retired}AclIdentityParticipant`)
+      expect(server).not.toContain(
+        `aclIdentity: ${retired.toLowerCase()}Catalog.participants.aclIdentity`,
+      )
+    }
+    for (const retired of ['agent', 'skill', 'plugin', 'workflow', 'workgroup']) {
+      expect(
+        existsSync(
+          resolve(
+            sourceRoot,
+            `modules/resource-catalog/application/participants/${retired}AclIdentity.ts`,
+          ),
+        ),
+      ).toBe(false)
+    }
+    expect(publicParticipants).toContain('interface McpAclIdentityParticipant')
+    expect(server).toContain('aclIdentity: mcpCatalog.participants.aclIdentity')
+
+    const mcpComposition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/mcpOperations.ts'),
+      'utf8',
+    )
+    const workflowComposition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/workflowOperations.ts'),
+      'utf8',
+    )
+    const workgroupComposition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/workgroupOperations.ts'),
+      'utf8',
+    )
+    expect(mcpComposition).toContain('transitionMcpAclRuntimeTestsInTx')
+    expect(mcpComposition).toContain('runtime.reconcileDurableIntents()')
+    expect(workflowComposition).toContain('workflowsBroadcaster.broadcast')
+    expect(workflowComposition).toContain("type: 'workflow.acl.updated'")
+    expect(workgroupComposition).toContain('workgroupsBroadcaster.broadcast')
+    expect(workgroupComposition).toContain("type: 'workgroup.acl.updated'")
   })
 
   test('T9 retires zero-consumer W4-C public and facade debt', () => {

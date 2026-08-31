@@ -16,10 +16,7 @@ import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shar
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { WorkflowOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type {
-  WorkflowAclIdentityParticipant,
-  WorkflowOperationContext,
-} from '@/modules/resource-catalog/public/participants'
+import type { WorkflowOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { WorkflowQueries } from '@/modules/resource-catalog/public/queries'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
@@ -45,14 +42,11 @@ import {
 } from '@/services/workflow.validator'
 import {} from '@/services/workflow.yaml'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { mountAclEndpoints } from './resourceAcl'
-import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { safeJsonOrEmpty } from '@/util/http'
 
 export interface WorkflowRouteDependencies {
   readonly queries: WorkflowQueries
   readonly operations: WorkflowOperationDescriptors
-  readonly aclIdentity: WorkflowAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => WorkflowOperationContext
 }
 
@@ -61,7 +55,7 @@ export function mountWorkflowRoutes(
   deps: AppDeps,
   module: WorkflowRouteDependencies,
 ): void {
-  const { queries, operations, aclIdentity } = module
+  const { queries, operations } = module
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleWorkflow(actor: Actor, id: string) {
@@ -320,19 +314,30 @@ export function mountWorkflowRoutes(
   // 实例必然悬空。那不是「功能少一点」，是一个会稳定产出坏结果的出口。
 
   // RFC-099 — GET/PUT /api/workflows/:id/acl
-  mountAclEndpoints(app, deps, {
-    type: 'workflow',
-    base: '/api/workflows',
-    param: 'id',
-    load: (_db, id) => aclIdentity.load(id),
-    // Lets connected /ws/workflows clients re-fetch AND lets the WS server
-    // invalidate its per-connection visibility cache for this workflow.
-    afterUpdate: (workflowId) => {
-      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
-        type: 'workflow.acl.updated',
-        workflowId,
-      })
-    },
+  registerOperationRoute(app, {
+    descriptor: operations.getAcl,
+    method: 'GET',
+    path: '/api/workflows/:id/acl',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
+  })
+
+  registerOperationRoute(app, {
+    descriptor: operations.updateAcl,
+    method: 'PUT',
+    path: '/api/workflows/:id/acl',
+    tokenAccess: 'never',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
   })
 }
 

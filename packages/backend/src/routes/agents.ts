@@ -21,10 +21,7 @@ import { z } from 'zod'
 import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { AgentOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type {
-  AgentAclIdentityParticipant,
-  AgentOperationContext,
-} from '@/modules/resource-catalog/public/participants'
+import type { AgentOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { AgentQueries, AgentReferenceQueries } from '@/modules/resource-catalog/public/queries'
 import type {
   AgentCatalogResource,
@@ -51,7 +48,6 @@ import {
 import type { UploadLimits } from '@/services/upload'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
-import { mountAclEndpoints } from './resourceAcl'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
 import { getAgentResourceStatus } from '@/services/agentResourceIntegrity'
@@ -62,7 +58,6 @@ export interface AgentRouteDependencies {
   readonly queries: AgentQueries
   readonly referenceQueries: AgentReferenceQueries
   readonly operations: AgentOperationDescriptors
-  readonly aclIdentity: AgentAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => AgentOperationContext
 }
 
@@ -81,7 +76,7 @@ function closureRefNameMaps(labels: AgentReferenceLabels): ClosureRefNameMaps {
 }
 
 export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDependencies): void {
-  const { queries, referenceQueries, operations, aclIdentity } = module
+  const { queries, referenceQueries, operations } = module
   // RFC-099: load-or-404 that treats "missing" and "not visible" identically
   // (same code + message) so existence never leaks to non-granted users.
   async function loadVisibleAgent(actor: Actor, id: string): Promise<AgentCatalogResource> {
@@ -540,12 +535,30 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     },
   )
 
-  // RFC-099 / RFC-223 — GET/PUT /api/agents/:id/acl
-  mountAclEndpoints(app, deps, {
-    type: 'agent',
-    base: '/api/agents',
-    param: 'id',
-    load: (_db, id) => aclIdentity.load(id),
+  registerOperationRoute(app, {
+    descriptor: operations.getAcl,
+    method: 'GET',
+    path: '/api/agents/:id/acl',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
+  })
+
+  registerOperationRoute(app, {
+    descriptor: operations.updateAcl,
+    method: 'PUT',
+    path: '/api/agents/:id/acl',
+    tokenAccess: 'never',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
   })
 }
 

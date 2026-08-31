@@ -1,6 +1,13 @@
 import type { Actor } from '@/auth/actor'
+import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
-import { createResourceAclApplication } from '../application/resourceAcl'
+import { assertNotBuiltin } from '@/services/systemResources'
+import { triggerRevalidation } from '@/ws/revalidationHook'
+import {
+  createResourceAclApplication,
+  createResourceAclOperationApplication,
+  type ResourceAclOperationLinearizer,
+} from '../application/resourceAcl'
 import {
   createResourceScopeAuthorizationInTx as createResourceScopeAuthorizationParticipantInTx,
   type ResourceCurrentAuthorityResolver,
@@ -28,6 +35,13 @@ import {
   loadGrantLevelInTx,
   loadGrantLevelsForUser,
 } from '../infrastructure/sqliteResourceGrantRepository'
+import type {
+  AclResourceType,
+  ResourceAcl,
+  ResourceVisibility,
+  UpdateResourceAclBody,
+} from '@agent-workflow/shared'
+import type { AclRow } from '../domain/resourceAccess'
 
 const grantReads: ResourceGrantReadPort = {
   listGrantedResourceIds: (db, actor, type) => listGrantedResourceIds(db, actor, type),
@@ -76,6 +90,50 @@ export const {
 } = authorization
 
 export const { getResourceAcl, updateResourceAcl } = acl
+
+export interface ResourceAclOperationCompositionDependencies<Row extends AclRow> {
+  readonly db: DbClient
+  readonly type: AclResourceType
+  load(id: string): Promise<Row | null>
+  readonly linearizer?: ResourceAclOperationLinearizer<Row>
+  readonly afterWriteInTx?: (
+    tx: DbTxSync,
+    change: {
+      readonly resourceId: string
+      readonly ownerUserId: string | null
+      readonly visibility: ResourceVisibility
+      readonly grantedUserIds: ReadonlySet<string>
+      readonly now: number
+    },
+  ) => void
+  afterUpdated?(resourceId: string): void | Promise<void>
+}
+
+/** Owner composition for the classic-six descriptor-backed ACL operations. */
+export function composeResourceAclOperationApplication<Context extends Actor, Row extends AclRow>(
+  input: ResourceAclOperationCompositionDependencies<Row>,
+) {
+  return createResourceAclOperationApplication<Context, Row>({
+    type: input.type,
+    load: input.load,
+    canView: (authority, row) => canViewResource(input.db, authority, input.type, row),
+    assertMutable: (row) => assertNotBuiltin(input.type, row),
+    read: (authority, row) => getResourceAcl(input.db, authority, input.type, row),
+    update: (
+      authority: Context,
+      row: Row,
+      body: UpdateResourceAclBody,
+      updatedAt?: number,
+    ): Promise<ResourceAcl> =>
+      updateResourceAcl(input.db, authority, input.type, row, body, {
+        updatedAt,
+        afterWriteInTx: input.afterWriteInTx,
+        afterCommit: (db) => triggerRevalidation(db, 'resource-acl-changed'),
+      }),
+    linearizer: input.linearizer,
+    afterUpdated: input.afterUpdated,
+  })
+}
 
 const participantDependencies = { accessRows, authorization }
 

@@ -38,7 +38,6 @@ import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { serializeMcpFor } from '@/services/tokenRedaction'
-import { mountAclEndpoints } from './resourceAcl'
 import { probeMcp, type ProbeOptions } from '@/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '@/services/mcpProbeStore'
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
@@ -51,7 +50,6 @@ import {
 } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type { McpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import { transitionMcpAclRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import { safeJsonOrEmpty } from '@/util/http'
 
 const log = createLogger('mcps-routes')
@@ -550,25 +548,29 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
     },
   )
 
-  // RFC-099 / RFC-223 — GET/PUT /api/mcps/:id/acl
-  mountAclEndpoints(app, deps, {
-    type: 'mcp',
-    base: '/api/mcps',
-    param: 'id',
-    load: (_db, id) => aclIdentity.load(id),
-    coordinator: {
-      runExclusive: (resourceId, task) => mcpOperationCoordinator.runExclusive(resourceId, task),
-      loadById: (_db, resourceId) => aclIdentity.load(resourceId),
-      nextUpdatedAt: (row) => aclIdentity.nextUpdatedAt(row.id),
-    },
-    afterWriteInTx: (tx, change) =>
-      transitionMcpAclRuntimeTestsInTx(tx, {
-        mcpId: change.resourceId,
-        ownerUserId: change.ownerUserId,
-        visibility: change.visibility,
-        grantedUserIds: change.grantedUserIds,
-        now: change.now,
-      }),
-    afterUpdate: () => runtimeTests.reconcileDurableIntents(),
+  registerOperationRoute(app, {
+    descriptor: operations.getAcl,
+    method: 'GET',
+    path: '/api/mcps/:id/acl',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
+  })
+
+  registerOperationRoute(app, {
+    descriptor: operations.updateAcl,
+    method: 'PUT',
+    path: '/api/mcps/:id/acl',
+    tokenAccess: 'never',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, acl) => c.json(acl),
   })
 }

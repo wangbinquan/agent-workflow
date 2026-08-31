@@ -2,6 +2,7 @@ import type { Mcp } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
+import { transitionMcpAclRuntimeTestsInTx } from '@/services/mcpRuntimeTestTransitions'
 import { createMcpApplication } from '../application/mcps/mcpApplication'
 import type {
   McpAccessPort,
@@ -15,6 +16,7 @@ import {
 } from '../infrastructure/sqliteMcpRepository'
 import {
   canViewResource,
+  composeResourceAclOperationApplication,
   discloseRefs,
   filterVisibleRows,
   requireResourceEdit,
@@ -66,7 +68,26 @@ export function composeMcpCatalog(input: McpCatalogCompositionDependencies): Mcp
     now: input.now ?? Date.now,
   })
   const aclIdentity = createMcpAclIdentityParticipant({ repository, clock })
-  const operations = createMcpOperationDescriptors(application.commands, application.queries)
+  const acl = composeResourceAclOperationApplication({
+    db: input.db,
+    type: 'mcp',
+    load: (id) => repository.get(id),
+    linearizer: {
+      runExclusive: (resourceId, task) => input.coordinator.runExclusive(resourceId, task),
+      loadById: (resourceId) => repository.get(resourceId),
+      nextUpdatedAt: (row) => clock.next(row),
+    },
+    afterWriteInTx: (tx, change) =>
+      transitionMcpAclRuntimeTestsInTx(tx, {
+        mcpId: change.resourceId,
+        ownerUserId: change.ownerUserId,
+        visibility: change.visibility,
+        grantedUserIds: change.grantedUserIds,
+        now: change.now,
+      }),
+    afterUpdated: () => input.runtime.reconcileDurableIntents(),
+  })
+  const operations = createMcpOperationDescriptors(application.commands, application.queries, acl)
   return Object.freeze({
     queries: application.queries,
     operations,

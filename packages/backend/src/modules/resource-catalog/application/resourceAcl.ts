@@ -1,10 +1,15 @@
-import type {
-  AclResourceType,
-  ResourceAcl,
-  ResourceGrantLevel,
-  ResourceVisibility,
-  UpdateResourceAclBody,
+import {
+  UpdateResourceAclBodySchema,
+  type AclResourceType,
+  type ResourceAcl,
+  type ResourceGrantLevel,
+  type ResourceVisibility,
+  type UpdateResourceAclBody,
 } from '@agent-workflow/shared'
+import type {
+  GetResourceAclCatalogInput,
+  UpdateResourceAclCatalogInput,
+} from '../domain/catalogOperationTypes'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DbClient } from '@/db/client'
@@ -220,4 +225,93 @@ export function createResourceAclApplication({
   return { getResourceAcl, updateResourceAcl }
 }
 
-export type ResourceAclApplication = ReturnType<typeof createResourceAclApplication>
+export interface ResourceAclOperationLinearizer<Row extends AclRow> {
+  runExclusive(resourceId: string, task: () => Promise<ResourceAcl>): Promise<ResourceAcl>
+  loadById(resourceId: string): Promise<Row | null>
+  nextUpdatedAt?: (row: Row) => Promise<number>
+}
+
+export interface ResourceAclOperationApplicationDependencies<
+  Context extends Actor,
+  Row extends AclRow,
+> {
+  readonly type: AclResourceType
+  load(id: string): Promise<Row | null>
+  canView(authority: Context, row: Row): Promise<boolean>
+  assertMutable(row: Row): void
+  read(authority: Context, row: Row): Promise<ResourceAcl>
+  update(
+    authority: Context,
+    row: Row,
+    body: UpdateResourceAclBody,
+    updatedAt?: number,
+  ): Promise<ResourceAcl>
+  readonly linearizer?: ResourceAclOperationLinearizer<Row>
+  afterUpdated?(resourceId: string): void | Promise<void>
+}
+
+function parseResourceAclSubmission(input: UpdateResourceAclCatalogInput): UpdateResourceAclBody {
+  let body: unknown
+  try {
+    body = JSON.parse(input.submission.body)
+  } catch {
+    body = {}
+  }
+  const parsed = UpdateResourceAclBodySchema.safeParse(body)
+  if (!parsed.success) {
+    throw new ValidationError('acl-invalid', 'invalid acl payload', {
+      issues: parsed.error.issues,
+    })
+  }
+  return parsed.data
+}
+
+/**
+ * Classic-six transport-neutral ACL use cases. The application deliberately
+ * loads visibility before parsing the closed submission, then repeats the
+ * visibility and built-in checks on the linearized row before the existing
+ * govern/CAS transaction.
+ */
+export function createResourceAclOperationApplication<Context extends Actor, Row extends AclRow>(
+  deps: ResourceAclOperationApplicationDependencies<Context, Row>,
+) {
+  const notFound = (): NotFoundError =>
+    new NotFoundError(`${deps.type}-not-found`, `${deps.type} not found`)
+
+  async function loadVisible(authority: Context, id: string): Promise<Row> {
+    const row = await deps.load(id)
+    if (row === null || !(await deps.canView(authority, row))) throw notFound()
+    return row
+  }
+
+  const queries = Object.freeze({
+    async get(authority: Context, input: GetResourceAclCatalogInput): Promise<ResourceAcl> {
+      return deps.read(authority, await loadVisible(authority, input.id))
+    },
+  })
+
+  const commands = Object.freeze({
+    async update(authority: Context, input: UpdateResourceAclCatalogInput): Promise<ResourceAcl> {
+      const row = await loadVisible(authority, input.id)
+      const body = parseResourceAclSubmission(input)
+      const updateFresh = async (fresh: Row): Promise<ResourceAcl> => {
+        if (!(await deps.canView(authority, fresh))) throw notFound()
+        deps.assertMutable(fresh)
+        const updatedAt = await deps.linearizer?.nextUpdatedAt?.(fresh)
+        return deps.update(authority, fresh, body, updatedAt)
+      }
+      const result =
+        deps.linearizer === undefined
+          ? await updateFresh(row)
+          : await deps.linearizer.runExclusive(row.id, async () => {
+              const fresh = await deps.linearizer!.loadById(row.id)
+              if (fresh === null) throw notFound()
+              return updateFresh(fresh)
+            })
+      await deps.afterUpdated?.(row.id)
+      return result
+    },
+  })
+
+  return Object.freeze({ commands, queries })
+}

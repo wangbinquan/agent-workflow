@@ -31,6 +31,15 @@ interface JsonBodySubmission {
   readonly body: string
 }
 
+export interface GetResourceAclCatalogInput {
+  readonly id: string
+}
+
+export interface UpdateResourceAclCatalogInput {
+  readonly id: string
+  readonly submission: JsonBodySubmission
+}
+
 export type CreateAgentCatalogInput = CreateAgent
 
 export interface UpdateAgentCatalogInput {

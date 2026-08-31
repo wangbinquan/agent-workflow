@@ -9,7 +9,8 @@
 // 资源。整套门禁全绿，因为**没有任何规则要求一个 ACL 资源族必须使用 owner 判据**。
 //
 // 本文件把那条缺失的规则补上，两条断言：
-//   ① 凡**消费** `mountAclEndpoints` 的路由文件，必须同时用到一道真写门；
+//   ① 凡**消费** ACL route binding（legacy `mountAclEndpoints` 或 exact
+//      `operations.getAcl` / `operations.updateAcl`）的路由文件，必须同时用到一道真写门；
 //   ② 凡在 `routes/**` 里用到 `canViewResource` 的文件，也必须用到真写门
 //      ——除非它在显式 allowlist 里并写清为什么它只读。
 //
@@ -66,6 +67,8 @@ interface RouteSource {
   readonly rel: string
   /** 该文件里被**调用**过的顶层标识符名（AST 提取）。 */
   readonly calledNames: ReadonlySet<string>
+  /** 该文件里真实引用过的 property 名；用于识别 data-only descriptor binding。 */
+  readonly referencedPropertyNames: ReadonlySet<string>
 }
 
 /**
@@ -96,9 +99,25 @@ function calledIdentifierNames(path: string, text: string): Set<string> {
   return names
 }
 
+function referencedPropertyNames(path: string, text: string): Set<string> {
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const names = new Set<string>()
+  const visit = (node: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(node)) names.add(node.name.text)
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return names
+}
+
 const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
   const rel = relative(REPO_ROOT, path).split('\\').join('/')
-  return { rel, calledNames: calledIdentifierNames(rel, readFileSync(path, 'utf8')) }
+  const text = readFileSync(path, 'utf8')
+  return {
+    rel,
+    calledNames: calledIdentifierNames(rel, text),
+    referencedPropertyNames: referencedPropertyNames(rel, text),
+  }
 })
 
 const CONFIG_OPERATION_SOURCE = 'packages/backend/src/modules/development-automation/composition/configOperations.ts'
@@ -114,35 +133,28 @@ const WORKFLOW_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/workflows/workflowApplication.ts'
 const WORKGROUP_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupApplication.ts'
+const RESOURCE_ACL_OPERATION_SOURCE =
+  'packages/backend/src/modules/resource-catalog/application/resourceAcl.ts'
+const RESOURCE_ACL_OPERATION_GATES = calledIdentifierNames(
+  RESOURCE_ACL_OPERATION_SOURCE,
+  readFileSync(resolve(REPO_ROOT, RESOURCE_ACL_OPERATION_SOURCE), 'utf8'),
+)
+const aggregateAndAclGates = (source: string): ReadonlySet<string> =>
+  new Set([
+    ...calledIdentifierNames(source, readFileSync(resolve(REPO_ROOT, source), 'utf8')),
+    ...RESOURCE_ACL_OPERATION_GATES,
+  ])
 const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = {
   'packages/backend/src/routes/developmentConfig.ts': calledIdentifierNames(
     CONFIG_OPERATION_SOURCE,
     readFileSync(resolve(REPO_ROOT, CONFIG_OPERATION_SOURCE), 'utf8'),
   ),
-  'packages/backend/src/routes/agents.ts': calledIdentifierNames(
-    AGENT_OPERATION_SOURCE,
-    readFileSync(resolve(REPO_ROOT, AGENT_OPERATION_SOURCE), 'utf8'),
-  ),
-  'packages/backend/src/routes/mcps.ts': calledIdentifierNames(
-    MCP_OPERATION_SOURCE,
-    readFileSync(resolve(REPO_ROOT, MCP_OPERATION_SOURCE), 'utf8'),
-  ),
-  'packages/backend/src/routes/plugins.ts': calledIdentifierNames(
-    PLUGIN_OPERATION_SOURCE,
-    readFileSync(resolve(REPO_ROOT, PLUGIN_OPERATION_SOURCE), 'utf8'),
-  ),
-  'packages/backend/src/routes/skills.ts': calledIdentifierNames(
-    SKILL_OPERATION_SOURCE,
-    readFileSync(resolve(REPO_ROOT, SKILL_OPERATION_SOURCE), 'utf8'),
-  ),
-  'packages/backend/src/routes/workflows.ts': calledIdentifierNames(
-    WORKFLOW_OPERATION_SOURCE,
-    readFileSync(resolve(REPO_ROOT, WORKFLOW_OPERATION_SOURCE), 'utf8'),
-  ),
-  'packages/backend/src/routes/workgroups.ts': calledIdentifierNames(
-    WORKGROUP_OPERATION_SOURCE,
-    readFileSync(resolve(REPO_ROOT, WORKGROUP_OPERATION_SOURCE), 'utf8'),
-  ),
+  'packages/backend/src/routes/agents.ts': aggregateAndAclGates(AGENT_OPERATION_SOURCE),
+  'packages/backend/src/routes/mcps.ts': aggregateAndAclGates(MCP_OPERATION_SOURCE),
+  'packages/backend/src/routes/plugins.ts': aggregateAndAclGates(PLUGIN_OPERATION_SOURCE),
+  'packages/backend/src/routes/skills.ts': aggregateAndAclGates(SKILL_OPERATION_SOURCE),
+  'packages/backend/src/routes/workflows.ts': aggregateAndAclGates(WORKFLOW_OPERATION_SOURCE),
+  'packages/backend/src/routes/workgroups.ts': aggregateAndAclGates(WORKGROUP_OPERATION_SOURCE),
 }
 
 const calledNamesFor = (source: RouteSource): ReadonlySet<string> => {
@@ -151,8 +163,11 @@ const calledNamesFor = (source: RouteSource): ReadonlySet<string> => {
   return new Set([...source.calledNames, ...delegated])
 }
 
-const usesMountAclEndpoints = (source: RouteSource): boolean =>
-  source.rel !== ACL_MOUNTER_DEFINITION && source.calledNames.has('mountAclEndpoints')
+const usesAclEndpoints = (source: RouteSource): boolean =>
+  source.rel !== ACL_MOUNTER_DEFINITION &&
+  (source.calledNames.has('mountAclEndpoints') ||
+    (source.referencedPropertyNames.has('getAcl') &&
+      source.referencedPropertyNames.has('updateAcl')))
 /** RFC-324 —— 真写门：治理档或内容档，两者都不是「看得见就写得动」。 */
 const WRITE_GATES = ['requireResourceGovern', 'requireResourceEdit'] as const
 const usesOwnerGate = (source: RouteSource): boolean =>
@@ -181,12 +196,12 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
   })
 
   test('前提复核：确实存在挂载 /acl 的消费方，否则规则①无处可施', () => {
-    expect(SOURCES.filter(usesMountAclEndpoints).length).toBeGreaterThan(5)
+    expect(SOURCES.filter(usesAclEndpoints).length).toBeGreaterThan(5)
   })
 
   test('①凡挂载 /acl 端点的路由文件，都必须用到一道真写门（govern 或 edit）', () => {
     const offenders = SOURCES.filter(
-      (source) => usesMountAclEndpoints(source) && !usesOwnerGate(source),
+      (source) => usesAclEndpoints(source) && !usesOwnerGate(source),
     ).map((source) => source.rel)
     expect(
       offenders,
@@ -212,7 +227,7 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
   test('③挂 /acl 的路由文件必须有内容写门，否则「可编辑」档对该资源形同虚设', () => {
     const offenders = SOURCES.filter(
       (source) =>
-        usesMountAclEndpoints(source) &&
+        usesAclEndpoints(source) &&
         !usesEditGate(source) &&
         EDIT_GATE_ELSEWHERE_ALLOWLIST[source.rel] === undefined,
     ).map((source) => source.rel)

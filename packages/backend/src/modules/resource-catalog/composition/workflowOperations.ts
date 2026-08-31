@@ -1,13 +1,14 @@
 import type { Workflow } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
+import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import {
   canViewResource,
+  composeResourceAclOperationApplication,
   filterVisibleRows,
   requireResourceEdit,
   requireResourceGovern,
 } from './resourceAcl'
 import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemResources'
-import { createWorkflowAclIdentityParticipant } from '../application/participants/workflowAclIdentity'
 import { createWorkflowApplication } from '../application/workflows/workflowApplication'
 import type {
   WorkflowAccessPort,
@@ -45,11 +46,24 @@ export function composeWorkflowCatalog(
     assertMutable: (row: WorkflowAccessRow) => assertNotBuiltin('workflow', row),
   })
   const application = createWorkflowApplication({ repository, access, policy })
-  const aclIdentity = createWorkflowAclIdentityParticipant({ repository })
-  const operations = createWorkflowOperationDescriptors(application.commands, application.queries)
+  const acl = composeResourceAclOperationApplication<WorkflowOperationContext, WorkflowAccessRow>({
+    db: input.db,
+    type: 'workflow',
+    load: (id) => repository.getAclIdentity(id),
+    afterUpdated: (workflowId) => {
+      workflowsBroadcaster.broadcast(WORKFLOWS_CHANNEL, {
+        type: 'workflow.acl.updated',
+        workflowId,
+      })
+    },
+  })
+  const operations = createWorkflowOperationDescriptors(
+    application.commands,
+    application.queries,
+    acl,
+  )
   return Object.freeze({
     queries: application.queries,
     operations,
-    participants: Object.freeze({ aclIdentity }),
   })
 }
