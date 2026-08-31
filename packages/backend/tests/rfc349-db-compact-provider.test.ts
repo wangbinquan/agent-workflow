@@ -3,7 +3,7 @@
 // activation; the CLI must not open, validate or rewrite it as live state.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { dbCompactCommand } from '@/cli/dbCompact'
@@ -24,6 +24,18 @@ afterEach(() => {
 })
 
 describe('RFC-349 db compact provider dispatch', () => {
+  test('reports a missing SQLite database without materializing default config', () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc349-db-compact-no-database-'))
+    roots.push(appHome)
+    process.env.AGENT_WORKFLOW_HOME = appHome
+
+    expect(dbCompactCommand()).toEqual({
+      status: 'no-db',
+      output: `no database at ${join(appHome, 'db.sqlite')}\n`,
+    })
+    expect(readdirSync(appHome)).toEqual([])
+  })
+
   test('leaves the retained SQLite file untouched when PostgreSQL is live', () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc349-db-compact-provider-'))
     roots.push(appHome)

@@ -13,7 +13,8 @@
 //   * 各诊断项：git 地板 `doctor.ts:269-286`（`MIN_GIT_VERSION` 见
 //     `services/gitVersion.ts:60-68`）、ssh 忠告 `doctor.ts:314-326`、
 //     secret 权限 `doctor.ts:393-441`、migrations `doctor.ts:473-514`、
-//     db 完整性 `doctor.ts:156-167`、备份健康 `doctor.ts:170-198`、
+//     provider-aware DB 完整性 `doctor.ts:111-183` 与
+//     `platform/persistence/databaseOperationalAdapter.ts`、备份健康 `doctor.ts:170-198`、
 //     密封凭据 `doctor.ts:98-149`、lifecycle `doctor.ts:214-262`。
 //   * `db compact` 的三态与停机闸门 → `packages/backend/src/cli/dbCompact.ts:28-69`；
 //     `db` 子命令用法 / 退出码 → `main.ts:105-114`。
@@ -72,7 +73,7 @@ const DOCTOR_CHECK_ROSTER = [
   'secret file protection',
   'migrations folder',
   'lifecycle',
-  'db integrity',
+  'database provider',
   'backups',
   'repo credentials',
 ] as const
@@ -276,10 +277,10 @@ test('RFC-319 OPS-010: doctor 在编译二进制上跑完整套诊断——十�
         '用户不知道这份体检报告说的是哪一份状态',
     ).toBe(home)
     expect(
-      doctorCheck(result.out, 'db integrity').message,
+      doctorCheck(result.out, 'database provider').message,
       '完好的库没有得到 `quick_check ok` ⇒ 「库到底有没有坏」这个问题没有肯定答案，' +
         '恢复备份的决定就只能靠猜',
-    ).toBe('quick_check ok')
+    ).toBe('sqlite generation dbg_legacy_sqlite: sqlite-quick-check=ok')
     expect(
       doctorCheck(result.out, 'git version').message,
       'git 那一项没有报出实测版本与要求的地板 ⇒ 升级 git 之后用户无从确认自己是不是升够了',
@@ -515,7 +516,7 @@ test('RFC-319 OPS-011: 备份健康读数只数 .tar.gz、报出最新一份的�
   }
 })
 
-test('RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 报 CORRUPT 并给出恢复命令，其余读库项降级为「读不到」而不是跟着报警 @nightly', async () => {
+test('RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 的 provider 检查报 unreadable 并给出恢复命令，其余读库项降级为「读不到」而不是跟着报警 @nightly', async () => {
   test.setTimeout(OPS_TEST_TIMEOUT_MS)
   const home = cloneHome('doctor-corrupt')
   try {
@@ -536,12 +537,16 @@ test('RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 报 CORRUPT 并给出�
       '库已经不是一个 SQLite 文件了，doctor 却以 0 退出 ⇒ 用户拿着一份「一切正常」的体检报告，' +
         '继续往一个坏掉的库里写，直到 daemon 起不来',
     ).toBe(1)
-    const integrity = doctorCheck(result.out, 'db integrity')
+    const integrity = doctorCheck(result.out, 'database provider')
     expect(integrity.ok, '损坏的库被判为完好 ⇒ 同上').toBe(false)
     expect(
       integrity.message,
-      '报损坏却不说是怎么坏的 ⇒ 用户无法判断这是磁盘故障、拷贝没拷完，还是根本指错了文件',
-    ).toBe('CORRUPT (file is not a database) — recover: agent-workflow restore <backup>')
+      '报损坏却不说是哪个 provider / generation、也不给恢复入口 ⇒ 用户无法确认现场或执行恢复',
+    ).toBe(
+      'sqlite generation dbg_legacy_sqlite: ' +
+        'sqlite-open=SQLite database is unavailable or unreadable — ' +
+        'recover: agent-workflow restore <backup>',
+    )
 
     // 另外两个读库项必须**降级**而不是各自报一次警：同一件事被报三遍会让运维
     // 去分头排查「凭据」和「任务生命周期」，而真正要做的只有恢复备份这一件。
@@ -561,7 +566,7 @@ test('RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 报 CORRUPT 并给出�
           '而那正是「没问题」的样子',
       ).toContain('(unavailable:')
     }
-    expectOnlyFailing(result.out, ['db integrity'])
+    expectOnlyFailing(result.out, ['database provider'])
 
     expect(
       sha256Of(dbPathOf(home)),
@@ -1053,9 +1058,9 @@ test('RFC-319 OPS-012: migrate 在发行二进制上真的把库建起来，应�
         'daemon 起来之后第一条查询就会失败',
     ).toEqual(['cached_repos', 'tasks', 'users', 'workflows'])
     expect(
-      doctorCheck(runCli(home, ['doctor']).out, 'db integrity').message,
+      doctorCheck(runCli(home, ['doctor']).out, 'database provider').message,
       '`migrate` 造出来的库过不了完整性检查 ⇒ 这条恢复退路交付的是一个一出生就坏的库',
-    ).toBe('quick_check ok')
+    ).toBe('sqlite generation dbg_legacy_sqlite: sqlite-quick-check=ok')
 
     // 重跑必须是无害的：运维在不确定「刚才那条到底跑没跑」时的第一反应就是再敲一次。
     const again = runCli(home, ['migrate'])

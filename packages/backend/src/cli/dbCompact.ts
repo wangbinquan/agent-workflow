@@ -9,10 +9,11 @@
 // 与 `backup`/`restore` 同一条闸门：先看 PID 文件，daemon 在跑就拒绝并告诉用户
 // 先 `agent-workflow stop`。
 
+import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { Database } from 'bun:sqlite'
 import { existsSync, statSync } from 'node:fs'
 
-import { loadConfig } from '@/config'
+import { readConfig } from '@/config'
 import { resolveDatabaseProviderSelection } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { isProcessAlive } from '@/util/process'
@@ -40,7 +41,10 @@ export function dbCompactCommand(): DbCompactResult {
     }
   }
   const generation = resolveDatabaseProviderSelection({
-    config: loadConfig(Paths.config).database,
+    // `db compact` is an offline inspection/maintenance command. A mistyped
+    // AGENT_WORKFLOW_HOME must not materialize config.json or emit config
+    // bootstrap logs before reporting that no database exists.
+    config: (readConfig(Paths.config) ?? DEFAULT_CONFIG).database,
     generationPointerPath: Paths.databaseGenerationPointer,
     operationsRoot: Paths.databaseMigrationsDir,
     contract: buildLogicalSchemaContract(),
