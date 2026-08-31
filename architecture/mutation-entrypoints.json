@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1268,
+    "entries": 1273,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1347,7 +1347,7 @@
       "controls": {
         "audit": false,
         "authority": "internal-family",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -1357,6 +1357,7 @@
       "id": "mutation:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeMatrixQuery",
       "missingControls": [
         "audit",
+        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -1893,6 +1894,53 @@
       "symbol": "rejectFrameworkOnlyFields",
       "targetContext": "task-execution",
       "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts#createPostgresqlCapabilityMatrixRead",
+      "missingControls": [
+        "audit",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts#createPostgresqlCapabilityMatrixRead",
+      "symbol": "createPostgresqlCapabilityMatrixRead",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts#EnabledEndpoint",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead.ts#EnabledEndpoint",
+      "symbol": "EnabledEndpoint",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -10704,6 +10752,56 @@
       },
       "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteSkillFileInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteSkillFileInputSchema",
+      "symbol": "deleteSkillFileInputSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteSkillFileReceiptSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteSkillFileReceiptSchema",
+      "symbol": "deleteSkillFileReceiptSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#deleteSkillInputSchema",
       "missingControls": [
         "audit",
@@ -10940,6 +11038,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#renameWorkgroupInputSchema",
       "symbol": "renameWorkgroupInputSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#restoreSkillVersionInputSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#restoreSkillVersionInputSchema",
+      "symbol": "restoreSkillVersionInputSchema",
+      "targetContext": "resource-catalog",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/public/operations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/public/operations.ts#restoreSkillVersionReceiptSchema",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#restoreSkillVersionReceiptSchema",
+      "symbol": "restoreSkillVersionReceiptSchema",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
     },
@@ -16901,31 +17049,6 @@
       "ownerEntryId": "owner:packages/backend/src/routes/runtimes.ts#UpdateBody",
       "symbol": "UpdateBody",
       "targetContext": "runtime-management",
-      "targetLayer": "inbound"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/routes/skills.ts",
-      "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/skills.ts#$http:delete:347",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/routes/skills.ts#$file",
-      "symbol": "$http:delete:347",
-      "targetContext": "resource-catalog",
       "targetLayer": "inbound"
     },
     {
@@ -30271,7 +30394,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:884c4873a48da28a706a874e01a60fff872308f323009e4670d4a06ae9a08c2b",
+  "sourceDigest": "sha256:ec91e56167a9abea78eab79ec95be32088986ed2c1fdaeff0b0823267e7f4eae",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

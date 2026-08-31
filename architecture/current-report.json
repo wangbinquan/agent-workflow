@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 473,
-    "architectureExceptions": 2191,
+    "architectureExceptions": 2174,
     "backgroundJobs": 282,
-    "crossContextImports": 2245,
+    "crossContextImports": 2228,
     "facades": 385,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 20931,
-    "mutationEntrypoints": 1268,
+    "moduleSymbolOwners": 20964,
+    "mutationEntrypoints": 1273,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 590,
     "transactionExternalEffects": 305
@@ -22,7 +22,6 @@
       "packages/backend/src/routes/cached-repos.ts",
       "packages/backend/src/routes/capabilityTemplates.ts",
       "packages/backend/src/routes/clarify.ts",
-      "packages/backend/src/routes/code.ts",
       "packages/backend/src/routes/codeHosts.ts",
       "packages/backend/src/routes/config.ts",
       "packages/backend/src/routes/daemon.ts",
@@ -63,7 +62,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1171,
+    "backendProductionFiles": 1174,
     "backendValueSccs": [
       [
         "packages/backend/src/services/agent.ts",
@@ -108,12 +107,12 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 74,
-    "inboundBoundaryEdges": 59,
+    "inboundBoundaryEdges": 57,
     "knownViolations": 29,
     "moduleContexts": [
       {
         "context": "code-capability",
-        "files": 26
+        "files": 29
       },
       {
         "context": "collaboration",
@@ -168,7 +167,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 586,
+    "moduleFiles": 589,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -224,5 +223,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:884c4873a48da28a706a874e01a60fff872308f323009e4670d4a06ae9a08c2b"
+  "sourceDigest": "sha256:ec91e56167a9abea78eab79ec95be32088986ed2c1fdaeff0b0823267e7f4eae"
 }

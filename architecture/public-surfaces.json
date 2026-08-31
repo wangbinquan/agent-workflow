@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 459,
+    "consumers": 463,
     "exactEntrypointFiles": 45,
     "governedFieldSurfaces": 5,
     "methods": 301,
@@ -203,7 +203,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:bac467f4a8b42ce5ac71"
+      ],
       "context": "code-capability",
       "dataClass": "metadata",
       "direction": "offered",
@@ -227,13 +229,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:bac467f4a8b42ce5ac71"
+          ],
           "name": "forRepo",
           "signatureDigest": "sha256:1848a41ef9abd5a3cac1fd083bf3ceeadaa2b257322936a86640cc1d93cfb3ab"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#CodeMatrixQuery",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:bac467f4a8b42ce5ac71",
+          "file": "packages/backend/src/routes/code.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/code.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": "W9-D",
       "serialization": "wire",
@@ -341,7 +352,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:c0da31e820921d6e7fd7"
+      ],
       "context": "code-capability",
       "dataClass": "metadata",
       "direction": "offered",
@@ -353,7 +366,9 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c0da31e820921d6e7fd7"
+          ],
           "fieldPath": "$method:summary.$parameter:input.windowMs",
           "type": "number"
         },
@@ -368,7 +383,9 @@
           "type": "readonly CodeRunCounts[]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c0da31e820921d6e7fd7"
+          ],
           "fieldPath": "$method:summary.$return.windowMs",
           "type": "number"
         }
@@ -380,13 +397,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c0da31e820921d6e7fd7"
+          ],
           "name": "summary",
           "signatureDigest": "sha256:f5ea90c47e4d6dd96828f19e92490c7dce953ccd3d6c58c884fb31e6ce2d7c10"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#CodeMetricsQuery",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c0da31e820921d6e7fd7",
+          "file": "packages/backend/src/routes/code.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/code.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": "W9-D",
       "serialization": "wire",
@@ -507,7 +533,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:3e0162398b23ec41669c"
+      ],
       "context": "code-capability",
       "dataClass": "metadata",
       "direction": "offered",
@@ -531,13 +559,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:3e0162398b23ec41669c"
+          ],
           "name": "forRound",
           "signatureDigest": "sha256:38fe73868a1fa2243d320a3b64d0b9610afbe48a69d7ebf89ab4223638ce1ee4"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#CodeRoundAttemptsQuery",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:3e0162398b23ec41669c",
+          "file": "packages/backend/src/routes/code.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/code.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": "W9-D",
       "serialization": "wire",
@@ -997,19 +1034,25 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:520dabc36f0a39e20e3b"
+      ],
       "context": "code-capability",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "queries",
       "fields": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:520dabc36f0a39e20e3b"
+          ],
           "fieldPath": "$method:page.$parameter:input.capability",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:520dabc36f0a39e20e3b"
+          ],
           "fieldPath": "$method:page.$parameter:input.codeHostEndpointId",
           "type": "string"
         },
@@ -1024,22 +1067,30 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:520dabc36f0a39e20e3b"
+          ],
           "fieldPath": "$method:page.$parameter:input.limit",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:520dabc36f0a39e20e3b"
+          ],
           "fieldPath": "$method:page.$parameter:input.roundLimit",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:520dabc36f0a39e20e3b"
+          ],
           "fieldPath": "$method:page.$parameter:input.stableProjectId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:520dabc36f0a39e20e3b"
+          ],
           "fieldPath": "$method:page.$return.items",
           "type": "readonly CodeWorkItemProjection[]"
         },
@@ -1061,13 +1112,22 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:520dabc36f0a39e20e3b"
+          ],
           "name": "page",
           "signatureDigest": "sha256:9e00d33299e32b0eda42dbd3e3c74a8f845090e743a42e4f296608c5e1c3d969"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#CodeWorkItemProjectionQuery",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:520dabc36f0a39e20e3b",
+          "file": "packages/backend/src/routes/code.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/code.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": "W9-D",
       "serialization": "wire",
@@ -58026,7 +58086,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:884c4873a48da28a706a874e01a60fff872308f323009e4670d4a06ae9a08c2b",
+  "sourceDigest": "sha256:ec91e56167a9abea78eab79ec95be32088986ed2c1fdaeff0b0823267e7f4eae",
   "targetContexts": [
     "collaboration",
     "development-automation",

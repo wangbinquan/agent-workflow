@@ -356,8 +356,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1268,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1273,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-345 的 Skill 文件删除/版本恢复 exact descriptors 与 RFC-349 capability-matrix provider adapter 新增五个具名、owner-closed 的 census surface。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -391,7 +394,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 2245,
+      "baseline": 2228,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -412,7 +415,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 2191,
+      "baseline": 2174,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -447,12 +450,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 20931,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 20964,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-345 的 versioned Skill operation contracts 与 RFC-349 的 PostgreSQL capability/history adapters 新增三十三个具名 production owner symbols。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:884c4873a48da28a706a874e01a60fff872308f323009e4670d4a06ae9a08c2b",
+    "sourceDigest": "sha256:ec91e56167a9abea78eab79ec95be32088986ed2c1fdaeff0b0823267e7f4eae",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -465,8 +471,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4f36c2dc098277f5a26fe5db96446a7dd186d2bd",
-    "contentDigest": "sha256:ac47ec67a4f26a57189210e425549306ba58bc5e182bc22f8069bba61930a36b",
+    "currentSnapshotSha": "cf367febf91dfb3dd27a237a64861b4950c47381",
+    "contentDigest": "sha256:6cd54eeeca43c04bd344ee67ab416a9bed5e25bd97d00a96e6c85fbb06e3fd6d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

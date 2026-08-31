@@ -2020,14 +2020,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:884c4873a48da28a706a874e01a60fff872308f323009e4670d4a06ae9a08c2b",
+    "sourceDigest": "sha256:ec91e56167a9abea78eab79ec95be32088986ed2c1fdaeff0b0823267e7f4eae",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "4f36c2dc098277f5a26fe5db96446a7dd186d2bd",
-    "contentDigest": "sha256:5c1ceb0353dffcc25191eb1e8b6d48bfb062bd2195e598b4b414a65c3ae65bf5",
+    "currentSnapshotSha": "cf367febf91dfb3dd27a237a64861b4950c47381",
+    "contentDigest": "sha256:e0c3d029553669fb03240e4077d85e9236532e3a76e1a3dfbcd9d2017d54054c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

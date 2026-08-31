@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:884c4873a48da28a706a874e01a60fff872308f323009e4670d4a06ae9a08c2b`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ec91e56167a9abea78eab79ec95be32088986ed2c1fdaeff0b0823267e7f4eae`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,18 +10,18 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1171 |
+| backend production TS 文件 | 1174 |
 | `services/` 文件 | 385 |
-| `modules/**` 文件 / 非空 context | 586 / 14 |
+| `modules/**` 文件 / 非空 context | 589 / 14 |
 | backend 值级 SCC / 全仓值级 SCC | 3 / 5 |
 | `KNOWN_VIOLATIONS` | 29 |
 | route→DB / transport→DB 值级边 | 15 / 2 |
-| route/MCP `AppDeps` consumer 文件 | 46 |
+| route/MCP `AppDeps` consumer 文件 | 45 |
 | production ambient wiring seam | 473 |
 | background work entries | 282 |
 | direct native `setInterval`（call / files） | 24 / 21 |
 | direct native timers（全部） | 74 |
-| RFC-317 boundary census（inbound / outbound） | 59 / 23 |
+| RFC-317 boundary census（inbound / outbound） | 57 / 23 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 473 |
-| `architectureExceptions` | 2191 |
+| `architectureExceptions` | 2174 |
 | `backgroundJobs` | 282 |
-| `crossContextImports` | 2245 |
+| `crossContextImports` | 2228 |
 | `facades` | 385 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 20931 |
-| `mutationEntrypoints` | 1268 |
+| `moduleSymbolOwners` | 20964 |
+| `mutationEntrypoints` | 1273 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 590 |
 | `transactionExternalEffects` | 305 |
@@ -67,13 +67,13 @@
 | integration / application | 10 |
 | integration / composition | 10 |
 | task-execution / infrastructure | 10 |
+| code-capability / application | 9 |
 | collaboration / infrastructure | 9 |
 | intent / domain | 9 |
 | system-operations / application | 9 |
-| code-capability / application | 8 |
 | integration / infrastructure | 8 |
+| code-capability / infrastructure | 7 |
 | development-automation / engine | 7 |
-| code-capability / infrastructure | 6 |
 | digital-employee / infrastructure | 6 |
 | event-center / application | 6 |
 | identity-access / public | 6 |
@@ -106,6 +106,7 @@
 | source-control / composition | 2 |
 | system-operations / composition | 2 |
 | task-catalog / composition | 2 |
+| code-capability / composition | 1 |
 | code-capability / public | 1 |
 | execution-contract / composition | 1 |
 | execution-contract / domain | 1 |
@@ -184,9 +185,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 1376 |
-| legacy-inbound | 673 |
-| external-layer-debt | 99 |
+| legacy-outbound | 1374 |
+| legacy-inbound | 657 |
+| external-layer-debt | 100 |
 | offered-consumption | 49 |
 | authority-type-only | 17 |
 | required-implementation | 17 |
@@ -197,9 +198,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 1376 |
-| legacy-inbound | 673 |
-| external-layer-debt | 99 |
+| legacy-outbound | 1374 |
+| legacy-inbound | 657 |
+| external-layer-debt | 100 |
 | no-routes-to-db | 15 |
 | off-dag-offered | 11 |
 | no-circular | 10 |
@@ -211,15 +212,15 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 922 |
-| W4-C | 316 |
-| W9 | 188 |
+| W4-E1 | 912 |
+| W4-C | 300 |
+| W9 | 190 |
 | W4-E0 | 148 |
 | W4 | 119 |
-| W4-E8 | 112 |
-| W5 | 99 |
+| W4-E8 | 114 |
+| W5 | 101 |
 | W4-E9 | 92 |
-| W4-B | 81 |
+| W4-B | 84 |
 | RFC-owner-cutover | 27 |
 | W4-E7 | 27 |
 | W4-E4a | 25 |
@@ -249,14 +250,14 @@
 | integration | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 106 / 590）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 102 / 590）
 
 | context | 数量 |
 | --- | --- |
 | collaboration | 20 |
 | digital-employee | 17 |
-| code-capability | 15 |
 | system-operations | 12 |
+| code-capability | 11 |
 | task-execution | 9 |
 | event-center | 8 |
 | identity-access | 7 |
