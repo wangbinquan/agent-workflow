@@ -516,7 +516,7 @@ test('RFC-319 OPS-011: 备份健康读数只数 .tar.gz、报出最新一份的�
   }
 })
 
-test('RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 的 provider 检查报 unreadable 并给出恢复命令，其余读库项降级为「读不到」而不是跟着报警 @nightly', async () => {
+test('RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 报 CORRUPT 并给出恢复命令，其余读库项降级为「读不到」而不是跟着报警 @nightly', async () => {
   test.setTimeout(OPS_TEST_TIMEOUT_MS)
   const home = cloneHome('doctor-corrupt')
   try {
