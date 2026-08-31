@@ -1,5 +1,5 @@
 // RFC-345 T9 — compatibility barrels may expose only symbols with a real
-// external consumer. These ACL helpers remain module-internal; restoring either
+// external consumer. These ACL helpers remain module-internal; restoring any
 // re-export would recreate public/facade debt without an owning use case.
 
 import { expect, test } from 'bun:test'
@@ -21,13 +21,16 @@ test('resource ACL compatibility barrels do not re-export consumer-zero symbols'
     'ResourceAclActorProjection',
     'ResourceAclAudienceAuthority',
     'canEditResourceInTx',
+    'canGovernResource',
     'grantsOfUserWhere',
     'hasPrivateResourceAccess',
     'listResourceGrantsInTx',
+    'listResourceGrantUserIds',
     'loadGrantLevelInTx',
     'loadGrantLevelsForUser',
     'resolveAccessFrom',
     'resolveResourceAccess',
+    'requireResourceView',
   ]) {
     const exactSymbol = new RegExp(`\\b${retiredSymbol}\\b`)
     expect(exactSymbol.test(publicOperations)).toBe(false)

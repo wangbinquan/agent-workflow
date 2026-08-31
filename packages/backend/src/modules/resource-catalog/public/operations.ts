@@ -1690,7 +1690,6 @@ export {
 } from '../domain/resourceAccess'
 export {
   canEditResource,
-  canGovernResource,
   canViewResource,
   canViewResourceInTx,
   discloseRefs,
@@ -1699,7 +1698,6 @@ export {
   projectVisibleRowsWithAccess,
   requireResourceEdit,
   requireResourceGovern,
-  requireResourceView,
   resolveResourceAccessFor,
   resolveResourceAccessForInTx,
   updateResourceAcl,
@@ -1726,7 +1724,6 @@ export {
   grantsOfResourceWhere,
   listGrantedResourceIds,
   listGrantedResourceIdsInTx,
-  listResourceGrantUserIds,
   listResourceGrantUserIdsInTx,
   listResourceGrants,
   listWritableGrantedResourceIds,

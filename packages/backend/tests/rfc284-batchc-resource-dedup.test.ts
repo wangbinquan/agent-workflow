@@ -20,6 +20,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
 import { agents, resourceGrants, skills } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
+import { listResourceGrantUserIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { findAgentsDependingOn } from '../src/services/agentDeps'
 import { findAgentsReferencingMcp } from '../src/services/mcp'
 import { isOwnerNameUniqueViolation } from '../src/services/ownerScopedName'
@@ -27,7 +28,6 @@ import { findAgentsReferencingPlugin } from '../src/services/plugin'
 import {
   grantsOfResourceWhere,
   isVisibleToAudienceSnapshot,
-  listResourceGrantUserIds,
   listResourceGrantUserIdsInTx,
 } from '../src/services/resourceAcl'
 import { scheduledRowsReferencing } from '../src/services/scheduledTaskRefs'

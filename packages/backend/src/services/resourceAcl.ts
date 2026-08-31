@@ -32,7 +32,6 @@ export {
 } from '@/modules/resource-catalog/public/operations'
 export {
   canEditResource,
-  canGovernResource,
   canViewResource,
   canViewResourceInTx,
   discloseRefs,
@@ -40,7 +39,6 @@ export {
   projectVisibleRowsWithAccess,
   requireResourceEdit,
   requireResourceGovern,
-  requireResourceView,
   resolveResourceAccessFor,
   resolveResourceAccessForInTx,
 } from '@/modules/resource-catalog/public/operations'
@@ -75,7 +73,6 @@ export {
   grantsOfResourceWhere,
   listGrantedResourceIds,
   listGrantedResourceIdsInTx,
-  listResourceGrantUserIds,
   listResourceGrantUserIdsInTx,
   listResourceGrants,
   listWritableGrantedResourceIds,

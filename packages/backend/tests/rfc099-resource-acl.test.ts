@@ -12,13 +12,15 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, workflows } from '../src/db/schema'
 import {
+  canGovernResource,
+  requireResourceView,
+} from '../src/modules/resource-catalog/composition/resourceAcl'
+import {
   canViewResource,
   filterVisibleRows,
-  canGovernResource,
   isVisibleRow,
   listGrantedResourceIds,
   requireResourceGovern,
-  requireResourceView,
   resolveTaskRole,
   type AclRow,
 } from '../src/services/resourceAcl'
