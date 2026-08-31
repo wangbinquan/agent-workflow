@@ -426,7 +426,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 597,
+      "baseline": 596,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -452,7 +452,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ce9498a848212198aec9858f175f1f544e806f5c092f1575db420dbdc8edce1b",
+    "sourceDigest": "sha256:ca28e3309369f5e7763c8b163450e078d44e4c15b0a8769a1e09eee7b39a0e06",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

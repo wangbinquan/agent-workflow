@@ -6,7 +6,7 @@
     "methods": 311,
     "opaqueTypeRefs": 6,
     "recursiveFields": 5734,
-    "symbols": 597
+    "symbols": 596
   },
   "entries": [
     {
@@ -30231,6 +30231,13 @@
           "consumerEdgeIds": [
             "import:a1560d1b2c032eaf1300"
           ],
+          "fieldPath": "$method:load.$return.$variant:0.builtin",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a1560d1b2c032eaf1300"
+          ],
           "fieldPath": "$method:load.$return.$variant:0.id",
           "type": "string"
         },
@@ -34984,6 +34991,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "builtin",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "id",
           "type": "string"
         },
@@ -35017,6 +35029,7 @@
       "id": "public:resource-catalog:types:AgentAclIdentity",
       "members": [
         "aclRevision",
+        "builtin",
         "id",
         "name",
         "ownerUserId",
@@ -35031,7 +35044,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:2b264e527a68c917244ac49730a0a353305f343550eecbb2a62dd6dddb9b4b59",
+      "signatureDigest": "sha256:72d55beb647cdffcc3eb88a084defce0b59f5f9d6f180b76da41219f8e170fbf",
       "status": "target-context-current-surface",
       "symbol": "AgentAclIdentity",
       "transaction": "none",
@@ -35134,50 +35147,6 @@
       "unresolvedTypeRefs": [
         "Extract"
       ],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "name",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
-      "id": "public:resource-catalog:types:AgentReferenceLabel",
-      "members": [
-        "id",
-        "name"
-      ],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#AgentReferenceLabel",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:a94fae9b1addb6ebe6db80b0acb390f35cf68ea1900848568fcfde0c8a32b542",
-      "status": "target-context-current-surface",
-      "symbol": "AgentReferenceLabel",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -57399,7 +57368,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ce9498a848212198aec9858f175f1f544e806f5c092f1575db420dbdc8edce1b",
+  "sourceDigest": "sha256:ca28e3309369f5e7763c8b163450e078d44e4c15b0a8769a1e09eee7b39a0e06",
   "targetContexts": [
     "collaboration",
     "development-automation",
