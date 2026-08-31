@@ -11,7 +11,7 @@ import {
   databaseMigrationPreflightViewSchema,
   databaseMigrationStatusViewSchema,
   databaseRuntimeOverviewSchema,
-} from '../public/types'
+} from '@agent-workflow/shared'
 
 export interface DatabaseMigrationApplication {
   readonly commands: DatabaseMigrationCommands

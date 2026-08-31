@@ -5,21 +5,6 @@ import { z } from 'zod'
 // RFC-349 — the system-operations public contract is shared byte-for-byte with
 // Settings. Keep provider clients and raw connection URLs outside this surface.
 export {
-  databaseMigrationArtifactInputSchema,
-  databaseMigrationArtifactKindSchema,
-  databaseMigrationArtifactViewSchema,
-  databaseMigrationLegacyChunkInputSchema,
-  databaseMigrationLegacyTableInputSchema,
-  databaseMigrationLegacyTableViewSchema,
-  databaseMigrationListViewSchema,
-  databaseMigrationOperationInputSchema,
-  databaseMigrationPreflightInputSchema,
-  databaseMigrationPreflightViewSchema,
-  databaseMigrationStatusViewSchema,
-  databaseMigrationTableCountsSchema,
-  databaseMigrationTargetSchema,
-  databaseRuntimeOverviewSchema,
-  startDatabaseMigrationInputSchema,
   type DatabaseMigrationArtifactInput,
   type DatabaseMigrationArtifactKind,
   type DatabaseMigrationArtifactView,

@@ -3,14 +3,14 @@
 
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
-import { createDatabaseMigrationApplication } from '@/modules/system-operations/application/databaseMigrationApplication'
-import type { DatabaseMigrationCoordinatorPort } from '@/modules/system-operations/application/ports/databaseMigrationCoordinator'
-import { createDatabaseMigrationOperationDescriptors } from '@/modules/system-operations/public/operations'
 import {
   databaseMigrationStatusViewSchema,
   startDatabaseMigrationInputSchema,
-  type DatabaseMigrationStatusView,
-} from '@/modules/system-operations/public/types'
+} from '@agent-workflow/shared'
+import { createDatabaseMigrationApplication } from '@/modules/system-operations/application/databaseMigrationApplication'
+import type { DatabaseMigrationCoordinatorPort } from '@/modules/system-operations/application/ports/databaseMigrationCoordinator'
+import { createDatabaseMigrationOperationDescriptors } from '@/modules/system-operations/public/operations'
+import type { DatabaseMigrationStatusView } from '@/modules/system-operations/public/types'
 import { mountDatabaseMigrationRoutes } from '@/routes/databaseMigrations'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 

@@ -3,6 +3,20 @@
 // not masquerade as authenticated HTTP operations.
 
 import { z } from 'zod'
+import {
+  databaseMigrationArtifactInputSchema,
+  databaseMigrationArtifactViewSchema,
+  databaseMigrationLegacyChunkInputSchema,
+  databaseMigrationLegacyTableInputSchema,
+  databaseMigrationLegacyTableViewSchema,
+  databaseMigrationListViewSchema,
+  databaseMigrationOperationInputSchema,
+  databaseMigrationPreflightInputSchema,
+  databaseMigrationPreflightViewSchema,
+  databaseMigrationStatusViewSchema,
+  databaseRuntimeOverviewSchema,
+  startDatabaseMigrationInputSchema,
+} from '@agent-workflow/shared'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import { operationId } from '@/platform/operations/catalog'
 import { zodOperationCodec } from '@/platform/operations/codecs'
@@ -20,20 +34,8 @@ import type { DatabaseMigrationQueries, SystemOperationQueries } from './queries
 import {
   backupResultViewSchema,
   cancelStagedRestoreResultSchema,
-  databaseMigrationArtifactInputSchema,
-  databaseMigrationArtifactViewSchema,
-  databaseMigrationLegacyChunkInputSchema,
-  databaseMigrationLegacyTableInputSchema,
-  databaseMigrationLegacyTableViewSchema,
-  databaseMigrationListViewSchema,
-  databaseMigrationOperationInputSchema,
-  databaseMigrationPreflightInputSchema,
-  databaseMigrationPreflightViewSchema,
-  databaseMigrationStatusViewSchema,
-  databaseRuntimeOverviewSchema,
   recoveryStatusViewSchema,
   requestBackupInputSchema,
-  startDatabaseMigrationInputSchema,
   stageRestoreResultSchema,
   type BackupResultView,
   type CancelStagedRestoreResult,
