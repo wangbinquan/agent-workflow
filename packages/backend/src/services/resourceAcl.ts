@@ -56,7 +56,6 @@ export {
   type AclRow,
 } from '@/modules/resource-catalog/public/operations'
 export {
-  findOwnedAclResourceIdsByName,
   getAclResourceAccessRow,
   getAclResourceAccessRowInTx,
   getAclResourceIdentityRowInTx,

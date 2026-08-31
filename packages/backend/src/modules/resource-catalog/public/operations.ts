@@ -1707,7 +1707,6 @@ export type {
   ResourceAclIdentityPersistence,
 } from '../composition/required-ports'
 export {
-  findOwnedAclResourceIdsByName,
   getAclResourceAccessRow,
   getAclResourceAccessRowInTx,
   getAclResourceIdentityRowInTx,

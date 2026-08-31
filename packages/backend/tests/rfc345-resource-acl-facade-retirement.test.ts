@@ -13,6 +13,11 @@ test('resource ACL compatibility barrels do not re-export consumer-zero symbols'
     'utf8',
   )
   const legacyFacade = readFileSync(resolve(sourceRoot, 'services/resourceAcl.ts'), 'utf8')
+  const packageCli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
+  const packageComposition = readFileSync(
+    resolve(sourceRoot, 'modules/resource-catalog/composition/resourcePackageOperations.ts'),
+    'utf8',
+  )
 
   for (const retiredSymbol of [
     'AclResourceIdentitySnapshot',
@@ -22,6 +27,7 @@ test('resource ACL compatibility barrels do not re-export consumer-zero symbols'
     'ResourceAclAudienceAuthority',
     'canEditResourceInTx',
     'canGovernResource',
+    'findOwnedAclResourceIdsByName',
     'grantsOfUserWhere',
     'hasPrivateResourceAccess',
     'listResourceGrantsInTx',
@@ -36,4 +42,8 @@ test('resource ACL compatibility barrels do not re-export consumer-zero symbols'
     expect(exactSymbol.test(publicOperations)).toBe(false)
     expect(exactSymbol.test(legacyFacade)).toBe(false)
   }
+
+  expect(packageCli).not.toContain("from '@/services/resourceAcl'")
+  expect(packageCli).toContain('catalog.transport.findOwnedResourceIdsByName')
+  expect(packageComposition).toContain('findOwnedAclResourceIdsByName(deps.db,')
 })

@@ -11,7 +11,6 @@
 import type { DbClient } from '@/db/client'
 import type { Actor } from '@/auth/actor'
 import { users } from '@/db/schema'
-import { findOwnedAclResourceIdsByName } from '@/services/resourceAcl'
 import { eq } from 'drizzle-orm'
 import { writeFileSync, readFileSync } from 'node:fs'
 import {
@@ -80,6 +79,10 @@ interface CliPackageSecretInput {
 }
 
 interface PackageCommandTransport {
+  findOwnedResourceIdsByName(
+    actor: Actor,
+    input: Readonly<{ kind: BundleResourceType; name: string }>,
+  ): Promise<readonly string[]>
   stageInspect(actor: Actor, bytes: Uint8Array): InspectResourcePackage
   stageApply(
     actor: Actor,
@@ -243,7 +246,7 @@ export async function packageCommand(
     if (operationIdentity === null) {
       return { output: `user '${username}' is not active\n`, status: 'error' }
     }
-    if (sub === 'export') return await runExport(db, operationIdentity, catalog, flags)
+    if (sub === 'export') return await runExport(operationIdentity, catalog, flags)
     return await runImport(operationIdentity, catalog, flags)
   } catch (err) {
     const e = err as { code?: string; message?: string }
@@ -254,7 +257,6 @@ export async function packageCommand(
 }
 
 async function runExport(
-  db: DbClient,
   identity: Readonly<{
     actor: Actor
     commandContext(): CommandContext
@@ -277,7 +279,10 @@ async function runExport(
     const name = flags.get('name')
     if (name === undefined)
       return { output: 'either --id or --name is required\n', status: 'error' }
-    const matches = await findOwnedAclResourceIdsByName(db, type, identity.actor.user.id, name)
+    const matches = await catalog.transport.findOwnedResourceIdsByName(identity.actor, {
+      kind: type,
+      name,
+    })
     if (matches.length === 0)
       return { output: `no ${type} named '${name}' for you\n`, status: 'error' }
     if (matches.length > 1) {

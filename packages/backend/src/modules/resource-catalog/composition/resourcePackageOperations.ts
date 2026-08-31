@@ -13,6 +13,7 @@ import type { PackageSecretInput } from '@/services/resourcePackage/secretInputs
 import { sha256Hex } from '@/util/hash'
 import { createResourcePackageApplication } from '../application/package/packageApplication'
 import type { ResourcePackageExecutionPort } from '../application/package/ports'
+import { findOwnedAclResourceIdsByName } from '../infrastructure/sqliteAclReadRepository'
 import {
   createResourcePackageOperationDescriptors,
   type ResourcePackageCatalogModule,
@@ -62,6 +63,10 @@ interface StagedExport {
 type StagedResourcePackageInput = StagedInspect | StagedApply | StagedExport
 
 export interface ResourcePackageTransport {
+  findOwnedResourceIdsByName(
+    actor: Actor,
+    input: Readonly<{ kind: PackageResourceKind; name: string }>,
+  ): Promise<readonly string[]>
   stageInspect(actor: Actor, bytes: Uint8Array): InspectResourcePackage
   stageApply(
     actor: Actor,
@@ -180,6 +185,12 @@ export function composeResourcePackageOperations(
     application.queries,
   )
   const transport: ResourcePackageTransport = Object.freeze({
+    findOwnedResourceIdsByName(
+      actor: Actor,
+      input: Readonly<{ kind: PackageResourceKind; name: string }>,
+    ): Promise<readonly string[]> {
+      return findOwnedAclResourceIdsByName(deps.db, input.kind, actor.user.id, input.name)
+    },
     stageInspect(actor: Actor, bytes: Uint8Array): InspectResourcePackage {
       return Object.freeze({
         submission: Object.freeze({
