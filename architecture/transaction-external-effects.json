@@ -865,8 +865,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#dbTxSync:1227",
-      "line": 1227,
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#dbTxSync:1233",
+      "line": 1233,
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#rollForwardSkillTails",
       "status": "clear",
       "symbol": "rollForwardSkillTails",
@@ -3765,7 +3765,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29a32f691da5399c5ff298cd433b38a3d790778a562bdfd0f1b5159754388a3f",
+  "sourceDigest": "sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

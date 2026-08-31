@@ -111,8 +111,8 @@
       "id": "acl-edit-gate-elsewhere-allowlist",
       "file": "packages/backend/tests/architecture/rfc317-acl-write-gate-guard.test.ts",
       "symbol": "EDIT_GATE_ELSEWHERE_ALLOWLIST",
-      "baseline": 2,
-      "why": "RFC-324：挂了 /acl 端点、却没有任何 requireResourceEdit 的路由文件。每一条都是「这类资源的内容写门在别处」的断言；新增一条等于新增一处「可编辑档对该资源不生效」的缺口——那种失败不报错、不变红，只留下一个不生效的开关，必须人复核。当前两条：mountAclEndpoints 的定义处本身不承载任何资源的内容写；workflows.ts 的保存门在 services/workflow.ts 的 assertPrincipalCanEditInTx（它要拿事务内的当前名字做改名围栏，路由层做不到）"
+      "baseline": 1,
+      "why": "RFC-324：挂了 /acl 端点、却没有任何 requireResourceEdit 的路由文件。每一条都是「这类资源的内容写门在别处」的断言；新增一条等于新增一处「可编辑档对该资源不生效」的缺口——那种失败不报错、不变红，只留下一个不生效的开关，必须人复核。当前唯一条目是 mountAclEndpoints 的定义处；资源内容写已全部委托给各自 application 写门。"
     },
     {
       "id": "lifecycle-status-set-exemptions",
@@ -328,8 +328,8 @@
       "id": "rfc294-review-unconsumed-public-symbols",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 136,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。additive contract 允许先落，但必须同批入账并点名清偿波次；被消费后同批销账。只许降。"
+      "baseline": 106,
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。"
     },
     {
       "id": "rfc294-review-dead-required-ports",
@@ -384,21 +384,21 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 472,
+      "baseline": 474,
       "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 2224,
+      "baseline": 2227,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
       "file": "architecture/cross-context-imports.json",
       "symbol": "targetEdges",
-      "baseline": 64,
+      "baseline": 65,
       "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。"
     },
     {
@@ -412,7 +412,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 2171,
+      "baseline": 2173,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -452,7 +452,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:29a32f691da5399c5ff298cd433b38a3d790778a562bdfd0f1b5159754388a3f",
+    "sourceDigest": "sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

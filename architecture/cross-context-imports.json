@@ -785,6 +785,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:02cd70f92122a2d8f914",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#ResourceScopeAuthorizationBinding",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
+      "toSymbol": "ResourceScopeAuthorizationBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromSymbol": "$file",
@@ -8261,6 +8278,23 @@
       "toPath": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
       "toSymbol": "createDevelopmentEmployeeCaseWorkspaceDetailReader",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:349374da815bd0779bd7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#createSha256DigestBuilder",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "createSha256DigestBuilder",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -30533,23 +30567,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d5495cfa0a1774c0a868",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-E9",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/participants.ts#DigitalEmployeeIntegrationTriggerParticipant",
-      "toPath": "packages/backend/src/modules/digital-employee/public/participants.ts",
-      "toSymbol": "DigitalEmployeeIntegrationTriggerParticipant",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#$file",
@@ -31432,6 +31449,23 @@
       "toPath": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toSymbol": "DevelopmentConfigResourceOperations",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dbaae4030f2aef195ec6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -36909,11 +36943,11 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 2171,
+    "architectureExceptions": 2173,
     "implementationSccs": 0,
-    "observedEdges": 2224,
+    "observedEdges": 2227,
     "requiredPorts": 28,
-    "targetEdges": 64
+    "targetEdges": 65
   },
   "finalCriterion": "Observed imports, offered/required/authority target edges and required-port liveness remain exact, referentially complete and role-preserving.",
   "implementationSccs": [],
@@ -37190,6 +37224,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/execution/childBudget.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/childBudget.ts#ensureChildTaskBudget"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:02cd70f92122a2d8f914",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/resourceAcl",
+      "syntax": "static-import",
+      "targetSymbol": "ResourceScopeAuthorizationBinding",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#ResourceScopeAuthorizationBinding"
     },
     {
       "edgeKind": "type",
@@ -44456,6 +44506,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts#$file",
+      "id": "import:349374da815bd0779bd7",
+      "owner": "system-operations",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "createSha256DigestBuilder",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#createSha256DigestBuilder"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/memory.ts",
@@ -48358,6 +48424,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#ResourcePackageCatalogModule"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts#$file",
+      "id": "import:5333aaa08afb9a37dfad",
+      "owner": "resource-catalog",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/digital-employee/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "DigitalEmployeeIntegrationTriggerParticipant",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/participants.ts#DigitalEmployeeIntegrationTriggerParticipant"
     },
     {
       "edgeKind": "value",
@@ -66376,22 +66458,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#readDatabaseGeneration"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts#$file",
-      "id": "import:d5495cfa0a1774c0a868",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-E9",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/digital-employee/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "DigitalEmployeeIntegrationTriggerParticipant",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/participants.ts#DigitalEmployeeIntegrationTriggerParticipant"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts",
@@ -67254,6 +67320,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts#$file",
+      "id": "import:dbaae4030f2aef195ec6",
+      "owner": "system-operations",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "value",
@@ -73054,7 +73136,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29a32f691da5399c5ff298cd433b38a3d790778a562bdfd0f1b5159754388a3f",
+  "sourceDigest": "sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
@@ -73314,6 +73396,13 @@
       "id": "offered-consumption:memory->task-execution:public",
       "role": "offered-consumption",
       "toContext": "task-execution"
+    },
+    {
+      "contract": "exact-public-entrypoint",
+      "fromContext": "resource-catalog",
+      "id": "offered-consumption:resource-catalog->digital-employee:public",
+      "role": "offered-consumption",
+      "toContext": "digital-employee"
     },
     {
       "contract": "exact-public-entrypoint",

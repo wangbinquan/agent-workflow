@@ -1,10 +1,10 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 472,
-    "architectureExceptions": 2171,
+    "ambientWiring": 474,
+    "architectureExceptions": 2173,
     "backgroundJobs": 282,
-    "crossContextImports": 2224,
+    "crossContextImports": 2227,
     "facades": 385,
     "governedFieldSurfaces": 5,
     "moduleSymbolOwners": 20908,
@@ -14,7 +14,7 @@
     "transactionExternalEffects": 305
   },
   "metrics": {
-    "ambientWiringEntries": 472,
+    "ambientWiringEntries": 474,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -224,5 +224,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29a32f691da5399c5ff298cd433b38a3d790778a562bdfd0f1b5159754388a3f"
+  "sourceDigest": "sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65"
 }
