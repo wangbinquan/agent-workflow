@@ -6,7 +6,7 @@
     "moduleFiles": 586,
     "productionFiles": 1947,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 20929
+    "symbolsIncludingFileRoots": 20931
   },
   "entries": [
     {
@@ -80819,10 +80819,34 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "id": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#DEFAULT_DURABLE_LOGICAL_ARTIFACT_SYNC_MECHANICS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DEFAULT_DURABLE_LOGICAL_ARTIFACT_SYNC_MECHANICS",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
       "id": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#DigestSchema",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DigestSchema",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "id": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#DurableLogicalArtifactSyncMechanics",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DurableLogicalArtifactSyncMechanics",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -251590,5 +251614,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:376c929ee0edf2d68c0d4e7766b75003499bb228c42d097f7c6b902ed1001357"
+  "sourceDigest": "sha256:9dc3214705f0208b3e028760f98b2179677f668adfee307465c1608de35ee198"
 }

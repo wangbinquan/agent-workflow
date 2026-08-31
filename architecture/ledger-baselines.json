@@ -391,8 +391,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 2244,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 2245,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-349 的 provider-neutral work-item projection 增加一条已核验的具名跨 context 观测边。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -412,8 +415,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 2190,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 2191,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-349 的 PostgreSQL work-item read adapter 新增一条精确具名、可审计的 provider compatibility edge。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -447,12 +453,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 20929,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 20931,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 的 Windows durable-artifact sync seam 新增两个精确拥有者符号，用于跨平台 fsync 行为锁。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:376c929ee0edf2d68c0d4e7766b75003499bb228c42d097f7c6b902ed1001357",
+    "sourceDigest": "sha256:9dc3214705f0208b3e028760f98b2179677f668adfee307465c1608de35ee198",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -465,8 +474,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "6e1ec9baaf94e0370674bc68c418de14af2dc3e2",
-    "contentDigest": "sha256:cced2e3c8efb69f6ba56e3d3959613eb13fe9666e76aebdd811b569db57d1fc9",
+    "currentSnapshotSha": "51cc706c4a848d9fa70cf80ec59e9afed4f85d07",
+    "contentDigest": "sha256:570faf64c5d94878a0ac555e3123054a10a2d0ebea7b88b7695d7252dde57eea",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

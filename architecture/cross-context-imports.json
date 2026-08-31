@@ -938,6 +938,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:04297269d70f64b7093d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/orchestratorAgent.ts#ORCHESTRATOR_AGENT_ID",
+      "toPath": "packages/backend/src/services/orchestratorAgent.ts",
+      "toSymbol": "ORCHESTRATOR_AGENT_ID",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -37232,9 +37249,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 2190,
+    "architectureExceptions": 2191,
     "implementationSccs": 0,
-    "observedEdges": 2244,
+    "observedEdges": 2245,
     "requiredPorts": 28,
     "targetEdges": 65
   },
@@ -37657,6 +37674,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#isLegacyTaskGateContinuationPayload"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
+      "id": "import:04297269d70f64b7093d",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-outbound",
+      "specifier": "@/services/orchestratorAgent",
+      "syntax": "static-import",
+      "targetSymbol": "ORCHESTRATOR_AGENT_ID",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/orchestratorAgent.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/orchestratorAgent.ts#ORCHESTRATOR_AGENT_ID"
     },
     {
       "edgeKind": "value",
@@ -73697,7 +73730,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:376c929ee0edf2d68c0d4e7766b75003499bb228c42d097f7c6b902ed1001357",
+  "sourceDigest": "sha256:9dc3214705f0208b3e028760f98b2179677f668adfee307465c1608de35ee198",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
