@@ -118,9 +118,7 @@ describe('RFC-349 PostgreSQL target preflight', () => {
   })
 
   test('accepts only the same resumable RFC-349 operation', async () => {
-    const tables = [
-      { table_schema: 'agent_workflow_meta', table_name: 'logical_copy_operations' },
-    ]
+    const tables = [{ table_schema: 'agent_workflow_meta', table_name: 'logical_copy_operations' }]
     const accepted = fakeRuntime({ tables, operations: [{ operation_id: 'dbm_resume_12345678' }] })
     await expect(
       preflightPostgresqlTarget({ runtime: accepted.runtime, operationId: 'dbm_resume_12345678' }),

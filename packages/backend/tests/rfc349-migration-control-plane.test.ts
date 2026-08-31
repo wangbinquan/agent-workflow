@@ -254,9 +254,7 @@ describe('RFC-349 migration control plane', () => {
       rollbackReceiptDigest: ARTIFACT_DIGEST,
       rollback: { eligible: false, reason: 'operation-rolled-back' },
     })
-    expect(control.markRolledBack('dbm_operation_0001', ARTIFACT_DIGEST, 4000)).toEqual(
-      rolledBack,
-    )
+    expect(control.markRolledBack('dbm_operation_0001', ARTIFACT_DIGEST, 4000)).toEqual(rolledBack)
     expect(() =>
       control.resume('dbm_operation_0001', {
         requesterOwnerId: 'dbo_owner_0001',
@@ -264,9 +262,9 @@ describe('RFC-349 migration control plane', () => {
         now: 5000,
       }),
     ).toThrow('rolled-back database migration cannot resume')
-    expect(() =>
-      advance(control, 'accepting-writes', 'finalized', 5001),
-    ).toThrow('rolled-back database migration cannot advance')
+    expect(() => advance(control, 'accepting-writes', 'finalized', 5001)).toThrow(
+      'rolled-back database migration cannot advance',
+    )
   })
 
   test('file store CAS rejects stale writers and keeps the old revision on a pre-replace crash', () => {

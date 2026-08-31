@@ -734,9 +734,8 @@ export function buildLogicalSchemaContract(): LogicalSchemaContract {
         return {
           name: foreignKey.getName(),
           columns: reference.columns.map((column) => column.name),
-          foreignTable: getTableConfig(
-            concreteDatabaseTable(reference.foreignTable, 'sqlite'),
-          ).name,
+          foreignTable: getTableConfig(concreteDatabaseTable(reference.foreignTable, 'sqlite'))
+            .name,
           foreignColumns: reference.foreignColumns.map((column) => column.name),
           onDelete: foreignKey.onDelete ?? 'no action',
           onUpdate: foreignKey.onUpdate ?? 'no action',

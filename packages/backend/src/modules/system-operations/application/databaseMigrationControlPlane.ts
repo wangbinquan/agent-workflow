@@ -154,7 +154,11 @@ export interface DatabaseMigrationControlPlane {
   requestCancel(operationId: string, now: number): DatabaseMigrationStatusView
   settleCancelled(operationId: string, now: number): DatabaseMigrationStatusView
   markFirstLiveWrite(operationId: string, now: number): DatabaseMigrationStatusView
-  markRolledBack(operationId: string, receiptDigest: string, now: number): DatabaseMigrationStatusView
+  markRolledBack(
+    operationId: string,
+    receiptDigest: string,
+    now: number,
+  ): DatabaseMigrationStatusView
   readManifest(operationId: string): DatabaseMigrationManifest
 }
 
