@@ -37,12 +37,37 @@ import { registerRoute } from '@/routes/registry'
 import type { AppDeps } from '@/server'
 import { ValidationError } from '@/util/errors'
 
-export function mountCodeRoutes(app: Hono, deps: AppDeps): void {
+/**
+ * Route-facing structural contract for code history. The module composition
+ * returns this shape without making the legacy route import module internals,
+ * which would create a new RFC-317 R1 inbound edge.
+ */
+export interface CodeHistoryRouteQueries {
+  readonly workItems: ReturnType<typeof createCodeWorkItemProjectionQuery>
+  readonly attempts: ReturnType<typeof createCodeRoundAttemptsQuery>
+  readonly deliveries: ReturnType<typeof createCodeDeliveryChainQuery>
+  readonly metrics: ReturnType<typeof createCodeMetricsQuery>
+}
+
+function sqliteCodeHistoryFallback(db: AppDeps['db']): CodeHistoryRouteQueries {
+  return Object.freeze({
+    workItems: createCodeWorkItemProjectionQuery(db),
+    attempts: createCodeRoundAttemptsQuery(db),
+    deliveries: createCodeDeliveryChainQuery(db),
+    metrics: createCodeMetricsQuery(db),
+  })
+}
+
+export function mountCodeRoutes(
+  app: Hono,
+  deps: AppDeps,
+  history: CodeHistoryRouteQueries = sqliteCodeHistoryFallback(deps.db),
+): void {
   const matrix = createCodeMatrixQuery(deps.db)
-  const projection = createCodeWorkItemProjectionQuery(deps.db)
-  const attempts = createCodeRoundAttemptsQuery(deps.db)
-  const deliveries = createCodeDeliveryChainQuery(deps.db)
-  const metrics = createCodeMetricsQuery(deps.db)
+  const projection = history.workItems
+  const attempts = history.attempts
+  const deliveries = history.deliveries
+  const metrics = history.metrics
 
   registerRoute(
     app,
