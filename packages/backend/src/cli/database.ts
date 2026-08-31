@@ -27,12 +27,13 @@ export interface LocalDatabaseMigrationOperations {
 }
 
 export interface DatabaseCliResult {
-  readonly status: 'ok' | 'error'
+  readonly status: 'ok' | 'usage-error' | 'error'
   readonly output: string
 }
 
 const USAGE =
   'usage:\n' +
+  '  agent-workflow db compact\n' +
   '  agent-workflow db status [--json]\n' +
   '  agent-workflow db preflight --to postgresql --url-env NAME [pool/timeout flags] [--json]\n' +
   '  agent-workflow db migrate --to postgresql --url-env NAME --auto [pool/timeout flags] [--json]\n' +
@@ -303,7 +304,7 @@ export async function databaseCommand(
         return { status: 'ok', output: artifact.json }
       }
     }
-    return { status: 'error', output: USAGE }
+    return { status: 'usage-error', output: USAGE }
   } catch (error) {
     return {
       status: 'error',

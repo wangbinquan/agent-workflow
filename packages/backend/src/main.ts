@@ -268,7 +268,7 @@ async function main(): Promise<void> {
         requireLocalDatabaseMigrationOperations(),
       )
       process.stdout.write(result.output)
-      if (result.status !== 'ok') process.exit(1)
+      if (result.status !== 'ok') process.exit(result.status === 'usage-error' ? 2 : 1)
       break
     }
 

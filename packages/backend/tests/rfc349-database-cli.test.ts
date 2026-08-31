@@ -185,6 +185,17 @@ function fixture() {
 }
 
 describe('RFC-349 database CLI', () => {
+  test('keeps missing and unknown database verbs distinct from operational failure', async () => {
+    const fake = fixture()
+    for (const argv of [[], ['vacuum']]) {
+      const result = await databaseCommand(argv, fake.operations, fake.lockFactory)
+      expect(result.status).toBe('usage-error')
+      expect(result.output).toContain('agent-workflow db compact')
+    }
+    expect(fake.calls).toHaveLength(0)
+    expect(fake.acquired).toBe(0)
+  })
+
   test('requires explicit --auto and projects every target constraint', async () => {
     const fake = fixture()
     expect(
