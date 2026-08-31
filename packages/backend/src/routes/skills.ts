@@ -55,15 +55,7 @@ export interface SkillRouteDependencies {
 }
 
 export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDependencies): void {
-  const {
-    fileCommands,
-    versionCommands,
-    queries,
-    fileQueries,
-    versionQueries,
-    operations,
-    aclIdentity,
-  } = module
+  const { queries, operations, aclIdentity } = module
   const zipFsOpts = { appHome: Paths.root }
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
@@ -222,20 +214,15 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
   })
 
   // SKILL.md content (parsed view).
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id/content',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'Read SKILL.md',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(await queries.content(module.authorityFor(actor), { id: c.req.param('id') }))
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.content,
+    method: 'GET',
+    path: '/api/skills/:id/content',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, content) => c.json(content),
+  })
 
   registerRoute(
     app,
@@ -274,172 +261,121 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
   })
 
   // File tree + single-file CRUD.
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id/files',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'List skill files',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(await fileQueries.list(module.authorityFor(actor), { id: c.req.param('id') }))
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.listFiles,
+    method: 'GET',
+    path: '/api/skills/:id/files',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, files) => c.json(files),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id/file',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'Read one skill file',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await fileQueries.read(module.authorityFor(actor), {
-          id: c.req.param('id'),
-          path: c.req.query('path') ?? '',
-        }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.readFile,
+    method: 'GET',
+    path: '/api/skills/:id/file',
+    tokenAccess: 'allow',
+    decode: (c) => ({
+      id: c.req.param('id'),
+      path: c.req.query('path') ?? '',
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, file) => c.json(file),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/skills/:id/file',
-      permissions: ['skills:update'],
-      tokenAccess: 'allow',
-      summary: 'Write one skill file',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await fileCommands.write(module.authorityFor(actor), {
-          id: c.req.param('id'),
-          path: c.req.query('path') ?? '',
-          submission: {
-            kind: 'json-body',
-            body: await c.req.raw.text().catch(() => ''),
-          },
-        }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.writeFile,
+    method: 'PUT',
+    path: '/api/skills/:id/file',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      path: c.req.query('path') ?? '',
+      submission: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => c.json(receipt),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/skills/:id/file',
-      permissions: ['skills:delete'],
-      tokenAccess: 'allow',
-      summary: 'Delete one skill file',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const receipt = await fileCommands.delete(module.authorityFor(actor), {
-        id: c.req.param('id'),
-        path: c.req.query('path') ?? '',
-        expectedToken: c.req.query('expectedToken'),
-        submission: {
-          kind: 'json-body',
-          body: await c.req.raw.text().catch(() => ''),
-        },
-      })
-      captureDeleteSnapshot(c, actor, receipt.deleted)
+  registerOperationRoute(app, {
+    descriptor: operations.deleteFile,
+    method: 'DELETE',
+    path: '/api/skills/:id/file',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      path: c.req.query('path') ?? '',
+      expectedToken: c.req.query('expectedToken'),
+      submission: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
+      captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.json({ token: receipt.token })
     },
-  )
+  })
 
   // RFC-101 — skill content version history.
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id/versions',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'List skill versions',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await versionQueries.list(module.authorityFor(actor), { id: c.req.param('id') }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.listVersions,
+    method: 'GET',
+    path: '/api/skills/:id/versions',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, versions) => c.json(versions),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id/versions/diff',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'Diff two skill versions',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await versionQueries.diff(module.authorityFor(actor), {
-          id: c.req.param('id'),
-          from: c.req.query('from') ?? '',
-          to: c.req.query('to') ?? '',
-        }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.diffVersions,
+    method: 'GET',
+    path: '/api/skills/:id/versions/diff',
+    tokenAccess: 'allow',
+    decode: (c) => ({
+      id: c.req.param('id'),
+      from: c.req.query('from') ?? '',
+      to: c.req.query('to') ?? '',
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, diff) => c.json(diff),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id/versions/:v/content',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'Read one skill version',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await versionQueries.content(module.authorityFor(actor), {
-          id: c.req.param('id'),
-          version: c.req.param('v'),
-        }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.getVersionContent,
+    method: 'GET',
+    path: '/api/skills/:id/versions/:v/content',
+    tokenAccess: 'allow',
+    decode: (c) => ({
+      id: c.req.param('id'),
+      version: c.req.param('v'),
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, content) => c.json(content),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/skills/:id/versions/:v/restore',
-      permissions: ['skills:update'],
-      tokenAccess: 'allow',
-      summary: 'Restore a skill version',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await versionCommands.restore(module.authorityFor(actor), {
-          id: c.req.param('id'),
-          version: c.req.param('v'),
-          submission: {
-            kind: 'json-body',
-            body: await c.req.raw.text().catch(() => ''),
-          },
-        }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.restoreVersion,
+    method: 'POST',
+    path: '/api/skills/:id/versions/:v/restore',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      version: c.req.param('v'),
+      submission: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => c.json(receipt),
+  })
 
   // RFC-099 / RFC-223 — GET/PUT /api/skills/:id/acl
   mountAclEndpoints(app, deps, {

@@ -49,7 +49,14 @@ export function composeSkillCatalog(
     nextUpdatedAt: (skill) => monotonicNow(skill.updatedAt),
   } satisfies SkillMutationClock)
   const aclIdentity = createSkillAclIdentityParticipant({ repository, clock })
-  const operations = createSkillOperationDescriptors(application.commands, application.queries)
+  const operations = createSkillOperationDescriptors(
+    application.commands,
+    application.queries,
+    application.fileCommands,
+    application.fileQueries,
+    application.versionCommands,
+    application.versionQueries,
+  )
   return Object.freeze({
     fileCommands: application.fileCommands,
     versionCommands: application.versionCommands,

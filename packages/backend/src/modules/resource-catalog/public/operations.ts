@@ -5,6 +5,7 @@
 import {
   AgentSchema,
   CreateAgentSchema,
+  FileNodeSchema,
   McpLocalConfigSchema,
   McpLocalConfigWriteSchema,
   McpNameSchema,
@@ -21,6 +22,9 @@ import {
   ResourceVisibilitySchema,
   SkillContentSchema,
   SkillSchema,
+  SkillVersionContentSchema,
+  SkillVersionDiffSchema,
+  SkillVersionSchema,
   UpdatePluginRequestSchema,
   CopyWorkflowRequestSchema,
   SaveWorkflowReceiptSchema as SaveWorkflowCatalogReceiptSchema,
@@ -35,6 +39,7 @@ import {
   WorkgroupSchema,
   WorkgroupDetailSchema,
   type Workgroup,
+  type FileNode,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
@@ -112,9 +117,14 @@ import type {
 } from './queries'
 import type {
   AgentCatalogResource,
+  DeleteSkillFileCatalogInput,
+  DeleteSkillFileCatalogReceipt,
+  DiffSkillVersionsCatalogInput,
   GetMcpCatalogInput,
   GetAgentCatalogInput,
   GetPluginCatalogInput,
+  GetSkillContentCatalogInput,
+  GetSkillVersionContentCatalogInput,
   McpCatalogResource,
   PluginCatalogResource,
   GetWorkgroupCatalogInput,
@@ -127,6 +137,16 @@ import type {
   ApplyResourcePackage,
   ExportResourcePackage,
   InspectResourcePackage,
+  ListSkillFilesCatalogInput,
+  ListSkillVersionsCatalogInput,
+  ReadSkillFileCatalogInput,
+  RestoreSkillVersionCatalogInput,
+  RestoreSkillVersionCatalogReceipt,
+  SkillCatalogVersion,
+  SkillCatalogVersionContent,
+  SkillCatalogVersionDiff,
+  WriteSkillFileCatalogInput,
+  WriteSkillFileCatalogReceipt,
 } from './types'
 
 interface AgentCommands {
@@ -430,6 +450,53 @@ const deleteSkillInputSchema = z
   .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
   .strict()
 const deleteSkillReceiptSchema = z.object({ deleted: SkillSchema }).strict()
+const skillIdInputSchema = z.object({ id: z.string().min(1) }).strict()
+const skillFileInputSchema = z.object({ id: z.string().min(1), path: z.string() }).strict()
+const writeSkillFileInputSchema = z
+  .object({
+    id: z.string().min(1),
+    path: z.string(),
+    submission: jsonBodySubmissionSchema,
+  })
+  .strict()
+const deleteSkillFileInputSchema = z
+  .object({
+    id: z.string().min(1),
+    path: z.string(),
+    expectedToken: z.string().optional(),
+    submission: jsonBodySubmissionSchema,
+  })
+  .strict()
+const diffSkillVersionsInputSchema = z
+  .object({ id: z.string().min(1), from: z.string(), to: z.string() })
+  .strict()
+const getSkillVersionContentInputSchema = z
+  .object({ id: z.string().min(1), version: z.string() })
+  .strict()
+const restoreSkillVersionInputSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.string(),
+    submission: jsonBodySubmissionSchema,
+  })
+  .strict()
+const readSkillFileReceiptSchema = z.object({ path: z.string(), content: z.string() }).strict()
+const writeSkillFileReceiptSchema = z
+  .object({ ok: z.literal(true), path: z.string(), token: z.string().nullable() })
+  .strict()
+const deleteSkillFileReceiptSchema = z
+  .object({
+    deleted: z.object({ skillId: z.string(), name: z.string(), path: z.string() }).strict(),
+    token: z.string().nullable(),
+  })
+  .strict()
+const restoreSkillVersionReceiptSchema = z
+  .object({
+    version: SkillVersionSchema,
+    unfusedMemoryIds: z.array(z.string()),
+    token: z.string().nullable(),
+  })
+  .strict()
 
 export interface SkillOperationDescriptors {
   readonly list: QueryOperationDescriptor<
@@ -457,6 +524,51 @@ export interface SkillOperationDescriptors {
     DeleteSkillCatalogReceipt,
     SkillOperationContext
   >
+  readonly content: QueryOperationDescriptor<
+    GetSkillContentCatalogInput,
+    SkillCatalogContent,
+    SkillOperationContext
+  >
+  readonly listFiles: QueryOperationDescriptor<
+    ListSkillFilesCatalogInput,
+    FileNode[],
+    SkillOperationContext
+  >
+  readonly readFile: QueryOperationDescriptor<
+    ReadSkillFileCatalogInput,
+    Readonly<{ path: string; content: string }>,
+    SkillOperationContext
+  >
+  readonly writeFile: CommandOperationDescriptor<
+    WriteSkillFileCatalogInput,
+    WriteSkillFileCatalogReceipt,
+    SkillOperationContext
+  >
+  readonly deleteFile: CommandOperationDescriptor<
+    DeleteSkillFileCatalogInput,
+    DeleteSkillFileCatalogReceipt,
+    SkillOperationContext
+  >
+  readonly listVersions: QueryOperationDescriptor<
+    ListSkillVersionsCatalogInput,
+    SkillCatalogVersion[],
+    SkillOperationContext
+  >
+  readonly diffVersions: QueryOperationDescriptor<
+    DiffSkillVersionsCatalogInput,
+    SkillCatalogVersionDiff,
+    SkillOperationContext
+  >
+  readonly getVersionContent: QueryOperationDescriptor<
+    GetSkillVersionContentCatalogInput,
+    SkillCatalogVersionContent,
+    SkillOperationContext
+  >
+  readonly restoreVersion: CommandOperationDescriptor<
+    RestoreSkillVersionCatalogInput,
+    RestoreSkillVersionCatalogReceipt,
+    SkillOperationContext
+  >
 }
 
 export interface SkillCatalogModule {
@@ -474,6 +586,10 @@ export interface SkillCatalogModule {
 export function createSkillOperationDescriptors(
   commands: SkillCommands,
   queries: SkillQueries,
+  fileCommands: SkillFileCommands,
+  fileQueries: SkillFileQueries,
+  versionCommands: SkillVersionCommands,
+  versionQueries: SkillVersionQueries,
 ): SkillOperationDescriptors {
   return Object.freeze({
     list: defineQueryOperation({
@@ -524,6 +640,103 @@ export function createSkillOperationDescriptors(
       outputSchema: deleteSkillReceiptSchema,
       invoke: (authority: SkillOperationContext, input: DeleteSkillCatalogInput) =>
         commands.delete(authority, input),
+    }),
+    content: defineQueryOperation({
+      id: 'skill-catalog.get-skill-content.v1',
+      summary: 'Read SKILL.md',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: skillIdInputSchema,
+      outputSchema: SkillContentSchema,
+      invoke: (authority: SkillOperationContext, input: GetSkillContentCatalogInput) =>
+        queries.content(authority, input),
+    }),
+    listFiles: defineQueryOperation({
+      id: 'skill-catalog.list-skill-files.v1',
+      summary: 'List skill files',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: skillIdInputSchema,
+      outputSchema: z.array(FileNodeSchema),
+      invoke: async (authority: SkillOperationContext, input: ListSkillFilesCatalogInput) => [
+        ...(await fileQueries.list(authority, input)),
+      ],
+    }),
+    readFile: defineQueryOperation({
+      id: 'skill-catalog.read-skill-file.v1',
+      summary: 'Read one skill file',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: skillFileInputSchema,
+      outputSchema: readSkillFileReceiptSchema,
+      invoke: (authority: SkillOperationContext, input: ReadSkillFileCatalogInput) =>
+        fileQueries.read(authority, input),
+    }),
+    writeFile: defineCommandOperation({
+      id: 'skill-catalog.write-skill-file.v1',
+      summary: 'Write one skill file',
+      permissions: ['skills:update'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: writeSkillFileInputSchema,
+      outputSchema: writeSkillFileReceiptSchema,
+      invoke: (authority: SkillOperationContext, input: WriteSkillFileCatalogInput) =>
+        fileCommands.write(authority, input),
+    }),
+    deleteFile: defineCommandOperation({
+      id: 'skill-catalog.delete-skill-file.v1',
+      summary: 'Delete one skill file',
+      permissions: ['skills:delete'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: deleteSkillFileInputSchema,
+      outputSchema: deleteSkillFileReceiptSchema,
+      invoke: (authority: SkillOperationContext, input: DeleteSkillFileCatalogInput) =>
+        fileCommands.delete(authority, input),
+    }),
+    listVersions: defineQueryOperation({
+      id: 'skill-catalog.list-skill-versions.v1',
+      summary: 'List skill versions',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: skillIdInputSchema,
+      outputSchema: z.array(SkillVersionSchema),
+      invoke: async (authority: SkillOperationContext, input: ListSkillVersionsCatalogInput) => [
+        ...(await versionQueries.list(authority, input)),
+      ],
+    }),
+    diffVersions: defineQueryOperation({
+      id: 'skill-catalog.diff-skill-versions.v1',
+      summary: 'Diff two skill versions',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: diffSkillVersionsInputSchema,
+      outputSchema: SkillVersionDiffSchema,
+      invoke: (authority: SkillOperationContext, input: DiffSkillVersionsCatalogInput) =>
+        versionQueries.diff(authority, input),
+    }),
+    getVersionContent: defineQueryOperation({
+      id: 'skill-catalog.get-skill-version-content.v1',
+      summary: 'Read one skill version',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: getSkillVersionContentInputSchema,
+      outputSchema: SkillVersionContentSchema,
+      invoke: (authority: SkillOperationContext, input: GetSkillVersionContentCatalogInput) =>
+        versionQueries.content(authority, input),
+    }),
+    restoreVersion: defineCommandOperation({
+      id: 'skill-catalog.restore-skill-version.v1',
+      summary: 'Restore a skill version',
+      permissions: ['skills:update'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: restoreSkillVersionInputSchema,
+      outputSchema: restoreSkillVersionReceiptSchema,
+      invoke: async (authority: SkillOperationContext, input: RestoreSkillVersionCatalogInput) => {
+        const receipt = await versionCommands.restore(authority, input)
+        return Object.freeze({
+          ...receipt,
+          unfusedMemoryIds: [...receipt.unfusedMemoryIds],
+        })
+      },
     }),
   })
 }

@@ -226,7 +226,20 @@ assertType<Equal<Extract<keyof SkillAclIdentityParticipant, string>, 'load' | 'n
 assertType<
   Equal<
     Extract<keyof SkillOperationDescriptors, string>,
-    'list' | 'get' | 'create' | 'save' | 'delete'
+    | 'list'
+    | 'get'
+    | 'create'
+    | 'save'
+    | 'delete'
+    | 'content'
+    | 'listFiles'
+    | 'readFile'
+    | 'writeFile'
+    | 'deleteFile'
+    | 'listVersions'
+    | 'diffVersions'
+    | 'getVersionContent'
+    | 'restoreVersion'
   >
 >(true)
 assertType<
@@ -1429,15 +1442,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'descriptor: operations.delete',
       'descriptor: operations.list',
       'descriptor: operations.get',
-      'fileCommands.write(',
-      'fileCommands.delete(',
-      'versionCommands.restore(',
-      'queries.content(',
-      'fileQueries.list(',
-      'fileQueries.read(',
-      'versionQueries.list(',
-      'versionQueries.diff(',
-      'versionQueries.content(',
+      'descriptor: operations.content',
+      'descriptor: operations.listFiles',
+      'descriptor: operations.readFile',
+      'descriptor: operations.writeFile',
+      'descriptor: operations.deleteFile',
+      'descriptor: operations.listVersions',
+      'descriptor: operations.diffVersions',
+      'descriptor: operations.getVersionContent',
+      'descriptor: operations.restoreVersion',
       'aclIdentity.load(',
     ]) {
       expect(route).toContain(consumer)
@@ -1493,6 +1506,19 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ]) {
       expect(operations).toContain(operationId)
       expect(mcpBindings).toContain(operationId)
+    }
+    for (const operationId of [
+      'skill-catalog.get-skill-content.v1',
+      'skill-catalog.list-skill-files.v1',
+      'skill-catalog.read-skill-file.v1',
+      'skill-catalog.write-skill-file.v1',
+      'skill-catalog.delete-skill-file.v1',
+      'skill-catalog.list-skill-versions.v1',
+      'skill-catalog.diff-skill-versions.v1',
+      'skill-catalog.get-skill-version-content.v1',
+      'skill-catalog.restore-skill-version.v1',
+    ]) {
+      expect(operations).toContain(operationId)
     }
     expect(server).toContain('composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })')
     expect(server).toContain('operations: skillCatalog.operations')
@@ -1792,7 +1818,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       ['agents.ts', 6],
       ['mcps.ts', 6],
       ['plugins.ts', 8],
-      ['skills.ts', 5],
+      ['skills.ts', 14],
       ['workflows.ts', 6],
       ['workgroups.ts', 7],
     ] as const
