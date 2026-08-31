@@ -55,7 +55,12 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
 import { createAgent } from '@/services/agent'
-import { canManageMemory, fuseMemoriesTx, getMemoryById } from '@/services/memory'
+import {
+  canManageMemory,
+  fuseMemoriesTx,
+  getMemoryById,
+  type MemoryResourceScopeAuthority,
+} from '@/services/memory'
 import { canEditResource, canViewResource, hasResourceAclBypass } from '@/services/resourceAcl'
 import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
 import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
@@ -549,10 +554,11 @@ function serializeMemoriesForPrompt(
 export async function createFusion(
   input: LaunchFusion,
   deps: FusionDeps,
-  actor: Actor,
+  scopeAuthority: MemoryResourceScopeAuthority,
   launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
   const { db, appHome } = deps
+  const actor = scopeAuthority.actor
   await seedFusionResources(db)
 
   // 1. Target skill must exist, be visible (RFC-099 D1 existence isolation:
@@ -595,7 +601,7 @@ export async function createFusion(
     if (got.memory.status !== 'approved') {
       throw new ConflictError('fusion-memory-not-approved', `memory '${id}' is not approved`)
     }
-    const manageable = await canManageMemory(db, actor, {
+    const manageable = await canManageMemory(db, scopeAuthority, {
       scopeType: got.memory.scopeType,
       scopeId: got.memory.scopeId,
     })

@@ -8,8 +8,20 @@ import { actorOf } from '@/auth/actor'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { buildOverview } from '@/services/overview'
+import type { MemoryResourceScopeAuthorization } from '@/services/memory'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
-export function mountOverviewRoutes(app: Hono, deps: AppDeps): void {
+export interface OverviewRouteAuthorization {
+  readonly directAuthority: DirectAuthorityBinding
+  readonly resourceScopeAuthorization: MemoryResourceScopeAuthorization
+}
+
+export function mountOverviewRoutes(
+  app: Hono,
+  deps: AppDeps,
+  authorization: OverviewRouteAuthorization,
+): void {
   registerRoute(
     app,
     {
@@ -22,7 +34,14 @@ export function mountOverviewRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Home page aggregate counters',
     },
     async (c) => {
-      return c.json(await buildOverview(deps.db, actorOf(c)))
+      const actor = actorOf(c)
+      return c.json(
+        await buildOverview(deps.db, {
+          actor,
+          authority: directRequestAuthority(authorization.directAuthority, actor),
+          authorization: authorization.resourceScopeAuthorization,
+        }),
+      )
     },
   )
 }

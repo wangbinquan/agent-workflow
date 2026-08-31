@@ -66,7 +66,14 @@ import type {
   CommandContext,
   DirectCommandContextFactory,
   PrincipalSource,
+  RequestAuthority,
 } from '@/modules/identity-access/public/participants'
+import type { ResourceScopeAuthorizationInTx } from '@/modules/resource-catalog/public/participants'
+import type {
+  ResourceMemoryScopeRef,
+  ResourceScopeAccess,
+} from '@/modules/resource-catalog/public/types'
+import { hasResourceAclBypass } from '@/services/resourceAcl'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
 export interface MemoryWithChain {
@@ -620,6 +627,21 @@ export interface MoveMemoryResult {
   moved: boolean
 }
 
+/** Composition-owned factory injected by the HTTP/WS bootstrap roots. */
+export interface MemoryResourceScopeAuthorization {
+  inTransaction(
+    tx: DbTxSync,
+    pair: Readonly<{ authority: RequestAuthority; actor: Actor }>,
+  ): ResourceScopeAuthorizationInTx
+}
+
+/** Exact opaque authority handle and its admitted current actor projection. */
+export interface MemoryResourceScopeAuthority {
+  readonly authority: RequestAuthority
+  readonly actor: Actor
+  readonly authorization: MemoryResourceScopeAuthorization
+}
+
 /**
  * RFC-342 / RFC-294 P0-A — the only scope mutation path.
  *
@@ -632,6 +654,7 @@ export function moveMemory(
   db: DbClient,
   contexts: DirectCommandContextFactory,
   context: CommandContext,
+  authorization: MemoryResourceScopeAuthorization,
   id: string,
   input: MemoryMoveRequest,
   hooks: MemoryMutationTestHooks = {},
@@ -675,8 +698,13 @@ export function moveMemory(
       scopeType: parsed.data.scopeType,
       scopeId: parsed.data.scopeId,
     }
-    assertMemoryScopeManageableInTx(tx, actor, previousScope, 'current')
-    assertMemoryScopeManageableInTx(tx, actor, nextScope, 'destination')
+    const scopeAuthority: MemoryResourceScopeAuthority = {
+      authority: context.authority,
+      actor,
+      authorization,
+    }
+    assertMemoryScopeManageableInTx(tx, scopeAuthority, previousScope, 'current')
+    assertMemoryScopeManageableInTx(tx, scopeAuthority, nextScope, 'destination')
 
     const scopeTypeChanged = previousScope.scopeType !== nextScope.scopeType
     const scopeIdChanged = previousScope.scopeId !== nextScope.scopeId
@@ -710,8 +738,13 @@ export function moveMemory(
       })
     }
     const refreshedActor = currentMoveActorInTx(tx, authority)
-    assertMemoryScopeManageableInTx(tx, refreshedActor, previousScope, 'current')
-    assertMemoryScopeManageableInTx(tx, refreshedActor, nextScope, 'destination')
+    const refreshedScopeAuthority: MemoryResourceScopeAuthority = {
+      authority: context.authority,
+      actor: refreshedActor,
+      authorization,
+    }
+    assertMemoryScopeManageableInTx(tx, refreshedScopeAuthority, previousScope, 'current')
+    assertMemoryScopeManageableInTx(tx, refreshedScopeAuthority, nextScope, 'destination')
 
     const nextVersion = row.version + 1
     const update = tx
@@ -824,10 +857,11 @@ function actorSourceOf(source: PrincipalSource): ActorSource {
 
 function assertMemoryScopeManageableInTx(
   tx: DbTxSync,
-  actor: Actor,
+  authority: MemoryResourceScopeAuthority,
   scope: MemoryScopeRef,
   side: 'current' | 'destination',
 ): void {
+  const actor = authority.actor
   if (scope.scopeType === 'global') {
     if (hasResourceAclBypass(actor)) return
     throw new ForbiddenError(
@@ -865,40 +899,15 @@ function assertMemoryScopeManageableInTx(
     )
   }
 
-  const row =
-    scope.scopeType === 'agent'
-      ? tx
-          .select({
-            id: agentsTable.id,
-            ownerUserId: agentsTable.ownerUserId,
-            visibility: agentsTable.visibility,
-          })
-          .from(agentsTable)
-          .where(eq(agentsTable.id, scope.scopeId))
-          .get()
-      : tx
-          .select({
-            id: workflowsTable.id,
-            ownerUserId: workflowsTable.ownerUserId,
-            visibility: workflowsTable.visibility,
-          })
-          .from(workflowsTable)
-          .where(eq(workflowsTable.id, scope.scopeId))
-          .get()
-  if (row === undefined) {
+  const access = resourceScopeAccessInTx(tx, authority, scope)
+  if (access === 'none') {
     if (side === 'current' && hasResourceAclBypass(actor)) return
     throw new NotFoundError(
       'memory-scope-target-not-found',
       `${side} ${scope.scopeType} scope target not found`,
     )
   }
-  if (!canViewResourceInTx(tx, actor, scope.scopeType, row)) {
-    throw new NotFoundError(
-      'memory-scope-target-not-found',
-      `${side} ${scope.scopeType} scope target not found`,
-    )
-  }
-  if (!canEditResourceInTx(tx, actor, scope.scopeType, row)) {
+  if (access !== 'write' && access !== 'own') {
     throw new ForbiddenError(
       'memory-scope-forbidden',
       `request authority cannot manage the ${side} ${scope.scopeType} scope`,
@@ -1056,17 +1065,6 @@ export function _scopeKey(scope: MemoryScope, id: string | null): string {
 // injection (memoryInject.ts) is untouched — the daemon actor is `__system__`.
 // ---------------------------------------------------------------------------
 
-import { agents as agentsTable, workflows as workflowsTable } from '@/db/schema'
-import {
-  canEditResourceInTx,
-  canViewResourceInTx,
-  canViewResource,
-  filterVisibleRows,
-  hasResourceAclBypass,
-  canEditResource,
-  type AclRow,
-} from '@/services/resourceAcl'
-
 export interface MemoryScopeRef {
   // RFC-248: 第 5 种 scope。`repo_group` 与 repo/global 同档——全员可读、仅
   // 仅 ACL-bypass 可管（下面 canViewMemory / canManageMemory / filterVisibleMemories
@@ -1075,41 +1073,34 @@ export interface MemoryScopeRef {
   scopeId: string | null
 }
 
-async function loadScopeAclRow(db: DbClient, scope: MemoryScopeRef): Promise<AclRow | null> {
-  if (scope.scopeId === null) return null
-  if (scope.scopeType === 'agent') {
-    const rows = await db
-      .select({
-        id: agentsTable.id,
-        ownerUserId: agentsTable.ownerUserId,
-        visibility: agentsTable.visibility,
-      })
-      .from(agentsTable)
-      .where(eq(agentsTable.id, scope.scopeId))
-      .limit(1)
-    return rows[0] ?? null
+function resourceMemoryScope(scope: MemoryScopeRef): ResourceMemoryScopeRef | null {
+  if (
+    (scope.scopeType !== 'agent' && scope.scopeType !== 'workflow') ||
+    scope.scopeId === null ||
+    scope.scopeId === ''
+  ) {
+    return null
   }
-  if (scope.scopeType === 'workflow') {
-    const rows = await db
-      .select({
-        id: workflowsTable.id,
-        ownerUserId: workflowsTable.ownerUserId,
-        visibility: workflowsTable.visibility,
-      })
-      .from(workflowsTable)
-      .where(eq(workflowsTable.id, scope.scopeId))
-      .limit(1)
-    return rows[0] ?? null
-  }
-  return null
+  return { kind: scope.scopeType, id: scope.scopeId }
+}
+
+function resourceScopeAccessInTx(
+  tx: DbTxSync,
+  authority: MemoryResourceScopeAuthority,
+  scope: MemoryScopeRef,
+): ResourceScopeAccess {
+  const ref = resourceMemoryScope(scope)
+  if (ref === null) return 'none'
+  return authority.authorization.inTransaction(tx, authority).accessOf(authority.authority, ref)
 }
 
 /** Read visibility (D12): repo/global → everyone; agent/workflow → resource viewers. */
 export async function canViewMemory(
   db: DbClient,
-  actor: Actor,
+  authority: MemoryResourceScopeAuthority,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
+  const actor = authority.actor
   if (hasResourceAclBypass(actor)) return true
   // RFC-248 AC-29: repo_group 与 repo/global 同档——全员可读。
   if (
@@ -1119,19 +1110,16 @@ export async function canViewMemory(
   ) {
     return true
   }
-  const row = await loadScopeAclRow(db, scope)
-  // Scope resource vanished → fail closed without ACL bypass (nothing to anchor
-  // visibility on; bypass actors still see it for cleanup).
-  if (row === null) return false
-  return canViewResource(db, actor, scope.scopeType, row)
+  return dbTxSync(db, (tx) => resourceScopeAccessInTx(tx, authority, scope) !== 'none')
 }
 
 /** Management rights (D12): scope-resource owner or ACL bypass; repo/global require bypass. */
 export async function canManageMemory(
   db: DbClient,
-  actor: Actor,
+  authority: MemoryResourceScopeAuthority,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
+  const actor = authority.actor
   if (hasResourceAclBypass(actor)) return true
   // RFC-248/RFC-305: repo_group 与 repo/global 同档——仅 ACL bypass 可管。
   if (
@@ -1141,11 +1129,12 @@ export async function canManageMemory(
   ) {
     return false
   }
-  const row = await loadScopeAclRow(db, scope)
-  if (row === null) return false
   // RFC-324 D9 —— 「随 scope 资源写权」现在包含 `write` 授权档：能改这个 agent /
   // workflow 的人，也能管它名下的记忆。读面（canViewMemory）不受影响。
-  return canEditResource(db, actor, scope.scopeType === 'agent' ? 'agent' : 'workflow', row)
+  return dbTxSync(db, (tx) => {
+    const access = resourceScopeAccessInTx(tx, authority, scope)
+    return access === 'write' || access === 'own'
+  })
 }
 
 /**
@@ -1154,49 +1143,28 @@ export async function canManageMemory(
  */
 export async function filterMemoriesByScopeVisibility<T extends MemoryScopeRef>(
   db: DbClient,
-  actor: Actor,
+  authority: MemoryResourceScopeAuthority,
   rows: readonly T[],
 ): Promise<T[]> {
+  const actor = authority.actor
   if (hasResourceAclBypass(actor)) return [...rows]
-  const agentIds = new Set(
-    rows.filter((r) => r.scopeType === 'agent' && r.scopeId !== null).map((r) => r.scopeId!),
-  )
-  const workflowIds = new Set(
-    rows.filter((r) => r.scopeType === 'workflow' && r.scopeId !== null).map((r) => r.scopeId!),
-  )
-  const visibleAgents = new Set<string>()
-  if (agentIds.size > 0) {
-    const aRows = await db
-      .select({
-        id: agentsTable.id,
-        ownerUserId: agentsTable.ownerUserId,
-        visibility: agentsTable.visibility,
-      })
-      .from(agentsTable)
-      .where(inArray(agentsTable.id, [...agentIds]))
-    for (const r of await filterVisibleRows(db, actor, 'agent', aRows)) visibleAgents.add(r.id)
-  }
-  const visibleWorkflows = new Set<string>()
-  if (workflowIds.size > 0) {
-    const wRows = await db
-      .select({
-        id: workflowsTable.id,
-        ownerUserId: workflowsTable.ownerUserId,
-        visibility: workflowsTable.visibility,
-      })
-      .from(workflowsTable)
-      .where(inArray(workflowsTable.id, [...workflowIds]))
-    for (const r of await filterVisibleRows(db, actor, 'workflow', wRows)) {
-      visibleWorkflows.add(r.id)
+  const accessByScope = dbTxSync(db, (tx) => {
+    const access = new Map<string, ResourceScopeAccess>()
+    for (const row of rows) {
+      const ref = resourceMemoryScope(row)
+      if (ref === null) continue
+      const key = `${ref.kind}:${ref.id}`
+      if (!access.has(key)) access.set(key, resourceScopeAccessInTx(tx, authority, row))
     }
-  }
+    return access
+  })
   return rows.filter((r) => {
     // RFC-248 AC-29: repo_group 与 repo/global 同档。
     if (r.scopeType === 'repo' || r.scopeType === 'repo_group' || r.scopeType === 'global') {
       return true
     }
     if (r.scopeId === null) return false
-    return r.scopeType === 'agent' ? visibleAgents.has(r.scopeId) : visibleWorkflows.has(r.scopeId)
+    return accessByScope.get(`${r.scopeType}:${r.scopeId}`) !== 'none'
   })
 }
 
@@ -1207,43 +1175,26 @@ export async function filterMemoriesByScopeVisibility<T extends MemoryScopeRef>(
  */
 export async function annotateMemoryManageRights<T extends MemoryScopeRef>(
   db: DbClient,
-  actor: Actor,
+  authority: MemoryResourceScopeAuthority,
   rows: readonly T[],
 ): Promise<Array<T & { canManage: boolean }>> {
+  const actor = authority.actor
   if (hasResourceAclBypass(actor)) return rows.map((r) => ({ ...r, canManage: true }))
-  const agentIds = [
-    ...new Set(
-      rows.filter((r) => r.scopeType === 'agent' && r.scopeId !== null).map((r) => r.scopeId!),
-    ),
-  ]
-  const workflowIds = [
-    ...new Set(
-      rows.filter((r) => r.scopeType === 'workflow' && r.scopeId !== null).map((r) => r.scopeId!),
-    ),
-  ]
-  const ownedAgents = new Set<string>()
-  if (agentIds.length > 0) {
-    const aRows = await db
-      .select({ id: agentsTable.id, ownerUserId: agentsTable.ownerUserId })
-      .from(agentsTable)
-      .where(inArray(agentsTable.id, agentIds))
-    for (const r of aRows) if (r.ownerUserId === actor.user.id) ownedAgents.add(r.id)
-  }
-  const ownedWorkflows = new Set<string>()
-  if (workflowIds.length > 0) {
-    const wRows = await db
-      .select({ id: workflowsTable.id, ownerUserId: workflowsTable.ownerUserId })
-      .from(workflowsTable)
-      .where(inArray(workflowsTable.id, workflowIds))
-    for (const r of wRows) if (r.ownerUserId === actor.user.id) ownedWorkflows.add(r.id)
-  }
+  const accessByScope = dbTxSync(db, (tx) => {
+    const access = new Map<string, ResourceScopeAccess>()
+    for (const row of rows) {
+      const ref = resourceMemoryScope(row)
+      if (ref === null) continue
+      const key = `${ref.kind}:${ref.id}`
+      if (!access.has(key)) access.set(key, resourceScopeAccessInTx(tx, authority, row))
+    }
+    return access
+  })
   return rows.map((r) => ({
     ...r,
     canManage:
-      r.scopeType === 'agent'
-        ? r.scopeId !== null && ownedAgents.has(r.scopeId)
-        : r.scopeType === 'workflow'
-          ? r.scopeId !== null && ownedWorkflows.has(r.scopeId)
-          : false,
+      (r.scopeType === 'agent' || r.scopeType === 'workflow') && r.scopeId !== null
+        ? accessByScope.get(`${r.scopeType}:${r.scopeId}`) === 'own'
+        : false,
   }))
 }

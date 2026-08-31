@@ -47,6 +47,7 @@ import { composePluginCatalog } from '@/modules/resource-catalog/composition/plu
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
+import { composeResourceScopeAuthorizationBinding } from '@/modules/resource-catalog/composition/resourceAcl'
 import type {
   AgentCatalogModule,
   McpCatalogModule,
@@ -1000,6 +1001,7 @@ export function mountApiRoutes(
   const developmentActivityOperations = deps.developmentActivityOperations
   const developmentConfigOperations = deps.developmentConfigOperations
   const developmentMissionOperations = deps.developmentMissionOperations
+  const resourceScopeAuthorization = composeResourceScopeAuthorizationBinding()
 
   mountConfigRoutes(app, deps)
   mountMaintenanceRoutes(app, deps)
@@ -1007,7 +1009,10 @@ export function mountApiRoutes(
   mountPlantumlRoutes(app, deps)
   mountRuntimeRoutes(app, deps)
   mountRuntimesRoutes(app, deps)
-  mountOverviewRoutes(app, deps) // RFC-190
+  mountOverviewRoutes(app, deps, {
+    directAuthority: identityAccess.directAuthority,
+    resourceScopeAuthorization,
+  }) // RFC-190
   mountAgentRoutes(app, routeDeps, {
     commands: agentCatalog.commands,
     queries: agentCatalog.queries,
@@ -1109,9 +1114,16 @@ export function mountApiRoutes(
   mountClarifyRoutes(app, routeDeps)
   mountTaskQuestionRoutes(app, routeDeps)
   mountTaskClarifyDirectiveRoutes(app, deps)
-  mountFusionRoutes(app, routeDeps)
+  mountFusionRoutes(app, routeDeps, {
+    directAuthority: identityAccess.directAuthority,
+    resourceScopeAuthorization,
+  })
   mountIntentSessionRoutes(app, deps) // RFC-234
-  mountMemoryRoutes(app, deps, identityAccess)
+  mountMemoryRoutes(app, deps, {
+    contexts: identityAccess.contexts,
+    directAuthority: identityAccess.directAuthority,
+    resourceScopeAuthorization,
+  })
   mountMemoryDistillJobRoutes(app, deps)
   mountTaskFeedbackRoutes(app, deps)
   // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always

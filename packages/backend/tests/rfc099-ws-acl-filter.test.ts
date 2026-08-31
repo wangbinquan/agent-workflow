@@ -24,6 +24,7 @@ import {
 } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 
 type AnyServer = Server<unknown>
 
@@ -76,6 +77,7 @@ async function buildHarness(): Promise<Harness> {
     daemonToken: DAEMON_TOKEN,
     db,
     identityAccess: createIdentityAccessRuntime({ db }),
+    resourceScopeAuthorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
   })
   const server = Bun.serve({
     port: 0,

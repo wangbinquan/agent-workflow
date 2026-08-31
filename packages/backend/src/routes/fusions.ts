@@ -32,8 +32,20 @@ import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
 import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
+import type { MemoryResourceScopeAuthorization } from '@/services/memory'
+import { directRequestAuthority } from '@/routes/operationAuthority'
 
-export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
+export interface FusionRouteAuthorization {
+  readonly directAuthority: DirectAuthorityBinding
+  readonly resourceScopeAuthorization: MemoryResourceScopeAuthorization
+}
+
+export function mountFusionRoutes(
+  app: Hono,
+  deps: AppDeps,
+  authorization?: FusionRouteAuthorization,
+): void {
   function fusionDeps(): FusionDeps {
     // RFC-108 T4 (Codex impl gate P2): thread the per-node timeout floor so a
     // hung fusion agent is bounded like any other node. RFC-115: also thread
@@ -71,11 +83,18 @@ export function mountFusionRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
+      if (authorization === undefined) {
+        throw new Error('fusion-resource-scope-authorization-not-composed')
+      }
       const actor = actorOf(c)
       const fusion = await createFusion(
         parsed.data,
         fusionDeps(),
-        actor,
+        {
+          actor,
+          authority: directRequestAuthority(authorization.directAuthority, actor),
+          authorization: authorization.resourceScopeAuthorization,
+        },
         directTaskInitiatorFromActorSource(actor.source),
       )
       return c.json(fusion, 201)

@@ -31,11 +31,16 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createApp } from '../src/server'
-import { buildOverview } from '../src/services/overview'
+import { buildOverview as buildOverviewWithAuthority } from '../src/services/overview'
 import { createUser } from '../src/services/users'
+import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+function buildOverview(db: DbClient, actor: Actor, now?: () => number) {
+  return buildOverviewWithAuthority(db, resourceScopeAuthority(db, actor), now)
+}
 
 interface Harness {
   db: DbClient

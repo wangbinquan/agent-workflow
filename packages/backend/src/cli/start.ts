@@ -116,6 +116,7 @@ import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { startMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
+import { composeResourceScopeAuthorizationBinding } from '@/modules/resource-catalog/composition/resourceAcl'
 import { composeEventCenter, startEventCenterWorker } from '@/modules/event-center/composition'
 import {
   activateDigitalEmployeeOsWriter,
@@ -1242,7 +1243,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   const bindHost = opts.host ?? config.bindHost
   const bindPort = opts.port ?? config.bindPort ?? 0
-  const ws = buildWebSocketAdapter({ daemonToken: token, db, identityAccess })
+  const ws = buildWebSocketAdapter({
+    daemonToken: token,
+    db,
+    identityAccess,
+    resourceScopeAuthorization: composeResourceScopeAuthorizationBinding(),
+  })
   const server = Bun.serve({
     port: bindPort,
     hostname: bindHost,

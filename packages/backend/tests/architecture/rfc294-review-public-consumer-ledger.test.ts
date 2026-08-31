@@ -153,7 +153,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:resource-catalog:participants:ResourceAuthorizationInTx', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:participants:ResourcePackageApplyScenarioProvider', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:participants:ResourcePackageApplyTx', removeAfterWave: 'W4-C' },
-  { id: 'public:resource-catalog:participants:ResourceScopeAuthorizationInTx', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:queries:ResourceAclQuery', removeAfterWave: 'W4-C' },
   { id: 'public:resource-catalog:queries:ResourceAuthorizationQuery', removeAfterWave: 'W4-C' },

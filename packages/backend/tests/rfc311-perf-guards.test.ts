@@ -65,6 +65,7 @@ import { archiveEvents } from '../src/services/eventsArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { buildOverview } from '../src/services/overview'
+import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 import { listTaskOperationsPage } from '../src/services/taskOperations'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 
@@ -247,7 +248,10 @@ const GUARDED: GuardedPath[] = [
   },
   {
     name: '/api/overview — 计数面板',
-    run: (db) => buildOverview(db, actorOf('admin')),
+    run: (db) => {
+      const actor = actorOf('admin')
+      return buildOverview(db, resourceScopeAuthority(db, actor))
+    },
   },
   // 周期任务：历史事故密度最高的地方（归档器无界 IN 撞 32766 死循环、备份 VACUUM
   // 全站冻结 30-90 秒），而它们此前一条都没被防护网跑到。

@@ -36,7 +36,11 @@ import {
   workgroups as workgroupsTable,
 } from '@/db/schema'
 import { countCachedRepos } from '@/services/gitRepoCache'
-import { filterMemoriesByScopeVisibility, listMemories } from '@/services/memory'
+import {
+  filterMemoriesByScopeVisibility,
+  listMemories,
+  type MemoryResourceScopeAuthority,
+} from '@/services/memory'
 import { visibleRowsCondition, type AclColumnRef } from '@/services/resourceAcl'
 import { taskVisibilityCondition } from '@/services/task'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
@@ -136,9 +140,10 @@ async function buildTaskStats(
  */
 async function buildOverviewFresh(
   db: DbClient,
-  actor: Actor,
+  authority: MemoryResourceScopeAuthority,
   now: () => number = Date.now,
 ): Promise<OverviewResponse> {
+  const actor = authority.actor
   const t = now()
   const [
     agents,
@@ -215,7 +220,7 @@ async function buildOverviewFresh(
     }),
     gatedCount(actor, 'memory:read', async () => {
       const approved = await listMemories(db, { status: 'approved' })
-      return (await filterMemoriesByScopeVisibility(db, actor, approved)).length
+      return (await filterMemoriesByScopeVisibility(db, authority, approved)).length
     }),
     buildTaskStats(db, actor, t - WINDOW_7D_MS),
   ])
@@ -228,12 +233,13 @@ async function buildOverviewFresh(
 
 export function buildOverview(
   db: DbClient,
-  actor: Actor,
+  authority: MemoryResourceScopeAuthority,
   now: () => number = Date.now,
 ): Promise<OverviewResponse> {
+  const actor = authority.actor
   // An injected clock defines an independent observation and is used by
   // boundary tests; never merge it with another caller's clock. Production
   // requests use Date.now and can safely share only their overlapping read.
-  if (now !== Date.now) return buildOverviewFresh(db, actor, now)
-  return overviewFlight(db)(overviewFlightKey(actor), () => buildOverviewFresh(db, actor, now))
+  if (now !== Date.now) return buildOverviewFresh(db, authority, now)
+  return overviewFlight(db)(overviewFlightKey(actor), () => buildOverviewFresh(db, authority, now))
 }

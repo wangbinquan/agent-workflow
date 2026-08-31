@@ -1,3 +1,4 @@
+import type { Actor } from '@/auth/actor'
 import type { DbTxSync } from '@/db/txSync'
 import { createResourceAclApplication } from '../application/resourceAcl'
 import {
@@ -5,6 +6,7 @@ import {
   createResourceScopeAuthorizationInTx as createResourceScopeAuthorizationParticipantInTx,
   type ResourceCurrentAuthorityResolver,
 } from '../application/participants/resourceAuthorization'
+import type { ResourceRequestContext, ResourceScopeAuthorizationInTx } from '../public/participants'
 import type {
   ResourceAccessRowReadPort,
   ResourceAclMutationPort,
@@ -78,6 +80,15 @@ export const { getResourceAcl, updateResourceAcl } = acl
 
 const participantDependencies = { accessRows, authorization }
 
+export interface ResourceScopeAuthorityPair {
+  readonly authority: ResourceRequestContext
+  readonly actor: Actor
+}
+
+export interface ResourceScopeAuthorizationBinding {
+  inTransaction(tx: DbTxSync, pair: ResourceScopeAuthorityPair): ResourceScopeAuthorizationInTx
+}
+
 export function createResourceAuthorizationInTx(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
@@ -94,4 +105,24 @@ export function createResourceScopeAuthorizationInTx(
     authorityResolver,
     participantDependencies,
   )
+}
+
+/**
+ * Bootstrap-owned adapter for the memory consumer.  The participant accepts
+ * only the exact opaque handle paired with the current actor; it never falls
+ * back to a structurally compatible Actor bag.
+ */
+export function composeResourceScopeAuthorizationBinding(): ResourceScopeAuthorizationBinding {
+  return Object.freeze({
+    inTransaction(tx: DbTxSync, pair: ResourceScopeAuthorityPair) {
+      return createResourceScopeAuthorizationInTx(tx, {
+        resolve(authority) {
+          if (authority !== pair.authority) {
+            throw new Error('foreign-resource-scope-authority')
+          }
+          return pair.actor
+        },
+      })
+    },
+  })
 }

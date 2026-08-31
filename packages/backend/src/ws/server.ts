@@ -35,6 +35,7 @@ import {
   type WsCredentialWithExpiry,
 } from '@/auth/session'
 import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
+import type { MemoryResourceScopeAuthorization } from '@/services/memory'
 import { createLogger } from '@/util/log'
 import {
   checkUpgradeGate,
@@ -55,6 +56,12 @@ import {
 } from './connections'
 
 const log = createLogger('ws.server')
+
+const missingResourceScopeAuthorization = Object.freeze({
+  inTransaction(): never {
+    throw new Error('resource-scope-authorization-not-composed')
+  },
+}) satisfies MemoryResourceScopeAuthorization
 
 /**
  * Per-connection data — derived from the registry's channel-params union
@@ -78,6 +85,8 @@ export interface WebSocketAdapterDeps {
     IdentityAccessWsBinding,
     'directAuthority' | 'authorityFence' | 'presenceConnections' | 'presenceQuery'
   >
+  /** Production bootstrap must inject this. Omission is a fail-closed test seam. */
+  resourceScopeAuthorization?: MemoryResourceScopeAuthorization
 }
 
 export interface WebSocketAdapter {
@@ -109,6 +118,8 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   // length-check + timing-safe equality, so we avoid Buffer.from() per
   // upgrade attempt.
   const daemonTokenBuf = Buffer.from(deps.daemonToken, 'utf-8')
+  const resourceScopeAuthorization =
+    deps.resourceScopeAuthorization ?? missingResourceScopeAuthorization
   const identityAccess: IdentityAccessWsBinding = Object.freeze({
     directAuthority: deps.identityAccess.directAuthority,
     authorityFence: deps.identityAccess.authorityFence,
@@ -238,6 +249,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       channel,
       actor,
       authority,
+      resourceScopeAuthorization,
       identityAccess,
       // RFC-212 — fingerprint (never the raw token) so a live socket can be
       // re-checked when a credential is revoked; also carries the credential's

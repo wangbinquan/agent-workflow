@@ -34,14 +34,29 @@ import {
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { fusions, memories, skills, tasks } from '../src/db/schema'
-import { createFusion, type FusionDeps } from '../src/services/fusion'
+import { createFusion as createFusionWithAuthority, type FusionDeps } from '../src/services/fusion'
 import { forcedPortPathsForTask } from '../src/services/portArtifacts'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc319-test-opencode'
+
+function createFusion(
+  input: Parameters<typeof createFusionWithAuthority>[0],
+  deps: Parameters<typeof createFusionWithAuthority>[1],
+  actor: Actor,
+  launchInitiator: Parameters<typeof createFusionWithAuthority>[3],
+) {
+  return createFusionWithAuthority(
+    input,
+    deps,
+    resourceScopeAuthority(deps.db, actor),
+    launchInitiator,
+  )
+}
 
 setDefaultTimeout(60_000)
 

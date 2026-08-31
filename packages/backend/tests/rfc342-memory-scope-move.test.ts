@@ -26,15 +26,35 @@ import type {
 import {
   createManualCandidate,
   getMemoryById,
-  moveMemory,
+  moveMemory as moveMemoryWithAuthorization,
   promoteCandidate,
 } from '../src/services/memory'
 import { loadInjectableMemories } from '../src/services/memoryInject'
 import { createUser } from '../src/services/users'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_789_747_212_066
+
+function moveMemory(
+  db: Parameters<typeof moveMemoryWithAuthorization>[0],
+  contexts: Parameters<typeof moveMemoryWithAuthorization>[1],
+  context: Parameters<typeof moveMemoryWithAuthorization>[2],
+  id: Parameters<typeof moveMemoryWithAuthorization>[4],
+  input: Parameters<typeof moveMemoryWithAuthorization>[5],
+  hooks?: Parameters<typeof moveMemoryWithAuthorization>[6],
+) {
+  return moveMemoryWithAuthorization(
+    db,
+    contexts,
+    context,
+    TEST_RESOURCE_SCOPE_AUTHORIZATION,
+    id,
+    input,
+    hooks,
+  )
+}
 
 function captureBroadcasts(): { messages: MemoryWsMessage[]; stop: () => void } {
   const messages: MemoryWsMessage[] = []

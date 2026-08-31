@@ -45,6 +45,8 @@ import {
   promoteCandidate,
   toSummary,
   unarchiveMemory,
+  type MemoryResourceScopeAuthority,
+  type MemoryResourceScopeAuthorization,
   type MemoryScopeRef,
 } from '@/services/memory'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
@@ -55,34 +57,52 @@ import type {
 } from '@/modules/identity-access/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
+interface MemoryRouteIdentityAccess {
+  readonly contexts: DirectCommandContextFactory
+  readonly directAuthority: DirectAuthorityBinding
+  readonly resourceScopeAuthorization: MemoryResourceScopeAuthorization
+}
+
+function memoryScopeAuthority(
+  c: Parameters<typeof actorOf>[0],
+  identityAccess: MemoryRouteIdentityAccess,
+): MemoryResourceScopeAuthority {
+  const actor = actorOf(c)
+  return Object.freeze({
+    actor,
+    authority: directRequestAuthority(identityAccess.directAuthority, actor),
+    authorization: identityAccess.resourceScopeAuthorization,
+  })
+}
+
 /**
  * RFC-099 (D12) — load + gate one memory row for a management operation:
  * invisible → 404 (existence isolation); visible but not the scope-resource
  * owner / ACL-bypass actor → 403. Returns the loaded row bundle for the handler.
  */
-async function loadManagedMemory(deps: AppDeps, c: Parameters<typeof actorOf>[0], id: string) {
+async function loadManagedMemory(
+  deps: AppDeps,
+  identityAccess: MemoryRouteIdentityAccess,
+  c: Parameters<typeof actorOf>[0],
+  id: string,
+) {
   const found = await getMemoryById(deps.db, id)
   if (found === null) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
-  const actor = actorOf(c)
+  const authority = memoryScopeAuthority(c, identityAccess)
   const scope: MemoryScopeRef = {
     scopeType: found.memory.scopeType,
     scopeId: found.memory.scopeId,
   }
-  if (!(await canViewMemory(deps.db, actor, scope))) {
+  if (!(await canViewMemory(deps.db, authority, scope))) {
     throw new NotFoundError('memory-not-found', `memory ${id} not found`)
   }
-  if (!(await canManageMemory(deps.db, actor, scope))) {
+  if (!(await canManageMemory(deps.db, authority, scope))) {
     throw new ForbiddenError(
       'forbidden',
       'only the scoped resource owner or an actor with resource-acl:bypass can manage this memory',
     )
   }
   return found
-}
-
-interface MemoryRouteIdentityAccess {
-  readonly contexts: DirectCommandContextFactory
-  readonly directAuthority: DirectAuthorityBinding
 }
 
 export function mountMemoryRoutes(
@@ -152,6 +172,7 @@ export function mountMemoryRoutes(
       }
       // RFC-099 (D12): agent/workflow-scoped rows only for viewers of that resource.
       const actor = actorOf(c)
+      const scopeAuthority = memoryScopeAuthority(c, identityAccess)
       // RFC-285 B7（Q4 拍板，E12）：candidate 状态是**未经人审的蒸馏产物**（含
       // body）——读面收紧为仅持有 `resource-acl:bypass` 的操作者，与 distill 详情门
       // （E8）同一威胁模型。人审发布（approved）后才进入全员读面。两读法
@@ -160,15 +181,15 @@ export function mountMemoryRoutes(
         hasResourceAclBypass(actor) ? rows : rows.filter((r) => r.status !== 'candidate')
       if (includeRaw === 'body') {
         const items = await listMemories(deps.db, parsed.data, { includeBody: true })
-        const visible = await filterMemoriesByScopeVisibility(deps.db, actor, items)
+        const visible = await filterMemoriesByScopeVisibility(deps.db, scopeAuthority, items)
         return c.json({
-          items: await annotateMemoryManageRights(deps.db, actor, dropCandidates(visible)),
+          items: await annotateMemoryManageRights(deps.db, scopeAuthority, dropCandidates(visible)),
         })
       }
       const items = await listMemories(deps.db, parsed.data)
-      const visible = await filterMemoriesByScopeVisibility(deps.db, actor, items)
+      const visible = await filterMemoriesByScopeVisibility(deps.db, scopeAuthority, items)
       return c.json({
-        items: await annotateMemoryManageRights(deps.db, actor, dropCandidates(visible)),
+        items: await annotateMemoryManageRights(deps.db, scopeAuthority, dropCandidates(visible)),
       })
     },
   )
@@ -218,8 +239,9 @@ export function mountMemoryRoutes(
       // 一个外部代理问「有哪些标签」，想要的是能被注入的事实，不是未审的候选。
       const status = parsed.data.status ?? 'approved'
       const actor = actorOf(c)
+      const scopeAuthority = memoryScopeAuthority(c, identityAccess)
       const rows = await listMemories(deps.db, { ...parsed.data, status })
-      const visible = await filterMemoriesByScopeVisibility(deps.db, actor, rows)
+      const visible = await filterMemoriesByScopeVisibility(deps.db, scopeAuthority, rows)
       const items =
         status === 'candidate' && !hasResourceAclBypass(actor)
           ? visible.filter((r) => r.status !== 'candidate')
@@ -248,7 +270,8 @@ export function mountMemoryRoutes(
       const found = await getMemoryById(deps.db, id)
       if (found === null) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
       // RFC-099 (D12): invisible scope → identical 404.
-      const visible = await canViewMemory(deps.db, actorOf(c), {
+      const scopeAuthority = memoryScopeAuthority(c, identityAccess)
+      const visible = await canViewMemory(deps.db, scopeAuthority, {
         scopeType: found.memory.scopeType,
         scopeId: found.memory.scopeId,
       })
@@ -257,7 +280,7 @@ export function mountMemoryRoutes(
       if (found.memory.status === 'candidate' && !hasResourceAclBypass(actorOf(c))) {
         throw new NotFoundError('memory-not-found', `memory ${id} not found`)
       }
-      const canManage = await canManageMemory(deps.db, actorOf(c), {
+      const canManage = await canManageMemory(deps.db, scopeAuthority, {
         scopeType: found.memory.scopeType,
         scopeId: found.memory.scopeId,
       })
@@ -286,7 +309,7 @@ export function mountMemoryRoutes(
       // RFC-099 (D12): creating a memory targets a scope — the creator must
       // hold management rights on that scope (resource owner or ACL bypass;
       // repo/global require the bypass capability).
-      const canCreate = await canManageMemory(deps.db, actorOf(c), {
+      const canCreate = await canManageMemory(deps.db, memoryScopeAuthority(c, identityAccess), {
         scopeType: parsed.data.scopeType,
         scopeId: parsed.data.scopeId ?? null,
       })
@@ -320,7 +343,7 @@ export function mountMemoryRoutes(
       if (!parsed.success) {
         throw new ValidationError('invalid-body', 'invalid patch request', parsed.error.format())
       }
-      await loadManagedMemory(deps, c, id)
+      await loadManagedMemory(deps, identityAccess, c, id)
       const actor = actorOf(c)
       const result = await patchMemory(deps.db, id, parsed.data, actor.user.id)
       return c.json({ memory: result.memory, changedFields: result.changedFields })
@@ -348,7 +371,14 @@ export function mountMemoryRoutes(
         directRequestAuthority(identityAccess.directAuthority, actor),
         'http',
       )
-      const result = moveMemory(deps.db, identityAccess.contexts, context, id, parsed.data)
+      const result = moveMemory(
+        deps.db,
+        identityAccess.contexts,
+        context,
+        identityAccess.resourceScopeAuthorization,
+        id,
+        parsed.data,
+      )
       return c.json({ memory: result.memory, moved: result.moved })
     },
   )
@@ -369,7 +399,7 @@ export function mountMemoryRoutes(
       if (!parsed.success) {
         throw new ValidationError('invalid-body', 'invalid promote action', parsed.error.format())
       }
-      await loadManagedMemory(deps, c, id)
+      await loadManagedMemory(deps, identityAccess, c, id)
       const actor = actorOf(c)
       const memory = await promoteCandidate(deps.db, id, parsed.data, actor.user.id)
       return c.json({ memory })
@@ -387,7 +417,7 @@ export function mountMemoryRoutes(
     },
     async (c) => {
       const id = c.req.param('id')
-      await loadManagedMemory(deps, c, id)
+      await loadManagedMemory(deps, identityAccess, c, id)
       const memory = await archiveMemory(deps.db, id)
       return c.json({ memory })
     },
@@ -404,7 +434,7 @@ export function mountMemoryRoutes(
     },
     async (c) => {
       const id = c.req.param('id')
-      await loadManagedMemory(deps, c, id)
+      await loadManagedMemory(deps, identityAccess, c, id)
       const memory = await unarchiveMemory(deps.db, id)
       return c.json({ memory })
     },
@@ -421,7 +451,7 @@ export function mountMemoryRoutes(
     },
     async (c) => {
       const id = c.req.param('id')
-      const memory = await loadManagedMemory(deps, c, id)
+      const memory = await loadManagedMemory(deps, identityAccess, c, id)
       if (!parseBoolQuery(c, 'confirm', { default: false })) {
         throw new ValidationError(
           'confirm-required',

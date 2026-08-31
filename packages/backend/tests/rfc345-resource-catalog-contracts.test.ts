@@ -592,6 +592,70 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(projections).toContain('resourceCatalogProjectionDependencies')
   })
 
+  test('T4d memory scope authorization consumes the named participant through exact pairs', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const memory = readFileSync(resolve(sourceRoot, 'services/memory.ts'), 'utf8')
+    const memoryRoute = readFileSync(resolve(sourceRoot, 'routes/memories.ts'), 'utf8')
+    const overviewRoute = readFileSync(resolve(sourceRoot, 'routes/overview.ts'), 'utf8')
+    const fusionRoute = readFileSync(resolve(sourceRoot, 'routes/fusions.ts'), 'utf8')
+    const wsRegistry = readFileSync(resolve(sourceRoot, 'ws/registry.ts'), 'utf8')
+    const wsServer = readFileSync(resolve(sourceRoot, 'ws/server.ts'), 'utf8')
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/resourceAcl.ts'),
+      'utf8',
+    )
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+    const cliStart = readFileSync(resolve(sourceRoot, 'cli/start.ts'), 'utf8')
+
+    expect(memory).toContain('ResourceScopeAuthorizationInTx')
+    expect(memory).toContain('.accessOf(authority.authority, ref)')
+    expect(memory).toContain("scope.scopeType === 'repo'")
+    expect(memory).toContain("scope.scopeType === 'repo_group'")
+    expect(memory).toContain("scope.scopeType === 'global'")
+    for (const forbidden of [
+      'agents as agentsTable',
+      'workflows as workflowsTable',
+      'canEditResourceInTx',
+      'canViewResourceInTx',
+      'filterVisibleRows',
+      'loadScopeAclRow',
+    ]) {
+      expect(memory).not.toContain(forbidden)
+    }
+
+    expect(composition).toContain('composeResourceScopeAuthorizationBinding')
+    expect(composition).toContain('authority !== pair.authority')
+    expect(composition).toContain("throw new Error('foreign-resource-scope-authority')")
+    expect(server).toContain('const resourceScopeAuthorization =')
+    expect(server).toContain('composeResourceScopeAuthorizationBinding()')
+    expect(cliStart).toContain(
+      'resourceScopeAuthorization: composeResourceScopeAuthorizationBinding()',
+    )
+    expect(wsServer).toContain(
+      'deps.resourceScopeAuthorization ?? missingResourceScopeAuthorization',
+    )
+    expect(wsRegistry).not.toContain('modules/resource-catalog/composition/resourceAcl')
+    expect(wsRegistry).toContain('authority: ws.data.authority')
+    expect(memoryRoute).toContain('directRequestAuthority(identityAccess.directAuthority, actor)')
+    expect(overviewRoute).toContain('directRequestAuthority(authorization.directAuthority, actor)')
+    expect(fusionRoute).toContain('directRequestAuthority(authorization.directAuthority, actor)')
+
+    const resolveContext = memory.indexOf('contexts.resolveCommandContext(context)')
+    const firstScopeGate = memory.indexOf(
+      "assertMemoryScopeManageableInTx(tx, scopeAuthority, previousScope, 'current')",
+      resolveContext,
+    )
+    const refreshActor = memory.indexOf('currentMoveActorInTx(tx, authority)', firstScopeGate + 1)
+    const secondScopeGate = memory.indexOf(
+      "assertMemoryScopeManageableInTx(tx, refreshedScopeAuthority, previousScope, 'current')",
+      refreshActor,
+    )
+    expect(resolveContext).toBeGreaterThanOrEqual(0)
+    expect(firstScopeGate).toBeGreaterThan(resolveContext)
+    expect(refreshActor).toBeGreaterThan(firstScopeGate)
+    expect(secondScopeGate).toBeGreaterThan(refreshActor)
+  })
+
   test('T5-M active HTTP and MCP compatibility bindings execute the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const route = readFileSync(resolve(sourceRoot, 'routes/mcps.ts'), 'utf8')

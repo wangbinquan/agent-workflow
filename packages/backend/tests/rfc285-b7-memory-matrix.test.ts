@@ -15,6 +15,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents } from '../src/db/schema'
 import { canManageMemory, canViewMemory } from '../src/services/memory'
+import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -41,7 +42,13 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
     const db = createInMemoryDb(MIGRATIONS)
     for (const scopeType of ['repo', 'repo_group', 'global'] as const) {
       for (const role of ['admin', 'manager', 'user'] as const) {
-        expect(await canViewMemory(db, actorOfRole(role), { scopeType, scopeId: 's1' })).toBe(true)
+        const actor = actorOfRole(role)
+        expect(
+          await canViewMemory(db, resourceScopeAuthority(db, actor), {
+            scopeType,
+            scopeId: 's1',
+          }),
+        ).toBe(true)
       }
     }
   })
@@ -52,17 +59,21 @@ describe('RFC-285 B7 — 现状矩阵（读面）', () => {
     const stranger = actorOfRole('user', 'u_stranger')
     const agentId = await seedAgent(db, owner.user.id)
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
-    expect(await canViewMemory(db, owner, scope)).toBe(true)
-    expect(await canViewMemory(db, stranger, scope)).toBe(false)
-    expect(await canViewMemory(db, actorOfRole('admin'), scope)).toBe(true)
-    expect(await canViewMemory(db, actorOfRole('manager'), scope)).toBe(true)
+    expect(await canViewMemory(db, resourceScopeAuthority(db, owner), scope)).toBe(true)
+    expect(await canViewMemory(db, resourceScopeAuthority(db, stranger), scope)).toBe(false)
+    const admin = actorOfRole('admin')
+    const manager = actorOfRole('manager')
+    expect(await canViewMemory(db, resourceScopeAuthority(db, admin), scope)).toBe(true)
+    expect(await canViewMemory(db, resourceScopeAuthority(db, manager), scope)).toBe(true)
   })
 
   test('资源 scope 资源行消失：非管理员 fail-closed、管理员保留（清理面）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const scope = { scopeType: 'agent' as const, scopeId: 'agt_vanished' }
-    expect(await canViewMemory(db, actorOfRole('user'), scope)).toBe(false)
-    expect(await canViewMemory(db, actorOfRole('admin'), scope)).toBe(true)
+    const user = actorOfRole('user')
+    const admin = actorOfRole('admin')
+    expect(await canViewMemory(db, resourceScopeAuthority(db, user), scope)).toBe(false)
+    expect(await canViewMemory(db, resourceScopeAuthority(db, admin), scope)).toBe(true)
   })
 })
 
@@ -71,9 +82,12 @@ describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
     const db = createInMemoryDb(MIGRATIONS)
     for (const scopeType of ['repo', 'repo_group', 'global'] as const) {
       const scope = { scopeType, scopeId: 's1' }
-      expect(await canManageMemory(db, actorOfRole('admin'), scope)).toBe(true)
-      expect(await canManageMemory(db, actorOfRole('manager'), scope)).toBe(true)
-      expect(await canManageMemory(db, actorOfRole('user'), scope)).toBe(false)
+      const admin = actorOfRole('admin')
+      const manager = actorOfRole('manager')
+      const user = actorOfRole('user')
+      expect(await canManageMemory(db, resourceScopeAuthority(db, admin), scope)).toBe(true)
+      expect(await canManageMemory(db, resourceScopeAuthority(db, manager), scope)).toBe(true)
+      expect(await canManageMemory(db, resourceScopeAuthority(db, user), scope)).toBe(false)
     }
   })
 
@@ -83,8 +97,9 @@ describe('RFC-285 B7 — 现状矩阵（管理面）', () => {
     const stranger = actorOfRole('user', 'u_stranger')
     const agentId = await seedAgent(db, owner.user.id)
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
-    expect(await canManageMemory(db, owner, scope)).toBe(true)
-    expect(await canManageMemory(db, stranger, scope)).toBe(false)
-    expect(await canManageMemory(db, actorOfRole('manager'), scope)).toBe(true)
+    expect(await canManageMemory(db, resourceScopeAuthority(db, owner), scope)).toBe(true)
+    expect(await canManageMemory(db, resourceScopeAuthority(db, stranger), scope)).toBe(false)
+    const manager = actorOfRole('manager')
+    expect(await canManageMemory(db, resourceScopeAuthority(db, manager), scope)).toBe(true)
   })
 })

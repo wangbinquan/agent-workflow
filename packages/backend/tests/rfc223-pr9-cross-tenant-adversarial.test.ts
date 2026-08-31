@@ -34,7 +34,7 @@ import { createApp } from '../src/server'
 import { createAgent, renameAgent } from '../src/services/agent'
 import {
   approveFusion,
-  createFusion,
+  createFusion as createFusionWithAuthority,
   getFusion,
   reconcileFusion,
   type FusionDeps,
@@ -48,11 +48,26 @@ import { abortAllActiveTasks, getTask, resumeTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const TOKEN = 'rfc223-pr9-token'
 const TEST_TIMEOUT_MS = 30_000
+
+function createFusion(
+  input: Parameters<typeof createFusionWithAuthority>[0],
+  deps: Parameters<typeof createFusionWithAuthority>[1],
+  actor: Actor,
+  launchInitiator: Parameters<typeof createFusionWithAuthority>[3],
+) {
+  return createFusionWithAuthority(
+    input,
+    deps,
+    resourceScopeAuthority(deps.db, actor),
+    launchInitiator,
+  )
+}
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

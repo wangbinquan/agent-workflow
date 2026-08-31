@@ -70,7 +70,7 @@ import {
   workflows,
   workgroups,
 } from '@/db/schema'
-import { canViewMemory } from '@/services/memory'
+import { canViewMemory, type MemoryResourceScopeAuthorization } from '@/services/memory'
 import {
   canAuditIntentSessions,
   canViewResource,
@@ -212,6 +212,13 @@ export interface WsConnectionData {
   actor: Actor
   /** Same opaque handle minted with `actor` at credential admission. */
   authority: DirectRequestAuthority
+  /**
+   * Bootstrap-injected owner factory for the memory scope participant.
+   * Optional only because registry unit fixtures for unrelated channels build
+   * structural connection data. The memory gate requires it at runtime and
+   * fails closed when a bootstrap omitted the binding.
+   */
+  resourceScopeAuthorization?: MemoryResourceScopeAuthorization
   /** Narrow bootstrap binding; registry never composes identity-access from DB. */
   identityAccess: IdentityAccessWsBinding
   /** RFC-212 — credential fingerprint used by the revalidation pass. */
@@ -281,6 +288,10 @@ export interface WsUpgradeRefusal {
 export interface FrameGateCtx {
   db: DbClient
   actor: Actor
+  /** Present on production frames; optional for unrelated direct gate fixtures. */
+  authority?: DirectRequestAuthority
+  /** Present on production frames; the memory gate rejects its absence. */
+  resourceScopeAuthorization?: MemoryResourceScopeAuthorization
   cache: Map<string, boolean>
 }
 
@@ -478,6 +489,21 @@ async function cachedWorkgroupVisible(ctx: FrameGateCtx, workgroupId: string): P
     rows.length === 0 ? false : await canViewResource(ctx.db, ctx.actor, 'workgroup', rows[0]!)
   ctx.cache.set(key, visible)
   return visible
+}
+
+function memoryResourceScopeAuthority(ctx: FrameGateCtx): {
+  readonly actor: Actor
+  readonly authority: DirectRequestAuthority
+  readonly authorization: MemoryResourceScopeAuthorization
+} {
+  if (ctx.authority === undefined || ctx.resourceScopeAuthorization === undefined) {
+    throw new Error('memory-resource-scope-authorization-not-composed')
+  }
+  return {
+    actor: ctx.actor,
+    authority: ctx.authority,
+    authorization: ctx.resourceScopeAuthorization,
+  }
 }
 
 /**
@@ -854,9 +880,10 @@ export const WS_CHANNELS: WsChannelRegistry = {
     //     frontends may go stale on supersede" is a known registered
     //     limitation, improving it is out of scope here.
     frameGate: async (ctx, msg) => {
+      const resourceScopeAuthority = memoryResourceScopeAuthority(ctx)
       switch (msg.type) {
         case 'memory.candidate.created':
-          return canViewMemory(ctx.db, ctx.actor, {
+          return canViewMemory(ctx.db, resourceScopeAuthority, {
             scopeType: msg.memory.scopeType,
             scopeId: msg.memory.scopeId,
           })
@@ -872,7 +899,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
             .limit(1)
           const row = rows[0]
           if (row === undefined) return false
-          return canViewMemory(ctx.db, ctx.actor, row)
+          return canViewMemory(ctx.db, resourceScopeAuthority, row)
         }
         case 'memory.superseded':
           return false
@@ -1151,7 +1178,19 @@ export function gatedSubscribe(
     // to NOT sending — same safer-default as the unknown-shape drops.
     const gateActor = ws.data.actor
     erased
-      .frameGate({ db, actor: gateActor, cache: ws.data.visibilityCache }, msg, context)
+      .frameGate(
+        {
+          db,
+          actor: gateActor,
+          authority: ws.data.authority,
+          ...(ws.data.resourceScopeAuthorization === undefined
+            ? {}
+            : { resourceScopeAuthorization: ws.data.resourceScopeAuthorization }),
+          cache: ws.data.visibilityCache,
+        },
+        msg,
+        context,
+      )
       .then((visible) => {
         // RFC-305 async-continuation fence: a refresh may replace the actor
         // while frameGate awaits DB/ACL work. A verdict minted by the prior
