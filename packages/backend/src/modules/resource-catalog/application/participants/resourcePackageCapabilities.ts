@@ -11,8 +11,78 @@ import type {
   WorkflowPackageMutationParticipantInTx,
   WorkgroupPackageMutationParticipantInTx,
 } from '../../public/participants'
+import type {
+  AgentPackageMutation,
+  CapabilityTemplatePackageMutation,
+  McpPackageMutation,
+  PluginPackageMutation,
+  PreparedAgentPackageMutation,
+  PreparedCapabilityTemplatePackageMutation,
+  PreparedMcpPackageMutation,
+  PreparedPluginPackageMutation,
+  PreparedSkillPackageMutation,
+  PreparedWorkflowPackageMutation,
+  PreparedWorkgroupPackageMutation,
+  SkillPackageMutation,
+  WorkflowPackageMutation,
+  WorkgroupPackageMutation,
+} from '../../public/types'
 
 const trustedResourcePackageCapabilities = new WeakSet<object>()
+
+function prepared<T extends object>(value: T): T {
+  const capability = Object.freeze(value)
+  trustedResourcePackageCapabilities.add(capability)
+  return capability
+}
+
+export function createPreparedAgentPackageMutation(
+  mutation: AgentPackageMutation,
+): PreparedAgentPackageMutation {
+  return prepared({ mutation }) as unknown as PreparedAgentPackageMutation
+}
+
+export function createPreparedSkillPackageMutation(
+  mutation: SkillPackageMutation,
+): PreparedSkillPackageMutation {
+  return prepared({ mutation }) as unknown as PreparedSkillPackageMutation
+}
+
+export function createPreparedMcpPackageMutation(
+  mutation: McpPackageMutation,
+): PreparedMcpPackageMutation {
+  return prepared({ mutation }) as unknown as PreparedMcpPackageMutation
+}
+
+export function createPreparedPluginPackageMutation(
+  mutation: PluginPackageMutation,
+): PreparedPluginPackageMutation {
+  return prepared({ mutation }) as unknown as PreparedPluginPackageMutation
+}
+
+export function createPreparedWorkflowPackageMutation(
+  mutation: WorkflowPackageMutation,
+): PreparedWorkflowPackageMutation {
+  return prepared({ mutation }) as unknown as PreparedWorkflowPackageMutation
+}
+
+export function createPreparedWorkgroupPackageMutation(
+  mutation: WorkgroupPackageMutation,
+): PreparedWorkgroupPackageMutation {
+  return prepared({ mutation }) as unknown as PreparedWorkgroupPackageMutation
+}
+
+export function createPreparedCapabilityTemplatePackageMutation(
+  mutation: CapabilityTemplatePackageMutation,
+): PreparedCapabilityTemplatePackageMutation {
+  return prepared({ mutation }) as unknown as PreparedCapabilityTemplatePackageMutation
+}
+
+export function assertTrustedResourcePackageCapability(capability: object): void {
+  if (!trustedResourcePackageCapabilities.has(capability)) {
+    throw new Error('untrusted-resource-package-capability')
+  }
+}
 
 export function createAgentPackageMutationParticipantInTx(
   commit: AgentPackageMutationParticipantInTx['commit'],
@@ -103,7 +173,7 @@ export function createResourcePackageApplyScenarioTx(
 }
 
 export interface ResourcePackageApplyTxInput {
-  readonly currentAuthority: ResourcePackageApplyTx['currentAuthority']
+  readonly currentAuthority: () => ResourcePackageApplyTx['currentAuthority']
   readonly agents: ResourcePackageApplyTx['agents']
   readonly skills: ResourcePackageApplyTx['skills']
   readonly mcps: ResourcePackageApplyTx['mcps']
@@ -118,7 +188,20 @@ export interface ResourcePackageApplyTxInput {
 export function createResourcePackageApplyTx(
   input: ResourcePackageApplyTxInput,
 ): ResourcePackageApplyTx {
-  const participant = Object.freeze({ ...input }) as unknown as ResourcePackageApplyTx
+  const participant = Object.freeze({
+    get currentAuthority() {
+      return input.currentAuthority()
+    },
+    agents: input.agents,
+    skills: input.skills,
+    mcps: input.mcps,
+    plugins: input.plugins,
+    workflows: input.workflows,
+    workgroups: input.workgroups,
+    capabilityTemplates: input.capabilityTemplates,
+    events: input.events,
+    audit: input.audit,
+  }) as unknown as ResourcePackageApplyTx
   trustedResourcePackageCapabilities.add(participant)
   return participant
 }

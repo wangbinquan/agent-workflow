@@ -22,17 +22,36 @@
 
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import type { BundleOp } from '@agent-workflow/shared'
+import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { resourceBundleApplies } from '@/db/schema'
 import {
   compensateLegacyResourcePackageArtifact,
-  createLegacyResourcePackageMutationAdapter,
   rollForwardLegacyResourcePackageArtifacts,
-  type PreparedResourcePackageMutation,
   type ResourcePackageMutationArtifact,
 } from '@/modules/resource-catalog/public/operations'
-import { legacyResourcePackageMutationDependencies } from './legacyResourcePackageMutationDependencies'
+import type {
+  ResourcePackageApplyScenarioProvider,
+  ResourcePackageApplyTx,
+  ResourceRequestContext,
+} from '@/modules/resource-catalog/public/participants'
+import type {
+  PreparedAgentPackageMutation,
+  PreparedCapabilityTemplatePackageMutation,
+  PreparedMcpPackageMutation,
+  PreparedPackageMutation,
+  PreparedPluginPackageMutation,
+  PreparedSkillPackageMutation,
+  PreparedWorkflowPackageMutation,
+  PreparedWorkgroupPackageMutation,
+  ResourcePackageApplyScenarioPlan,
+} from '@/modules/resource-catalog/public/types'
+import {
+  legacyResourcePackageMutationDependencies,
+  legacyResourcePackageMutationRuntimeFactory,
+} from './legacyResourcePackageMutationDependencies'
 import { ConflictError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import {
@@ -41,11 +60,53 @@ import {
   type BundleArtifact,
   type BundleReceipt,
 } from './provider'
-import { lowerBundlePayloads } from './lower'
+import { lowerBundlePayloads, type LoweredOp } from './lower'
+
+export interface ResourcePackageMutationRuntime {
+  readonly provider: ResourcePackageApplyScenarioProvider
+  prestage(
+    prepared: PreparedPackageMutation,
+    input: {
+      readonly readSkillFile: (ref: string) => Uint8Array
+      readonly recordArtifact: (artifact: BundleArtifact) => void
+    },
+  ): Promise<void>
+  assertUpdateTargetsOwnedInTx(tx: DbTxSync, operations: readonly LoweredOp[]): void
+  bindApplyTx(
+    tx: DbTxSync,
+    bundleCreatedNames: Readonly<{
+      workflow: Set<string>
+      workgroup: Set<string>
+    }>,
+  ): ResourcePackageApplyTx
+  rollForwardCommitted(log: Logger): void
+  broadcastCommitted(): void
+}
+
+export interface ResourcePackageMutationRuntimeFactory {
+  create(input: {
+    readonly db: DbClient
+    readonly appHome: string
+    readonly actor: Actor
+    readonly currentAuthority?: () => ResourceRequestContext
+    readonly scenario: ResourcePackageApplyScenarioPlan
+    readonly operations: readonly BundleOp[]
+    readonly lowered: readonly LoweredOp[]
+    readonly pendingIds: Set<string>
+    readonly pendingAgentNames: Map<string, string>
+    readonly key: string
+    readonly pluginInstallOpts?: { pluginsDir?: string; npmBin?: string; timeoutMs?: number }
+    readonly afterPluginInstall?: () => void
+    readonly afterSkillStage?: () => void
+  }): ResourcePackageMutationRuntime
+}
 
 export interface BundleApplyDeps {
   db: DbClient
   appHome: string
+  /** T6 typed mutation composition. Legacy direct engine callers use the same typed default. */
+  resourcePackageMutations?: ResourcePackageMutationRuntimeFactory
+  currentAuthority?: () => ResourceRequestContext
   log?: Logger
   pluginInstallOpts?: { pluginsDir?: string; npmBin?: string; timeoutMs?: number }
   /** 测试注入点：在生命周期的确定位置抛错，验证补偿与收敛。 */
@@ -90,6 +151,59 @@ async function withApplyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 const ACTIVE_BUNDLE_APPLIES = new Set<string>()
 /** I9：再加一条下限——一个慢 npm 安装跨过小时 tick 是 ACTIVE，不是崩溃。 */
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
+
+function isPreparedAgentPackageMutation(
+  prepared: PreparedPackageMutation,
+): prepared is PreparedAgentPackageMutation {
+  return prepared.mutation.kind === 'agent-create' || prepared.mutation.kind === 'agent-update'
+}
+
+function isPreparedSkillPackageMutation(
+  prepared: PreparedPackageMutation,
+): prepared is PreparedSkillPackageMutation {
+  return prepared.mutation.kind === 'skill-create' || prepared.mutation.kind === 'skill-update'
+}
+
+function isPreparedMcpPackageMutation(
+  prepared: PreparedPackageMutation,
+): prepared is PreparedMcpPackageMutation {
+  return prepared.mutation.kind === 'mcp-create' || prepared.mutation.kind === 'mcp-update'
+}
+
+function isPreparedPluginPackageMutation(
+  prepared: PreparedPackageMutation,
+): prepared is PreparedPluginPackageMutation {
+  return prepared.mutation.kind === 'plugin-create' || prepared.mutation.kind === 'plugin-update'
+}
+
+function isPreparedWorkflowPackageMutation(
+  prepared: PreparedPackageMutation,
+): prepared is PreparedWorkflowPackageMutation {
+  return (
+    prepared.mutation.kind === 'workflow-create' || prepared.mutation.kind === 'workflow-update'
+  )
+}
+
+function isPreparedWorkgroupPackageMutation(
+  prepared: PreparedPackageMutation,
+): prepared is PreparedWorkgroupPackageMutation {
+  return (
+    prepared.mutation.kind === 'workgroup-create' || prepared.mutation.kind === 'workgroup-update'
+  )
+}
+
+function isPreparedCapabilityTemplatePackageMutation(
+  prepared: PreparedPackageMutation,
+): prepared is PreparedCapabilityTemplatePackageMutation {
+  return (
+    prepared.mutation.kind === 'capability-framework-create' ||
+    prepared.mutation.kind === 'capability-framework-update' ||
+    prepared.mutation.kind === 'capability-binding-create' ||
+    prepared.mutation.kind === 'capability-binding-update' ||
+    prepared.mutation.kind === 'capability-template-create' ||
+    prepared.mutation.kind === 'capability-template-update'
+  )
+}
 
 export async function applyResourceBundle(
   deps: BundleApplyDeps,
@@ -165,23 +279,6 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
     })
   }
 
-  const mutationAdapter = createLegacyResourcePackageMutationAdapter(
-    {
-      db,
-      appHome: deps.appHome,
-      actor,
-      ...(deps.pluginInstallOpts === undefined
-        ? {}
-        : { pluginInstallOpts: deps.pluginInstallOpts }),
-      ...(deps.faults?.afterPluginInstall === undefined
-        ? {}
-        : { afterPluginInstall: deps.faults.afterPluginInstall }),
-      ...(deps.faults?.afterSkillStage === undefined
-        ? {}
-        : { afterSkillStage: deps.faults.afterSkillStage }),
-    },
-    legacyResourcePackageMutationDependencies,
-  )
   let committedReceipt: BundleReceipt | null = null
 
   try {
@@ -198,14 +295,84 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
         .map((o) => [o.resourceId, (o.payload as { name: string }).name]),
     )
 
-    const preparedOps: PreparedResourcePackageMutation[] = []
-    for (const op of lowered) {
-      preparedOps.push(await mutationAdapter.prepare(op, { pendingIds, pendingAgentNames, key }))
+    if (scope !== 'package') {
+      throw new Error(`resource-package-idempotency-scope-invalid:${scope}`)
+    }
+    const scenario: ResourcePackageApplyScenarioPlan = Object.freeze({
+      scenarioId: 'resource-package',
+      idempotencyKey: Object.freeze({ scope, key }),
+      serializationKey: provider.serializationKey,
+      operations: planned,
+    })
+    const mutationRuntime = (
+      deps.resourcePackageMutations ?? legacyResourcePackageMutationRuntimeFactory
+    ).create({
+      db,
+      appHome: deps.appHome,
+      actor,
+      ...(deps.currentAuthority === undefined ? {} : { currentAuthority: deps.currentAuthority }),
+      scenario,
+      operations: planned,
+      lowered,
+      pendingIds,
+      pendingAgentNames,
+      key,
+      ...(deps.pluginInstallOpts === undefined
+        ? {}
+        : { pluginInstallOpts: deps.pluginInstallOpts }),
+      ...(deps.faults?.afterPluginInstall === undefined
+        ? {}
+        : { afterPluginInstall: deps.faults.afterPluginInstall }),
+      ...(deps.faults?.afterSkillStage === undefined
+        ? {}
+        : { afterSkillStage: deps.faults.afterSkillStage }),
+    })
+
+    const preparedOps: PreparedPackageMutation[] = []
+    for (const operation of planned) {
+      switch (operation.kind) {
+        case 'agent-create':
+        case 'agent-update':
+          preparedOps.push(await mutationRuntime.provider.participants.agents.prepare(operation))
+          break
+        case 'skill-create':
+        case 'skill-update':
+          preparedOps.push(await mutationRuntime.provider.participants.skills.prepare(operation))
+          break
+        case 'mcp-create':
+        case 'mcp-update':
+          preparedOps.push(await mutationRuntime.provider.participants.mcps.prepare(operation))
+          break
+        case 'plugin-create':
+        case 'plugin-update':
+          preparedOps.push(await mutationRuntime.provider.participants.plugins.prepare(operation))
+          break
+        case 'workflow-create':
+        case 'workflow-update':
+          preparedOps.push(await mutationRuntime.provider.participants.workflows.prepare(operation))
+          break
+        case 'workgroup-create':
+        case 'workgroup-update':
+          preparedOps.push(
+            await mutationRuntime.provider.participants.workgroups.prepare(operation),
+          )
+          break
+        case 'capability-framework-create':
+        case 'capability-framework-update':
+        case 'capability-binding-create':
+        case 'capability-binding-update':
+        case 'capability-template-create':
+        case 'capability-template-update':
+          preparedOps.push(
+            await mutationRuntime.provider.participants.capabilityTemplates.prepare(operation),
+          )
+          break
+      }
     }
 
     // ── ② pre-stage（record-before-act） ─────────────────────────────────
     for (const item of preparedOps) {
-      await mutationAdapter.prestage(item, {
+      await mutationRuntime.prestage(item, {
         readSkillFile: provider.readSkillFile,
         recordArtifact: (artifact) => recordArtifact(artifact),
       })
@@ -233,7 +400,7 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
 
       // T12：**每个 update 目标**在提交事务里断言 owner。这是 §5.4 的核心——
       // 内容 hash 只证明「我读到的是这一版」，不是授权。
-      mutationAdapter.assertUpdateTargetsOwnedInTx(tx, lowered)
+      mutationRuntime.assertUpdateTargetsOwnedInTx(tx, lowered)
 
       // 设计门 B3：本 bundle 正在创建的名字要从引用 ACL 复核里排除——那些行是
       // actor 在**这个事务里**创建的，没有别人的行可以躲在同名背后。
@@ -251,14 +418,66 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
         if (typeof name === 'string' && name.length > 0) bucket.add(name)
       }
 
+      const applyTx = mutationRuntime.bindApplyTx(tx, bundleCreatedNames)
       for (const item of preparedOps) {
-        mutationAdapter.commitInTx(tx, item, { bundleCreatedNames })
+        const receipt = (() => {
+          switch (item.mutation.kind) {
+            case 'agent-create':
+            case 'agent-update':
+              if (!isPreparedAgentPackageMutation(item)) {
+                throw new Error('resource-package-agent-capability-kind-mismatch')
+              }
+              return applyTx.agents.commit(item)
+            case 'skill-create':
+            case 'skill-update':
+              if (!isPreparedSkillPackageMutation(item)) {
+                throw new Error('resource-package-skill-capability-kind-mismatch')
+              }
+              return applyTx.skills.commit(item)
+            case 'mcp-create':
+            case 'mcp-update':
+              if (!isPreparedMcpPackageMutation(item)) {
+                throw new Error('resource-package-mcp-capability-kind-mismatch')
+              }
+              return applyTx.mcps.commit(item)
+            case 'plugin-create':
+            case 'plugin-update':
+              if (!isPreparedPluginPackageMutation(item)) {
+                throw new Error('resource-package-plugin-capability-kind-mismatch')
+              }
+              return applyTx.plugins.commit(item)
+            case 'workflow-create':
+            case 'workflow-update':
+              if (!isPreparedWorkflowPackageMutation(item)) {
+                throw new Error('resource-package-workflow-capability-kind-mismatch')
+              }
+              return applyTx.workflows.commit(item)
+            case 'workgroup-create':
+            case 'workgroup-update':
+              if (!isPreparedWorkgroupPackageMutation(item)) {
+                throw new Error('resource-package-workgroup-capability-kind-mismatch')
+              }
+              return applyTx.workgroups.commit(item)
+            case 'capability-framework-create':
+            case 'capability-framework-update':
+            case 'capability-binding-create':
+            case 'capability-binding-update':
+            case 'capability-template-create':
+            case 'capability-template-update':
+              if (!isPreparedCapabilityTemplatePackageMutation(item)) {
+                throw new Error('resource-package-capability-template-kind-mismatch')
+              }
+              return applyTx.capabilityTemplates.commit(item)
+          }
+        })()
+        applyTx.events.resourceApplied(receipt)
+        applyTx.audit.recordResourceApplied(receipt)
         applied.push({
-          opId: item.op.opId,
-          resourceType: item.op.resourceType,
-          resourceId: item.op.resourceId,
-          action: item.op.action,
-          name: (item.op.payload as { name: string }).name,
+          opId: receipt.operationId,
+          resourceType: receipt.resourceType,
+          resourceId: receipt.resourceId,
+          action: receipt.action,
+          name: receipt.name,
         })
       }
 
@@ -281,8 +500,8 @@ async function applyInner(deps: BundleApplyDeps, input: BundleApplyInput): Promi
 
     // ── ④ 幂等尾 ─────────────────────────────────────────────────────────
     deps.faults?.afterTxBeforeRollForward?.()
-    mutationAdapter.rollForwardCommitted(log)
-    mutationAdapter.broadcastCommitted()
+    mutationRuntime.rollForwardCommitted(log)
+    mutationRuntime.broadcastCommitted()
     return receipt
   } catch (error) {
     if (committedReceipt !== null) {

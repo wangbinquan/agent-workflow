@@ -44,9 +44,13 @@ import {
   WorkgroupDetailSchema,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
+import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
+import { operationId } from '@/platform/operations/catalog'
+import { zodOperationCodec } from '@/platform/operations/codecs'
 import { defineCommandOperation, defineQueryOperation } from '@/platform/operations/definitions'
 import type {
   CommandOperationDescriptor,
+  IdempotentCommandOperationDescriptor,
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
 import type {
@@ -57,6 +61,7 @@ import type {
   SkillCommands,
   SkillFileCommands,
   SkillVersionCommands,
+  ResourcePackageCommands,
   WorkflowCommands,
   WorkgroupCommands,
 } from './commands'
@@ -82,6 +87,7 @@ import type {
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
+  ResourcePackageQueries,
   WorkflowQueries,
   WorkgroupQueries,
 } from './queries'
@@ -129,6 +135,16 @@ import type {
   UpdateWorkflowCatalogReceipt,
   WorkflowCatalogDetail,
   WorkflowCatalogResource,
+  ApplyResourcePackage,
+  ExportResourcePackage,
+  GetResourcePackageApplyReceipt,
+  GetResourcePackagePreview,
+  InspectResourcePackage,
+  ResourcePackageApplyReceipt,
+  ResourcePackageApplyReceiptView,
+  ResourcePackageExportReceipt,
+  ResourcePackagePreviewReceipt,
+  ResourcePackagePreviewView,
 } from './types'
 
 const AGENT_PUBLIC_ERRORS = Object.freeze([
@@ -1090,6 +1106,159 @@ export function createWorkgroupOperationDescriptors(
       outputSchema: SaveWorkgroupReceiptSchema,
       invoke: (authority: WorkgroupOperationContext, input: RenameWorkgroupCatalogInput) =>
         commands.rename(authority, input),
+    }),
+  })
+}
+
+const RESOURCE_PACKAGE_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'resource-operation-stale',
+  'internal-error',
+] as const)
+const resourcePackageSubmissionSchema = z
+  .object({
+    kind: z.literal('staged-resource-package'),
+    handle: z.string().min(1).max(128),
+  })
+  .strict()
+const inspectResourcePackageSchema = z
+  .object({ submission: resourcePackageSubmissionSchema })
+  .strict()
+const applyResourcePackageSchema = z
+  .object({
+    submission: resourcePackageSubmissionSchema,
+    idempotencyKey: z
+      .string()
+      .min(8)
+      .max(256)
+      .regex(/^[A-Za-z0-9._:-]+$/),
+  })
+  .strict()
+const exportResourcePackageSchema = z
+  .object({ submission: resourcePackageSubmissionSchema })
+  .strict()
+const resourcePackagePreviewReceiptSchema = z.object({ previewId: z.string().min(1) }).strict()
+const getResourcePackagePreviewSchema = z.object({ previewId: z.string().min(1) }).strict()
+const resourcePackagePreviewViewSchema = z
+  .object({ previewId: z.string().min(1), document: z.string() })
+  .strict()
+const resourcePackageApplyReceiptSchema = z.object({ receiptId: z.string().min(1) }).strict()
+const getResourcePackageApplyReceiptSchema = z.object({ receiptId: z.string().min(1) }).strict()
+const resourcePackageApplyReceiptViewSchema = z
+  .object({ receiptId: z.string().min(1), document: z.string() })
+  .strict()
+const resourcePackageExportReceiptSchema = z
+  .object({ packageId: z.string().min(1), filename: z.string().min(1) })
+  .strict()
+
+export interface ResourcePackageOperationDescriptors {
+  readonly inspect: CommandOperationDescriptor<
+    InspectResourcePackage,
+    ResourcePackagePreviewReceipt,
+    CommandContext
+  >
+  readonly apply: IdempotentCommandOperationDescriptor<
+    ApplyResourcePackage,
+    ResourcePackageApplyReceipt,
+    CommandContext
+  >
+  readonly getPreview: QueryOperationDescriptor<
+    GetResourcePackagePreview,
+    ResourcePackagePreviewView,
+    QueryContext
+  >
+  readonly getReceipt: QueryOperationDescriptor<
+    GetResourcePackageApplyReceipt,
+    ResourcePackageApplyReceiptView,
+    QueryContext
+  >
+  readonly export: CommandOperationDescriptor<
+    ExportResourcePackage,
+    ResourcePackageExportReceipt,
+    CommandContext
+  >
+}
+
+export interface ResourcePackageCatalogModule {
+  readonly commands: ResourcePackageCommands
+  readonly queries: ResourcePackageQueries
+  readonly operations: ResourcePackageOperationDescriptors
+}
+
+export function createResourcePackageOperationDescriptors(
+  commands: ResourcePackageCommands,
+  queries: ResourcePackageQueries,
+): ResourcePackageOperationDescriptors {
+  const apply: ResourcePackageOperationDescriptors['apply'] = Object.freeze({
+    id: operationId('resource-catalog.apply-package.v1'),
+    kind: 'idempotent-command',
+    contextKind: 'authenticated-command',
+    summary: 'Apply a previewed resource package',
+    permissions: [],
+    publicReason: 'Package entries determine their own exact resource permissions.',
+    publicErrors: RESOURCE_PACKAGE_PUBLIC_ERRORS,
+    idempotencyKey: {
+      field: 'idempotencyKey' as const,
+      minLength: 8,
+      maxLength: 256,
+      pattern: /^[A-Za-z0-9._:-]+$/,
+    },
+    input: zodOperationCodec('resource-catalog.package.apply.input.v1', applyResourcePackageSchema),
+    output: zodOperationCodec(
+      'resource-catalog.package.apply.output.v1',
+      resourcePackageApplyReceiptSchema,
+    ),
+    invoke: (context: CommandContext, input: ApplyResourcePackage) =>
+      commands.apply(context, input),
+  })
+  return Object.freeze({
+    inspect: defineCommandOperation({
+      id: 'resource-catalog.inspect-package.v1',
+      summary: 'Inspect a staged resource package',
+      permissions: [],
+      publicReason: 'Package entries determine their own exact resource permissions.',
+      publicErrors: RESOURCE_PACKAGE_PUBLIC_ERRORS,
+      inputSchema: inspectResourcePackageSchema,
+      outputSchema: resourcePackagePreviewReceiptSchema,
+      invoke: (context: CommandContext, input: InspectResourcePackage) =>
+        commands.inspect(context, input),
+    }),
+    apply,
+    getPreview: defineQueryOperation({
+      id: 'resource-catalog.get-package-preview.v1',
+      summary: 'Read one staged resource package preview',
+      permissions: [],
+      publicReason: 'The preview handle is minted by the authenticated package operation.',
+      publicErrors: RESOURCE_PACKAGE_PUBLIC_ERRORS,
+      inputSchema: getResourcePackagePreviewSchema,
+      outputSchema: resourcePackagePreviewViewSchema,
+      invoke: (context: QueryContext, input: GetResourcePackagePreview) =>
+        queries.getPreview(context, input),
+    }),
+    getReceipt: defineQueryOperation({
+      id: 'resource-catalog.get-package-receipt.v1',
+      summary: 'Read one resource package apply receipt',
+      permissions: [],
+      publicReason: 'The receipt handle is minted by the authenticated package operation.',
+      publicErrors: RESOURCE_PACKAGE_PUBLIC_ERRORS,
+      inputSchema: getResourcePackageApplyReceiptSchema,
+      outputSchema: resourcePackageApplyReceiptViewSchema,
+      invoke: (context: QueryContext, input: GetResourcePackageApplyReceipt) =>
+        queries.getReceipt(context, input),
+    }),
+    export: defineCommandOperation({
+      id: 'resource-catalog.export-package.v1',
+      summary: 'Export a resource package',
+      permissions: [],
+      publicReason: 'The typed HTTP/CLI binding applies the exact root permission.',
+      publicErrors: RESOURCE_PACKAGE_PUBLIC_ERRORS,
+      inputSchema: exportResourcePackageSchema,
+      outputSchema: resourcePackageExportReceiptSchema,
+      invoke: (context: CommandContext, input: ExportResourcePackage) =>
+        commands.export(context, input),
     }),
   })
 }

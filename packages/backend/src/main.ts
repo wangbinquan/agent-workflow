@@ -12,6 +12,7 @@
 import { appVersion } from './util/version'
 import { runGitCredentialSubcommand } from './util/gitCredentialLease'
 import { SYSTEM_USER_ID } from './auth/systemIdentity'
+import { createSecretBox } from './auth/secretBox'
 import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
@@ -34,6 +35,7 @@ import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 import { openDb } from './db/client'
 import { createIdentityAccessRuntime } from './modules/identity-access/composition'
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
+import { composeResourcePackageOperations } from './modules/resource-catalog/composition/resourcePackageOperations'
 import { composeLocalSystemOperations } from './modules/system-operations/composition'
 import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/databaseMigrationComposition'
 import {
@@ -97,12 +99,23 @@ async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap
   const migrationsFolder = await resolveMigrationsFolder()
   const db = openDb({ path: Paths.db, migrationsFolder })
   const identityAccess = createIdentityAccessRuntime({ db })
+  const catalog = composeResourcePackageOperations({
+    db,
+    appHome: Paths.root,
+    box: createSecretBox(Paths.secretKeyFile),
+  })
   const identity = Object.freeze({
-    async localActorForUser(userId: string) {
-      return (await identityAccess.localOperator.forUser(userId))?.actor ?? null
+    async localIdentityForUser(userId: string) {
+      const local = await identityAccess.localOperator.forUser(userId)
+      if (local === null) return null
+      return Object.freeze({
+        actor: local.actor,
+        commandContext: () => local.commandContext(),
+        queryContext: () => local.queryContext(),
+      })
     },
   }) satisfies PackageCommandIdentityHandle
-  return { db, identity, shutdown: () => identityAccess.shutdown() }
+  return { db, identity, catalog, shutdown: () => identityAccess.shutdown() }
 }
 
 async function main(): Promise<void> {

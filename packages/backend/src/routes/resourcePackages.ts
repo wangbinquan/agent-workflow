@@ -10,21 +10,20 @@
 
 import type { Context, Hono } from 'hono'
 import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
-import { ulid } from 'ulid'
-import { SKILL_ZIP_LIMITS, type BundleResourceType } from '@agent-workflow/shared'
-import { actorOf } from '@/auth/actor'
-import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
-import { registerRoute } from '@/routes/registry'
-import { exportResourcePackage } from '@/services/resourcePackage/export'
-import { PackageSecretRefSchema, parseResourcePackage } from '@/services/resourcePackage/parse'
-import { buildPackagePreview } from '@/services/resourcePackage/preview'
 import {
-  commitResourcePackage,
-  type HumanMemberMapping,
-  type ImportDecision,
-} from '@/services/resourcePackage/commit'
-import type { PackageSecretInput } from '@/services/resourcePackage/secretInputs'
+  PackageImportReceiptSchema,
+  PackagePreviewSchema,
+  SKILL_ZIP_LIMITS,
+} from '@agent-workflow/shared'
+import { actorOf, type Actor } from '@/auth/actor'
+import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
+import type {
+  ComposedResourcePackageCatalog,
+  ResourcePackageExportFence,
+} from '@/modules/resource-catalog/composition/resourcePackageOperations'
+import { invokeOperation } from '@/platform/operations/invoke'
+import type { PackageResourceKind } from '@/modules/resource-catalog/public/types'
+import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
 
@@ -52,7 +51,14 @@ const HumanMemberMappingsSchema = z.array(
 )
 
 const PackageSecretInputsSchema = z.array(
-  PackageSecretRefSchema.extend({ value: z.string() }).strict(),
+  z
+    .object({
+      resourceType: z.string().min(1),
+      resourceName: z.string().min(1),
+      field: z.string().min(1),
+      value: z.string(),
+    })
+    .strict(),
 )
 
 // A valid package may use the entire compressed-ZIP allowance. Leave bounded
@@ -80,10 +86,9 @@ const resourcePackageBodyLimit = verifiedBodyLimit({
 })
 
 export interface ResourcePackageRouteDeps {
-  db: DbClient
-  appHome: string
-  box: SecretBox
-  pluginInstallOpts?: { pluginsDir?: string; npmBin?: string; timeoutMs?: number }
+  readonly catalog: ComposedResourcePackageCatalog
+  commandContextFor(actor: Actor): CommandContext
+  queryContextFor(actor: Actor): QueryContext
 }
 
 /**
@@ -109,7 +114,8 @@ export interface ResourcePackageRouteDeps {
  * `metaRevision` 从 0 起，0 是合法初值。用同一条规则会两头错：要么把合法的 0 拒掉，
  * 要么把不可能的 version 0 放进去，让它去比出一个假的 409。
  */
-const FENCE_NUMERIC: ReadonlyArray<{ key: string; min: 0 | 1 }> = [
+type NumericFenceKey = Exclude<keyof ResourcePackageExportFence, 'expectedConfigHash'>
+const FENCE_NUMERIC: ReadonlyArray<{ key: NumericFenceKey; min: 0 | 1 }> = [
   { key: 'expectedVersion', min: 1 },
   { key: 'expectedContentVersion', min: 1 },
   { key: 'expectedUpdatedAt', min: 0 },
@@ -118,8 +124,15 @@ const FENCE_NUMERIC: ReadonlyArray<{ key: string; min: 0 | 1 }> = [
 ]
 const FENCE_STRING = ['expectedConfigHash'] as const
 
-function parseRootFence(c: Context): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
+function parseRootFence(c: Context): ResourcePackageExportFence {
+  const out: {
+    expectedVersion?: number
+    expectedContentVersion?: number
+    expectedUpdatedAt?: number
+    expectedAclRevision?: number
+    expectedMetaRevision?: number
+    expectedConfigHash?: string
+  } = {}
   for (const { key, min } of FENCE_NUMERIC) {
     const raw = c.req.query(key)
     if (raw === undefined) continue
@@ -166,24 +179,25 @@ function parseRootFence(c: Context): Record<string, unknown> {
 // cannot be added for a type the bundle does not carry. That gate is why the
 // capability-template routes below arrived only once T17a's ops, closure,
 // applier and — last — serializer were all in place.
-function exportHandler(type: BundleResourceType, deps: ResourcePackageRouteDeps) {
+function exportHandler(type: PackageResourceKind, deps: ResourcePackageRouteDeps) {
   return async (c: Context): Promise<Response> => {
-    const pkg = await exportResourcePackage(
-      deps.db,
-      actorOf(c),
-      { type, id: c.req.param('id') ?? '' },
-      {
-        appHome: deps.appHome,
+    const actor = actorOf(c)
+    const receipt = await invokeOperation(
+      deps.catalog.operations.export,
+      deps.commandContextFor(actor),
+      deps.catalog.transport.stageExport(actor, {
+        root: { kind: type, id: c.req.param('id') ?? '' },
         exportedAt: Date.now(),
         // 客户端「所见非所得」revision 只针对 root；导出器会自行复核整棵闭包在
         // 本次读取期间没有变化，客户端不需要预先知道传递成员。
         expect: parseRootFence(c),
-      },
+      }),
     )
-    return new Response(new Blob([pkg.zip]), {
+    const bytes = deps.catalog.transport.takeExport(receipt.packageId)
+    return new Response(new Blob([bytes]), {
       headers: {
         'content-type': 'application/zip',
-        'content-disposition': `attachment; filename="${pkg.filename}"`,
+        'content-disposition': `attachment; filename="${receipt.filename}"`,
       },
     })
   }
@@ -295,10 +309,18 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
     },
     resourcePackageBodyLimit,
     async (c) => {
-      const pkg = await parseResourcePackage(await readUpload(c))
-      return c.json(
-        await buildPackagePreview(deps.db, actorOf(c), pkg, { box: deps.box, importId: ulid() }),
+      const actor = actorOf(c)
+      const inspected = await invokeOperation(
+        deps.catalog.operations.inspect,
+        deps.commandContextFor(actor),
+        deps.catalog.transport.stageInspect(actor, await readUpload(c)),
       )
+      const preview = await invokeOperation(
+        deps.catalog.operations.getPreview,
+        deps.queryContextFor(actor),
+        { previewId: inspected.previewId },
+      )
+      return c.json(PackagePreviewSchema.parse(JSON.parse(preview.document)))
     },
   )
 
@@ -335,7 +357,7 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
           issues: parsed.error.issues,
         })
       }
-      const decisions: ImportDecision[] = parsed.data
+      const decisions: z.infer<typeof ImportDecisionsSchema> = parsed.data
       // 工作组的 human 成员：包里带的是源实例 username，本机绑谁由用户逐个选。
       let rawMappings: unknown
       try {
@@ -349,7 +371,7 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
           issues: parsedMappings.error.issues,
         })
       }
-      const humanMemberMappings: HumanMemberMapping[] = parsedMappings.data
+      const humanMemberMappings: z.infer<typeof HumanMemberMappingsSchema> = parsedMappings.data
       let rawSecretInputs: unknown
       try {
         rawSecretInputs = JSON.parse(String(form.get('secretInputs') ?? '[]'))
@@ -362,22 +384,25 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
           issues: parsedSecretInputs.error.issues,
         })
       }
-      const secretInputs: PackageSecretInput[] = parsedSecretInputs.data
-      const pkg = await parseResourcePackage(new Uint8Array(await file.arrayBuffer()))
-      return c.json(
-        await commitResourcePackage(
-          {
-            db: deps.db,
-            appHome: deps.appHome,
-            box: deps.box,
-            ...(deps.pluginInstallOpts === undefined
-              ? {}
-              : { pluginInstallOpts: deps.pluginInstallOpts }),
-          },
-          actorOf(c),
-          { pkg, previewToken, decisions, humanMemberMappings, secretInputs },
-        ),
+      const secretInputs: z.infer<typeof PackageSecretInputsSchema> = parsedSecretInputs.data
+      const actor = actorOf(c)
+      const applied = await invokeOperation(
+        deps.catalog.operations.apply,
+        deps.commandContextFor(actor),
+        deps.catalog.transport.stageApply(actor, {
+          bytes: new Uint8Array(await file.arrayBuffer()),
+          previewToken,
+          decisions,
+          humanMemberMappings,
+          secretInputs,
+        }),
       )
+      const receipt = await invokeOperation(
+        deps.catalog.operations.getReceipt,
+        deps.queryContextFor(actor),
+        { receiptId: applied.receiptId },
+      )
+      return c.json(PackageImportReceiptSchema.parse(JSON.parse(receipt.document)))
     },
   )
 }

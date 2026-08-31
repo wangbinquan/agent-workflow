@@ -18,6 +18,7 @@ import {
   UpdateAgentSchema,
   WorkflowDefinitionSchema,
   migrateWorkflowDefinitionToLatest,
+  type BundleOp,
   type BundleOpKind,
   type BundleResourceType,
   type CreateMcp,
@@ -31,6 +32,49 @@ import { plugins, skillOperations } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Logger } from '@/util/log'
 import { monotonicNow } from '@/util/time'
+import {
+  assertTrustedResourcePackageCapability,
+  createAgentPackageMutationParticipantInTx,
+  createCapabilityTemplatePackageMutationParticipantInTx,
+  createMcpPackageMutationParticipantInTx,
+  createPluginPackageMutationParticipantInTx,
+  createPreparedAgentPackageMutation,
+  createPreparedCapabilityTemplatePackageMutation,
+  createPreparedMcpPackageMutation,
+  createPreparedPluginPackageMutation,
+  createPreparedSkillPackageMutation,
+  createPreparedWorkflowPackageMutation,
+  createPreparedWorkgroupPackageMutation,
+  createResourcePackageApplyTx,
+  createResourcePackageAuditInTx,
+  createResourcePackageEventsInTx,
+  createSkillPackageMutationParticipantInTx,
+  createWorkflowPackageMutationParticipantInTx,
+  createWorkgroupPackageMutationParticipantInTx,
+} from '../../application/participants/resourcePackageCapabilities'
+import type {
+  ResourcePackageApplyScenarioProvider,
+  ResourcePackageApplyTx,
+} from '../../public/participants'
+import type {
+  AgentPackageMutation,
+  CapabilityTemplatePackageMutation,
+  McpPackageMutation,
+  PluginPackageMutation,
+  PreparedAgentPackageMutation,
+  PreparedCapabilityTemplatePackageMutation,
+  PreparedMcpPackageMutation,
+  PreparedPackageMutation,
+  PreparedPluginPackageMutation,
+  PreparedSkillPackageMutation,
+  PreparedWorkflowPackageMutation,
+  PreparedWorkgroupPackageMutation,
+  ResourcePackageApplyScenarioPlan,
+  ResourcePackageMutationReceipt,
+  SkillPackageMutation,
+  WorkflowPackageMutation,
+  WorkgroupPackageMutation,
+} from '../../public/types'
 
 export interface ResourcePackageMutationOperation {
   readonly opId: string
@@ -205,23 +249,26 @@ export interface LegacyResourcePackageMutationParticipants {
 
 export interface LegacyResourcePackageMutationAdapter {
   readonly participants: LegacyResourcePackageMutationParticipants
-  prepare(
-    operation: ResourcePackageMutationOperation,
-    context: ResourcePackageMutationPreparationContext,
-  ): Promise<PreparedResourcePackageMutation>
+  createScenarioProvider(input: {
+    readonly scenario: ResourcePackageApplyScenarioPlan
+    readonly operations: readonly BundleOp[]
+    readonly lowered: readonly ResourcePackageMutationOperation[]
+    context: ResourcePackageMutationPreparationContext
+  }): ResourcePackageApplyScenarioProvider
   prestage(
-    prepared: PreparedResourcePackageMutation,
+    prepared: PreparedPackageMutation,
     context: ResourcePackageMutationPrestageContext,
   ): Promise<void>
   assertUpdateTargetsOwnedInTx(
     tx: DbTxSync,
     operations: readonly ResourcePackageMutationOperation[],
   ): void
-  commitInTx(
+  bindApplyTx(
     tx: DbTxSync,
-    prepared: PreparedResourcePackageMutation,
-    context: ResourcePackageMutationCommitContext,
-  ): void
+    input: ResourcePackageMutationCommitContext & {
+      readonly currentAuthority: () => ResourcePackageApplyTx['currentAuthority']
+    },
+  ): ResourcePackageApplyTx
   rollForwardCommitted(log: Logger): void
   broadcastCommitted(): void
 }
@@ -429,6 +476,34 @@ export function createLegacyResourcePackageMutationAdapter(
   const skillVersionStages = new Map<string, LegacyStagedSkillVersion>()
   const createdWorkflowRows: unknown[] = []
   const createdWorkgroups: unknown[] = []
+  const preparedInternals = new WeakMap<object, PreparedResourcePackageMutation>()
+
+  const rememberPrepared = <T extends PreparedPackageMutation>(
+    capability: T,
+    prepared: PreparedResourcePackageMutation,
+  ): T => {
+    preparedInternals.set(capability, prepared)
+    return capability
+  }
+
+  const internalPrepared = (
+    capability: PreparedPackageMutation,
+  ): PreparedResourcePackageMutation => {
+    assertTrustedResourcePackageCapability(capability)
+    const prepared = preparedInternals.get(capability)
+    if (prepared === undefined) throw new Error('resource-package-prepared-capability-expired')
+    return prepared
+  }
+
+  const mutationReceipt = (
+    prepared: PreparedResourcePackageMutation,
+  ): ResourcePackageMutationReceipt => ({
+    resourceType: prepared.op.resourceType,
+    operationId: prepared.op.opId,
+    resourceId: prepared.op.resourceId,
+    action: prepared.op.action,
+    name: String(prepared.op.payload.name ?? ''),
+  })
 
   const participants: LegacyResourcePackageMutationParticipants = {
     agents: {
@@ -627,82 +702,154 @@ export function createLegacyResourcePackageMutationAdapter(
 
   return {
     participants,
-    async prepare(operation, context) {
-      switch (operation.resourceType) {
-        case 'agent':
-          return participants.agents.prepare(operation as AgentOperation, context)
-        case 'skill':
-          return participants.skills.prepare(operation as SkillOperation)
-        case 'mcp':
-          return participants.mcps.prepare(operation as McpOperation)
-        case 'plugin':
-          return participants.plugins.prepare(operation as PluginOperation)
-        case 'workflow':
-          return participants.workflows.prepare(operation as WorkflowOperation, context)
-        case 'workgroup':
-          return participants.workgroups.prepare(operation as WorkgroupOperation, context)
-        case 'capability_template':
-          return participants.capabilityTemplates.prepare(operation as CapabilityTemplateOperation)
+    createScenarioProvider({ scenario, operations, lowered, context }) {
+      const loweredByOperationId = new Map(lowered.map((operation) => [operation.opId, operation]))
+      const loweredAs = <T extends ResourcePackageMutationOperation>(
+        mutation: BundleOp,
+        resourceType: T['resourceType'],
+      ): T => {
+        const operation = loweredByOperationId.get(mutation.opId)
+        if (operation === undefined || operation.resourceType !== resourceType) {
+          throw new Error(`resource-package-lowered-operation-missing:${mutation.opId}`)
+        }
+        return operation as T
       }
+      if (operations.length !== lowered.length) {
+        throw new Error('resource-package-lowered-operation-count-mismatch')
+      }
+      return Object.freeze({
+        scenario,
+        participants: Object.freeze({
+          agents: Object.freeze({
+            async prepare(mutation: AgentPackageMutation): Promise<PreparedAgentPackageMutation> {
+              const prepared = await participants.agents.prepare(
+                loweredAs<AgentOperation>(mutation, 'agent'),
+                context,
+              )
+              return rememberPrepared(createPreparedAgentPackageMutation(mutation), prepared)
+            },
+          }),
+          skills: Object.freeze({
+            async prepare(mutation: SkillPackageMutation): Promise<PreparedSkillPackageMutation> {
+              const prepared = await participants.skills.prepare(
+                loweredAs<SkillOperation>(mutation, 'skill'),
+              )
+              return rememberPrepared(createPreparedSkillPackageMutation(mutation), prepared)
+            },
+          }),
+          mcps: Object.freeze({
+            async prepare(mutation: McpPackageMutation): Promise<PreparedMcpPackageMutation> {
+              const prepared = await participants.mcps.prepare(
+                loweredAs<McpOperation>(mutation, 'mcp'),
+              )
+              return rememberPrepared(createPreparedMcpPackageMutation(mutation), prepared)
+            },
+          }),
+          plugins: Object.freeze({
+            async prepare(mutation: PluginPackageMutation): Promise<PreparedPluginPackageMutation> {
+              const prepared = await participants.plugins.prepare(
+                loweredAs<PluginOperation>(mutation, 'plugin'),
+              )
+              return rememberPrepared(createPreparedPluginPackageMutation(mutation), prepared)
+            },
+          }),
+          workflows: Object.freeze({
+            async prepare(
+              mutation: WorkflowPackageMutation,
+            ): Promise<PreparedWorkflowPackageMutation> {
+              const prepared = await participants.workflows.prepare(
+                loweredAs<WorkflowOperation>(mutation, 'workflow'),
+                context,
+              )
+              return rememberPrepared(createPreparedWorkflowPackageMutation(mutation), prepared)
+            },
+          }),
+          workgroups: Object.freeze({
+            async prepare(
+              mutation: WorkgroupPackageMutation,
+            ): Promise<PreparedWorkgroupPackageMutation> {
+              const prepared = await participants.workgroups.prepare(
+                loweredAs<WorkgroupOperation>(mutation, 'workgroup'),
+                context,
+              )
+              return rememberPrepared(createPreparedWorkgroupPackageMutation(mutation), prepared)
+            },
+          }),
+          capabilityTemplates: Object.freeze({
+            async prepare(
+              mutation: CapabilityTemplatePackageMutation,
+            ): Promise<PreparedCapabilityTemplatePackageMutation> {
+              const prepared = await participants.capabilityTemplates.prepare(
+                loweredAs<CapabilityTemplateOperation>(mutation, 'capability_template'),
+              )
+              return rememberPrepared(
+                createPreparedCapabilityTemplatePackageMutation(mutation),
+                prepared,
+              )
+            },
+          }),
+        }),
+      })
     },
     async prestage(prepared, context) {
-      if (prepared.kind === 'plugin-create' || prepared.kind === 'plugin-update') {
+      const internal = internalPrepared(prepared)
+      if (internal.kind === 'plugin-create' || internal.kind === 'plugin-update') {
         const generationId = ulid()
         const generationDir = dependencies.plannedGenerationDir(
-          prepared.op.resourceId,
-          prepared.spec,
+          internal.op.resourceId,
+          internal.spec,
           generationId,
           options.pluginInstallOpts?.pluginsDir,
         )
         if (generationDir !== null) {
           context.recordArtifact({
             kind: 'plugin-install',
-            pluginId: prepared.op.resourceId,
+            pluginId: internal.op.resourceId,
             generationId,
             generationDir,
           })
         }
-        const install = await dependencies.installPlugin(prepared.op.resourceId, prepared.spec, {
+        const install = await dependencies.installPlugin(internal.op.resourceId, internal.spec, {
           ...options.pluginInstallOpts,
           generationId,
         })
-        pluginInstalls.set(prepared.op.opId, install)
+        pluginInstalls.set(internal.op.opId, install)
         options.afterPluginInstall?.()
         return
       }
-      if (prepared.kind === 'skill-create') {
+      if (internal.kind === 'skill-create') {
         const stage = await dependencies.stageManagedSkill(
           db,
           { appHome },
           {
-            name: skillPayload(prepared.op).name,
-            description: skillPayload(prepared.op).description,
+            name: skillPayload(internal.op).name,
+            description: skillPayload(internal.op).description,
             ownerUserId: actor.user.id,
             actor,
-            id: prepared.op.resourceId,
+            id: internal.op.resourceId,
           },
-          (filesDir) => writeSkillTree(filesDir, prepared.op, context.readSkillFile),
+          (filesDir) => writeSkillTree(filesDir, internal.op, context.readSkillFile),
         )
-        skillStages.set(prepared.op.opId, stage)
+        skillStages.set(internal.op.opId, stage)
         context.recordArtifact({ kind: 'skill-stage', ...stage })
         options.afterSkillStage?.()
         return
       }
-      if (prepared.kind === 'skill-update') {
+      if (internal.kind === 'skill-update') {
         const staged = dependencies.stageSkillVersion(
           db,
           { appHome },
-          prepared.op.resourceId,
-          (stagingDir) => writeSkillTree(stagingDir, prepared.op, context.readSkillFile),
+          internal.op.resourceId,
+          (stagingDir) => writeSkillTree(stagingDir, internal.op, context.readSkillFile),
           {
             source: 'import',
             authorUserId: actor.user.id,
-            ...skillExpectOf(prepared.op),
+            ...skillExpectOf(internal.op),
             expectedOwnerUserId: actor.user.id,
-            setDescription: skillPayload(prepared.op).description,
+            setDescription: skillPayload(internal.op).description,
           },
         )
-        skillVersionStages.set(prepared.op.opId, staged)
+        skillVersionStages.set(internal.op.opId, staged)
         context.recordArtifact({ kind: 'skill-version-stage', staged })
         options.afterSkillStage?.()
       }
@@ -729,130 +876,178 @@ export function createLegacyResourcePackageMutationAdapter(
         }
       }
     },
-    commitInTx(tx, prepared, context) {
-      switch (prepared.kind) {
-        case 'agent-create':
-          dependencies.commitAgentCreateInTx(tx, prepared.prepared)
-          return
-        case 'agent-update':
-          dependencies.commitAgentUpdateInTx(tx, prepared.prepared)
-          return
-        case 'mcp-create':
-          dependencies.commitMcpCreateInTx(tx, prepared.prepared)
-          return
-        case 'mcp-update':
-          dependencies.commitMcpUpdateInTx(tx, prepared.prepared)
-          return
-        case 'plugin-create': {
-          const install = pluginInstalls.get(prepared.op.opId)
-          if (install === undefined) throw new Error('plugin install result missing')
-          dependencies.commitPluginCreateInTx(tx, {
-            id: prepared.op.resourceId,
-            parsed: prepared.parsed as never,
-            initialAcl: dependencies.initialPrivateResourceAcl(actor.user.id),
-            install,
-            now: Date.now(),
-          })
-          return
-        }
-        case 'plugin-update': {
-          const install = pluginInstalls.get(prepared.op.opId)
-          if (install === undefined) throw new Error('plugin install result missing')
-          const captured = selectPluginRowInTx(tx, prepared.op.resourceId)
-          const payload = prepared.captured as {
-            spec: string
-            options?: Record<string, unknown>
-            description?: string
-            enabled?: boolean
-          }
-          dependencies.commitPluginPublishInTx(tx, captured, {
-            spec: payload.spec,
-            optionsJson: JSON.stringify(payload.options ?? {}),
-            description: payload.description ?? captured.description,
-            enabled: payload.enabled ?? captured.enabled,
-            sourceKind: install.sourceKind,
-            cachedPath: install.cachedPath,
-            resolvedVersion: install.resolvedVersion,
-            installedAt: Date.now(),
-            updatedAt: monotonicNow(captured.updatedAt),
-          })
-          return
-        }
-        case 'skill-create': {
-          const stage = skillStages.get(prepared.op.opId)
-          if (stage === undefined) throw new Error('skill stage missing')
-          dependencies.commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
-          return
-        }
-        case 'skill-update': {
-          const staged = skillVersionStages.get(prepared.op.opId)
-          if (staged === undefined) throw new Error('skill version stage missing')
-          dependencies.commitSkillVersionInTx(tx, staged, {
-            source: 'import',
-            authorUserId: actor.user.id,
-            setDescription: skillPayload(prepared.op).description,
-          })
-          return
-        }
-        case 'workflow-create': {
-          dependencies.assertRefsUsableInTx(tx, actor, [
-            {
-              type: 'agent',
-              domain: 'id',
-              names: (prepared.definition.nodes ?? [])
-                .filter((node) => node.kind === 'agent-single' && typeof node.agentId === 'string')
-                .map((node) => node.agentId as string),
-            },
-            {
-              type: 'workflow',
-              names: dependencies
-                .extractWorkflowWorkflowRefs(prepared.definition)
-                .filter((name) => !context.bundleCreatedNames.workflow.has(name)),
-              domain: 'name',
-            },
-            {
-              type: 'workgroup',
-              names: dependencies
-                .extractWorkflowWorkgroupRefs(prepared.definition)
-                .filter((name) => !context.bundleCreatedNames.workgroup.has(name)),
-              domain: 'name',
-            },
-          ])
-          const payload = prepared.op.payload as { name: string; description: string }
-          createdWorkflowRows.push(
-            dependencies.insertWorkflowInTx(tx, {
-              scriptPrincipal: { kind: 'actor', actor },
+    bindApplyTx(tx, input) {
+      const applyPrepared = (prepared: PreparedResourcePackageMutation): void => {
+        switch (prepared.kind) {
+          case 'agent-create':
+            dependencies.commitAgentCreateInTx(tx, prepared.prepared)
+            return
+          case 'agent-update':
+            dependencies.commitAgentUpdateInTx(tx, prepared.prepared)
+            return
+          case 'mcp-create':
+            dependencies.commitMcpCreateInTx(tx, prepared.prepared)
+            return
+          case 'mcp-update':
+            dependencies.commitMcpUpdateInTx(tx, prepared.prepared)
+            return
+          case 'plugin-create': {
+            const install = pluginInstalls.get(prepared.op.opId)
+            if (install === undefined) throw new Error('plugin install result missing')
+            dependencies.commitPluginCreateInTx(tx, {
               id: prepared.op.resourceId,
-              name: payload.name,
-              description: payload.description,
-              definition: prepared.definition,
-              ownerUserId: actor.user.id,
-              builtin: false,
+              parsed: prepared.parsed as never,
+              initialAcl: dependencies.initialPrivateResourceAcl(actor.user.id),
+              install,
               now: Date.now(),
-            }),
-          )
-          return
-        }
-        case 'workflow-update': {
-          const result = dependencies.commitWorkflowSaveInTx(tx, prepared.prepared)
-          if (!result.committed && result.receipt.outcome !== 'already-current') {
-            throw new ConflictError('bundle-baseline-stale', 'workflow save did not commit')
+            })
+            return
           }
-          return
-        }
-        case 'workgroup-create':
-          createdWorkgroups.push(dependencies.commitWorkgroupCreateInTx(tx, prepared.prepared))
-          return
-        case 'workgroup-update': {
-          const result = dependencies.commitWorkgroupSaveInTx(tx, prepared.prepared)
-          if (!result.committed && result.receipt.outcome !== 'already-current') {
-            throw new ConflictError('bundle-baseline-stale', 'workgroup save did not commit')
+          case 'plugin-update': {
+            const install = pluginInstalls.get(prepared.op.opId)
+            if (install === undefined) throw new Error('plugin install result missing')
+            const captured = selectPluginRowInTx(tx, prepared.op.resourceId)
+            const payload = prepared.captured as {
+              spec: string
+              options?: Record<string, unknown>
+              description?: string
+              enabled?: boolean
+            }
+            dependencies.commitPluginPublishInTx(tx, captured, {
+              spec: payload.spec,
+              optionsJson: JSON.stringify(payload.options ?? {}),
+              description: payload.description ?? captured.description,
+              enabled: payload.enabled ?? captured.enabled,
+              sourceKind: install.sourceKind,
+              cachedPath: install.cachedPath,
+              resolvedVersion: install.resolvedVersion,
+              installedAt: Date.now(),
+              updatedAt: monotonicNow(captured.updatedAt),
+            })
+            return
           }
-          return
+          case 'skill-create': {
+            const stage = skillStages.get(prepared.op.opId)
+            if (stage === undefined) throw new Error('skill stage missing')
+            dependencies.commitSkillReadyInTx(tx, { skillId: stage.skillId, opId: stage.opId })
+            return
+          }
+          case 'skill-update': {
+            const staged = skillVersionStages.get(prepared.op.opId)
+            if (staged === undefined) throw new Error('skill version stage missing')
+            dependencies.commitSkillVersionInTx(tx, staged, {
+              source: 'import',
+              authorUserId: actor.user.id,
+              setDescription: skillPayload(prepared.op).description,
+            })
+            return
+          }
+          case 'workflow-create': {
+            dependencies.assertRefsUsableInTx(tx, actor, [
+              {
+                type: 'agent',
+                domain: 'id',
+                names: (prepared.definition.nodes ?? [])
+                  .filter(
+                    (node) => node.kind === 'agent-single' && typeof node.agentId === 'string',
+                  )
+                  .map((node) => node.agentId as string),
+              },
+              {
+                type: 'workflow',
+                names: dependencies
+                  .extractWorkflowWorkflowRefs(prepared.definition)
+                  .filter((name) => !input.bundleCreatedNames.workflow.has(name)),
+                domain: 'name',
+              },
+              {
+                type: 'workgroup',
+                names: dependencies
+                  .extractWorkflowWorkgroupRefs(prepared.definition)
+                  .filter((name) => !input.bundleCreatedNames.workgroup.has(name)),
+                domain: 'name',
+              },
+            ])
+            const payload = prepared.op.payload as { name: string; description: string }
+            createdWorkflowRows.push(
+              dependencies.insertWorkflowInTx(tx, {
+                scriptPrincipal: { kind: 'actor', actor },
+                id: prepared.op.resourceId,
+                name: payload.name,
+                description: payload.description,
+                definition: prepared.definition,
+                ownerUserId: actor.user.id,
+                builtin: false,
+                now: Date.now(),
+              }),
+            )
+            return
+          }
+          case 'workflow-update': {
+            const result = dependencies.commitWorkflowSaveInTx(tx, prepared.prepared)
+            if (!result.committed && result.receipt.outcome !== 'already-current') {
+              throw new ConflictError('bundle-baseline-stale', 'workflow save did not commit')
+            }
+            return
+          }
+          case 'workgroup-create':
+            createdWorkgroups.push(dependencies.commitWorkgroupCreateInTx(tx, prepared.prepared))
+            return
+          case 'workgroup-update': {
+            const result = dependencies.commitWorkgroupSaveInTx(tx, prepared.prepared)
+            if (!result.committed && result.receipt.outcome !== 'already-current') {
+              throw new ConflictError('bundle-baseline-stale', 'workgroup save did not commit')
+            }
+            return
+          }
+          case 'capability-template':
+            dependencies.commitTemplateInTx(tx, prepared.prepared)
         }
-        case 'capability-template':
-          dependencies.commitTemplateInTx(tx, prepared.prepared)
       }
+      const commitCapability = <K extends ResourcePackageMutationReceipt['resourceType']>(
+        capability: PreparedPackageMutation,
+        resourceType: K,
+      ): ResourcePackageMutationReceipt<K> => {
+        const prepared = internalPrepared(capability)
+        if (prepared.op.resourceType !== resourceType) {
+          throw new Error('resource-package-participant-kind-mismatch')
+        }
+        applyPrepared(prepared)
+        const receipt = mutationReceipt(prepared)
+        return {
+          resourceType,
+          operationId: receipt.operationId,
+          resourceId: receipt.resourceId,
+          action: receipt.action,
+          name: receipt.name,
+        }
+      }
+      return createResourcePackageApplyTx({
+        currentAuthority: input.currentAuthority,
+        agents: createAgentPackageMutationParticipantInTx((prepared) =>
+          commitCapability(prepared, 'agent'),
+        ),
+        skills: createSkillPackageMutationParticipantInTx((prepared) =>
+          commitCapability(prepared, 'skill'),
+        ),
+        mcps: createMcpPackageMutationParticipantInTx((prepared) =>
+          commitCapability(prepared, 'mcp'),
+        ),
+        plugins: createPluginPackageMutationParticipantInTx((prepared) =>
+          commitCapability(prepared, 'plugin'),
+        ),
+        workflows: createWorkflowPackageMutationParticipantInTx((prepared) =>
+          commitCapability(prepared, 'workflow'),
+        ),
+        workgroups: createWorkgroupPackageMutationParticipantInTx((prepared) =>
+          commitCapability(prepared, 'workgroup'),
+        ),
+        capabilityTemplates: createCapabilityTemplatePackageMutationParticipantInTx((prepared) =>
+          commitCapability(prepared, 'capability_template'),
+        ),
+        events: createResourcePackageEventsInTx((_receipt) => {}),
+        audit: createResourcePackageAuditInTx((_receipt) => {}),
+      })
     },
     rollForwardCommitted(log) {
       rollForwardSkillTails(

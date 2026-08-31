@@ -9,23 +9,20 @@
 // `--type --name` 在那种情况下选不中确定的一行。
 
 import type { DbClient } from '@/db/client'
-import { Paths } from '@/util/paths'
 import type { Actor } from '@/auth/actor'
-import { createSecretBox } from '@/auth/secretBox'
 import { users } from '@/db/schema'
 import { findOwnedAclResourceIdsByName } from '@/services/resourceAcl'
 import { eq } from 'drizzle-orm'
 import { writeFileSync, readFileSync } from 'node:fs'
-import { exportResourcePackage } from '@/services/resourcePackage/export'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
-import { buildPackagePreview, groupHumanMemberSlots } from '@/services/resourcePackage/preview'
 import {
-  commitResourcePackage,
-  type HumanMemberMapping,
-  type ImportDecision,
-} from '@/services/resourcePackage/commit'
-import type { BundleResourceType } from '@agent-workflow/shared'
-import { ulid } from 'ulid'
+  PackageImportReceiptSchema,
+  PackagePreviewSchema,
+  type BundleResourceType,
+  type PackagePreview,
+} from '@agent-workflow/shared'
+import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
+import type { ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
+import { invokeOperation } from '@/platform/operations/invoke'
 
 const USAGE = `usage: agent-workflow package <export|import> --as-user <username> [options]
 
@@ -54,6 +51,57 @@ const USAGE = `usage: agent-workflow package <export|import> --as-user <username
 interface Parsed {
   flags: Map<string, string>
   bools: Set<string>
+}
+
+interface CliImportDecision {
+  readonly localSlug: string
+  readonly action: 'new' | 'reuse' | 'overwrite'
+  readonly targetId?: string
+  readonly finalName?: string
+}
+
+interface CliHumanMemberMapping {
+  readonly workgroupSlug: string
+  readonly username: string
+  readonly userId?: string | null
+}
+
+interface CliHumanMemberGroup {
+  readonly workgroupSlug: string
+  readonly username: string
+  readonly displayNames: string[]
+  suggestedUserId: string | null
+  required: boolean
+}
+
+function groupHumanMemberSlots(slots: PackagePreview['humanMembers']): CliHumanMemberGroup[] {
+  const grouped = new Map<string, CliHumanMemberGroup>()
+  for (const slot of slots) {
+    const key = `${slot.workgroupSlug}#${slot.username}`
+    const existing = grouped.get(key)
+    if (existing === undefined) {
+      grouped.set(key, {
+        workgroupSlug: slot.workgroupSlug,
+        username: slot.username,
+        displayNames: [slot.displayName],
+        suggestedUserId: slot.suggestedUserId,
+        required: slot.required,
+      })
+      continue
+    }
+    if (!existing.displayNames.includes(slot.displayName)) {
+      existing.displayNames.push(slot.displayName)
+    }
+    existing.required ||= slot.required
+    if (existing.suggestedUserId === null && slot.suggestedUserId !== null) {
+      existing.suggestedUserId = slot.suggestedUserId
+    }
+  }
+  return [...grouped.values()].sort((left, right) =>
+    left.workgroupSlug === right.workgroupSlug
+      ? left.username.localeCompare(right.username)
+      : left.workgroupSlug.localeCompare(right.workgroupSlug),
+  )
 }
 
 function parseArgs(args: readonly string[]): Parsed {
@@ -91,12 +139,17 @@ const RESOURCE_TYPES: readonly BundleResourceType[] = [
 ]
 
 export interface PackageCommandIdentityHandle {
-  localActorForUser(userId: string): Promise<Actor | null>
+  localIdentityForUser(userId: string): Promise<Readonly<{
+    actor: Actor
+    commandContext(): CommandContext
+    queryContext(): QueryContext
+  }> | null>
 }
 
 export interface PackageCommandBootstrap {
   readonly db: DbClient
   readonly identity: PackageCommandIdentityHandle
+  readonly catalog: ComposedResourcePackageCatalog
   shutdown(): void
 }
 
@@ -125,7 +178,7 @@ export async function packageCommand(
   let bootstrap: PackageCommandBootstrap | undefined
   try {
     bootstrap = await bootstrapFactory()
-    const { db, identity } = bootstrap
+    const { db, identity, catalog } = bootstrap
     const row = db.select().from(users).where(eq(users.username, username)).get()
     if (row === undefined) return { output: `user '${username}' not found\n`, status: 'error' }
     // ⚠️ 与 HTTP 同构的**第二半**：HTTP 侧 session lookup 对非 active 用户返回 null，
@@ -139,12 +192,12 @@ export async function packageCommand(
     }
     // 与 HTTP 同构：bootstrap 注入的 local participant 从当前数据库访问状态解析
     // 最终 permissions + access revision；消费者不把角色当成第二条授权轴。
-    const actor = await identity.localActorForUser(row.id)
-    if (actor === null) {
+    const operationIdentity = await identity.localIdentityForUser(row.id)
+    if (operationIdentity === null) {
       return { output: `user '${username}' is not active\n`, status: 'error' }
     }
-    if (sub === 'export') return await runExport(db, actor, flags)
-    return await runImport(db, actor, flags)
+    if (sub === 'export') return await runExport(db, operationIdentity, catalog, flags)
+    return await runImport(operationIdentity, catalog, flags)
   } catch (err) {
     const e = err as { code?: string; message?: string }
     return { output: `${e.code ?? 'error'}: ${e.message ?? String(err)}\n`, status: 'error' }
@@ -155,7 +208,11 @@ export async function packageCommand(
 
 async function runExport(
   db: DbClient,
-  actor: Actor,
+  identity: Readonly<{
+    actor: Actor
+    commandContext(): CommandContext
+  }>,
+  catalog: ComposedResourcePackageCatalog,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   // `find` rather than a cast plus `includes`: the cast is what made this
@@ -173,7 +230,7 @@ async function runExport(
     const name = flags.get('name')
     if (name === undefined)
       return { output: 'either --id or --name is required\n', status: 'error' }
-    const matches = await findOwnedAclResourceIdsByName(db, type, actor.user.id, name)
+    const matches = await findOwnedAclResourceIdsByName(db, type, identity.actor.user.id, name)
     if (matches.length === 0)
       return { output: `no ${type} named '${name}' for you\n`, status: 'error' }
     if (matches.length > 1) {
@@ -188,19 +245,27 @@ async function runExport(
     id = matches[0]!
   }
 
-  const pkg = await exportResourcePackage(
-    db,
-    actor,
-    { type, id },
-    { appHome: Paths.root, exportedAt: Date.now() },
+  const receipt = await invokeOperation(
+    catalog.operations.export,
+    identity.commandContext(),
+    catalog.transport.stageExport(identity.actor, {
+      root: { kind: type, id },
+      exportedAt: Date.now(),
+      expect: {},
+    }),
   )
-  writeFileSync(out, pkg.zip)
-  return { output: `wrote ${out} (${pkg.zip.byteLength} bytes)\n`, status: 'ok' }
+  const bytes = catalog.transport.takeExport(receipt.packageId)
+  writeFileSync(out, bytes)
+  return { output: `wrote ${out} (${bytes.byteLength} bytes)\n`, status: 'ok' }
 }
 
 async function runImport(
-  db: DbClient,
-  actor: Actor,
+  identity: Readonly<{
+    actor: Actor
+    commandContext(): CommandContext
+    queryContext(): QueryContext
+  }>,
+  catalog: ComposedResourcePackageCatalog,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const file = flags.get('file')
@@ -232,9 +297,18 @@ async function runImport(
     }
   }
 
-  const pkg = await parseResourcePackage(new Uint8Array(readFileSync(file)))
-  const box = createSecretBox(Paths.secretKeyFile)
-  const preview = await buildPackagePreview(db, actor, pkg, { box, importId: ulid() })
+  const bytes = new Uint8Array(readFileSync(file))
+  const inspected = await invokeOperation(
+    catalog.operations.inspect,
+    identity.commandContext(),
+    catalog.transport.stageInspect(identity.actor, bytes),
+  )
+  const previewView = await invokeOperation(
+    catalog.operations.getPreview,
+    identity.queryContext(),
+    { previewId: inspected.previewId },
+  )
+  const preview = PackagePreviewSchema.parse(JSON.parse(previewView.document))
   const humanMemberGroups = groupHumanMemberSlots(preview.humanMembers)
 
   // ── 阶段一：只产出计划，**不提交任何东西** ──
@@ -275,9 +349,9 @@ async function runImport(
     }
   }
 
-  let decisions: ImportDecision[]
+  let decisions: CliImportDecision[]
   let previewToken = preview.previewToken
-  let humanMemberMappings: HumanMemberMapping[] = humanMemberGroups.map((m) => ({
+  let humanMemberMappings: CliHumanMemberMapping[] = humanMemberGroups.map((m) => ({
     workgroupSlug: m.workgroupSlug,
     username: m.username,
     userId: m.suggestedUserId,
@@ -285,7 +359,7 @@ async function runImport(
   if (applyPath !== undefined) {
     const saved = JSON.parse(readFileSync(applyPath, 'utf8')) as {
       previewToken?: string
-      entries?: ImportDecision[]
+      entries?: CliImportDecision[]
       humanMemberMappings?: Array<{
         workgroupSlug: string
         username: string
@@ -302,7 +376,7 @@ async function runImport(
       // 一刀切的默认值也要落在**允许**的动作里：例如别人的资源没有 overwrite，
       // 那就退回 reuse（能看见即可复用），再退回 new。
       const action = e.allowedActions.includes(want as never)
-        ? (want as ImportDecision['action'])
+        ? (want as CliImportDecision['action'])
         : e.allowedActions.includes('reuse')
           ? 'reuse'
           : 'new'
@@ -312,12 +386,23 @@ async function runImport(
     })
   }
 
-  const receipt = await commitResourcePackage({ db, appHome: Paths.root, box }, actor, {
-    pkg,
-    previewToken,
-    decisions,
-    humanMemberMappings,
-  })
+  const applied = await invokeOperation(
+    catalog.operations.apply,
+    identity.commandContext(),
+    catalog.transport.stageApply(identity.actor, {
+      bytes,
+      previewToken,
+      decisions,
+      humanMemberMappings,
+      secretInputs: [],
+    }),
+  )
+  const receiptView = await invokeOperation(
+    catalog.operations.getReceipt,
+    identity.queryContext(),
+    { receiptId: applied.receiptId },
+  )
+  const receipt = PackageImportReceiptSchema.parse(JSON.parse(receiptView.document))
   return {
     output:
       `imported ${receipt.applied.length} resource(s)\n` +

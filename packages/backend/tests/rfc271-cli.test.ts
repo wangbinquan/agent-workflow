@@ -47,9 +47,13 @@ describe('① --as-user 强制', () => {
     // local participant，不伪装成 daemon/session/PAT direct authority；具体
     // runtime 只由 main bootstrap 装配，package consumer 收窄 handle。
     expect(SRC).not.toContain('identity-access/composition')
-    expect(SRC).toContain('identity.localActorForUser(row.id)')
+    expect(SRC).toContain('identity.localIdentityForUser(row.id)')
     expect(MAIN).toContain('composePackageCommandBootstrap')
     expect(MAIN).toContain('identityAccess.localOperator.forUser(userId)')
+    expect(MAIN).toContain('composeResourcePackageOperations({')
+    expect(SRC).toContain('catalog.operations.inspect')
+    expect(SRC).toContain('catalog.operations.apply')
+    expect(SRC).not.toContain("from '@/services/resourcePackage/")
     expect(SRC).not.toContain('buildCurrentActor(')
     expect(SRC).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(SRC).toContain('access revision')

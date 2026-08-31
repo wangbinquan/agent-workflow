@@ -25,12 +25,38 @@ import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, users, workflows } from '../src/db/schema'
+import type {
+  CommandContext,
+  QueryContext,
+} from '../src/modules/identity-access/public/participants'
+import { composeResourcePackageOperations } from '../src/modules/resource-catalog/composition/resourcePackageOperations'
 import { errorHandler } from '../src/util/errors'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
+
+function testCommandContext(): CommandContext {
+  return Object.freeze({
+    get authority(): never {
+      throw new Error('rfc271-export-fence-does-not-consume-request-authority')
+    },
+    operationId: 'rfc271-export-fence',
+    correlationId: 'rfc271-export-fence',
+    now: 0,
+  })
+}
+
+function testQueryContext(): QueryContext {
+  return Object.freeze({
+    get authority(): never {
+      throw new Error('rfc271-export-fence-does-not-consume-request-authority')
+    },
+    operationId: 'rfc271-export-fence',
+    correlationId: 'rfc271-export-fence',
+  })
+}
 
 function makeApp(db: DbClient, appHome: string): Hono {
   const box = createSecretBoxFromKey(randomBytes(32))
@@ -72,7 +98,11 @@ function makeApp(db: DbClient, appHome: string): Hono {
   }
   app.use('*', injectActor)
   app.onError(errorHandler)
-  registerResourcePackageRoutes(app, { db, appHome, box })
+  registerResourcePackageRoutes(app, {
+    catalog: composeResourcePackageOperations({ db, appHome, box }),
+    commandContextFor: testCommandContext,
+    queryContextFor: testQueryContext,
+  })
   return app
 }
 

@@ -10,6 +10,7 @@ import { Zip, ZipPassThrough, zipSync, type Zippable } from 'fflate'
 import { buildActor } from '../src/auth/actor'
 import type { SecretBox } from '../src/auth/secretBox'
 import type { DbClient } from '../src/db/client'
+import { composeResourcePackageOperations } from '../src/modules/resource-catalog/composition/resourcePackageOperations'
 import {
   registerResourcePackageRoutes,
   RESOURCE_PACKAGE_BODY_MAX_BYTES,
@@ -142,9 +143,17 @@ function routeApp(): Hono {
   // dependency is touched. Deliberately inert dependencies make that boundary
   // observable: falling through would become a test failure rather than a DB IO.
   registerResourcePackageRoutes(app, {
-    db: {} as DbClient,
-    appHome: '/unused/resource-package-upload-limit-test',
-    box: {} as SecretBox,
+    catalog: composeResourcePackageOperations({
+      db: {} as DbClient,
+      appHome: '/unused/resource-package-upload-limit-test',
+      box: {} as SecretBox,
+    }),
+    commandContextFor() {
+      throw new Error('body-limit-must-stop-before-command-context')
+    },
+    queryContextFor() {
+      throw new Error('body-limit-must-stop-before-query-context')
+    },
   })
   return app
 }

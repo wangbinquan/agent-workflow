@@ -67,7 +67,11 @@ import {
 } from '@/services/workgroups'
 import type { WorkgroupDetail } from '@agent-workflow/shared'
 import type { workflows } from '@/db/schema'
-import type { LegacyResourcePackageMutationDependencies } from '@/modules/resource-catalog/public/operations'
+import {
+  createLegacyResourcePackageMutationAdapter,
+  type LegacyResourcePackageMutationDependencies,
+} from '@/modules/resource-catalog/public/operations'
+import type { ResourcePackageMutationRuntime, ResourcePackageMutationRuntimeFactory } from './apply'
 
 type WorkflowRow = typeof workflows.$inferSelect
 
@@ -132,3 +136,63 @@ export const legacyResourcePackageMutationDependencies = Object.freeze({
     commitWorkgroupSaveInTx(tx, prepared as PreparedWorkgroupSave),
   broadcastWorkgroupCreated: (workgroup) => broadcastWorkgroupCreated(workgroup as WorkgroupDetail),
 } satisfies LegacyResourcePackageMutationDependencies)
+
+/**
+ * Compatibility composition for direct BundleApply tests and legacy service
+ * callers. Both the default and the production module injection execute the
+ * same seven typed participants; there is no parallel mutation path.
+ */
+const createLegacyResourcePackageMutationRuntime: ResourcePackageMutationRuntimeFactory['create'] =
+  (input) => {
+    const adapter = createLegacyResourcePackageMutationAdapter(
+      {
+        db: input.db,
+        appHome: input.appHome,
+        actor: input.actor,
+        ...(input.pluginInstallOpts === undefined
+          ? {}
+          : { pluginInstallOpts: input.pluginInstallOpts }),
+        ...(input.afterPluginInstall === undefined
+          ? {}
+          : { afterPluginInstall: input.afterPluginInstall }),
+        ...(input.afterSkillStage === undefined ? {} : { afterSkillStage: input.afterSkillStage }),
+      },
+      legacyResourcePackageMutationDependencies,
+    )
+    const provider = adapter.createScenarioProvider({
+      scenario: input.scenario,
+      operations: input.operations,
+      lowered: input.lowered,
+      context: {
+        pendingIds: input.pendingIds,
+        pendingAgentNames: input.pendingAgentNames,
+        key: input.key,
+      },
+    })
+    const currentAuthority = () => {
+      if (input.currentAuthority === undefined) {
+        throw new Error('resource-package-current-authority-unavailable')
+      }
+      return input.currentAuthority()
+    }
+    const prestage: ResourcePackageMutationRuntime['prestage'] = (prepared, context) =>
+      adapter.prestage(prepared, context)
+    const assertUpdateTargetsOwnedInTx: ResourcePackageMutationRuntime['assertUpdateTargetsOwnedInTx'] =
+      (tx, operations) => adapter.assertUpdateTargetsOwnedInTx(tx, operations)
+    const bindApplyTx: ResourcePackageMutationRuntime['bindApplyTx'] = (tx, bundleCreatedNames) =>
+      adapter.bindApplyTx(tx, { currentAuthority, bundleCreatedNames })
+    const rollForwardCommitted: ResourcePackageMutationRuntime['rollForwardCommitted'] = (log) =>
+      adapter.rollForwardCommitted(log)
+    const runtime: ResourcePackageMutationRuntime = Object.freeze({
+      provider,
+      prestage,
+      assertUpdateTargetsOwnedInTx,
+      bindApplyTx,
+      rollForwardCommitted,
+      broadcastCommitted: () => adapter.broadcastCommitted(),
+    })
+    return runtime
+  }
+
+export const legacyResourcePackageMutationRuntimeFactory: ResourcePackageMutationRuntimeFactory =
+  Object.freeze({ create: createLegacyResourcePackageMutationRuntime })

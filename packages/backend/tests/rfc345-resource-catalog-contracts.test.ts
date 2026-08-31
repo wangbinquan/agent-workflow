@@ -60,6 +60,7 @@ import type {
   McpCommands,
   PluginCommands,
   PluginUpdateCommands,
+  ResourcePackageCommands,
   SkillCommands,
   SkillFileCommands,
   SkillVersionCommands,
@@ -70,6 +71,7 @@ import type {
   AgentReferenceQueries,
   McpQueries,
   PluginQueries,
+  ResourcePackageQueries,
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
@@ -97,6 +99,8 @@ import type {
   McpOperationDescriptors,
   PluginCatalogModule,
   PluginOperationDescriptors,
+  ResourcePackageCatalogModule,
+  ResourcePackageOperationDescriptors,
   SkillCatalogModule,
   SkillOperationDescriptors,
   WorkgroupCatalogModule,
@@ -192,6 +196,19 @@ assertType<
   >
 >(true)
 assertType<Equal<keyof ResourcePackageApplyScenarioProvider, 'scenario' | 'participants'>>(true)
+assertType<Equal<Extract<keyof ResourcePackageCommands, string>, 'inspect' | 'apply' | 'export'>>(
+  true,
+)
+assertType<Equal<Extract<keyof ResourcePackageQueries, string>, 'getPreview' | 'getReceipt'>>(true)
+assertType<
+  Equal<
+    Extract<keyof ResourcePackageOperationDescriptors, string>,
+    'inspect' | 'apply' | 'getPreview' | 'getReceipt' | 'export'
+  >
+>(true)
+assertType<
+  Equal<Extract<keyof ResourcePackageCatalogModule, string>, 'commands' | 'queries' | 'operations'>
+>(true)
 assertType<
   Equal<
     keyof LegacyResourcePackageMutationParticipants,
@@ -1635,14 +1652,28 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'services/bundle/legacyResourcePackageMutationDependencies.ts'),
       'utf8',
     )
+    const application = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/package/packageApplication.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/resourcePackageOperations.ts'),
+      'utf8',
+    )
+    const route = readFileSync(resolve(sourceRoot, 'routes/resourcePackages.ts'), 'utf8')
+    const cli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
+    const main = readFileSync(resolve(sourceRoot, 'main.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
 
-    expect(engine).toContain('createLegacyResourcePackageMutationAdapter')
+    expect(engine).not.toContain('createLegacyResourcePackageMutationAdapter')
     expect(engine).toContain('resourceBundleApplies')
     expect(engine).toContain("state: 'applying'")
     expect(engine).toContain('provider.revalidateInTx?.(tx)')
     expect(engine).toContain('provider.finalizeInTx?.(tx, receiptValue)')
     expect(engine).toContain('ACTIVE_BUNDLE_APPLIES')
     expect(engine).toContain('convergeResourceBundleApplies')
+    expect(engine).toContain('deps.resourcePackageMutations ??')
+    expect(engine).toContain('.create({')
 
     for (const legacyWriter of [
       "@/services/agent'",
@@ -1660,18 +1691,52 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(dependencies).toContain(legacyWriter)
     }
     expect(adapter).not.toContain("from '@/services/")
+    expect(engine).toContain('compensateLegacyResourcePackageArtifact(')
+    expect(engine).toContain('rollForwardLegacyResourcePackageArtifacts(')
     expect(engine).toContain('legacyResourcePackageMutationDependencies')
+    expect(dependencies).toContain('createLegacyResourcePackageMutationAdapter')
 
     for (const participant of [
-      'agents:',
-      'skills:',
-      'mcps:',
-      'plugins:',
-      'workflows:',
-      'workgroups:',
-      'capabilityTemplates:',
+      'agents',
+      'skills',
+      'mcps',
+      'plugins',
+      'workflows',
+      'workgroups',
+      'capabilityTemplates',
     ]) {
-      expect(adapter).toContain(participant)
+      expect(adapter).toContain(`${participant}:`)
+      expect(engine).toContain(`provider.participants.${participant}.prepare`)
+      expect(engine).toContain(`applyTx.${participant}.commit`)
     }
+    expect(application).toContain('const commands: ResourcePackageCommands = Object.freeze')
+    expect(application).toContain('const queries: ResourcePackageQueries = Object.freeze')
+    expect(composition).toContain('createResourcePackageApplication')
+    expect(composition).toContain('createResourcePackageOperationDescriptors')
+    expect(composition).toContain('legacyResourcePackageMutationRuntimeFactory')
+    for (const operationId of [
+      'resource-catalog.inspect-package.v1',
+      'resource-catalog.apply-package.v1',
+      'resource-catalog.get-package-preview.v1',
+      'resource-catalog.get-package-receipt.v1',
+      'resource-catalog.export-package.v1',
+    ]) {
+      expect(
+        readFileSync(resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'), 'utf8'),
+      ).toContain(operationId)
+    }
+    expect(route).not.toContain("from '@/services/resourcePackage/")
+    expect(cli).not.toContain("from '@/services/resourcePackage/")
+    for (const consumer of [
+      'catalog.operations.inspect',
+      'catalog.operations.apply',
+      'catalog.operations.getPreview',
+      'catalog.operations.getReceipt',
+      'catalog.operations.export',
+    ]) {
+      expect(`${route}\n${cli}`).toContain(consumer)
+    }
+    expect(server).toContain('composeResourcePackageOperations({')
+    expect(main).toContain('composeResourcePackageOperations({')
   })
 })

@@ -770,3 +770,68 @@ export interface ResourcePackageApplyScenarioPlan {
   readonly serializationKey: string
   readonly operations: readonly BundleOp[]
 }
+
+/**
+ * T6 package transport contract. Multipart files, ZIP bytes, filesystem paths
+ * and secret values are staged by the composition adapter and never cross the
+ * public operation surface.
+ */
+export interface StagedResourcePackageSubmission {
+  readonly kind: 'staged-resource-package'
+  readonly handle: string
+}
+
+export interface InspectResourcePackage {
+  readonly submission: StagedResourcePackageSubmission
+}
+
+export interface ApplyResourcePackage {
+  readonly submission: StagedResourcePackageSubmission
+  readonly idempotencyKey: string
+}
+
+export interface ExportResourcePackage {
+  readonly submission: StagedResourcePackageSubmission
+}
+
+export interface ResourcePackagePreviewReceipt {
+  readonly previewId: string
+}
+
+export interface GetResourcePackagePreview {
+  readonly previewId: string
+}
+
+export interface ResourcePackagePreviewView {
+  readonly previewId: string
+  /** Exact legacy wire document; the HTTP/CLI binding owns JSON projection. */
+  readonly document: string
+}
+
+export interface ResourcePackageApplyReceipt {
+  readonly receiptId: string
+}
+
+export interface GetResourcePackageApplyReceipt {
+  readonly receiptId: string
+}
+
+export interface ResourcePackageApplyReceiptView {
+  readonly receiptId: string
+  /** Exact legacy wire document; the HTTP/CLI binding owns JSON projection. */
+  readonly document: string
+}
+
+export interface ResourcePackageExportReceipt {
+  readonly packageId: string
+  readonly filename: string
+}
+
+export type PreparedPackageMutation =
+  | PreparedAgentPackageMutation
+  | PreparedSkillPackageMutation
+  | PreparedMcpPackageMutation
+  | PreparedPluginPackageMutation
+  | PreparedWorkflowPackageMutation
+  | PreparedWorkgroupPackageMutation
+  | PreparedCapabilityTemplatePackageMutation

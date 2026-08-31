@@ -57,10 +57,28 @@ import type {
   UpdateWorkgroupCatalogInput,
   UpdateWorkgroupCatalogReceipt,
   WorkgroupCatalogDetail,
+  ApplyResourcePackage,
+  ExportResourcePackage,
+  InspectResourcePackage,
+  ResourcePackageApplyReceipt,
+  ResourcePackageExportReceipt,
+  ResourcePackagePreviewReceipt,
 } from './types'
 
 export interface ResourceAclCommands {
   update(context: CommandContext, request: UpdateResourceAclRequest): Promise<ResourceAclDocument>
+}
+
+export interface ResourcePackageCommands {
+  inspect(
+    context: CommandContext,
+    input: InspectResourcePackage,
+  ): Promise<ResourcePackagePreviewReceipt>
+  apply(context: CommandContext, input: ApplyResourcePackage): Promise<ResourcePackageApplyReceipt>
+  export(
+    context: CommandContext,
+    input: ExportResourcePackage,
+  ): Promise<ResourcePackageExportReceipt>
 }
 
 export interface AgentCommands {

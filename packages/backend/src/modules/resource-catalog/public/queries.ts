@@ -41,6 +41,10 @@ import type {
   GetWorkgroupCatalogInput,
   WorkgroupCatalogDetail,
   WorkgroupCatalogResource,
+  GetResourcePackageApplyReceipt,
+  GetResourcePackagePreview,
+  ResourcePackageApplyReceiptView,
+  ResourcePackagePreviewView,
 } from './types'
 
 export interface ResourceCatalogQuery {
@@ -54,6 +58,17 @@ export interface ResourceAclQuery {
 
 export interface ResourceAuthorizationQuery {
   accessOf(context: QueryContext, target: ResourceAclTarget): Promise<ResourceScopeAccess>
+}
+
+export interface ResourcePackageQueries {
+  getPreview(
+    context: QueryContext,
+    input: GetResourcePackagePreview,
+  ): Promise<ResourcePackagePreviewView>
+  getReceipt(
+    context: QueryContext,
+    input: GetResourcePackageApplyReceipt,
+  ): Promise<ResourcePackageApplyReceiptView>
 }
 
 export interface AgentQueries {

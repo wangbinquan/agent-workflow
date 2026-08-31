@@ -18,7 +18,11 @@ import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
 import { assertOperationCatalogClosed, registerOperationAlias } from '@/platform/operations/catalog'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
-import { directMcpOperationAuthority, directOperationAuthority } from '@/routes/operationAuthority'
+import {
+  directMcpOperationAuthority,
+  directOperationAuthority,
+  directRequestAuthority,
+} from '@/routes/operationAuthority'
 import { mountAgentRoutes } from '@/routes/agents'
 import { mountAuthRoutes } from '@/routes/auth'
 import { mountBackupRoutes } from '@/routes/backup'
@@ -48,6 +52,10 @@ import { composePluginCatalog } from '@/modules/resource-catalog/composition/plu
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
+import {
+  composeResourcePackageOperations,
+  type ComposedResourcePackageCatalog,
+} from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
   canViewResourceInTx,
@@ -822,6 +830,14 @@ export function createApp(deps: AppDeps): Hono {
   const skillCatalog = composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })
   const workflowCatalog = composeWorkflowCatalog({ db: effectiveDeps.db })
   const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
+  const resourcePackageCatalog =
+    effectiveDeps.secretBox === undefined
+      ? null
+      : composeResourcePackageOperations({
+          db: effectiveDeps.db,
+          appHome: effectiveDeps.appHome ?? Paths.root,
+          box: effectiveDeps.secretBox,
+        })
   const identityUserOperations = composeIdentityUserOperations({
     db: effectiveDeps.db,
     identityAccess,
@@ -840,6 +856,7 @@ export function createApp(deps: AppDeps): Hono {
     skillCatalog,
     workflowCatalog,
     workgroupCatalog,
+    resourcePackageCatalog,
   )
 
   // RFC-344 — tools invoke stable operation ids on this already-mounted app.
@@ -918,6 +935,7 @@ export function mountApiRoutes(
   skillCatalog: SkillCatalogModule,
   workflowCatalog: WorkflowCatalogModule,
   workgroupCatalog: WorkgroupCatalogModule,
+  resourcePackageCatalog: ComposedResourcePackageCatalog | null,
 ): void {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -1113,11 +1131,19 @@ export function mountApiRoutes(
   // RFC-271 配置包：导出六条 + 导入两条。需要 secretBox 来签 previewToken——
   // 缺它时**整组不挂**（与 OIDC 路由同姿势），而不是退化成一个不签名的版本：
   // 不签名的 preview→commit 绑定等于没有绑定。
-  if (deps.secretBox !== undefined) {
+  if (resourcePackageCatalog !== null) {
     registerResourcePackageRoutes(app, {
-      db: deps.db,
-      appHome: Paths.root,
-      box: deps.secretBox,
+      catalog: resourcePackageCatalog,
+      commandContextFor: (actor) =>
+        identityAccess.contexts.fromAuthority(
+          directRequestAuthority(identityAccess.directAuthority, actor),
+          'http',
+        ),
+      queryContextFor: (actor) =>
+        identityAccess.contexts.queryFromAuthority(
+          directRequestAuthority(identityAccess.directAuthority, actor),
+          'http',
+        ),
     })
   }
   mountWorkgroupTaskRoutes(app, routeDeps) // RFC-164 PR-4

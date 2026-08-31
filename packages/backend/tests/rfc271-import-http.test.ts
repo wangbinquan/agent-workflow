@@ -17,6 +17,11 @@ import { buildActor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, resourceBundleApplies, users, workgroupMembers, workgroups } from '../src/db/schema'
+import type {
+  CommandContext,
+  QueryContext,
+} from '../src/modules/identity-access/public/participants'
+import { composeResourcePackageOperations } from '../src/modules/resource-catalog/composition/resourcePackageOperations'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { errorHandler } from '../src/util/errors'
 import { encodeZip } from '../src/util/zip'
@@ -25,6 +30,27 @@ import { removeTempDirSync } from './fixtures/tempDir'
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
 const tempDirs: string[] = []
+
+function testCommandContext(): CommandContext {
+  return Object.freeze({
+    get authority(): never {
+      throw new Error('rfc271-import-http-does-not-consume-request-authority')
+    },
+    operationId: 'rfc271-import-http',
+    correlationId: 'rfc271-import-http',
+    now: 0,
+  })
+}
+
+function testQueryContext(): QueryContext {
+  return Object.freeze({
+    get authority(): never {
+      throw new Error('rfc271-import-http-does-not-consume-request-authority')
+    },
+    operationId: 'rfc271-import-http',
+    correlationId: 'rfc271-import-http',
+  })
+}
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) removeTempDirSync(dir)
@@ -185,7 +211,11 @@ function appWithResourcePackageRoutes(
   }
   app.use('*', injectActor)
   app.onError(errorHandler)
-  registerResourcePackageRoutes(app, { db, appHome, box })
+  registerResourcePackageRoutes(app, {
+    catalog: composeResourcePackageOperations({ db, appHome, box }),
+    commandContextFor: testCommandContext,
+    queryContextFor: testQueryContext,
+  })
   return app
 }
 
