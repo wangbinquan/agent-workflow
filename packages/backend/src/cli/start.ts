@@ -146,6 +146,7 @@ import {
   developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
+import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import {
   composeDevelopmentEmployeeWorkspace,
   createDevelopmentEmployeeCaseWorkspaceDetailReader,
@@ -1253,6 +1254,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     registrations: developmentExecutionContractRegistrations,
     implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
   })
+  const codeHistoryQueries = composeSqliteCodeHistoryQueries(db)
 
   // 7. HTTP server.
   const app = createApp({
@@ -1266,6 +1268,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     dbVersion,
     db,
     executionContracts: employeeExecutionContracts,
+    codeHistoryQueries,
     identityAccess: integrationIdentityAccess,
     maintenanceStatus: maintenanceService.status,
     secretBox,

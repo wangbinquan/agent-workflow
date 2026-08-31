@@ -4,9 +4,10 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { buildActor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composePostgresqlCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -18,8 +19,11 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { mountCodeRoutes } from '@/routes/code'
 import { resetRouteMetaRegistry } from '@/routes/registry'
-import type { AppDeps } from '@/server'
 import { errorHandler } from '@/util/errors'
+
+const CODE_ROUTE_SOURCE = resolve(import.meta.dir, '..', 'src', 'routes', 'code.ts')
+const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'server.ts')
+const START_SOURCE = resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts')
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -83,7 +87,7 @@ function appWithHistory(history: ReturnType<typeof composePostgresqlCodeHistoryQ
   }
   app.use('*', injectActor)
   app.onError(errorHandler)
-  mountCodeRoutes(app, { db: {} as DbClient } as AppDeps, history)
+  mountCodeRoutes(app, history)
   return app
 }
 
@@ -97,6 +101,21 @@ afterEach(() => {
 })
 
 describe('RFC-349 code-history composition', () => {
+  test('route mounting cannot reopen SQLite after bootstrap selected a provider', () => {
+    const routeSource = readFileSync(CODE_ROUTE_SOURCE, 'utf8')
+    const serverSource = readFileSync(SERVER_SOURCE, 'utf8')
+    const startSource = readFileSync(START_SOURCE, 'utf8')
+
+    expect(routeSource).not.toContain('sqliteCodeHistoryFallback')
+    expect(routeSource).not.toContain('deps.db')
+    expect(serverSource).toContain(
+      'codeHistoryQueries: deps.codeHistoryQueries ?? composeSqliteCodeHistoryQueries(deps.db)',
+    )
+    expect(serverSource).toContain('mountCodeRoutes(app, deps.codeHistoryQueries)')
+    expect(startSource).toContain('const codeHistoryQueries = composeSqliteCodeHistoryQueries(db)')
+    expect(startSource).toContain('codeHistoryQueries,')
+  })
+
   test('one PostgreSQL aggregate drives all four HTTP history projections', async () => {
     const fixture = postgresqlHistoryFixture()
     const app = appWithHistory(fixture.history)

@@ -131,7 +131,7 @@ import { mountDigitalEmployeeRoutes } from '@/routes/digitalEmployees'
 import { mountEventCenterRoutes } from '@/routes/eventCenter'
 import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
-import { mountCodeRoutes } from '@/routes/code'
+import { mountCodeRoutes, type CodeHistoryRouteQueries } from '@/routes/code'
 import { mountWebhookEndpointRoutes } from '@/routes/webhookEndpoints'
 import { mountWebhookTriggerRoutes } from '@/routes/webhookTriggers'
 import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
@@ -168,6 +168,7 @@ import {
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
+import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import {
   createDevelopmentActivityWorkerBinding,
   type DevelopmentActivityWorkerBinding,
@@ -327,6 +328,12 @@ export interface AppDeps {
    */
   executionContracts?: ReturnType<typeof composeExecutionContract>
   /**
+   * RFC-349 provider-neutral code-history projections. Production bootstrap
+   * injects the selected provider aggregate once; direct createApp tests may
+   * omit it and retain the SQLite compatibility composition.
+   */
+  codeHistoryQueries?: CodeHistoryRouteQueries
+  /**
    * RFC-349 bootstrap-owned database migration application. Production and
    * contract harnesses inject one composition root with their own admission
    * and durable paths; route mounting never constructs provider mechanisms.
@@ -422,6 +429,7 @@ type RuntimeComposedAppDeps = AppDeps & {
   readonly taskExecutionReadModels: TaskExecutionReadModels
   readonly collaborationContext: CollaborationCommandContext
   readonly executionContracts: ReturnType<typeof composeExecutionContract>
+  readonly codeHistoryQueries: CodeHistoryRouteQueries
 }
 
 type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
@@ -697,6 +705,7 @@ export function createApp(deps: AppDeps): Hono {
         registrations: developmentExecutionContractRegistrations,
         implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
       }),
+    codeHistoryQueries: deps.codeHistoryQueries ?? composeSqliteCodeHistoryQueries(deps.db),
     collaborationContext:
       deps.collaborationContext ??
       createCollaborationCommandContext({
@@ -1185,7 +1194,7 @@ export function mountApiRoutes(
       currentSubjects: identityAccess.resolveAuthority,
     })
   }
-  mountCodeRoutes(app, deps) // RFC-304 T31b
+  mountCodeRoutes(app, deps.codeHistoryQueries) // RFC-304 T31b / RFC-349 provider cutover
   mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
   mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center
   mountExecutionContractRoutes(app, executionContracts) // platform deterministic IO contracts

@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 
 import { buildActor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createCodeMatrixQuery } from '@/modules/code-capability/application/codeMatrixQuery'
 import { composePostgresqlCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
@@ -19,7 +18,6 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { mountCodeRoutes } from '@/routes/code'
 import { resetRouteMetaRegistry } from '@/routes/registry'
-import type { AppDeps } from '@/server'
 import { errorHandler } from '@/util/errors'
 
 const REPO = 'repo-1'
@@ -82,7 +80,7 @@ function appWithHistory(history: ReturnType<typeof composePostgresqlCodeHistoryQ
   }
   app.use('*', injectActor)
   app.onError(errorHandler)
-  mountCodeRoutes(app, { db: {} as DbClient } as AppDeps, history)
+  mountCodeRoutes(app, history)
   return app
 }
 

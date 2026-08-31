@@ -20,13 +20,12 @@
 // same file as a switch a repository owner may flip.
 
 import type { Hono } from 'hono'
-import {
-  createCodeMatrixQuery,
-  createCodeDeliveryChainQuery,
-  createCodeRoundAttemptsQuery,
-  createCodeWorkItemProjectionQuery,
-} from '@/modules/code-capability/application/codeMatrixQuery'
-import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
+import type {
+  CodeMatrixQuery,
+  CodeMetricsQuery,
+  CodeRoundAttemptsQuery,
+  CodeWorkItemProjectionQuery,
+} from '@/modules/code-capability/public/queries'
 import {
   CODE_CAPABILITIES,
   parseCodeCapabilityId,
@@ -34,7 +33,6 @@ import {
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { projectStageGraph } from '@/modules/code-capability/domain/stageGraph'
 import { registerRoute } from '@/routes/registry'
-import type { AppDeps } from '@/server'
 import { ValidationError } from '@/util/errors'
 
 /**
@@ -43,28 +41,24 @@ import { ValidationError } from '@/util/errors'
  * which would create a new RFC-317 R1 inbound edge.
  */
 export interface CodeHistoryRouteQueries {
-  readonly matrix: ReturnType<typeof createCodeMatrixQuery>
-  readonly workItems: ReturnType<typeof createCodeWorkItemProjectionQuery>
-  readonly attempts: ReturnType<typeof createCodeRoundAttemptsQuery>
-  readonly deliveries: ReturnType<typeof createCodeDeliveryChainQuery>
-  readonly metrics: ReturnType<typeof createCodeMetricsQuery>
+  readonly matrix: CodeMatrixQuery
+  readonly workItems: CodeWorkItemProjectionQuery
+  readonly attempts: CodeRoundAttemptsQuery
+  readonly deliveries: {
+    forProject(input: {
+      readonly stableProjectId: string
+      readonly limit?: number
+    }): Promise<readonly unknown[]>
+    forCorrelation(correlationId: string): Promise<readonly unknown[]>
+    failures(input: {
+      readonly stableProjectId?: string
+      readonly limit?: number
+    }): Promise<readonly unknown[]>
+  }
+  readonly metrics: CodeMetricsQuery
 }
 
-function sqliteCodeHistoryFallback(db: AppDeps['db']): CodeHistoryRouteQueries {
-  return Object.freeze({
-    matrix: createCodeMatrixQuery(db),
-    workItems: createCodeWorkItemProjectionQuery(db),
-    attempts: createCodeRoundAttemptsQuery(db),
-    deliveries: createCodeDeliveryChainQuery(db),
-    metrics: createCodeMetricsQuery(db),
-  })
-}
-
-export function mountCodeRoutes(
-  app: Hono,
-  deps: AppDeps,
-  history: CodeHistoryRouteQueries = sqliteCodeHistoryFallback(deps.db),
-): void {
+export function mountCodeRoutes(app: Hono, history: CodeHistoryRouteQueries): void {
   const matrix = history.matrix
   const projection = history.workItems
   const attempts = history.attempts
