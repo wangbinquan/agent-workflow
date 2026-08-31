@@ -31,7 +31,11 @@ import {
 } from '@/platform/persistence/generationStore'
 import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logicalDatabaseExport'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
-import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import type {
+  PostgresqlDatabaseRuntime,
+  PostgresqlPool,
+  SqlRows,
+} from '@/platform/persistence/postgresqlRuntime'
 import type {
   LogicalColumnContract,
   LogicalSchemaContract,
@@ -110,6 +114,14 @@ function tempRoot(): string {
   const value = mkdtempSync(join(tmpdir(), 'rfc349-postgresql-backup-'))
   roots.push(value)
   return value
+}
+
+function rows(value: readonly Record<string, unknown>[]): SqlRows {
+  return Object.assign(Promise.resolve(value), {
+    async values() {
+      return value.map((row) => Object.values(row))
+    },
+  })
 }
 
 function advanceToAcceptingWrites(input: {
@@ -220,9 +232,50 @@ function livePostgresqlFixture() {
       activatedAt: 11,
     },
   })
+  const worktreePath = join(appHome, 'active-worktree')
+  const repoPath = join(appHome, 'cached-repo')
+  mkdirSync(worktreePath, { recursive: true })
+  mkdirSync(repoPath, { recursive: true })
+  writeFileSync(join(worktreePath, 'tracked.txt'), 'live PostgreSQL worktree\n')
+  const pool: PostgresqlPool = {
+    async reserve() {
+      throw new Error('provider backup assets must not reserve a connection')
+    },
+    unsafe(sql: string) {
+      if (sql.includes('"agent_workflow"."workflows"')) {
+        return rows([
+          {
+            id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+            name: 'PostgreSQL backup workflow',
+            description: 'default production application assets',
+            definition: JSON.stringify({
+              $schema_version: 1,
+              inputs: [],
+              nodes: [],
+              edges: [],
+            }),
+          },
+        ])
+      }
+      if (sql.includes('"agent_workflow"."tasks"')) {
+        return rows([
+          {
+            id: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+            worktreePath,
+            branch: 'agent-workflow/postgresql-backup',
+            repoPath,
+            baseCommit: null,
+          },
+        ])
+      }
+      throw new Error(`unexpected PostgreSQL provider backup query: ${sql}`)
+    },
+    async close() {},
+  }
   const runtime = {
     provider: 'postgresql',
     generationId: GENERATION_ID,
+    providerPool: () => pool,
   } as PostgresqlDatabaseRuntime
   return { appHome, operationsRoot, runtime }
 }
@@ -268,16 +321,6 @@ describe('RFC-349 PostgreSQL provider backup', () => {
       contract: CONTRACT,
       now: 5,
       includeWorktrees: true,
-      application: {
-        async exportWorkflows(destination) {
-          writeFileSync(join(destination, 'workflow.yaml'), 'name: workflow')
-          return 1
-        },
-        async captureWorktrees(stagingDirectory) {
-          mkdirSync(join(stagingDirectory, 'worktrees', 'task-1'), { recursive: true })
-          writeFileSync(join(stagingDirectory, 'worktrees', 'task-1', 'patch'), 'diff')
-        },
-      },
       openLogicalSource: async () => logicalSource(() => (closed += 1)),
     })
 
@@ -286,7 +329,8 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     expect(backup.contents).toEqual({ workflows: 1, skills: 1, config: true, db: true })
     expect(closed).toBe(1)
     expect(existsSync(join(extracted, 'db.sqlite'))).toBe(false)
-    expect(existsSync(join(extracted, 'worktrees', 'task-1', 'patch'))).toBe(true)
+    expect(existsSync(join(extracted, 'workflows', '01ARZ3NDEKTSV4RRFFQ69G5FAV.yaml'))).toBe(true)
+    expect(existsSync(join(extracted, 'worktrees', '01ARZ3NDEKTSV4RRFFQ69G5FAW.tar.gz'))).toBe(true)
     const manifest = readManifest(extracted)
     expect(manifest).toMatchObject({
       manifestVersion: 2,

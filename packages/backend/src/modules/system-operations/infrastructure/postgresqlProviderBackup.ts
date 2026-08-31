@@ -22,6 +22,7 @@ import {
 } from '@/platform/persistence/schemaContract'
 import { openVerifiedLogicalDatabaseArtifactSource } from '@/platform/persistence/logicalDatabaseRestore'
 import { createFileDatabaseMigrationStore } from './fileDatabaseMigrationStore'
+import { createPostgresqlProviderBackupApplicationAssets } from './postgresqlProviderBackupApplicationAssets'
 
 export class PostgresqlProviderBackupError extends Error {
   constructor(
@@ -44,7 +45,9 @@ type PostgresqlLogicalSourceFactory = (input: {
 
 export interface CreatePostgresqlProviderBackupOptions {
   readonly runtime: PostgresqlDatabaseRuntime
-  readonly application: PortableBackupApplicationAssets
+  /** Infrastructure test/embedding seam; production reads assets from the live provider. */
+  readonly application?: PortableBackupApplicationAssets
+  readonly maxWorktreeBytes?: number
   readonly appHome: string
   readonly operationsRoot?: string
   readonly generationPointerPath?: string
@@ -118,12 +121,20 @@ export async function createPostgresqlProviderBackup(
   }
 
   const sourceFactory = options.openLogicalSource ?? openPostgresqlLogicalSource
+  const application =
+    options.application ??
+    createPostgresqlProviderBackupApplicationAssets({
+      runtime: options.runtime,
+      ...(options.maxWorktreeBytes === undefined
+        ? {}
+        : { maxWorktreeBytes: options.maxWorktreeBytes }),
+    })
   return await createPortableBackupArchive({
     appHome: options.appHome,
     kind: options.kind,
     includeWorktrees: options.includeWorktrees,
     now: options.now,
-    application: options.application,
+    application,
     async exportDatabase({ logicalArtifactRoot, operationId }) {
       const source = await sourceFactory({
         runtime: options.runtime,
