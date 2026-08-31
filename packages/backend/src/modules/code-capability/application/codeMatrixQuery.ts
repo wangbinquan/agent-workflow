@@ -7,12 +7,11 @@
 import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { codeAiAttempts, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
-import {
-  deliveriesByCorrelation,
-  failedDeliveries,
-  recentDeliveries,
-  type DeliveryRow,
-} from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
+import type {
+  DeliveryChainReadPort,
+  DeliveryRow,
+} from '@/modules/code-capability/application/ports/deliveryChainRead'
+import { createSqliteDeliveryChainRead } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
 import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
 import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
@@ -348,21 +347,28 @@ export interface CodeDeliveryChainQuery {
   failures(input: { stableProjectId?: string; limit?: number }): Promise<DeliveryRow[]>
 }
 
-export function createCodeDeliveryChainQuery(db: DbClient): CodeDeliveryChainQuery {
+function isDeliveryChainReadPort(
+  input: DbClient | DeliveryChainReadPort,
+): input is DeliveryChainReadPort {
+  return 'recent' in input && typeof input.recent === 'function'
+}
+
+export function createCodeDeliveryChainQuery(
+  input: DbClient | DeliveryChainReadPort,
+): CodeDeliveryChainQuery {
+  const reader = isDeliveryChainReadPort(input) ? input : createSqliteDeliveryChainRead(input)
   return {
     async forProject(input) {
-      return await recentDeliveries({
-        db,
+      return await reader.recent({
         stableProjectId: input.stableProjectId,
         ...(input.limit === undefined ? {} : { limit: input.limit }),
       })
     },
     async forCorrelation(correlationId) {
-      return await deliveriesByCorrelation({ db, correlationId })
+      return await reader.byCorrelation(correlationId)
     },
     async failures(input) {
-      return await failedDeliveries({
-        db,
+      return await reader.failures({
         ...(input.stableProjectId === undefined ? {} : { stableProjectId: input.stableProjectId }),
         ...(input.limit === undefined ? {} : { limit: input.limit }),
       })

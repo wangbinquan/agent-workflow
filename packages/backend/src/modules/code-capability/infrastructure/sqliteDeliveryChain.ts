@@ -16,23 +16,11 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { codeTriggerDeliveries } from '@/db/schema'
+import type {
+  DeliveryChainReadPort,
+  DeliveryRow,
+} from '@/modules/code-capability/application/ports/deliveryChainRead'
 import type { DeliveryOutcome, DeliveryStep } from '@/modules/code-capability/domain/deliveryChain'
-
-export interface DeliveryRow {
-  id: string
-  correlationId: string
-  capability: string | null
-  step: DeliveryStep
-  outcome: DeliveryOutcome['kind']
-  reason: string | null
-  queuedAt: number | null
-  queuePosition: number | null
-  waitingOn: string | null
-  roundId: string | null
-  isProbe: boolean
-  createdAt: number
-  updatedAt: number
-}
 
 /** Recent deliveries for one project, newest first. */
 export async function recentDeliveries(input: {
@@ -79,6 +67,20 @@ export async function failedDeliveries(input: {
     .orderBy(desc(codeTriggerDeliveries.createdAt))
     .limit(input.limit ?? 50)
   return rows.map(toRow)
+}
+
+export function createSqliteDeliveryChainRead(db: DbClient): DeliveryChainReadPort {
+  return {
+    async recent(input) {
+      return await recentDeliveries({ db, ...input })
+    },
+    async byCorrelation(correlationId) {
+      return await deliveriesByCorrelation({ db, correlationId })
+    },
+    async failures(input) {
+      return await failedDeliveries({ db, ...input })
+    },
+  }
 }
 
 function toRow(row: typeof codeTriggerDeliveries.$inferSelect): DeliveryRow {
