@@ -27,6 +27,13 @@ import {
   SkillSchema,
   UpdatePluginRequestSchema,
   UpdateAgentRequestSchema,
+  CopyWorkflowRequestSchema,
+  CreateWorkflowSchema,
+  DeleteWorkflowSchema,
+  SaveWorkflowReceiptSchema as SaveWorkflowCatalogReceiptSchema,
+  UpdateWorkflowSchema,
+  WorkflowDetailSchema,
+  WorkflowSchema,
   CopyWorkgroupRequestSchema,
   CreateWorkgroupSchema,
   DeleteWorkgroupSchema,
@@ -50,6 +57,7 @@ import type {
   SkillCommands,
   SkillFileCommands,
   SkillVersionCommands,
+  WorkflowCommands,
   WorkgroupCommands,
 } from './commands'
 import type {
@@ -61,6 +69,8 @@ import type {
   PluginOperationContext,
   SkillAclIdentityParticipant,
   SkillOperationContext,
+  WorkflowAclIdentityParticipant,
+  WorkflowOperationContext,
   WorkgroupAclIdentityParticipant,
   WorkgroupOperationContext,
 } from './participants'
@@ -72,6 +82,7 @@ import type {
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
+  WorkflowQueries,
   WorkgroupQueries,
 } from './queries'
 import type {
@@ -111,6 +122,13 @@ import type {
   GetSkillCatalogInput,
   SkillCatalogContent,
   SkillCatalogResource,
+  CopyWorkflowCatalogInput,
+  DeleteWorkflowCatalogReceipt,
+  GetWorkflowCatalogInput,
+  UpdateWorkflowCatalogInput,
+  UpdateWorkflowCatalogReceipt,
+  WorkflowCatalogDetail,
+  WorkflowCatalogResource,
 } from './types'
 
 const AGENT_PUBLIC_ERRORS = Object.freeze([
@@ -748,6 +766,166 @@ export function createPluginOperationDescriptors(
       outputSchema: PluginUpgradeResultSchema,
       invoke: (authority: PluginOperationContext, input: UpgradePluginCatalogInput) =>
         updateCommands.upgrade(authority, input),
+    }),
+  })
+}
+
+const WORKFLOW_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'resource-operation-stale',
+  'internal-error',
+] as const)
+
+const emptyWorkflowInputSchema = z.object({}).strict()
+const getWorkflowInputSchema = z.object({ id: z.string().min(1) }).strict()
+const copyWorkflowInputSchema = z
+  .object({ id: z.string().min(1), copy: CopyWorkflowRequestSchema })
+  .strict()
+const updateWorkflowInputSchema = z
+  .object({ id: z.string().min(1), update: UpdateWorkflowSchema })
+  .strict()
+const deleteWorkflowInputSchema = z
+  .object({ id: z.string().min(1), deletion: DeleteWorkflowSchema })
+  .strict()
+const workflowAclIdentitySchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string(),
+    ownerUserId: z.string().nullable(),
+    visibility: ResourceVisibilitySchema,
+    builtin: z.boolean(),
+  })
+  .strict()
+const deleteWorkflowReceiptSchema = z
+  .object({
+    deleted: workflowAclIdentitySchema,
+    clientMutationId: z.string().min(1),
+    deletedVersion: z.number().int().positive(),
+  })
+  .strict()
+
+export interface WorkflowOperationDescriptors {
+  readonly list: QueryOperationDescriptor<
+    Record<never, never>,
+    WorkflowCatalogResource[],
+    WorkflowOperationContext
+  >
+  readonly get: QueryOperationDescriptor<
+    GetWorkflowCatalogInput,
+    WorkflowCatalogDetail | null,
+    WorkflowOperationContext
+  >
+  readonly create: CommandOperationDescriptor<
+    z.infer<typeof CreateWorkflowSchema>,
+    WorkflowCatalogDetail,
+    WorkflowOperationContext
+  >
+  readonly copy: CommandOperationDescriptor<
+    CopyWorkflowCatalogInput,
+    WorkflowCatalogDetail,
+    WorkflowOperationContext
+  >
+  readonly update: CommandOperationDescriptor<
+    z.infer<typeof updateWorkflowInputSchema>,
+    UpdateWorkflowCatalogReceipt,
+    WorkflowOperationContext
+  >
+  readonly delete: CommandOperationDescriptor<
+    z.infer<typeof deleteWorkflowInputSchema>,
+    DeleteWorkflowCatalogReceipt,
+    WorkflowOperationContext
+  >
+}
+
+export interface WorkflowCatalogModule {
+  readonly commands: WorkflowCommands
+  readonly queries: WorkflowQueries
+  readonly operations: WorkflowOperationDescriptors
+  readonly participants: Readonly<{
+    aclIdentity: WorkflowAclIdentityParticipant
+  }>
+}
+
+export function createWorkflowOperationDescriptors(
+  commands: WorkflowCommands,
+  queries: WorkflowQueries,
+): WorkflowOperationDescriptors {
+  return Object.freeze({
+    list: defineQueryOperation({
+      id: 'workflow-catalog.list-workflows.v1',
+      summary: 'List workflows visible to the caller',
+      permissions: ['workflows:read'],
+      publicErrors: WORKFLOW_PUBLIC_ERRORS,
+      inputSchema: emptyWorkflowInputSchema,
+      outputSchema: z.array(WorkflowSchema),
+      invoke: async (authority: WorkflowOperationContext) => [...(await queries.list(authority))],
+    }),
+    get: defineQueryOperation({
+      id: 'workflow-catalog.get-workflow.v1',
+      summary: 'Get one workflow',
+      permissions: ['workflows:read'],
+      publicErrors: WORKFLOW_PUBLIC_ERRORS,
+      inputSchema: getWorkflowInputSchema,
+      outputSchema: WorkflowDetailSchema.nullable(),
+      invoke: (authority: WorkflowOperationContext, input: GetWorkflowCatalogInput) =>
+        queries.get(authority, input),
+    }),
+    create: defineCommandOperation({
+      id: 'workflow-catalog.create-workflow.v1',
+      summary: 'Create a workflow',
+      permissions: ['workflows:create'],
+      publicErrors: WORKFLOW_PUBLIC_ERRORS,
+      inputSchema: CreateWorkflowSchema,
+      outputSchema: WorkflowDetailSchema,
+      invoke: (authority: WorkflowOperationContext, input: z.infer<typeof CreateWorkflowSchema>) =>
+        commands.create(authority, {
+          submission: { kind: 'json-body', body: JSON.stringify(input) ?? '{}' },
+        }),
+    }),
+    copy: defineCommandOperation({
+      id: 'workflow-catalog.copy-workflow.v1',
+      summary: 'Copy a workflow into a private duplicate',
+      permissions: ['workflows:create'],
+      publicErrors: WORKFLOW_PUBLIC_ERRORS,
+      inputSchema: copyWorkflowInputSchema,
+      outputSchema: WorkflowDetailSchema,
+      invoke: (authority: WorkflowOperationContext, input: CopyWorkflowCatalogInput) =>
+        commands.copy(authority, input),
+    }),
+    update: defineCommandOperation({
+      id: 'workflow-catalog.update-workflow.v1',
+      summary: 'Replace a workflow',
+      permissions: ['workflows:update'],
+      publicErrors: WORKFLOW_PUBLIC_ERRORS,
+      inputSchema: updateWorkflowInputSchema,
+      outputSchema: SaveWorkflowCatalogReceiptSchema,
+      invoke: (
+        authority: WorkflowOperationContext,
+        input: z.infer<typeof updateWorkflowInputSchema>,
+      ) =>
+        commands.update(authority, {
+          id: input.id,
+          submission: { kind: 'json-body', body: JSON.stringify(input.update) ?? '{}' },
+        } satisfies UpdateWorkflowCatalogInput),
+    }),
+    delete: defineCommandOperation({
+      id: 'workflow-catalog.delete-workflow.v1',
+      summary: 'Delete a workflow',
+      permissions: ['workflows:delete'],
+      publicErrors: WORKFLOW_PUBLIC_ERRORS,
+      inputSchema: deleteWorkflowInputSchema,
+      outputSchema: deleteWorkflowReceiptSchema,
+      invoke: (
+        authority: WorkflowOperationContext,
+        input: z.infer<typeof deleteWorkflowInputSchema>,
+      ) =>
+        commands.delete(authority, {
+          id: input.id,
+          submission: { kind: 'json-body', body: JSON.stringify(input.deletion) ?? '{}' },
+        }),
     }),
   })
 }

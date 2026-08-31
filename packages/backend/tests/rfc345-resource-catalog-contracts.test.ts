@@ -1253,6 +1253,144 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ])
   })
 
+  test('T5-WF active HTTP binding executes the owned aggregate and preserves exact legacy callers', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const route = readFileSync(resolve(sourceRoot, 'routes/workflows.ts'), 'utf8')
+    const application = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/workflows/workflowApplication.ts'),
+      'utf8',
+    )
+    const repository = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteWorkflowRepository.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/workflowOperations.ts'),
+      'utf8',
+    )
+    const participant = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/resource-catalog/application/participants/workflowAclIdentity.ts',
+      ),
+      'utf8',
+    )
+    const operations = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
+      'utf8',
+    )
+    const publicTypes = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/types.ts'),
+      'utf8',
+    )
+    const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+
+    expect(route).not.toContain("from '@/services/workflow'")
+    expect(route).toContain("from '@/services/workflow.validator'")
+    expect(route).toContain("from '@/services/resourceRefs'")
+    for (const contract of [
+      'WorkflowCommands',
+      'WorkflowQueries',
+      'WorkflowAclIdentityParticipant',
+    ]) {
+      expect(route).toContain(contract)
+    }
+    for (const consumer of [
+      'commands.create(',
+      'commands.copy(',
+      'commands.update(',
+      'commands.delete(',
+      'queries.list(',
+      'queries.get(',
+      'aclIdentity.load(',
+    ]) {
+      expect(route).toContain(consumer)
+    }
+    expect(publicTypes).not.toContain('readonly submission: unknown')
+    expect(publicTypes).toContain("readonly kind: 'json-body'")
+    expect(application).toContain('CreateWorkflowSchema.safeParse')
+    expect(application).toContain('UpdateWorkflowSchema.safeParse')
+    expect(application).toContain('DeleteWorkflowSchema.safeParse')
+    expect(application).not.toContain("from '@/db/")
+    expect(application).not.toContain('/infrastructure/')
+    expect(repository).toContain("from '@/services/workflow'")
+    expect(repository).toContain('explicit compatibility island')
+    expect(composition).toContain('createSqliteWorkflowRepository')
+    expect(composition).toContain('createWorkflowApplication')
+    expect(composition).toContain('createWorkflowAclIdentityParticipant')
+    expect(participant).toContain('trustedWorkflowAclIdentityParticipants')
+    expect(participant).toContain('Object.freeze')
+
+    const deleteCommandStart = application.indexOf('async delete(')
+    const loadVisible = application.indexOf(
+      'const current = await loadVisibleIdentity(authority, input.id)',
+      deleteCommandStart,
+    )
+    const assertMutable = application.indexOf('deps.policy.assertMutable(current)', loadVisible)
+    const requireGovern = application.indexOf(
+      'await deps.access.requireResourceGovern(authority, current)',
+      assertMutable,
+    )
+    const parseSubmission = application.indexOf(
+      'const deletion = parseDeleteSubmission(jsonOrEmpty(input.submission.body))',
+      requireGovern,
+    )
+    const confirmDelete = application.indexOf(
+      'assertDeleteConfirm(deletion, current.name)',
+      parseSubmission,
+    )
+    expect(deleteCommandStart).toBeGreaterThanOrEqual(0)
+    expect(loadVisible).toBeGreaterThan(deleteCommandStart)
+    expect(assertMutable).toBeGreaterThan(loadVisible)
+    expect(requireGovern).toBeGreaterThan(assertMutable)
+    expect(parseSubmission).toBeGreaterThan(requireGovern)
+    expect(confirmDelete).toBeGreaterThan(parseSubmission)
+
+    for (const operationId of [
+      'workflow-catalog.list-workflows.v1',
+      'workflow-catalog.get-workflow.v1',
+      'workflow-catalog.create-workflow.v1',
+      'workflow-catalog.update-workflow.v1',
+      'workflow-catalog.delete-workflow.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+      expect(mcpBindings).toContain(operationId)
+    }
+    expect(operations).toContain('workflow-catalog.copy-workflow.v1')
+    expect(server).toContain('composeWorkflowCatalog({ db: effectiveDeps.db })')
+    expect(server).toContain('commands: workflowCatalog.commands')
+    expect(server).toContain('queries: workflowCatalog.queries')
+    expect(server).toContain('aclIdentity: workflowCatalog.participants.aclIdentity')
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name)
+        return entry.isDirectory() ? walk(path) : entry.name.endsWith('.ts') ? [path] : []
+      })
+    const legacyConsumers = walk(sourceRoot)
+      .filter((path) => readFileSync(path, 'utf8').includes("@/services/workflow'"))
+      .map((path) => path.slice(sourceRoot.length + 1))
+      .sort()
+    expect(legacyConsumers).toEqual([
+      'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
+      'modules/resource-catalog/infrastructure/sqliteWorkflowRepository.ts',
+      'routes/tasks.ts',
+      'services/backup.ts',
+      'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/fusion.ts',
+      'services/intent/applyChangeset.ts',
+      'services/intent/dumpBuilder.ts',
+      'services/scheduledTasks.ts',
+      'services/task.ts',
+      'services/taskLaunchGate.ts',
+      'services/webhook/triggerValidation.ts',
+      'services/workflow.validator.ts',
+      'services/workflow.yaml.ts',
+      'services/workgroup/dwActions.ts',
+    ])
+  })
+
   test('BundleApply keeps lifecycle ownership while seven writer arms stay in infrastructure', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const engine = readFileSync(resolve(sourceRoot, 'services/bundle/apply.ts'), 'utf8')

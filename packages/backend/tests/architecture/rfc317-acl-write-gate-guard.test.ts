@@ -110,6 +110,8 @@ const PLUGIN_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/plugins/pluginApplication.ts'
 const SKILL_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/skills/skillApplication.ts'
+const WORKFLOW_OPERATION_SOURCE =
+  'packages/backend/src/modules/resource-catalog/application/workflows/workflowApplication.ts'
 const WORKGROUP_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupApplication.ts'
 const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = {
@@ -132,6 +134,10 @@ const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = 
   'packages/backend/src/routes/skills.ts': calledIdentifierNames(
     SKILL_OPERATION_SOURCE,
     readFileSync(resolve(REPO_ROOT, SKILL_OPERATION_SOURCE), 'utf8'),
+  ),
+  'packages/backend/src/routes/workflows.ts': calledIdentifierNames(
+    WORKFLOW_OPERATION_SOURCE,
+    readFileSync(resolve(REPO_ROOT, WORKFLOW_OPERATION_SOURCE), 'utf8'),
   ),
   'packages/backend/src/routes/workgroups.ts': calledIdentifierNames(
     WORKGROUP_OPERATION_SOURCE,
@@ -166,8 +172,6 @@ const usesEditGate = (source: RouteSource): boolean =>
 const EDIT_GATE_ELSEWHERE_ALLOWLIST: Readonly<Record<string, string>> = {
   [ACL_MOUNTER_DEFINITION]:
     '它是 /acl 端点的模板定义处，本身不承载任何资源的内容写；写门在各资源自己的路由或服务里。',
-  'packages/backend/src/routes/workflows.ts':
-    '工作流的保存不在路由层判档：PUT 把 body 交给 services/workflow.ts，写门是那里的 assertPrincipalCanEditInTx——它必须拿事务内的当前名字做改名围栏，路由层做不到。本文件里的 requireResourceGovern 是 DELETE 的治理门。',
 }
 
 describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () => {

@@ -9,15 +9,19 @@
 
 import {
   CopyWorkflowRequestSchema,
-  CreateWorkflowSchema,
-  DeleteWorkflowSchema,
-  UpdateWorkflowSchema,
   WorkflowDraftValidationRequestSchema,
   WorkflowValidationRequestSchema,
 } from '@agent-workflow/shared'
 import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
+import type { WorkflowCommands } from '@/modules/resource-catalog/public/commands'
+import type {
+  WorkflowAclIdentityParticipant,
+  WorkflowOperationContext,
+} from '@/modules/resource-catalog/public/participants'
+import type { WorkflowQueries } from '@/modules/resource-catalog/public/queries'
+import type { WorkflowCatalogResource } from '@/modules/resource-catalog/public/types'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
@@ -27,30 +31,12 @@ import {
   workflowReadLensFor,
 } from '@/services/tokenRedaction'
 import {
-  canViewResource,
-  filterVisibleRows,
-  requireResourceGovern,
-  requireResourceView,
-} from '@/services/resourceAcl'
-import { assertDeleteConfirm } from '@/services/deleteConfirm'
-import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemResources'
-import {
   assertNewRefsUsable,
   diffNewNames,
   extractWorkflowAgentRefs,
   extractWorkflowWorkflowRefs,
   extractWorkflowWorkgroupRefs,
 } from '@/services/resourceRefs'
-import {
-  copyWorkflow,
-  createWorkflow,
-  deleteWorkflow,
-  getWorkflow,
-  getWorkflowAclRow,
-  listWorkflows,
-  updateWorkflow,
-  workflowRevisionOf,
-} from '@/services/workflow'
 import {
   loadWorkflowValidationContext,
   validateWorkflowDefinition,
@@ -63,11 +49,24 @@ import { mountAclEndpoints } from './resourceAcl'
 import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { safeJsonOrEmpty } from '@/util/http'
 
-export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
+export interface WorkflowRouteDependencies {
+  readonly commands: WorkflowCommands
+  readonly queries: WorkflowQueries
+  readonly aclIdentity: WorkflowAclIdentityParticipant
+  readonly authorityFor: (actor: Actor) => WorkflowOperationContext
+}
+
+export function mountWorkflowRoutes(
+  app: Hono,
+  deps: AppDeps,
+  module: WorkflowRouteDependencies,
+): void {
+  const { commands, queries, aclIdentity } = module
+
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleWorkflow(actor: Actor, id: string) {
-    const wf = await getWorkflow(deps.db, id)
-    if (wf === null || !(await canViewResource(deps.db, actor, 'workflow', wf))) {
+    const wf = await queries.get(module.authorityFor(actor), { id })
+    if (wf === null) {
       throw new NotFoundError('workflow-not-found', `workflow '${id}' not found`)
     }
     return wf
@@ -87,11 +86,9 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       // daemon references by name, not a user list row. Discriminator = reserved
       // name AND __system__ owner — workflows.name is non-unique, so a user-owned
       // workflow named aw-skill-fusion must stay visible. See systemResources.ts.
-      const rows = await filterVisibleRows(
-        deps.db,
-        actorOf(c),
-        'workflow',
-        excludeBuiltinWorkflows(await listWorkflows(deps.db)),
+      const actor = actorOf(c)
+      const rows: readonly WorkflowCatalogResource[] = await queries.list(
+        module.authorityFor(actor),
       )
       // RFC-311 (proposal C2): the list carried every workflow's FULL definition
       // JSON — the transport bulk of this endpoint — while the list UI only
@@ -106,7 +103,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       const withDefinition = c.req.query('include') === 'definition'
       return c.json(
         rows.map((wf) => {
-          const serialized = serializeWorkflowFor(wf, workflowReadLensFor(actorOf(c)))
+          const serialized = serializeWorkflowFor(wf, workflowReadLensFor(actor))
           const nodeCount = serialized.definition.nodes.length
           if (withDefinition) return { ...serialized, nodeCount }
           const { definition: _definition, ...rest } = serialized
@@ -146,17 +143,10 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create a workflow',
     },
     async (c) => {
-      const parsed = CreateWorkflowSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('workflow-invalid', 'invalid workflow payload', {
-          issues: parsed.error.issues,
-        })
-      }
       const actor = actorOf(c)
-      // Service preflight + final dbTxSync bind every canonical id to this actor.
-      const created = await createWorkflow(deps.db, parsed.data, {
-        ownerUserId: actor.user.id,
-        actor,
+      const body = await c.req.raw.text().catch(() => '')
+      const created = await commands.create(module.authorityFor(actor), {
+        submission: { kind: 'json-body', body },
       })
       return c.json(serializeWorkflowFor(created, workflowReadLensFor(actor)), 201)
     },
@@ -184,7 +174,10 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
       // must not hand back the env plaintext the read path hides.
       return c.json(
         serializeWorkflowFor(
-          await copyWorkflow(deps.db, c.req.param('id'), parsed.data, actor),
+          await commands.copy(module.authorityFor(actor), {
+            id: c.req.param('id'),
+            copy: parsed.data,
+          }),
           workflowReadLensFor(actor),
         ),
         201,
@@ -203,18 +196,16 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const parsed = UpdateWorkflowSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('workflow-invalid', 'invalid workflow save payload', {
-          issues: parsed.error.issues,
-        })
-      }
       const actor = actorOf(c)
+      const body = await c.req.raw.text().catch(() => '')
       // A save answers with a RECEIPT, whose `snapshot` carries the definition
       // just written — the record projection would not reach it.
       return c.json(
         serializeWorkflowReceiptFor(
-          await updateWorkflow(deps.db, id, parsed.data, { kind: 'actor', actor }),
+          await commands.update(module.authorityFor(actor), {
+            id,
+            submission: { kind: 'json-body', body },
+          }),
           workflowReadLensFor(actor),
         ),
       )
@@ -232,29 +223,12 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      // RFC-222 (N-5 order): existence 404 → visibility 404 → builtin/owner 403 →
-      // confirm 422 → deleteWorkflow (OCC + reference refusal, re-checked in-tx).
-      // Uses the raw ACL row (NOT loadVisibleWorkflow) so a workflow with a corrupt
-      // stored definition is still deletable — deletion must not require a
-      // parseable definition.
-      const row = await getWorkflowAclRow(deps.db, c.req.param('id'))
-      if (row === null) {
-        throw new NotFoundError('workflow-not-found', `workflow '${c.req.param('id')}' not found`)
-      }
-      await requireResourceView(deps.db, actor, 'workflow', row)
-      assertNotBuiltin('workflow', row) // RFC-104: built-ins are read-only
-      // RFC-324: deletion is governance — an edit grant does not reach it.
-      await requireResourceGovern(deps.db, actor, 'workflow', row)
-      const parsed = DeleteWorkflowSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      // RFC-222 (D5, N-1): confirm against the workflow's current name (id ≠ name).
-      assertDeleteConfirm(parsed.data, row.name, 'workflow')
-      captureDeleteSnapshot(c, actor, row)
-      await deleteWorkflow(deps.db, c.req.param('id'), parsed.data, { kind: 'actor', actor })
+      const body = await c.req.raw.text().catch(() => '')
+      const receipt = await commands.delete(module.authorityFor(actor), {
+        id: c.req.param('id'),
+        submission: { kind: 'json-body', body },
+      })
+      captureDeleteSnapshot(c, actor, receipt.deleted)
       return c.body(null, 204)
     },
   )
@@ -386,7 +360,7 @@ export function mountWorkflowRoutes(app: Hono, deps: AppDeps): void {
     type: 'workflow',
     base: '/api/workflows',
     param: 'id',
-    load: (db, id) => getWorkflow(db, id),
+    load: (_db, id) => aclIdentity.load(id),
     // Lets connected /ws/workflows clients re-fetch AND lets the WS server
     // invalidate its per-connection visibility cache for this workflow.
     afterUpdate: (workflowId) => {
@@ -403,7 +377,12 @@ function assertExactWorkflowRevision(
   expected: WorkflowExactRevision,
   code: 'workflow-validation-stale' | 'workflow-version-mismatch',
 ) {
-  const current = workflowRevisionOf(workflow)
+  const current = {
+    workflowId: workflow.id,
+    version: workflow.version,
+    snapshotHash: workflow.snapshotHash,
+    updatedAt: workflow.updatedAt,
+  }
   if (
     current.version !== expected.expectedVersion ||
     current.snapshotHash !== expected.expectedSnapshotHash

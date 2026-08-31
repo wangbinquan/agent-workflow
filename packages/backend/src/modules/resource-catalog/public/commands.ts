@@ -3,6 +3,7 @@ import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
 import type { SkillOperationContext } from './participants'
+import type { WorkflowOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
 import type {
   AgentCatalogResource,
@@ -41,6 +42,13 @@ import type {
   UpdateResourceAclRequest,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
+  CopyWorkflowCatalogInput,
+  CreateWorkflowCatalogInput,
+  DeleteWorkflowCatalogInput,
+  DeleteWorkflowCatalogReceipt,
+  UpdateWorkflowCatalogInput,
+  UpdateWorkflowCatalogReceipt,
+  WorkflowCatalogDetail,
   CopyWorkgroupCatalogInput,
   CreateWorkgroupCatalogInput,
   DeleteWorkgroupCatalogInput,
@@ -102,6 +110,25 @@ export interface SkillVersionCommands {
     authority: SkillOperationContext,
     input: RestoreSkillVersionCatalogInput,
   ): Promise<RestoreSkillVersionCatalogReceipt>
+}
+
+export interface WorkflowCommands {
+  create(
+    authority: WorkflowOperationContext,
+    input: CreateWorkflowCatalogInput,
+  ): Promise<WorkflowCatalogDetail>
+  copy(
+    authority: WorkflowOperationContext,
+    input: CopyWorkflowCatalogInput,
+  ): Promise<WorkflowCatalogDetail>
+  update(
+    authority: WorkflowOperationContext,
+    input: UpdateWorkflowCatalogInput,
+  ): Promise<UpdateWorkflowCatalogReceipt>
+  delete(
+    authority: WorkflowOperationContext,
+    input: DeleteWorkflowCatalogInput,
+  ): Promise<DeleteWorkflowCatalogReceipt>
 }
 
 export interface McpCommands {

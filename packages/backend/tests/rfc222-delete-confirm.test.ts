@@ -264,7 +264,6 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
   const GATED: Array<[string, RegExp]> = [
     ['mcps.ts', deleteHandlerRe('/api/mcps/:id')],
     ['plugins.ts', deleteHandlerRe('/api/plugins/:id')],
-    ['workflows.ts', deleteHandlerRe('/api/workflows/:id')],
     ['tasks.ts', deleteHandlerRe('/api/tasks/:id')], // PR-3 lights this up
   ]
 
@@ -327,6 +326,29 @@ describe('RFC-222 G-2 — every destructive DELETE handler calls the confirm gat
       'utf8',
     )
     expect(application).toContain('deps.confirmations.assertResource(body, current.name)')
+  })
+
+  test('workflows DELETE delegates to the application-owned confirm gate', () => {
+    const route = readFileSync(resolve(ROUTES_DIR, 'workflows.ts'), 'utf8')
+    expect(deleteHandlerRe('/api/workflows/:id').test(route)).toBe(true)
+    expect(route).toContain('commands.delete(')
+    expect(route).not.toContain('assertDeleteConfirm')
+
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'application',
+        'workflows',
+        'workflowApplication.ts',
+      ),
+      'utf8',
+    )
+    expect(application).toContain('function assertDeleteConfirm(')
+    expect(application).toContain('assertDeleteConfirm(deletion, current.name)')
   })
 
   test('workgroups DELETE delegates to the application-owned confirm gate', () => {

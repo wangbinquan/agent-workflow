@@ -3,6 +3,7 @@ import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
 import type { SkillOperationContext } from './participants'
+import type { WorkflowOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
 import type {
   AgentCatalogResource,
@@ -34,6 +35,9 @@ import type {
   ResourceSummary,
   ResourceSummaryPage,
   ResourceSummaryQuery,
+  GetWorkflowCatalogInput,
+  WorkflowCatalogDetail,
+  WorkflowCatalogResource,
   GetWorkgroupCatalogInput,
   WorkgroupCatalogDetail,
   WorkgroupCatalogResource,
@@ -103,6 +107,14 @@ export interface SkillVersionQueries {
     authority: SkillOperationContext,
     input: GetSkillVersionContentCatalogInput,
   ): Promise<SkillCatalogVersionContent>
+}
+
+export interface WorkflowQueries {
+  list(authority: WorkflowOperationContext): Promise<readonly WorkflowCatalogResource[]>
+  get(
+    authority: WorkflowOperationContext,
+    input: GetWorkflowCatalogInput,
+  ): Promise<WorkflowCatalogDetail | null>
 }
 
 export interface McpQueries {

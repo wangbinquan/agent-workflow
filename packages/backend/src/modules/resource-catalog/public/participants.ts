@@ -31,6 +31,7 @@ import type {
   SkillPackageMutation,
   TaskExecutionResourceRequest,
   VersionedIntentResourceChangesetPlan,
+  WorkflowAclIdentity,
   WorkflowPackageMutation,
   WorkgroupPackageMutation,
 } from './types'
@@ -45,6 +46,8 @@ export type McpOperationContext = DirectAuthenticatedAuthority
 export type PluginOperationContext = DirectAuthenticatedAuthority
 /** Branded current-user authority consumed by exact Skill aggregate operations. */
 export type SkillOperationContext = DirectAuthenticatedAuthority
+/** Branded current-user authority consumed by exact Workflow aggregate operations. */
+export type WorkflowOperationContext = DirectAuthenticatedAuthority
 /** Branded current-user authority consumed by exact Workgroup aggregate operations. */
 export type WorkgroupOperationContext = DirectAuthenticatedAuthority
 
@@ -68,6 +71,7 @@ declare const mcpAclIdentityParticipantBrand: unique symbol
 declare const agentAclIdentityParticipantBrand: unique symbol
 declare const pluginAclIdentityParticipantBrand: unique symbol
 declare const skillAclIdentityParticipantBrand: unique symbol
+declare const workflowAclIdentityParticipantBrand: unique symbol
 declare const workgroupAclIdentityParticipantBrand: unique symbol
 
 export interface McpAclIdentityParticipant {
@@ -92,6 +96,11 @@ export interface SkillAclIdentityParticipant {
   readonly [skillAclIdentityParticipantBrand]: 'skill-acl-identity-participant'
   load(id: string): Promise<SkillAclIdentity | null>
   nextUpdatedAt(id: string): Promise<number>
+}
+
+export interface WorkflowAclIdentityParticipant {
+  readonly [workflowAclIdentityParticipantBrand]: 'workflow-acl-identity-participant'
+  load(id: string): Promise<WorkflowAclIdentity | null>
 }
 
 export interface WorkgroupAclIdentityParticipant {

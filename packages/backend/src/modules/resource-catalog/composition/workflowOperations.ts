@@ -1,0 +1,56 @@
+import type { Workflow } from '@agent-workflow/shared'
+import type { DbClient } from '@/db/client'
+import {
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '@/services/resourceAcl'
+import { assertNotBuiltin, excludeBuiltinWorkflows } from '@/services/systemResources'
+import { createWorkflowAclIdentityParticipant } from '../application/participants/workflowAclIdentity'
+import { createWorkflowApplication } from '../application/workflows/workflowApplication'
+import type {
+  WorkflowAccessPort,
+  WorkflowAccessRow,
+  WorkflowPolicyPort,
+} from '../application/workflows/ports'
+import { createSqliteWorkflowRepository } from '../infrastructure/sqliteWorkflowRepository'
+import {
+  createWorkflowOperationDescriptors,
+  type WorkflowCatalogModule,
+} from '../public/operations'
+import type { WorkflowOperationContext } from '../public/participants'
+
+export interface WorkflowCatalogCompositionDependencies {
+  readonly db: DbClient
+}
+
+export function composeWorkflowCatalog(
+  input: WorkflowCatalogCompositionDependencies,
+): WorkflowCatalogModule {
+  const repository = createSqliteWorkflowRepository(input.db)
+  const access: WorkflowAccessPort = Object.freeze({
+    filterVisible: (authority: WorkflowOperationContext, rows: readonly Workflow[]) =>
+      filterVisibleRows(input.db, authority, 'workflow', [...rows]),
+    canView: (authority: WorkflowOperationContext, row: WorkflowAccessRow) =>
+      canViewResource(input.db, authority, 'workflow', row),
+    requireResourceEdit: async (authority: WorkflowOperationContext, row: WorkflowAccessRow) => {
+      await requireResourceEdit(input.db, authority, 'workflow', row)
+    },
+    requireResourceGovern: (authority: WorkflowOperationContext, row: WorkflowAccessRow) =>
+      requireResourceGovern(input.db, authority, 'workflow', row),
+  })
+  const policy: WorkflowPolicyPort = Object.freeze({
+    excludeBuiltin: (rows: readonly Workflow[]) => excludeBuiltinWorkflows([...rows]),
+    assertMutable: (row: WorkflowAccessRow) => assertNotBuiltin('workflow', row),
+  })
+  const application = createWorkflowApplication({ repository, access, policy })
+  const aclIdentity = createWorkflowAclIdentityParticipant({ repository })
+  const operations = createWorkflowOperationDescriptors(application.commands, application.queries)
+  return Object.freeze({
+    commands: application.commands,
+    queries: application.queries,
+    operations,
+    participants: Object.freeze({ aclIdentity }),
+  })
+}

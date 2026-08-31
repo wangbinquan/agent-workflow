@@ -29,6 +29,10 @@ import type {
   UpdateMcpRequest,
   UpdatePluginRequest,
   UpdateResourceAclBody,
+  CopyWorkflowRequest,
+  SaveWorkflowReceipt,
+  Workflow,
+  WorkflowDetail,
   CopyWorkgroupRequest,
   CreateWorkgroup,
   RenameWorkgroup,
@@ -296,6 +300,57 @@ export interface SkillAclIdentity {
   readonly visibility: ResourceVisibility
   readonly aclRevision: number
   readonly updatedAt: number
+}
+
+/** T5-WF aggregate contract. Persistence rows and raw submissions stay private. */
+export type WorkflowCatalogResource = Workflow
+export type WorkflowCatalogDetail = WorkflowDetail
+
+interface WorkflowJsonSubmission {
+  readonly kind: 'json-body'
+  readonly body: string
+}
+
+export interface GetWorkflowCatalogInput {
+  readonly id: string
+}
+
+export interface CreateWorkflowCatalogInput {
+  /** Closed transport envelope; application owns schema parsing. */
+  readonly submission: WorkflowJsonSubmission
+}
+
+export interface CopyWorkflowCatalogInput {
+  readonly id: string
+  readonly copy: CopyWorkflowRequest
+}
+
+export interface UpdateWorkflowCatalogInput {
+  readonly id: string
+  /** Closed envelope keeps WorkflowDefinition off the command boundary. */
+  readonly submission: WorkflowJsonSubmission
+}
+
+export interface DeleteWorkflowCatalogInput {
+  readonly id: string
+  /** Visibility, builtin and govern gates precede decoding and confirmation. */
+  readonly submission: WorkflowJsonSubmission
+}
+
+export type UpdateWorkflowCatalogReceipt = SaveWorkflowReceipt
+
+export interface WorkflowAclIdentity {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly builtin: boolean
+}
+
+export interface DeleteWorkflowCatalogReceipt {
+  readonly deleted: WorkflowAclIdentity
+  readonly clientMutationId: string
+  readonly deletedVersion: number
 }
 
 /** T5-M aggregate contract. Persistence rows and transport contexts stay private. */

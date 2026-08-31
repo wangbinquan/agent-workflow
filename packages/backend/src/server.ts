@@ -45,12 +45,14 @@ import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agen
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
+import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import type {
   AgentCatalogModule,
   McpCatalogModule,
   PluginCatalogModule,
   SkillCatalogModule,
+  WorkflowCatalogModule,
   WorkgroupCatalogModule,
 } from '@/modules/resource-catalog/public/operations'
 import {
@@ -768,6 +770,7 @@ export function createApp(deps: AppDeps): Hono {
     coordinator: pluginOperationCoordinator,
   })
   const skillCatalog = composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })
+  const workflowCatalog = composeWorkflowCatalog({ db: effectiveDeps.db })
   const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
   const identityUserOperations = composeIdentityUserOperations({
     db: effectiveDeps.db,
@@ -785,6 +788,7 @@ export function createApp(deps: AppDeps): Hono {
     mcpCatalog,
     pluginCatalog,
     skillCatalog,
+    workflowCatalog,
     workgroupCatalog,
   )
 
@@ -862,6 +866,7 @@ export function mountApiRoutes(
   mcpCatalog: McpCatalogModule,
   pluginCatalog: PluginCatalogModule,
   skillCatalog: SkillCatalogModule,
+  workflowCatalog: WorkflowCatalogModule,
   workgroupCatalog: WorkgroupCatalogModule,
 ): void {
   const appHome = deps.appHome ?? Paths.root
@@ -1037,7 +1042,12 @@ export function mountApiRoutes(
   mountRepoRoutes(app, deps)
   mountCachedRepoRoutes(app, deps)
   mountRepoGroupRoutes(app, deps)
-  mountWorkflowRoutes(app, deps)
+  mountWorkflowRoutes(app, deps, {
+    commands: workflowCatalog.commands,
+    queries: workflowCatalog.queries,
+    aclIdentity: workflowCatalog.participants.aclIdentity,
+    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+  })
   mountWorkgroupRoutes(app, routeDeps, {
     commands: workgroupCatalog.commands,
     queries: workgroupCatalog.queries,
