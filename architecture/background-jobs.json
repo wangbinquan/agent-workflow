@@ -2984,9 +2984,9 @@
     {
       "callee": "registerOperationDescriptor",
       "file": "packages/backend/src/routes/operationRoute.ts",
-      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerOperationDescriptor:48",
+      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerOperationDescriptor:50",
       "kind": "register-call",
-      "line": 48,
+      "line": 50,
       "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerOperationRoute",
@@ -2995,9 +2995,20 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/operationRoute.ts",
-      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerRoute:56",
+      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerRoute:80",
       "kind": "register-call",
-      "line": 56,
+      "line": 80,
+      "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
+      "removeAfterWave": "W6/W9",
+      "symbol": "registerOperationRoute",
+      "targetContext": "task-execution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/routes/operationRoute.ts",
+      "id": "ambient:packages/backend/src/routes/operationRoute.ts#registerRoute:81",
+      "kind": "register-call",
+      "line": 81,
       "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerOperationRoute",
@@ -3281,9 +3292,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:254",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:253",
       "kind": "register-call",
-      "line": 254,
+      "line": 253,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3292,9 +3303,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:263",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:262",
       "kind": "register-call",
-      "line": 263,
+      "line": 262,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3303,9 +3314,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:272",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:271",
       "kind": "register-call",
-      "line": 272,
+      "line": 271,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3314,9 +3325,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:281",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:280",
       "kind": "register-call",
-      "line": 281,
+      "line": 280,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3325,9 +3336,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:290",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:289",
       "kind": "register-call",
-      "line": 290,
+      "line": 289,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3336,9 +3347,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:299",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:298",
       "kind": "register-call",
-      "line": 299,
+      "line": 298,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3347,9 +3358,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:311",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:310",
       "kind": "register-call",
-      "line": 311,
+      "line": 310,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3358,9 +3369,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:322",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:320",
       "kind": "register-call",
-      "line": 322,
+      "line": 320,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -3369,31 +3380,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:340",
+      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerOperationRoute:338",
       "kind": "register-call",
-      "line": 340,
-      "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
-    },
-    {
-      "callee": "registerRouteMiddleware",
-      "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerRouteMiddleware:321",
-      "kind": "register-call",
-      "line": 321,
-      "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
-    },
-    {
-      "callee": "registerRouteMiddleware",
-      "file": "packages/backend/src/routes/resourcePackages.ts",
-      "id": "ambient:packages/backend/src/routes/resourcePackages.ts#registerRouteMiddleware:339",
-      "kind": "register-call",
-      "line": 339,
+      "line": 338,
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
@@ -5232,7 +5221,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 474,
+    "ambientWiring": 473,
     "disabled": 7,
     "entries": 282,
     "executionLocal": 25,
@@ -6251,9 +6240,9 @@
     },
     {
       "dependencies": [],
-      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/public/types.ts#resourceCatalogCursorBrand",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts#resourceCatalogCursorBrand",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6265,7 +6254,7 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#resourceCatalogCursorBrand",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts#resourceCatalogCursorBrand",
       "phase": "unknown",
       "symbol": "resourceCatalogCursorBrand",
       "targetContext": "resource-catalog"
@@ -11523,5 +11512,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65"
+  "sourceDigest": "sha256:06f029b085308fb93bc4b74677c469c09a971e71226520b32526b9aa4f4235af"
 }

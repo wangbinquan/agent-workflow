@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:06f029b085308fb93bc4b74677c469c09a971e71226520b32526b9aa4f4235af`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,14 +10,14 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1163 |
+| backend production TS 文件 | 1164 |
 | `services/` 文件 | 385 |
-| `modules/**` 文件 / 非空 context | 578 / 14 |
+| `modules/**` 文件 / 非空 context | 579 / 14 |
 | backend 值级 SCC / 全仓值级 SCC | 3 / 5 |
 | `KNOWN_VIOLATIONS` | 29 |
 | route→DB / transport→DB 值级边 | 15 / 2 |
 | route/MCP `AppDeps` consumer 文件 | 46 |
-| production ambient wiring seam | 474 |
+| production ambient wiring seam | 473 |
 | background work entries | 282 |
 | direct native `setInterval`（call / files） | 24 / 21 |
 | direct native timers（全部） | 74 |
@@ -29,16 +29,16 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 474 |
+| `ambientWiring` | 473 |
 | `architectureExceptions` | 2173 |
 | `backgroundJobs` | 282 |
 | `crossContextImports` | 2227 |
 | `facades` | 385 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 20908 |
-| `mutationEntrypoints` | 1262 |
+| `moduleSymbolOwners` | 20899 |
+| `mutationEntrypoints` | 1260 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 647 |
+| `publicSurfaces` | 590 |
 | `transactionExternalEffects` | 305 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -82,13 +82,13 @@
 | collaboration / public | 5 |
 | digital-employee / public | 5 |
 | event-center / public | 5 |
+| resource-catalog / domain | 5 |
 | resource-catalog / public | 5 |
 | task-execution / public | 5 |
 | development-automation / public | 4 |
 | digital-employee / composition | 4 |
 | event-center / infrastructure | 4 |
 | identity-access / infrastructure | 4 |
-| resource-catalog / domain | 4 |
 | source-control / public | 4 |
 | system-operations / public | 4 |
 | event-center / domain | 3 |
@@ -235,8 +235,8 @@
 
 | context | 数量 |
 | --- | --- |
-| resource-catalog | 182 |
 | task-execution | 129 |
+| resource-catalog | 125 |
 | collaboration | 77 |
 | identity-access | 55 |
 | system-operations | 49 |
@@ -249,12 +249,11 @@
 | integration | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 124 / 647）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 106 / 590）
 
 | context | 数量 |
 | --- | --- |
 | collaboration | 20 |
-| resource-catalog | 18 |
 | digital-employee | 17 |
 | code-capability | 15 |
 | system-operations | 12 |

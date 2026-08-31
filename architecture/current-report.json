@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 474,
+    "ambientWiring": 473,
     "architectureExceptions": 2173,
     "backgroundJobs": 282,
     "crossContextImports": 2227,
     "facades": 385,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 20908,
-    "mutationEntrypoints": 1262,
+    "moduleSymbolOwners": 20899,
+    "mutationEntrypoints": 1260,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 647,
+    "publicSurfaces": 590,
     "transactionExternalEffects": 305
   },
   "metrics": {
-    "ambientWiringEntries": 474,
+    "ambientWiringEntries": 473,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -63,7 +63,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1163,
+    "backendProductionFiles": 1164,
     "backendValueSccs": [
       [
         "packages/backend/src/services/agent.ts",
@@ -149,7 +149,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 67
+        "files": 68
       },
       {
         "context": "source-control",
@@ -168,7 +168,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 578,
+    "moduleFiles": 579,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -224,5 +224,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65"
+  "sourceDigest": "sha256:06f029b085308fb93bc4b74677c469c09a971e71226520b32526b9aa4f4235af"
 }

@@ -196,10 +196,7 @@
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
       "baseline": 36,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight 与 schema-contract 两组集成测试只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 必须保留 env-gated skip，于是 34 → 36。",
-      "allowGrowth": {
-        "why": "RFC-349 adds two environment-gated real PostgreSQL integration suites"
-      }
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight 与 schema-contract 两组集成测试只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 必须保留 env-gated skip，于是 34 → 36。"
     },
     {
       "id": "frontend-inline-loading-allowlist",
@@ -359,7 +356,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1262,
+      "baseline": 1260,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -387,7 +384,7 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 474,
+      "baseline": 473,
       "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
@@ -429,7 +426,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 647,
+      "baseline": 590,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -450,12 +447,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 20908,
+      "baseline": 20899,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2ea43e19bd34f92afe8b40f8c7dfc9175194a4698984c67fbeccef5728aeeb65",
+    "sourceDigest": "sha256:06f029b085308fb93bc4b74677c469c09a971e71226520b32526b9aa4f4235af",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -468,8 +465,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4664527f8cf32a4ed646fa4aed0523bbb515b936",
-    "contentDigest": "sha256:7a4c043055319eeda2434e0c3fb3ba2e5fcd5ab51cf94883d9570dbd8854565d",
+    "currentSnapshotSha": "a80cdbfd0b30ebbb36b245e095dd734edeed68a9",
+    "contentDigest": "sha256:cd65698174924ec02bcf9c7fa76f95c0faba1b1b5601c2c99f820d6e5fff267f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
