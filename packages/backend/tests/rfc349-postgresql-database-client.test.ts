@@ -107,6 +107,14 @@ describe('RFC-349 PostgreSQL database client', () => {
     expect(fake.executions[0]?.parameters).toEqual([true])
   })
 
+  test('maps an empty get result to undefined instead of an all-undefined row', async () => {
+    const fake = fixture()
+    fake.queued.push({ values: [] })
+    const db = createPostgresqlDatabaseClient(fake.runtime)
+
+    expect(await db.select({ id: agents.id }).from(agents).limit(1).get()).toBeUndefined()
+  })
+
   test('normalizes mutation count and supports object-mode raw queries', async () => {
     const fake = fixture()
     fake.queued.push(

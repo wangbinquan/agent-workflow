@@ -1,5 +1,6 @@
 import type { DbClient } from '@/db/client'
 import { ExecutionContractService } from './application/executionContractService'
+import type { ExecutionContractResourcePort } from './application/ports'
 import {
   createExecutionContractProgramFixtureAdapter,
   createExecutionContractResourceAdapter,
@@ -10,17 +11,30 @@ import type {
   ExecutionContractRegistration,
 } from './public/types'
 
-export function composeExecutionContract(input: {
-  readonly db: DbClient
-  readonly appHome: string
-  readonly registrations: readonly ExecutionContractRegistration[]
-  readonly implicitAgentDeclarations?: (input: {
-    readonly frontmatterExtra: Readonly<Record<string, unknown>>
-  }) => readonly { readonly contractId: string; readonly version: number }[]
-}): ExecutionContractParticipant & ExecutionContractProjectionParticipant {
+type ExecutionContractResourceComposition =
+  | { readonly db: DbClient; readonly resources?: never }
+  | { readonly db?: never; readonly resources: ExecutionContractResourcePort }
+
+export function composeExecutionContract(
+  input: ExecutionContractResourceComposition & {
+    readonly appHome: string
+    readonly registrations: readonly ExecutionContractRegistration[]
+    readonly implicitAgentDeclarations?: (input: {
+      readonly frontmatterExtra: Readonly<Record<string, unknown>>
+    }) => readonly { readonly contractId: string; readonly version: number }[]
+  },
+): ExecutionContractParticipant & ExecutionContractProjectionParticipant {
+  const resources =
+    input.resources ??
+    (input.db === undefined
+      ? undefined
+      : createExecutionContractResourceAdapter(input.db, input.implicitAgentDeclarations))
+  if (resources === undefined) {
+    throw new Error('execution-contract composition requires an injected resource port')
+  }
   const service = new ExecutionContractService({
     registrations: input.registrations,
-    resources: createExecutionContractResourceAdapter(input.db, input.implicitAgentDeclarations),
+    resources,
     programFixtures: createExecutionContractProgramFixtureAdapter({ appHome: input.appHome }),
   })
   return {

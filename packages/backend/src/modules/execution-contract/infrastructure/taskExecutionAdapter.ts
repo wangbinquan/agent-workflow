@@ -1,4 +1,10 @@
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  WorkflowDefinitionSchema,
+  type Agent,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
@@ -6,9 +12,11 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 
 import type { DbClient } from '@/db/client'
+import { agents, workflows } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { getAgentById } from '@/services/agent'
 import { resolveScriptInterpreter, runScriptProcess } from '@/services/scriptRun'
-import { getWorkflow } from '@/services/workflow'
+import { getWorkflow, migrateDefinitionToLatest } from '@/services/workflow'
 import { sha256Hex } from '@/util/hash'
 import type {
   ExecutionContractProgramFixturePort,
@@ -35,6 +43,33 @@ const CONTRACT_WORKFLOW_NODE_KINDS = new Set([
   'wrapper-loop',
   'wrapper-fanout',
 ])
+
+interface ExecutionContractAgentResource {
+  readonly name: string
+  readonly outputs: readonly string[]
+  readonly updatedAt: number
+  readonly frontmatterExtra: Readonly<Record<string, unknown>>
+}
+
+interface ExecutionContractWorkflowResource {
+  readonly name: string
+  readonly version: number
+  readonly definition: WorkflowDefinition
+}
+
+interface ExecutionContractResourceLookup {
+  loadAgent(id: string): Promise<ExecutionContractAgentResource | null>
+  loadWorkflow(id: string): Promise<ExecutionContractWorkflowResource | null>
+}
+
+function executionContractAgentResource(agent: Agent): ExecutionContractAgentResource {
+  return {
+    name: agent.name,
+    outputs: agent.outputs,
+    updatedAt: agent.updatedAt,
+    frontmatterExtra: agent.frontmatterExtra,
+  }
+}
 
 export function inspectExecutionContractWorkflowDefinition(
   definition: WorkflowDefinition,
@@ -85,8 +120,8 @@ export function inspectExecutionContractWorkflowDefinition(
     : { ok: false, detail: violations.join('; ') }
 }
 
-export function createExecutionContractResourceAdapter(
-  db: DbClient,
+function createExecutionContractResourceAdapterFromLookup(
+  lookup: ExecutionContractResourceLookup,
   implicitAgentDeclarations: (input: {
     readonly frontmatterExtra: Readonly<Record<string, unknown>>
   }) => readonly { readonly contractId: string; readonly version: number }[] = () => [],
@@ -94,7 +129,7 @@ export function createExecutionContractResourceAdapter(
   return {
     async inspect({ implementation, expectedOutputPort }) {
       if (implementation.kind === 'agent') {
-        const agent = await getAgentById(db, implementation.agentRef.id)
+        const agent = await lookup.loadAgent(implementation.agentRef.id)
         if (agent === null || agent.updatedAt !== implementation.agentRef.revision) return null
         const available = agent.outputs.includes(expectedOutputPort)
         const declared = declarationsSchema.safeParse(agent.frontmatterExtra.executionContracts)
@@ -111,7 +146,7 @@ export function createExecutionContractResourceAdapter(
           declaredContractRefs: declared.success ? declared.data : fallbackDeclarations,
         }
       }
-      const workflow = await getWorkflow(db, implementation.workflowRef.id)
+      const workflow = await lookup.loadWorkflow(implementation.workflowRef.id)
       if (workflow === null || workflow.version !== implementation.workflowRef.revision) return null
       const closure = inspectExecutionContractWorkflowDefinition(
         workflow.definition,
@@ -126,6 +161,87 @@ export function createExecutionContractResourceAdapter(
       }
     },
   }
+}
+
+/** SQLite compatibility adapter. The legacy service projection stays the
+ * behavior oracle while PostgreSQL uses the same closed lookup contract. */
+export function createExecutionContractResourceAdapter(
+  db: DbClient,
+  implicitAgentDeclarations: (input: {
+    readonly frontmatterExtra: Readonly<Record<string, unknown>>
+  }) => readonly { readonly contractId: string; readonly version: number }[] = () => [],
+): ExecutionContractResourcePort {
+  return createExecutionContractResourceAdapterFromLookup(
+    {
+      async loadAgent(id) {
+        const agent = await getAgentById(db, id)
+        return agent === null ? null : executionContractAgentResource(agent)
+      },
+      async loadWorkflow(id) {
+        const workflow = await getWorkflow(db, id)
+        return workflow === null
+          ? null
+          : { name: workflow.name, version: workflow.version, definition: workflow.definition }
+      },
+    },
+    implicitAgentDeclarations,
+  )
+}
+
+/** PostgreSQL adapter for the execution-contract resource projection. Only the
+ * four Agent fields and three Workflow fields owned by this port cross the
+ * infrastructure boundary; no provider handle reaches application/public. */
+export function createPostgresqlExecutionContractResourceAdapter(
+  db: PostgresqlDatabaseClient,
+  implicitAgentDeclarations: (input: {
+    readonly frontmatterExtra: Readonly<Record<string, unknown>>
+  }) => readonly { readonly contractId: string; readonly version: number }[] = () => [],
+): ExecutionContractResourcePort {
+  return createExecutionContractResourceAdapterFromLookup(
+    {
+      async loadAgent(id) {
+        const row = await db
+          .select({
+            name: agents.name,
+            outputs: agents.outputs,
+            updatedAt: agents.updatedAt,
+            frontmatterExtra: agents.frontmatterExtra,
+          })
+          .from(agents)
+          .where(eq(agents.id, id))
+          .limit(1)
+          .get()
+        if (row === undefined) return null
+        return {
+          name: row.name,
+          outputs: JSON.parse(row.outputs) as string[],
+          updatedAt: row.updatedAt,
+          frontmatterExtra: JSON.parse(row.frontmatterExtra) as Record<string, unknown>,
+        }
+      },
+      async loadWorkflow(id) {
+        const row = await db
+          .select({
+            name: workflows.name,
+            version: workflows.version,
+            definition: workflows.definition,
+          })
+          .from(workflows)
+          .where(eq(workflows.id, id))
+          .limit(1)
+          .get()
+        if (row === undefined) return null
+        return {
+          name: row.name,
+          version: row.version,
+          definition: migrateDefinitionToLatest(
+            WorkflowDefinitionSchema.parse(JSON.parse(row.definition) as unknown),
+          ),
+        }
+      },
+    },
+    implicitAgentDeclarations,
+  )
 }
 
 function resolveArtifact(appHome: string, artifactRef: string): string | null {

@@ -3,7 +3,7 @@
 // projection; this adapter only compiles bind markers and pins transactions to
 // one reserved connection.
 
-import { SQL, type SQLWrapper } from 'drizzle-orm'
+import type { SQL, SQLWrapper } from 'drizzle-orm'
 import { SQLiteAsyncDialect } from 'drizzle-orm/sqlite-core'
 import {
   drizzle as createRemoteDatabase,
@@ -123,7 +123,11 @@ async function executeArrays(
         return { rows: [], changes: mutationCount(result) }
       }
       const values = await pending.values()
-      if (method === 'get') return { rows: (values[0] ?? []) as unknown[] }
+      // sqlite-proxy's get mapper distinguishes no row by a falsy `rows`
+      // value. An empty array is truthy and would be mapped into an object
+      // whose selected fields are all undefined, turning every not-found read
+      // into a false hit. Preserve the native first row, including undefined.
+      if (method === 'get') return { rows: values[0] as unknown[] }
       return { rows: values as unknown[] }
     },
   })
