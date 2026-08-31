@@ -87,7 +87,12 @@ import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { buildStartTaskDeps, resolveSubagentLiveCapture } from '@/services/startTaskDeps'
 import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
-import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
+import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+import { directRequestAuthority } from '@/routes/operationAuthority'
+import {
+  loadTaskExecutionResourceSnapshot,
+  type TaskExecutionResourceBinding,
+} from '@/services/execution/taskExecutionResources'
 import { listRecoveryEventsForTask } from '@/services/recovery'
 import { clearAutoRecoverySuspension, isAutoRecoverySuspended } from '@/services/recoveryBreaker'
 import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
@@ -133,6 +138,31 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
 // resume — threads the same runtime config from one source (Codex impl gate
 // P2: the floor must reach all StartTaskDeps construction sites, not just the
 // task routes). Call sites below are unchanged.
+
+type TaskExecutionIdentityAccess = NonNullable<AppDeps['identityAccess']> & {
+  readonly taskExecutionResources: TaskExecutionResourceBinding
+}
+
+function requireTaskExecutionIdentityAccess(
+  identityAccess: AppDeps['identityAccess'],
+): TaskExecutionIdentityAccess {
+  if (identityAccess === undefined || !('taskExecutionResources' in identityAccess)) {
+    throw new Error('task-execution-resources-not-composed')
+  }
+  return identityAccess as TaskExecutionIdentityAccess
+}
+
+function taskExecutionResourceAuthority(
+  c: Parameters<typeof actorOf>[0],
+  identityAccess: TaskExecutionIdentityAccess,
+) {
+  const actor = actorOf(c)
+  return Object.freeze({
+    actor,
+    authority: directRequestAuthority(identityAccess.directAuthority, actor),
+    resources: identityAccess.taskExecutionResources,
+  })
+}
 
 export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
   const taskExecutionReadModels = deps.taskExecutionReadModels
@@ -322,6 +352,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Launch a task',
     },
     async (c) => {
+      const identityAccess = requireTaskExecutionIdentityAccess(deps.identityAccess)
       const ct = c.req.header('content-type') ?? ''
       // RFC-020: multipart branch handles launcher uploads. payload field is
       // JSON-encoded StartTask; files[<inputKey>][] fields are the binary
@@ -331,6 +362,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           c.req.raw,
           {
             ...deps,
+            identityAccess,
             schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
           },
           actorOf(c),
@@ -386,6 +418,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
+      const launchResources = taskExecutionResourceAuthority(c, identityAccess)
       // RFC-099 (D3) + RFC-104: the launcher must be able to use the WORKFLOW; the
       // referenced agent/skill/mcp/plugin closure is implicitly authorized. Invisible
       // and missing produce the identical 404; built-in → 403. Shared gate — the
@@ -399,9 +432,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           deps.secretBox,
           deps.identityAccess,
         ),
-        // RFC-243 实现门 P0-1: closure freezing resolves call-node names inside
-        // THIS actor's visibility.
-        launchActor: actor,
+        launchResources,
         // RFC-287 G7：**只有这条 JSON-body 路由**把仓库准备推迟到任务行落库之后。
         //
         // 用户可见的变化：点启动后接口立刻返回、任务出现在列表里并显示为「准备中」
@@ -413,7 +444,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         // 必须保持预物化语义（proposal §G7）。
         deferRepoPreparation: true,
       }
-      await assertWorkflowLaunchable(deps.db, actor, parsed.data.workflowId)
+      const launchSnapshot = loadTaskExecutionResourceSnapshot(deps.db, launchResources, {
+        kind: 'workflow-launch',
+        workflowId: parsed.data.workflowId,
+      })
+      await assertWorkflowSnapshotLaunchable(deps.db, launchSnapshot.workflow)
       const task = await startExecution(
         deps.db,
         actor,
@@ -932,7 +967,15 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
         return c.json(notSyncable('workflow-not-visible'))
       }
-      return c.json(await computeWorkflowSyncPreview(deps.db, task, workflow, actorOf(c)))
+      const identityAccess = requireTaskExecutionIdentityAccess(deps.identityAccess)
+      return c.json(
+        await computeWorkflowSyncPreview(
+          deps.db,
+          task,
+          workflow,
+          taskExecutionResourceAuthority(c, identityAccess),
+        ),
+      )
     },
   )
 
@@ -952,6 +995,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const id = c.req.param('id')
       const actor = actorOf(c)
+      const identityAccess = requireTaskExecutionIdentityAccess(deps.identityAccess)
       await assertTaskSyncable(deps, id) // RFC-104 builtin 403 / RFC-165 host 422
       const task = await getTask(deps.db, id)
       if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
@@ -977,7 +1021,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         db: deps.db,
         schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
         expectedVersion: body.data.expectedVersion,
-        launchActor: actor,
+        launchResources: taskExecutionResourceAuthority(c, identityAccess),
         // RFC-328: workflow sync is one of the existing explicit manual
         // continuation commands, so retain its authenticated actor in the
         // durable replay authorization/audit row.

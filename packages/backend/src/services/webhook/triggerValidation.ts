@@ -14,7 +14,7 @@ import {
   loadIntegrationTriggerResourceSnapshot,
   type IntegrationTriggerResourceAuthority,
 } from '@/services/scheduledTasks'
-import { freezeCallClosure } from '@/services/execution/closure'
+import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import { renderWebhookLaunch } from '@/services/webhook/webhookDispatch'
 import { ValidationError } from '@/util/errors'
@@ -125,6 +125,7 @@ export async function assertTriggerSaveable(
   },
   defaultRuntime: string | null | undefined,
 ): Promise<void> {
+  if (actor !== resourceAuthority.actor) throw new Error('foreign-webhook-trigger-actor')
   const parsedPayload = webhookPayloadTemplateSchemaFor(candidate.launchKind).safeParse(
     candidate.launchPayload,
   )
@@ -156,10 +157,14 @@ export async function assertTriggerSaveable(
     }
     workflowDefinition = resourceSnapshot.workflow.definition
     workflowInputs = workflowDefinition.inputs
-    workflowClosureJson = await freezeCallClosure(
+    workflowClosureJson = freezeTaskExecutionCallClosure(
       db,
       { id: candidate.launchRefId, definition: workflowDefinition },
-      actor,
+      Object.freeze({
+        authority: resourceAuthority.authority,
+        actor: resourceAuthority.actor,
+        resources: resourceAuthority.taskExecutionResources,
+      }),
     )
   }
   if (candidate.launchKind === 'digital-employee') {
@@ -212,7 +217,7 @@ export async function assertTriggerSaveable(
     if (resourceSnapshot === null) throw new Error('digital-employee-snapshot-missing')
     await assertIntegrationTriggerSnapshotUsable(
       db,
-      actor,
+      resourceAuthority,
       resourceSnapshot,
       payload as unknown as Record<string, unknown>,
     )
@@ -222,7 +227,7 @@ export async function assertTriggerSaveable(
     if (resourceSnapshot === null) throw new Error('webhook-workflow-snapshot-missing')
     await assertIntegrationTriggerSnapshotUsable(
       db,
-      actor,
+      resourceAuthority,
       resourceSnapshot,
       rendered.payload as unknown as Record<string, unknown>,
       { kind: 'event-types', eventTypes: candidate.eventTypes },

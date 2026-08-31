@@ -75,7 +75,7 @@ import {
 } from '@/services/resourceRefs'
 import { NotFoundError } from '@/util/errors'
 import type { ResourceSummaryRevision } from '@/modules/resource-catalog/public/types'
-import type { CatalogSelectorKind } from '@/modules/resource-catalog/domain/resourceKinds'
+import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'
 
 type PluginRow = typeof plugins.$inferSelect
 type WorkflowRow = typeof workflows.$inferSelect

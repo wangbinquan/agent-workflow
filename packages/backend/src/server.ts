@@ -65,6 +65,8 @@ import {
   composeIntegrationTriggerResourceBinding,
   type IntegrationTriggerResourceBinding,
 } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
+import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type {
   AgentCatalogModule,
   McpCatalogModule,
@@ -155,6 +157,7 @@ import { rowToAgent } from '@/services/agent'
 import { rowToWorkflowDetail } from '@/services/workflow'
 import { rowToWorkgroup } from '@/services/workgroups'
 import { assertNotBuiltin } from '@/services/systemResources'
+import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
 import type { EmployeeCaseDetailProjectionParticipant } from '@/modules/digital-employee/public/types'
 import {
   developmentExecutionContractRegistrations,
@@ -412,12 +415,15 @@ type RuntimeComposedAppDeps = AppDeps & {
 
 type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
   readonly integrationTriggerResources: IntegrationTriggerResourceBinding
+  readonly taskExecutionResources: TaskExecutionResourceBinding
 }
 
 function hasIntegrationTriggerResources(
   identityAccess: IdentityAccessRuntime,
 ): identityAccess is IntegrationTriggerIdentityAccess {
-  return 'integrationTriggerResources' in identityAccess
+  return (
+    'integrationTriggerResources' in identityAccess && 'taskExecutionResources' in identityAccess
+  )
 }
 
 function withIntegrationTriggerResources(
@@ -430,6 +436,9 @@ function withIntegrationTriggerResources(
     integrationTriggerResources: composeIntegrationTriggerResourceBinding(
       { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
       composeDigitalEmployeeIntegrationTriggerParticipant,
+    ),
+    taskExecutionResources: composeTaskExecutionResourceBinding(
+      legacyTaskExecutionResourceDependencies,
     ),
   })
 }

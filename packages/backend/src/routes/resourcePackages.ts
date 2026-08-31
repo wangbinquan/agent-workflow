@@ -17,12 +17,15 @@ import {
 } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
+import type { ResourcePackageCatalogModule } from '@/modules/resource-catalog/public/operations'
 import type {
-  ComposedResourcePackageCatalog,
-  ResourcePackageExportFence,
-} from '@/modules/resource-catalog/composition/resourcePackageOperations'
+  ApplyResourcePackage,
+  ExportResourcePackage,
+  InspectResourcePackage,
+  PackageResourceKind,
+  PackageResourceRef,
+} from '@/modules/resource-catalog/public/types'
 import { invokeOperation } from '@/platform/operations/invoke'
-import type { PackageResourceKind } from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
@@ -67,6 +70,42 @@ const PackageSecretInputsSchema = z.array(
 // request body.
 export const RESOURCE_PACKAGE_BODY_MAX_BYTES = SKILL_ZIP_LIMITS.totalBytes + 4 * 1024 * 1024
 
+interface ResourcePackageExportFence {
+  readonly expectedVersion?: number
+  readonly expectedContentVersion?: number
+  readonly expectedUpdatedAt?: number
+  readonly expectedAclRevision?: number
+  readonly expectedMetaRevision?: number
+  readonly expectedConfigHash?: string
+}
+
+interface ResourcePackageRouteTransport {
+  stageInspect(actor: Actor, bytes: Uint8Array): InspectResourcePackage
+  stageApply(
+    actor: Actor,
+    input: Readonly<{
+      bytes: Uint8Array
+      previewToken: string
+      decisions: z.infer<typeof ImportDecisionsSchema>
+      humanMemberMappings: z.infer<typeof HumanMemberMappingsSchema>
+      secretInputs: z.infer<typeof PackageSecretInputsSchema>
+    }>,
+  ): ApplyResourcePackage
+  stageExport(
+    actor: Actor,
+    input: Readonly<{
+      root: PackageResourceRef
+      exportedAt: number
+      expect: ResourcePackageExportFence
+    }>,
+  ): ExportResourcePackage
+  takeExport(packageId: string): Uint8Array
+}
+
+interface ResourcePackageRouteCatalog extends ResourcePackageCatalogModule {
+  readonly transport: ResourcePackageRouteTransport
+}
+
 function packageBodyTooLarge(c: Context): Response {
   return c.json(
     {
@@ -86,7 +125,7 @@ const resourcePackageBodyLimit = verifiedBodyLimit({
 })
 
 export interface ResourcePackageRouteDeps {
-  readonly catalog: ComposedResourcePackageCatalog
+  readonly catalog: ResourcePackageRouteCatalog
   commandContextFor(actor: Actor): CommandContext
   queryContextFor(actor: Actor): QueryContext
 }

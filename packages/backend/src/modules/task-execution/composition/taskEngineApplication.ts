@@ -52,6 +52,7 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { HumanGateOpenParticipant } from '../application/ports/humanGateOpenParticipant'
+import { createTaskExecutionResourceSession } from '@/services/execution/taskExecutionResources'
 import {
   ManualQuestionParkRequired,
   assertNoManualQuestionParkObligationTx,
@@ -114,6 +115,45 @@ async function runTaskEngineOrchestratorInner(
     log.error('runTask: durable owner requires exact execution context', { taskId })
     return
   }
+
+  const taskExecutionIdentity = opts.identityAccess
+  if (taskExecutionIdentity === undefined) {
+    await failTask(
+      topology,
+      db,
+      taskId,
+      'task execution authority unavailable',
+      'identity-access-runtime-not-composed',
+      undefined,
+      opts.executionContext,
+    )
+    return
+  }
+  const taskExecutionAdmission = await taskExecutionIdentity.delegatedRequests.forTaskExecution({
+    ownerUserId: task.ownerUserId,
+    taskId,
+  })
+  if (taskExecutionAdmission === null) {
+    await failTask(
+      topology,
+      db,
+      taskId,
+      'task execution authority unavailable',
+      'task-execution-owner-inactive',
+      undefined,
+      opts.executionContext,
+    )
+    return
+  }
+  const taskExecutionResources = createTaskExecutionResourceSession(
+    db,
+    Object.freeze({
+      authority: taskExecutionAdmission.authority,
+      actor: taskExecutionAdmission.actor,
+      resources: taskExecutionIdentity.taskExecutionResources,
+    }),
+    opts.appHome,
+  )
 
   // RFC-066 PR-B T9: load per-repo metadata once at the top so every runner
   // dispatch site can thread it through `templateMeta.repos` without an extra
@@ -382,6 +422,7 @@ async function runTaskEngineOrchestratorInner(
     taskId,
     definition,
     opts,
+    taskExecutionResources,
     topology,
     // RFC-248: 组名**快照**（`tasks.repo_group_name`）——组被删除后仍能渲染，
     // 这正是 D8 存这一列的理由。

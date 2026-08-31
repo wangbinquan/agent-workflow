@@ -21,6 +21,10 @@ import type {
   RequestAuthority,
 } from '@/modules/identity-access/public/participants'
 import type { GetUserGitCommitIdentity } from '@/modules/identity-access/public/queries'
+import type {
+  TaskExecutionResourceAuthority,
+  TaskExecutionResourceBinding,
+} from '@/services/execution/taskExecutionResources'
 import {
   cachedRepos,
   tasks,
@@ -115,6 +119,7 @@ export type WebhookDispatchDeps = {
     delegatedRequests: DelegatedRequestAuthorityFactory
     getUserGitCommitIdentity: GetUserGitCommitIdentity
     integrationTriggerResources: IntegrationTriggerResourceBinding
+    taskExecutionResources: TaskExecutionResourceBinding
   }>
   resolveEventTargetAuthority: (
     userId: string,
@@ -623,6 +628,7 @@ async function launchViaExecutor(
   actor: Actor,
   rendered: RenderedLaunch,
   invoker: ExecutionInvoker,
+  launchResources: TaskExecutionResourceAuthority,
   guard?: ProtectedMrLaunchGuard,
 ): Promise<WorkStartReceipt> {
   if (rendered.kind === 'digital-employee') {
@@ -657,8 +663,7 @@ async function launchViaExecutor(
       deps.secretBox,
       deps.identityAccess,
     ),
-    // 对齐 buildScheduleLaunch：闭包解析在重建的 owner actor 可见性内。
-    launchActor: actor,
+    launchResources,
     // RFC-287 G7：定时/webhook 触发与手动启动**同一套语义**（proposal §G7 原话：
     // 「定时任务与 webhook 触发同一套语义」）。这里没有等 HTTP 响应的用户，但 G7
     // 的另一半收益恰恰是这两条最需要的：**准备失败要留下记录**。不开的话，一次
@@ -1031,6 +1036,12 @@ async function fireTrigger(
       authority: delegated.authority,
       actor,
       resources: deps.identityAccess.integrationTriggerResources,
+      taskExecutionResources: deps.identityAccess.taskExecutionResources,
+    })
+    const taskExecutionAuthority = Object.freeze({
+      authority: delegated.authority,
+      actor,
+      resources: deps.identityAccess.taskExecutionResources,
     })
     const rendered = renderWebhookLaunch(effectiveTrigger, effectiveTrigger.row.name, event, space)
     /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
@@ -1054,7 +1065,7 @@ async function fireTrigger(
         })
         await assertIntegrationTriggerSnapshotUsable(
           db,
-          actor,
+          resourceAuthority,
           snapshot,
           rendered.intake as unknown as Record<string, unknown>,
         )
@@ -1122,7 +1133,14 @@ async function fireTrigger(
       const rawReceipt =
         deps.launch !== undefined
           ? await deps.launch(actor, rendered, invoker)
-          : await launchViaExecutor(deps, actor, rendered, invoker, launchGuard)
+          : await launchViaExecutor(
+              deps,
+              actor,
+              rendered,
+              invoker,
+              taskExecutionAuthority,
+              launchGuard,
+            )
       const receipt: WorkStartReceipt =
         typeof rawReceipt === 'string' ? { kind: 'orchestration', taskId: rawReceipt } : rawReceipt
       if (receipt.kind === 'orchestration') {
@@ -1389,6 +1407,7 @@ export function createWebhookDispatcher(
         authority: admitted.authority,
         actor: admitted.actor,
         resources: deps.identityAccess.integrationTriggerResources,
+        taskExecutionResources: deps.identityAccess.taskExecutionResources,
       })
       const rendered = renderEventResponseTarget(input.target, input.triggerContext)
       if (rendered.kind === 'digital-employee') {
@@ -1398,7 +1417,7 @@ export function createWebhookDispatcher(
         })
         await assertIntegrationTriggerSnapshotUsable(
           deps.db,
-          admitted.actor,
+          resourceAuthority,
           snapshot,
           rendered.intake as unknown as Record<string, unknown>,
         )
@@ -1413,12 +1432,22 @@ export function createWebhookDispatcher(
           'webhook',
         )
       }
-      return launchViaExecutor(deps, admitted.actor, rendered, {
-        type: 'event',
-        eventSubscriptionId: input.eventSubscriptionId,
-        eventDeliveryId: input.eventDeliveryId,
-        triggerContext: input.triggerContext,
-      })
+      return launchViaExecutor(
+        deps,
+        admitted.actor,
+        rendered,
+        {
+          type: 'event',
+          eventSubscriptionId: input.eventSubscriptionId,
+          eventDeliveryId: input.eventDeliveryId,
+          triggerContext: input.triggerContext,
+        },
+        Object.freeze({
+          authority: admitted.authority,
+          actor: admitted.actor,
+          resources: deps.identityAccess.taskExecutionResources,
+        }),
+      )
     },
   }
 }

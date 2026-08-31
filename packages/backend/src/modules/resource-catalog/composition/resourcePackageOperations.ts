@@ -18,13 +18,13 @@ import {
   type ResourcePackageCatalogModule,
 } from '../public/operations'
 import {
-  PACKAGE_RESOURCE_KINDS,
   type PackageResourceKind,
   type PackageResourceRef,
   type ApplyResourcePackage,
   type ExportResourcePackage,
   type InspectResourcePackage,
 } from '../public/types'
+import { PACKAGE_RESOURCE_KINDS } from '../domain/resourceKinds'
 
 export interface ResourcePackageExportFence {
   readonly expectedVersion?: number

@@ -44,7 +44,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
+import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
   ALL_TOOLS,
   McpCallError,
@@ -125,7 +125,7 @@ async function harness(): Promise<Harness> {
     role: 'user',
     password: 'pw12345678',
   })
-  const taskExecutionRuntime = composeTaskExecutionRuntime({ db })
+  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
   const deps = {
     token: DAEMON_TOKEN,
     configPath,

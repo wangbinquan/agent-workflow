@@ -187,12 +187,13 @@ import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { isHumanReviewConclusion, selectCurrentReviewRound } from '@agent-workflow/shared'
 import { clarifyNavKindForRoundStatus, type ClarifyRoundStatus } from '@agent-workflow/shared'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
-import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@/auth/actor'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import type { GetUserGitCommitIdentity } from '@/modules/identity-access/public/queries'
 import { getUserGitCommitIdentity } from '@/services/users'
-import { freezeCallClosure } from '@/services/execution/closure'
+import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
+import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
 import {
   assertTriggerPreflight,
   triggerPreflightIssue,
@@ -233,25 +234,29 @@ type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionContext' | 'signal'>
 
 /**
- * RFC-243 实现门 P0-1 — closure freezing needs the LAUNCH ACTOR (visibility
- * fence on the name fallback). Call-node-free definitions skip everything
- * (byte-compat). A call-bearing launch WITHOUT an actor (internal faces never
- * produce one today) fails closed rather than freezing blind.
+ * RFC-243 / RFC-345 T4a — closure freezing needs the exact Resource Catalog
+ * authority captured for this launch. Call-node-free definitions skip the
+ * participant (byte-compat); a call-bearing launch without that binding fails
+ * closed instead of returning to the legacy live-row resolver.
  */
 async function freezeClosureForLaunch(
-  deps: Pick<StartTaskDeps, 'db' | 'launchActor'>,
+  deps: Pick<StartTaskDeps, 'db' | 'launchResources'>,
   workflowId: string,
   definition: WorkflowDefinition,
 ): Promise<string | null> {
   const refs = collectExecutionRefs(definition)
   if (refs.workflowNames.size === 0 && refs.workgroupNames.size === 0) return null
-  if (deps.launchActor === undefined) {
+  if (deps.launchResources === undefined) {
     throw new ValidationError(
       'workflow-call-ref-missing',
-      'call-node launches require an authenticated launch actor for closure resolution',
+      'call-node launches require an authenticated resource authority for closure resolution',
     )
   }
-  return freezeCallClosure(deps.db, { id: workflowId, definition }, deps.launchActor)
+  return freezeTaskExecutionCallClosure(
+    deps.db,
+    { id: workflowId, definition },
+    deps.launchResources,
+  )
 }
 
 /**
@@ -575,8 +580,8 @@ export interface StartTaskDeps {
    */
   scriptInterpreters?: Partial<Record<ScriptLanguage, string>>
   scriptDepsInstallTimeoutMs?: number
-  /** RFC-243 实现门 P0-1: the launch actor — closure name-resolution visibility fence. */
-  launchActor?: Actor
+  /** RFC-345 T4a: exact Resource Catalog authority used by production launch paths. */
+  launchResources?: TaskExecutionResourceAuthority
   /** RFC-243 §3.2: daemon-wide active-child-task cap (config.maxActiveChildTasks). */
   maxActiveChildTasks?: number
   /** RFC-243 §3.2: invocation-chain depth ceiling (config.maxInvocationDepth). */
@@ -4898,7 +4903,7 @@ export async function computeWorkflowSyncPreview(
   db: DbClient,
   task: Task,
   workflow: Workflow,
-  actor?: Actor,
+  resourceAuthority: TaskExecutionResourceAuthority,
 ): Promise<WorkflowSyncPreview> {
   // RFC-104 built-in workflows are never manually executed (POST sync-workflow
   // would 403) — so the banner must not appear for them (Codex impl-gate F4).
@@ -4920,19 +4925,17 @@ export async function computeWorkflowSyncPreview(
   const newDef = workflow.definition
   let candidateClosureJson: string | null = null
   const closureIssues: Array<{ code: string; message: string }> = []
-  if (actor !== undefined) {
-    try {
-      candidateClosureJson = await freezeClosureForLaunch(
-        { db, launchActor: actor },
-        workflow.id,
-        newDef,
-      )
-    } catch (error) {
-      closureIssues.push({
-        code: error instanceof DomainError ? error.code : 'workflow-call-ref-missing',
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
+  try {
+    candidateClosureJson = await freezeClosureForLaunch(
+      { db, launchResources: resourceAuthority },
+      workflow.id,
+      newDef,
+    )
+  } catch (error) {
+    closureIssues.push({
+      code: error instanceof DomainError ? error.code : 'workflow-call-ref-missing',
+      message: error instanceof Error ? error.message : String(error),
+    })
   }
   const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
 

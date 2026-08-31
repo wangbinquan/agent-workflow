@@ -17,14 +17,13 @@ import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns } from '@/db/schema'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import { resolveInjection } from '@/services/execution/resolveInjection'
 import {
   setNodeRunStatus,
   transitionMergeState,
   tryTransitionMergeState,
 } from '@/services/lifecycle'
 import { loadRunEnvelopeNonce, mintNodeRun, resolveFrozenRuntime } from '@/services/nodeRunMint'
-import { fanoutInnerAgentRefKey, resolveNodeAgentRef } from '@/services/ref/runtimeRef'
+import { fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 
 import {
   consumedMapsEqual,
@@ -44,7 +43,6 @@ import {
   type WrapperProgress,
 } from '@/modules/task-execution/domain/wrapperProgress'
 import type { Logger } from '@/util/log'
-import { FANOUT_HYDRATE_CALL_POLICY } from '@agent-workflow/shared'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
 // shardSource instead of slicing a string diff.
@@ -142,12 +140,10 @@ export function createWrapperMechanicsPorts(
     fanoutMaxShardTotal: state.opts.fanoutMaxShardTotal ?? 256,
     fanoutAgentKey: fanoutInnerAgentKey,
     async resolveFanoutAgent(node) {
-      const resolved = await resolveNodeAgentRef(
-        state.db,
-        node as Record<string, unknown>,
-        FANOUT_HYDRATE_CALL_POLICY,
-      )
-      return resolved.ok ? resolved.value : null
+      const agentId = fanoutInnerAgentRefKey(node as Record<string, unknown>)
+      if (agentId === null) return { kind: 'missing' }
+      const resolution = await state.taskExecutionResources.injection(agentId)
+      return resolution.kind === 'ok' ? { kind: 'ok', agent: resolution.spec.agent } : resolution
     },
     consumedProvenanceMatches(priorJson, current) {
       return consumedMapsEqual(parseConsumedJson(priorJson), current)
@@ -701,7 +697,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     }
   }
 
-  const injection = await resolveInjection(db, innerAgent, { appHome: opts.appHome, log })
+  const injection = await state.taskExecutionResources.injection(innerAgent.id)
   if (injection.kind === 'failed') {
     await setNodeRunStatus({
       db,
@@ -788,7 +784,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         const shardRuntime = await resolveFrozenRuntime(
           db,
           shardRunId,
-          innerAgent.runtime,
+          injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
           freezeBinaryConfig(opts.configPath),
@@ -798,7 +794,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           taskId,
           nodeRunId: shardRunId,
           nodeId: innerNode.id,
-          agent: innerAgent,
+          agent: injection.spec.agent,
           triggerContext: state.triggerContext,
           runtime: shardRuntime.protocol,
           runtimeBinary: shardRuntime.binary,
@@ -1195,7 +1191,7 @@ async function dispatchFanoutAggregatorAttempt(
   }
   broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'pending')
 
-  const injection = await resolveInjection(db, aggAgent, { appHome: opts.appHome, log })
+  const injection = await state.taskExecutionResources.injection(aggAgent.id)
   if (injection.kind === 'failed') {
     await setNodeRunStatus({
       db,
@@ -1233,7 +1229,7 @@ async function dispatchFanoutAggregatorAttempt(
     const block = await composePriorOutputBlock(
       db,
       aggPriorRun.id,
-      aggAgent.outputs ?? [],
+      injection.spec.agent.outputs ?? [],
       undefined,
       await loadRunEnvelopeNonce(db, aggRunId),
     )
@@ -1286,7 +1282,7 @@ async function dispatchFanoutAggregatorAttempt(
         const aggRuntime = await resolveFrozenRuntime(
           db,
           aggRunId,
-          aggAgent.runtime,
+          injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
           freezeBinaryConfig(opts.configPath),
@@ -1296,7 +1292,7 @@ async function dispatchFanoutAggregatorAttempt(
           taskId,
           nodeRunId: aggRunId,
           nodeId: aggNode.id,
-          agent: aggAgent,
+          agent: injection.spec.agent,
           triggerContext: state.triggerContext,
           runtime: aggRuntime.protocol,
           runtimeBinary: aggRuntime.binary,

@@ -95,6 +95,7 @@ function agentSnapshot(agent: Agent): TaskExecutionAgentSnapshot {
   return Object.freeze({
     id: agent.id,
     name: agent.name,
+    description: agent.description,
     outputs: agent.outputs,
     outputKinds: agent.outputKinds,
     branchPorts: agent.branchPorts,
@@ -110,6 +111,9 @@ function agentSnapshot(agent: Agent): TaskExecutionAgentSnapshot {
     plugins: agent.plugins,
     frontmatterExtra: agent.frontmatterExtra,
     bodyMd: agent.bodyMd,
+    schemaVersion: agent.schemaVersion,
+    createdAt: agent.createdAt,
+    updatedAt: agent.updatedAt,
   })
 }
 

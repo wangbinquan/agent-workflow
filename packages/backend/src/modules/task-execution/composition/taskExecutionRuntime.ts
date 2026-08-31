@@ -1,5 +1,6 @@
 import type { DbClient } from '@/db/client'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
+import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { cancelTask, isTaskActive, resumeTask } from '@/services/task'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 import { humanGateComposition } from '@/services/humanGateComposition'
@@ -26,6 +27,7 @@ export function composeTaskExecutionRuntime(input: {
   readonly db: DbClient
   readonly identityAccess?: Readonly<{
     readonly delegatedRequests: DelegatedRequestAuthorityFactory
+    readonly taskExecutionResources: TaskExecutionResourceBinding
   }>
   readonly repositoryPublicationTransport?: TaskRepositoryPublicationTransport
 }): TaskExecutionRuntime {

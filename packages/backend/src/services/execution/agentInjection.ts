@@ -46,6 +46,17 @@ export const EMPTY_RUNTIME_PROFILE: RuntimeProfile = {
  */
 export type DeclaredManifestV1 = DeclaredInjectionManifest
 
+/**
+ * Runtime-only plugin projection. Persistence may provide the historical
+ * cached path while Resource Catalog provides an already-normalized file
+ * specifier; spawn assembly consumes exactly one locator and never a row.
+ */
+export type RuntimePlugin = Pick<Plugin, 'id' | 'name' | 'options' | 'enabled'> &
+  (
+    | { readonly cachedPath: string; readonly runtimeSpecifier?: never }
+    | { readonly runtimeSpecifier: string; readonly cachedPath?: never }
+  )
+
 /** 全空 manifest —— 各渲染路径在此之上按面填充。 */
 export function emptyDeclaredManifest(): DeclaredManifestV1 {
   return {
@@ -252,7 +263,7 @@ export function declareSubagents(rootName: string, dependents: readonly Agent[])
  * RFC-282 B4（去重键统一）：按 **id** 去重，与 `selectShippedPlugins`（实际
  * ship 集）同键。旧版按 name 去重 ⇒ 同名异 id 时注入 2 个、声明 1 个，启动
  * 验证漏判——声明必须描述 exactly the shipped set（RFC-251 同理）。 */
-export function declarePlugins(plugins: readonly Plugin[]): string[] {
+export function declarePlugins(plugins: readonly RuntimePlugin[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const p of plugins) {

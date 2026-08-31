@@ -24,7 +24,6 @@ import type {
   InventoryDeclaration,
   InventorySnapshot,
   Mcp,
-  Plugin,
   RuntimeConfigDirProfile,
   RuntimeInventoryPayload,
 } from '@agent-workflow/shared'
@@ -35,7 +34,7 @@ import type { LivePollOptions, LivePollerHandle } from './opencode/subagentLiveC
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
 // RFC-280 T1 — unified injection layer shapes (type-only; agentInjection is a
 // leaf module, see its header).
-import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
+import type { DeclaredManifestV1, RuntimePlugin } from '@/services/execution/agentInjection'
 
 export type RuntimeKind = 'opencode' | 'claude-code'
 
@@ -63,7 +62,7 @@ export interface AgentInjectionSpecV1 {
    */
   skills?: readonly ResolvedSkill[]
   /** Selected plugins (opencode face; claude declares them unsupported). */
-  plugins?: readonly Plugin[]
+  plugins?: readonly RuntimePlugin[]
 }
 
 /** RFC-280 T1 — output of the unified injection render hook. */
@@ -584,7 +583,7 @@ export interface BusinessNodeSpawnContext {
   /** RFC-028 MCP rows (drivers apply their own enabled-filter + translation). */
   mcps: readonly Mcp[]
   /** RFC-031 opencode plugin rows (claude ignores). */
-  plugins: readonly Plugin[]
+  plugins: readonly RuntimePlugin[]
   /**
    * RFC-113: resolved runtime profile per agent name (root INCLUDED). Resolved in the
    * runner (async DB reads stay out of drivers — RFC-143 §4.6C).

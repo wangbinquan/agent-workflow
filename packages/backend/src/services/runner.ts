@@ -27,7 +27,6 @@ import type {
   ClarifyTruncationWarning,
   InventorySnapshot,
   Mcp,
-  Plugin,
   PriorOutputUpdateContext,
   ReviewPromptContext,
   TriggerContext,
@@ -87,7 +86,7 @@ import { renderUserPrompt } from './protocol'
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
 // (tests, memoryDistiller) keep resolving from './runner'.
-import { getRuntimeDriver, type RuntimeKind } from './runtime'
+import { getRuntimeDriver, pluginFileSpec, type RuntimeKind } from './runtime'
 import {
   defaultConfigDirProfile,
   resolveAgentRuntime,
@@ -101,7 +100,7 @@ import type {
   ResolvedSkill,
   StartupInventory,
 } from './runtime/types'
-import { EMPTY_RUNTIME_PROFILE } from './execution/agentInjection'
+import { EMPTY_RUNTIME_PROFILE, type RuntimePlugin } from './execution/agentInjection'
 import {
   declaredHasContent,
   observationForVerification,
@@ -316,7 +315,7 @@ export interface RunNodeOptions {
    */
   warnMissingDeclaredPorts?: boolean
   /** Skills used by this agent. */
-  skills: ResolvedSkill[]
+  skills: readonly ResolvedSkill[]
   /**
    * RFC-022: agents resolved from the primary agent's dependsOn closure (BFS
    * order, root excluded). Each one becomes an additional entry under
@@ -328,7 +327,7 @@ export interface RunNodeOptions {
    * (model / variant / temperature) only ever apply to the node-selected
    * primary agent.
    */
-  dependents?: Agent[]
+  dependents?: readonly Agent[]
   /**
    * RFC-028: MCP server configs to inject under `mcp.<name>` in the inline
    * OPENCODE_CONFIG_CONTENT. Scheduler pre-loads these via
@@ -349,7 +348,7 @@ export interface RunNodeOptions {
    * without touching the network. Empty / undefined → omit the `plugin` key
    * entirely.
    */
-  plugins?: readonly Plugin[]
+  plugins?: readonly RuntimePlugin[]
   /**
    * RFC-060 D.T7: per-input port kinds, used to enforce the
    * `signal`-port-not-in-prompt rule. Optional — when set, the runner runs
@@ -2783,7 +2782,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
  */
 export function detectPluginLoadFailure(
   line: string,
-  plugins: readonly Plugin[],
+  plugins: readonly RuntimePlugin[],
 ): { pluginName: string; message: string } | null {
   // opencode log lines pass through a structured logger; the human-readable
   // tail of the line (after `INFO`/`ERROR`/etc.) starts with the message we
@@ -2809,16 +2808,18 @@ export function detectPluginLoadFailure(
   if (spec.startsWith('file://')) {
     const path = spec.replace(/^file:\/\//, '')
     for (const p of plugins) {
-      const cached = p.cachedPath.replace(/^file:\/\//, '')
+      const cached = pluginFileSpec(p).replace(/^file:\/\//, '')
       if (path === cached || path.endsWith(cached) || cached.endsWith(path)) {
         pluginName = p.name
         break
       }
     }
   } else {
-    // npm/git spec form — try direct name match.
+    // Non-file diagnostics are defensive only: runtime assembly always emits
+    // the normalized file locator, so the closed projection need not expose
+    // the persistence-side source spec.
     for (const p of plugins) {
-      if (p.spec === spec || p.name === spec) {
+      if (p.name === spec) {
         pluginName = p.name
         break
       }

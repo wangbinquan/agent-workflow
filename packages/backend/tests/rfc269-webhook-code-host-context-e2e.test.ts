@@ -39,7 +39,7 @@ import { createIntentSession } from '../src/services/intent/session'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
-import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
+import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
@@ -235,7 +235,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
       configPath,
       secretBox: box,
-      schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,
+      schedulerDriver: composeTaskExecutionTestRuntime(db).schedulerDriver,
       getDefaultRuntime: async () => null,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })
@@ -419,7 +419,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
       configPath,
       secretBox: box,
-      schedulerDriver: composeTaskExecutionRuntime({ db }).schedulerDriver,
+      schedulerDriver: composeTaskExecutionTestRuntime(db).schedulerDriver,
       getDefaultRuntime: async () => INTENT_RUNTIME,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })

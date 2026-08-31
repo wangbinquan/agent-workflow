@@ -6,6 +6,7 @@ import {
 } from '../../src/modules/identity-access/composition'
 import { composeDigitalEmployeeIntegrationTriggerParticipant } from '../../src/modules/digital-employee/composition'
 import { composeIntegrationTriggerResourceBinding } from '../../src/modules/resource-catalog/composition/integrationTrigger'
+import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { canViewResourceInTx } from '../../src/modules/resource-catalog/composition/resourceAcl'
 import { rowToAgent } from '../../src/services/agent'
 import { assertNotBuiltin } from '../../src/services/systemResources'
@@ -16,12 +17,17 @@ import {
 } from '../../src/services/scheduledTasks'
 import { rowToWorkflowDetail } from '../../src/services/workflow'
 import { rowToWorkgroup } from '../../src/services/workgroups'
+import { legacyTaskExecutionResourceDependencies } from '../../src/services/execution/legacyTaskExecutionResourceDependencies'
 
 export function integrationTriggerResourceBinding() {
   return composeIntegrationTriggerResourceBinding(
     { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
     composeDigitalEmployeeIntegrationTriggerParticipant,
   )
+}
+
+export function taskExecutionResourceBinding() {
+  return composeTaskExecutionResourceBinding(legacyTaskExecutionResourceDependencies)
 }
 
 export function integrationTriggerResourceAuthority(
@@ -37,6 +43,7 @@ export function integrationTriggerResourceAuthority(
     authority: context.authority,
     actor,
     resources: integrationTriggerResourceBinding(),
+    taskExecutionResources: taskExecutionResourceBinding(),
   })
 }
 
@@ -85,10 +92,12 @@ export function withIntegrationTriggerResources<T extends IdentityAccessRuntime>
 ): T &
   Readonly<{
     integrationTriggerResources: ReturnType<typeof integrationTriggerResourceBinding>
+    taskExecutionResources: ReturnType<typeof taskExecutionResourceBinding>
   }> {
   return Object.freeze({
     ...identityAccess,
     integrationTriggerResources: integrationTriggerResourceBinding(),
+    taskExecutionResources: taskExecutionResourceBinding(),
   })
 }
 

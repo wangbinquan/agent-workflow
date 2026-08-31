@@ -19,7 +19,6 @@ import {
   ACL_CATALOG_KINDS,
   CATALOG_SELECTOR_KINDS,
   GRANT_TARGET_KINDS,
-  PACKAGE_RESOURCE_KINDS,
   asAclCatalogKind,
   asCatalogSelectorKind,
   asPackageResourceKind,
@@ -55,12 +54,12 @@ import {
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
+import { PACKAGE_RESOURCE_KINDS } from '../src/modules/resource-catalog/domain/resourceKinds'
 import type {
   AgentCommands,
   McpCommands,
   PluginCommands,
   PluginUpdateCommands,
-  ResourcePackageCommands,
   SkillCommands,
   SkillFileCommands,
   SkillVersionCommands,
@@ -71,7 +70,6 @@ import type {
   AgentReferenceQueries,
   McpQueries,
   PluginQueries,
-  ResourcePackageQueries,
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
@@ -196,19 +194,13 @@ assertType<
   >
 >(true)
 assertType<Equal<keyof ResourcePackageApplyScenarioProvider, 'scenario' | 'participants'>>(true)
-assertType<Equal<Extract<keyof ResourcePackageCommands, string>, 'inspect' | 'apply' | 'export'>>(
-  true,
-)
-assertType<Equal<Extract<keyof ResourcePackageQueries, string>, 'getPreview' | 'getReceipt'>>(true)
 assertType<
   Equal<
     Extract<keyof ResourcePackageOperationDescriptors, string>,
     'inspect' | 'apply' | 'getPreview' | 'getReceipt' | 'export'
   >
 >(true)
-assertType<
-  Equal<Extract<keyof ResourcePackageCatalogModule, string>, 'commands' | 'queries' | 'operations'>
->(true)
+assertType<Equal<Extract<keyof ResourcePackageCatalogModule, string>, 'operations'>>(true)
 assertType<
   Equal<
     keyof LegacyResourcePackageMutationParticipants,
@@ -835,6 +827,119 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(cliStart).toContain('const integrationIdentityAccess = Object.freeze({')
     expect(cliStart).toContain('identityAccess: integrationIdentityAccess')
     expect(cliStart).toContain('resolveEventTargetAuthority: async (userId) =>')
+  })
+
+  test('T4a task execution consumes one authority-bound snapshot session without legacy reads', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const publicParticipants = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/participants.ts'),
+      'utf8',
+    )
+    const publicTypes = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/types.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/taskExecution.ts'),
+      'utf8',
+    )
+    const adapter = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/resource-catalog/infrastructure/aggregateAdapters/legacyTaskExecutionResourceSnapshots.ts',
+      ),
+      'utf8',
+    )
+    const dependencies = readFileSync(
+      resolve(sourceRoot, 'services/execution/legacyTaskExecutionResourceDependencies.ts'),
+      'utf8',
+    )
+    const resources = readFileSync(
+      resolve(sourceRoot, 'services/execution/taskExecutionResources.ts'),
+      'utf8',
+    )
+    const closure = readFileSync(
+      resolve(sourceRoot, 'services/execution/taskExecutionCallClosure.ts'),
+      'utf8',
+    )
+    const task = readFileSync(resolve(sourceRoot, 'services/task.ts'), 'utf8')
+    const taskRoute = readFileSync(resolve(sourceRoot, 'routes/tasks.ts'), 'utf8')
+    const multipart = readFileSync(resolve(sourceRoot, 'services/multipartTaskStart.ts'), 'utf8')
+    const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
+    const webhook = readFileSync(resolve(sourceRoot, 'services/webhook/webhookDispatch.ts'), 'utf8')
+    const node = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/composition/nodeMechanics.ts'),
+      'utf8',
+    )
+    const wrapper = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/composition/wrapperMechanics.ts'),
+      'utf8',
+    )
+    const wrapperData = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/application/ports/wrapperData.ts'),
+      'utf8',
+    )
+    const fanout = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/engine/wrapper/fanoutStrategy.ts'),
+      'utf8',
+    )
+    const scheduler = readFileSync(resolve(sourceRoot, 'services/scheduler.ts'), 'utf8')
+    const identity = readFileSync(
+      resolve(sourceRoot, 'modules/identity-access/application/operationContext.ts'),
+      'utf8',
+    )
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+    const cliStart = readFileSync(resolve(sourceRoot, 'cli/start.ts'), 'utf8')
+
+    expect(publicParticipants).toContain('TaskExecutionResourceSnapshotInTx')
+    for (const kind of ['workflow-launch', 'agent-injection', 'call-workflow', 'call-workgroup']) {
+      expect(publicTypes).toContain(`kind: '${kind}'`)
+    }
+    expect(composition).toContain('composeTaskExecutionResourceBinding')
+    expect(composition).toContain('createTaskExecutionResourceSnapshotInTx(')
+    expect(adapter).toContain('authority !== options.authority')
+    expect(adapter).toContain("throw new Error('foreign-task-execution-authority')")
+    expect(adapter).not.toContain("from '@/services/")
+    expect(dependencies).toContain("from '@/services/resourceAcl'")
+    expect(resources).not.toContain('modules/resource-catalog/composition')
+    expect(resources).toContain('createTaskExecutionResourceSession')
+    expect(closure).toContain('participant.loadAuthorized(resourceAuthority.authority, [request])')
+
+    expect(task).toContain('freezeTaskExecutionCallClosure(')
+    expect(task).not.toContain('freezeCallClosure(')
+    expect(taskRoute).not.toContain('modules/identity-access/composition')
+    expect(taskRoute).not.toContain('modules/resource-catalog/composition/taskExecution')
+    expect(multipart).not.toContain('modules/identity-access/composition')
+    expect(multipart).not.toContain('modules/resource-catalog/composition/taskExecution')
+    expect(taskRoute).toContain('taskExecutionResourceAuthority(c, identityAccess)')
+    expect(schedules).toContain('freezeTaskExecutionCallClosure(')
+    expect(schedules).toContain('resources: identityAccess.taskExecutionResources')
+    expect(webhook).toContain('launchResources,')
+
+    const execution = `${node}\n${wrapper}\n${scheduler}`
+    for (const legacyResourceImport of [
+      "@/services/agent'",
+      "@/services/mcp'",
+      "@/services/plugin'",
+      "@/services/skill'",
+      "@/services/workflow'",
+      "@/services/workgroups'",
+      "@/services/execution/resolveInjection'",
+    ]) {
+      expect(execution).not.toContain(legacyResourceImport)
+    }
+    expect(execution.split('taskExecutionResources.injection(').length - 1).toBe(5)
+    expect(execution.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(2)
+    expect(wrapperData).toContain('WrapperFanoutAgentResolution')
+    expect(wrapper).toContain("return resolution.kind === 'ok'")
+    expect(fanout).toContain('agentFailures.get(innerAgentId)')
+    expect(fanout).toContain('agentFailures.get(aggregatorKey)')
+    expect(fanout.indexOf('if (items.length === 0)')).toBeLessThan(
+      fanout.indexOf('agentFailures.get(innerAgentId)'),
+    )
+    expect(identity).toContain('forTaskExecution(input:')
+    expect(server).toContain('composeTaskExecutionResourceBinding(')
+    expect(cliStart).toContain('composeTaskExecutionResourceBinding(')
   })
 
   test('T5-M active HTTP and MCP compatibility bindings execute the owned aggregate', () => {

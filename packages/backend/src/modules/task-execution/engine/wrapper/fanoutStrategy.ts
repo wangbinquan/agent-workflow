@@ -32,6 +32,10 @@ interface PreparedFanoutWrapper {
   readonly itemKind: ParsedKind
   readonly innerIds: readonly string[]
   readonly agentsMap: ReadonlyMap<string, Agent>
+  readonly agentFailures: ReadonlyMap<
+    string,
+    { readonly summary: string; readonly message: string }
+  >
 }
 
 /** Owns fanout hydration, scope, shard identity, attempt orchestration and projection. */
@@ -83,13 +87,15 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
     }
 
     const agentsMap = new Map<string, Agent>()
+    const agentFailures = new Map<string, { readonly summary: string; readonly message: string }>()
     for (const innerId of scope.directNodeIds) {
       const inner = this.data.definition.nodes.find((candidate) => candidate.id === innerId)
       if (inner === undefined) continue
       const key = this.data.fanoutAgentKey(inner)
-      if (key === null || agentsMap.has(key)) continue
-      const agent = await this.data.resolveFanoutAgent(inner)
-      if (agent !== null) agentsMap.set(key, agent)
+      if (key === null || agentsMap.has(key) || agentFailures.has(key)) continue
+      const resolution = await this.data.resolveFanoutAgent(inner)
+      if (resolution.kind === 'ok') agentsMap.set(key, resolution.agent)
+      if (resolution.kind === 'failed') agentFailures.set(key, resolution)
     }
 
     const prepared: PreparedFanoutWrapper = {
@@ -97,6 +103,7 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
       itemKind: parsedKind.item,
       innerIds: scope.directNodeIds,
       agentsMap,
+      agentFailures,
     }
     return {
       kind: 'ready',
@@ -111,7 +118,7 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
   ): Promise<WrapperSettlement> {
     const { node, iteration } = request
     const { definition } = this.data
-    const { shardPort, itemKind, innerIds, agentsMap } = prepared
+    const { shardPort, itemKind, innerIds, agentsMap, agentFailures } = prepared
     const wrapperRunId = generation.runId
     const { inputs: upstreamInputs, consumed: wrapperConsumed } = await this.data.resolveInputs(
       node.id,
@@ -237,6 +244,14 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
       }
       const innerAgent = agentsMap.get(innerAgentId)
       if (innerAgent === undefined) {
+        const failure = agentFailures.get(innerAgentId)
+        if (failure !== undefined) {
+          return wrapperSettlement(
+            'failed',
+            { kind: 'failed', summary: failure.summary, message: failure.message },
+            `inner-agent-resolution-failed:${failure.message}`,
+          )
+        }
         return wrapperSettlement(
           'failed',
           {
@@ -333,6 +348,24 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
     }
 
     if (shardScope.aggregatorId !== null) {
+      const aggregatorNode = definition.nodes.find(
+        (candidate) => candidate.id === shardScope.aggregatorId,
+      )
+      const aggregatorKey =
+        aggregatorNode === undefined ? null : this.data.fanoutAgentKey(aggregatorNode)
+      const aggregatorFailure =
+        aggregatorKey === null ? undefined : agentFailures.get(aggregatorKey)
+      if (aggregatorFailure !== undefined) {
+        return wrapperSettlement(
+          'failed',
+          {
+            kind: 'failed',
+            summary: aggregatorFailure.summary,
+            message: aggregatorFailure.message,
+          },
+          `aggregator-resolution-failed:${aggregatorFailure.message}`,
+        )
+      }
       const aggregator = findFanoutAggregatorInScope(
         definition,
         request.scope.directNodeIds,

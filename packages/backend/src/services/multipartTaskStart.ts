@@ -15,6 +15,7 @@ import {
 import type { Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
+import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { startExecution } from '@/services/execution/executor'
 import {
@@ -26,7 +27,11 @@ import {
 } from '@/services/launchMultipart'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { resolveSubagentLiveCapture } from '@/services/startTaskDeps'
-import { assertWorkflowLaunchable } from '@/services/taskLaunchGate'
+import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+import {
+  loadTaskExecutionResourceSnapshot,
+  type TaskExecutionResourceBinding,
+} from '@/services/execution/taskExecutionResources'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import {
   cleanupMaterializedSpace,
@@ -45,6 +50,10 @@ export interface MultipartLaunchDeps {
   secretBox?: SecretBox
   configPath: string
   schedulerDriver: SchedulerDriverPort
+  identityAccess: Readonly<{
+    directAuthority: DirectAuthorityBinding
+    readonly taskExecutionResources: TaskExecutionResourceBinding
+  }>
 }
 
 export async function handleMultipartTaskStart(
@@ -102,7 +111,16 @@ export async function handleMultipartTaskStart(
   // 2. Resolve workflow → extract upload input declarations. RFC-099 (D3):
   // the launcher must be able to use the workflow; invisible == missing.
   const launchRuntime = resolveLaunchRuntimeConfig(deps.configPath)
-  const workflow = await assertWorkflowLaunchable(deps.db, actor, startInput.workflowId)
+  const launchResources = Object.freeze({
+    actor,
+    authority: deps.identityAccess.directAuthority.authorityForLegacyProjection(actor),
+    resources: deps.identityAccess.taskExecutionResources,
+  })
+  const workflow = loadTaskExecutionResourceSnapshot(deps.db, launchResources, {
+    kind: 'workflow-launch',
+    workflowId: startInput.workflowId,
+  }).workflow
+  await assertWorkflowSnapshotLaunchable(deps.db, workflow)
   // RFC-199 G1: reject a stale launch guard against the SAME visible row we
   // just captured, before URL resolution can mint a cache row/worktree/branch.
   // startTask intentionally retains its own pre-materialize and final-tx
@@ -133,7 +151,7 @@ export async function handleMultipartTaskStart(
     ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
     configPath: deps.configPath,
     ...launchRuntime,
-    launchActor: actor,
+    launchResources,
   }
   const gitCommitIdentity = await resolveTaskGitCommitIdentity(routeLaunchDeps)
   const resolvedRouteLaunchDeps = { ...routeLaunchDeps, gitCommitIdentity }

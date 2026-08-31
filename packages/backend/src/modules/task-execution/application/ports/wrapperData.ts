@@ -13,12 +13,17 @@ export interface WrapperResolvedInputs {
   readonly consumed: Record<string, string>
 }
 
+export type WrapperFanoutAgentResolution =
+  | { readonly kind: 'ok'; readonly agent: Agent }
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'failed'; readonly summary: string; readonly message: string }
+
 export interface WrapperDataPort {
   readonly definition: WorkflowDefinition
   readonly fanoutMaxShardTotal: number
 
   fanoutAgentKey(node: WorkflowNode): string | null
-  resolveFanoutAgent(node: WorkflowNode): Promise<Agent | null>
+  resolveFanoutAgent(node: WorkflowNode): Promise<WrapperFanoutAgentResolution>
   consumedProvenanceMatches(priorJson: string, current: Readonly<Record<string, string>>): boolean
   reportDiagnostic(input: {
     readonly level: 'info' | 'warn'

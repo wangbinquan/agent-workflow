@@ -19,7 +19,7 @@ import type { DbClient } from '@/db/client'
 import { nodeRuns, taskRepos } from '@/db/schema'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import { resolveInjection } from '@/services/execution/resolveInjection'
+import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { loadRunEnvelopeNonce, mintNodeRun, resolveFrozenRuntime } from '@/services/nodeRunMint'
 
@@ -234,11 +234,7 @@ export async function maybeRunCommitPush(
         const commitAgent = buildCommitAgent()
         // RFC-282 B2 — the 6th/5th entries also go through the ONE resolver.
         // writeSem is held here: thread the scope signal (design §9-5).
-        const commitInjection = await resolveInjection(db, commitAgent, {
-          appHome: state.opts.appHome,
-          log: log.child('commit'),
-          ...(state.opts.signal ? { signal: state.opts.signal } : {}),
-        })
+        const commitInjection = resolveSyntheticTaskExecutionInjection(commitAgent)
         if (commitInjection.kind === 'failed') {
           throw new Error(`commit-push injection resolve failed: ${commitInjection.message}`)
         }
@@ -266,11 +262,9 @@ export async function maybeRunCommitPush(
             // RFC-248: `{{__repo_group__}}`；非组启动时不传 ⇒ 渲染空串。
             ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
           },
-          // RFC-282 B2 — resources derive from the synthetic agent's own
-          // definition via the ONE resolver (was four hand-written empty
-          // arrays: adding an MCP ref to the built-in agent silently did
-          // nothing). Zero-resource today ⇒ identical spec; the regression
-          // lock pins that resolveInjection stays ok for synthetic agents.
+          // RFC-282 B2 / RFC-345 T4a — code-owned synthetic agents are resolved
+          // explicitly without a catalog read. Any future managed reference
+          // fails closed instead of being hidden behind hand-written empties.
           skills: commitInjection.spec.skills,
           dependents: commitInjection.spec.dependents,
           mcps: commitInjection.spec.mcps,

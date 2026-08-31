@@ -39,7 +39,7 @@ export function buildScheduleLaunch(
   configPath: string,
   identityAccess: NonNullable<StartTaskDeps['identityAccess']>,
 ): BuildScheduleLaunch {
-  return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor) => {
+  return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor, resources) => {
     const deps = {
       ...buildStartTaskDeps(
         db,
@@ -49,9 +49,7 @@ export function buildScheduleLaunch(
         undefined,
         identityAccess,
       ),
-      // RFC-243 实现门 P0-1: scheduled fires resolve call-node closures inside
-      // the rebuilt owner actor's visibility (same fence as a manual launch).
-      launchActor: actor,
+      launchResources: resources,
       // RFC-287 G7：定时/webhook 触发与手动启动**同一套语义**（proposal §G7 原话：
       // 「定时任务与 webhook 触发同一套语义」）。这里没有等 HTTP 响应的用户，但 G7
       // 的另一半收益恰恰是这两条最需要的：**准备失败要留下记录**。不开的话，一次

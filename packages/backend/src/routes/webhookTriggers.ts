@@ -20,11 +20,13 @@ import {
 import { safeJsonOrThrowInvalid } from '@/util/http'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { IntegrationTriggerResourceBinding } from '@/services/scheduledTasks'
+import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
 interface WebhookTriggerRouteIdentityAccess {
   readonly directAuthority: DirectAuthorityBinding
   readonly integrationTriggerResources: IntegrationTriggerResourceBinding
+  readonly taskExecutionResources: TaskExecutionResourceBinding
 }
 
 export function mountWebhookTriggerRoutes(
@@ -39,6 +41,7 @@ export function mountWebhookTriggerRoutes(
       actor,
       authority: directRequestAuthority(identityAccess.directAuthority, actor),
       resources: identityAccess.integrationTriggerResources,
+      taskExecutionResources: identityAccess.taskExecutionResources,
     })
   }
 

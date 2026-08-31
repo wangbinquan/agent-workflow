@@ -119,6 +119,7 @@ export function mountScheduledTaskRoutes(
       actor,
       authority: directRequestAuthority(deps.identityAccess.directAuthority, actor),
       resources: deps.identityAccess.integrationTriggerResources,
+      taskExecutionResources: deps.identityAccess.taskExecutionResources,
     })
   }
   registerRoute(

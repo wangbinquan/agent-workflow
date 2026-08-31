@@ -23,7 +23,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents } from '../src/db/schema'
 import { ALL_TOOLS, describeResource } from '../src/mcp/tools'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
+import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createApp } from '../src/server'
 import { createRouteOperationDispatcher as createDispatcher } from './helpers/routeOperationDispatcher'
 import {
@@ -286,7 +286,7 @@ describe('RFC-327 —— MCP resource_read 的 query 透传与 facets', () => {
     seen: Array<{ path: string; query: unknown }>
     value: unknown
   }> {
-    const taskExecutionRuntime = composeTaskExecutionRuntime({ db: h.db })
+    const taskExecutionRuntime = composeTaskExecutionTestRuntime(h.db)
     const dispatch = createDispatcher({
       token: DAEMON_TOKEN,
       configPath: h.configPath,

@@ -5,12 +5,16 @@ import type { CodeHostConnectionsService } from '@/services/codeHost/connections
 import type { Logger } from '@/util/log'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
+import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 
 export interface RunTaskOptions {
   taskId: string
   db: DbClient
   /** RFC-347 bootstrap-owned delegated authority factory for child calls. */
-  identityAccess?: Readonly<{ delegatedRequests: DelegatedRequestAuthorityFactory }>
+  identityAccess?: Readonly<{
+    delegatedRequests: DelegatedRequestAuthorityFactory
+    taskExecutionResources: TaskExecutionResourceBinding
+  }>
   appHome: string
   /**
    * RFC-328 exact durable claim, supplied only by the claim→attach handoff.

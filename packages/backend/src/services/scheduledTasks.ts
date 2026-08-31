@@ -54,7 +54,8 @@ import { triggerRevalidation } from '@/ws/revalidationHook'
 import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
-import { freezeCallClosure } from '@/services/execution/closure'
+import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
+import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import type {
   IntegrationTriggerResourceSnapshotInTx,
@@ -78,6 +79,11 @@ export type ScheduleLaunch = (
   kind: ScheduledLaunchKind,
   payload: Record<string, unknown>,
   actor: Actor,
+  resources: Readonly<{
+    readonly authority: ResourceRequestContext
+    readonly actor: Actor
+    readonly resources: TaskExecutionResourceBinding
+  }>,
 ) => Promise<{ id: string }>
 export type BuildScheduleLaunch = (ownerUserId: string, scheduledTaskId: string) => ScheduleLaunch
 export type ScheduleAuthorityInvocation =
@@ -86,6 +92,7 @@ export type ScheduleAuthorityInvocation =
 export type ScheduleAuthorityRuntime = Readonly<{
   delegatedRequests: DelegatedRequestAuthorityFactory
   integrationTriggerResources: IntegrationTriggerResourceBinding
+  taskExecutionResources: TaskExecutionResourceBinding
 }>
 
 export interface IntegrationTriggerResourceBinding {
@@ -100,6 +107,7 @@ export interface IntegrationTriggerResourceAuthority {
   readonly authority: ResourceRequestContext
   readonly actor: Actor
   readonly resources: IntegrationTriggerResourceBinding
+  readonly taskExecutionResources: TaskExecutionResourceBinding
 }
 
 type Row = typeof scheduledTasks.$inferSelect
@@ -390,7 +398,7 @@ function assertDigitalEmployeeIntake(
 
 export async function assertIntegrationTriggerSnapshotUsable(
   db: DbClient,
-  actor: Actor,
+  resourceAuthority: IntegrationTriggerResourceAuthority,
   snapshot: FrozenIntegrationTriggerResourceSnapshot,
   body: Record<string, unknown>,
   triggerSource: TriggerDependencySource = { kind: 'none' },
@@ -400,10 +408,14 @@ export async function assertIntegrationTriggerSnapshotUsable(
     // Preserve the RFC-159 schedule-specific incompatibility as the first
     // visible error after the participant's ACL/builtin gates.
     assertNoRequiredUploadInput(target)
-    const closureJson = await freezeCallClosure(
+    const closureJson = freezeTaskExecutionCallClosure(
       db,
       { id: target.id, definition: target.definition },
-      actor,
+      Object.freeze({
+        authority: resourceAuthority.authority,
+        actor: resourceAuthority.actor,
+        resources: resourceAuthority.taskExecutionResources,
+      }),
     )
     assertTriggerPreflight({ root: target.definition, closureJson, source: triggerSource })
     await assertWorkflowSnapshotLaunchable(db, target)
@@ -472,13 +484,7 @@ export async function assertScheduledTargetUsable(
     resourceAuthority,
     scheduledResourceRequest(kind, body, source),
   )
-  await assertIntegrationTriggerSnapshotUsable(
-    db,
-    resourceAuthority.actor,
-    snapshot,
-    body,
-    triggerSource,
-  )
+  await assertIntegrationTriggerSnapshotUsable(db, resourceAuthority, snapshot, body, triggerSource)
 }
 
 export async function createScheduledTask(
@@ -999,6 +1005,7 @@ export async function fireSchedule(
     authority: delegated.authority,
     actor,
     resources: identityAccess.integrationTriggerResources,
+    taskExecutionResources: identityAccess.taskExecutionResources,
   })
   // RFC-224: save-time acceptance is not a launch capability. Re-evaluate the
   // canonical target and its effective runtime on every fire, using the daemon
@@ -1009,7 +1016,16 @@ export async function fireSchedule(
   await assertScheduledTargetUsable(db, resourceAuthority, kind, bodyWithName, defaultRuntime)
 
   const launch = buildLaunch(row.ownerUserId, row.id)
-  const task = await launch(kind, bodyWithName, actor)
+  const task = await launch(
+    kind,
+    bodyWithName,
+    actor,
+    Object.freeze({
+      authority: delegated.authority,
+      actor,
+      resources: identityAccess.taskExecutionResources,
+    }),
+  )
   return { taskId: task.id }
 }
 

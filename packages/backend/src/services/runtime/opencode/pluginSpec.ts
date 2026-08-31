@@ -9,7 +9,7 @@
 // Leaf module: a shared type import only, so both assemblers can depend on it
 // without creating a runtime edge between them.
 
-import type { Plugin } from '@agent-workflow/shared'
+import type { RuntimePlugin } from '@/services/execution/agentInjection'
 
 /**
  * One element of opencode's `config.plugin`: either a bare `file://<path>`
@@ -33,7 +33,7 @@ export type PluginSpec = string | [string, Record<string, unknown>]
  * Returns [] when nothing resolves; callers omit the `plugin` key entirely in
  * that case rather than emitting an empty array.
  */
-export function buildPluginSpecArray(plugins: readonly Plugin[]): PluginSpec[] {
+export function buildPluginSpecArray(plugins: readonly RuntimePlugin[]): PluginSpec[] {
   return selectShippedPlugins(plugins).map((p) => {
     const pathSpec = pluginFileSpec(p)
     const opts = p.options && Object.keys(p.options).length > 0 ? p.options : undefined
@@ -49,8 +49,8 @@ export function buildPluginSpecArray(plugins: readonly Plugin[]): PluginSpec[] {
  * from the raw selection instead would drift the moment a row is disabled or
  * reached twice through the closure.
  */
-export function selectShippedPlugins(plugins: readonly Plugin[]): Plugin[] {
-  const shipped: Plugin[] = []
+export function selectShippedPlugins(plugins: readonly RuntimePlugin[]): RuntimePlugin[] {
+  const shipped: RuntimePlugin[] = []
   const seen = new Set<string>()
   for (const p of plugins) {
     if (p.enabled === false) continue
@@ -62,6 +62,7 @@ export function selectShippedPlugins(plugins: readonly Plugin[]): Plugin[] {
 }
 
 /** The resolved local `file://` specifier — never the raw npm/git input. */
-export function pluginFileSpec(plugin: Plugin): string {
+export function pluginFileSpec(plugin: RuntimePlugin): string {
+  if (plugin.runtimeSpecifier !== undefined) return plugin.runtimeSpecifier
   return plugin.cachedPath.startsWith('file://') ? plugin.cachedPath : `file://${plugin.cachedPath}`
 }

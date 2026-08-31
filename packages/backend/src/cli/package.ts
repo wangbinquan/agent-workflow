@@ -21,7 +21,13 @@ import {
   type PackagePreview,
 } from '@agent-workflow/shared'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
-import type { ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
+import type { ResourcePackageCatalogModule } from '@/modules/resource-catalog/public/operations'
+import type {
+  ApplyResourcePackage,
+  ExportResourcePackage,
+  InspectResourcePackage,
+  PackageResourceRef,
+} from '@/modules/resource-catalog/public/types'
 import { invokeOperation } from '@/platform/operations/invoke'
 
 const USAGE = `usage: agent-workflow package <export|import> --as-user <username> [options]
@@ -64,6 +70,47 @@ interface CliHumanMemberMapping {
   readonly workgroupSlug: string
   readonly username: string
   readonly userId?: string | null
+}
+
+interface CliPackageSecretInput {
+  readonly resourceType: string
+  readonly resourceName: string
+  readonly field: string
+  readonly value: string
+}
+
+interface PackageCommandTransport {
+  stageInspect(actor: Actor, bytes: Uint8Array): InspectResourcePackage
+  stageApply(
+    actor: Actor,
+    input: Readonly<{
+      bytes: Uint8Array
+      previewToken: string
+      decisions: readonly CliImportDecision[]
+      humanMemberMappings: readonly CliHumanMemberMapping[]
+      secretInputs: readonly CliPackageSecretInput[]
+    }>,
+  ): ApplyResourcePackage
+  stageExport(
+    actor: Actor,
+    input: Readonly<{
+      root: PackageResourceRef
+      exportedAt: number
+      expect: Readonly<{
+        expectedVersion?: number
+        expectedContentVersion?: number
+        expectedUpdatedAt?: number
+        expectedAclRevision?: number
+        expectedMetaRevision?: number
+        expectedConfigHash?: string
+      }>
+    }>,
+  ): ExportResourcePackage
+  takeExport(packageId: string): Uint8Array
+}
+
+interface PackageCommandCatalog extends ResourcePackageCatalogModule {
+  readonly transport: PackageCommandTransport
 }
 
 interface CliHumanMemberGroup {
@@ -149,7 +196,7 @@ export interface PackageCommandIdentityHandle {
 export interface PackageCommandBootstrap {
   readonly db: DbClient
   readonly identity: PackageCommandIdentityHandle
-  readonly catalog: ComposedResourcePackageCatalog
+  readonly catalog: PackageCommandCatalog
   shutdown(): void
 }
 
@@ -212,7 +259,7 @@ async function runExport(
     actor: Actor
     commandContext(): CommandContext
   }>,
-  catalog: ComposedResourcePackageCatalog,
+  catalog: PackageCommandCatalog,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   // `find` rather than a cast plus `includes`: the cast is what made this
@@ -265,7 +312,7 @@ async function runImport(
     commandContext(): CommandContext
     queryContext(): QueryContext
   }>,
-  catalog: ComposedResourcePackageCatalog,
+  catalog: PackageCommandCatalog,
   flags: Map<string, string>,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   const file = flags.get('file')

@@ -121,6 +121,7 @@ import {
   composeResourceScopeAuthorizationBinding,
 } from '@/modules/resource-catalog/composition/resourceAcl'
 import { composeIntegrationTriggerResourceBinding } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeEventCenter, startEventCenterWorker } from '@/modules/event-center/composition'
 import {
   activateDigitalEmployeeOsWriter,
@@ -136,6 +137,7 @@ import { rowToAgent } from '@/services/agent'
 import { rowToWorkflowDetail } from '@/services/workflow'
 import { rowToWorkgroup } from '@/services/workgroups'
 import { assertNotBuiltin } from '@/services/systemResources'
+import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
   developmentExecutionContractRegistrations,
@@ -610,10 +612,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
       composeDigitalEmployeeIntegrationTriggerParticipant,
     ),
+    taskExecutionResources: composeTaskExecutionResourceBinding(
+      legacyTaskExecutionResourceDependencies,
+    ),
   })
   const taskExecutionRuntime = composeTaskExecutionRuntime({
     db,
-    identityAccess,
+    identityAccess: integrationIdentityAccess,
     repositoryPublicationTransport,
   })
   const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)

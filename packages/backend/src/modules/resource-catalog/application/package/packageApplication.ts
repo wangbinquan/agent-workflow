@@ -1,24 +1,68 @@
 import { NotFoundError } from '@/util/errors'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
-import type { ResourcePackageCommands } from '../../public/commands'
-import type { ResourcePackageQueries } from '../../public/queries'
 import type {
-  GetResourcePackageApplyReceipt,
-  GetResourcePackagePreview,
   ApplyResourcePackage,
   ExportResourcePackage,
   InspectResourcePackage,
-  ResourcePackageApplyReceipt,
-  ResourcePackageApplyReceiptView,
-  ResourcePackageExportReceipt,
-  ResourcePackagePreviewReceipt,
-  ResourcePackagePreviewView,
 } from '../../public/types'
-import type { ResourcePackageExecutionPort, ResourcePackageResultIdFactory } from './ports'
+import type {
+  ResourcePackageExecutionPort,
+  ResourcePackageExportReceipt,
+  ResourcePackageResultIdFactory,
+} from './ports'
+
+interface ResourcePackagePreviewReceipt {
+  readonly previewId: string
+}
+
+interface GetResourcePackagePreview {
+  readonly previewId: string
+}
+
+interface ResourcePackagePreviewView {
+  readonly previewId: string
+  readonly document: string
+}
+
+interface ResourcePackageApplyReceipt {
+  readonly receiptId: string
+}
+
+interface GetResourcePackageApplyReceipt {
+  readonly receiptId: string
+}
+
+interface ResourcePackageApplyReceiptView {
+  readonly receiptId: string
+  readonly document: string
+}
 
 export interface ResourcePackageApplicationDependencies {
   readonly execution: ResourcePackageExecutionPort
   readonly ids: ResourcePackageResultIdFactory
+}
+
+interface ResourcePackageCommands {
+  inspect(
+    context: CommandContext,
+    input: InspectResourcePackage,
+  ): Promise<ResourcePackagePreviewReceipt>
+  apply(context: CommandContext, input: ApplyResourcePackage): Promise<ResourcePackageApplyReceipt>
+  export(
+    context: CommandContext,
+    input: ExportResourcePackage,
+  ): Promise<ResourcePackageExportReceipt>
+}
+
+interface ResourcePackageQueries {
+  getPreview(
+    context: QueryContext,
+    input: GetResourcePackagePreview,
+  ): Promise<ResourcePackagePreviewView>
+  getReceipt(
+    context: QueryContext,
+    input: GetResourcePackageApplyReceipt,
+  ): Promise<ResourcePackageApplyReceiptView>
 }
 
 export interface ResourcePackageApplication {

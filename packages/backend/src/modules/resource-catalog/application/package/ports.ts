@@ -1,5 +1,9 @@
 import type { CommandContext } from '@/modules/identity-access/public/participants'
-import type { ResourcePackageExportReceipt } from '../../public/types'
+
+export interface ResourcePackageExportReceipt {
+  readonly packageId: string
+  readonly filename: string
+}
 
 /**
  * Composition-owned execution adapter. Handles identify one-shot, privately

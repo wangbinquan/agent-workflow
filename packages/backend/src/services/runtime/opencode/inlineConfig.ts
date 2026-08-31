@@ -20,7 +20,8 @@
 // Leaf module: imports shared types + the unified injection layer (itself a
 // leaf) → no runtime edge back into runner/runtimeRegistry.
 
-import type { Agent, Mcp, Plugin } from '@agent-workflow/shared'
+import type { Agent, Mcp } from '@agent-workflow/shared'
+import type { RuntimePlugin } from '@/services/execution/agentInjection'
 import type { RuntimeProfile } from '@/services/runtimeRegistry'
 import {
   renderOpencodeAgentEntry,
@@ -41,7 +42,7 @@ export function buildInlineConfig(
   paramsByAgent: ReadonlyMap<string, RuntimeProfile>,
   dependents: readonly Agent[],
   mcps: readonly Mcp[] = [],
-  plugins: readonly Plugin[] = [],
+  plugins: readonly RuntimePlugin[] = [],
   // RFC-281 T1: task workspace boundary. When provided, EVERY agent entry's
   // permission is re-composed through `composeOpencodeBoundary` (deny baseline
   // + W(run) re-allow, author keys preserved, external_directory appended AFTER

@@ -1,5 +1,6 @@
-// RFC-282 B2 — the resolution layer lives in services/execution/ and all six
-// scheduler entries go through it.
+// RFC-282 B2 / RFC-345 T4a — the legacy resolver keeps its focused behavior
+// tests below, while all six TaskExecution entries now use the per-task named
+// Resource Catalog session (four managed + two synthetic code-owned entries).
 //
 // §7-7 (registered behavior change): the RFC-170 skill-quarantine gate and
 // the RFC-223 canonical-path gate used to THROW out of the resolver — runScope
@@ -143,18 +144,20 @@ describe('RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 
   })
 })
 
-describe('RFC-282 B2 — all six TaskExecution entries go through the one resolver', () => {
-  test('TaskExecution has six resolveInjection call sites and zero hand-written empty-array bypasses', () => {
+describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one resource session', () => {
+  test('TaskExecution has four managed session reads plus two explicit synthetic resolutions', () => {
     const text = [
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
     ].join('\n')
-    expect(text.split('await resolveInjection(').length - 1).toBe(6)
+    expect(text).not.toContain('await resolveInjection(')
+    expect(text.split('taskExecutionResources.injection(').length - 1).toBe(4)
+    expect(text.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(2)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')
     expect(text).not.toContain('skills: [],\n      dependents: [],')
-    // the resolver itself no longer lives in either execution composition file
+    // no resolver implementation is duplicated in either execution composition file
     expect(text).not.toContain('function prepareNodeRunInjection')
     expect(text).not.toContain('async function resolveSkills')
   })

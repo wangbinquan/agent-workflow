@@ -25,6 +25,7 @@ import type {
   ValidatedIdempotencyKey,
 } from '../public/participants'
 import {
+  projectOwnerlessLegacyActor,
   projectDelegatedLegacyActor,
   projectDirectLegacyActor,
   type DirectLegacyProjection,
@@ -60,6 +61,7 @@ type DelegatedSource =
   | 'schedule'
   | 'webhook'
   | 'event'
+  | 'task-execution'
   | 'call-workflow'
   | 'call-workgroup'
   | 'code-host'
@@ -74,7 +76,7 @@ interface DelegatedClaim {
   readonly revision: number
   readonly source: Extract<
     DelegatedSource,
-    'schedule' | 'webhook' | 'call-workflow' | 'call-workgroup'
+    'schedule' | 'webhook' | 'task-execution' | 'call-workflow' | 'call-workgroup'
   >
   readonly actor: LegacyActorProjection
   readonly correlationId: string
@@ -433,6 +435,34 @@ export class DelegatedOperationContextFactory implements DelegatedRequestAuthori
     private readonly currentSubjects: CurrentSubjectAccessResolver,
     private readonly registry: AuthorityClaimRegistry,
   ) {}
+
+  forTaskExecution(input: {
+    readonly ownerUserId: string | null
+    readonly taskId: string
+  }): Promise<DelegatedAuthorityAdmission | null> {
+    if (input.ownerUserId !== null) {
+      return this.admit({
+        userId: input.ownerUserId,
+        source: 'task-execution',
+        correlationId: input.taskId,
+      })
+    }
+    const authority = this.registry.mintDelegatedAuthority({
+      userId: SYSTEM_USER_ID,
+      revision: 0,
+      source: 'task-execution',
+      actor: projectOwnerlessLegacyActor(),
+      correlationId: input.taskId,
+    })
+    const registered = this.registry.delegatedClaim(authority)
+    return Promise.resolve(
+      Object.freeze({
+        authority,
+        actor: registered.actor,
+        context: this.fromAuthority(authority),
+      }),
+    )
+  }
 
   forSchedule(input: {
     readonly ownerUserId: string

@@ -61,7 +61,6 @@ import type {
   SkillCommands,
   SkillFileCommands,
   SkillVersionCommands,
-  ResourcePackageCommands,
   WorkflowCommands,
   WorkgroupCommands,
 } from './commands'
@@ -87,7 +86,6 @@ import type {
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
-  ResourcePackageQueries,
   WorkflowQueries,
   WorkgroupQueries,
 } from './queries'
@@ -137,15 +135,39 @@ import type {
   WorkflowCatalogResource,
   ApplyResourcePackage,
   ExportResourcePackage,
-  GetResourcePackageApplyReceipt,
-  GetResourcePackagePreview,
   InspectResourcePackage,
-  ResourcePackageApplyReceipt,
-  ResourcePackageApplyReceiptView,
-  ResourcePackageExportReceipt,
-  ResourcePackagePreviewReceipt,
-  ResourcePackagePreviewView,
 } from './types'
+
+interface ResourcePackagePreviewReceipt {
+  readonly previewId: string
+}
+
+interface GetResourcePackagePreview {
+  readonly previewId: string
+}
+
+interface ResourcePackagePreviewView {
+  readonly previewId: string
+  readonly document: string
+}
+
+interface ResourcePackageApplyReceipt {
+  readonly receiptId: string
+}
+
+interface GetResourcePackageApplyReceipt {
+  readonly receiptId: string
+}
+
+interface ResourcePackageApplyReceiptView {
+  readonly receiptId: string
+  readonly document: string
+}
+
+interface ResourcePackageExportReceipt {
+  readonly packageId: string
+  readonly filename: string
+}
 
 const AGENT_PUBLIC_ERRORS = Object.freeze([
   'not-found',
@@ -1183,14 +1205,35 @@ export interface ResourcePackageOperationDescriptors {
 }
 
 export interface ResourcePackageCatalogModule {
-  readonly commands: ResourcePackageCommands
-  readonly queries: ResourcePackageQueries
   readonly operations: ResourcePackageOperationDescriptors
 }
 
+interface ResourcePackageOperationCommands {
+  inspect(
+    context: CommandContext,
+    input: InspectResourcePackage,
+  ): Promise<ResourcePackagePreviewReceipt>
+  apply(context: CommandContext, input: ApplyResourcePackage): Promise<ResourcePackageApplyReceipt>
+  export(
+    context: CommandContext,
+    input: ExportResourcePackage,
+  ): Promise<ResourcePackageExportReceipt>
+}
+
+interface ResourcePackageOperationQueries {
+  getPreview(
+    context: QueryContext,
+    input: GetResourcePackagePreview,
+  ): Promise<ResourcePackagePreviewView>
+  getReceipt(
+    context: QueryContext,
+    input: GetResourcePackageApplyReceipt,
+  ): Promise<ResourcePackageApplyReceiptView>
+}
+
 export function createResourcePackageOperationDescriptors(
-  commands: ResourcePackageCommands,
-  queries: ResourcePackageQueries,
+  commands: ResourcePackageOperationCommands,
+  queries: ResourcePackageOperationQueries,
 ): ResourcePackageOperationDescriptors {
   const apply: ResourcePackageOperationDescriptors['apply'] = Object.freeze({
     id: operationId('resource-catalog.apply-package.v1'),

@@ -9,6 +9,7 @@ import type {
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/util/semaphore'
 import type { RunTaskOptions } from './taskEngineRuntimeOptions'
+import type { TaskExecutionResourceSession } from './taskExecutionResources'
 
 export interface TaskScopeArgs {
   /** Wrapper node that owns this scope; null for the workflow root. */
@@ -37,6 +38,8 @@ export interface LegacyTaskMechanicsState {
   readonly taskId: string
   readonly definition: WorkflowDefinition
   readonly opts: RunTaskOptions
+  /** One authority-bound, immutable resource snapshot cache for this task run. */
+  readonly taskExecutionResources: TaskExecutionResourceSession
   readonly topology: SchedulerRuntimeTopology
   readonly log: Logger
   readonly inputsMap: Record<string, string>

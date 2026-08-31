@@ -23,7 +23,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { composeTaskExecutionRuntime } from '../src/modules/task-execution/composition/taskExecutionRuntime'
+import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
   ALL_TOOLS,
   describeCapabilities,
@@ -81,7 +81,7 @@ async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
     role,
     password: 'pw12345678',
   })
-  const taskExecutionRuntime = composeTaskExecutionRuntime({ db })
+  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
   return {
     db,
     userId: user.id,

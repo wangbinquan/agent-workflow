@@ -50,7 +50,7 @@ import {
 } from '@/services/execution/closure'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
-import { resolveInjection } from '@/services/execution/resolveInjection'
+import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
 import type {
   LegacyNodeResult,
   LegacyTaskMechanicsState,
@@ -95,7 +95,7 @@ import {
   resolveSchedulerRunRow,
 } from '@/services/nodeRunMint'
 import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
-import { resolveNodeAgentRef } from '@/services/ref/runtimeRef'
+import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import { runNode, type RunResult } from '@/services/runner'
 import { getRuntimeDriver, runRootFor } from '@/services/runtime'
@@ -164,7 +164,6 @@ import {
   DAEMON_SHUTDOWN_ABORT_REASON,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   describeWrapperKind,
-  DISPATCH_CALL_POLICY,
   findClarifyNodeForAgent,
   findCrossClarifyNodeForQuestioner,
   findDesignerNodeForCrossClarify,
@@ -273,7 +272,7 @@ export async function executeWorkgroupHostMechanics(
   collaboration: CollaborationNodeGatePort,
 ): Promise<WorkgroupHostRunResult> {
   const { db, taskId, task, opts, log, definition } = state
-  const injection = await resolveInjection(db, req.agent, { appHome: opts.appHome, log })
+  const injection = await state.taskExecutionResources.injection(req.agent.id)
   if (injection.kind === 'failed') {
     await setNodeRunStatus({
       db,
@@ -335,7 +334,7 @@ export async function executeWorkgroupHostMechanics(
         const frozen = await resolveFrozenRuntime(
           db,
           req.nodeRunId,
-          req.agent.runtime,
+          injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
           freezeBinaryConfig(opts.configPath),
@@ -390,14 +389,14 @@ export async function executeWorkgroupHostMechanics(
         // RFC-184: workgroup host runs project the member agent's outputs to the
         // role's wg_* protocol ports and clear outputKinds, so runNode parses/
         // returns the wg ports and never validates the member's own business
-        // output kinds (F42SE root cause). resolveInjection above already
-        // ran on the ORIGINAL req.agent (skills/mcp/deps are unaffected by this
-        // projection). Dynamic orchestrator runs leave hostOutputPorts unset →
+        // output kinds (F42SE root cause). The per-task resource session above
+        // already resolved the ORIGINAL req.agent (skills/mcp/deps are
+        // unaffected by this projection). Dynamic orchestrator runs leave hostOutputPorts unset →
         // no projection (design.md §2.2/§2.4).
         const hostAgent =
           req.hostOutputPorts !== undefined
-            ? { ...req.agent, outputs: req.hostOutputPorts, outputKinds: undefined }
-            : req.agent
+            ? { ...injection.spec.agent, outputs: req.hostOutputPorts, outputKinds: undefined }
+            : injection.spec.agent
         const result = await runNode({
           taskId,
           nodeRunId: req.nodeRunId,
@@ -1079,11 +1078,7 @@ export async function resolveMergeConflicts(
     const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
     const mergeAgent = buildMergeAgent()
     // RFC-282 B2 — single-resolver derivation (writeSem held: signal threaded).
-    const mergeInjection = await resolveInjection(db, mergeAgent, {
-      appHome: state.opts.appHome,
-      log: log.child('merge'),
-      ...(state.opts.signal ? { signal: state.opts.signal } : {}),
-    })
+    const mergeInjection = resolveSyntheticTaskExecutionInjection(mergeAgent)
     if (mergeInjection.kind === 'failed') {
       throw new Error(`merge injection resolve failed: ${mergeInjection.message}`)
     }
@@ -3785,20 +3780,23 @@ export async function runAgentSingleNode(
   // 与归属逐字不变**——主派发是节点级失败，与 fanout hydration 的静默跳过不同。
   const agentIdRef = pickString(node, 'agentId')
   const agentName = pickString(node, 'agentName') ?? agentIdRef ?? node.id
-  const resolvedAgent = await resolveNodeAgentRef(db, node, DISPATCH_CALL_POLICY)
-  if (!resolvedAgent.ok && resolvedAgent.reason === 'missing') {
+  const agentRef = agentRefOfNode(node)
+  if (agentRef === null) {
     return {
       kind: 'failed',
       summary: `node ${node.id} missing canonical agentId`,
       message: 'agent-identity-missing',
     }
   }
-  if (!resolvedAgent.ok) {
+  if (agentRef.k !== 'id') {
     return { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
   }
-  // RFC-223 (T15): persisted workflow identity is the frozen id. A name-only
-  // node is corrupt/quarantined data and was rejected above.
-  const nodeAgent = resolvedAgent.value
+  const injection = await state.taskExecutionResources.injection(agentRef.id)
+  if (injection.kind === 'failed') {
+    return injection.message === 'agent-not-found'
+      ? { kind: 'failed', summary: `agent '${agentName}' not found`, message: 'agent-not-found' }
+      : injection
+  }
   // RFC-132 ③ (借壳收官): the borrow ledgers are move-semantics (RFC-131 T4) and the immediate
   // ledger is deleted, so resolveBorrowForNode never returns an agent anymore — its remaining
   // job is the multi-ledger duplicate-execution REJECT (designer + dispatched self/q both open
@@ -3813,7 +3811,7 @@ export async function runAgentSingleNode(
     }
     throw err
   }
-  const agent = nodeAgent
+  const agent = injection.spec.agent
 
   // RFC-060 PR-E: agent-multi NodeKind was removed in favor of wrapper-fanout.
   // The agent-single path below is now the sole agent dispatch path.
@@ -3837,8 +3835,6 @@ export async function runAgentSingleNode(
   // guard normally prevents it; hitting one at runtime implies an external
   // SQL edit or a race against another writer. Fail loudly instead of
   // silently spawning with a broken closure.
-  const injection = await resolveInjection(db, agent, { appHome: opts.appHome, log })
-  if (injection.kind === 'failed') return injection
   const { dependents, skills: resolvedSkills, mcps, plugins } = injection.spec
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = opts.defaultPerNodeTimeoutMs

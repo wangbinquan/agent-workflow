@@ -1,7 +1,6 @@
 import type {
   Agent,
   BundleOp,
-  FileNode,
   CreateAgent,
   CreatePlugin,
   CreateMcp,
@@ -50,7 +49,6 @@ export {
   ACL_CATALOG_KINDS,
   CATALOG_SELECTOR_KINDS,
   GRANT_TARGET_KINDS,
-  PACKAGE_RESOURCE_KINDS,
   asAclCatalogKind,
   asCatalogSelectorKind,
   asPackageResourceKind,
@@ -189,7 +187,6 @@ export interface AgentReferenceLabels {
 /** T5-S aggregate contract. Filesystem roots and persistence rows stay private. */
 export type SkillCatalogResource = Skill
 export type SkillCatalogContent = SkillContent
-export type SkillCatalogFileNode = FileNode
 export type SkillCatalogVersion = SkillVersion
 export type SkillCatalogVersionContent = SkillVersionContent
 export type SkillCatalogVersionDiff = SkillVersionDiff
@@ -497,6 +494,7 @@ export type TaskExecutionAgentSnapshot = Pick<
   Agent,
   | 'id'
   | 'name'
+  | 'description'
   | 'outputs'
   | 'outputKinds'
   | 'branchPorts'
@@ -512,11 +510,22 @@ export type TaskExecutionAgentSnapshot = Pick<
   | 'plugins'
   | 'frontmatterExtra'
   | 'bodyMd'
+  | 'schemaVersion'
+  | 'createdAt'
+  | 'updatedAt'
 >
 
 type TaskExecutionMcpSnapshotOf<T extends Mcp> = Pick<
   T,
-  'id' | 'name' | 'type' | 'config' | 'enabled'
+  | 'id'
+  | 'name'
+  | 'description'
+  | 'type'
+  | 'config'
+  | 'enabled'
+  | 'schemaVersion'
+  | 'createdAt'
+  | 'updatedAt'
 >
 
 export type TaskExecutionMcpSnapshot =
@@ -533,7 +542,7 @@ export interface TaskExecutionPluginSnapshot {
   readonly resolvedVersion: string | null
 }
 
-export type TaskExecutionSkillSnapshot =
+type TaskExecutionSkillSnapshot =
   | {
       readonly kind: 'managed'
       readonly skillId: string
@@ -792,39 +801,6 @@ export interface ApplyResourcePackage {
 
 export interface ExportResourcePackage {
   readonly submission: StagedResourcePackageSubmission
-}
-
-export interface ResourcePackagePreviewReceipt {
-  readonly previewId: string
-}
-
-export interface GetResourcePackagePreview {
-  readonly previewId: string
-}
-
-export interface ResourcePackagePreviewView {
-  readonly previewId: string
-  /** Exact legacy wire document; the HTTP/CLI binding owns JSON projection. */
-  readonly document: string
-}
-
-export interface ResourcePackageApplyReceipt {
-  readonly receiptId: string
-}
-
-export interface GetResourcePackageApplyReceipt {
-  readonly receiptId: string
-}
-
-export interface ResourcePackageApplyReceiptView {
-  readonly receiptId: string
-  /** Exact legacy wire document; the HTTP/CLI binding owns JSON projection. */
-  readonly document: string
-}
-
-export interface ResourcePackageExportReceipt {
-  readonly packageId: string
-  readonly filename: string
 }
 
 export type PreparedPackageMutation =

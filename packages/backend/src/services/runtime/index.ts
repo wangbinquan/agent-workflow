@@ -79,3 +79,5 @@ export { getInventorySnapshot, runRootFor } from './opencode/inventory'
 export { NOOP_HANDLE } from './opencode/subagentLiveCapture'
 // Distiller session sweep failure marker (memory distill session view).
 export { DISTILL_CAPTURE_FAILED_KIND } from './opencode/distillSessionCapture'
+// Frozen plugin runtime specifier projection used by startup inventory.
+export { pluginFileSpec } from './opencode/pluginSpec'

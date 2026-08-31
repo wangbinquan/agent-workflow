@@ -197,6 +197,10 @@ export type DelegatedAuthorityAdmission = Readonly<{
 }>
 
 export interface DelegatedRequestAuthorityFactory {
+  forTaskExecution(input: {
+    readonly ownerUserId: string | null
+    readonly taskId: string
+  }): Promise<DelegatedAuthorityAdmission | null>
   forSchedule(input: {
     readonly ownerUserId: string
     readonly scheduleId: string

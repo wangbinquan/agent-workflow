@@ -2,6 +2,7 @@ import type {
   CombinedSaveSkill,
   CreateManagedSkill,
   DeleteSkill,
+  FileNode,
   RestoreSkillVersion,
   Skill,
   WriteSkillFile,
@@ -12,7 +13,6 @@ import type {
   DeleteSkillFileCatalogReceipt,
   RestoreSkillVersionCatalogReceipt,
   SkillCatalogContent,
-  SkillCatalogFileNode,
   SkillCatalogVersion,
   SkillCatalogVersionContent,
   SkillCatalogVersionDiff,
@@ -30,7 +30,7 @@ export interface SkillRepository {
   ): Promise<SkillCatalogContent>
   delete(authority: SkillOperationContext, current: Skill, input: DeleteSkill): Promise<void>
   readContent(id: string): Promise<SkillCatalogContent>
-  listFiles(id: string): Promise<readonly SkillCatalogFileNode[]>
+  listFiles(id: string): Promise<readonly FileNode[]>
   readFile(id: string, path: string): Promise<string>
   writeFile(
     authority: SkillOperationContext,
