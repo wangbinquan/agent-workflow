@@ -4,8 +4,11 @@
 
 import {
   AgentSchema,
+  CombinedSaveSkillSchema,
+  CreateManagedSkillSchema,
   CreateAgentSchema,
   DeleteAgentSchema,
+  DeleteSkillSchema,
   McpLocalConfigSchema,
   McpLocalConfigWriteSchema,
   McpNameSchema,
@@ -20,6 +23,8 @@ import {
   RenamePluginRequestSchema,
   RenameAgentRequestSchema,
   ResourceVisibilitySchema,
+  SkillContentSchema,
+  SkillSchema,
   UpdatePluginRequestSchema,
   UpdateAgentRequestSchema,
   CopyWorkgroupRequestSchema,
@@ -42,6 +47,9 @@ import type {
   McpCommands,
   PluginCommands,
   PluginUpdateCommands,
+  SkillCommands,
+  SkillFileCommands,
+  SkillVersionCommands,
   WorkgroupCommands,
 } from './commands'
 import type {
@@ -51,6 +59,8 @@ import type {
   McpOperationContext,
   PluginAclIdentityParticipant,
   PluginOperationContext,
+  SkillAclIdentityParticipant,
+  SkillOperationContext,
   WorkgroupAclIdentityParticipant,
   WorkgroupOperationContext,
 } from './participants'
@@ -59,6 +69,9 @@ import type {
   AgentReferenceQueries,
   McpQueries,
   PluginQueries,
+  SkillFileQueries,
+  SkillQueries,
+  SkillVersionQueries,
   WorkgroupQueries,
 } from './queries'
 import type {
@@ -94,6 +107,10 @@ import type {
   UpdateWorkgroupCatalogReceipt,
   WorkgroupCatalogDetail,
   WorkgroupCatalogResource,
+  DeleteSkillCatalogReceipt,
+  GetSkillCatalogInput,
+  SkillCatalogContent,
+  SkillCatalogResource,
 } from './types'
 
 const AGENT_PUBLIC_ERRORS = Object.freeze([
@@ -230,6 +247,131 @@ export function createAgentOperationDescriptors(
       outputSchema: AgentSchema,
       invoke: (authority: AgentOperationContext, input: RenameAgentCatalogInput) =>
         commands.rename(authority, input),
+    }),
+  })
+}
+
+const SKILL_PUBLIC_ERRORS = Object.freeze([
+  'not-found',
+  'forbidden',
+  'validation-failed',
+  'conflict',
+  'resource-operation-stale',
+  'internal-error',
+] as const)
+
+const emptySkillInputSchema = z.object({}).strict()
+const getSkillInputSchema = z.object({ id: z.string().min(1) }).strict()
+const saveSkillInputSchema = z
+  .object({ id: z.string().min(1), save: CombinedSaveSkillSchema })
+  .strict()
+const deleteSkillInputSchema = z
+  .object({ id: z.string().min(1), deletion: DeleteSkillSchema })
+  .strict()
+const deleteSkillReceiptSchema = z.object({ deleted: SkillSchema }).strict()
+
+export interface SkillOperationDescriptors {
+  readonly list: QueryOperationDescriptor<
+    Record<never, never>,
+    SkillCatalogResource[],
+    SkillOperationContext
+  >
+  readonly get: QueryOperationDescriptor<
+    GetSkillCatalogInput,
+    SkillCatalogResource | null,
+    SkillOperationContext
+  >
+  readonly create: CommandOperationDescriptor<
+    z.infer<typeof CreateManagedSkillSchema>,
+    SkillCatalogResource,
+    SkillOperationContext
+  >
+  readonly save: CommandOperationDescriptor<
+    z.infer<typeof saveSkillInputSchema>,
+    SkillCatalogContent,
+    SkillOperationContext
+  >
+  readonly delete: CommandOperationDescriptor<
+    z.infer<typeof deleteSkillInputSchema>,
+    DeleteSkillCatalogReceipt,
+    SkillOperationContext
+  >
+}
+
+export interface SkillCatalogModule {
+  readonly commands: SkillCommands
+  readonly fileCommands: SkillFileCommands
+  readonly versionCommands: SkillVersionCommands
+  readonly queries: SkillQueries
+  readonly fileQueries: SkillFileQueries
+  readonly versionQueries: SkillVersionQueries
+  readonly operations: SkillOperationDescriptors
+  readonly participants: Readonly<{
+    aclIdentity: SkillAclIdentityParticipant
+  }>
+}
+
+export function createSkillOperationDescriptors(
+  commands: SkillCommands,
+  queries: SkillQueries,
+): SkillOperationDescriptors {
+  return Object.freeze({
+    list: defineQueryOperation({
+      id: 'skill-catalog.list-skills.v1',
+      summary: 'List skills visible to the caller',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: emptySkillInputSchema,
+      outputSchema: z.array(SkillSchema),
+      invoke: async (authority: SkillOperationContext) => [...(await queries.list(authority))],
+    }),
+    get: defineQueryOperation({
+      id: 'skill-catalog.get-skill.v1',
+      summary: 'Get one skill',
+      permissions: ['skills:read'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: getSkillInputSchema,
+      outputSchema: SkillSchema.nullable(),
+      invoke: (authority: SkillOperationContext, input: GetSkillCatalogInput) =>
+        queries.get(authority, input),
+    }),
+    create: defineCommandOperation({
+      id: 'skill-catalog.create-skill.v1',
+      summary: 'Create a skill',
+      permissions: ['skills:create'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: CreateManagedSkillSchema,
+      outputSchema: SkillSchema,
+      invoke: (authority: SkillOperationContext, input: z.infer<typeof CreateManagedSkillSchema>) =>
+        commands.create(authority, {
+          submission: { kind: 'json-body', body: JSON.stringify(input) ?? '{}' },
+        }),
+    }),
+    save: defineCommandOperation({
+      id: 'skill-catalog.save-skill.v1',
+      summary: 'Save skill metadata and content',
+      permissions: ['skills:update'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: saveSkillInputSchema,
+      outputSchema: SkillContentSchema,
+      invoke: (authority: SkillOperationContext, input: z.infer<typeof saveSkillInputSchema>) =>
+        commands.save(authority, {
+          id: input.id,
+          submission: { kind: 'json-body', body: JSON.stringify(input.save) ?? '{}' },
+        }),
+    }),
+    delete: defineCommandOperation({
+      id: 'skill-catalog.delete-skill.v1',
+      summary: 'Delete a skill',
+      permissions: ['skills:delete'],
+      publicErrors: SKILL_PUBLIC_ERRORS,
+      inputSchema: deleteSkillInputSchema,
+      outputSchema: deleteSkillReceiptSchema,
+      invoke: (authority: SkillOperationContext, input: z.infer<typeof deleteSkillInputSchema>) =>
+        commands.delete(authority, {
+          id: input.id,
+          submission: { kind: 'json-body', body: JSON.stringify(input.deletion) ?? '{}' },
+        }),
     }),
   })
 }

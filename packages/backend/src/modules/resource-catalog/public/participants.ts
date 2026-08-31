@@ -27,6 +27,7 @@ import type {
   ResourcePackageApplyScenarioPlan,
   ResourcePackageMutationReceipt,
   ResourceScopeAccess,
+  SkillAclIdentity,
   SkillPackageMutation,
   TaskExecutionResourceRequest,
   VersionedIntentResourceChangesetPlan,
@@ -42,6 +43,8 @@ export type AgentOperationContext = DirectAuthenticatedAuthority
 export type McpOperationContext = DirectAuthenticatedAuthority
 /** Branded current-user authority consumed by exact Plugin aggregate operations. */
 export type PluginOperationContext = DirectAuthenticatedAuthority
+/** Branded current-user authority consumed by exact Skill aggregate operations. */
+export type SkillOperationContext = DirectAuthenticatedAuthority
 /** Branded current-user authority consumed by exact Workgroup aggregate operations. */
 export type WorkgroupOperationContext = DirectAuthenticatedAuthority
 
@@ -64,6 +67,7 @@ declare const resourcePackageApplyTxBrand: unique symbol
 declare const mcpAclIdentityParticipantBrand: unique symbol
 declare const agentAclIdentityParticipantBrand: unique symbol
 declare const pluginAclIdentityParticipantBrand: unique symbol
+declare const skillAclIdentityParticipantBrand: unique symbol
 declare const workgroupAclIdentityParticipantBrand: unique symbol
 
 export interface McpAclIdentityParticipant {
@@ -81,6 +85,12 @@ export interface AgentAclIdentityParticipant {
 export interface PluginAclIdentityParticipant {
   readonly [pluginAclIdentityParticipantBrand]: 'plugin-acl-identity-participant'
   load(id: string): Promise<PluginAclIdentity | null>
+  nextUpdatedAt(id: string): Promise<number>
+}
+
+export interface SkillAclIdentityParticipant {
+  readonly [skillAclIdentityParticipantBrand]: 'skill-acl-identity-participant'
+  load(id: string): Promise<SkillAclIdentity | null>
   nextUpdatedAt(id: string): Promise<number>
 }
 

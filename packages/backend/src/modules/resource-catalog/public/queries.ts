@@ -2,6 +2,7 @@ import type { QueryContext } from '@/modules/identity-access/public/participants
 import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
+import type { SkillOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
 import type {
   AgentCatalogResource,
@@ -16,6 +17,19 @@ import type {
   PluginCatalogResource,
   ResourceAclDocument,
   ResourceAclTarget,
+  DiffSkillVersionsCatalogInput,
+  GetSkillCatalogInput,
+  GetSkillContentCatalogInput,
+  GetSkillVersionContentCatalogInput,
+  ListSkillFilesCatalogInput,
+  ListSkillVersionsCatalogInput,
+  ReadSkillFileCatalogInput,
+  SkillCatalogContent,
+  SkillCatalogFileNode,
+  SkillCatalogResource,
+  SkillCatalogVersion,
+  SkillCatalogVersionContent,
+  SkillCatalogVersionDiff,
   ResourceScopeAccess,
   ResourceSummary,
   ResourceSummaryPage,
@@ -51,6 +65,44 @@ export interface AgentReferenceQueries {
     authority: AgentOperationContext,
     input: AgentReferenceLabelsInput,
   ): Promise<AgentReferenceLabels>
+}
+
+export interface SkillQueries {
+  list(authority: SkillOperationContext): Promise<readonly SkillCatalogResource[]>
+  get(
+    authority: SkillOperationContext,
+    input: GetSkillCatalogInput,
+  ): Promise<SkillCatalogResource | null>
+  content(
+    authority: SkillOperationContext,
+    input: GetSkillContentCatalogInput,
+  ): Promise<SkillCatalogContent>
+}
+
+export interface SkillFileQueries {
+  list(
+    authority: SkillOperationContext,
+    input: ListSkillFilesCatalogInput,
+  ): Promise<readonly SkillCatalogFileNode[]>
+  read(
+    authority: SkillOperationContext,
+    input: ReadSkillFileCatalogInput,
+  ): Promise<Readonly<{ path: string; content: string }>>
+}
+
+export interface SkillVersionQueries {
+  list(
+    authority: SkillOperationContext,
+    input: ListSkillVersionsCatalogInput,
+  ): Promise<readonly SkillCatalogVersion[]>
+  diff(
+    authority: SkillOperationContext,
+    input: DiffSkillVersionsCatalogInput,
+  ): Promise<SkillCatalogVersionDiff>
+  content(
+    authority: SkillOperationContext,
+    input: GetSkillVersionContentCatalogInput,
+  ): Promise<SkillCatalogVersionContent>
 }
 
 export interface McpQueries {

@@ -108,6 +108,8 @@ const MCP_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts'
 const PLUGIN_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/plugins/pluginApplication.ts'
+const SKILL_OPERATION_SOURCE =
+  'packages/backend/src/modules/resource-catalog/application/skills/skillApplication.ts'
 const WORKGROUP_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupApplication.ts'
 const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = {
@@ -126,6 +128,10 @@ const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = 
   'packages/backend/src/routes/plugins.ts': calledIdentifierNames(
     PLUGIN_OPERATION_SOURCE,
     readFileSync(resolve(REPO_ROOT, PLUGIN_OPERATION_SOURCE), 'utf8'),
+  ),
+  'packages/backend/src/routes/skills.ts': calledIdentifierNames(
+    SKILL_OPERATION_SOURCE,
+    readFileSync(resolve(REPO_ROOT, SKILL_OPERATION_SOURCE), 'utf8'),
   ),
   'packages/backend/src/routes/workgroups.ts': calledIdentifierNames(
     WORKGROUP_OPERATION_SOURCE,

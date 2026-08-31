@@ -16,63 +16,59 @@
 //   PUT    /api/skills/:id/file?path=...            write one file (utf-8)
 //   DELETE /api/skills/:id/file?path=...            delete one file/dir
 
-import {
-  CreateManagedSkillSchema,
-  DeleteSkillSchema,
-  RestoreSkillVersionSchema,
-  SkillZipDecisionMapSchema,
-  CombinedSaveSkillSchema,
-  WriteSkillFileSchema,
-} from '@agent-workflow/shared'
+import { SkillZipDecisionMapSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
+import type {
+  SkillCommands,
+  SkillFileCommands,
+  SkillVersionCommands,
+} from '@/modules/resource-catalog/public/commands'
+import type {
+  SkillAclIdentityParticipant,
+  SkillOperationContext,
+} from '@/modules/resource-catalog/public/participants'
+import type {
+  SkillFileQueries,
+  SkillQueries,
+  SkillVersionQueries,
+} from '@/modules/resource-catalog/public/queries'
+import type { SkillCatalogResource } from '@/modules/resource-catalog/public/types'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import {
-  canViewResource,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
-import {
-  assertDeleteConfirm,
-  assertTokenDeleteConfirm,
-  readDeleteBody,
-} from '@/services/deleteConfirm'
 import { Paths } from '@/util/paths'
-import {
-  createManagedSkill,
-  deleteSkill,
-  deleteSkillFile,
-  getSkillById,
-  getSkillPreconditionTokenById,
-  listSkillFiles,
-  listSkills,
-  readSkillContent,
-  readSkillFile,
-  saveSkillWithToken,
-  writeSkillFile,
-  type SkillFsOptions,
-} from '@/services/skill'
 import { commitSkillZipBuffer, parseSkillZipBuffer, ZIP_LIMITS } from '@/services/skill-zip'
-import {
-  diffSkillVersions,
-  getSkillVersionContent,
-  listSkillVersions,
-  restoreSkillVersion,
-} from '@/services/skillVersion'
 import { GoneError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
-import { safeJsonOrEmpty } from '@/util/http'
 
-export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
-  const fsOpts: SkillFsOptions = { appHome: Paths.root }
+export interface SkillRouteDependencies {
+  readonly commands: SkillCommands
+  readonly fileCommands: SkillFileCommands
+  readonly versionCommands: SkillVersionCommands
+  readonly queries: SkillQueries
+  readonly fileQueries: SkillFileQueries
+  readonly versionQueries: SkillVersionQueries
+  readonly aclIdentity: SkillAclIdentityParticipant
+  readonly authorityFor: (actor: Actor) => SkillOperationContext
+}
+
+export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDependencies): void {
+  const {
+    commands,
+    fileCommands,
+    versionCommands,
+    queries,
+    fileQueries,
+    versionQueries,
+    aclIdentity,
+  } = module
+  const zipFsOpts = { appHome: Paths.root }
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
-  async function loadVisibleSkill(actor: Actor, id: string) {
-    const skill = await getSkillById(deps.db, id)
-    if (skill === null || !(await canViewResource(deps.db, actor, 'skill', skill))) {
+  async function loadVisibleSkill(actor: Actor, id: string): Promise<SkillCatalogResource> {
+    const skill = await queries.get(module.authorityFor(actor), { id })
+    if (skill === null) {
       throw new NotFoundError('skill-not-found', 'skill not found')
     }
     return skill
@@ -87,8 +83,10 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'List skills visible to the caller',
     },
-    async (c) =>
-      c.json(await filterVisibleRows(deps.db, actorOf(c), 'skill', await listSkills(deps.db))),
+    async (c) => {
+      const actor = actorOf(c)
+      return c.json(await queries.list(module.authorityFor(actor)))
+    },
   )
 
   registerRoute(
@@ -101,16 +99,12 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Create a skill',
     },
     async (c) => {
-      const parsed = CreateManagedSkillSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('skill-invalid', 'invalid skill payload', {
-          issues: parsed.error.issues,
-        })
-      }
       const actor = actorOf(c)
-      const created = await createManagedSkill(deps.db, fsOpts, parsed.data, {
-        ownerUserId: actor.user.id,
-        actor,
+      const created = await commands.create(module.authorityFor(actor), {
+        submission: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
       })
       return c.json(created, 201)
     },
@@ -176,7 +170,7 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
           issues: decisionsParsed.error.issues,
         })
       }
-      const result = await commitSkillZipBuffer(deps.db, fsOpts, buffer, decisionsParsed.data, {
+      const result = await commitSkillZipBuffer(deps.db, zipFsOpts, buffer, decisionsParsed.data, {
         actor: actorOf(c),
       })
       return c.json(result)
@@ -230,23 +224,14 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      // RFC-324: deletion is governance — an edit grant does not reach it.
-      await requireResourceGovern(deps.db, actor, 'skill', existing)
-      const deleteBody = await readDeleteBody(c)
-      assertDeleteConfirm(deleteBody, existing.name, 'skill')
-      const parsed = DeleteSkillSchema.safeParse(deleteBody)
-      if (!parsed.success) {
-        throw new ValidationError('skill-delete-invalid', 'invalid skill delete payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      captureDeleteSnapshot(c, actor, existing)
-      await deleteSkill(deps.db, fsOpts, existing.id, actor, {
-        token: parsed.data.expectedToken,
-        aclRevision: parsed.data.expectedAclRevision,
-        ownerUserId: existing.ownerUserId ?? null,
+      const receipt = await commands.delete(module.authorityFor(actor), {
+        id: c.req.param('id'),
+        submission: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
       })
+      captureDeleteSnapshot(c, actor, receipt.deleted)
       return c.body(null, 204)
     },
   )
@@ -262,8 +247,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Read SKILL.md',
     },
     async (c) => {
-      const existing = await loadVisibleSkill(actorOf(c), c.req.param('id'))
-      return c.json(await readSkillContent(deps.db, fsOpts, existing.id))
+      const actor = actorOf(c)
+      return c.json(await queries.content(module.authorityFor(actor), { id: c.req.param('id') }))
     },
   )
 
@@ -297,31 +282,15 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Save skill metadata + body',
     },
     async (c) => {
-      const parsed = CombinedSaveSkillSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('skill-content-invalid', 'invalid combined save', {
-          issues: parsed.error.issues,
-        })
-      }
       const actor = actorOf(c)
-      const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      // RFC-324: content write. A skill's save body carries no `name` by design
-      // (`UpdateSkillContentSchema` says so in as many words), so an edit grant
-      // cannot rename through this route and needs no name fence.
-      await requireResourceEdit(deps.db, actor, 'skill', existing)
-      const { expectedToken, ...patch } = parsed.data
       return c.json(
-        await saveSkillWithToken(
-          deps.db,
-          fsOpts,
-          existing.id,
-          patch,
-          expectedToken,
-          actor.user.id,
-          // RFC-170 (4th-review [high]): the owner we just authorized against — the
-          // funnel 409s if it drifts before the version commits (owner-transfer race).
-          existing.ownerUserId,
-        ),
+        await commands.save(module.authorityFor(actor), {
+          id: c.req.param('id'),
+          submission: {
+            kind: 'json-body',
+            body: await c.req.raw.text().catch(() => ''),
+          },
+        }),
       )
     },
   )
@@ -337,8 +306,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List skill files',
     },
     async (c) => {
-      const existing = await loadVisibleSkill(actorOf(c), c.req.param('id'))
-      return c.json(await listSkillFiles(deps.db, fsOpts, existing.id))
+      const actor = actorOf(c)
+      return c.json(await fileQueries.list(module.authorityFor(actor), { id: c.req.param('id') }))
     },
   )
 
@@ -352,10 +321,13 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Read one skill file',
     },
     async (c) => {
-      const existing = await loadVisibleSkill(actorOf(c), c.req.param('id'))
-      const path = requirePath(c.req.query('path'))
-      const content = await readSkillFile(deps.db, fsOpts, existing.id, path)
-      return c.json({ path, content })
+      const actor = actorOf(c)
+      return c.json(
+        await fileQueries.read(module.authorityFor(actor), {
+          id: c.req.param('id'),
+          path: c.req.query('path') ?? '',
+        }),
+      )
     },
   )
 
@@ -369,34 +341,17 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Write one skill file',
     },
     async (c) => {
-      const path = requirePath(c.req.query('path'))
-      const parsed = WriteSkillFileSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('skill-file-invalid', 'invalid file write payload', {
-          issues: parsed.error.issues,
-        })
-      }
       const actor = actorOf(c)
-      const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceEdit(deps.db, actor, 'skill', existing)
-      await writeSkillFile(
-        deps.db,
-        fsOpts,
-        existing.id,
-        path,
-        parsed.data.content,
-        actor.user.id,
-        // RFC-170 (4th-review [high]): the owner we just authorized against.
-        existing.ownerUserId,
-        // RFC-170 F3: OCC token from the client's canonical token store.
-        parsed.data.expectedToken,
+      return c.json(
+        await fileCommands.write(module.authorityFor(actor), {
+          id: c.req.param('id'),
+          path: c.req.query('path') ?? '',
+          submission: {
+            kind: 'json-body',
+            body: await c.req.raw.text().catch(() => ''),
+          },
+        }),
       )
-      // RFC-170 F3: return the FRESH token so the client's canonical store advances.
-      return c.json({
-        ok: true,
-        path,
-        token: await getSkillPreconditionTokenById(deps.db, existing.id),
-      })
     },
   )
 
@@ -411,25 +366,17 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceEdit(deps.db, actor, 'skill', existing)
-      const path = requirePath(c.req.query('path'))
-      // RFC-247 T20 — a token echoes the file PATH (the thing being destroyed);
-      // the skill name would confirm the wrong noun here.
-      assertTokenDeleteConfirm(await readDeleteBody(c), path, 'skill file', actor.source)
-      captureDeleteSnapshot(c, actor, { skillId: existing.id, name: existing.name, path })
-      await deleteSkillFile(
-        deps.db,
-        fsOpts,
-        existing.id,
-        path,
-        actor.user.id,
-        existing.ownerUserId,
-        // RFC-170 F3: OCC token (query param, since DELETE has no body).
-        c.req.query('expectedToken'),
-      )
-      // RFC-170 F3: was 204; now returns the fresh token for the canonical store.
-      return c.json({ token: await getSkillPreconditionTokenById(deps.db, existing.id) })
+      const receipt = await fileCommands.delete(module.authorityFor(actor), {
+        id: c.req.param('id'),
+        path: c.req.query('path') ?? '',
+        expectedToken: c.req.query('expectedToken'),
+        submission: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
+      })
+      captureDeleteSnapshot(c, actor, receipt.deleted)
+      return c.json({ token: receipt.token })
     },
   )
 
@@ -444,8 +391,10 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List skill versions',
     },
     async (c) => {
-      const existing = await loadVisibleSkill(actorOf(c), c.req.param('id'))
-      return c.json(listSkillVersions(deps.db, fsOpts, existing.id))
+      const actor = actorOf(c)
+      return c.json(
+        await versionQueries.list(module.authorityFor(actor), { id: c.req.param('id') }),
+      )
     },
   )
 
@@ -459,10 +408,14 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Diff two skill versions',
     },
     async (c) => {
-      const existing = await loadVisibleSkill(actorOf(c), c.req.param('id'))
-      const from = parseVersionParam(c.req.query('from'), 'from')
-      const to = parseVersionParam(c.req.query('to'), 'to')
-      return c.json(diffSkillVersions(deps.db, fsOpts, existing.id, from, to))
+      const actor = actorOf(c)
+      return c.json(
+        await versionQueries.diff(module.authorityFor(actor), {
+          id: c.req.param('id'),
+          from: c.req.query('from') ?? '',
+          to: c.req.query('to') ?? '',
+        }),
+      )
     },
   )
 
@@ -476,9 +429,13 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Read one skill version',
     },
     async (c) => {
-      const existing = await loadVisibleSkill(actorOf(c), c.req.param('id'))
-      const v = parseVersionParam(c.req.param('v'), 'v')
-      return c.json(getSkillVersionContent(deps.db, fsOpts, existing.id, v))
+      const actor = actorOf(c)
+      return c.json(
+        await versionQueries.content(module.authorityFor(actor), {
+          id: c.req.param('id'),
+          version: c.req.param('v'),
+        }),
+      )
     },
   )
 
@@ -492,33 +449,17 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Restore a skill version',
     },
     async (c) => {
-      const parsed = RestoreSkillVersionSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('skill-restore-invalid', 'invalid restore payload', {
-          issues: parsed.error.issues,
-        })
-      }
       const actor = actorOf(c)
-      const existing = await loadVisibleSkill(actor, c.req.param('id'))
-      await requireResourceEdit(deps.db, actor, 'skill', existing)
-      const v = parseVersionParam(c.req.param('v'), 'v')
-      const result = restoreSkillVersion(
-        deps.db,
-        fsOpts,
-        existing.id,
-        v,
-        actor.user.id,
-        parsed.data.reason,
-        // RFC-170 (4th-review [high]): the owner we just authorized against.
-        existing.ownerUserId,
-        // RFC-170 F3: OCC token from the client's canonical token store.
-        parsed.data.expectedToken,
+      return c.json(
+        await versionCommands.restore(module.authorityFor(actor), {
+          id: c.req.param('id'),
+          version: c.req.param('v'),
+          submission: {
+            kind: 'json-body',
+            body: await c.req.raw.text().catch(() => ''),
+          },
+        }),
       )
-      // RFC-170 F3: return the fresh token alongside the restore result.
-      return c.json({
-        ...result,
-        token: await getSkillPreconditionTokenById(deps.db, existing.id),
-      })
     },
   )
 
@@ -527,23 +468,8 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps): void {
     type: 'skill',
     base: '/api/skills',
     param: 'id',
-    load: (db, id) => getSkillById(db, id),
+    load: (_db, id) => aclIdentity.load(id),
   })
-}
-
-function requirePath(p: string | undefined): string {
-  if (p === undefined || p.length === 0) {
-    throw new ValidationError('path-required', "'path' query parameter is required")
-  }
-  return p
-}
-
-function parseVersionParam(raw: string | undefined, field: string): number {
-  const n = Number(raw)
-  if (raw === undefined || raw === '' || !Number.isInteger(n) || n < 1) {
-    throw new ValidationError('skill-version-invalid', `'${field}' must be a positive integer`)
-  }
-  return n
 }
 
 async function readZipFileFromMultipart(req: Request): Promise<Uint8Array> {

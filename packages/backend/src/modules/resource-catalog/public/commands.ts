@@ -2,6 +2,7 @@ import type { CommandContext } from '@/modules/identity-access/public/participan
 import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
+import type { SkillOperationContext } from './participants'
 import type { WorkgroupOperationContext } from './participants'
 import type {
   AgentCatalogResource,
@@ -22,6 +23,18 @@ import type {
   RenameAgentCatalogInput,
   RenamePluginCatalogInput,
   ResourceAclDocument,
+  CreateSkillCatalogInput,
+  DeleteSkillCatalogInput,
+  DeleteSkillCatalogReceipt,
+  DeleteSkillFileCatalogInput,
+  DeleteSkillFileCatalogReceipt,
+  RestoreSkillVersionCatalogInput,
+  RestoreSkillVersionCatalogReceipt,
+  SaveSkillCatalogInput,
+  SkillCatalogContent,
+  SkillCatalogResource,
+  WriteSkillFileCatalogInput,
+  WriteSkillFileCatalogReceipt,
   UpdateMcpCatalogInput,
   UpdateAgentCatalogInput,
   UpdatePluginCatalogInput,
@@ -59,6 +72,36 @@ export interface AgentCommands {
     authority: AgentOperationContext,
     input: RenameAgentCatalogInput,
   ): Promise<AgentCatalogResource>
+}
+
+export interface SkillCommands {
+  create(
+    authority: SkillOperationContext,
+    input: CreateSkillCatalogInput,
+  ): Promise<SkillCatalogResource>
+  save(authority: SkillOperationContext, input: SaveSkillCatalogInput): Promise<SkillCatalogContent>
+  delete(
+    authority: SkillOperationContext,
+    input: DeleteSkillCatalogInput,
+  ): Promise<DeleteSkillCatalogReceipt>
+}
+
+export interface SkillFileCommands {
+  write(
+    authority: SkillOperationContext,
+    input: WriteSkillFileCatalogInput,
+  ): Promise<WriteSkillFileCatalogReceipt>
+  delete(
+    authority: SkillOperationContext,
+    input: DeleteSkillFileCatalogInput,
+  ): Promise<DeleteSkillFileCatalogReceipt>
+}
+
+export interface SkillVersionCommands {
+  restore(
+    authority: SkillOperationContext,
+    input: RestoreSkillVersionCatalogInput,
+  ): Promise<RestoreSkillVersionCatalogReceipt>
 }
 
 export interface McpCommands {

@@ -44,11 +44,13 @@ import {
 import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import type {
   AgentCatalogModule,
   McpCatalogModule,
   PluginCatalogModule,
+  SkillCatalogModule,
   WorkgroupCatalogModule,
 } from '@/modules/resource-catalog/public/operations'
 import {
@@ -765,6 +767,7 @@ export function createApp(deps: AppDeps): Hono {
     db: effectiveDeps.db,
     coordinator: pluginOperationCoordinator,
   })
+  const skillCatalog = composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })
   const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
   const identityUserOperations = composeIdentityUserOperations({
     db: effectiveDeps.db,
@@ -781,6 +784,7 @@ export function createApp(deps: AppDeps): Hono {
     agentCatalog,
     mcpCatalog,
     pluginCatalog,
+    skillCatalog,
     workgroupCatalog,
   )
 
@@ -857,6 +861,7 @@ export function mountApiRoutes(
   agentCatalog: AgentCatalogModule,
   mcpCatalog: McpCatalogModule,
   pluginCatalog: PluginCatalogModule,
+  skillCatalog: SkillCatalogModule,
   workgroupCatalog: WorkgroupCatalogModule,
 ): void {
   const appHome = deps.appHome ?? Paths.root
@@ -1019,7 +1024,16 @@ export function mountApiRoutes(
     aclIdentity: pluginCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
-  mountSkillRoutes(app, deps)
+  mountSkillRoutes(app, deps, {
+    commands: skillCatalog.commands,
+    fileCommands: skillCatalog.fileCommands,
+    versionCommands: skillCatalog.versionCommands,
+    queries: skillCatalog.queries,
+    fileQueries: skillCatalog.fileQueries,
+    versionQueries: skillCatalog.versionQueries,
+    aclIdentity: skillCatalog.participants.aclIdentity,
+    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+  })
   mountRepoRoutes(app, deps)
   mountCachedRepoRoutes(app, deps)
   mountRepoGroupRoutes(app, deps)

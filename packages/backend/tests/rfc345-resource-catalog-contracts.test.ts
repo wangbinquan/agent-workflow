@@ -42,6 +42,8 @@ import {
   type PluginPackageMutation,
   type ResourceMemoryScopeRef,
   type ResourceSummary,
+  type SaveSkillCatalogInput,
+  type SkillCatalogResource,
   type SkillPackageMutation,
   type TaskExecutionResourceRequest,
   type UpdateAgentCatalogInput,
@@ -58,6 +60,9 @@ import type {
   McpCommands,
   PluginCommands,
   PluginUpdateCommands,
+  SkillCommands,
+  SkillFileCommands,
+  SkillVersionCommands,
   WorkgroupCommands,
 } from '../src/modules/resource-catalog/public/commands'
 import type {
@@ -65,6 +70,9 @@ import type {
   AgentReferenceQueries,
   McpQueries,
   PluginQueries,
+  SkillFileQueries,
+  SkillQueries,
+  SkillVersionQueries,
   WorkgroupQueries,
 } from '../src/modules/resource-catalog/public/queries'
 import type {
@@ -73,6 +81,7 @@ import type {
   IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
   PluginAclIdentityParticipant,
+  SkillAclIdentityParticipant,
   WorkgroupAclIdentityParticipant,
   ResourceAuthorizationInTx,
   ResourcePackageApplyScenarioProvider,
@@ -88,6 +97,8 @@ import type {
   McpOperationDescriptors,
   PluginCatalogModule,
   PluginOperationDescriptors,
+  SkillCatalogModule,
+  SkillOperationDescriptors,
   WorkgroupCatalogModule,
   WorkgroupOperationDescriptors,
 } from '../src/modules/resource-catalog/public/operations'
@@ -221,6 +232,34 @@ assertType<
     'commands' | 'queries' | 'referenceQueries' | 'operations' | 'participants'
   >
 >(true)
+assertType<Equal<Extract<keyof SkillCommands, string>, 'create' | 'save' | 'delete'>>(true)
+assertType<Equal<Extract<keyof SkillFileCommands, string>, 'write' | 'delete'>>(true)
+assertType<Equal<Extract<keyof SkillVersionCommands, string>, 'restore'>>(true)
+assertType<Equal<Extract<keyof SkillQueries, string>, 'list' | 'get' | 'content'>>(true)
+assertType<Equal<Extract<keyof SkillFileQueries, string>, 'list' | 'read'>>(true)
+assertType<Equal<Extract<keyof SkillVersionQueries, string>, 'list' | 'diff' | 'content'>>(true)
+assertType<Equal<Extract<keyof SkillAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
+  true,
+)
+assertType<
+  Equal<
+    Extract<keyof SkillOperationDescriptors, string>,
+    'list' | 'get' | 'create' | 'save' | 'delete'
+  >
+>(true)
+assertType<
+  Equal<
+    Extract<keyof SkillCatalogModule, string>,
+    | 'commands'
+    | 'fileCommands'
+    | 'versionCommands'
+    | 'queries'
+    | 'fileQueries'
+    | 'versionQueries'
+    | 'operations'
+    | 'participants'
+  >
+>(true)
 assertType<Equal<Extract<keyof McpCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
   true,
 )
@@ -283,6 +322,8 @@ assertType<
 
 const agentResourceTypeProbe: AgentCatalogResource | null = null
 const agentUpdateTypeProbe: UpdateAgentCatalogInput | null = null
+const skillResourceTypeProbe: SkillCatalogResource | null = null
+const skillSaveTypeProbe: SaveSkillCatalogInput | null = null
 const mcpResourceTypeProbe: McpCatalogResource | null = null
 const mcpUpdateTypeProbe: UpdateMcpCatalogInput | null = null
 const pluginResourceTypeProbe: PluginCatalogResource | null = null
@@ -291,6 +332,8 @@ const workgroupResourceTypeProbe: WorkgroupCatalogResource | null = null
 const workgroupUpdateTypeProbe: UpdateWorkgroupCatalogInput | null = null
 void agentResourceTypeProbe
 void agentUpdateTypeProbe
+void skillResourceTypeProbe
+void skillSaveTypeProbe
 void mcpResourceTypeProbe
 void mcpUpdateTypeProbe
 void pluginResourceTypeProbe
@@ -1053,6 +1096,160 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'services/workflow.validator.ts',
       'services/workgroup/memberTurns.ts',
       'services/workgroup/state.ts',
+    ])
+  })
+
+  test('T5-S active HTTP binding executes the owned aggregate and preserves exact legacy callers', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const route = readFileSync(resolve(sourceRoot, 'routes/skills.ts'), 'utf8')
+    const application = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/application/skills/skillApplication.ts'),
+      'utf8',
+    )
+    const repository = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts'),
+      'utf8',
+    )
+    const composition = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/composition/skillOperations.ts'),
+      'utf8',
+    )
+    const operations = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'),
+      'utf8',
+    )
+    const publicTypes = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/types.ts'),
+      'utf8',
+    )
+    const mcpBindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+
+    expect(route).not.toContain("from '@/services/skill'")
+    expect(route).not.toContain("from '@/services/skillVersion'")
+    expect(route).toContain("from '@/services/skill-zip'")
+    for (const contract of [
+      'SkillCommands',
+      'SkillFileCommands',
+      'SkillVersionCommands',
+      'SkillQueries',
+      'SkillFileQueries',
+      'SkillVersionQueries',
+      'SkillAclIdentityParticipant',
+    ]) {
+      expect(route).toContain(contract)
+    }
+    for (const consumer of [
+      'commands.create(',
+      'commands.save(',
+      'commands.delete(',
+      'fileCommands.write(',
+      'fileCommands.delete(',
+      'versionCommands.restore(',
+      'queries.list(',
+      'queries.get(',
+      'queries.content(',
+      'fileQueries.list(',
+      'fileQueries.read(',
+      'versionQueries.list(',
+      'versionQueries.diff(',
+      'versionQueries.content(',
+      'aclIdentity.load(',
+    ]) {
+      expect(route).toContain(consumer)
+    }
+    expect(publicTypes).not.toContain('readonly submission: unknown')
+    expect(publicTypes).toContain("readonly kind: 'json-body'")
+    expect(application).toContain('CreateManagedSkillSchema.safeParse')
+    expect(application).toContain('CombinedSaveSkillSchema.safeParse')
+    expect(application).toContain('DeleteSkillSchema.safeParse')
+    expect(application).toContain('WriteSkillFileSchema.safeParse')
+    expect(application).toContain('RestoreSkillVersionSchema.safeParse')
+    expect(application).toContain('deps.confirmations.assertResource(body, current.name)')
+    expect(application).toContain('deps.access.requireResourceEdit')
+    expect(application).toContain('deps.access.requireResourceGovern')
+    expect(application).not.toContain("from '@/db/")
+    expect(application).not.toContain('/infrastructure/')
+    expect(repository).toContain("from '@/services/skill'")
+    expect(repository).toContain("from '@/services/skillVersion'")
+    expect(repository).toContain('explicit compatibility island')
+    expect(composition).toContain('createSqliteSkillRepository')
+    expect(composition).toContain('createSkillApplication')
+    expect(composition).toContain('createSkillAclIdentityParticipant')
+
+    const deleteCommandStart = application.indexOf('async delete(')
+    const loadVisible = application.indexOf(
+      'const current = await loadVisible(authority, input.id)',
+      deleteCommandStart,
+    )
+    const requireGovern = application.indexOf(
+      'await deps.access.requireResourceGovern(authority, current)',
+      loadVisible,
+    )
+    const parseSubmission = application.indexOf(
+      'const body = jsonOrInvalid(input.submission.body)',
+      requireGovern,
+    )
+    const confirmDelete = application.indexOf(
+      'deps.confirmations.assertResource(body, current.name)',
+      parseSubmission,
+    )
+    expect(deleteCommandStart).toBeGreaterThanOrEqual(0)
+    expect(loadVisible).toBeGreaterThan(deleteCommandStart)
+    expect(requireGovern).toBeGreaterThan(loadVisible)
+    expect(parseSubmission).toBeGreaterThan(requireGovern)
+    expect(confirmDelete).toBeGreaterThan(parseSubmission)
+
+    for (const operationId of [
+      'skill-catalog.list-skills.v1',
+      'skill-catalog.get-skill.v1',
+      'skill-catalog.create-skill.v1',
+      'skill-catalog.save-skill.v1',
+      'skill-catalog.delete-skill.v1',
+    ]) {
+      expect(operations).toContain(operationId)
+      expect(mcpBindings).toContain(operationId)
+    }
+    expect(server).toContain('composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })')
+    expect(server).toContain('commands: skillCatalog.commands')
+    expect(server).toContain('fileCommands: skillCatalog.fileCommands')
+    expect(server).toContain('versionCommands: skillCatalog.versionCommands')
+    expect(server).toContain('queries: skillCatalog.queries')
+    expect(server).toContain('fileQueries: skillCatalog.fileQueries')
+    expect(server).toContain('versionQueries: skillCatalog.versionQueries')
+    expect(server).toContain('aclIdentity: skillCatalog.participants.aclIdentity')
+
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = resolve(dir, entry.name)
+        return entry.isDirectory() ? walk(path) : entry.name.endsWith('.ts') ? [path] : []
+      })
+    const legacySkillConsumers = walk(sourceRoot)
+      .filter((path) => readFileSync(path, 'utf8').includes("@/services/skill'"))
+      .map((path) => path.slice(sourceRoot.length + 1))
+      .sort()
+    expect(legacySkillConsumers).toEqual([
+      'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
+      'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/fusion.ts',
+      'services/intent/applyChangeset.ts',
+      'services/intent/dumpBuilder.ts',
+      'services/resourcePackage/skillTree.ts',
+      'services/skill-zip.ts',
+      'services/workflow.validator.ts',
+    ])
+    const legacyVersionConsumers = walk(sourceRoot)
+      .filter((path) => readFileSync(path, 'utf8').includes("@/services/skillVersion'"))
+      .map((path) => path.slice(sourceRoot.length + 1))
+      .sort()
+    expect(legacyVersionConsumers).toEqual([
+      'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
+      'services/bundle/legacyResourcePackageMutationDependencies.ts',
+      'services/fusion.ts',
+      'services/intent/applyChangeset.ts',
+      'services/intent/journalArtifacts.ts',
+      'services/skill-zip.ts',
+      'services/skill.ts',
     ])
   })
 

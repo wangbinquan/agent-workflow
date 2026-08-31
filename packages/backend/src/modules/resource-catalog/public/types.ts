@@ -1,6 +1,7 @@
 import type {
   Agent,
   BundleOp,
+  FileNode,
   CreateAgent,
   CreatePlugin,
   CreateMcp,
@@ -20,6 +21,11 @@ import type {
   ResourceAccess,
   ResourceAcl,
   ResourceVisibility,
+  Skill,
+  SkillContent,
+  SkillVersion,
+  SkillVersionContent,
+  SkillVersionDiff,
   UpdateMcpRequest,
   UpdatePluginRequest,
   UpdateResourceAclBody,
@@ -174,6 +180,122 @@ export interface AgentReferenceLabels {
   readonly skills: readonly AgentReferenceLabel[]
   readonly mcps: readonly AgentReferenceLabel[]
   readonly plugins: readonly AgentReferenceLabel[]
+}
+
+/** T5-S aggregate contract. Filesystem roots and persistence rows stay private. */
+export type SkillCatalogResource = Skill
+export type SkillCatalogContent = SkillContent
+export type SkillCatalogFileNode = FileNode
+export type SkillCatalogVersion = SkillVersion
+export type SkillCatalogVersionContent = SkillVersionContent
+export type SkillCatalogVersionDiff = SkillVersionDiff
+
+interface SkillJsonSubmission {
+  readonly kind: 'json-body'
+  readonly body: string
+}
+
+export interface GetSkillCatalogInput {
+  readonly id: string
+}
+
+export interface CreateSkillCatalogInput {
+  /** Closed transport envelope; application owns schema parsing. */
+  readonly submission: SkillJsonSubmission
+}
+
+export interface SaveSkillCatalogInput {
+  readonly id: string
+  /** Closed transport envelope preserves the existing combined-save parser. */
+  readonly submission: SkillJsonSubmission
+}
+
+export interface DeleteSkillCatalogInput {
+  readonly id: string
+  /** Authorization precedes decoding and type-to-confirm. */
+  readonly submission: SkillJsonSubmission
+}
+
+export interface DeleteSkillCatalogReceipt {
+  readonly deleted: SkillCatalogResource
+}
+
+export interface GetSkillContentCatalogInput {
+  readonly id: string
+}
+
+export interface ListSkillFilesCatalogInput {
+  readonly id: string
+}
+
+export interface ReadSkillFileCatalogInput {
+  readonly id: string
+  readonly path: string
+}
+
+export interface WriteSkillFileCatalogInput {
+  readonly id: string
+  readonly path: string
+  readonly submission: SkillJsonSubmission
+}
+
+export interface WriteSkillFileCatalogReceipt {
+  readonly ok: true
+  readonly path: string
+  readonly token: string | null
+}
+
+export interface DeleteSkillFileCatalogInput {
+  readonly id: string
+  readonly path: string
+  readonly expectedToken?: string
+  readonly submission: SkillJsonSubmission
+}
+
+export interface DeleteSkillFileCatalogReceipt {
+  readonly deleted: Readonly<{
+    readonly skillId: string
+    readonly name: string
+    readonly path: string
+  }>
+  readonly token: string | null
+}
+
+export interface ListSkillVersionsCatalogInput {
+  readonly id: string
+}
+
+export interface DiffSkillVersionsCatalogInput {
+  readonly id: string
+  readonly from: string
+  readonly to: string
+}
+
+export interface GetSkillVersionContentCatalogInput {
+  readonly id: string
+  readonly version: string
+}
+
+export interface RestoreSkillVersionCatalogInput {
+  readonly id: string
+  readonly version: string
+  readonly submission: SkillJsonSubmission
+}
+
+export interface RestoreSkillVersionCatalogReceipt {
+  readonly version: SkillCatalogVersion
+  readonly unfusedMemoryIds: readonly string[]
+  readonly token: string | null
+}
+
+/** Purpose-specific identity used by the generic ACL transport adapter. */
+export interface SkillAclIdentity {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly aclRevision: number
+  readonly updatedAt: number
 }
 
 /** T5-M aggregate contract. Persistence rows and transport contexts stay private. */
