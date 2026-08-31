@@ -12,6 +12,7 @@ import type {
   DeliveryRow,
 } from '@/modules/code-capability/application/ports/deliveryChainRead'
 import type { RoundAttemptsReadPort } from '@/modules/code-capability/application/ports/roundAttemptsRead'
+import type { WorkItemProjectionReadPort } from '@/modules/code-capability/application/ports/workItemProjectionRead'
 import { createSqliteDeliveryChainRead } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
 import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
@@ -166,11 +167,11 @@ export function createCodeMatrixQuery(db: DbClient): CodeMatrixQuery {
  * ordinary under load, and a timestamp-only cursor would either skip the rest
  * of that millisecond or replay it forever.
  */
-function encodeCursor(createdAt: number, id: string): string {
+export function encodeCursor(createdAt: number, id: string): string {
   return `${createdAt}:${id}`
 }
 
-function decodeCursor(cursor: string): { createdAt: number; id: string } | null {
+export function decodeCursor(cursor: string): { createdAt: number; id: string } | null {
   const cut = cursor.indexOf(':')
   if (cut <= 0) return null
   const createdAt = Number(cursor.slice(0, cut))
@@ -179,7 +180,23 @@ function decodeCursor(cursor: string): { createdAt: number; id: string } | null 
   return { createdAt, id }
 }
 
-export function createCodeWorkItemProjectionQuery(db: DbClient): CodeWorkItemProjectionQuery {
+function isWorkItemProjectionReadPort(
+  input: DbClient | WorkItemProjectionReadPort,
+): input is WorkItemProjectionReadPort {
+  return 'readPage' in input && typeof input.readPage === 'function'
+}
+
+export function createCodeWorkItemProjectionQuery(
+  input: DbClient | WorkItemProjectionReadPort,
+): CodeWorkItemProjectionQuery {
+  if (isWorkItemProjectionReadPort(input)) {
+    return {
+      async page(request) {
+        return await input.readPage(request)
+      },
+    }
+  }
+  const db = input
   return {
     async page(input) {
       const limit = Math.max(1, Math.min(input.limit ?? WORK_ITEM_PAGE_LIMIT, 100))
