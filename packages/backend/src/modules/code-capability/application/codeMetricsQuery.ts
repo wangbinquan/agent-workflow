@@ -38,6 +38,77 @@ import type {
  */
 export const DEFAULT_METRICS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
+export interface CodeMetricFindingRow {
+  readonly capability: string
+  readonly resolvedAt: number | null
+  readonly codeChangedAt: number | null
+}
+
+export interface CodeMetricRoundRow {
+  readonly capability: string
+  readonly outcome: string | null
+  readonly endedAt: number | null
+  readonly n: number
+}
+
+/**
+ * Provider-neutral metrics projection. SQLite and PostgreSQL own their query
+ * mechanics, while the four adoption buckets and run outcome vocabulary stay
+ * one application-level behavior oracle.
+ */
+export function projectCodeMetricsSummary(input: {
+  readonly windowMs: number
+  readonly findings: readonly CodeMetricFindingRow[]
+  readonly rounds: readonly CodeMetricRoundRow[]
+}): CodeMetricsSummary {
+  const adoptionBy = new Map<string, CodeAdoptionBuckets>()
+  for (const row of input.findings) {
+    const bucket = adoptionBy.get(row.capability) ?? {
+      capability: row.capability,
+      published: 0,
+      adopted: 0,
+      quietFix: 0,
+      disagreed: 0,
+      outstanding: 0,
+    }
+    bucket.published += 1
+    const resolved = row.resolvedAt !== null
+    const changed = row.codeChangedAt !== null
+    if (changed && resolved) bucket.adopted += 1
+    else if (changed) bucket.quietFix += 1
+    else if (resolved) bucket.disagreed += 1
+    else bucket.outstanding += 1
+    adoptionBy.set(row.capability, bucket)
+  }
+
+  const runsBy = new Map<string, CodeRunCounts>()
+  for (const row of input.rounds) {
+    const counts = runsBy.get(row.capability) ?? {
+      capability: row.capability,
+      rounds: 0,
+      published: 0,
+      failed: 0,
+      awaiting: 0,
+      incomplete: 0,
+    }
+    counts.rounds += row.n
+    if (row.outcome === 'published') counts.published += row.n
+    else if (row.outcome === 'failed') counts.failed += row.n
+    else if (row.outcome === 'awaiting') counts.awaiting += row.n
+    else if (row.endedAt !== null) counts.incomplete += row.n
+    runsBy.set(row.capability, counts)
+  }
+
+  const byCapability = (a: { capability: string }, b: { capability: string }): number =>
+    a.capability < b.capability ? -1 : a.capability > b.capability ? 1 : 0
+
+  return {
+    windowMs: input.windowMs,
+    adoption: [...adoptionBy.values()].sort(byCapability),
+    runs: [...runsBy.values()].sort(byCapability),
+  }
+}
+
 export function createCodeMetricsQuery(db: DbClient): CodeMetricsQuery {
   return {
     async summary(input) {
@@ -57,26 +128,6 @@ export function createCodeMetricsQuery(db: DbClient): CodeMetricsQuery {
         .from(codeFindings)
         .where(and(isNotNull(codeFindings.externalId), gte(codeFindings.createdAt, since)))
 
-      const adoptionBy = new Map<string, CodeAdoptionBuckets>()
-      for (const row of findings) {
-        const bucket = adoptionBy.get(row.capability) ?? {
-          capability: row.capability,
-          published: 0,
-          adopted: 0,
-          quietFix: 0,
-          disagreed: 0,
-          outstanding: 0,
-        }
-        bucket.published += 1
-        const resolved = row.resolvedAt !== null
-        const changed = row.codeChangedAt !== null
-        if (changed && resolved) bucket.adopted += 1
-        else if (changed) bucket.quietFix += 1
-        else if (resolved) bucket.disagreed += 1
-        else bucket.outstanding += 1
-        adoptionBy.set(row.capability, bucket)
-      }
-
       // Rounds carry no capability of their own — it lives on the work item, so
       // this joins rather than reading a denormalized copy. A copy would drift
       // the first time a work item's capability is corrected.
@@ -92,41 +143,7 @@ export function createCodeMetricsQuery(db: DbClient): CodeMetricsQuery {
         .where(gte(codeWorkRounds.startedAt, since))
         .groupBy(codeWorkItems.capability, codeWorkRounds.outcome, codeWorkRounds.endedAt)
 
-      const runsBy = new Map<string, CodeRunCounts>()
-      for (const row of rounds) {
-        const counts = runsBy.get(row.capability) ?? {
-          capability: row.capability,
-          rounds: 0,
-          published: 0,
-          failed: 0,
-          awaiting: 0,
-          incomplete: 0,
-        }
-        counts.rounds += row.n
-        if (row.outcome === 'published') counts.published += row.n
-        else if (row.outcome === 'failed') counts.failed += row.n
-        else if (row.outcome === 'awaiting') counts.awaiting += row.n
-        else if (row.endedAt !== null) {
-          // Ended with no outcome written — a daemon death mid-round, almost
-          // always. Kept as its own count rather than folded into `failed`: one
-          // is the platform breaking, the other is the round deciding.
-          counts.incomplete += row.n
-        }
-        // A round still in flight (no outcome, no end time) counts toward
-        // `rounds` and nothing else. It has not succeeded or failed yet, and
-        // putting it in either column would make the totals move backwards when
-        // it finishes.
-        runsBy.set(row.capability, counts)
-      }
-
-      const byCapability = (a: { capability: string }, b: { capability: string }): number =>
-        a.capability < b.capability ? -1 : a.capability > b.capability ? 1 : 0
-
-      return {
-        windowMs,
-        adoption: [...adoptionBy.values()].sort(byCapability),
-        runs: [...runsBy.values()].sort(byCapability),
-      } satisfies CodeMetricsSummary
+      return projectCodeMetricsSummary({ windowMs, findings, rounds })
     },
   }
 }
