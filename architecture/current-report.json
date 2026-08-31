@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 460,
-    "architectureExceptions": 1881,
-    "backgroundJobs": 273,
-    "crossContextImports": 1926,
-    "facades": 381,
+    "ambientWiring": 472,
+    "architectureExceptions": 2171,
+    "backgroundJobs": 282,
+    "crossContextImports": 2224,
+    "facades": 385,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 19960,
-    "mutationEntrypoints": 1163,
+    "moduleSymbolOwners": 20908,
+    "mutationEntrypoints": 1262,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 596,
-    "transactionExternalEffects": 297
+    "publicSurfaces": 647,
+    "transactionExternalEffects": 305
   },
   "metrics": {
-    "ambientWiringEntries": 460,
+    "ambientWiringEntries": 472,
     "appDepsConsumers": [
       "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
       "packages/backend/src/routes/agents.ts",
@@ -63,7 +63,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1093,
+    "backendProductionFiles": 1163,
     "backendValueSccs": [
       [
         "packages/backend/src/services/agent.ts",
@@ -82,7 +82,7 @@
         "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 273,
+    "backgroundEntries": 282,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -107,7 +107,7 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 24,
-    "directNativeTimers": 72,
+    "directNativeTimers": 74,
     "inboundBoundaryEdges": 59,
     "knownViolations": 29,
     "moduleContexts": [
@@ -121,11 +121,11 @@
       },
       {
         "context": "development-automation",
-        "files": 123
+        "files": 124
       },
       {
         "context": "digital-employee",
-        "files": 25
+        "files": 27
       },
       {
         "context": "event-center",
@@ -149,7 +149,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 48
+        "files": 67
       },
       {
         "context": "source-control",
@@ -157,7 +157,7 @@
       },
       {
         "context": "system-operations",
-        "files": 12
+        "files": 31
       },
       {
         "context": "task-catalog",
@@ -168,7 +168,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 537,
+    "moduleFiles": 578,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -219,10 +219,10 @@
       ]
     ],
     "routeToDbEdges": 15,
-    "serviceFiles": 381,
+    "serviceFiles": 385,
     "transportToDbEdges": 2,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ca28e3309369f5e7763c8b163450e078d44e4c15b0a8769a1e09eee7b39a0e06"
+  "sourceDigest": "sha256:29a32f691da5399c5ff298cd433b38a3d790778a562bdfd0f1b5159754388a3f"
 }
