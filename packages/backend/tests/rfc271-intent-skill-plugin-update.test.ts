@@ -172,7 +172,7 @@ describe('T17 · plugin 半边的两条要害（源码层）', () => {
     // 就是这个先后。（初版把锚打在了 `kind: 'plugin-install'` 上，结果命中的是
     // 文件顶部的类型声明，白测一场。）
     const start = src.indexOf('async prestage(plan, context)')
-    const end = src.indexOf('async commitInTransaction(', start)
+    const end = src.indexOf('participantInTransaction(', start)
     expect(start).toBeGreaterThan(0)
     expect(end).toBeGreaterThan(start)
     const prestage = src.slice(start, end)

@@ -138,7 +138,6 @@ export function composeWorkgroupCatalog(
   const aclIdentity = createWorkgroupAclIdentityParticipant({ repository, clock })
   const operations = createWorkgroupOperationDescriptors(application.commands, application.queries)
   return Object.freeze({
-    commands: application.commands,
     queries: application.queries,
     operations,
     participants: Object.freeze({ aclIdentity }),

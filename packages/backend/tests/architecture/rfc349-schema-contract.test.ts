@@ -95,7 +95,7 @@ describe('RFC-349 canonical schema contract', () => {
       const table = byId.get(id)
       if (!table) throw new Error(`missing archive contract for ${id}`)
       const symbolPattern = new RegExp(`\\b${table.schemaSymbol}\\b`)
-      const physicalPattern = new RegExp(`(?:['\"\`])${id}(?:['\"\`])`)
+      const physicalPattern = new RegExp(`(?:['"\`])${id}(?:['"\`])`)
       const consumers = units
         .filter((unit) => symbolPattern.test(unit.text) || physicalPattern.test(unit.text))
         .map((unit) => unit.path)

@@ -2,14 +2,9 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { agents, mcps, plugins, skills, workflows, workgroups } from '@/db/schema'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
-import type {
-  CatalogResourceRef,
-  ResourceCatalogCursor,
-  ResourceSummary,
-  ResourceSummaryPage,
-  ResourceSummaryQuery,
-} from '../public/types'
 import { CATALOG_SELECTOR_KINDS, type CatalogSelectorKind } from '../domain/resourceKinds'
+import type { CatalogResourceRef } from '../domain/resourceRef'
+import type { ResourceSummaryRevision } from '../domain/resourceRevision'
 import type { Mcp, Plugin } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 import { and, asc, eq, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
@@ -17,6 +12,36 @@ import { visibleRowsCondition } from './sqliteResourceGrantRepository'
 
 const CATALOG_PAGE_MAX = 500
 const KIND_RANK = new Map(CATALOG_SELECTOR_KINDS.map((kind, rank) => [kind, rank] as const))
+
+declare const resourceCatalogCursorBrand: unique symbol
+
+type ResourceCatalogCursor = string & {
+  readonly [resourceCatalogCursorBrand]: 'resource-catalog-cursor'
+}
+
+interface ResourceSummaryQuery {
+  readonly kinds?: readonly CatalogSelectorKind[]
+  readonly search?: string
+  readonly cursor?: ResourceCatalogCursor
+  readonly limit: number
+}
+
+interface ResourceSummaryPage {
+  readonly items: readonly ResourceSummary[]
+  readonly nextCursor: ResourceCatalogCursor | null
+}
+
+interface ResourceSummaryOf<K extends CatalogSelectorKind> {
+  readonly ref: CatalogResourceRef<K>
+  readonly kind: K
+  readonly name: string
+  readonly description: string | null
+  readonly revision: ResourceSummaryRevision<K>
+  readonly visibilityHint: 'public' | 'private'
+}
+
+type ResourceSummary<K extends CatalogSelectorKind = CatalogSelectorKind> =
+  K extends CatalogSelectorKind ? ResourceSummaryOf<K> : never
 
 interface DecodedCatalogCursor {
   readonly kind: CatalogSelectorKind

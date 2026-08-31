@@ -136,9 +136,9 @@ describe('四处失败归属：调用点各用各的策略，且映射逐条不�
   test('① 主派发用 catalog session，两个错误码分开（missing ≠ 查不到行）', () => {
     expect(nodeMechanics).toContain('const agentRef = agentRefOfNode(node)')
     expect(nodeMechanics).toContain('state.taskExecutionResources.injection(agentRef.id)')
-    // 两个分支必须都在，且 `missing` 那支先判——合并会让两个码塌成一个。
+    // 两个分支必须都在，且缺 canonical id 的那支先判——合并会让两个码塌成一个。
     expect(nodeMechanics).toMatch(
-      /resolvedAgent\.reason === 'missing'[\s\S]{0,200}agent-identity-missing/,
+      /agentRef === null[\s\S]{0,240}agent-identity-missing[\s\S]{0,240}agentRef\.k !== 'id'[\s\S]{0,160}agent-not-found/,
     )
     expect(nodeMechanics).toContain("message: 'agent-not-found'")
   })

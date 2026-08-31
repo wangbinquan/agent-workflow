@@ -30,7 +30,6 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import { invokeOperation } from '@/platform/operations/invoke'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { registerRouteMiddleware } from '@/routes/registry'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
 
@@ -318,12 +317,12 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
     encode: (_c, receipt) => exportResponse(deps, receipt),
   })
 
-  registerRouteMiddleware(app, '/api/resource-packages/preview', resourcePackageBodyLimit)
   registerOperationRoute(app, {
     descriptor: deps.catalog.operations.inspect,
     method: 'POST',
     path: '/api/resource-packages/preview',
     tokenAccess: 'allow',
+    middleware: resourcePackageBodyLimit,
     decode: async (c) => deps.catalog.transport.stageInspect(actorOf(c), await readUpload(c)),
     context: (c) => deps.commandContextFor(actorOf(c)),
     encode: async (c, inspected) => {
@@ -336,12 +335,12 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
     },
   })
 
-  registerRouteMiddleware(app, '/api/resource-packages/commit', resourcePackageBodyLimit)
   registerOperationRoute(app, {
     descriptor: deps.catalog.operations.apply,
     method: 'POST',
     path: '/api/resource-packages/commit',
     tokenAccess: 'allow',
+    middleware: resourcePackageBodyLimit,
     decode: async (c) => {
       const form = await readMultipart(c)
       const file = packageFile(form)

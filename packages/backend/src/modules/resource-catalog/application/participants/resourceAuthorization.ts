@@ -1,16 +1,14 @@
+import type { ResourceVisibility } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbTxSync } from '@/db/txSync'
 import { ForbiddenError, NotFoundError } from '@/util/errors'
 import { canEditAccess, canGovernAccess, canViewAccess } from '../../domain/resourceAccess'
+import type { AclResourceRef } from '../../domain/resourceRef'
 import type {
   ResourceRequestContext,
   ResourceScopeAuthorizationInTx,
 } from '../../public/participants'
-import type {
-  ResourceAclTarget,
-  ResourceMemoryScopeRef,
-  ResourceScopeAccess,
-} from '../../public/types'
+import type { ResourceMemoryScopeRef, ResourceScopeAccess } from '../../public/types'
 import type { ResourceAccessRowReadPort } from '../ports/resourceAclPersistence'
 import type { ResourceAuthorizationApplication } from '../resourceAuthorization'
 
@@ -23,6 +21,12 @@ export interface ResourceAuthorizationParticipantDependencies {
   readonly authorization: Pick<ResourceAuthorizationApplication, 'resolveResourceAccessForInTx'>
 }
 
+interface ResourceAclTarget {
+  readonly ref: AclResourceRef
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+}
+
 interface ResourceAuthorizationInTx {
   accessOf(authority: ResourceRequestContext, target: ResourceAclTarget): ResourceScopeAccess
   assertView(authority: ResourceRequestContext, target: ResourceAclTarget): void
@@ -30,7 +34,7 @@ interface ResourceAuthorizationInTx {
   assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget): void
 }
 
-function createResourceAuthorizationInTx(
+function resourceAuthorizationForTransaction(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
   dependencies: ResourceAuthorizationParticipantDependencies,
@@ -79,12 +83,14 @@ function createResourceAuthorizationInTx(
   return participant satisfies ResourceAuthorizationInTx
 }
 
+const trustedResourceScopeAuthorizations = new WeakSet<ResourceScopeAuthorizationInTx>()
+
 export function createResourceScopeAuthorizationInTx(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
   dependencies: ResourceAuthorizationParticipantDependencies,
 ): ResourceScopeAuthorizationInTx {
-  const authorization = createResourceAuthorizationInTx(tx, authorityResolver, dependencies)
+  const authorization = resourceAuthorizationForTransaction(tx, authorityResolver, dependencies)
   const participant = Object.freeze({
     accessOf(authority: ResourceRequestContext, scope: ResourceMemoryScopeRef) {
       const row = dependencies.accessRows.getInTx(tx, scope.kind, scope.id)
@@ -96,5 +102,6 @@ export function createResourceScopeAuthorizationInTx(
       })
     },
   }) as unknown as ResourceScopeAuthorizationInTx
+  trustedResourceScopeAuthorizations.add(participant)
   return participant
 }

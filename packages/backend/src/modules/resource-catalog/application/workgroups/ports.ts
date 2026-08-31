@@ -11,8 +11,7 @@ import type {
   CopyWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   UpdateWorkgroupCatalogInput,
-  WorkgroupCatalogResource,
-} from '../../public/types'
+} from '../../domain/catalogOperationTypes'
 
 export interface WorkgroupInitialAcl {
   readonly ownerUserId: string | null
@@ -71,7 +70,7 @@ export interface WorkgroupRepository {
 }
 
 export interface WorkgroupProjection {
-  resourceOf(workgroup: Workgroup): WorkgroupCatalogResource
+  resourceOf(workgroup: Workgroup): Workgroup
   snapshotOf(workgroup: Workgroup): WorkgroupDraftSnapshot
 }
 

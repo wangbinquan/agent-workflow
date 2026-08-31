@@ -94,7 +94,6 @@ describe('② 身份仍是必需的 —— descriptor `publicReason` 不等于�
     expect(
       OPERATIONS.match(/Package entries determine their own exact resource permissions\./g),
     ).toHaveLength(2)
-    expect(SRC).toContain('路径不在 multiAuth 的 `PUBLIC_PATH_PREFIXES`')
   })
 })
 

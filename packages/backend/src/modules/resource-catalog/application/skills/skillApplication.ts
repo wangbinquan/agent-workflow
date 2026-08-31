@@ -6,13 +6,16 @@ import {
   WriteSkillFileSchema,
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import type { SkillCommands, SkillFileCommands, SkillVersionCommands } from '../../public/commands'
-import type { SkillOperationContext } from '../../public/participants'
-import type { SkillFileQueries, SkillQueries, SkillVersionQueries } from '../../public/queries'
 import type {
   CreateSkillCatalogInput,
   DeleteSkillCatalogInput,
   DeleteSkillCatalogReceipt,
+  SaveSkillCatalogInput,
+} from '../../domain/catalogOperationTypes'
+import type { SkillFileCommands, SkillVersionCommands } from '../../public/commands'
+import type { SkillOperationContext } from '../../public/participants'
+import type { SkillFileQueries, SkillQueries, SkillVersionQueries } from '../../public/queries'
+import type {
   DeleteSkillFileCatalogInput,
   DiffSkillVersionsCatalogInput,
   GetSkillCatalogInput,
@@ -22,7 +25,6 @@ import type {
   ListSkillVersionsCatalogInput,
   ReadSkillFileCatalogInput,
   RestoreSkillVersionCatalogInput,
-  SaveSkillCatalogInput,
   SkillCatalogResource,
   WriteSkillFileCatalogInput,
 } from '../../public/types'
@@ -32,15 +34,6 @@ export interface SkillApplicationDependencies {
   readonly repository: SkillRepository
   readonly access: SkillAccessPort
   readonly confirmations: SkillDeleteConfirmationPort
-}
-
-export interface SkillApplication {
-  readonly commands: SkillCommands
-  readonly fileCommands: SkillFileCommands
-  readonly versionCommands: SkillVersionCommands
-  readonly queries: SkillQueries
-  readonly fileQueries: SkillFileQueries
-  readonly versionQueries: SkillVersionQueries
 }
 
 function jsonOrEmpty(body: string): unknown {
@@ -76,7 +69,7 @@ function requireVersion(raw: string, field: string): number {
   return version
 }
 
-export function createSkillApplication(deps: SkillApplicationDependencies): SkillApplication {
+export function createSkillApplication(deps: SkillApplicationDependencies) {
   async function loadVisible(
     authority: SkillOperationContext,
     id: string,
@@ -137,7 +130,7 @@ export function createSkillApplication(deps: SkillApplicationDependencies): Skil
     },
   } satisfies SkillVersionQueries)
 
-  const commands: SkillCommands = Object.freeze({
+  const commands = Object.freeze({
     async create(authority: SkillOperationContext, input: CreateSkillCatalogInput) {
       const parsed = CreateManagedSkillSchema.safeParse(jsonOrEmpty(input.submission.body))
       if (!parsed.success) {
@@ -147,7 +140,7 @@ export function createSkillApplication(deps: SkillApplicationDependencies): Skil
       }
       return deps.repository.create(authority, parsed.data)
     },
-    async save(authority, input: SaveSkillCatalogInput) {
+    async save(authority: SkillOperationContext, input: SaveSkillCatalogInput) {
       const parsed = CombinedSaveSkillSchema.safeParse(jsonOrEmpty(input.submission.body))
       if (!parsed.success) {
         throw new ValidationError('skill-content-invalid', 'invalid combined save', {
@@ -158,7 +151,10 @@ export function createSkillApplication(deps: SkillApplicationDependencies): Skil
       await deps.access.requireResourceEdit(authority, current)
       return deps.repository.save(authority, current, parsed.data)
     },
-    async delete(authority, input: DeleteSkillCatalogInput): Promise<DeleteSkillCatalogReceipt> {
+    async delete(
+      authority: SkillOperationContext,
+      input: DeleteSkillCatalogInput,
+    ): Promise<DeleteSkillCatalogReceipt> {
       const current = await loadVisible(authority, input.id)
       await deps.access.requireResourceGovern(authority, current)
       const body = jsonOrInvalid(input.submission.body)
@@ -172,7 +168,7 @@ export function createSkillApplication(deps: SkillApplicationDependencies): Skil
       await deps.repository.delete(authority, current, parsed.data)
       return Object.freeze({ deleted: current })
     },
-  } satisfies SkillCommands)
+  })
 
   const fileCommands: SkillFileCommands = Object.freeze({
     async write(authority, input: WriteSkillFileCatalogInput) {

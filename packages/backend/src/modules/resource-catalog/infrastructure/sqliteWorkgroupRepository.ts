@@ -36,9 +36,9 @@ import {
   canViewAccess,
   discloseScheduleRefs,
 } from '../domain/resourceAccess'
+import type { UpdateWorkgroupCatalogInput } from '../domain/catalogOperationTypes'
 import { listResourceGrantUserIdsInTx } from './sqliteResourceGrantRepository'
 import type { WorkgroupOperationContext } from '../public/participants'
-import type { UpdateWorkgroupCatalogInput } from '../public/types'
 import type {
   ValidatedWorkgroupDeleteInput,
   WorkgroupDeleteResult,

@@ -163,8 +163,7 @@ export function providerAwareSqliteTable(physicalSqliteTable: SQLiteTableFn): SQ
   return ((...args: Parameters<SQLiteTableFn>) => {
     const sqliteTable = physicalSqliteTable(...args)
     const postgresqlTable = buildPostgresqlTable(sqliteTable)
-    let facade: object
-    facade = new Proxy(sqliteTable, {
+    const facade: object = new Proxy(sqliteTable, {
       get(_target, property, receiver) {
         const projection = projectionByFacade.get(facade)!
         return Reflect.get(projection[activeProvider], property, receiver)

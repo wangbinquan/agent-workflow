@@ -4,23 +4,24 @@ import {
   DeleteWorkflowSchema,
   UpdateWorkflowSchema,
   type DeleteWorkflow,
+  type Workflow,
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { assertInitialResourceOwner } from '../resourceDefaults'
-import type { WorkflowCommands } from '../../public/commands'
-import type { WorkflowOperationContext } from '../../public/participants'
-import type { WorkflowQueries } from '../../public/queries'
 import type {
   CopyWorkflowCatalogInput,
   CreateWorkflowCatalogInput,
   DeleteWorkflowCatalogInput,
   DeleteWorkflowCatalogReceipt,
-  GetWorkflowCatalogInput,
   UpdateWorkflowCatalogInput,
   UpdateWorkflowCatalogReceipt,
+} from '../../domain/catalogOperationTypes'
+import type { WorkflowOperationContext } from '../../public/participants'
+import type { WorkflowQueries } from '../../public/queries'
+import type {
+  GetWorkflowCatalogInput,
   WorkflowAclIdentity,
   WorkflowCatalogDetail,
-  WorkflowCatalogResource,
 } from '../../public/types'
 import type { WorkflowAccessPort, WorkflowPolicyPort, WorkflowRepository } from './ports'
 
@@ -28,11 +29,6 @@ export interface WorkflowApplicationDependencies {
   readonly repository: WorkflowRepository
   readonly access: WorkflowAccessPort
   readonly policy: WorkflowPolicyPort
-}
-
-export interface WorkflowApplication {
-  readonly commands: WorkflowCommands
-  readonly queries: WorkflowQueries
 }
 
 function notFound(id: string): NotFoundError {
@@ -75,9 +71,7 @@ function assertDeleteConfirm(input: DeleteWorkflow, expectedName: string): void 
   }
 }
 
-export function createWorkflowApplication(
-  deps: WorkflowApplicationDependencies,
-): WorkflowApplication {
+export function createWorkflowApplication(deps: WorkflowApplicationDependencies) {
   async function loadVisible(
     authority: WorkflowOperationContext,
     id: string,
@@ -101,7 +95,7 @@ export function createWorkflowApplication(
   }
 
   const queries: WorkflowQueries = Object.freeze({
-    async list(authority: WorkflowOperationContext): Promise<readonly WorkflowCatalogResource[]> {
+    async list(authority: WorkflowOperationContext): Promise<readonly Workflow[]> {
       const managed = deps.policy.excludeBuiltin(await deps.repository.list())
       return deps.access.filterVisible(authority, managed)
     },
@@ -115,7 +109,7 @@ export function createWorkflowApplication(
     },
   } satisfies WorkflowQueries)
 
-  const commands: WorkflowCommands = Object.freeze({
+  const commands = Object.freeze({
     async create(authority: WorkflowOperationContext, input: CreateWorkflowCatalogInput) {
       const parsed = CreateWorkflowSchema.safeParse(jsonOrEmpty(input.submission.body))
       if (!parsed.success) {
@@ -165,7 +159,7 @@ export function createWorkflowApplication(
         deletedVersion: deletion.expectedVersion,
       })
     },
-  } satisfies WorkflowCommands)
+  })
 
   return Object.freeze({ commands, queries })
 }

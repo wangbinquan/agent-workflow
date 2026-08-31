@@ -26,6 +26,7 @@ import {
   SaveWorkflowReceiptSchema as SaveWorkflowCatalogReceiptSchema,
   WorkflowDetailSchema,
   WorkflowSchema,
+  type Workflow,
   CopyWorkgroupRequestSchema,
   CreateWorkgroupSchema,
   RenameWorkgroupSchema,
@@ -33,6 +34,7 @@ import {
   UpdateWorkgroupSchema,
   WorkgroupSchema,
   WorkgroupDetailSchema,
+  type Workgroup,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
@@ -45,16 +47,44 @@ import type {
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
 import type {
-  AgentCommands,
-  McpCommands,
-  PluginCommands,
-  PluginUpdateCommands,
-  SkillCommands,
-  SkillFileCommands,
-  SkillVersionCommands,
-  WorkflowCommands,
-  WorkgroupCommands,
-} from './commands'
+  CheckPluginUpdateCatalogInput,
+  CheckPluginUpdateCatalogReceipt,
+  CopyWorkflowCatalogInput,
+  CopyWorkgroupCatalogInput,
+  CreateAgentCatalogInput,
+  CreateMcpCatalogInput,
+  CreatePluginCatalogInput,
+  CreateSkillCatalogInput,
+  CreateWorkflowCatalogInput,
+  CreateWorkgroupCatalogInput,
+  DeleteAgentCatalogInput,
+  DeleteAgentCatalogReceipt,
+  DeleteMcpCatalogInput,
+  DeleteMcpCatalogReceipt,
+  DeletePluginCatalogInput,
+  DeletePluginCatalogReceipt,
+  DeleteSkillCatalogInput,
+  DeleteSkillCatalogReceipt,
+  DeleteWorkflowCatalogInput,
+  DeleteWorkflowCatalogReceipt,
+  DeleteWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogReceipt,
+  RenameAgentCatalogInput,
+  RenameMcpCatalogInput,
+  RenamePluginCatalogInput,
+  RenameWorkgroupCatalogInput,
+  SaveSkillCatalogInput,
+  UpdateAgentCatalogInput,
+  UpdateMcpCatalogInput,
+  UpdatePluginCatalogInput,
+  UpdateWorkflowCatalogInput,
+  UpdateWorkflowCatalogReceipt,
+  UpdateWorkgroupCatalogInput,
+  UpdateWorkgroupCatalogReceipt,
+  UpgradePluginCatalogInput,
+  UpgradePluginCatalogReceipt,
+} from '../domain/catalogOperationTypes'
+import type { SkillFileCommands, SkillVersionCommands } from './commands'
 import type {
   AgentAclIdentityParticipant,
   AgentOperationContext,
@@ -82,60 +112,135 @@ import type {
 } from './queries'
 import type {
   AgentCatalogResource,
-  CheckPluginUpdateCatalogInput,
-  CheckPluginUpdateCatalogReceipt,
-  CreateMcpCatalogInput,
-  CreateAgentCatalogInput,
-  CreateSkillCatalogInput,
-  CreateWorkflowCatalogInput,
-  CreatePluginCatalogInput,
-  DeleteMcpCatalogInput,
-  DeleteMcpCatalogReceipt,
-  DeleteAgentCatalogReceipt,
-  DeleteAgentCatalogInput,
-  DeletePluginCatalogInput,
-  DeletePluginCatalogReceipt,
   GetMcpCatalogInput,
   GetAgentCatalogInput,
   GetPluginCatalogInput,
   McpCatalogResource,
   PluginCatalogResource,
-  RenameMcpCatalogInput,
-  RenameAgentCatalogInput,
-  RenamePluginCatalogInput,
-  UpdateMcpCatalogInput,
-  UpdateAgentCatalogInput,
-  UpdatePluginCatalogInput,
-  UpgradePluginCatalogInput,
-  UpgradePluginCatalogReceipt,
-  CopyWorkgroupCatalogInput,
-  CreateWorkgroupCatalogInput,
-  DeleteWorkgroupCatalogInput,
-  DeleteWorkgroupCatalogReceipt,
   GetWorkgroupCatalogInput,
-  RenameWorkgroupCatalogInput,
-  UpdateWorkgroupCatalogInput,
-  UpdateWorkgroupCatalogReceipt,
   WorkgroupCatalogDetail,
-  WorkgroupCatalogResource,
-  DeleteSkillCatalogReceipt,
-  DeleteSkillCatalogInput,
   GetSkillCatalogInput,
-  SaveSkillCatalogInput,
   SkillCatalogContent,
   SkillCatalogResource,
-  CopyWorkflowCatalogInput,
-  DeleteWorkflowCatalogReceipt,
-  DeleteWorkflowCatalogInput,
   GetWorkflowCatalogInput,
-  UpdateWorkflowCatalogInput,
-  UpdateWorkflowCatalogReceipt,
   WorkflowCatalogDetail,
-  WorkflowCatalogResource,
   ApplyResourcePackage,
   ExportResourcePackage,
   InspectResourcePackage,
 } from './types'
+
+interface AgentCommands {
+  create(
+    authority: AgentOperationContext,
+    input: CreateAgentCatalogInput,
+  ): Promise<AgentCatalogResource>
+  update(
+    authority: AgentOperationContext,
+    input: UpdateAgentCatalogInput,
+  ): Promise<AgentCatalogResource>
+  delete(
+    authority: AgentOperationContext,
+    input: DeleteAgentCatalogInput,
+  ): Promise<DeleteAgentCatalogReceipt>
+  rename(
+    authority: AgentOperationContext,
+    input: RenameAgentCatalogInput,
+  ): Promise<AgentCatalogResource>
+}
+
+interface SkillCommands {
+  create(
+    authority: SkillOperationContext,
+    input: CreateSkillCatalogInput,
+  ): Promise<SkillCatalogResource>
+  save(authority: SkillOperationContext, input: SaveSkillCatalogInput): Promise<SkillCatalogContent>
+  delete(
+    authority: SkillOperationContext,
+    input: DeleteSkillCatalogInput,
+  ): Promise<DeleteSkillCatalogReceipt>
+}
+
+interface McpCommands {
+  create(authority: McpOperationContext, input: CreateMcpCatalogInput): Promise<McpCatalogResource>
+  update(authority: McpOperationContext, input: UpdateMcpCatalogInput): Promise<McpCatalogResource>
+  delete(
+    authority: McpOperationContext,
+    input: DeleteMcpCatalogInput,
+  ): Promise<DeleteMcpCatalogReceipt>
+  rename(authority: McpOperationContext, input: RenameMcpCatalogInput): Promise<McpCatalogResource>
+}
+
+interface PluginCommands {
+  create(
+    authority: PluginOperationContext,
+    input: CreatePluginCatalogInput,
+  ): Promise<PluginCatalogResource>
+  update(
+    authority: PluginOperationContext,
+    input: UpdatePluginCatalogInput,
+  ): Promise<PluginCatalogResource>
+  delete(
+    authority: PluginOperationContext,
+    input: DeletePluginCatalogInput,
+  ): Promise<DeletePluginCatalogReceipt>
+  rename(
+    authority: PluginOperationContext,
+    input: RenamePluginCatalogInput,
+  ): Promise<PluginCatalogResource>
+}
+
+interface PluginUpdateCommands {
+  checkUpdate(
+    authority: PluginOperationContext,
+    input: CheckPluginUpdateCatalogInput,
+  ): Promise<CheckPluginUpdateCatalogReceipt>
+  upgrade(
+    authority: PluginOperationContext,
+    input: UpgradePluginCatalogInput,
+  ): Promise<UpgradePluginCatalogReceipt>
+}
+
+interface WorkflowCommands {
+  create(
+    authority: WorkflowOperationContext,
+    input: CreateWorkflowCatalogInput,
+  ): Promise<WorkflowCatalogDetail>
+  copy(
+    authority: WorkflowOperationContext,
+    input: CopyWorkflowCatalogInput,
+  ): Promise<WorkflowCatalogDetail>
+  update(
+    authority: WorkflowOperationContext,
+    input: UpdateWorkflowCatalogInput,
+  ): Promise<UpdateWorkflowCatalogReceipt>
+  delete(
+    authority: WorkflowOperationContext,
+    input: DeleteWorkflowCatalogInput,
+  ): Promise<DeleteWorkflowCatalogReceipt>
+}
+
+interface WorkgroupCommands {
+  create(
+    authority: WorkgroupOperationContext,
+    input: CreateWorkgroupCatalogInput,
+  ): Promise<WorkgroupCatalogDetail>
+  copy(
+    authority: WorkgroupOperationContext,
+    input: CopyWorkgroupCatalogInput,
+  ): Promise<WorkgroupCatalogDetail>
+  update(
+    authority: WorkgroupOperationContext,
+    input: UpdateWorkgroupCatalogInput,
+  ): Promise<UpdateWorkgroupCatalogReceipt>
+  delete(
+    authority: WorkgroupOperationContext,
+    input: DeleteWorkgroupCatalogInput,
+  ): Promise<DeleteWorkgroupCatalogReceipt>
+  rename(
+    authority: WorkgroupOperationContext,
+    input: RenameWorkgroupCatalogInput,
+  ): Promise<UpdateWorkgroupCatalogReceipt>
+}
 
 interface ResourcePackagePreviewReceipt {
   readonly previewId: string
@@ -227,7 +332,6 @@ export interface AgentOperationDescriptors {
 }
 
 export interface AgentCatalogModule {
-  readonly commands: AgentCommands
   readonly queries: AgentQueries
   readonly referenceQueries: AgentReferenceQueries
   readonly operations: AgentOperationDescriptors
@@ -351,7 +455,6 @@ export interface SkillOperationDescriptors {
 }
 
 export interface SkillCatalogModule {
-  readonly commands: SkillCommands
   readonly fileCommands: SkillFileCommands
   readonly versionCommands: SkillVersionCommands
   readonly queries: SkillQueries
@@ -552,7 +655,6 @@ export interface McpOperationDescriptors {
 }
 
 export interface McpCatalogModule {
-  readonly commands: McpCommands
   readonly queries: McpQueries
   readonly operations: McpOperationDescriptors
   readonly participants: Readonly<{
@@ -699,8 +801,6 @@ export interface PluginOperationDescriptors {
 }
 
 export interface PluginCatalogModule {
-  readonly commands: PluginCommands
-  readonly updateCommands: PluginUpdateCommands
   readonly queries: PluginQueries
   readonly operations: PluginOperationDescriptors
   readonly participants: Readonly<{
@@ -837,7 +937,7 @@ const deleteWorkflowReceiptSchema = z
 export interface WorkflowOperationDescriptors {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
-    WorkflowCatalogResource[],
+    Workflow[],
     WorkflowOperationContext
   >
   readonly get: QueryOperationDescriptor<
@@ -868,7 +968,6 @@ export interface WorkflowOperationDescriptors {
 }
 
 export interface WorkflowCatalogModule {
-  readonly commands: WorkflowCommands
   readonly queries: WorkflowQueries
   readonly operations: WorkflowOperationDescriptors
   readonly participants: Readonly<{
@@ -978,7 +1077,7 @@ const deleteWorkgroupReceiptSchema = z
 export interface WorkgroupOperationDescriptors {
   readonly list: QueryOperationDescriptor<
     Record<never, never>,
-    WorkgroupCatalogResource[],
+    Workgroup[],
     WorkgroupOperationContext
   >
   readonly get: QueryOperationDescriptor<
@@ -1014,7 +1113,6 @@ export interface WorkgroupOperationDescriptors {
 }
 
 export interface WorkgroupCatalogModule {
-  readonly commands: WorkgroupCommands
   readonly queries: WorkgroupQueries
   readonly operations: WorkgroupOperationDescriptors
   readonly participants: Readonly<{

@@ -51,7 +51,6 @@ export function composeSkillCatalog(
   const aclIdentity = createSkillAclIdentityParticipant({ repository, clock })
   const operations = createSkillOperationDescriptors(application.commands, application.queries)
   return Object.freeze({
-    commands: application.commands,
     fileCommands: application.fileCommands,
     versionCommands: application.versionCommands,
     queries: application.queries,

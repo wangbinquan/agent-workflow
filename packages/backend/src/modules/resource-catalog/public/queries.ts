@@ -1,4 +1,4 @@
-import type { FileNode } from '@agent-workflow/shared'
+import type { FileNode, Workflow, Workgroup } from '@agent-workflow/shared'
 import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
@@ -28,10 +28,8 @@ import type {
   SkillCatalogVersionDiff,
   GetWorkflowCatalogInput,
   WorkflowCatalogDetail,
-  WorkflowCatalogResource,
   GetWorkgroupCatalogInput,
   WorkgroupCatalogDetail,
-  WorkgroupCatalogResource,
 } from './types'
 
 export interface AgentQueries {
@@ -88,7 +86,7 @@ export interface SkillVersionQueries {
 }
 
 export interface WorkflowQueries {
-  list(authority: WorkflowOperationContext): Promise<readonly WorkflowCatalogResource[]>
+  list(authority: WorkflowOperationContext): Promise<readonly Workflow[]>
   get(
     authority: WorkflowOperationContext,
     input: GetWorkflowCatalogInput,
@@ -109,7 +107,7 @@ export interface PluginQueries {
 }
 
 export interface WorkgroupQueries {
-  list(authority: WorkgroupOperationContext): Promise<readonly WorkgroupCatalogResource[]>
+  list(authority: WorkgroupOperationContext): Promise<readonly Workgroup[]>
   get(
     authority: WorkgroupOperationContext,
     input: GetWorkgroupCatalogInput,

@@ -87,8 +87,6 @@ export function composePluginCatalog(
     application.queries,
   )
   return Object.freeze({
-    commands: application.commands,
-    updateCommands: application.updateCommands,
     queries: application.queries,
     operations,
     participants: Object.freeze({ aclIdentity }),

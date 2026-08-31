@@ -49,7 +49,6 @@ export function composeAgentCatalog(
   const aclIdentity = createAgentAclIdentityParticipant({ repository, clock })
   const operations = createAgentOperationDescriptors(application.commands, application.queries)
   return Object.freeze({
-    commands: application.commands,
     queries: application.queries,
     referenceQueries: application.referenceQueries,
     operations,

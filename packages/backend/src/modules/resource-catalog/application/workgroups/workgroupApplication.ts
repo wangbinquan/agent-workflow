@@ -5,22 +5,20 @@ import {
   RenameWorkgroupSchema,
   UpdateWorkgroupSchema,
   type DeleteWorkgroup,
+  type Workgroup,
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
-import type { WorkgroupCommands } from '../../public/commands'
-import type { WorkgroupOperationContext } from '../../public/participants'
-import type { WorkgroupQueries } from '../../public/queries'
 import type {
   CopyWorkgroupCatalogInput,
   CreateWorkgroupCatalogInput,
   DeleteWorkgroupCatalogInput,
-  GetWorkgroupCatalogInput,
   RenameWorkgroupCatalogInput,
   UpdateWorkgroupCatalogInput,
-  WorkgroupCatalogDetail,
-  WorkgroupCatalogResource,
-} from '../../public/types'
+} from '../../domain/catalogOperationTypes'
+import type { WorkgroupOperationContext } from '../../public/participants'
+import type { WorkgroupQueries } from '../../public/queries'
+import type { GetWorkgroupCatalogInput, WorkgroupCatalogDetail } from '../../public/types'
 import type {
   WorkgroupAccessPort,
   WorkgroupEventsPort,
@@ -37,11 +35,6 @@ export interface WorkgroupApplicationDependencies {
   readonly events: WorkgroupEventsPort
   readonly ids: WorkgroupIdFactory
   readonly clock: WorkgroupMutationClock
-}
-
-export interface WorkgroupApplication {
-  readonly commands: WorkgroupCommands
-  readonly queries: WorkgroupQueries
 }
 
 function notFound(id: string): NotFoundError {
@@ -83,9 +76,7 @@ function parseDeleteWorkgroupSubmission(
   return parsed.data
 }
 
-export function createWorkgroupApplication(
-  deps: WorkgroupApplicationDependencies,
-): WorkgroupApplication {
+export function createWorkgroupApplication(deps: WorkgroupApplicationDependencies) {
   async function loadVisible(
     authority: WorkgroupOperationContext,
     id: string,
@@ -98,7 +89,7 @@ export function createWorkgroupApplication(
   }
 
   const queries: WorkgroupQueries = Object.freeze({
-    async list(authority: WorkgroupOperationContext): Promise<readonly WorkgroupCatalogResource[]> {
+    async list(authority: WorkgroupOperationContext): Promise<readonly Workgroup[]> {
       const visible = await deps.access.filterVisible(authority, await deps.repository.list())
       return visible.map((workgroup) => deps.projection.resourceOf(workgroup))
     },
@@ -112,7 +103,7 @@ export function createWorkgroupApplication(
     },
   })
 
-  const commands: WorkgroupCommands = Object.freeze({
+  const commands = Object.freeze({
     async create(
       authority: WorkgroupOperationContext,
       input: CreateWorkgroupCatalogInput,

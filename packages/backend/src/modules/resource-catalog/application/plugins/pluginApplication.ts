@@ -7,19 +7,17 @@ import {
 } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
-import type { PluginCommands, PluginUpdateCommands } from '../../public/commands'
-import type { PluginOperationContext } from '../../public/participants'
-import type { PluginQueries } from '../../public/queries'
 import type {
   CheckPluginUpdateCatalogInput,
   CreatePluginCatalogInput,
   DeletePluginCatalogInput,
-  GetPluginCatalogInput,
-  PluginCatalogResource,
   RenamePluginCatalogInput,
   UpdatePluginCatalogInput,
   UpgradePluginCatalogInput,
-} from '../../public/types'
+} from '../../domain/catalogOperationTypes'
+import type { PluginOperationContext } from '../../public/participants'
+import type { PluginQueries } from '../../public/queries'
+import type { GetPluginCatalogInput, PluginCatalogResource } from '../../public/types'
 import type {
   PluginAccessPort,
   PluginAgentReference,
@@ -39,12 +37,6 @@ export interface PluginApplicationDependencies {
   readonly clock: PluginMutationClock
   readonly id: () => string
   readonly now: () => number
-}
-
-export interface PluginApplication {
-  readonly commands: PluginCommands
-  readonly updateCommands: PluginUpdateCommands
-  readonly queries: PluginQueries
 }
 
 function assertExpectedHash(
@@ -92,7 +84,7 @@ function assertOperationSupported(plugin: Plugin): void {
   }
 }
 
-export function createPluginApplication(deps: PluginApplicationDependencies): PluginApplication {
+export function createPluginApplication(deps: PluginApplicationDependencies) {
   async function loadVisible(authority: PluginOperationContext, id: string): Promise<Plugin> {
     const plugin = await deps.repository.get(id)
     if (plugin === null || !(await deps.access.canView(authority, plugin))) {
@@ -158,7 +150,7 @@ export function createPluginApplication(deps: PluginApplicationDependencies): Pl
     },
   })
 
-  const commands: PluginCommands = Object.freeze({
+  const commands = Object.freeze({
     async create(
       authority: PluginOperationContext,
       input: CreatePluginCatalogInput,
@@ -293,7 +285,7 @@ export function createPluginApplication(deps: PluginApplicationDependencies): Pl
     },
   })
 
-  const updateCommands: PluginUpdateCommands = Object.freeze({
+  const updateCommands = Object.freeze({
     async checkUpdate(
       authority: PluginOperationContext,
       input: CheckPluginUpdateCatalogInput,

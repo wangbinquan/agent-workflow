@@ -6,16 +6,15 @@ import {
 } from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
-import type { McpCommands } from '../../public/commands'
-import type { McpOperationContext } from '../../public/participants'
-import type { McpQueries } from '../../public/queries'
 import type {
   CreateMcpCatalogInput,
   DeleteMcpCatalogInput,
-  McpCatalogResource,
   RenameMcpCatalogInput,
   UpdateMcpCatalogInput,
-} from '../../public/types'
+} from '../../domain/catalogOperationTypes'
+import type { McpOperationContext } from '../../public/participants'
+import type { McpQueries } from '../../public/queries'
+import type { McpCatalogResource } from '../../public/types'
 import type {
   McpAccessPort,
   McpAgentReference,
@@ -36,11 +35,6 @@ export interface McpApplicationDependencies {
   readonly runtime: McpRuntimeLifecyclePort
   readonly id: () => string
   readonly now: () => number
-}
-
-export interface McpApplication {
-  readonly commands: McpCommands
-  readonly queries: McpQueries
 }
 
 function validateConfigForType(type: 'local' | 'remote', config: unknown): Mcp['config'] {
@@ -85,7 +79,7 @@ function assertDeleteConfirm(input: DeleteMcpCatalogInput['deletion'], expectedN
   }
 }
 
-export function createMcpApplication(deps: McpApplicationDependencies): McpApplication {
+export function createMcpApplication(deps: McpApplicationDependencies) {
   async function loadVisible(authority: McpOperationContext, id: string): Promise<Mcp> {
     const mcp = await deps.repository.get(id)
     if (mcp === null || !(await deps.access.canView(authority, mcp))) {
@@ -121,7 +115,7 @@ export function createMcpApplication(deps: McpApplicationDependencies): McpAppli
     },
   })
 
-  const commands: McpCommands = Object.freeze({
+  const commands = Object.freeze({
     async create(
       authority: McpOperationContext,
       input: CreateMcpCatalogInput,

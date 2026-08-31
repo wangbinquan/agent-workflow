@@ -48,7 +48,6 @@ export function composeWorkflowCatalog(
   const aclIdentity = createWorkflowAclIdentityParticipant({ repository })
   const operations = createWorkflowOperationDescriptors(application.commands, application.queries)
   return Object.freeze({
-    commands: application.commands,
     queries: application.queries,
     operations,
     participants: Object.freeze({ aclIdentity }),

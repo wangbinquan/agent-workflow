@@ -8,18 +8,19 @@ import {
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { assertInitialResourceOwner } from '../resourceDefaults'
-import type { AgentCommands } from '../../public/commands'
+import type {
+  CreateAgentCatalogInput,
+  DeleteAgentCatalogInput,
+  DeleteAgentCatalogReceipt,
+  RenameAgentCatalogInput,
+  UpdateAgentCatalogInput,
+} from '../../domain/catalogOperationTypes'
 import type { AgentOperationContext } from '../../public/participants'
 import type { AgentQueries, AgentReferenceQueries } from '../../public/queries'
 import type {
   AgentCatalogResource,
-  CreateAgentCatalogInput,
-  DeleteAgentCatalogInput,
-  DeleteAgentCatalogReceipt,
   GetAgentCatalogInput,
   AgentReferenceLabelsInput,
-  RenameAgentCatalogInput,
-  UpdateAgentCatalogInput,
 } from '../../public/types'
 import type { AgentAccessPort, AgentPolicyPort, AgentRepository } from './ports'
 
@@ -27,12 +28,6 @@ export interface AgentApplicationDependencies {
   readonly repository: AgentRepository
   readonly access: AgentAccessPort
   readonly policy: AgentPolicyPort
-}
-
-export interface AgentApplication {
-  readonly commands: AgentCommands
-  readonly queries: AgentQueries
-  readonly referenceQueries: AgentReferenceQueries
 }
 
 function notFound(): NotFoundError {
@@ -110,7 +105,7 @@ function assertDeleteConfirm(input: unknown, expectedName: string): void {
 
 const resourceOf = (agent: Agent): AgentCatalogResource => Object.freeze({ ...agent })
 
-export function createAgentApplication(deps: AgentApplicationDependencies): AgentApplication {
+export function createAgentApplication(deps: AgentApplicationDependencies) {
   async function loadVisible(
     authority: AgentOperationContext,
     id: string,
@@ -141,7 +136,7 @@ export function createAgentApplication(deps: AgentApplicationDependencies): Agen
       deps.repository.referenceLabels(authority, input),
   })
 
-  const commands: AgentCommands = Object.freeze({
+  const commands = Object.freeze({
     async create(
       authority: AgentOperationContext,
       input: CreateAgentCatalogInput,

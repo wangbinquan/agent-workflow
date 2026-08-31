@@ -71,6 +71,11 @@ describe('VirtualList', () => {
     el.scrollTop = 50_000 - 800 - 100 // 距底 100px < 400px 阈值
     fireEvent.scroll(el)
     expect(onReachEnd).toHaveBeenCalledTimes(1)
+    // @tanstack/virtual-core keeps a 150ms scroll-end fallback timer. Its
+    // observer cleanup removes listeners but cannot cancel that private timer;
+    // drain it while jsdom's window still exists so it cannot fire after the
+    // Vitest environment has been torn down.
+    await new Promise((resolve) => setTimeout(resolve, 200))
   })
 
   test('tail renders after the virtualized window', async () => {

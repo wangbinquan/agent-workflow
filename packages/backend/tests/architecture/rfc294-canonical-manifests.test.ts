@@ -182,7 +182,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     )!
     expect(resourceRef.unresolvedTypeRefs).toEqual([])
     expect(resourceRef.publicTypeConsumerIds).toContain(
-      'public:resource-catalog:types:GetResourceAclRequest',
+      'public:resource-catalog:types:PackageResourceRef',
     )
 
     const unknown = cloneArtifacts(generated)

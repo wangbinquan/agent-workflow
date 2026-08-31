@@ -14,17 +14,16 @@ import {
   type BundleResourceType,
   type GrantResourceType,
   type IntentResourceType,
+  type Workgroup,
 } from '@agent-workflow/shared'
 import {
   asPackageResourceKind,
-  type AclCatalogKind,
   type AgentCatalogResource,
   type AgentPackageMutation,
   type CapabilityTemplatePackageMutation,
   type CatalogSelectorKind,
   type FrozenIntegrationTriggerResourceSnapshot,
   type FrozenTaskExecutionResourceSnapshot,
-  type GrantTargetKind,
   type IntegrationTriggerResourceRequest,
   type IntentResourceChangesetReceipt,
   type McpCatalogResource,
@@ -33,17 +32,10 @@ import {
   type PluginCatalogResource,
   type PluginPackageMutation,
   type ResourceMemoryScopeRef,
-  type ResourceSummary,
-  type SaveSkillCatalogInput,
   type SkillCatalogResource,
   type SkillPackageMutation,
   type TaskExecutionResourceRequest,
-  type UpdateAgentCatalogInput,
-  type UpdateMcpCatalogInput,
-  type UpdatePluginCatalogInput,
-  type UpdateWorkgroupCatalogInput,
   type VersionedIntentResourceChangesetPlan,
-  type WorkgroupCatalogResource,
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
@@ -54,18 +46,14 @@ import {
   PACKAGE_RESOURCE_KINDS,
   asAclCatalogKind,
   asCatalogSelectorKind,
+  type AclCatalogKind,
+  type GrantTargetKind,
 } from '../src/modules/resource-catalog/domain/resourceKinds'
 import { resourceRef } from '../src/modules/resource-catalog/domain/resourceRef'
 import { resourceSummaryRevisionEquals } from '../src/modules/resource-catalog/domain/resourceRevision'
 import type {
-  AgentCommands,
-  McpCommands,
-  PluginCommands,
-  PluginUpdateCommands,
-  SkillCommands,
   SkillFileCommands,
   SkillVersionCommands,
-  WorkgroupCommands,
 } from '../src/modules/resource-catalog/public/commands'
 import type {
   AgentQueries,
@@ -169,12 +157,6 @@ assertType<
 >(true)
 assertType<
   Equal<
-    keyof ResourceSummary,
-    'ref' | 'kind' | 'name' | 'description' | 'revision' | 'visibilityHint'
-  >
->(true)
-assertType<
-  Equal<
     keyof ResourcePackageMutationParticipants,
     'agents' | 'skills' | 'mcps' | 'plugins' | 'workflows' | 'workgroups' | 'capabilityTemplates'
   >
@@ -216,9 +198,6 @@ assertType<Equal<Extract<keyof IntegrationTriggerResourceSnapshotInTx, string>, 
   true,
 )
 assertType<Equal<Extract<keyof ResourceScopeAuthorizationInTx, string>, 'accessOf'>>(true)
-assertType<Equal<Extract<keyof AgentCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
-  true,
-)
 assertType<Equal<Extract<keyof AgentQueries, string>, 'list' | 'get'>>(true)
 assertType<Equal<Extract<keyof AgentReferenceQueries, string>, 'labels'>>(true)
 assertType<Equal<Extract<keyof AgentAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
@@ -233,10 +212,9 @@ assertType<
 assertType<
   Equal<
     Extract<keyof AgentCatalogModule, string>,
-    'commands' | 'queries' | 'referenceQueries' | 'operations' | 'participants'
+    'queries' | 'referenceQueries' | 'operations' | 'participants'
   >
 >(true)
-assertType<Equal<Extract<keyof SkillCommands, string>, 'create' | 'save' | 'delete'>>(true)
 assertType<Equal<Extract<keyof SkillFileCommands, string>, 'write' | 'delete'>>(true)
 assertType<Equal<Extract<keyof SkillVersionCommands, string>, 'restore'>>(true)
 assertType<Equal<Extract<keyof SkillQueries, string>, 'list' | 'get' | 'content'>>(true)
@@ -254,7 +232,6 @@ assertType<
 assertType<
   Equal<
     Extract<keyof SkillCatalogModule, string>,
-    | 'commands'
     | 'fileCommands'
     | 'versionCommands'
     | 'queries'
@@ -264,9 +241,6 @@ assertType<
     | 'participants'
   >
 >(true)
-assertType<Equal<Extract<keyof McpCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
-  true,
-)
 assertType<Equal<Extract<keyof McpQueries, string>, 'list' | 'get'>>(true)
 assertType<Equal<Extract<keyof McpAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(true)
 assertType<
@@ -276,15 +250,8 @@ assertType<
   >
 >(true)
 assertType<
-  Equal<
-    Extract<keyof McpCatalogModule, string>,
-    'commands' | 'queries' | 'operations' | 'participants'
-  >
+  Equal<Extract<keyof McpCatalogModule, string>, 'queries' | 'operations' | 'participants'>
 >(true)
-assertType<Equal<Extract<keyof PluginCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
-  true,
-)
-assertType<Equal<Extract<keyof PluginUpdateCommands, string>, 'checkUpdate' | 'upgrade'>>(true)
 assertType<Equal<Extract<keyof PluginQueries, string>, 'list' | 'get'>>(true)
 assertType<Equal<Extract<keyof PluginAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
   true,
@@ -296,16 +263,7 @@ assertType<
   >
 >(true)
 assertType<
-  Equal<
-    Extract<keyof PluginCatalogModule, string>,
-    'commands' | 'updateCommands' | 'queries' | 'operations' | 'participants'
-  >
->(true)
-assertType<
-  Equal<
-    Extract<keyof WorkgroupCommands, string>,
-    'create' | 'copy' | 'update' | 'delete' | 'rename'
-  >
+  Equal<Extract<keyof PluginCatalogModule, string>, 'queries' | 'operations' | 'participants'>
 >(true)
 assertType<Equal<Extract<keyof WorkgroupQueries, string>, 'list' | 'get'>>(true)
 assertType<Equal<Extract<keyof WorkgroupAclIdentityParticipant, string>, 'load' | 'nextUpdatedAt'>>(
@@ -318,53 +276,19 @@ assertType<
   >
 >(true)
 assertType<
-  Equal<
-    Extract<keyof WorkgroupCatalogModule, string>,
-    'commands' | 'queries' | 'operations' | 'participants'
-  >
+  Equal<Extract<keyof WorkgroupCatalogModule, string>, 'queries' | 'operations' | 'participants'>
 >(true)
 
 const agentResourceTypeProbe: AgentCatalogResource | null = null
-const agentUpdateTypeProbe: UpdateAgentCatalogInput | null = null
 const skillResourceTypeProbe: SkillCatalogResource | null = null
-const skillSaveTypeProbe: SaveSkillCatalogInput | null = null
 const mcpResourceTypeProbe: McpCatalogResource | null = null
-const mcpUpdateTypeProbe: UpdateMcpCatalogInput | null = null
 const pluginResourceTypeProbe: PluginCatalogResource | null = null
-const pluginUpdateTypeProbe: UpdatePluginCatalogInput | null = null
-const workgroupResourceTypeProbe: WorkgroupCatalogResource | null = null
-const workgroupUpdateTypeProbe: UpdateWorkgroupCatalogInput | null = null
+const workgroupResourceTypeProbe: Workgroup | null = null
 void agentResourceTypeProbe
-void agentUpdateTypeProbe
 void skillResourceTypeProbe
-void skillSaveTypeProbe
 void mcpResourceTypeProbe
-void mcpUpdateTypeProbe
 void pluginResourceTypeProbe
-void pluginUpdateTypeProbe
 void workgroupResourceTypeProbe
-void workgroupUpdateTypeProbe
-
-const correlatedSummary: ResourceSummary<'agent'> = {
-  ref: { kind: 'agent', id: 'agent-1' },
-  kind: 'agent',
-  name: 'Agent',
-  description: null,
-  revision: { kind: 'agent', updatedAt: 1, aclRevision: 2 },
-  visibilityHint: 'private',
-}
-void correlatedSummary
-
-const mismatchedSummary: ResourceSummary<'agent'> = {
-  ref: { kind: 'agent', id: 'agent-1' },
-  kind: 'agent',
-  name: 'Agent',
-  description: null,
-  // @ts-expect-error an agent summary cannot carry a workflow revision
-  revision: { kind: 'workflow', version: 1 },
-  visibilityHint: 'private',
-}
-void mismatchedSummary
 
 describe('RFC-345 T1 resource-catalog contracts', () => {
   test('the 15/16/7/6 rosters are the shared canonical tuple objects', () => {
@@ -644,6 +568,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(memoryRoute).toContain('directRequestAuthority(identityAccess.directAuthority, actor)')
     expect(overviewRoute).toContain('directRequestAuthority(authorization.directAuthority, actor)')
     expect(fusionRoute).toContain('directRequestAuthority(authorization.directAuthority, actor)')
+    expect(fusionRoute).toContain('fusion-resource-scope-authorization-not-composed')
 
     const resolveContext = memory.indexOf('contexts.resolveCommandContext(context)')
     const firstScopeGate = memory.indexOf(
@@ -936,6 +861,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(identity).toContain('forTaskExecution(input:')
     expect(server).toContain('composeTaskExecutionResourceBinding(')
     expect(cliStart).toContain('composeTaskExecutionResourceBinding(')
+    expect(taskRoute).toContain('task-execution-resources-not-composed')
   })
 
   test('T5-M/T8 descriptor-backed HTTP and MCP bindings execute the owned aggregate', () => {
@@ -1086,8 +1012,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('coordinator.runDeduplicatedOperation')
     expect(application).toContain('requireResourceEdit')
     expect(application).toContain('requireResourceGovern')
-    expect(application).toContain('const commands: PluginCommands = Object.freeze')
-    expect(application).toContain('const updateCommands: PluginUpdateCommands = Object.freeze')
+    expect(application).toContain('const commands = Object.freeze')
+    expect(application).toContain('const updateCommands = Object.freeze')
     expect(application).toContain('Object.freeze({ commands, updateCommands, queries })')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
@@ -1207,7 +1133,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('requireResourceEdit')
     expect(application).toContain('requireResourceGovern')
     expect(application).toContain('DeleteWorkgroupSchema.safeParse(body)')
-    expect(application).toContain('const commands: WorkgroupCommands = Object.freeze')
+    expect(application).toContain('const commands = Object.freeze')
     expect(application).toContain('const queries: WorkgroupQueries = Object.freeze')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
@@ -1219,7 +1145,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('createSqliteWorkgroupRepository')
     expect(composition).toContain('createWorkgroupApplication')
     expect(operations).toContain('inputSchema: deleteWorkgroupInputSchema')
-    expect(operations).toContain("kind: 'json-body'")
+    expect(operations).toContain('deletion: jsonBodySubmissionSchema')
 
     const deleteCommandStart = application.indexOf('async delete(')
     const loadVisible = application.indexOf(
@@ -1340,7 +1266,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('requireResourceEdit')
     expect(application).toContain('requireResourceGovern')
     expect(application).toContain('assertDeleteConfirm(body, current.name)')
-    expect(application).toContain('const commands: AgentCommands = Object.freeze')
+    expect(application).toContain('const commands = Object.freeze')
     expect(application).toContain('const queries: AgentQueries = Object.freeze')
     expect(application).toContain('const referenceQueries: AgentReferenceQueries = Object.freeze')
     expect(
@@ -1583,8 +1509,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/fusion.ts',
-      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/resourcePackage/skillTree.ts',
       'services/skill-zip.ts',
       'services/workflow.validator.ts',
@@ -1876,12 +1802,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
     expect(packageRoute.split('registerOperationRoute(app, {').length - 1).toBe(9)
     expect(packageRoute).not.toContain('registerRoute(')
-    expect(packageRoute).toContain(
-      "registerRouteMiddleware(app, '/api/resource-packages/preview', resourcePackageBodyLimit)",
-    )
-    expect(packageRoute).toContain(
-      "registerRouteMiddleware(app, '/api/resource-packages/commit', resourcePackageBodyLimit)",
-    )
+    expect(packageRoute.split('middleware: resourcePackageBodyLimit').length - 1).toBe(2)
+    expect(packageRoute).not.toContain('registerRouteMiddleware')
     expect(packageCli).toContain('catalog.operations.exports[type]')
     expect(bindings).toContain("implementation: 'descriptor'")
     for (const catalog of ['agent', 'mcp', 'plugin', 'skill', 'workflow', 'workgroup']) {
@@ -1924,6 +1846,17 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
 
     expect(commands).not.toContain('ResourceAclCommands')
+    for (const internalCommand of [
+      'AgentCommands',
+      'McpCommands',
+      'PluginCommands',
+      'PluginUpdateCommands',
+      'SkillCommands',
+      'WorkflowCommands',
+      'WorkgroupCommands',
+    ]) {
+      expect(commands).not.toContain(`export interface ${internalCommand}`)
+    }
     for (const retiredQuery of [
       'export interface ResourceCatalogQuery',
       'export interface ResourceAclQuery',
@@ -1942,12 +1875,29 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       '  GRANT_TARGET_KINDS,',
       '  type GrantTargetRef,',
       '  type ResourceSummaryRevisionByKind,',
+      '  type AclCatalogKind,',
+      '  type CatalogResourceRef,',
+      '  type GrantTargetKind,',
       '  asAclCatalogKind,',
       '  asCatalogSelectorKind,',
       '  resourceRef,',
       '  resourceSummaryRevisionEquals,',
     ]) {
       expect(publicTypes).not.toContain(retiredExport)
+    }
+    for (const retiredType of [
+      'export type ResourceCatalogCursor',
+      'export type ResourceSummary',
+      'export interface ResourceSummaryQuery',
+      'export interface ResourceSummaryPage',
+      'export interface ResourceAclTarget',
+      'export interface GetResourceAclRequest',
+      'export interface UpdateResourceAclRequest',
+      'export type ResourceAclDocument',
+      'export type WorkflowCatalogResource',
+      'export type WorkgroupCatalogResource',
+    ]) {
+      expect(publicTypes).not.toContain(retiredType)
     }
     expect(ledger).not.toContain('public:resource-catalog:')
     expect(existsSync(resolve(sourceRoot, 'services/resourceAccessPolicy.ts'))).toBe(false)

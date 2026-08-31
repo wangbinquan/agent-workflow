@@ -1,149 +1,39 @@
 import type {
   Agent,
   BundleOp,
-  CreateAgent,
-  CreatePlugin,
-  CreateMcp,
-  DeletePlugin,
-  DeleteMcp,
   IntentOp,
   Mcp,
   McpOperationResource,
   Plugin,
-  PluginOperationRequest,
   PluginOperationResource,
-  PluginUpdateCheck,
-  PluginUpgradeResult,
-  RenamePluginRequest,
-  RenameMcpRequest,
-  RenameAgentRequest,
   ResourceAccess,
-  ResourceAcl,
   ResourceVisibility,
   Skill,
   SkillContent,
   SkillVersion,
   SkillVersionContent,
   SkillVersionDiff,
-  UpdateMcpRequest,
-  UpdatePluginRequest,
-  UpdateResourceAclBody,
-  CopyWorkflowRequest,
-  SaveWorkflowReceipt,
-  Workflow,
   WorkflowDetail,
-  CopyWorkgroupRequest,
-  CreateWorkgroup,
-  RenameWorkgroup,
-  SaveWorkgroupReceipt,
-  UpdateWorkgroup,
   WorkflowDefinition,
   Workgroup,
   WorkgroupDetail,
 } from '@agent-workflow/shared'
 import type { CatalogSelectorKind, PackageResourceKind } from '../domain/resourceKinds'
-import type { AclResourceRef, CatalogResourceRef } from '../domain/resourceRef'
 import type { ResourceSummaryRevision } from '../domain/resourceRevision'
 
 export {
   asPackageResourceKind,
-  type AclCatalogKind,
   type CatalogSelectorKind,
-  type GrantTargetKind,
   type PackageResourceKind,
 } from '../domain/resourceKinds'
-export {
-  type AclResourceRef,
-  type CatalogResourceRef,
-  type PackageResourceRef,
-  type ResourceRef,
-} from '../domain/resourceRef'
+export { type PackageResourceRef, type ResourceRef } from '../domain/resourceRef'
 export { type ResourceSummaryRevision } from '../domain/resourceRevision'
-
-declare const resourceCatalogCursorBrand: unique symbol
-
-export type ResourceCatalogCursor = string & {
-  readonly [resourceCatalogCursorBrand]: 'resource-catalog-cursor'
-}
-
-interface ResourceSummaryOf<K extends CatalogSelectorKind> {
-  readonly ref: CatalogResourceRef<K>
-  readonly kind: K
-  readonly name: string
-  readonly description: string | null
-  readonly revision: ResourceSummaryRevision<K>
-  readonly visibilityHint: 'public' | 'private'
-}
-
-export type ResourceSummary<K extends CatalogSelectorKind = CatalogSelectorKind> =
-  K extends CatalogSelectorKind ? ResourceSummaryOf<K> : never
-
-export interface ResourceSummaryQuery {
-  readonly kinds?: readonly CatalogSelectorKind[]
-  readonly search?: string
-  readonly cursor?: ResourceCatalogCursor
-  readonly limit: number
-}
-
-export interface ResourceSummaryPage {
-  readonly items: readonly ResourceSummary[]
-  readonly nextCursor: ResourceCatalogCursor | null
-}
-
-/** Stable application target; no SQLite row or column handle crosses public. */
-export interface ResourceAclTarget {
-  readonly ref: AclResourceRef
-  readonly ownerUserId: string | null
-  readonly visibility: ResourceVisibility
-}
-
-export interface GetResourceAclRequest {
-  readonly target: ResourceAclTarget
-}
-
-export interface UpdateResourceAclRequest {
-  readonly target: ResourceAclTarget
-  readonly update: UpdateResourceAclBody
-}
-
-export type ResourceAclDocument = ResourceAcl
 
 /** T5-A aggregate contract. SQLite rows and raw transport values stay private. */
 export type AgentCatalogResource = Agent
-export type CreateAgentCatalogInput = CreateAgent
 
 export interface GetAgentCatalogInput {
   readonly id: string
-}
-
-export interface UpdateAgentCatalogInput {
-  readonly id: string
-  /**
-   * Closed transport submission. The application owns parsing so the literal
-   * submitted key set remains authoritative for the built-in runtime-only gate.
-   */
-  readonly submission: {
-    readonly kind: 'json-body'
-    readonly body: string
-  }
-}
-
-export interface DeleteAgentCatalogInput {
-  readonly id: string
-  /** Authorization precedes decoding and confirmation for this submission. */
-  readonly submission: {
-    readonly kind: 'json-body'
-    readonly body: string
-  }
-}
-
-export interface RenameAgentCatalogInput {
-  readonly id: string
-  readonly rename: RenameAgentRequest
-}
-
-export interface DeleteAgentCatalogReceipt {
-  readonly deleted: AgentCatalogResource
 }
 
 /** Purpose-specific identity used by the generic ACL transport adapter. */
@@ -187,27 +77,6 @@ interface SkillJsonSubmission {
 
 export interface GetSkillCatalogInput {
   readonly id: string
-}
-
-export interface CreateSkillCatalogInput {
-  /** Closed transport envelope; application owns schema parsing. */
-  readonly submission: SkillJsonSubmission
-}
-
-export interface SaveSkillCatalogInput {
-  readonly id: string
-  /** Closed transport envelope preserves the existing combined-save parser. */
-  readonly submission: SkillJsonSubmission
-}
-
-export interface DeleteSkillCatalogInput {
-  readonly id: string
-  /** Authorization precedes decoding and type-to-confirm. */
-  readonly submission: SkillJsonSubmission
-}
-
-export interface DeleteSkillCatalogReceipt {
-  readonly deleted: SkillCatalogResource
 }
 
 export interface GetSkillContentCatalogInput {
@@ -289,41 +158,11 @@ export interface SkillAclIdentity {
 }
 
 /** T5-WF aggregate contract. Persistence rows and raw submissions stay private. */
-export type WorkflowCatalogResource = Workflow
 export type WorkflowCatalogDetail = WorkflowDetail
-
-interface WorkflowJsonSubmission {
-  readonly kind: 'json-body'
-  readonly body: string
-}
 
 export interface GetWorkflowCatalogInput {
   readonly id: string
 }
-
-export interface CreateWorkflowCatalogInput {
-  /** Closed transport envelope; application owns schema parsing. */
-  readonly submission: WorkflowJsonSubmission
-}
-
-export interface CopyWorkflowCatalogInput {
-  readonly id: string
-  readonly copy: CopyWorkflowRequest
-}
-
-export interface UpdateWorkflowCatalogInput {
-  readonly id: string
-  /** Closed envelope keeps WorkflowDefinition off the command boundary. */
-  readonly submission: WorkflowJsonSubmission
-}
-
-export interface DeleteWorkflowCatalogInput {
-  readonly id: string
-  /** Visibility, builtin and govern gates precede decoding and confirmation. */
-  readonly submission: WorkflowJsonSubmission
-}
-
-export type UpdateWorkflowCatalogReceipt = SaveWorkflowReceipt
 
 export interface WorkflowAclIdentity {
   readonly id: string
@@ -333,37 +172,11 @@ export interface WorkflowAclIdentity {
   readonly builtin: boolean
 }
 
-export interface DeleteWorkflowCatalogReceipt {
-  readonly deleted: WorkflowAclIdentity
-  readonly clientMutationId: string
-  readonly deletedVersion: number
-}
-
 /** T5-M aggregate contract. Persistence rows and transport contexts stay private. */
 export type McpCatalogResource = McpOperationResource
-export type CreateMcpCatalogInput = CreateMcp
 
 export interface GetMcpCatalogInput {
   readonly id: string
-}
-
-export interface UpdateMcpCatalogInput {
-  readonly id: string
-  readonly update: UpdateMcpRequest
-}
-
-export interface DeleteMcpCatalogInput {
-  readonly id: string
-  readonly deletion: DeleteMcp
-}
-
-export interface RenameMcpCatalogInput {
-  readonly id: string
-  readonly rename: RenameMcpRequest
-}
-
-export interface DeleteMcpCatalogReceipt {
-  readonly deleted: McpCatalogResource
 }
 
 /** Purpose-specific identity used by the generic ACL transport adapter. */
@@ -378,43 +191,10 @@ export interface McpAclIdentity {
 
 /** T5-P aggregate contract. Installer artifacts and SQLite rows stay private. */
 export type PluginCatalogResource = PluginOperationResource
-export type CreatePluginCatalogInput = CreatePlugin
 
 export interface GetPluginCatalogInput {
   readonly id: string
 }
-
-export interface UpdatePluginCatalogInput {
-  readonly id: string
-  readonly update: UpdatePluginRequest
-}
-
-export interface DeletePluginCatalogInput {
-  readonly id: string
-  readonly deletion: DeletePlugin
-}
-
-export interface RenamePluginCatalogInput {
-  readonly id: string
-  readonly rename: RenamePluginRequest
-}
-
-export interface CheckPluginUpdateCatalogInput {
-  readonly id: string
-  readonly operation: PluginOperationRequest
-}
-
-export interface UpgradePluginCatalogInput {
-  readonly id: string
-  readonly operation: PluginOperationRequest
-}
-
-export interface DeletePluginCatalogReceipt {
-  readonly deleted: PluginCatalogResource
-}
-
-export type CheckPluginUpdateCatalogReceipt = PluginUpdateCheck
-export type UpgradePluginCatalogReceipt = PluginUpgradeResult
 
 /** Purpose-specific identity used by the generic ACL transport adapter. */
 export interface PluginAclIdentity {
@@ -427,49 +207,10 @@ export interface PluginAclIdentity {
 }
 
 /** T5-WG aggregate contract. Roster persistence and SQLite rows stay private. */
-export type WorkgroupCatalogResource = Workgroup
 export type WorkgroupCatalogDetail = WorkgroupDetail
-export type CreateWorkgroupCatalogInput = CreateWorkgroup
 
 export interface GetWorkgroupCatalogInput {
   readonly id: string
-}
-
-export interface CopyWorkgroupCatalogInput {
-  readonly id: string
-  readonly copy: CopyWorkgroupRequest
-}
-
-export interface UpdateWorkgroupCatalogInput {
-  readonly id: string
-  readonly update: UpdateWorkgroup
-}
-
-export interface DeleteWorkgroupCatalogInput {
-  readonly id: string
-  /**
-   * Closed transport submission decoded and validated by the application only
-   * after its govern gate. The repository never receives this envelope.
-   */
-  readonly deletion: {
-    readonly kind: 'json-body'
-    readonly body: string
-  }
-}
-
-export interface RenameWorkgroupCatalogInput {
-  readonly id: string
-  readonly rename: RenameWorkgroup
-}
-
-export type UpdateWorkgroupCatalogReceipt = SaveWorkgroupReceipt
-
-export interface DeleteWorkgroupCatalogReceipt {
-  readonly id: string
-  readonly deletedVersion: number
-  readonly clientMutationId: string
-  /** Exact pre-delete snapshot used by transport audit projection only. */
-  readonly deleted: WorkgroupCatalogDetail
 }
 
 /** Purpose-specific identity used by the generic ACL transport adapter. */

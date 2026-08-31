@@ -68,7 +68,6 @@ export function composeMcpCatalog(input: McpCatalogCompositionDependencies): Mcp
   const aclIdentity = createMcpAclIdentityParticipant({ repository, clock })
   const operations = createMcpOperationDescriptors(application.commands, application.queries)
   return Object.freeze({
-    commands: application.commands,
     queries: application.queries,
     operations,
     participants: Object.freeze({ aclIdentity }),
