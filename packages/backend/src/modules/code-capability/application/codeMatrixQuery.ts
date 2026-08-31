@@ -11,6 +11,7 @@ import type {
   DeliveryChainReadPort,
   DeliveryRow,
 } from '@/modules/code-capability/application/ports/deliveryChainRead'
+import type { RoundAttemptsReadPort } from '@/modules/code-capability/application/ports/roundAttemptsRead'
 import { createSqliteDeliveryChainRead } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
 import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
 import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
@@ -24,7 +25,6 @@ export {
 import { ROUND_WINDOW, roundWindow } from '@/modules/code-capability/domain/stateViewScale'
 import { deriveReadiness } from '@/modules/code-capability/domain/templateLayers'
 import type {
-  CodeAiAttemptProjection,
   CodeMatrixQuery,
   CodeMatrixRow,
   CodeRoundAttemptsQuery,
@@ -56,35 +56,43 @@ export const ROUNDS_PER_ITEM = 3
  */
 export const ATTEMPTS_PER_ROUND = 200
 
-export function createCodeRoundAttemptsQuery(db: DbClient): CodeRoundAttemptsQuery {
+function isRoundAttemptsReadPort(
+  input: DbClient | RoundAttemptsReadPort,
+): input is RoundAttemptsReadPort {
+  return 'load' in input && typeof input.load === 'function'
+}
+
+export function createCodeRoundAttemptsQuery(
+  input: DbClient | RoundAttemptsReadPort,
+): CodeRoundAttemptsQuery {
+  if (isRoundAttemptsReadPort(input)) {
+    return {
+      async forRound(roundId) {
+        return await input.load(roundId, ATTEMPTS_PER_ROUND)
+      },
+    }
+  }
+  const db = input
   return {
     async forRound(roundId) {
-      const rows = await db
-        .select()
+      return await db
+        .select({
+          attemptId: codeAiAttempts.id,
+          stageName: codeAiAttempts.stageName,
+          shardKey: codeAiAttempts.shardKey,
+          rerunSeq: codeAiAttempts.rerunSeq,
+          attemptSeq: codeAiAttempts.attemptSeq,
+          status: codeAiAttempts.status,
+          validationOutcome: codeAiAttempts.validationOutcome,
+          sessionRef: codeAiAttempts.sessionRef,
+          nodeRunId: codeAiAttempts.nodeRunId,
+          startedAt: codeAiAttempts.startedAt,
+          endedAt: codeAiAttempts.endedAt,
+        })
         .from(codeAiAttempts)
         .where(eq(codeAiAttempts.roundId, roundId))
-        // Ascending by when it started, so the retries of one stage read in the
-        // order they were made. Ordering by id would be close but not the same:
-        // ULIDs are only monotonic across milliseconds, and a same-session retry
-        // can land inside one.
         .orderBy(codeAiAttempts.startedAt, codeAiAttempts.rerunSeq, codeAiAttempts.attemptSeq)
         .limit(ATTEMPTS_PER_ROUND)
-
-      return rows.map(
-        (row): CodeAiAttemptProjection => ({
-          attemptId: row.id,
-          stageName: row.stageName,
-          shardKey: row.shardKey,
-          rerunSeq: row.rerunSeq,
-          attemptSeq: row.attemptSeq,
-          status: row.status,
-          validationOutcome: row.validationOutcome,
-          sessionRef: row.sessionRef,
-          nodeRunId: row.nodeRunId,
-          startedAt: row.startedAt,
-          endedAt: row.endedAt,
-        }),
-      )
     },
   }
 }
