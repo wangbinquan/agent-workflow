@@ -2,12 +2,11 @@
 // Settings and recovery. Transport adapters start/query this runner; they do
 // not assemble phases, provider operations or cutover rules themselves.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type {
   DatabaseMigrationControlPlane,
   DatabaseMigrationStatusView,
 } from './databaseMigrationControlPlane'
+import type { DatabaseMigrationArtifactStorePort } from './ports/databaseMigrationArtifactStore'
 import type {
   DatabaseMigrationFailure,
   DatabaseMigrationManifest,
@@ -18,20 +17,12 @@ import {
   createLegacyArchiveManifest,
   createLogicalArtifactManifest,
   createLogicalTableChunk,
-  logicalChunkPath,
-  readLogicalTableChunk,
   summarizeLogicalTableChunks,
-  writeDurableLogicalArtifact,
-  writeLogicalArtifactManifest,
-  writeLogicalTableChunk,
   type LogicalDatabaseArtifactManifest,
   type LogicalTableArtifactEntry,
   type LogicalTableChunk,
 } from '@/platform/persistence/logicalDatabaseArtifact'
-import {
-  digestDatabaseArtifact,
-  writeDatabaseGenerationAtomic,
-} from '@/platform/persistence/generationStore'
+import { writeDatabaseGenerationAtomic } from '@/platform/persistence/generationStore'
 import type { PostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { preflightPostgresqlTarget } from '@/platform/persistence/postgresqlPreflight'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
@@ -166,10 +157,6 @@ export function classifyDatabaseMigrationFailure(
   return { category: 'internal', detailCode, retryable: false }
 }
 
-function manifestFileDigest(operationRoot: string): string {
-  return digestDatabaseArtifact(readFileSync(join(operationRoot, 'manifest.json')))
-}
-
 function tableEntryFromChunks(
   contract: LogicalSchemaContract,
   tableId: string,
@@ -189,7 +176,7 @@ export function createDatabaseMigrationRunner(deps: {
   readonly contract: LogicalSchemaContract
   readonly admission: DatabaseMigrationAdmissionPort
   readonly safetyBackup: DatabaseMigrationSafetyBackupPort
-  readonly operationRoot: (operationId: string) => string
+  readonly artifacts: DatabaseMigrationArtifactStorePort
   readonly generationPointerPath: string
   readonly chunkRows?: number
   readonly drainTimeoutMs?: number
@@ -233,7 +220,7 @@ export function createDatabaseMigrationRunner(deps: {
         provider: 'postgresql',
         operationId,
         schemaDigest: deps.contract.digest,
-        manifestDigest: manifestFileDigest(deps.operationRoot(operationId)),
+        manifestDigest: deps.artifacts.manifestFileDigest(operationId),
         activatedAt: switched?.committedAt ?? now(),
       },
     })
@@ -245,19 +232,16 @@ export function createDatabaseMigrationRunner(deps: {
   ): Promise<DatabaseMigrationStatusView> => {
     const manifest = deps.controlPlane.readManifest(operationId)
     const rolledBackAt = now()
-    const receiptDigest = writeDurableLogicalArtifact(
-      join(deps.operationRoot(operationId), 'rollback-receipt.json'),
-      {
-        version: 1,
-        operationId,
-        sourceGenerationId: manifest.payload.source.generationId,
-        retiredTargetGenerationId: generationId,
-        schemaDigest: deps.contract.digest,
-        verificationDigest: manifest.payload.verificationDigest,
-        firstLiveWriteAt: null,
-        rolledBackAt,
-      },
-    )
+    const receiptDigest = deps.artifacts.writeRollbackReceipt(operationId, {
+      version: 1,
+      operationId,
+      sourceGenerationId: manifest.payload.source.generationId,
+      retiredTargetGenerationId: generationId,
+      schemaDigest: deps.contract.digest,
+      verificationDigest: manifest.payload.verificationDigest,
+      firstLiveWriteAt: null,
+      rolledBackAt,
+    })
     writeDatabaseGenerationAtomic({
       pointerPath: deps.generationPointerPath,
       payload: {
@@ -299,7 +283,6 @@ export function createDatabaseMigrationRunner(deps: {
     readonly manifest: LogicalDatabaseArtifactManifest
     readonly archiveDigest: string
   } | null> => {
-    const operationRoot = deps.operationRoot(operationId)
     const entries: LogicalTableArtifactEntry[] = []
     let rowsCopied = 0
     let bytesCopied = 0
@@ -323,9 +306,7 @@ export function createDatabaseMigrationRunner(deps: {
           chunkIndex,
           rows,
         })
-        const path = logicalChunkPath(operationRoot, table, chunkIndex)
-        writeLogicalTableChunk(operationRoot, chunk)
-        const persisted = readLogicalTableChunk(path)
+        const persisted = deps.artifacts.writeTableChunk(operationId, chunk)
         if (table.disposition !== 'ARCHIVE_THEN_OMIT') {
           await deps.target.copyChunk(table, persisted, now())
         }
@@ -389,10 +370,10 @@ export function createDatabaseMigrationRunner(deps: {
       createdAt: now(),
       tables: entries,
     })
-    writeLogicalArtifactManifest(operationRoot, artifactManifest)
+    deps.artifacts.writeLogicalManifest(operationId, artifactManifest)
     const archiveEntries = entries.filter((entry) => entry.disposition === 'ARCHIVE_THEN_OMIT')
-    const archiveDigest = writeDurableLogicalArtifact(
-      join(operationRoot, 'legacy-archive', 'manifest.json'),
+    const archiveDigest = deps.artifacts.writeLegacyArchiveManifest(
+      operationId,
       createLegacyArchiveManifest({
         operationId,
         schemaDigest: deps.contract.digest,
@@ -470,7 +451,7 @@ export function createDatabaseMigrationRunner(deps: {
               const backup = await deps.safetyBackup.create({
                 operationId,
                 sourcePath: deps.source.path,
-                operationRoot: deps.operationRoot(operationId),
+                operationRoot: deps.artifacts.operationRoot(operationId),
               })
               advance(operationId, 'backed-up', { sourceBackupDigest: backup.digest })
               break
@@ -499,22 +480,19 @@ export function createDatabaseMigrationRunner(deps: {
                 generationId,
                 sourceGenerationId: manifest.payload.source.generationId,
               })
-              const verificationDigest = writeDurableLogicalArtifact(
-                join(deps.operationRoot(operationId), 'verification.json'),
-                {
-                  version: 1,
-                  operationId,
-                  sourceGenerationId: manifest.payload.source.generationId,
-                  sourceFingerprint: deps.sourceSnapshot.databaseFingerprint,
-                  targetFingerprint: manifest.payload.target.databaseFingerprint,
-                  schemaDigest: deps.contract.digest,
-                  logicalBackupDigest: manifest.payload.logicalBackupDigest,
-                  legacyArchiveDigest: manifest.payload.legacyArchiveDigest,
-                  activeTableCount: deps.contract.activeTableCount,
-                  archiveOnlyTableCount: deps.contract.archiveOnlyTableCount,
-                  verifiedAt: now(),
-                },
-              )
+              const verificationDigest = deps.artifacts.writeVerificationReceipt(operationId, {
+                version: 1,
+                operationId,
+                sourceGenerationId: manifest.payload.source.generationId,
+                sourceFingerprint: deps.sourceSnapshot.databaseFingerprint,
+                targetFingerprint: manifest.payload.target.databaseFingerprint,
+                schemaDigest: deps.contract.digest,
+                logicalBackupDigest: manifest.payload.logicalBackupDigest,
+                legacyArchiveDigest: manifest.payload.legacyArchiveDigest,
+                activeTableCount: deps.contract.activeTableCount,
+                archiveOnlyTableCount: deps.contract.archiveOnlyTableCount,
+                verifiedAt: now(),
+              })
               advance(operationId, 'cutover-prepared', { verificationDigest })
               break
             }
@@ -667,21 +645,18 @@ export function createDatabaseMigrationRunner(deps: {
           'database migration can only finalize after PostgreSQL is accepting writes',
         )
       }
-      const receiptDigest = writeDurableLogicalArtifact(
-        join(deps.operationRoot(operationId), 'receipt.json'),
-        {
-          version: 1,
-          operationId,
-          sourceGenerationId: manifest.payload.source.generationId,
-          targetGenerationId: targetGenerationId(operationId),
-          schemaDigest: deps.contract.digest,
-          logicalBackupDigest: manifest.payload.logicalBackupDigest,
-          legacyArchiveDigest: manifest.payload.legacyArchiveDigest,
-          verificationDigest: manifest.payload.verificationDigest,
-          firstLiveWriteAt: manifest.payload.firstLiveWriteAt,
-          finalizedAt: now(),
-        },
-      )
+      const receiptDigest = deps.artifacts.writeFinalReceipt(operationId, {
+        version: 1,
+        operationId,
+        sourceGenerationId: manifest.payload.source.generationId,
+        targetGenerationId: targetGenerationId(operationId),
+        schemaDigest: deps.contract.digest,
+        logicalBackupDigest: manifest.payload.logicalBackupDigest,
+        legacyArchiveDigest: manifest.payload.legacyArchiveDigest,
+        verificationDigest: manifest.payload.verificationDigest,
+        firstLiveWriteAt: manifest.payload.firstLiveWriteAt,
+        finalizedAt: now(),
+      })
       const status = advance(operationId, 'finalized', { receiptDigest })
       refreshPointer(operationId)
       await deps.target.markFinalized(now())

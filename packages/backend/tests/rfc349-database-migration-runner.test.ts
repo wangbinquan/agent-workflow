@@ -9,6 +9,7 @@ import {
   type DatabaseMigrationAdmissionPort,
 } from '@/modules/system-operations/application/databaseMigrationRunner'
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
+import { createFileDatabaseMigrationArtifactStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore'
 import {
   encodeLogicalRow,
   type CanonicalLogicalRow,
@@ -253,7 +254,7 @@ function harness(
     safetyBackup: {
       create: async () => ({ path: join(root, 'backup.sqlite'), digest: PLAN_DIGEST }),
     },
-    operationRoot: (operationId) => join(migrationsDir, operationId),
+    artifacts: createFileDatabaseMigrationArtifactStore({ operationsRoot: migrationsDir }),
     generationPointerPath: join(root, 'database-generation.json'),
     chunkRows: 10,
     now: () => ++clock,

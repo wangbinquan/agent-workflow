@@ -37,6 +37,11 @@ export interface SystemOperationsModule {
   readonly artifacts: RestoreArtifactIngressHandle
 }
 
+export interface SystemOperationsRecoveryAdapter {
+  readonly backup: AdminBackupCoordinatorPort
+  readonly restore: AdminRestoreCoordinatorPort
+}
+
 export function composeSystemOperations(deps: {
   readonly db: DbClient
   readonly secretBox: SecretBox | undefined
@@ -49,7 +54,7 @@ export function composeSystemOperations(deps: {
   const artifacts = createRestoreArtifactIngress({
     uploadRoot: join(appHome, '.restore-upload'),
   })
-  return composeSystemOperationsWithArtifacts({
+  const adapter = createLegacyPlatformRecoveryAdapter({
     artifacts,
     appHome,
     dbPath: deps.dbPath ?? join(appHome, 'db.sqlite'),
@@ -58,6 +63,24 @@ export function composeSystemOperations(deps: {
     resolveRestoreMigrations:
       deps.resolveRestoreMigrations ?? (() => resolveMigrationsFolder({ force: true })),
   })
+  return composeSystemOperationsWithArtifacts({
+    artifacts,
+    adapter,
+  })
+}
+
+/** Provider-aware bootstrap entrypoint. The selected provider owns physical
+ * backup/restore mechanics; System Operations keeps transport/application
+ * descriptors and restore-artifact ingress unchanged. */
+export function composeSystemOperationsWithRecoveryAdapter(deps: {
+  readonly adapter: SystemOperationsRecoveryAdapter
+  readonly appHome?: string
+}): SystemOperationsModule {
+  const appHome = deps.appHome ?? Paths.root
+  const artifacts = createRestoreArtifactIngress({
+    uploadRoot: join(appHome, '.restore-upload'),
+  })
+  return composeSystemOperationsWithArtifacts({ artifacts, adapter: deps.adapter })
 }
 
 export interface LocalSystemOperations {
@@ -80,7 +103,7 @@ export function composeLocalSystemOperations(): LocalSystemOperations {
     restoreMigrations ??= resolveMigrationsFolder({ force: true })
     return restoreMigrations
   }
-  const module = composeSystemOperationsWithArtifacts({
+  const adapter = createLegacyPlatformRecoveryAdapter({
     artifacts,
     appHome,
     dbPath: Paths.db,
@@ -94,6 +117,7 @@ export function composeLocalSystemOperations(): LocalSystemOperations {
     },
     resolveRestoreMigrations,
   })
+  const module = composeSystemOperationsWithArtifacts({ artifacts, adapter })
   const context = Object.freeze({}) as LocalSystemOperationContext
 
   const localOperations: LocalSystemOperations = {
@@ -115,19 +139,9 @@ export function composeLocalSystemOperations(): LocalSystemOperations {
 
 function composeSystemOperationsWithArtifacts(deps: {
   readonly artifacts: RestoreArtifactRegistry
-  readonly backupResources: () =>
-    | Promise<Readonly<{ db: DbClient; secretBox: SecretBox | undefined }>>
-    | Readonly<{ db: DbClient; secretBox: SecretBox | undefined }>
-  readonly appHome: string
-  readonly dbPath: string
-  readonly lockPath: string
-  readonly resolveRestoreMigrations: () => Promise<string>
+  readonly adapter: SystemOperationsRecoveryAdapter
 }): SystemOperationsModule {
-  const adapter: Readonly<{
-    backup: AdminBackupCoordinatorPort
-    restore: AdminRestoreCoordinatorPort
-  }> = createLegacyPlatformRecoveryAdapter(deps)
-  const application = createSystemOperationsApplication(adapter)
+  const application = createSystemOperationsApplication(deps.adapter)
   const httpCommands: SystemOperationCommands = Object.freeze({
     ...application.commands,
     stageRestore: Object.freeze({

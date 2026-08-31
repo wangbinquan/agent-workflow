@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { restorePortableDatabaseBackup } from '@/modules/system-operations/infrastructure/portableDatabaseRestore'
 import type { PortableDatabaseRestoreError } from '@/modules/system-operations/infrastructure/portableDatabaseRestore'
+import { restorePostgresqlProviderBackup } from '@/modules/system-operations/infrastructure/postgresqlProviderRestore'
 import {
   createLegacyArchiveManifest,
   createLogicalArtifactManifest,
@@ -23,6 +24,8 @@ import {
   openVerifiedLogicalDatabaseArtifactSource,
   type LogicalDatabaseRestoreTarget,
 } from '@/platform/persistence/logicalDatabaseRestore'
+import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import type {
   LogicalColumnContract,
   LogicalSchemaContract,
@@ -273,6 +276,7 @@ describe('RFC-349 portable database restore', () => {
     await tarGz(extracted, forged)
     const calls: string[] = []
     const operationId = 'dbm_restore_reject_01'
+    let opened = false
 
     await expect(
       restorePortableDatabaseBackup({
@@ -280,13 +284,111 @@ describe('RFC-349 portable database restore', () => {
         appHome: backup.appHome,
         restoreOperationId: operationId,
         contract: CONTRACT,
-        target: target('postgresql', operationId, calls, []),
+        async openTarget() {
+          opened = true
+          return {
+            target: target('postgresql', operationId, calls, []),
+            async close() {},
+          }
+        },
         filesystem: { async apply() {} },
       }),
     ).rejects.toMatchObject({
       name: 'PortableDatabaseRestoreError',
       code: 'portable-restore-envelope',
     } satisfies Partial<PortableDatabaseRestoreError>)
+    expect(opened).toBe(false)
     expect(calls).toEqual([])
+  })
+
+  test('opens and closes a PostgreSQL target around verified logical restore', async () => {
+    const backup = await postgresqlBackup()
+    const calls: string[] = []
+    const restoredRows: CanonicalLogicalRow[] = []
+    const operationId = 'dbm_restore_postgresql_01'
+    const runtime = {
+      provider: 'postgresql',
+      generationId: 'dbg_pg_restore_target_01',
+    } as PostgresqlDatabaseRuntime
+    const plan = { contractDigest: CONTRACT.digest } as PostgresqlSchemaPlan
+
+    const result = await restorePostgresqlProviderBackup({
+      tarballPath: backup.path,
+      appHome: backup.appHome,
+      restoreOperationId: operationId,
+      runtime,
+      contract: CONTRACT,
+      plan,
+      filesystem: {
+        async apply() {
+          calls.push('assets')
+        },
+      },
+      now: () => 11,
+      async openTarget(input) {
+        calls.push('open')
+        expect(input).toEqual({
+          runtime,
+          operationId,
+          sourceGenerationId: 'dbg_postgresql_source_01',
+          contract: CONTRACT,
+          plan,
+        })
+        const restoreTarget = target('postgresql', operationId, calls, restoredRows)
+        return {
+          ...restoreTarget,
+          provider: 'postgresql' as const,
+          async close() {
+            calls.push('close')
+          },
+        }
+      },
+    })
+
+    expect(result.receipt).toMatchObject({
+      sourceProvider: 'postgresql',
+      targetProvider: 'postgresql',
+      rowsRestored: 1,
+    })
+    expect(restoredRows).toEqual([encodeLogicalRow(ACTIVE, { id: 'active-1', value: 'portable' })])
+    expect(calls).toEqual(['open', 'prepare', 'copy:active_rows:0', 'finalize', 'assets', 'close'])
+  })
+
+  test('releases the PostgreSQL target when filesystem application fails', async () => {
+    const backup = await postgresqlBackup()
+    const calls: string[] = []
+    const operationId = 'dbm_restore_postgresql_failure_01'
+
+    await expect(
+      restorePostgresqlProviderBackup({
+        tarballPath: backup.path,
+        appHome: backup.appHome,
+        restoreOperationId: operationId,
+        runtime: {
+          provider: 'postgresql',
+          generationId: 'dbg_pg_restore_target_02',
+        } as PostgresqlDatabaseRuntime,
+        contract: CONTRACT,
+        plan: { contractDigest: CONTRACT.digest } as PostgresqlSchemaPlan,
+        filesystem: {
+          async apply() {
+            calls.push('assets')
+            throw new Error('filesystem application failed')
+          },
+        },
+        async openTarget() {
+          const restoreTarget = target('postgresql', operationId, calls, [])
+          return {
+            ...restoreTarget,
+            provider: 'postgresql' as const,
+            async close() {
+              calls.push('close')
+            },
+          }
+        },
+      }),
+    ).rejects.toThrow('filesystem application failed')
+
+    expect(calls).toEqual(['prepare', 'copy:active_rows:0', 'finalize', 'assets', 'close'])
   })
 })

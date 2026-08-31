@@ -396,9 +396,16 @@ describe('RFC-346 System Operations contracts', () => {
       expect(port?.compositionFiles).toEqual([
         'packages/backend/src/modules/system-operations/composition.ts',
       ])
-      expect(port?.providerAdapters.map((entry) => entry.file)).toEqual([
-        'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
-      ])
+      expect(port?.providerAdapters.map((entry) => entry.file)).toEqual(
+        id === 'required:system-operations:AdminBackupCoordinatorPort'
+          ? [
+              'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
+              'packages/backend/src/modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts',
+            ]
+          : [
+              'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
+            ],
+      )
     }
 
     const observedEdges = canonical.crossContextImports.observedEdges as Array<{

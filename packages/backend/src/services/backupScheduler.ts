@@ -134,8 +134,14 @@ export function pruneBackups(opts: PruneOptions): PruneResult {
   return { deleted, kept: files.filter((f) => !deleted.includes(f.name)).map((f) => f.name) }
 }
 
-export interface BackupSchedulerOptions {
-  db: DbClient
+export interface ScheduledBackupRequest {
+  readonly kind: 'scheduled'
+  readonly appHome: string
+}
+
+export type ScheduledBackupRequester = (input: ScheduledBackupRequest) => Promise<unknown>
+
+interface BackupSchedulerCommonOptions {
   intervalMs: number
   retentionCount: number
   retentionDays: number
@@ -161,6 +167,15 @@ export interface BackupSchedulerOptions {
   onBackupSettled?: () => void
 }
 
+/** SQLite callers retain the historical DbClient path. Provider-aware
+ * bootstrap may instead inject the active provider's backup operation without
+ * manufacturing a SQLite client or allowing a SQLite fallback. */
+export type BackupSchedulerOptions = BackupSchedulerCommonOptions &
+  (
+    | Readonly<{ db: DbClient; createScheduledBackup?: never }>
+    | Readonly<{ db?: never; createScheduledBackup: ScheduledBackupRequester }>
+  )
+
 export interface BackupSchedulerHandle {
   stop: () => void
 }
@@ -177,6 +192,20 @@ function runPrune(opts: BackupSchedulerOptions, appHome: string): void {
     protectedKeepCount: live.protectedKeepCount ?? opts.protectedKeepCount,
     now: Date.now(),
   })
+}
+
+async function requestScheduledBackup(
+  opts: BackupSchedulerOptions,
+  appHome: string,
+): Promise<void> {
+  if (opts.createScheduledBackup !== undefined) {
+    await opts.createScheduledBackup({ kind: 'scheduled', appHome })
+    return
+  }
+  if (opts.db === undefined) {
+    throw new Error('backup scheduler has no provider backup operation')
+  }
+  await createBackup({ db: opts.db, kind: 'scheduled', appHome })
 }
 
 /** Start the periodic backup ticker. intervalMs <= 0 disables the BACKUP tick
@@ -218,7 +247,7 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
     if (running) return
     running = true
     ;(async () => {
-      await createBackup({ db: opts.db, kind: 'scheduled', appHome })
+      await requestScheduledBackup(opts, appHome)
     })()
       .catch((err) => log.warn('backup tick threw', { error: (err as Error).message }))
       .finally(() => {

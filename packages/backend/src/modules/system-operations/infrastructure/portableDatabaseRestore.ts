@@ -38,16 +38,39 @@ export interface PortableRestoreFilesystemAssets {
   }): Promise<void>
 }
 
-export interface RestorePortableDatabaseBackupOptions {
+interface RestorePortableDatabaseBackupCommonOptions {
   readonly tarballPath: string
   readonly appHome: string
   readonly restoreOperationId: string
   readonly contract: LogicalSchemaContract
-  readonly target: LogicalDatabaseRestoreTarget
   readonly filesystem: PortableRestoreFilesystemAssets
   readonly now?: () => number
   readonly onProgress?: (progress: LogicalDatabaseRestoreProgress) => void
 }
+
+export interface PortableRestoreTargetHandle {
+  readonly target: LogicalDatabaseRestoreTarget
+  close(): Promise<void>
+}
+
+export interface PortableRestoreTargetFactoryInput {
+  readonly manifest: BackupManifestV2
+  readonly envelope: LogicalDatabaseBackupEnvelope
+  readonly restoreOperationId: string
+  readonly contract: LogicalSchemaContract
+}
+
+export type RestorePortableDatabaseBackupOptions = RestorePortableDatabaseBackupCommonOptions &
+  (
+    | Readonly<{
+        target: LogicalDatabaseRestoreTarget
+        openTarget?: never
+      }>
+    | Readonly<{
+        target?: never
+        openTarget(input: PortableRestoreTargetFactoryInput): Promise<PortableRestoreTargetHandle>
+      }>
+  )
 
 export interface PortableDatabaseRestoreResult {
   readonly manifest: BackupManifestV2
@@ -119,17 +142,37 @@ export async function restorePortableDatabaseBackup(
     }
     validateEnvelope(manifest, envelope, options.contract)
 
-    const receipt = await restoreLogicalDatabaseBackup({
-      artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
-      expectedEnvelopeFileDigest: manifest.database.envelopeFileDigest,
-      restoreOperationId: options.restoreOperationId,
-      contract: options.contract,
-      target: options.target,
-      now: options.now,
-      onProgress: options.onProgress,
-    })
-    await options.filesystem.apply({ stagingDirectory, manifest })
-    return Object.freeze({ manifest, envelope, receipt })
+    const opened =
+      options.openTarget === undefined
+        ? null
+        : await options.openTarget({
+            manifest,
+            envelope,
+            restoreOperationId: options.restoreOperationId,
+            contract: options.contract,
+          })
+    const target = opened?.target ?? options.target
+    if (target === undefined) {
+      throw new PortableDatabaseRestoreError(
+        'portable-restore-envelope',
+        'portable database restore has no target adapter',
+      )
+    }
+    try {
+      const receipt = await restoreLogicalDatabaseBackup({
+        artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
+        expectedEnvelopeFileDigest: manifest.database.envelopeFileDigest,
+        restoreOperationId: options.restoreOperationId,
+        contract: options.contract,
+        target,
+        now: options.now,
+        onProgress: options.onProgress,
+      })
+      await options.filesystem.apply({ stagingDirectory, manifest })
+      return Object.freeze({ manifest, envelope, receipt })
+    } finally {
+      await opened?.close()
+    }
   } finally {
     if (existsSync(stagingDirectory)) {
       rmSync(stagingDirectory, { recursive: true, force: true })

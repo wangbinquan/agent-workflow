@@ -4,7 +4,6 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { createDatabaseMigrationControlPlane } from '../application/databaseMigrationControlPlane'
 import {
@@ -15,6 +14,7 @@ import {
 } from '../application/databaseMigrationRunner'
 import type { DatabaseMigrationCoordinatorPort } from '../application/ports/databaseMigrationCoordinator'
 import { createFileDatabaseMigrationStore } from './fileDatabaseMigrationStore'
+import { createFileDatabaseMigrationArtifactStore } from './fileDatabaseMigrationArtifactStore'
 import { createDatabaseMigrationArtifactReader } from './databaseMigrationArtifactReader'
 import { createSqliteMigrationSafetyBackup } from './sqliteMigrationSafetyBackup'
 import type {
@@ -110,6 +110,9 @@ export function createDatabaseMigrationCoordinator(
   const plan = buildPostgresqlSchemaPlan(contract)
   const store = createFileDatabaseMigrationStore({ root: options.operationsRoot })
   const controlPlane = createDatabaseMigrationControlPlane({ store })
+  const artifacts = createFileDatabaseMigrationArtifactStore({
+    operationsRoot: options.operationsRoot,
+  })
   const artifactReader = createDatabaseMigrationArtifactReader({
     operationsRoot: options.operationsRoot,
     controlPlane,
@@ -242,7 +245,7 @@ export function createDatabaseMigrationCoordinator(
       contract,
       admission,
       safetyBackup,
-      operationRoot: (id) => join(options.operationsRoot, id),
+      artifacts,
       generationPointerPath: options.generationPointerPath,
       now,
     })

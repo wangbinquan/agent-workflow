@@ -11,6 +11,7 @@ import { agents } from '@/db/schema'
 import { createDatabaseMigrationControlPlane } from '@/modules/system-operations/application/databaseMigrationControlPlane'
 import { createDatabaseMigrationRunner } from '@/modules/system-operations/application/databaseMigrationRunner'
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
+import { createFileDatabaseMigrationArtifactStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore'
 import { createSqliteMigrationSafetyBackup } from '@/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup'
 import { readLogicalArtifactManifest } from '@/platform/persistence/logicalDatabaseArtifact'
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
@@ -119,7 +120,9 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
             openPostgresqlAdmission: async () => undefined,
           },
           safetyBackup: createSqliteMigrationSafetyBackup(),
-          operationRoot: (operationId) => join(operationsDir, operationId),
+          artifacts: createFileDatabaseMigrationArtifactStore({
+            operationsRoot: operationsDir,
+          }),
           generationPointerPath: join(root, 'database-generation.json'),
           chunkRows: 25,
         })
