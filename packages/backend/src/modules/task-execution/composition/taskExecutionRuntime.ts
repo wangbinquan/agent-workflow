@@ -7,7 +7,9 @@ import { humanGateComposition } from '@/services/humanGateComposition'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskExecutionReadModels } from '../public/types'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
+import { createPostgresqlTaskExecutionReadModels } from '../infrastructure/postgresqlTaskExecutionReadModels'
 import { createSqliteTaskExecutionReadModels } from '../infrastructure/sqliteTaskExecutionReadModels'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { composeExecutionMergeRecovery } from './executionMergeRecovery'
 import { driveTaskEngineApplication } from './taskEngineApplication'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
@@ -23,8 +25,20 @@ export interface TaskExecutionRuntime extends TaskExecutionRuntimeComponents {
   readonly readModels: TaskExecutionReadModels
 }
 
+export function composeSqliteTaskExecutionReadModels(db: DbClient): TaskExecutionReadModels {
+  return createSqliteTaskExecutionReadModels(db)
+}
+
+export function composePostgresqlTaskExecutionReadModels(
+  db: PostgresqlDatabaseClient,
+): TaskExecutionReadModels {
+  return createPostgresqlTaskExecutionReadModels(db)
+}
+
 export function composeTaskExecutionRuntime(input: {
   readonly db: DbClient
+  /** Bootstrap-selected provider-neutral reads; direct SQLite tests may omit it. */
+  readonly readModels?: TaskExecutionReadModels
   readonly identityAccess?: Readonly<{
     readonly delegatedRequests: DelegatedRequestAuthorityFactory
     readonly taskExecutionResources: TaskExecutionResourceBinding
@@ -32,7 +46,7 @@ export function composeTaskExecutionRuntime(input: {
   readonly repositoryPublicationTransport?: TaskRepositoryPublicationTransport
 }): TaskExecutionRuntime {
   const { db, identityAccess, repositoryPublicationTransport } = input
-  const readModels = createSqliteTaskExecutionReadModels(db)
+  const readModels = input.readModels ?? composeSqliteTaskExecutionReadModels(db)
   const topology = {} as SchedulerRuntimeTopology
   const runtimeComponents: TaskExecutionRuntimeComponents = Object.freeze({
     wrapperRuntimeFactory: composeWrapperRuntime,

@@ -29,7 +29,10 @@ import {
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
-import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import {
+  composeSqliteTaskExecutionReadModels,
+  composeTaskExecutionRuntime,
+} from '@/modules/task-execution/composition/taskExecutionRuntime'
 import {
   createIdentityAccessRuntime,
   type IdentityAccessRuntime,
@@ -618,8 +621,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       legacyTaskExecutionResourceDependencies,
     ),
   })
+  const taskExecutionReadModels = composeSqliteTaskExecutionReadModels(db)
   const taskExecutionRuntime = composeTaskExecutionRuntime({
     db,
+    readModels: taskExecutionReadModels,
     identityAccess: integrationIdentityAccess,
     repositoryPublicationTransport,
   })
