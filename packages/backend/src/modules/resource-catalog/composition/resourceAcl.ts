@@ -2,7 +2,6 @@ import type { Actor } from '@/auth/actor'
 import type { DbTxSync } from '@/db/txSync'
 import { createResourceAclApplication } from '../application/resourceAcl'
 import {
-  createResourceAuthorizationInTx as createResourceAuthorizationParticipantInTx,
   createResourceScopeAuthorizationInTx as createResourceScopeAuthorizationParticipantInTx,
   type ResourceCurrentAuthorityResolver,
 } from '../application/participants/resourceAuthorization'
@@ -87,13 +86,6 @@ export interface ResourceScopeAuthorityPair {
 
 export interface ResourceScopeAuthorizationBinding {
   inTransaction(tx: DbTxSync, pair: ResourceScopeAuthorityPair): ResourceScopeAuthorizationInTx
-}
-
-export function createResourceAuthorizationInTx(
-  tx: DbTxSync,
-  authorityResolver: ResourceCurrentAuthorityResolver,
-) {
-  return createResourceAuthorizationParticipantInTx(tx, authorityResolver, participantDependencies)
 }
 
 export function createResourceScopeAuthorizationInTx(

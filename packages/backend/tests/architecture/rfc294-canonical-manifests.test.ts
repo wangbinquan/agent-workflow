@@ -313,7 +313,6 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/clarifyRounds.ts',
       'packages/backend/src/services/clarifySeal.ts',
       'packages/backend/src/services/protocol.ts',
-      'packages/backend/src/services/resourceAccessPolicy.ts',
     ])
 
     const owners = generated.moduleSymbolOwners.entries as Array<Record<string, unknown>>

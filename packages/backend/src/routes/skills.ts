@@ -20,10 +20,10 @@ import { SkillZipDecisionMapSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type {
-  SkillCommands,
   SkillFileCommands,
   SkillVersionCommands,
 } from '@/modules/resource-catalog/public/commands'
+import type { SkillOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type {
   SkillAclIdentityParticipant,
   SkillOperationContext,
@@ -36,6 +36,7 @@ import type {
 import type { SkillCatalogResource } from '@/modules/resource-catalog/public/types'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { Paths } from '@/util/paths'
 import { commitSkillZipBuffer, parseSkillZipBuffer, ZIP_LIMITS } from '@/services/skill-zip'
@@ -43,24 +44,24 @@ import { GoneError, NotFoundError, ValidationError } from '@/util/errors'
 import { mountAclEndpoints } from './resourceAcl'
 
 export interface SkillRouteDependencies {
-  readonly commands: SkillCommands
   readonly fileCommands: SkillFileCommands
   readonly versionCommands: SkillVersionCommands
   readonly queries: SkillQueries
   readonly fileQueries: SkillFileQueries
   readonly versionQueries: SkillVersionQueries
+  readonly operations: SkillOperationDescriptors
   readonly aclIdentity: SkillAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => SkillOperationContext
 }
 
 export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDependencies): void {
   const {
-    commands,
     fileCommands,
     versionCommands,
     queries,
     fileQueries,
     versionQueries,
+    operations,
     aclIdentity,
   } = module
   const zipFsOpts = { appHome: Paths.root }
@@ -74,41 +75,30 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
     return skill
   }
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'List skills visible to the caller',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(await queries.list(module.authorityFor(actor)))
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.list,
+    method: 'GET',
+    path: '/api/skills',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, output) => c.json(output),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/skills',
-      permissions: ['skills:create'],
-      tokenAccess: 'allow',
-      summary: 'Create a skill',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const created = await commands.create(module.authorityFor(actor), {
-        submission: {
-          kind: 'json-body',
-          body: await c.req.raw.text().catch(() => ''),
-        },
-      })
-      return c.json(created, 201)
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.create,
+    method: 'POST',
+    path: '/api/skills',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      submission: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, created) => c.json(created, 201),
+  })
 
   // --- RFC-019: ZIP batch import ---------------------------------------------
 
@@ -177,19 +167,18 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'Get one skill',
+  registerOperationRoute(app, {
+    descriptor: operations.get,
+    method: 'GET',
+    path: '/api/skills/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, skill) => {
+      if (skill === null) throw new NotFoundError('skill-not-found', 'skill not found')
+      return c.json(skill)
     },
-    async (c) => {
-      return c.json(await loadVisibleSkill(actorOf(c), c.req.param('id')))
-    },
-  )
+  })
 
   // RFC-170 T-BSAFE③ (§2/G3-3): the old metadata + content PUTs bypassed the
   // composite-token OCC / snapshot version funnel — both are 410 Gone. Every save
@@ -213,28 +202,24 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/skills/:id',
-      permissions: ['skills:delete'],
-      tokenAccess: 'allow',
-      summary: 'Delete a skill',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const receipt = await commands.delete(module.authorityFor(actor), {
-        id: c.req.param('id'),
-        submission: {
-          kind: 'json-body',
-          body: await c.req.raw.text().catch(() => ''),
-        },
-      })
-      captureDeleteSnapshot(c, actor, receipt.deleted)
+  registerOperationRoute(app, {
+    descriptor: operations.delete,
+    method: 'DELETE',
+    path: '/api/skills/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
+      captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
-  )
+  })
 
   // SKILL.md content (parsed view).
   registerRoute(
@@ -272,28 +257,21 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
 
   // RFC-170 §2/T4 — combined description+body save gated by the composite
   // precondition token from the detail read. Stale token → 409, malformed → 400.
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/skills/:id/save',
-      permissions: ['skills:update'],
-      tokenAccess: 'allow',
-      summary: 'Save skill metadata + body',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      return c.json(
-        await commands.save(module.authorityFor(actor), {
-          id: c.req.param('id'),
-          submission: {
-            kind: 'json-body',
-            body: await c.req.raw.text().catch(() => ''),
-          },
-        }),
-      )
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.save,
+    method: 'POST',
+    path: '/api/skills/:id/save',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, saved) => c.json(saved),
+  })
 
   // File tree + single-file CRUD.
   registerRoute(

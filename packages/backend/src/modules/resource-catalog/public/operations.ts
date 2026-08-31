@@ -1,14 +1,10 @@
-// RFC-345 compatibility operations. Legacy inbound/service adapters consume
-// this exact entrypoint while their call sites move to the data-only command,
-// query and participant contracts.
+// RFC-345 owned operation descriptors. The tail retains only the exact
+// compatibility exports still consumed by already-owned W4-E1/W5 cohorts;
+// W4-C public debt must not grow back here.
 
 import {
   AgentSchema,
-  CombinedSaveSkillSchema,
-  CreateManagedSkillSchema,
   CreateAgentSchema,
-  DeleteAgentSchema,
-  DeleteSkillSchema,
   McpLocalConfigSchema,
   McpLocalConfigWriteSchema,
   McpNameSchema,
@@ -26,17 +22,12 @@ import {
   SkillContentSchema,
   SkillSchema,
   UpdatePluginRequestSchema,
-  UpdateAgentRequestSchema,
   CopyWorkflowRequestSchema,
-  CreateWorkflowSchema,
-  DeleteWorkflowSchema,
   SaveWorkflowReceiptSchema as SaveWorkflowCatalogReceiptSchema,
-  UpdateWorkflowSchema,
   WorkflowDetailSchema,
   WorkflowSchema,
   CopyWorkgroupRequestSchema,
   CreateWorkgroupSchema,
-  DeleteWorkgroupSchema,
   RenameWorkgroupSchema,
   SaveWorkgroupReceiptSchema,
   UpdateWorkgroupSchema,
@@ -95,10 +86,13 @@ import type {
   CheckPluginUpdateCatalogReceipt,
   CreateMcpCatalogInput,
   CreateAgentCatalogInput,
+  CreateSkillCatalogInput,
+  CreateWorkflowCatalogInput,
   CreatePluginCatalogInput,
   DeleteMcpCatalogInput,
   DeleteMcpCatalogReceipt,
   DeleteAgentCatalogReceipt,
+  DeleteAgentCatalogInput,
   DeletePluginCatalogInput,
   DeletePluginCatalogReceipt,
   GetMcpCatalogInput,
@@ -110,11 +104,13 @@ import type {
   RenameAgentCatalogInput,
   RenamePluginCatalogInput,
   UpdateMcpCatalogInput,
+  UpdateAgentCatalogInput,
   UpdatePluginCatalogInput,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
   CopyWorkgroupCatalogInput,
   CreateWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   GetWorkgroupCatalogInput,
   RenameWorkgroupCatalogInput,
@@ -123,11 +119,14 @@ import type {
   WorkgroupCatalogDetail,
   WorkgroupCatalogResource,
   DeleteSkillCatalogReceipt,
+  DeleteSkillCatalogInput,
   GetSkillCatalogInput,
+  SaveSkillCatalogInput,
   SkillCatalogContent,
   SkillCatalogResource,
   CopyWorkflowCatalogInput,
   DeleteWorkflowCatalogReceipt,
+  DeleteWorkflowCatalogInput,
   GetWorkflowCatalogInput,
   UpdateWorkflowCatalogInput,
   UpdateWorkflowCatalogReceipt,
@@ -178,13 +177,16 @@ const AGENT_PUBLIC_ERRORS = Object.freeze([
   'internal-error',
 ] as const)
 
+const jsonBodySubmissionSchema = z
+  .object({ kind: z.literal('json-body'), body: z.string() })
+  .strict()
 const emptyAgentInputSchema = z.object({}).strict()
 const getAgentInputSchema = z.object({ id: z.string().min(1) }).strict()
 const updateAgentInputSchema = z
-  .object({ id: z.string().min(1), update: UpdateAgentRequestSchema })
+  .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
   .strict()
 const deleteAgentInputSchema = z
-  .object({ id: z.string().min(1), deletion: DeleteAgentSchema })
+  .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
   .strict()
 const renameAgentInputSchema = z
   .object({ id: z.string().min(1), rename: RenameAgentRequestSchema })
@@ -208,12 +210,12 @@ export interface AgentOperationDescriptors {
     AgentOperationContext
   >
   readonly update: CommandOperationDescriptor<
-    z.infer<typeof updateAgentInputSchema>,
+    UpdateAgentCatalogInput,
     AgentCatalogResource,
     AgentOperationContext
   >
   readonly delete: CommandOperationDescriptor<
-    z.infer<typeof deleteAgentInputSchema>,
+    DeleteAgentCatalogInput,
     DeleteAgentCatalogReceipt,
     AgentOperationContext
   >
@@ -275,11 +277,8 @@ export function createAgentOperationDescriptors(
       publicErrors: AGENT_PUBLIC_ERRORS,
       inputSchema: updateAgentInputSchema,
       outputSchema: AgentSchema,
-      invoke: (authority: AgentOperationContext, input: z.infer<typeof updateAgentInputSchema>) =>
-        commands.update(authority, {
-          id: input.id,
-          submission: { kind: 'json-body', body: JSON.stringify(input.update) ?? '{}' },
-        }),
+      invoke: (authority: AgentOperationContext, input: UpdateAgentCatalogInput) =>
+        commands.update(authority, input),
     }),
     delete: defineCommandOperation({
       id: 'agent-catalog.delete-agent.v1',
@@ -288,11 +287,8 @@ export function createAgentOperationDescriptors(
       publicErrors: AGENT_PUBLIC_ERRORS,
       inputSchema: deleteAgentInputSchema,
       outputSchema: deleteAgentReceiptSchema,
-      invoke: (authority: AgentOperationContext, input: z.infer<typeof deleteAgentInputSchema>) =>
-        commands.delete(authority, {
-          id: input.id,
-          submission: { kind: 'json-body', body: JSON.stringify(input.deletion) ?? '{}' },
-        }),
+      invoke: (authority: AgentOperationContext, input: DeleteAgentCatalogInput) =>
+        commands.delete(authority, input),
     }),
     rename: defineCommandOperation({
       id: 'agent-catalog.rename-agent.v1',
@@ -319,10 +315,10 @@ const SKILL_PUBLIC_ERRORS = Object.freeze([
 const emptySkillInputSchema = z.object({}).strict()
 const getSkillInputSchema = z.object({ id: z.string().min(1) }).strict()
 const saveSkillInputSchema = z
-  .object({ id: z.string().min(1), save: CombinedSaveSkillSchema })
+  .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
   .strict()
 const deleteSkillInputSchema = z
-  .object({ id: z.string().min(1), deletion: DeleteSkillSchema })
+  .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
   .strict()
 const deleteSkillReceiptSchema = z.object({ deleted: SkillSchema }).strict()
 
@@ -338,17 +334,17 @@ export interface SkillOperationDescriptors {
     SkillOperationContext
   >
   readonly create: CommandOperationDescriptor<
-    z.infer<typeof CreateManagedSkillSchema>,
+    CreateSkillCatalogInput,
     SkillCatalogResource,
     SkillOperationContext
   >
   readonly save: CommandOperationDescriptor<
-    z.infer<typeof saveSkillInputSchema>,
+    SaveSkillCatalogInput,
     SkillCatalogContent,
     SkillOperationContext
   >
   readonly delete: CommandOperationDescriptor<
-    z.infer<typeof deleteSkillInputSchema>,
+    DeleteSkillCatalogInput,
     DeleteSkillCatalogReceipt,
     SkillOperationContext
   >
@@ -396,12 +392,10 @@ export function createSkillOperationDescriptors(
       summary: 'Create a skill',
       permissions: ['skills:create'],
       publicErrors: SKILL_PUBLIC_ERRORS,
-      inputSchema: CreateManagedSkillSchema,
+      inputSchema: z.object({ submission: jsonBodySubmissionSchema }).strict(),
       outputSchema: SkillSchema,
-      invoke: (authority: SkillOperationContext, input: z.infer<typeof CreateManagedSkillSchema>) =>
-        commands.create(authority, {
-          submission: { kind: 'json-body', body: JSON.stringify(input) ?? '{}' },
-        }),
+      invoke: (authority: SkillOperationContext, input: CreateSkillCatalogInput) =>
+        commands.create(authority, input),
     }),
     save: defineCommandOperation({
       id: 'skill-catalog.save-skill.v1',
@@ -410,11 +404,8 @@ export function createSkillOperationDescriptors(
       publicErrors: SKILL_PUBLIC_ERRORS,
       inputSchema: saveSkillInputSchema,
       outputSchema: SkillContentSchema,
-      invoke: (authority: SkillOperationContext, input: z.infer<typeof saveSkillInputSchema>) =>
-        commands.save(authority, {
-          id: input.id,
-          submission: { kind: 'json-body', body: JSON.stringify(input.save) ?? '{}' },
-        }),
+      invoke: (authority: SkillOperationContext, input: SaveSkillCatalogInput) =>
+        commands.save(authority, input),
     }),
     delete: defineCommandOperation({
       id: 'skill-catalog.delete-skill.v1',
@@ -423,11 +414,8 @@ export function createSkillOperationDescriptors(
       publicErrors: SKILL_PUBLIC_ERRORS,
       inputSchema: deleteSkillInputSchema,
       outputSchema: deleteSkillReceiptSchema,
-      invoke: (authority: SkillOperationContext, input: z.infer<typeof deleteSkillInputSchema>) =>
-        commands.delete(authority, {
-          id: input.id,
-          submission: { kind: 'json-body', body: JSON.stringify(input.deletion) ?? '{}' },
-        }),
+      invoke: (authority: SkillOperationContext, input: DeleteSkillCatalogInput) =>
+        commands.delete(authority, input),
     }),
   })
 }
@@ -822,11 +810,12 @@ const getWorkflowInputSchema = z.object({ id: z.string().min(1) }).strict()
 const copyWorkflowInputSchema = z
   .object({ id: z.string().min(1), copy: CopyWorkflowRequestSchema })
   .strict()
+const createWorkflowInputSchema = z.object({ submission: jsonBodySubmissionSchema }).strict()
 const updateWorkflowInputSchema = z
-  .object({ id: z.string().min(1), update: UpdateWorkflowSchema })
+  .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
   .strict()
 const deleteWorkflowInputSchema = z
-  .object({ id: z.string().min(1), deletion: DeleteWorkflowSchema })
+  .object({ id: z.string().min(1), submission: jsonBodySubmissionSchema })
   .strict()
 const workflowAclIdentitySchema = z
   .object({
@@ -857,7 +846,7 @@ export interface WorkflowOperationDescriptors {
     WorkflowOperationContext
   >
   readonly create: CommandOperationDescriptor<
-    z.infer<typeof CreateWorkflowSchema>,
+    CreateWorkflowCatalogInput,
     WorkflowCatalogDetail,
     WorkflowOperationContext
   >
@@ -867,12 +856,12 @@ export interface WorkflowOperationDescriptors {
     WorkflowOperationContext
   >
   readonly update: CommandOperationDescriptor<
-    z.infer<typeof updateWorkflowInputSchema>,
+    UpdateWorkflowCatalogInput,
     UpdateWorkflowCatalogReceipt,
     WorkflowOperationContext
   >
   readonly delete: CommandOperationDescriptor<
-    z.infer<typeof deleteWorkflowInputSchema>,
+    DeleteWorkflowCatalogInput,
     DeleteWorkflowCatalogReceipt,
     WorkflowOperationContext
   >
@@ -916,12 +905,10 @@ export function createWorkflowOperationDescriptors(
       summary: 'Create a workflow',
       permissions: ['workflows:create'],
       publicErrors: WORKFLOW_PUBLIC_ERRORS,
-      inputSchema: CreateWorkflowSchema,
+      inputSchema: createWorkflowInputSchema,
       outputSchema: WorkflowDetailSchema,
-      invoke: (authority: WorkflowOperationContext, input: z.infer<typeof CreateWorkflowSchema>) =>
-        commands.create(authority, {
-          submission: { kind: 'json-body', body: JSON.stringify(input) ?? '{}' },
-        }),
+      invoke: (authority: WorkflowOperationContext, input: CreateWorkflowCatalogInput) =>
+        commands.create(authority, input),
     }),
     copy: defineCommandOperation({
       id: 'workflow-catalog.copy-workflow.v1',
@@ -940,14 +927,8 @@ export function createWorkflowOperationDescriptors(
       publicErrors: WORKFLOW_PUBLIC_ERRORS,
       inputSchema: updateWorkflowInputSchema,
       outputSchema: SaveWorkflowCatalogReceiptSchema,
-      invoke: (
-        authority: WorkflowOperationContext,
-        input: z.infer<typeof updateWorkflowInputSchema>,
-      ) =>
-        commands.update(authority, {
-          id: input.id,
-          submission: { kind: 'json-body', body: JSON.stringify(input.update) ?? '{}' },
-        } satisfies UpdateWorkflowCatalogInput),
+      invoke: (authority: WorkflowOperationContext, input: UpdateWorkflowCatalogInput) =>
+        commands.update(authority, input),
     }),
     delete: defineCommandOperation({
       id: 'workflow-catalog.delete-workflow.v1',
@@ -956,14 +937,8 @@ export function createWorkflowOperationDescriptors(
       publicErrors: WORKFLOW_PUBLIC_ERRORS,
       inputSchema: deleteWorkflowInputSchema,
       outputSchema: deleteWorkflowReceiptSchema,
-      invoke: (
-        authority: WorkflowOperationContext,
-        input: z.infer<typeof deleteWorkflowInputSchema>,
-      ) =>
-        commands.delete(authority, {
-          id: input.id,
-          submission: { kind: 'json-body', body: JSON.stringify(input.deletion) ?? '{}' },
-        }),
+      invoke: (authority: WorkflowOperationContext, input: DeleteWorkflowCatalogInput) =>
+        commands.delete(authority, input),
     }),
   })
 }
@@ -986,7 +961,7 @@ const updateWorkgroupInputSchema = z
   .object({ id: z.string().min(1), update: UpdateWorkgroupSchema })
   .strict()
 const deleteWorkgroupInputSchema = z
-  .object({ id: z.string().min(1), deletion: DeleteWorkgroupSchema })
+  .object({ id: z.string().min(1), deletion: jsonBodySubmissionSchema })
   .strict()
 const renameWorkgroupInputSchema = z
   .object({ id: z.string().min(1), rename: RenameWorkgroupSchema })
@@ -996,6 +971,7 @@ const deleteWorkgroupReceiptSchema = z
     id: z.string().min(1),
     deletedVersion: z.number().int().positive(),
     clientMutationId: z.string().min(1),
+    deleted: WorkgroupDetailSchema,
   })
   .strict()
 
@@ -1026,7 +1002,7 @@ export interface WorkgroupOperationDescriptors {
     WorkgroupOperationContext
   >
   readonly delete: CommandOperationDescriptor<
-    z.infer<typeof deleteWorkgroupInputSchema>,
+    DeleteWorkgroupCatalogInput,
     DeleteWorkgroupCatalogReceipt,
     WorkgroupOperationContext
   >
@@ -1107,17 +1083,8 @@ export function createWorkgroupOperationDescriptors(
       publicErrors: WORKGROUP_PUBLIC_ERRORS,
       inputSchema: deleteWorkgroupInputSchema,
       outputSchema: deleteWorkgroupReceiptSchema,
-      invoke: (
-        authority: WorkgroupOperationContext,
-        input: z.infer<typeof deleteWorkgroupInputSchema>,
-      ) =>
-        commands.delete(authority, {
-          id: input.id,
-          deletion: {
-            kind: 'json-body',
-            body: JSON.stringify(input.deletion) ?? '{}',
-          },
-        }),
+      invoke: (authority: WorkgroupOperationContext, input: DeleteWorkgroupCatalogInput) =>
+        commands.delete(authority, input),
     }),
     rename: defineCommandOperation({
       id: 'workgroup-catalog.rename-workgroup.v1',
@@ -1197,11 +1164,43 @@ export interface ResourcePackageOperationDescriptors {
     ResourcePackageApplyReceiptView,
     QueryContext
   >
-  readonly export: CommandOperationDescriptor<
-    ExportResourcePackage,
-    ResourcePackageExportReceipt,
-    CommandContext
-  >
+  readonly exports: Readonly<{
+    agent: CommandOperationDescriptor<
+      ExportResourcePackage,
+      ResourcePackageExportReceipt,
+      CommandContext
+    >
+    skill: CommandOperationDescriptor<
+      ExportResourcePackage,
+      ResourcePackageExportReceipt,
+      CommandContext
+    >
+    mcp: CommandOperationDescriptor<
+      ExportResourcePackage,
+      ResourcePackageExportReceipt,
+      CommandContext
+    >
+    plugin: CommandOperationDescriptor<
+      ExportResourcePackage,
+      ResourcePackageExportReceipt,
+      CommandContext
+    >
+    workflow: CommandOperationDescriptor<
+      ExportResourcePackage,
+      ResourcePackageExportReceipt,
+      CommandContext
+    >
+    workgroup: CommandOperationDescriptor<
+      ExportResourcePackage,
+      ResourcePackageExportReceipt,
+      CommandContext
+    >
+    capability_template: CommandOperationDescriptor<
+      ExportResourcePackage,
+      ResourcePackageExportReceipt,
+      CommandContext
+    >
+  }>
 }
 
 export interface ResourcePackageCatalogModule {
@@ -1235,6 +1234,25 @@ export function createResourcePackageOperationDescriptors(
   commands: ResourcePackageOperationCommands,
   queries: ResourcePackageOperationQueries,
 ): ResourcePackageOperationDescriptors {
+  const exportOperation = (
+    id: string,
+    summary: string,
+    permission: Parameters<typeof defineCommandOperation>[0]['permissions'][number],
+  ): CommandOperationDescriptor<
+    ExportResourcePackage,
+    ResourcePackageExportReceipt,
+    CommandContext
+  > =>
+    defineCommandOperation({
+      id,
+      summary,
+      permissions: [permission],
+      publicErrors: RESOURCE_PACKAGE_PUBLIC_ERRORS,
+      inputSchema: exportResourcePackageSchema,
+      outputSchema: resourcePackageExportReceiptSchema,
+      invoke: (context: CommandContext, input: ExportResourcePackage) =>
+        commands.export(context, input),
+    })
   const apply: ResourcePackageOperationDescriptors['apply'] = Object.freeze({
     id: operationId('resource-catalog.apply-package.v1'),
     kind: 'idempotent-command',
@@ -1292,16 +1310,42 @@ export function createResourcePackageOperationDescriptors(
       invoke: (context: QueryContext, input: GetResourcePackageApplyReceipt) =>
         queries.getReceipt(context, input),
     }),
-    export: defineCommandOperation({
-      id: 'resource-catalog.export-package.v1',
-      summary: 'Export a resource package',
-      permissions: [],
-      publicReason: 'The typed HTTP/CLI binding applies the exact root permission.',
-      publicErrors: RESOURCE_PACKAGE_PUBLIC_ERRORS,
-      inputSchema: exportResourcePackageSchema,
-      outputSchema: resourcePackageExportReceiptSchema,
-      invoke: (context: CommandContext, input: ExportResourcePackage) =>
-        commands.export(context, input),
+    exports: Object.freeze({
+      agent: exportOperation(
+        'resource-catalog.export-agent-package.v1',
+        'Export an agent with its transitive closure',
+        'agents:read',
+      ),
+      skill: exportOperation(
+        'resource-catalog.export-skill-package.v1',
+        'Export a skill with its transitive closure',
+        'skills:read',
+      ),
+      mcp: exportOperation(
+        'resource-catalog.export-mcp-package.v1',
+        'Export an MCP with its transitive closure',
+        'mcps:read',
+      ),
+      plugin: exportOperation(
+        'resource-catalog.export-plugin-package.v1',
+        'Export a plugin with its transitive closure',
+        'plugins:read',
+      ),
+      workflow: exportOperation(
+        'resource-catalog.export-workflow-package.v1',
+        'Export a workflow with its transitive closure',
+        'workflows:read',
+      ),
+      workgroup: exportOperation(
+        'resource-catalog.export-workgroup-package.v1',
+        'Export a workgroup with its transitive closure',
+        'workgroups:read',
+      ),
+      capability_template: exportOperation(
+        'resource-catalog.export-capability-template-package.v1',
+        'Export a capability template',
+        'capability-templates:read',
+      ),
     }),
   })
 }

@@ -1,4 +1,3 @@
-import type { CommandContext } from '@/modules/identity-access/public/participants'
 import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
@@ -23,7 +22,6 @@ import type {
   RenameMcpCatalogInput,
   RenameAgentCatalogInput,
   RenamePluginCatalogInput,
-  ResourceAclDocument,
   CreateSkillCatalogInput,
   DeleteSkillCatalogInput,
   DeleteSkillCatalogReceipt,
@@ -39,7 +37,6 @@ import type {
   UpdateMcpCatalogInput,
   UpdateAgentCatalogInput,
   UpdatePluginCatalogInput,
-  UpdateResourceAclRequest,
   UpgradePluginCatalogInput,
   UpgradePluginCatalogReceipt,
   CopyWorkflowCatalogInput,
@@ -58,10 +55,6 @@ import type {
   UpdateWorkgroupCatalogReceipt,
   WorkgroupCatalogDetail,
 } from './types'
-
-export interface ResourceAclCommands {
-  update(context: CommandContext, request: UpdateResourceAclRequest): Promise<ResourceAclDocument>
-}
 
 export interface AgentCommands {
   create(

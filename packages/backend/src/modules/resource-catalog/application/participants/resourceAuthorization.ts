@@ -3,11 +3,14 @@ import type { DbTxSync } from '@/db/txSync'
 import { ForbiddenError, NotFoundError } from '@/util/errors'
 import { canEditAccess, canGovernAccess, canViewAccess } from '../../domain/resourceAccess'
 import type {
-  ResourceAuthorizationInTx,
   ResourceRequestContext,
   ResourceScopeAuthorizationInTx,
 } from '../../public/participants'
-import type { ResourceAclTarget, ResourceMemoryScopeRef } from '../../public/types'
+import type {
+  ResourceAclTarget,
+  ResourceMemoryScopeRef,
+  ResourceScopeAccess,
+} from '../../public/types'
 import type { ResourceAccessRowReadPort } from '../ports/resourceAclPersistence'
 import type { ResourceAuthorizationApplication } from '../resourceAuthorization'
 
@@ -20,10 +23,14 @@ export interface ResourceAuthorizationParticipantDependencies {
   readonly authorization: Pick<ResourceAuthorizationApplication, 'resolveResourceAccessForInTx'>
 }
 
-const trustedResourceAuthorizations = new WeakSet<ResourceAuthorizationInTx>()
-const trustedResourceScopeAuthorizations = new WeakSet<ResourceScopeAuthorizationInTx>()
+interface ResourceAuthorizationInTx {
+  accessOf(authority: ResourceRequestContext, target: ResourceAclTarget): ResourceScopeAccess
+  assertView(authority: ResourceRequestContext, target: ResourceAclTarget): void
+  assertEdit(authority: ResourceRequestContext, target: ResourceAclTarget): void
+  assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget): void
+}
 
-export function createResourceAuthorizationInTx(
+function createResourceAuthorizationInTx(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
   dependencies: ResourceAuthorizationParticipantDependencies,
@@ -68,9 +75,8 @@ export function createResourceAuthorizationInTx(
         `deleting, renaming, transferring or re-granting a ${target.ref.kind} is reserved for its owner`,
       )
     },
-  }) as unknown as ResourceAuthorizationInTx
-  trustedResourceAuthorizations.add(participant)
-  return participant
+  })
+  return participant satisfies ResourceAuthorizationInTx
 }
 
 export function createResourceScopeAuthorizationInTx(
@@ -90,6 +96,5 @@ export function createResourceScopeAuthorizationInTx(
       })
     },
   }) as unknown as ResourceScopeAuthorizationInTx
-  trustedResourceScopeAuthorizations.add(participant)
   return participant
 }

@@ -23,7 +23,6 @@ import type {
   PreparedWorkflowPackageMutation,
   PreparedWorkgroupPackageMutation,
   ResourceMemoryScopeRef,
-  ResourceAclTarget,
   ResourcePackageApplyScenarioPlan,
   ResourcePackageMutationReceipt,
   ResourceScopeAccess,
@@ -55,7 +54,6 @@ declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
 declare const intentApplyResourceParticipantInTxBrand: unique symbol
 declare const integrationTriggerResourceSnapshotInTxBrand: unique symbol
 declare const resourceScopeAuthorizationInTxBrand: unique symbol
-declare const resourceAuthorizationInTxBrand: unique symbol
 declare const agentPackageMutationParticipantInTxBrand: unique symbol
 declare const skillPackageMutationParticipantInTxBrand: unique symbol
 declare const mcpPackageMutationParticipantInTxBrand: unique symbol
@@ -136,15 +134,6 @@ export interface IntegrationTriggerResourceSnapshotInTx {
 export interface ResourceScopeAuthorizationInTx {
   readonly [resourceScopeAuthorizationInTxBrand]: 'resource-scope-authorization'
   accessOf(authority: ResourceRequestContext, scope: ResourceMemoryScopeRef): ResourceScopeAccess
-}
-
-/** General ACL verdict participant; consumers cannot request a resource body. */
-export interface ResourceAuthorizationInTx {
-  readonly [resourceAuthorizationInTxBrand]: 'resource-authorization'
-  accessOf(authority: ResourceRequestContext, target: ResourceAclTarget): ResourceScopeAccess
-  assertView(authority: ResourceRequestContext, target: ResourceAclTarget): void
-  assertEdit(authority: ResourceRequestContext, target: ResourceAclTarget): void
-  assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget): void
 }
 
 export interface AgentPackageMutationParticipant {

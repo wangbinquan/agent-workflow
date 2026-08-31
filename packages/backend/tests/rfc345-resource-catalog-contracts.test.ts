@@ -16,14 +16,7 @@ import {
   type IntentResourceType,
 } from '@agent-workflow/shared'
 import {
-  ACL_CATALOG_KINDS,
-  CATALOG_SELECTOR_KINDS,
-  GRANT_TARGET_KINDS,
-  asAclCatalogKind,
-  asCatalogSelectorKind,
   asPackageResourceKind,
-  resourceRef,
-  resourceSummaryRevisionEquals,
   type AclCatalogKind,
   type AgentCatalogResource,
   type AgentPackageMutation,
@@ -54,7 +47,16 @@ import {
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
 } from '../src/modules/resource-catalog/public/types'
-import { PACKAGE_RESOURCE_KINDS } from '../src/modules/resource-catalog/domain/resourceKinds'
+import {
+  ACL_CATALOG_KINDS,
+  CATALOG_SELECTOR_KINDS,
+  GRANT_TARGET_KINDS,
+  PACKAGE_RESOURCE_KINDS,
+  asAclCatalogKind,
+  asCatalogSelectorKind,
+} from '../src/modules/resource-catalog/domain/resourceKinds'
+import { resourceRef } from '../src/modules/resource-catalog/domain/resourceRef'
+import { resourceSummaryRevisionEquals } from '../src/modules/resource-catalog/domain/resourceRevision'
 import type {
   AgentCommands,
   McpCommands,
@@ -83,7 +85,6 @@ import type {
   PluginAclIdentityParticipant,
   SkillAclIdentityParticipant,
   WorkgroupAclIdentityParticipant,
-  ResourceAuthorizationInTx,
   ResourcePackageApplyScenarioProvider,
   ResourcePackageApplyTx,
   ResourcePackageMutationParticipants,
@@ -197,7 +198,7 @@ assertType<Equal<keyof ResourcePackageApplyScenarioProvider, 'scenario' | 'parti
 assertType<
   Equal<
     Extract<keyof ResourcePackageOperationDescriptors, string>,
-    'inspect' | 'apply' | 'getPreview' | 'getReceipt' | 'export'
+    'inspect' | 'apply' | 'getPreview' | 'getReceipt' | 'exports'
   >
 >(true)
 assertType<Equal<Extract<keyof ResourcePackageCatalogModule, string>, 'operations'>>(true)
@@ -215,12 +216,6 @@ assertType<Equal<Extract<keyof IntegrationTriggerResourceSnapshotInTx, string>, 
   true,
 )
 assertType<Equal<Extract<keyof ResourceScopeAuthorizationInTx, string>, 'accessOf'>>(true)
-assertType<
-  Equal<
-    Extract<keyof ResourceAuthorizationInTx, string>,
-    'accessOf' | 'assertView' | 'assertEdit' | 'assertGovern'
-  >
->(true)
 assertType<Equal<Extract<keyof AgentCommands, string>, 'create' | 'update' | 'delete' | 'rename'>>(
   true,
 )
@@ -478,7 +473,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
   })
 
-  test('ACL policy, application facade and SQLite registry keep their layer boundaries', () => {
+  test('ACL policy, application owner and SQLite registry keep their layer boundaries', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -511,6 +506,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(domain).not.toContain(forbiddenImport)
     }
 
+    expect(existsSync(resolve(sourceRoot, 'services/resourceAccessPolicy.ts'))).toBe(false)
     const facade = readFileSync(resolve(sourceRoot, 'services/resourceAcl.ts'), 'utf8')
     for (const forbiddenImplementation of [
       "from 'drizzle-orm'",
@@ -942,7 +938,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(cliStart).toContain('composeTaskExecutionResourceBinding(')
   })
 
-  test('T5-M active HTTP and MCP compatibility bindings execute the owned aggregate', () => {
+  test('T5-M/T8 descriptor-backed HTTP and MCP bindings execute the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const route = readFileSync(resolve(sourceRoot, 'routes/mcps.ts'), 'utf8')
     const application = readFileSync(
@@ -969,19 +965,18 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
 
     expect(route).not.toContain("from '@/services/mcp'")
-    expect(route).not.toContain('catalog.operations')
-    expect(route).toContain(
-      "import type { McpCommands } from '@/modules/resource-catalog/public/commands'",
-    )
+    expect(route).toContain('McpOperationDescriptors')
     expect(route).toContain(
       "import type { McpQueries } from '@/modules/resource-catalog/public/queries'",
     )
     expect(route).toContain('McpAclIdentityParticipant')
     for (const consumer of [
-      'commands.create(',
-      'commands.update(',
-      'commands.delete(',
-      'commands.rename(',
+      'operations.create',
+      'operations.update',
+      'operations.delete',
+      'operations.rename',
+      'operations.list',
+      'operations.get',
       'queries.list(',
       'queries.get(',
       'aclIdentity.load(',
@@ -1015,7 +1010,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(server).toContain('composeMcpCatalog({')
     expect(server).toContain('transitionMutationInTx: transitionMcpRuntimeTestsInTx')
     expect(server).toContain('deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx')
-    expect(server).toContain('commands: mcpCatalog.commands')
+    expect(server).toContain('operations: mcpCatalog.operations')
     expect(server).toContain('queries: mcpCatalog.queries')
     expect(server).toContain('aclIdentity: mcpCatalog.participants.aclIdentity')
     expect(server).toContain('directOperationAuthority(identityAccess.directAuthority, actor)')
@@ -1044,7 +1039,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ])
   })
 
-  test('T5-P active HTTP binding executes the owned aggregate and preserves exact legacy callers', () => {
+  test('T5-P/T8 descriptor-backed HTTP binding executes the owned aggregate', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     const route = readFileSync(resolve(sourceRoot, 'routes/plugins.ts'), 'utf8')
     const application = readFileSync(
@@ -1068,18 +1063,18 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
     expect(route).not.toContain("from '@/services/plugin'")
     expect(route).not.toContain("from '@/services/pluginInstaller'")
-    expect(route).toContain('PluginCommands')
-    expect(route).toContain('PluginUpdateCommands')
+    expect(route).toContain('PluginOperationDescriptors')
     expect(route).toContain('PluginQueries')
     expect(route).toContain('PluginAclIdentityParticipant')
     for (const consumer of [
-      'commands.create(',
-      'commands.update(',
-      'commands.delete(',
-      'commands.rename(',
-      'updateCommands.checkUpdate(',
-      'updateCommands.upgrade(',
-      'queries.list(',
+      'operations.create',
+      'operations.update',
+      'operations.delete',
+      'operations.rename',
+      'operations.checkUpdate',
+      'operations.upgrade',
+      'operations.list',
+      'operations.get',
       'queries.get(',
       'aclIdentity.load(',
       'aclIdentity.nextUpdatedAt(',
@@ -1126,8 +1121,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(operations).toContain(operationId)
     }
     expect(server).toContain('composePluginCatalog({')
-    expect(server).toContain('commands: pluginCatalog.commands')
-    expect(server).toContain('updateCommands: pluginCatalog.updateCommands')
+    expect(server).toContain('operations: pluginCatalog.operations')
     expect(server).toContain('queries: pluginCatalog.queries')
     expect(server).toContain('aclIdentity: pluginCatalog.participants.aclIdentity')
 
@@ -1186,16 +1180,17 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
 
     expect(route).not.toContain("from '@/services/workgroups'")
-    expect(route).toContain('WorkgroupCommands')
+    expect(route).toContain('WorkgroupOperationDescriptors')
     expect(route).toContain('WorkgroupQueries')
     expect(route).toContain('WorkgroupAclIdentityParticipant')
     for (const consumer of [
-      'commands.create(',
-      'commands.copy(',
-      'commands.update(',
-      'commands.delete(',
-      'commands.rename(',
-      'queries.list(',
+      'operations.create',
+      'operations.copy',
+      'operations.update',
+      'operations.delete',
+      'operations.rename',
+      'operations.list',
+      'operations.get',
       'queries.get(',
       'aclIdentity.load(',
     ]) {
@@ -1206,7 +1201,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(publicTypes).toContain('readonly body: string')
     expect(route).not.toContain('DeleteWorkgroupSchema')
     expect(route).toContain('c.req.raw.text()')
-    expect(route).toContain("deletion: { kind: 'json-body', body }")
+    expect(route).toContain('deletion: {')
     expect(application).toContain('requireResourceEdit')
     expect(application).toContain('requireResourceGovern')
     expect(application).toContain('DeleteWorkgroupSchema.safeParse(body)')
@@ -1223,7 +1218,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('createWorkgroupApplication')
     expect(operations).toContain('inputSchema: deleteWorkgroupInputSchema')
     expect(operations).toContain("kind: 'json-body'")
-    expect(operations).toContain("body: JSON.stringify(input.deletion) ?? '{}'")
 
     const deleteCommandStart = application.indexOf('async delete(')
     const loadVisible = application.indexOf(
@@ -1259,7 +1253,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(operations).toContain(operationId)
     }
     expect(server).toContain('composeWorkgroupCatalog({ db: effectiveDeps.db })')
-    expect(server).toContain('commands: workgroupCatalog.commands')
+    expect(server).toContain('operations: workgroupCatalog.operations')
     expect(server).toContain('queries: workgroupCatalog.queries')
     expect(server).toContain('aclIdentity: workgroupCatalog.participants.aclIdentity')
 
@@ -1309,17 +1303,17 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
 
     expect(route).not.toContain("from '@/services/agent'")
-    expect(route).toContain('AgentCommands')
+    expect(route).toContain('AgentOperationDescriptors')
     expect(route).toContain('AgentQueries')
     expect(route).toContain('AgentReferenceQueries')
     expect(route).toContain('AgentAclIdentityParticipant')
     for (const consumer of [
-      'commands.create(',
-      'commands.update(',
-      'commands.delete(',
-      'commands.rename(',
-      'queries.list(',
-      'queries.get(',
+      'operations.create',
+      'operations.update',
+      'operations.delete',
+      'operations.rename',
+      'operations.list',
+      'operations.get',
       'referenceQueries.labels(',
       'aclIdentity.load(',
     ]) {
@@ -1411,7 +1405,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(operations).toContain('agent-catalog.rename-agent.v1')
     expect(operations).toContain("submission: { kind: 'json-body'")
     expect(server).toContain('composeAgentCatalog({ db: effectiveDeps.db })')
-    expect(server).toContain('commands: agentCatalog.commands')
+    expect(server).toContain('operations: agentCatalog.operations')
     expect(server).toContain('queries: agentCatalog.queries')
     expect(server).toContain('referenceQueries: agentCatalog.referenceQueries')
     expect(server).toContain('aclIdentity: agentCatalog.participants.aclIdentity')
@@ -1479,7 +1473,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).not.toContain("from '@/services/skillVersion'")
     expect(route).toContain("from '@/services/skill-zip'")
     for (const contract of [
-      'SkillCommands',
+      'SkillOperationDescriptors',
       'SkillFileCommands',
       'SkillVersionCommands',
       'SkillQueries',
@@ -1490,14 +1484,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(route).toContain(contract)
     }
     for (const consumer of [
-      'commands.create(',
-      'commands.save(',
-      'commands.delete(',
+      'operations.create',
+      'operations.save',
+      'operations.delete',
+      'operations.list',
+      'operations.get',
       'fileCommands.write(',
       'fileCommands.delete(',
       'versionCommands.restore(',
-      'queries.list(',
-      'queries.get(',
       'queries.content(',
       'fileQueries.list(',
       'fileQueries.read(',
@@ -1561,7 +1555,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(mcpBindings).toContain(operationId)
     }
     expect(server).toContain('composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })')
-    expect(server).toContain('commands: skillCatalog.commands')
+    expect(server).toContain('operations: skillCatalog.operations')
     expect(server).toContain('fileCommands: skillCatalog.fileCommands')
     expect(server).toContain('versionCommands: skillCatalog.versionCommands')
     expect(server).toContain('queries: skillCatalog.queries')
@@ -1641,19 +1635,19 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).toContain("from '@/services/workflow.validator'")
     expect(route).toContain("from '@/services/resourceRefs'")
     for (const contract of [
-      'WorkflowCommands',
+      'WorkflowOperationDescriptors',
       'WorkflowQueries',
       'WorkflowAclIdentityParticipant',
     ]) {
       expect(route).toContain(contract)
     }
     for (const consumer of [
-      'commands.create(',
-      'commands.copy(',
-      'commands.update(',
-      'commands.delete(',
-      'queries.list(',
-      'queries.get(',
+      'operations.create',
+      'operations.copy',
+      'operations.update',
+      'operations.delete',
+      'operations.list',
+      'operations.get',
       'aclIdentity.load(',
     ]) {
       expect(route).toContain(consumer)
@@ -1710,7 +1704,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
     expect(operations).toContain('workflow-catalog.copy-workflow.v1')
     expect(server).toContain('composeWorkflowCatalog({ db: effectiveDeps.db })')
-    expect(server).toContain('commands: workflowCatalog.commands')
+    expect(server).toContain('operations: workflowCatalog.operations')
     expect(server).toContain('queries: workflowCatalog.queries')
     expect(server).toContain('aclIdentity: workflowCatalog.participants.aclIdentity')
 
@@ -1824,7 +1818,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'resource-catalog.apply-package.v1',
       'resource-catalog.get-package-preview.v1',
       'resource-catalog.get-package-receipt.v1',
-      'resource-catalog.export-package.v1',
+      'resource-catalog.export-agent-package.v1',
+      'resource-catalog.export-skill-package.v1',
+      'resource-catalog.export-mcp-package.v1',
+      'resource-catalog.export-plugin-package.v1',
+      'resource-catalog.export-workflow-package.v1',
+      'resource-catalog.export-workgroup-package.v1',
+      'resource-catalog.export-capability-template-package.v1',
     ]) {
       expect(
         readFileSync(resolve(sourceRoot, 'modules/resource-catalog/public/operations.ts'), 'utf8'),
@@ -1837,11 +1837,111 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'catalog.operations.apply',
       'catalog.operations.getPreview',
       'catalog.operations.getReceipt',
-      'catalog.operations.export',
+      'catalog.operations.exports',
     ]) {
       expect(`${route}\n${cli}`).toContain(consumer)
     }
     expect(server).toContain('composeResourcePackageOperations({')
     expect(main).toContain('composeResourcePackageOperations({')
+  })
+
+  test('T8 binds classic aggregates and ResourcePackage through exact descriptors', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const routeCases = [
+      ['agents.ts', 6],
+      ['mcps.ts', 6],
+      ['plugins.ts', 8],
+      ['skills.ts', 5],
+      ['workflows.ts', 6],
+      ['workgroups.ts', 7],
+    ] as const
+    for (const [file, expectedBindings] of routeCases) {
+      const route = readFileSync(resolve(sourceRoot, 'routes', file), 'utf8')
+      expect(route.split('registerOperationRoute(app, {').length - 1).toBe(expectedBindings)
+      expect(route).toContain('descriptor: operations.')
+    }
+
+    const packageRoute = readFileSync(resolve(sourceRoot, 'routes/resourcePackages.ts'), 'utf8')
+    const packageCli = readFileSync(resolve(sourceRoot, 'cli/package.ts'), 'utf8')
+    const bindings = readFileSync(resolve(sourceRoot, 'mcp/operationBindings.ts'), 'utf8')
+    const server = readFileSync(resolve(sourceRoot, 'server.ts'), 'utf8')
+
+    expect(packageRoute.split('registerOperationRoute(app, {').length - 1).toBe(9)
+    expect(packageRoute).not.toContain('registerRoute(')
+    expect(packageRoute).toContain(
+      "app.use('/api/resource-packages/preview', resourcePackageBodyLimit)",
+    )
+    expect(packageRoute).toContain(
+      "app.use('/api/resource-packages/commit', resourcePackageBodyLimit)",
+    )
+    expect(packageCli).toContain('catalog.operations.exports[type]')
+    expect(bindings).toContain("implementation: 'descriptor'")
+    for (const catalog of ['agent', 'mcp', 'plugin', 'skill', 'workflow', 'workgroup']) {
+      expect(server).toContain(`operations: ${catalog}Catalog.operations`)
+    }
+  })
+
+  test('T9 retires zero-consumer W4-C public and facade debt', () => {
+    const sourceRoot = resolve(import.meta.dir, '../src')
+    const commands = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/commands.ts'),
+      'utf8',
+    )
+    const queries = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/queries.ts'),
+      'utf8',
+    )
+    const participants = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/participants.ts'),
+      'utf8',
+    )
+    const publicTypes = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/public/types.ts'),
+      'utf8',
+    )
+    const authorization = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/resource-catalog/application/participants/resourceAuthorization.ts',
+      ),
+      'utf8',
+    )
+    const catalogQuery = readFileSync(
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts'),
+      'utf8',
+    )
+    const ledger = readFileSync(
+      resolve(import.meta.dir, 'architecture/rfc294-review-public-consumer-ledger.test.ts'),
+      'utf8',
+    )
+
+    expect(commands).not.toContain('ResourceAclCommands')
+    for (const retiredQuery of [
+      'export interface ResourceCatalogQuery',
+      'export interface ResourceAclQuery',
+      'export interface ResourceAuthorizationQuery',
+    ]) {
+      expect(queries).not.toContain(retiredQuery)
+    }
+    expect(participants).not.toContain('export interface ResourceAuthorizationInTx')
+    expect(authorization).toContain('interface ResourceAuthorizationInTx')
+    expect(authorization).not.toContain('trustedResourceAuthorizations')
+    expect(catalogQuery).toContain('interface SqliteResourceCatalogQuery')
+    expect(catalogQuery).not.toContain("from '../public/queries'")
+    for (const retiredExport of [
+      '  ACL_CATALOG_KINDS,',
+      '  CATALOG_SELECTOR_KINDS,',
+      '  GRANT_TARGET_KINDS,',
+      '  type GrantTargetRef,',
+      '  type ResourceSummaryRevisionByKind,',
+      '  asAclCatalogKind,',
+      '  asCatalogSelectorKind,',
+      '  resourceRef,',
+      '  resourceSummaryRevisionEquals,',
+    ]) {
+      expect(publicTypes).not.toContain(retiredExport)
+    }
+    expect(ledger).not.toContain('public:resource-catalog:')
+    expect(existsSync(resolve(sourceRoot, 'services/resourceAccessPolicy.ts'))).toBe(false)
   })
 })

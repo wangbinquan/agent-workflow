@@ -11,17 +11,14 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import type {
-  PluginCommands,
-  PluginUpdateCommands,
-} from '@/modules/resource-catalog/public/commands'
+import type { PluginOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type {
   PluginAclIdentityParticipant,
   PluginOperationContext,
 } from '@/modules/resource-catalog/public/participants'
 import type { PluginQueries } from '@/modules/resource-catalog/public/queries'
 import type { PluginCatalogResource } from '@/modules/resource-catalog/public/types'
-import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { serializePluginFor } from '@/services/tokenRedaction'
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
@@ -31,15 +28,14 @@ import { mountAclEndpoints } from './resourceAcl'
 import { safeJsonOrEmpty } from '@/util/http'
 
 export interface PluginRouteDependencies {
-  readonly commands: PluginCommands
-  readonly updateCommands: PluginUpdateCommands
   readonly queries: PluginQueries
+  readonly operations: PluginOperationDescriptors
   readonly aclIdentity: PluginAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => PluginOperationContext
 }
 
 export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteDependencies): void {
-  const { commands, updateCommands, queries, aclIdentity } = module
+  const { queries, operations, aclIdentity } = module
 
   async function loadVisiblePlugin(actor: Actor, id: string): Promise<PluginCatalogResource> {
     const plugin = await queries.get(module.authorityFor(actor), { id })
@@ -49,75 +45,61 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
     return plugin
   }
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/plugins',
-      permissions: ['plugins:read'],
-      tokenAccess: 'allow',
-      summary: 'List plugins visible to the caller',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.list,
+    method: 'GET',
+    path: '/api/plugins',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, visible) => {
       const listActor = actorOf(c)
-      const visible = await queries.list(module.authorityFor(listActor))
       return c.json(visible.map((plugin) => serializePluginFor(plugin, listActor.source)))
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/plugins/:id',
-      permissions: ['plugins:read'],
-      tokenAccess: 'allow',
-      summary: 'Get one plugin',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.get,
+    method: 'GET',
+    path: '/api/plugins/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, plugin) => {
       const actor = actorOf(c)
-      return c.json(
-        serializePluginFor(await loadVisiblePlugin(actor, c.req.param('id')), actor.source),
-      )
+      if (plugin === null)
+        throw new NotFoundError('plugin-not-found', `plugin '${c.req.param('id')}' not found`)
+      return c.json(serializePluginFor(plugin, actor.source))
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/plugins',
-      permissions: ['plugins:create'],
-      tokenAccess: 'allow',
-      summary: 'Install a plugin',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.create,
+    method: 'POST',
+    path: '/api/plugins',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = CreatePluginSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-invalid', 'invalid plugin payload', {
           issues: parsed.error.issues,
         })
       }
-      try {
-        const actor = actorOf(c)
-        const created = await commands.create(module.authorityFor(actor), parsed.data)
-        return c.json(serializePluginFor(created, actor.source), 201)
-      } catch (error) {
-        throw wrapInstallErrors(error)
-      }
+      return parsed.data
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, created) => c.json(serializePluginFor(created, actorOf(c).source), 201),
+    mapError: (error) => {
+      throw wrapInstallErrors(error)
+    },
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/plugins/:id',
-      permissions: ['plugins:update'],
-      tokenAccess: 'allow',
-      summary: 'Replace a plugin',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.update,
+    method: 'PUT',
+    path: '/api/plugins/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = UpdatePluginRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-invalid', 'invalid plugin patch', {
@@ -126,28 +108,21 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      try {
-        const updated = await commands.update(module.authorityFor(actor), {
-          id: initial.id,
-          update: parsed.data,
-        })
-        return c.json(serializePluginFor(updated, actor.source))
-      } catch (error) {
-        throw wrapInstallErrors(error)
-      }
+      return { id: initial.id, update: parsed.data }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, updated) => c.json(serializePluginFor(updated, actorOf(c).source)),
+    mapError: (error) => {
+      throw wrapInstallErrors(error)
+    },
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/plugins/:id',
-      permissions: ['plugins:delete'],
-      tokenAccess: 'allow',
-      summary: 'Delete a plugin',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.delete,
+    method: 'DELETE',
+    path: '/api/plugins/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
       const deleteBody = await readDeleteBody(c)
@@ -158,25 +133,24 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
           issues: parsed.error.issues,
         })
       }
-      const receipt = await commands.delete(module.authorityFor(actor), {
+      return {
         id: initial.id,
         deletion: parsed.data,
-      })
-      captureDeleteSnapshot(c, actor, receipt.deleted)
+      }
+    },
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
+      captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/plugins/:id/rename',
-      permissions: ['plugins:update'],
-      tokenAccess: 'allow',
-      summary: 'Rename a plugin',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.rename,
+    method: 'POST',
+    path: '/api/plugins/:id/rename',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = RenamePluginRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-rename-invalid', 'invalid rename payload', {
@@ -185,24 +159,21 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      const renamed = await commands.rename(module.authorityFor(actor), {
+      return {
         id: initial.id,
         rename: parsed.data,
-      })
-      return c.json(serializePluginFor(renamed, actor.source))
+      }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, renamed) => c.json(serializePluginFor(renamed, actorOf(c).source)),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/plugins/:id/check-update',
-      permissions: ['plugins:execute'],
-      tokenAccess: 'allow',
-      summary: 'Check upstream for a newer version',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.checkUpdate,
+    method: 'POST',
+    path: '/api/plugins/:id/check-update',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = PluginOperationRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
@@ -211,28 +182,21 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      try {
-        const receipt = await updateCommands.checkUpdate(module.authorityFor(actor), {
-          id: initial.id,
-          operation: parsed.data,
-        })
-        return c.json(receipt)
-      } catch (error) {
-        throw wrapInstallErrors(error)
-      }
+      return { id: initial.id, operation: parsed.data }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => c.json(receipt),
+    mapError: (error) => {
+      throw wrapInstallErrors(error)
+    },
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/plugins/:id/upgrade',
-      permissions: ['plugins:update'],
-      tokenAccess: 'allow',
-      summary: 'Upgrade a plugin to a newer version',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.upgrade,
+    method: 'POST',
+    path: '/api/plugins/:id/upgrade',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = PluginOperationRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('plugin-operation-invalid', 'expectedConfigHash is required', {
@@ -241,17 +205,14 @@ export function mountPluginRoutes(app: Hono, deps: AppDeps, module: PluginRouteD
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      try {
-        const receipt = await updateCommands.upgrade(module.authorityFor(actor), {
-          id: initial.id,
-          operation: parsed.data,
-        })
-        return c.json(receipt)
-      } catch (error) {
-        throw wrapInstallErrors(error)
-      }
+      return { id: initial.id, operation: parsed.data }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => c.json(receipt),
+    mapError: (error) => {
+      throw wrapInstallErrors(error)
+    },
+  })
 
   mountAclEndpoints(app, deps, {
     type: 'plugin',

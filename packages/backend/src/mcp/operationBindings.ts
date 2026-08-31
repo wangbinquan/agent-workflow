@@ -20,9 +20,17 @@ const command = (
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
 ): DeclaredHttpOperation => declareHttpOperation({ id, method, path, kind: 'command' })
+const descriptorQuery = (id: string, path: string): DeclaredHttpOperation =>
+  declareHttpOperation({ id, method: 'GET', path, kind: 'query', implementation: 'descriptor' })
+const descriptorCommand = (
+  id: string,
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  path: string,
+): DeclaredHttpOperation =>
+  declareHttpOperation({ id, method, path, kind: 'command', implementation: 'descriptor' })
 
 export const MCP_OPERATIONS = Object.freeze({
-  workflowGet: query('workflow-catalog.get-workflow.v1', '/api/workflows/:id'),
+  workflowGet: descriptorQuery('workflow-catalog.get-workflow.v1', '/api/workflows/:id'),
   taskLaunch: command('task-execution.launch-task.v1', 'POST', '/api/tasks'),
   cachedReposList: query('source-control.list-cached-repos.v1', '/api/cached-repos'),
   repoRefsList: query('source-control.list-repo-refs.v1', '/api/repos/refs'),
@@ -180,46 +188,58 @@ export const MCP_OPERATIONS = Object.freeze({
 
 export const RESOURCE_OPERATIONS = Object.freeze({
   agents: Object.freeze({
-    list: query('agent-catalog.list-agents.v1', '/api/agents'),
-    get: query('agent-catalog.get-agent.v1', '/api/agents/:id'),
-    create: command('agent-catalog.create-agent.v1', 'POST', '/api/agents'),
-    update: command('agent-catalog.update-agent.v1', 'PUT', '/api/agents/:id'),
-    delete: command('agent-catalog.delete-agent.v1', 'DELETE', '/api/agents/:id'),
+    list: descriptorQuery('agent-catalog.list-agents.v1', '/api/agents'),
+    get: descriptorQuery('agent-catalog.get-agent.v1', '/api/agents/:id'),
+    create: descriptorCommand('agent-catalog.create-agent.v1', 'POST', '/api/agents'),
+    update: descriptorCommand('agent-catalog.update-agent.v1', 'PUT', '/api/agents/:id'),
+    delete: descriptorCommand('agent-catalog.delete-agent.v1', 'DELETE', '/api/agents/:id'),
   }),
   skills: Object.freeze({
-    list: query('skill-catalog.list-skills.v1', '/api/skills'),
-    get: query('skill-catalog.get-skill.v1', '/api/skills/:id'),
-    create: command('skill-catalog.create-skill.v1', 'POST', '/api/skills'),
-    update: command('skill-catalog.save-skill.v1', 'POST', '/api/skills/:id/save'),
-    delete: command('skill-catalog.delete-skill.v1', 'DELETE', '/api/skills/:id'),
+    list: descriptorQuery('skill-catalog.list-skills.v1', '/api/skills'),
+    get: descriptorQuery('skill-catalog.get-skill.v1', '/api/skills/:id'),
+    create: descriptorCommand('skill-catalog.create-skill.v1', 'POST', '/api/skills'),
+    update: descriptorCommand('skill-catalog.save-skill.v1', 'POST', '/api/skills/:id/save'),
+    delete: descriptorCommand('skill-catalog.delete-skill.v1', 'DELETE', '/api/skills/:id'),
   }),
   mcps: Object.freeze({
-    list: query('mcp-catalog.list-mcps.v1', '/api/mcps'),
-    get: query('mcp-catalog.get-mcp.v1', '/api/mcps/:id'),
-    create: command('mcp-catalog.create-mcp.v1', 'POST', '/api/mcps'),
-    update: command('mcp-catalog.update-mcp.v1', 'PUT', '/api/mcps/:id'),
-    delete: command('mcp-catalog.delete-mcp.v1', 'DELETE', '/api/mcps/:id'),
+    list: descriptorQuery('mcp-catalog.list-mcps.v1', '/api/mcps'),
+    get: descriptorQuery('mcp-catalog.get-mcp.v1', '/api/mcps/:id'),
+    create: descriptorCommand('mcp-catalog.create-mcp.v1', 'POST', '/api/mcps'),
+    update: descriptorCommand('mcp-catalog.update-mcp.v1', 'PUT', '/api/mcps/:id'),
+    delete: descriptorCommand('mcp-catalog.delete-mcp.v1', 'DELETE', '/api/mcps/:id'),
   }),
   plugins: Object.freeze({
-    list: query('plugin-catalog.list-plugins.v1', '/api/plugins'),
-    get: query('plugin-catalog.get-plugin.v1', '/api/plugins/:id'),
-    create: command('plugin-catalog.create-plugin.v1', 'POST', '/api/plugins'),
-    update: command('plugin-catalog.update-plugin.v1', 'PUT', '/api/plugins/:id'),
-    delete: command('plugin-catalog.delete-plugin.v1', 'DELETE', '/api/plugins/:id'),
+    list: descriptorQuery('plugin-catalog.list-plugins.v1', '/api/plugins'),
+    get: descriptorQuery('plugin-catalog.get-plugin.v1', '/api/plugins/:id'),
+    create: descriptorCommand('plugin-catalog.create-plugin.v1', 'POST', '/api/plugins'),
+    update: descriptorCommand('plugin-catalog.update-plugin.v1', 'PUT', '/api/plugins/:id'),
+    delete: descriptorCommand('plugin-catalog.delete-plugin.v1', 'DELETE', '/api/plugins/:id'),
   }),
   workflows: Object.freeze({
-    list: query('workflow-catalog.list-workflows.v1', '/api/workflows'),
+    list: descriptorQuery('workflow-catalog.list-workflows.v1', '/api/workflows'),
     get: MCP_OPERATIONS.workflowGet,
-    create: command('workflow-catalog.create-workflow.v1', 'POST', '/api/workflows'),
-    update: command('workflow-catalog.update-workflow.v1', 'PUT', '/api/workflows/:id'),
-    delete: command('workflow-catalog.delete-workflow.v1', 'DELETE', '/api/workflows/:id'),
+    create: descriptorCommand('workflow-catalog.create-workflow.v1', 'POST', '/api/workflows'),
+    update: descriptorCommand('workflow-catalog.update-workflow.v1', 'PUT', '/api/workflows/:id'),
+    delete: descriptorCommand(
+      'workflow-catalog.delete-workflow.v1',
+      'DELETE',
+      '/api/workflows/:id',
+    ),
   }),
   workgroups: Object.freeze({
-    list: query('workgroup-catalog.list-workgroups.v1', '/api/workgroups'),
-    get: query('workgroup-catalog.get-workgroup.v1', '/api/workgroups/:id'),
-    create: command('workgroup-catalog.create-workgroup.v1', 'POST', '/api/workgroups'),
-    update: command('workgroup-catalog.update-workgroup.v1', 'PUT', '/api/workgroups/:id'),
-    delete: command('workgroup-catalog.delete-workgroup.v1', 'DELETE', '/api/workgroups/:id'),
+    list: descriptorQuery('workgroup-catalog.list-workgroups.v1', '/api/workgroups'),
+    get: descriptorQuery('workgroup-catalog.get-workgroup.v1', '/api/workgroups/:id'),
+    create: descriptorCommand('workgroup-catalog.create-workgroup.v1', 'POST', '/api/workgroups'),
+    update: descriptorCommand(
+      'workgroup-catalog.update-workgroup.v1',
+      'PUT',
+      '/api/workgroups/:id',
+    ),
+    delete: descriptorCommand(
+      'workgroup-catalog.delete-workgroup.v1',
+      'DELETE',
+      '/api/workgroups/:id',
+    ),
   }),
   'scheduled-tasks': Object.freeze({
     list: query('scheduled-task.list-scheduled-tasks.v1', '/api/scheduled-tasks'),

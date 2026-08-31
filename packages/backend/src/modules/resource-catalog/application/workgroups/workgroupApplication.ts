@@ -161,7 +161,7 @@ export function createWorkgroupApplication(
       assertDeleteConfirm(deletion, current.name)
       const result = await deps.repository.delete(authority, { id: input.id, deletion })
       deps.events.deleted(result)
-      return result.receipt
+      return Object.freeze({ ...result.receipt, deleted: Object.freeze({ ...current }) })
     },
     async rename(authority: WorkgroupOperationContext, input: RenameWorkgroupCatalogInput) {
       const rename = RenameWorkgroupSchema.parse(input.rename)

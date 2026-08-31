@@ -1,5 +1,4 @@
 import type { FileNode } from '@agent-workflow/shared'
-import type { QueryContext } from '@/modules/identity-access/public/participants'
 import type { AgentOperationContext } from './participants'
 import type { McpOperationContext } from './participants'
 import type { PluginOperationContext } from './participants'
@@ -10,15 +9,11 @@ import type {
   AgentCatalogResource,
   AgentReferenceLabels,
   AgentReferenceLabelsInput,
-  CatalogResourceRef,
-  GetResourceAclRequest,
   GetAgentCatalogInput,
   GetMcpCatalogInput,
   McpCatalogResource,
   GetPluginCatalogInput,
   PluginCatalogResource,
-  ResourceAclDocument,
-  ResourceAclTarget,
   DiffSkillVersionsCatalogInput,
   GetSkillCatalogInput,
   GetSkillContentCatalogInput,
@@ -31,10 +26,6 @@ import type {
   SkillCatalogVersion,
   SkillCatalogVersionContent,
   SkillCatalogVersionDiff,
-  ResourceScopeAccess,
-  ResourceSummary,
-  ResourceSummaryPage,
-  ResourceSummaryQuery,
   GetWorkflowCatalogInput,
   WorkflowCatalogDetail,
   WorkflowCatalogResource,
@@ -42,19 +33,6 @@ import type {
   WorkgroupCatalogDetail,
   WorkgroupCatalogResource,
 } from './types'
-
-export interface ResourceCatalogQuery {
-  listVisible(context: QueryContext, query: ResourceSummaryQuery): Promise<ResourceSummaryPage>
-  getVisibleSummary(context: QueryContext, ref: CatalogResourceRef): Promise<ResourceSummary | null>
-}
-
-export interface ResourceAclQuery {
-  get(context: QueryContext, request: GetResourceAclRequest): Promise<ResourceAclDocument>
-}
-
-export interface ResourceAuthorizationQuery {
-  accessOf(context: QueryContext, target: ResourceAclTarget): Promise<ResourceScopeAccess>
-}
 
 export interface AgentQueries {
   list(authority: AgentOperationContext): Promise<readonly AgentCatalogResource[]>

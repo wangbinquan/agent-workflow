@@ -46,11 +46,6 @@ import type { AclResourceRef, CatalogResourceRef } from '../domain/resourceRef'
 import type { ResourceSummaryRevision } from '../domain/resourceRevision'
 
 export {
-  ACL_CATALOG_KINDS,
-  CATALOG_SELECTOR_KINDS,
-  GRANT_TARGET_KINDS,
-  asAclCatalogKind,
-  asCatalogSelectorKind,
   asPackageResourceKind,
   type AclCatalogKind,
   type CatalogSelectorKind,
@@ -58,18 +53,12 @@ export {
   type PackageResourceKind,
 } from '../domain/resourceKinds'
 export {
-  resourceRef,
   type AclResourceRef,
   type CatalogResourceRef,
-  type GrantTargetRef,
   type PackageResourceRef,
   type ResourceRef,
 } from '../domain/resourceRef'
-export {
-  resourceSummaryRevisionEquals,
-  type ResourceSummaryRevision,
-  type ResourceSummaryRevisionByKind,
-} from '../domain/resourceRevision'
+export { type ResourceSummaryRevision } from '../domain/resourceRevision'
 
 declare const resourceCatalogCursorBrand: unique symbol
 
@@ -479,6 +468,8 @@ export interface DeleteWorkgroupCatalogReceipt {
   readonly id: string
   readonly deletedVersion: number
   readonly clientMutationId: string
+  /** Exact pre-delete snapshot used by transport audit projection only. */
+  readonly deleted: WorkgroupCatalogDetail
 }
 
 /** Purpose-specific identity used by the generic ACL transport adapter. */

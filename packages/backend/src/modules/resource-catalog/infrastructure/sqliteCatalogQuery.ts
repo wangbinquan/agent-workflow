@@ -2,7 +2,6 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { agents, mcps, plugins, skills, workflows, workgroups } from '@/db/schema'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
-import type { ResourceCatalogQuery } from '../public/queries'
 import type {
   CatalogResourceRef,
   ResourceCatalogCursor,
@@ -375,9 +374,14 @@ export interface SqliteResourceCatalogQueryDependencies extends SqliteResourceCa
   resolve(context: QueryContext): ActorCatalogQuery
 }
 
+interface SqliteResourceCatalogQuery {
+  listVisible(context: QueryContext, query: ResourceSummaryQuery): Promise<ResourceSummaryPage>
+  getVisibleSummary(context: QueryContext, ref: CatalogResourceRef): Promise<ResourceSummary | null>
+}
+
 export function createSqliteResourceCatalogQuery(
   dependencies: SqliteResourceCatalogQueryDependencies,
-): ResourceCatalogQuery {
+): SqliteResourceCatalogQuery {
   return {
     listVisible(context, query) {
       const resolved = dependencies.resolve(context)

@@ -39,7 +39,7 @@ export interface ValidatedWorkgroupDeleteInput {
 }
 
 export interface WorkgroupDeleteResult {
-  readonly receipt: DeleteWorkgroupCatalogReceipt
+  readonly receipt: Omit<DeleteWorkgroupCatalogReceipt, 'deleted'>
   readonly audience: WorkgroupDeletedAudience
 }
 

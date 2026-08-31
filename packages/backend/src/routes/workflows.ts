@@ -15,15 +15,15 @@ import {
 import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { WorkflowCommands } from '@/modules/resource-catalog/public/commands'
+import type { WorkflowOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type {
   WorkflowAclIdentityParticipant,
   WorkflowOperationContext,
 } from '@/modules/resource-catalog/public/participants'
 import type { WorkflowQueries } from '@/modules/resource-catalog/public/queries'
-import type { WorkflowCatalogResource } from '@/modules/resource-catalog/public/types'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import {
   serializeWorkflowFor,
@@ -50,8 +50,8 @@ import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { safeJsonOrEmpty } from '@/util/http'
 
 export interface WorkflowRouteDependencies {
-  readonly commands: WorkflowCommands
   readonly queries: WorkflowQueries
+  readonly operations: WorkflowOperationDescriptors
   readonly aclIdentity: WorkflowAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => WorkflowOperationContext
 }
@@ -61,7 +61,7 @@ export function mountWorkflowRoutes(
   deps: AppDeps,
   module: WorkflowRouteDependencies,
 ): void {
-  const { commands, queries, aclIdentity } = module
+  const { queries, operations, aclIdentity } = module
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleWorkflow(actor: Actor, id: string) {
@@ -72,24 +72,19 @@ export function mountWorkflowRoutes(
     return wf
   }
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/workflows',
-      permissions: ['workflows:read'],
-      tokenAccess: 'allow',
-      summary: 'List workflows visible to the caller',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.list,
+    method: 'GET',
+    path: '/api/workflows',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, rows) => {
       // Hide the built-in aw-skill-fusion workflow (RFC-101): infrastructure the
       // daemon references by name, not a user list row. Discriminator = reserved
       // name AND __system__ owner — workflows.name is non-unique, so a user-owned
       // workflow named aw-skill-fusion must stay visible. See systemResources.ts.
       const actor = actorOf(c)
-      const rows: readonly WorkflowCatalogResource[] = await queries.list(
-        module.authorityFor(actor),
-      )
       // RFC-311 (proposal C2): the list carried every workflow's FULL definition
       // JSON — the transport bulk of this endpoint — while the list UI only
       // renders a node count. Detail keeps the definition.
@@ -111,127 +106,96 @@ export function mountWorkflowRoutes(
         }),
       )
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/workflows/:id',
-      permissions: ['workflows:read'],
-      tokenAccess: 'allow',
-      summary: 'Get one workflow',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.get,
+    method: 'GET',
+    path: '/api/workflows/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, workflow) => {
       const actor = actorOf(c)
-      return c.json(
-        serializeWorkflowFor(
-          await loadVisibleWorkflow(actor, c.req.param('id')),
-          workflowReadLensFor(actor),
-        ),
-      )
+      if (workflow === null) {
+        throw new NotFoundError('workflow-not-found', `workflow '${c.req.param('id')}' not found`)
+      }
+      return c.json(serializeWorkflowFor(workflow, workflowReadLensFor(actor)))
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/workflows',
-      permissions: ['workflows:create'],
-      tokenAccess: 'allow',
-      summary: 'Create a workflow',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.create,
+    method: 'POST',
+    path: '/api/workflows',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, created) => {
       const actor = actorOf(c)
-      const body = await c.req.raw.text().catch(() => '')
-      const created = await commands.create(module.authorityFor(actor), {
-        submission: { kind: 'json-body', body },
-      })
       return c.json(serializeWorkflowFor(created, workflowReadLensFor(actor)), 201)
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/workflows/:id/copy',
-      permissions: ['workflows:create'],
-      tokenAccess: 'allow',
-      summary: 'Copy a workflow into a private duplicate',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.copy,
+    method: 'POST',
+    path: '/api/workflows/:id/copy',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = CopyWorkflowRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workflow-copy-invalid', 'invalid workflow copy payload', {
           issues: parsed.error.issues,
         })
       }
+      return { id: c.req.param('id'), copy: parsed.data }
+    },
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, copied) => {
       const actor = actorOf(c)
       // Copy is the one write a PAT can perform on a script-bearing workflow
       // (verbatim provenance skips the scripts:author gate, D21) — its response
       // must not hand back the env plaintext the read path hides.
-      return c.json(
-        serializeWorkflowFor(
-          await commands.copy(module.authorityFor(actor), {
-            id: c.req.param('id'),
-            copy: parsed.data,
-          }),
-          workflowReadLensFor(actor),
-        ),
-        201,
-      )
+      return c.json(serializeWorkflowFor(copied, workflowReadLensFor(actor)), 201)
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/workflows/:id',
-      permissions: ['workflows:update'],
-      tokenAccess: 'allow',
-      summary: 'Replace a workflow',
-    },
-    async (c) => {
-      const id = c.req.param('id')
+  registerOperationRoute(app, {
+    descriptor: operations.update,
+    method: 'PUT',
+    path: '/api/workflows/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
       const actor = actorOf(c)
-      const body = await c.req.raw.text().catch(() => '')
       // A save answers with a RECEIPT, whose `snapshot` carries the definition
       // just written — the record projection would not reach it.
-      return c.json(
-        serializeWorkflowReceiptFor(
-          await commands.update(module.authorityFor(actor), {
-            id,
-            submission: { kind: 'json-body', body },
-          }),
-          workflowReadLensFor(actor),
-        ),
-      )
+      return c.json(serializeWorkflowReceiptFor(receipt, workflowReadLensFor(actor)))
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/workflows/:id',
-      permissions: ['workflows:delete'],
-      tokenAccess: 'allow',
-      summary: 'Delete a workflow',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const body = await c.req.raw.text().catch(() => '')
-      const receipt = await commands.delete(module.authorityFor(actor), {
-        id: c.req.param('id'),
-        submission: { kind: 'json-body', body },
-      })
-      captureDeleteSnapshot(c, actor, receipt.deleted)
+  registerOperationRoute(app, {
+    descriptor: operations.delete,
+    method: 'DELETE',
+    path: '/api/workflows/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
+      captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
-  )
+  })
 
   registerRoute(
     app,

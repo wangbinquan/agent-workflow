@@ -17,7 +17,10 @@ import {
 } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
-import type { ResourcePackageCatalogModule } from '@/modules/resource-catalog/public/operations'
+import type {
+  ResourcePackageCatalogModule,
+  ResourcePackageOperationDescriptors,
+} from '@/modules/resource-catalog/public/operations'
 import type {
   ApplyResourcePackage,
   ExportResourcePackage,
@@ -26,7 +29,7 @@ import type {
   PackageResourceRef,
 } from '@/modules/resource-catalog/public/types'
 import { invokeOperation } from '@/platform/operations/invoke'
-import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
 
@@ -218,166 +221,127 @@ function parseRootFence(c: Context): ResourcePackageExportFence {
 // cannot be added for a type the bundle does not carry. That gate is why the
 // capability-template routes below arrived only once T17a's ops, closure,
 // applier and — last — serializer were all in place.
-function exportHandler(type: PackageResourceKind, deps: ResourcePackageRouteDeps) {
-  return async (c: Context): Promise<Response> => {
-    const actor = actorOf(c)
-    const receipt = await invokeOperation(
-      deps.catalog.operations.export,
-      deps.commandContextFor(actor),
-      deps.catalog.transport.stageExport(actor, {
-        root: { kind: type, id: c.req.param('id') ?? '' },
-        exportedAt: Date.now(),
-        // 客户端「所见非所得」revision 只针对 root；导出器会自行复核整棵闭包在
-        // 本次读取期间没有变化，客户端不需要预先知道传递成员。
-        expect: parseRootFence(c),
-      }),
-    )
-    const bytes = deps.catalog.transport.takeExport(receipt.packageId)
-    return new Response(new Blob([bytes]), {
-      headers: {
-        'content-type': 'application/zip',
-        'content-disposition': `attachment; filename="${receipt.filename}"`,
-      },
-    })
-  }
+function exportInput(
+  type: PackageResourceKind,
+  deps: ResourcePackageRouteDeps,
+  c: Context,
+): ExportResourcePackage {
+  const actor = actorOf(c)
+  return deps.catalog.transport.stageExport(actor, {
+    root: { kind: type, id: c.req.param('id') ?? '' },
+    exportedAt: Date.now(),
+    // 客户端「所见非所得」revision 只针对 root；导出器会自行复核整棵闭包在
+    // 本次读取期间没有变化，客户端不需要预先知道传递成员。
+    expect: parseRootFence(c),
+  })
+}
+
+function exportResponse(
+  deps: ResourcePackageRouteDeps,
+  receipt: Awaited<ReturnType<ResourcePackageOperationDescriptors['exports']['agent']['invoke']>>,
+): Response {
+  const bytes = deps.catalog.transport.takeExport(receipt.packageId)
+  return new Response(new Blob([bytes]), {
+    headers: {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="${receipt.filename}"`,
+    },
+  })
 }
 
 export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRouteDeps): void {
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/agents/:id/export-package',
-      permissions: ['agents:read'],
-      tokenAccess: 'allow',
-      summary: 'Export an agent with its transitive closure (config package)',
-    },
-    exportHandler('agent', deps),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/skills/:id/export-package',
-      permissions: ['skills:read'],
-      tokenAccess: 'allow',
-      summary: 'Export a skill with its transitive closure (config package)',
-    },
-    exportHandler('skill', deps),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/mcps/:id/export-package',
-      permissions: ['mcps:read'],
-      tokenAccess: 'allow',
-      summary: 'Export an MCP with its transitive closure (config package)',
-    },
-    exportHandler('mcp', deps),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/plugins/:id/export-package',
-      permissions: ['plugins:read'],
-      tokenAccess: 'allow',
-      summary: 'Export a plugin with its transitive closure (config package)',
-    },
-    exportHandler('plugin', deps),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/workflows/:id/export-package',
-      permissions: ['workflows:read'],
-      tokenAccess: 'allow',
-      summary: 'Export a workflow with its transitive closure (config package)',
-    },
-    exportHandler('workflow', deps),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/workgroups/:id/export-package',
-      permissions: ['workgroups:read'],
-      tokenAccess: 'allow',
-      summary: 'Export a workgroup with its transitive closure (config package)',
-    },
-    exportHandler('workgroup', deps),
-  )
-  // RFC-304 T17a — the two capability template layers.
-  //
-  // Everything else about the round trip shipped and this was the only missing
-  // producer: the bundle carries both types, the closure walks
-  // binding→framework, and the import applier writes both rows. Without a route
-  // a group could import a package somebody handed them and nobody could hand
-  // one over.
-  //
-  // RFC-309 — one export. The old pair existed because a binding alone named a
-  // framework the destination did not have, so exporting one had to pull the
-  // other along. A merged template carries both halves, so the closure that
-  // used to reach across layers has nothing left to reach for.
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/capability-templates/:id/export-package',
-      permissions: ['capability-templates:read'],
-      tokenAccess: 'allow',
-      summary: 'Export a capability template (config package)',
-    },
-    exportHandler('capability_template', deps),
-  )
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.exports.agent,
+    method: 'GET',
+    path: '/api/agents/:id/export-package',
+    tokenAccess: 'allow',
+    decode: (c) => exportInput('agent', deps, c),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: (_c, receipt) => exportResponse(deps, receipt),
+  })
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.exports.skill,
+    method: 'GET',
+    path: '/api/skills/:id/export-package',
+    tokenAccess: 'allow',
+    decode: (c) => exportInput('skill', deps, c),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: (_c, receipt) => exportResponse(deps, receipt),
+  })
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.exports.mcp,
+    method: 'GET',
+    path: '/api/mcps/:id/export-package',
+    tokenAccess: 'allow',
+    decode: (c) => exportInput('mcp', deps, c),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: (_c, receipt) => exportResponse(deps, receipt),
+  })
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.exports.plugin,
+    method: 'GET',
+    path: '/api/plugins/:id/export-package',
+    tokenAccess: 'allow',
+    decode: (c) => exportInput('plugin', deps, c),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: (_c, receipt) => exportResponse(deps, receipt),
+  })
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.exports.workflow,
+    method: 'GET',
+    path: '/api/workflows/:id/export-package',
+    tokenAccess: 'allow',
+    decode: (c) => exportInput('workflow', deps, c),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: (_c, receipt) => exportResponse(deps, receipt),
+  })
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.exports.workgroup,
+    method: 'GET',
+    path: '/api/workgroups/:id/export-package',
+    tokenAccess: 'allow',
+    decode: (c) => exportInput('workgroup', deps, c),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: (_c, receipt) => exportResponse(deps, receipt),
+  })
+  // RFC-304 T17a → RFC-309 — one packaged template type. The descriptor owns
+  // the exact capability-template admission while the shared exporter still
+  // carries the framework/binding closure as one package resource.
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.exports.capability_template,
+    method: 'GET',
+    path: '/api/capability-templates/:id/export-package',
+    tokenAccess: 'allow',
+    decode: (c) => exportInput('capability_template', deps, c),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: (_c, receipt) => exportResponse(deps, receipt),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/resource-packages/preview',
-      // ⚠️ **只做身份准入**（AC-30c）。挂六类 `*:read` 的 AND 会与逐条预检自相
-      // 矛盾：一个只含 agent 的包，凭什么要求调用方同时有 `mcps:read`？
-      permissions: [],
-      publicReason:
-        'no resource-type point: the package decides which types it touches and the per-entry preview computes those permissions itself. Identity is still REQUIRED — this path is not in multiAuth PUBLIC_PATH_PREFIXES, so an unauthenticated caller is rejected before the handler runs.',
-      tokenAccess: 'allow',
-      summary: 'Inspect a config package against this instance (no writes)',
-    },
-    resourcePackageBodyLimit,
-    async (c) => {
-      const actor = actorOf(c)
-      const inspected = await invokeOperation(
-        deps.catalog.operations.inspect,
-        deps.commandContextFor(actor),
-        deps.catalog.transport.stageInspect(actor, await readUpload(c)),
-      )
+  app.use('/api/resource-packages/preview', resourcePackageBodyLimit)
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.inspect,
+    method: 'POST',
+    path: '/api/resource-packages/preview',
+    tokenAccess: 'allow',
+    decode: async (c) => deps.catalog.transport.stageInspect(actorOf(c), await readUpload(c)),
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: async (c, inspected) => {
       const preview = await invokeOperation(
         deps.catalog.operations.getPreview,
-        deps.queryContextFor(actor),
+        deps.queryContextFor(actorOf(c)),
         { previewId: inspected.previewId },
       )
       return c.json(PackagePreviewSchema.parse(JSON.parse(preview.document)))
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/resource-packages/commit',
-      // 同上——**写**权限由业务层按包内条目逐条判（`allowedActions` 服务端重算，
-      // 且「别人的资源不给 overwrite」在那里定死）。
-      permissions: [],
-      publicReason:
-        'no resource-type point: the decisions decide which rows are touched and the server recomputes allowedActions per entry. Identity is still REQUIRED — this path is not in multiAuth PUBLIC_PATH_PREFIXES.',
-      tokenAccess: 'allow',
-      summary: 'Apply a previewed config package',
-    },
-    resourcePackageBodyLimit,
-    async (c) => {
+  app.use('/api/resource-packages/commit', resourcePackageBodyLimit)
+  registerOperationRoute(app, {
+    descriptor: deps.catalog.operations.apply,
+    method: 'POST',
+    path: '/api/resource-packages/commit',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const form = await readMultipart(c)
       const file = packageFile(form)
       const previewToken = String(form.get('previewToken') ?? '')
@@ -397,7 +361,6 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
         })
       }
       const decisions: z.infer<typeof ImportDecisionsSchema> = parsed.data
-      // 工作组的 human 成员：包里带的是源实例 username，本机绑谁由用户逐个选。
       let rawMappings: unknown
       try {
         rawMappings = JSON.parse(String(form.get('humanMemberMappings') ?? '[]'))
@@ -423,27 +386,24 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
           issues: parsedSecretInputs.error.issues,
         })
       }
-      const secretInputs: z.infer<typeof PackageSecretInputsSchema> = parsedSecretInputs.data
-      const actor = actorOf(c)
-      const applied = await invokeOperation(
-        deps.catalog.operations.apply,
-        deps.commandContextFor(actor),
-        deps.catalog.transport.stageApply(actor, {
-          bytes: new Uint8Array(await file.arrayBuffer()),
-          previewToken,
-          decisions,
-          humanMemberMappings,
-          secretInputs,
-        }),
-      )
+      return deps.catalog.transport.stageApply(actorOf(c), {
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        previewToken,
+        decisions,
+        humanMemberMappings,
+        secretInputs: parsedSecretInputs.data,
+      })
+    },
+    context: (c) => deps.commandContextFor(actorOf(c)),
+    encode: async (c, applied) => {
       const receipt = await invokeOperation(
         deps.catalog.operations.getReceipt,
-        deps.queryContextFor(actor),
+        deps.queryContextFor(actorOf(c)),
         { receiptId: applied.receiptId },
       )
       return c.json(PackageImportReceiptSchema.parse(JSON.parse(receipt.document)))
     },
-  )
+  })
 }
 
 async function readUpload(c: Context): Promise<Uint8Array> {

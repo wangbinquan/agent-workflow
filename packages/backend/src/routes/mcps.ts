@@ -26,7 +26,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { AppDeps } from '@/server'
-import type { McpCommands } from '@/modules/resource-catalog/public/commands'
+import type { McpOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type {
   McpAclIdentityParticipant,
   McpOperationContext,
@@ -34,6 +34,7 @@ import type {
 import type { McpQueries } from '@/modules/resource-catalog/public/queries'
 import type { McpCatalogResource } from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { serializeMcpFor } from '@/services/tokenRedaction'
@@ -67,15 +68,15 @@ export function mcpRouteNow(): number {
 }
 
 export interface McpRouteDependencies {
-  readonly commands: McpCommands
   readonly queries: McpQueries
+  readonly operations: McpOperationDescriptors
   readonly aclIdentity: McpAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => McpOperationContext
   readonly runtimeTests: McpRuntimeTestService
 }
 
 export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDependencies): void {
-  const { commands, queries, aclIdentity, runtimeTests } = module
+  const { queries, operations, aclIdentity, runtimeTests } = module
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleMcp(actor: Actor, id: string): Promise<McpCatalogResource> {
     const mcp = await queries.get(module.authorityFor(actor), { id })
@@ -83,21 +84,18 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
     return mcp
   }
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/mcps',
-      permissions: ['mcps:read'],
-      tokenAccess: 'allow',
-      summary: 'List MCP servers visible to the caller',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.list,
+    method: 'GET',
+    path: '/api/mcps',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, visible) => {
       const actor = actorOf(c)
-      const visible = await queries.list(module.authorityFor(actor))
       return c.json(visible.map((mcp) => serializeMcpFor(mcp, actor.source)))
     },
-  )
+  })
 
   // RFC-030 — must come BEFORE /api/mcps/:id to avoid being swallowed.
   // RFC-099: probe rows are keyed by mcpId — only visible MCPs' probes leak.
@@ -119,20 +117,19 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/mcps/:id',
-      permissions: ['mcps:read'],
-      tokenAccess: 'allow',
-      summary: 'Get one MCP server',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.get,
+    method: 'GET',
+    path: '/api/mcps/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, mcp) => {
       const actor = actorOf(c)
-      return c.json(serializeMcpFor(await loadVisibleMcp(actor, c.req.param('id')), actor.source))
+      if (mcp === null) throw new NotFoundError('mcp-not-found', 'mcp not found')
+      return c.json(serializeMcpFor(mcp, actor.source))
     },
-  )
+  })
 
   // RFC-238 — private multi-turn runtime playground. Dialog dismiss never
   // reaches a mutating endpoint; only message/cancel/end change lifecycle.
@@ -304,16 +301,12 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/mcps',
-      permissions: ['mcps:create'],
-      tokenAccess: 'allow',
-      summary: 'Create an MCP server',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.create,
+    method: 'POST',
+    path: '/api/mcps',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = CreateMcpSchema.safeParse(body)
       if (!parsed.success) {
@@ -321,22 +314,21 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
           issues: parsed.error.issues,
         })
       }
+      return parsed.data
+    },
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, created) => {
       const actor = actorOf(c)
-      const created = await commands.create(module.authorityFor(actor), parsed.data)
       return c.json(serializeMcpFor(created, actor.source), 201)
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/mcps/:id',
-      permissions: ['mcps:update'],
-      tokenAccess: 'allow',
-      summary: 'Replace an MCP server',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.update,
+    method: 'PUT',
+    path: '/api/mcps/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = UpdateMcpRequestSchema.safeParse(body)
@@ -345,25 +337,24 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      const updated = await commands.update(module.authorityFor(actor), {
+      return {
         id,
         update: parsed.data,
-      })
+      }
+    },
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, updated) => {
+      const actor = actorOf(c)
       return c.json(serializeMcpFor(updated, actor.source))
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/mcps/:id',
-      permissions: ['mcps:delete'],
-      tokenAccess: 'allow',
-      summary: 'Delete an MCP server',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.delete,
+    method: 'DELETE',
+    path: '/api/mcps/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const id = c.req.param('id')
       const actor = actorOf(c)
       const resolved = await loadVisibleMcp(actor, id)
@@ -375,25 +366,24 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
           issues: parsed.error.issues,
         })
       }
-      const receipt = await commands.delete(module.authorityFor(actor), {
+      return {
         id: resolved.id,
         deletion: parsed.data,
-      })
-      captureDeleteSnapshot(c, actor, receipt.deleted)
+      }
+    },
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
+      captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/mcps/:id/rename',
-      permissions: ['mcps:update'],
-      tokenAccess: 'allow',
-      summary: 'Rename an MCP server',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.rename,
+    method: 'POST',
+    path: '/api/mcps/:id/rename',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = RenameMcpRequestSchema.safeParse(body)
@@ -402,14 +392,17 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      const renamed = await commands.rename(module.authorityFor(actor), {
+      return {
         id,
         rename: parsed.data,
-      })
+      }
+    },
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, renamed) => {
+      const actor = actorOf(c)
       return c.json(serializeMcpFor(renamed, actor.source))
     },
-  )
+  })
 
   // RFC-030 — per-mcp probe endpoints.
   registerRoute(

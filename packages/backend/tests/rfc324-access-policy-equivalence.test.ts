@@ -23,7 +23,7 @@ import {
   hasResourceAclBypass,
   resolveResourceAccess,
   type AclRow,
-} from '../src/services/resourceAccessPolicy'
+} from '../src/modules/resource-catalog/domain/resourceAccess'
 
 // ── oracle：RFC-324 之前的两个谓词，逐字誊自 services/resourceAcl.ts ──────────
 

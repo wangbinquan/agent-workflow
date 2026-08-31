@@ -293,7 +293,7 @@ async function runExport(
   }
 
   const receipt = await invokeOperation(
-    catalog.operations.export,
+    catalog.operations.exports[type],
     identity.commandContext(),
     catalog.transport.stageExport(identity.actor, {
       root: { kind: type, id },

@@ -20,7 +20,7 @@ import {
 import { z } from 'zod'
 import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { AgentCommands } from '@/modules/resource-catalog/public/commands'
+import type { AgentOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type {
   AgentAclIdentityParticipant,
   AgentOperationContext,
@@ -33,6 +33,7 @@ import type {
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
 import { resolveRefsUsableById } from '@/services/resourceRefs'
@@ -58,9 +59,9 @@ import { safeJsonOrEmpty } from '@/util/http'
 import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
 export interface AgentRouteDependencies {
-  readonly commands: AgentCommands
   readonly queries: AgentQueries
   readonly referenceQueries: AgentReferenceQueries
+  readonly operations: AgentOperationDescriptors
   readonly aclIdentity: AgentAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => AgentOperationContext
 }
@@ -80,7 +81,7 @@ function closureRefNameMaps(labels: AgentReferenceLabels): ClosureRefNameMaps {
 }
 
 export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDependencies): void {
-  const { commands, queries, referenceQueries, aclIdentity } = module
+  const { queries, referenceQueries, operations, aclIdentity } = module
   // RFC-099: load-or-404 that treats "missing" and "not visible" identically
   // (same code + message) so existence never leaks to non-granted users.
   async function loadVisibleAgent(actor: Actor, id: string): Promise<AgentCatalogResource> {
@@ -103,19 +104,15 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     return closureRefNameMaps(labels)
   }
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/agents',
-      permissions: ['agents:read'],
-      tokenAccess: 'allow',
-      summary: 'List agents visible to the caller',
-    },
-    async (c) => {
-      return c.json(await queries.list(module.authorityFor(actorOf(c))))
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.list,
+    method: 'GET',
+    path: '/api/agents',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, output) => c.json(output),
+  })
 
   registerRoute(
     app,
@@ -183,20 +180,18 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/agents/:id',
-      permissions: ['agents:read'],
-      tokenAccess: 'allow',
-      summary: 'Get one agent',
-    },
-    async (c) => {
-      const agent = await loadVisibleAgent(actorOf(c), c.req.param('id'))
+  registerOperationRoute(app, {
+    descriptor: operations.get,
+    method: 'GET',
+    path: '/api/agents/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, agent) => {
+      if (agent === null) throw new NotFoundError('agent-not-found', 'agent not found')
       return c.json(agent)
     },
-  )
+  })
 
   // RFC-228: actor-safe labels + integrity for the edit form. Existence is
   // computed from the unfiltered inventory; visibility is applied only while
@@ -218,16 +213,12 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/agents',
-      permissions: ['agents:create'],
-      tokenAccess: 'allow',
-      summary: 'Create an agent',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.create,
+    method: 'POST',
+    path: '/api/agents',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = CreateAgentSchema.safeParse(body)
       if (!parsed.success) {
@@ -235,69 +226,55 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
-      // enforced INSIDE createAgent, bound to the same single resolution that
-      // produces the persisted ids (no check-then-resolve TOCTOU). On create every
-      // reference is new.
-      const created = await commands.create(module.authorityFor(actor), parsed.data)
-      return c.json(created, 201)
+      return parsed.data
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, created) => c.json(created, 201),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/agents/:id',
-      permissions: ['agents:update'],
-      tokenAccess: 'allow',
-      summary: 'Replace an agent',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.update,
+    method: 'PUT',
+    path: '/api/agents/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
-      const actor = actorOf(c)
       // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
       // enforced INSIDE updateAgent, bound to the same single resolution that
       // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
       // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
       // not mis-flagged as new.
-      const updated = await commands.update(module.authorityFor(actor), {
+      return {
         id,
         submission: {
           kind: 'json-body',
           body: JSON.stringify(body) ?? '{}',
         },
-      })
-      return c.json(updated)
+      }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, updated) => c.json(updated),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/agents/:id',
-      permissions: ['agents:delete'],
-      tokenAccess: 'allow',
-      summary: 'Delete an agent',
-    },
-    async (c) => {
-      const id = c.req.param('id')
-      const actor = actorOf(c)
-      const body = await c.req.raw.text().catch(() => '')
-      const receipt = await commands.delete(module.authorityFor(actor), {
-        id,
-        submission: {
-          kind: 'json-body',
-          body,
-        },
-      })
-      captureDeleteSnapshot(c, actor, receipt.deleted)
+  registerOperationRoute(app, {
+    descriptor: operations.delete,
+    method: 'DELETE',
+    path: '/api/agents/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      submission: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
+      captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
-  )
+  })
 
   // RFC-165 §4 — launch a SINGLE-AGENT task (POST /api/agents/:id/tasks).
   // Service-layer entry (the builtin __agent_host__ workflow would 403
@@ -396,16 +373,12 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/agents/:id/rename',
-      permissions: ['agents:update'],
-      tokenAccess: 'allow',
-      summary: 'Rename an agent',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.rename,
+    method: 'POST',
+    path: '/api/agents/:id/rename',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = RenameAgentRequestSchema.safeParse(body)
@@ -414,14 +387,14 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      const renamed = await commands.rename(module.authorityFor(actor), {
+      return {
         id,
         rename: parsed.data,
-      })
-      return c.json(renamed)
+      }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, renamed) => c.json(renamed),
+  })
 
   // RFC-022: closure read-only endpoint. Returns the BFS-ordered agent list
   // for the named agent's dependsOn closure (root first). Missing closure

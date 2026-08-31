@@ -1092,33 +1092,32 @@ export function mountApiRoutes(
     resourceScopeAuthorization,
   }) // RFC-190
   mountAgentRoutes(app, routeDeps, {
-    commands: agentCatalog.commands,
     queries: agentCatalog.queries,
     referenceQueries: agentCatalog.referenceQueries,
+    operations: agentCatalog.operations,
     aclIdentity: agentCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
   mountMcpRoutes(app, deps, {
-    commands: mcpCatalog.commands,
     queries: mcpCatalog.queries,
+    operations: mcpCatalog.operations,
     aclIdentity: mcpCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
     runtimeTests: mcpRuntimeTests,
   })
   mountPluginRoutes(app, deps, {
-    commands: pluginCatalog.commands,
-    updateCommands: pluginCatalog.updateCommands,
     queries: pluginCatalog.queries,
+    operations: pluginCatalog.operations,
     aclIdentity: pluginCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
   mountSkillRoutes(app, deps, {
-    commands: skillCatalog.commands,
     fileCommands: skillCatalog.fileCommands,
     versionCommands: skillCatalog.versionCommands,
     queries: skillCatalog.queries,
     fileQueries: skillCatalog.fileQueries,
     versionQueries: skillCatalog.versionQueries,
+    operations: skillCatalog.operations,
     aclIdentity: skillCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
@@ -1126,14 +1125,14 @@ export function mountApiRoutes(
   mountCachedRepoRoutes(app, deps)
   mountRepoGroupRoutes(app, deps)
   mountWorkflowRoutes(app, deps, {
-    commands: workflowCatalog.commands,
     queries: workflowCatalog.queries,
+    operations: workflowCatalog.operations,
     aclIdentity: workflowCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   })
   mountWorkgroupRoutes(app, routeDeps, {
-    commands: workgroupCatalog.commands,
     queries: workgroupCatalog.queries,
+    operations: workgroupCatalog.operations,
     aclIdentity: workgroupCatalog.participants.aclIdentity,
     authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
   }) // RFC-164

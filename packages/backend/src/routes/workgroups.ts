@@ -22,19 +22,17 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { WorkgroupCommands } from '@/modules/resource-catalog/public/commands'
+import type { WorkgroupOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type {
   WorkgroupAclIdentityParticipant,
   WorkgroupOperationContext,
 } from '@/modules/resource-catalog/public/participants'
 import type { WorkgroupQueries } from '@/modules/resource-catalog/public/queries'
-import type {
-  WorkgroupCatalogDetail,
-  WorkgroupCatalogResource,
-} from '@/modules/resource-catalog/public/types'
+import type { WorkgroupCatalogDetail } from '@/modules/resource-catalog/public/types'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
+import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 // RFC-243 T2: workgroup launches go through the unified executor facade — this
 // route must not call startWorkgroupTask directly (source-text lock).
@@ -51,8 +49,8 @@ import {
 import { safeJsonOrEmpty } from '@/util/http'
 
 export interface WorkgroupRouteDependencies {
-  readonly commands: WorkgroupCommands
   readonly queries: WorkgroupQueries
+  readonly operations: WorkgroupOperationDescriptors
   readonly aclIdentity: WorkgroupAclIdentityParticipant
   readonly authorityFor: (actor: Actor) => WorkgroupOperationContext
 }
@@ -62,7 +60,7 @@ export function mountWorkgroupRoutes(
   deps: AppDeps,
   module: WorkgroupRouteDependencies,
 ): void {
-  const { commands, queries, aclIdentity } = module
+  const { queries, operations, aclIdentity } = module
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleWorkgroup(actor: Actor, id: string): Promise<WorkgroupCatalogDetail> {
@@ -73,37 +71,28 @@ export function mountWorkgroupRoutes(
     return group
   }
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/workgroups',
-      permissions: ['workgroups:read'],
-      tokenAccess: 'allow',
-      summary: 'List workgroups visible to the caller',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const list: readonly WorkgroupCatalogResource[] = await queries.list(
-        module.authorityFor(actor),
-      )
-      return c.json(list)
-    },
-  )
+  registerOperationRoute(app, {
+    descriptor: operations.list,
+    method: 'GET',
+    path: '/api/workgroups',
+    tokenAccess: 'allow',
+    decode: () => ({}),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, list) => c.json(list),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'GET',
-      path: '/api/workgroups/:id',
-      permissions: ['workgroups:read'],
-      tokenAccess: 'allow',
-      summary: 'Get one workgroup',
+  registerOperationRoute(app, {
+    descriptor: operations.get,
+    method: 'GET',
+    path: '/api/workgroups/:id',
+    tokenAccess: 'allow',
+    decode: (c) => ({ id: c.req.param('id') }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, group) => {
+      if (group === null) throw new NotFoundError('workgroup-not-found', 'workgroup not found')
+      return c.json(group)
     },
-    async (c) => {
-      return c.json(await loadVisibleWorkgroup(actorOf(c), c.req.param('id')))
-    },
-  )
+  })
 
   // RFC-228: advisory status for the editor/wizard. The POST launch service
   // always recomputes this; this endpoint only prevents a known-bad click and
@@ -138,16 +127,12 @@ export function mountWorkgroupRoutes(
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/workgroups',
-      permissions: ['workgroups:create'],
-      tokenAccess: 'allow',
-      summary: 'Create a workgroup',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.create,
+    method: 'POST',
+    path: '/api/workgroups',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = CreateWorkgroupSchema.safeParse(body)
       if (!parsed.success) {
@@ -155,52 +140,36 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      // RFC-223 (PR-1, Codex impl-gate P1-2): member reference ACL is enforced
-      // INSIDE createWorkgroup, bound to the same single resolution that produces
-      // the persisted member agentIds (no check-then-resolve TOCTOU).
-      const created = await commands.create(module.authorityFor(actor), parsed.data)
-      return c.json(created, 201)
+      return parsed.data
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, created) => c.json(created, 201),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/workgroups/:id/copy',
-      permissions: ['workgroups:create'],
-      tokenAccess: 'allow',
-      summary: 'Copy a workgroup into a private duplicate',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.copy,
+    method: 'POST',
+    path: '/api/workgroups/:id/copy',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const parsed = CopyWorkgroupRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('workgroup-copy-invalid', 'invalid workgroup copy payload', {
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      return c.json(
-        await commands.copy(module.authorityFor(actor), {
-          id: c.req.param('id'),
-          copy: parsed.data,
-        }),
-        201,
-      )
+      return { id: c.req.param('id'), copy: parsed.data }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, copied) => c.json(copied, 201),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'PUT',
-      path: '/api/workgroups/:id',
-      permissions: ['workgroups:update'],
-      tokenAccess: 'allow',
-      summary: 'Replace a workgroup document (version fenced)',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.update,
+    method: 'PUT',
+    path: '/api/workgroups/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = UpdateWorkgroupSchema.safeParse(body)
@@ -209,50 +178,37 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      const existing = await loadVisibleWorkgroup(actor, id)
-      return c.json(
-        await commands.update(module.authorityFor(actor), {
-          id: existing.id,
-          update: parsed.data,
-        }),
-      )
+      return { id, update: parsed.data }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, updated) => c.json(updated),
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'DELETE',
-      path: '/api/workgroups/:id',
-      permissions: ['workgroups:delete'],
-      tokenAccess: 'allow',
-      summary: 'Delete a workgroup (version fenced)',
-    },
-    async (c) => {
-      const id = c.req.param('id')
-      const actor = actorOf(c)
-      const existing = await loadVisibleWorkgroup(actor, id)
-      const body = await c.req.raw.text().catch(() => '')
-      await commands.delete(module.authorityFor(actor), {
-        id: existing.id,
-        deletion: { kind: 'json-body', body },
-      })
-      captureDeleteSnapshot(c, actor, existing)
+  registerOperationRoute(app, {
+    descriptor: operations.delete,
+    method: 'DELETE',
+    path: '/api/workgroups/:id',
+    tokenAccess: 'allow',
+    decode: async (c) => ({
+      id: c.req.param('id'),
+      deletion: {
+        kind: 'json-body',
+        body: await c.req.raw.text().catch(() => ''),
+      },
+    }),
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, receipt) => {
+      captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
-  )
+  })
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/workgroups/:id/rename',
-      permissions: ['workgroups:update'],
-      tokenAccess: 'allow',
-      summary: 'Rename a workgroup',
-    },
-    async (c) => {
+  registerOperationRoute(app, {
+    descriptor: operations.rename,
+    method: 'POST',
+    path: '/api/workgroups/:id/rename',
+    tokenAccess: 'allow',
+    decode: async (c) => {
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
       const parsed = RenameWorkgroupSchema.safeParse(body)
@@ -261,16 +217,11 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      const actor = actorOf(c)
-      const existing = await loadVisibleWorkgroup(actor, id)
-      return c.json(
-        await commands.rename(module.authorityFor(actor), {
-          id: existing.id,
-          rename: parsed.data,
-        }),
-      )
+      return { id, rename: parsed.data }
     },
-  )
+    context: (c) => module.authorityFor(actorOf(c)),
+    encode: (c, renamed) => c.json(renamed),
+  })
 
   // RFC-164 PR-3 — launch a workgroup task. Service-layer entry (the builtin
   // host workflow would 403 assertWorkflowLaunchable by design); the group
