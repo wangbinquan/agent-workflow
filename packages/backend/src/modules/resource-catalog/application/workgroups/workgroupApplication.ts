@@ -37,8 +37,8 @@ export interface WorkgroupApplicationDependencies {
   readonly clock: WorkgroupMutationClock
 }
 
-function notFound(id: string): NotFoundError {
-  return new NotFoundError('workgroup-not-found', `workgroup '${id}' not found`)
+function notFound(): NotFoundError {
+  return new NotFoundError('workgroup-not-found', 'workgroup not found')
 }
 
 function assertDeleteConfirm(input: DeleteWorkgroup, expectedName: string): void {
@@ -83,7 +83,7 @@ export function createWorkgroupApplication(deps: WorkgroupApplicationDependencie
   ): Promise<WorkgroupCatalogDetail> {
     const workgroup = await deps.repository.get(id)
     if (workgroup === null || !(await deps.access.canView(authority, workgroup))) {
-      throw notFound(id)
+      throw notFound()
     }
     return Object.freeze({ ...workgroup })
   }

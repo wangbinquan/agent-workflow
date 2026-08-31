@@ -145,7 +145,7 @@ describe('RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 
 })
 
 describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one resource session', () => {
-  test('TaskExecution has four managed session reads plus two explicit synthetic resolutions', () => {
+  test('TaskExecution has five managed session reads plus three explicit synthetic resolutions', () => {
     const text = [
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
@@ -153,7 +153,7 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
     ].join('\n')
     expect(text).not.toContain('await resolveInjection(')
     expect(text.split('taskExecutionResources.injection(').length - 1).toBe(5)
-    expect(text.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(2)
+    expect(text.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(3)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')
     expect(text).not.toContain('skills: [],\n      dependents: [],')
