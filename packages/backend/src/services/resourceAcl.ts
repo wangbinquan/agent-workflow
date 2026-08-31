@@ -24,7 +24,6 @@ import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/public/operations'
 export {
-  DEFAULT_USER_RESOURCE_VISIBILITY,
   assertInitialResourceOwner,
   canAuditIntentSessions,
   initialBuiltinResourceAcl,
@@ -33,7 +32,6 @@ export {
 } from '@/modules/resource-catalog/public/operations'
 export {
   canEditResource,
-  canEditResourceInTx,
   canGovernResource,
   canViewResource,
   canViewResourceInTx,
@@ -53,17 +51,11 @@ export {
   canViewAccess,
   discloseRefsSync,
   discloseScheduleRefs,
-  hasPrivateResourceAccess,
   hasResourceAclBypass,
   isVisibleRow,
   isVisibleToAudienceSnapshot,
-  resolveAccessFrom,
-  resolveResourceAccess,
   resourceAclAudienceAuthority,
   type AclRow,
-  type DisclosedRefs,
-  type ResourceAclActorProjection,
-  type ResourceAclAudienceAuthority,
 } from '@/modules/resource-catalog/public/operations'
 export {
   findOwnedAclResourceIdsByName,
@@ -78,21 +70,16 @@ export {
   listAclResourceIdentityRowsByNamesInTx,
   listOwnedAclResourceNames,
   loadAclResourceNamesByIds,
-  type AclResourceIdentitySnapshot,
 } from '@/modules/resource-catalog/public/operations'
 export {
   grantsOfResourceWhere,
-  grantsOfUserWhere,
   listGrantedResourceIds,
   listGrantedResourceIdsInTx,
   listResourceGrantUserIds,
   listResourceGrantUserIdsInTx,
   listResourceGrants,
-  listResourceGrantsInTx,
   listWritableGrantedResourceIds,
   loadGrantLevel,
-  loadGrantLevelInTx,
-  loadGrantLevelsForUser,
   visibleRowsCondition,
   type AclColumnRef,
 } from '@/modules/resource-catalog/public/operations'

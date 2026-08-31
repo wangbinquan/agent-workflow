@@ -1668,7 +1668,6 @@ export function createResourcePackageOperationDescriptors(
 
 export { assertNameUnchangedForEditor } from '../application/resourceAccess'
 export {
-  DEFAULT_USER_RESOURCE_VISIBILITY,
   assertInitialResourceOwner,
   canAuditIntentSessions,
   initialBuiltinResourceAcl,
@@ -1682,22 +1681,15 @@ export {
   canViewAccess,
   discloseRefsSync,
   discloseScheduleRefs,
-  hasPrivateResourceAccess,
   hasResourceAclBypass,
   isResourceNameSubmissionAllowed,
   isVisibleRow,
   isVisibleToAudienceSnapshot,
-  resolveAccessFrom,
-  resolveResourceAccess,
   resourceAclAudienceAuthority,
   type AclRow,
-  type DisclosedRefs,
-  type ResourceAclActorProjection,
-  type ResourceAclAudienceAuthority,
 } from '../domain/resourceAccess'
 export {
   canEditResource,
-  canEditResourceInTx,
   canGovernResource,
   canViewResource,
   canViewResourceInTx,
@@ -1729,21 +1721,16 @@ export {
   listAclResourceIdentityRowsByNamesInTx,
   listOwnedAclResourceNames,
   loadAclResourceNamesByIds,
-  type AclResourceIdentitySnapshot,
 } from '../infrastructure/sqliteAclReadRepository'
 export {
   grantsOfResourceWhere,
-  grantsOfUserWhere,
   listGrantedResourceIds,
   listGrantedResourceIdsInTx,
   listResourceGrantUserIds,
   listResourceGrantUserIdsInTx,
   listResourceGrants,
-  listResourceGrantsInTx,
   listWritableGrantedResourceIds,
   loadGrantLevel,
-  loadGrantLevelInTx,
-  loadGrantLevelsForUser,
   visibleRowsCondition,
   type AclColumnRef,
 } from '../infrastructure/sqliteResourceGrantRepository'
