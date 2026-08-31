@@ -59,6 +59,36 @@ export interface CreatePostgresqlProviderBackupOptions {
   readonly openLogicalSource?: PostgresqlLogicalSourceFactory
 }
 
+export interface PostgresqlScheduledBackupRequest {
+  readonly kind: 'scheduled'
+  readonly appHome: string
+}
+
+export type PostgresqlScheduledBackupRequester = (
+  input: PostgresqlScheduledBackupRequest,
+) => Promise<PortableBackupResult>
+
+/** Bootstrap adapter for the provider-neutral backup scheduler. The scheduler
+ * owns cadence/retention; this adapter owns the live PostgreSQL mechanism and
+ * forces the artifact into the scheduled retention family. */
+export function createPostgresqlScheduledBackupRequester(input: {
+  readonly options: Omit<
+    CreatePostgresqlProviderBackupOptions,
+    'appHome' | 'kind' | 'includeWorktrees'
+  >
+  /** Infrastructure test seam; production uses the live provider exporter. */
+  readonly createBackup?: typeof createPostgresqlProviderBackup
+}): PostgresqlScheduledBackupRequester {
+  const createBackup = input.createBackup ?? createPostgresqlProviderBackup
+  return async (request) =>
+    await createBackup({
+      ...input.options,
+      appHome: request.appHome,
+      kind: request.kind,
+      includeWorktrees: false,
+    })
+}
+
 function targetGenerationId(operationId: string): string {
   return `dbg_pg_${operationId.slice(4)}`
 }
