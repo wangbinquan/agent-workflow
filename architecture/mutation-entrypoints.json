@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1260,
+    "entries": 1268,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1417,7 +1417,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "internal-family",
+        "authority": "none-observed",
         "authorization": false,
         "event": true,
         "fenceOrOcc": false,
@@ -1428,12 +1428,63 @@
       "id": "mutation:packages/backend/src/modules/code-capability/application/codeMetricsQuery.ts#createCodeMetricsQuery",
       "missingControls": [
         "audit",
+        "authority",
         "authorization",
         "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMetricsQuery.ts#createCodeMetricsQuery",
       "symbol": "createCodeMetricsQuery",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts#DeliveryChainReadPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts#DeliveryChainReadPort",
+      "symbol": "DeliveryChainReadPort",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts#DeliveryRow",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts#DeliveryRow",
+      "symbol": "DeliveryRow",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -1852,9 +1903,9 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts",
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#deliveriesByCorrelation",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts#createPostgresqlCodeMetricsQuery",
       "missingControls": [
         "audit",
         "authority",
@@ -1863,8 +1914,132 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#deliveriesByCorrelation",
-      "symbol": "deliveriesByCorrelation",
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery.ts#createPostgresqlCodeMetricsQuery",
+      "symbol": "createPostgresqlCodeMetricsQuery",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlDeliveryChain.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlDeliveryChain.ts#createPostgresqlDeliveryChainRead",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlDeliveryChain.ts#createPostgresqlDeliveryChainRead",
+      "symbol": "createPostgresqlDeliveryChainRead",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlDeliveryChain.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlDeliveryChain.ts#DeliveryProjection",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlDeliveryChain.ts#DeliveryProjection",
+      "symbol": "DeliveryProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlRoundAttemptsRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlRoundAttemptsRead.ts#createPostgresqlRoundAttemptsRead",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlRoundAttemptsRead.ts#createPostgresqlRoundAttemptsRead",
+      "symbol": "createPostgresqlRoundAttemptsRead",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead.ts#createPostgresqlWorkItemProjectionRead",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead.ts#createPostgresqlWorkItemProjectionRead",
+      "symbol": "createPostgresqlWorkItemProjectionRead",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead.ts#stageFields",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead.ts#stageFields",
+      "symbol": "stageFields",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -1879,7 +2054,7 @@
       },
       "file": "packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#DeliveryRow",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#createSqliteDeliveryChainRead",
       "missingControls": [
         "audit",
         "authority",
@@ -1888,8 +2063,33 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#DeliveryRow",
-      "symbol": "DeliveryRow",
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#createSqliteDeliveryChainRead",
+      "symbol": "createSqliteDeliveryChainRead",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#deliveriesByCorrelation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteDeliveryChain.ts#deliveriesByCorrelation",
+      "symbol": "deliveriesByCorrelation",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -30071,7 +30271,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:06f029b085308fb93bc4b74677c469c09a971e71226520b32526b9aa4f4235af",
+  "sourceDigest": "sha256:376c929ee0edf2d68c0d4e7766b75003499bb228c42d097f7c6b902ed1001357",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

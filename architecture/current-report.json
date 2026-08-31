@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 473,
-    "architectureExceptions": 2173,
+    "architectureExceptions": 2190,
     "backgroundJobs": 282,
-    "crossContextImports": 2227,
+    "crossContextImports": 2244,
     "facades": 385,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 20899,
-    "mutationEntrypoints": 1260,
+    "moduleSymbolOwners": 20929,
+    "mutationEntrypoints": 1268,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 590,
     "transactionExternalEffects": 305
@@ -63,7 +63,7 @@
       "packages/backend/src/routes/workgroups.ts",
       "packages/backend/src/routes/worktree-files.ts"
     ],
-    "backendProductionFiles": 1164,
+    "backendProductionFiles": 1171,
     "backendValueSccs": [
       [
         "packages/backend/src/services/agent.ts",
@@ -113,7 +113,7 @@
     "moduleContexts": [
       {
         "context": "code-capability",
-        "files": 19
+        "files": 26
       },
       {
         "context": "collaboration",
@@ -168,7 +168,7 @@
         "files": 125
       }
     ],
-    "moduleFiles": 579,
+    "moduleFiles": 586,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -224,5 +224,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:06f029b085308fb93bc4b74677c469c09a971e71226520b32526b9aa4f4235af"
+  "sourceDigest": "sha256:376c929ee0edf2d68c0d4e7766b75003499bb228c42d097f7c6b902ed1001357"
 }

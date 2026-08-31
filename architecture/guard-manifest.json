@@ -1599,6 +1599,30 @@
       "lines": 110
     },
     {
+      "id": "rfc349-postgresql-preflight",
+      "file": "packages/backend/tests/rfc349-postgresql-preflight.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": true,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 171
+    },
+    {
+      "id": "rfc349-schema-contract",
+      "file": "packages/backend/tests/architecture/rfc349-schema-contract.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": true,
+      "minCorpusFiles": 1000,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 160
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -1996,14 +2020,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:06f029b085308fb93bc4b74677c469c09a971e71226520b32526b9aa4f4235af",
+    "sourceDigest": "sha256:376c929ee0edf2d68c0d4e7766b75003499bb228c42d097f7c6b902ed1001357",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "a80cdbfd0b30ebbb36b245e095dd734edeed68a9",
-    "contentDigest": "sha256:a26eb5b96300213a8ae3cab86ffadd25711f2fd1dba6600442008fea11d41fb7",
+    "currentSnapshotSha": "6e1ec9baaf94e0370674bc68c418de14af2dc3e2",
+    "contentDigest": "sha256:6751f4558c727986e257558a6a612423c14fdd997d22604c8a9f7abca3f332ce",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
