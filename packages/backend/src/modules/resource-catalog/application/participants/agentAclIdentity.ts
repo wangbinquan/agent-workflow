@@ -13,6 +13,7 @@ function identityOf(row: Agent | null): AgentAclIdentity | null {
     name: row.name,
     ownerUserId: row.ownerUserId ?? null,
     visibility: row.visibility ?? 'public',
+    builtin: row.builtin === true,
     aclRevision: row.aclRevision ?? 0,
     updatedAt: row.updatedAt,
   })

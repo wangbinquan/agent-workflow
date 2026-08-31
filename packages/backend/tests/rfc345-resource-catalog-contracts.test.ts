@@ -929,13 +929,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'queries.get(',
       'referenceQueries.labels(',
       'aclIdentity.load(',
-      'aclIdentity.nextUpdatedAt(',
     ]) {
       expect(route).toContain(consumer)
     }
     expect(publicTypes).not.toContain('readonly submission: unknown')
     expect(publicTypes).toContain("readonly kind: 'json-body'")
     expect(publicTypes).toContain('readonly body: string')
+    expect(publicTypes).toContain('readonly builtin: boolean')
+    expect(publicTypes).toContain('interface AgentReferenceLabel {')
+    expect(publicTypes).not.toContain('export interface AgentReferenceLabel {')
     expect(route).not.toContain('UpdateAgentRequestSchema')
     expect(route).not.toContain('DeleteAgentSchema')
     expect(route).not.toContain('readDeleteBody')
@@ -950,6 +952,15 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('const commands: AgentCommands = Object.freeze')
     expect(application).toContain('const queries: AgentQueries = Object.freeze')
     expect(application).toContain('const referenceQueries: AgentReferenceQueries = Object.freeze')
+    expect(
+      readFileSync(
+        resolve(
+          sourceRoot,
+          'modules/resource-catalog/application/participants/agentAclIdentity.ts',
+        ),
+        'utf8',
+      ),
+    ).toContain('builtin: row.builtin === true')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
     expect(repository).toContain("from '@/services/agent'")

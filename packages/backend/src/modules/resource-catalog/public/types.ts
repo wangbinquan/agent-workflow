@@ -155,6 +155,7 @@ export interface AgentAclIdentity {
   readonly name: string
   readonly ownerUserId: string | null
   readonly visibility: ResourceVisibility
+  readonly builtin: boolean
   readonly aclRevision: number
   readonly updatedAt: number
 }
@@ -164,7 +165,7 @@ export interface AgentReferenceLabelsInput {
   readonly visibleAgentIds: readonly string[]
 }
 
-export interface AgentReferenceLabel {
+interface AgentReferenceLabel {
   readonly id: string
   readonly name: string
 }
