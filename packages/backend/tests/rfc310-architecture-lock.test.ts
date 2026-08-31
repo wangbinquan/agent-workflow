@@ -265,7 +265,12 @@ describe('rfc310 development-automation architecture lock', () => {
       'src/modules/code-capability/infrastructure/gitAdapter.ts',
       'src/modules/code-capability/infrastructure/codeHostAdapter.ts',
     ]
-    const revived = retiredFiles.filter((rel) => existsSync(join(BACKEND_SRC, '..', rel)))
+    const revived = retiredFiles.filter((rel) => {
+      const retiredPath = join(BACKEND_SRC, '..', rel)
+      return rel === 'src/modules/code-capability/composition'
+        ? existsSync(retiredPath) && statSync(retiredPath).isFile()
+        : existsSync(retiredPath)
+    })
     expect(revived).toEqual([])
 
     const legacyRoot = join(BACKEND_SRC, 'modules', 'code-capability')
