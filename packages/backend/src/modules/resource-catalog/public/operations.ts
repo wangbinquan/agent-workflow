@@ -296,7 +296,12 @@ const deleteAgentInputSchema = z
 const renameAgentInputSchema = z
   .object({ id: z.string().min(1), rename: RenameAgentRequestSchema })
   .strict()
-const deleteAgentReceiptSchema = z.object({ deleted: AgentSchema }).strict()
+// Historical rows and source-backed fixtures predate the lowercase-only authoring
+// rule and may contain an uppercase ULID suffix in `name`. Keep create/update/
+// rename inputs on the strict shared schemas, while preserving the established
+// response contract for already-persisted resources.
+const agentCatalogResourceSchema = AgentSchema.extend({ name: z.string().min(1).max(128) })
+const deleteAgentReceiptSchema = z.object({ deleted: agentCatalogResourceSchema }).strict()
 
 export interface AgentOperationDescriptors {
   readonly list: QueryOperationDescriptor<
@@ -351,7 +356,7 @@ export function createAgentOperationDescriptors(
       permissions: ['agents:read'],
       publicErrors: AGENT_PUBLIC_ERRORS,
       inputSchema: emptyAgentInputSchema,
-      outputSchema: z.array(AgentSchema),
+      outputSchema: z.array(agentCatalogResourceSchema),
       invoke: async (authority: AgentOperationContext) => [...(await queries.list(authority))],
     }),
     get: defineQueryOperation({
@@ -360,7 +365,7 @@ export function createAgentOperationDescriptors(
       permissions: ['agents:read'],
       publicErrors: AGENT_PUBLIC_ERRORS,
       inputSchema: getAgentInputSchema,
-      outputSchema: AgentSchema.nullable(),
+      outputSchema: agentCatalogResourceSchema.nullable(),
       invoke: (authority: AgentOperationContext, input: GetAgentCatalogInput) =>
         queries.get(authority, input),
     }),
@@ -370,7 +375,7 @@ export function createAgentOperationDescriptors(
       permissions: ['agents:create'],
       publicErrors: AGENT_PUBLIC_ERRORS,
       inputSchema: CreateAgentSchema,
-      outputSchema: AgentSchema,
+      outputSchema: agentCatalogResourceSchema,
       invoke: (authority: AgentOperationContext, input: CreateAgentCatalogInput) =>
         commands.create(authority, input),
     }),
@@ -380,7 +385,7 @@ export function createAgentOperationDescriptors(
       permissions: ['agents:update'],
       publicErrors: AGENT_PUBLIC_ERRORS,
       inputSchema: updateAgentInputSchema,
-      outputSchema: AgentSchema,
+      outputSchema: agentCatalogResourceSchema,
       invoke: (authority: AgentOperationContext, input: UpdateAgentCatalogInput) =>
         commands.update(authority, input),
     }),
@@ -400,7 +405,7 @@ export function createAgentOperationDescriptors(
       permissions: ['agents:update'],
       publicErrors: AGENT_PUBLIC_ERRORS,
       inputSchema: renameAgentInputSchema,
-      outputSchema: AgentSchema,
+      outputSchema: agentCatalogResourceSchema,
       invoke: (authority: AgentOperationContext, input: RenameAgentCatalogInput) =>
         commands.rename(authority, input),
     }),

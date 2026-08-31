@@ -1335,6 +1335,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(operations).toContain('agent-catalog.rename-agent.v1')
     expect(operations).toContain('inputSchema: updateAgentInputSchema')
     expect(operations).toContain('inputSchema: deleteAgentInputSchema')
+    expect(operations).toContain(
+      'const agentCatalogResourceSchema = AgentSchema.extend({ name: z.string().min(1).max(128) })',
+    )
+    expect(operations).toContain('inputSchema: CreateAgentSchema')
+    expect(operations).toContain('outputSchema: z.array(agentCatalogResourceSchema)')
+    expect(operations).toContain('outputSchema: agentCatalogResourceSchema')
     expect(server).toContain('composeAgentCatalog({ db: effectiveDeps.db })')
     expect(server).toContain('operations: agentCatalog.operations')
     expect(server).toContain('queries: agentCatalog.queries')
@@ -1524,8 +1530,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'modules/resource-catalog/infrastructure/sqliteSkillRepository.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/fusion.ts',
-      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/journalArtifacts.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/skill-zip.ts',
       'services/skill.ts',
     ])

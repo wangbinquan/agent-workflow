@@ -19,6 +19,12 @@ import { packageSrcUnits } from './census'
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 const contract = buildLogicalSchemaContract()
 
+function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId: string): boolean {
+  const symbolPattern = new RegExp(`\\b${schemaSymbol}\\b`)
+  const physicalPattern = new RegExp(`(?:['"\`])${tableId}(?:['"\`])`)
+  return symbolPattern.test(text) || physicalPattern.test(text)
+}
+
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
     expect(RFC349_SOURCE_TABLES).toHaveLength(184)
@@ -90,17 +96,28 @@ describe('RFC-349 canonical schema contract', () => {
         unit.path !== 'packages/backend/src/platform/persistence/schemaContract.ts' &&
         !unit.path.startsWith('packages/backend/src/platform/persistence/migration/'),
     )
+    expect(units.length).toBeGreaterThanOrEqual(1000)
     const byId = new Map(contract.tables.map((table) => [table.id, table]))
     for (const id of RFC349_ARCHIVE_THEN_OMIT_TABLES) {
       const table = byId.get(id)
       if (!table) throw new Error(`missing archive contract for ${id}`)
-      const symbolPattern = new RegExp(`\\b${table.schemaSymbol}\\b`)
-      const physicalPattern = new RegExp(`(?:['"\`])${id}(?:['"\`])`)
       const consumers = units
-        .filter((unit) => symbolPattern.test(unit.text) || physicalPattern.test(unit.text))
+        .filter((unit) => sourceMentionsArchiveTable(unit.text, table.schemaSymbol, id))
         .map((unit) => unit.path)
       expect(consumers, `${id} regained a production consumer`).toEqual([])
     }
+  })
+
+  test('archive-only production-consumer matcher rejects symbol and physical table references', () => {
+    expect(sourceMentionsArchiveTable('const rows = legacyRows', 'legacyRows', 'legacy_rows')).toBe(
+      true,
+    )
+    expect(sourceMentionsArchiveTable("readTable('legacy_rows')", 'legacyRows', 'legacy_rows')).toBe(
+      true,
+    )
+    expect(sourceMentionsArchiveTable('const unrelated = true', 'legacyRows', 'legacy_rows')).toBe(
+      false,
+    )
   })
 
   test('manifest digest covers every canonical field', () => {

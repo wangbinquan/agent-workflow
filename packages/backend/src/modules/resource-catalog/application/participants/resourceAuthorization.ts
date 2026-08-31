@@ -27,7 +27,7 @@ interface ResourceAclTarget {
   readonly visibility: ResourceVisibility
 }
 
-interface ResourceAuthorizationInTx {
+interface ResourceAccessEvaluator {
   accessOf(authority: ResourceRequestContext, target: ResourceAclTarget): ResourceScopeAccess
   assertView(authority: ResourceRequestContext, target: ResourceAclTarget): void
   assertEdit(authority: ResourceRequestContext, target: ResourceAclTarget): void
@@ -38,7 +38,7 @@ function resourceAuthorizationForTransaction(
   tx: DbTxSync,
   authorityResolver: ResourceCurrentAuthorityResolver,
   dependencies: ResourceAuthorizationParticipantDependencies,
-): ResourceAuthorizationInTx {
+): ResourceAccessEvaluator {
   const accessOf = (authority: ResourceRequestContext, target: ResourceAclTarget) =>
     dependencies.authorization.resolveResourceAccessForInTx(
       tx,
@@ -80,7 +80,7 @@ function resourceAuthorizationForTransaction(
       )
     },
   })
-  return participant satisfies ResourceAuthorizationInTx
+  return participant satisfies ResourceAccessEvaluator
 }
 
 const trustedResourceScopeAuthorizations = new WeakSet<ResourceScopeAuthorizationInTx>()

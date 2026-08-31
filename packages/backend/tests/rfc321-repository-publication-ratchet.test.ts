@@ -371,7 +371,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     )
     expect(server).toContain('deps.repositoryPublicationTransport ??')
     expect(server).toMatch(
-      /const routeDeps: ComposedAppDeps = \{[\s\S]{0,160}repositoryPublicationTransport,[\s\S]{0,80}schedulerDriver/,
+      /const routeDeps = \{\s*\.\.\.deps,\s*identityAccess,\s*repositoryPublicationTransport,\s*schedulerDriver,/,
     )
     expect(taskRoutes).toContain('requireSchedulerDriver(deps.schedulerDriver)')
     expect(scheduleLaunch).toContain('schedulerDriver: SchedulerDriverPort')
