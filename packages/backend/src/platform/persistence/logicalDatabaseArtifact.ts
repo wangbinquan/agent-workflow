@@ -4,7 +4,6 @@
 // JSON's number coercion. That keeps signed 64-bit integers, booleans, NULL,
 // blobs and arbitrary JSON text byte-equivalent across SQLite and PostgreSQL.
 
-import { createHash } from 'node:crypto'
 import {
   closeSync,
   existsSync,
@@ -18,6 +17,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { sha256Hex } from '@/util/hash'
 import {
   canonicalSchemaJson,
   digestSchemaContract,
@@ -423,7 +423,7 @@ function durableWriteOnce(path: string, body: string): void {
 export function writeDurableLogicalArtifact(path: string, value: unknown): string {
   const body = canonicalSchemaJson(value)
   durableWriteOnce(path, body)
-  return `sha256:${createHash('sha256').update(body).digest('hex')}`
+  return `sha256:${sha256Hex(body)}`
 }
 
 export function logicalChunkPath(
@@ -610,5 +610,5 @@ export function summarizeLogicalTableChunks(input: {
 }
 
 export function logicalArtifactFileDigest(path: string): string {
-  return `sha256:${createHash('sha256').update(readFileSync(path)).digest('hex')}`
+  return `sha256:${sha256Hex(readFileSync(path))}`
 }

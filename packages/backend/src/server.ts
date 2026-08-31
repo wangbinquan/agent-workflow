@@ -60,6 +60,7 @@ import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/co
 import {
   canViewResourceInTx,
   composeResourceScopeAuthorizationBinding,
+  type ResourceScopeAuthorizationBinding,
 } from '@/modules/resource-catalog/composition/resourceAcl'
 import {
   composeIntegrationTriggerResourceBinding,
@@ -325,7 +326,9 @@ export interface AppDeps {
    */
   databaseMigration?: DatabaseMigrationModule
   /** RFC-347 bootstrap-owned authority/presence runtime shared by HTTP/MCP/WS. */
-  identityAccess?: IdentityAccessRuntime
+  identityAccess?: IdentityAccessRuntime & {
+    readonly taskExecutionResources?: TaskExecutionResourceBinding
+  }
   /** RFC-340 bootstrap-owned review access/config context shared by REST and MCP dispatch. */
   collaborationContext?: CollaborationCommandContext
   /** RFC-338: indexed/live projection from the off-thread maintenance owner. */
@@ -847,6 +850,8 @@ export function createApp(deps: AppDeps): Hono {
           appHome: effectiveDeps.appHome ?? Paths.root,
           box: effectiveDeps.secretBox,
         })
+  const resourceScopeAuthorization = composeResourceScopeAuthorizationBinding()
+  const intentApply = composeIntentApplyResourceBinding(legacyIntentApplyResourceDependencies)
   const identityUserOperations = composeIdentityUserOperations({
     db: effectiveDeps.db,
     identityAccess,
@@ -866,6 +871,8 @@ export function createApp(deps: AppDeps): Hono {
     workflowCatalog,
     workgroupCatalog,
     resourcePackageCatalog,
+    resourceScopeAuthorization,
+    intentApply,
   )
 
   // RFC-344 — tools invoke stable operation ids on this already-mounted app.
@@ -945,6 +952,8 @@ export function mountApiRoutes(
   workflowCatalog: WorkflowCatalogModule,
   workgroupCatalog: WorkgroupCatalogModule,
   resourcePackageCatalog: ComposedResourcePackageCatalog | null,
+  resourceScopeAuthorization: ResourceScopeAuthorizationBinding,
+  intentApply: ReturnType<typeof composeIntentApplyResourceBinding>,
 ): void {
   const appHome = deps.appHome ?? Paths.root
   const inputArtifacts = createEmployeeInputArtifactStore(
@@ -1078,9 +1087,6 @@ export function mountApiRoutes(
   const developmentActivityOperations = deps.developmentActivityOperations
   const developmentConfigOperations = deps.developmentConfigOperations
   const developmentMissionOperations = deps.developmentMissionOperations
-  const resourceScopeAuthorization = composeResourceScopeAuthorizationBinding()
-  const intentApply = composeIntentApplyResourceBinding(legacyIntentApplyResourceDependencies)
-
   mountConfigRoutes(app, deps)
   mountMaintenanceRoutes(app, deps)
   mountDaemonRoutes(app, deps)

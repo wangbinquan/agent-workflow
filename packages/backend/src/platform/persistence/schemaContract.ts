@@ -6,8 +6,8 @@
 // PostgreSQL projector and logical migration engine consume this provider-
 // neutral manifest.
 
-import { createHash } from 'node:crypto'
 import { is, SQL } from 'drizzle-orm'
+import { sha256Hex } from '@/util/hash'
 import {
   getTableConfig,
   SQLiteSyncDialect,
@@ -617,7 +617,7 @@ export function canonicalSchemaJson(value: unknown): string {
 }
 
 export function digestSchemaContract(value: unknown): string {
-  return `sha256:${createHash('sha256').update(canonicalSchemaJson(value)).digest('hex')}`
+  return `sha256:${sha256Hex(canonicalSchemaJson(value))}`
 }
 
 export function assertExactSchemaRoster(

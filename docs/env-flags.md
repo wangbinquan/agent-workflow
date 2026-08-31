@@ -8,14 +8,15 @@
 
 ## 运维 / 部署面（daemon 自身读取）
 
-| 变量                                      | 读取点                                            | 语义                                                                                 |
-| ----------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                       | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
-| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                     | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
-| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/cli/start.ts`                        | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
-| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/cli/start.ts`                        | dev 模式下单实例 flock 交接的等待毫秒数                                              |
-| `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/cli/start.ts`                        | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
-| `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts` | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
+| 变量                                      | 读取点                                                  | 语义                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                             | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
+| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                           | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
+| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/cli/start.ts`                              | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
+| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/cli/start.ts`                              | dev 模式下单实例 flock 交接的等待毫秒数                                              |
+| `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/cli/start.ts`                              | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
+| `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts`       | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
+| `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts` | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值  |
 
 ## 框架 ↔ 子进程契约（daemon 写入、child 读取）
 

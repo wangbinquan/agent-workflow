@@ -38,6 +38,10 @@ import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
 import { mountAgentRoutes } from '@/routes/agents'
+import {
+  createAgentOperationDescriptors,
+  createWorkgroupOperationDescriptors,
+} from '@/modules/resource-catalog/public/operations'
 
 // Mounting is what populates the registry; the deps are never touched because
 // every assertion refuses before the handler runs.
@@ -52,8 +56,27 @@ const deps = {
   // scheduler driver an explicit mount-time composition boundary.
   schedulerDriver: {},
 } as unknown as Parameters<typeof mountFusionRoutes>[1]
-const workgroupModule = {} as unknown as Parameters<typeof mountWorkgroupRoutes>[2]
-const agentModule = {} as unknown as Parameters<typeof mountAgentRoutes>[2]
+const workgroupQueries = {} as Parameters<typeof createWorkgroupOperationDescriptors>[1]
+const workgroupModule = {
+  queries: workgroupQueries,
+  operations: createWorkgroupOperationDescriptors(
+    {} as Parameters<typeof createWorkgroupOperationDescriptors>[0],
+    workgroupQueries,
+  ),
+  aclIdentity: {},
+  authorityFor: () => ({}),
+} as unknown as Parameters<typeof mountWorkgroupRoutes>[2]
+const agentQueries = {} as Parameters<typeof createAgentOperationDescriptors>[1]
+const agentModule = {
+  queries: agentQueries,
+  referenceQueries: {},
+  operations: createAgentOperationDescriptors(
+    {} as Parameters<typeof createAgentOperationDescriptors>[0],
+    agentQueries,
+  ),
+  aclIdentity: {},
+  authorityFor: () => ({}),
+} as unknown as Parameters<typeof mountAgentRoutes>[2]
 
 function mountAll(): void {
   const sink = new Hono()

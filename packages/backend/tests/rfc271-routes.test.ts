@@ -24,6 +24,10 @@ const SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'routes', 'resourcePackages.ts'),
   'utf8',
 )
+const OPERATIONS = readFileSync(
+  resolve(import.meta.dir, '..', 'src', 'modules', 'resource-catalog', 'public', 'operations.ts'),
+  'utf8',
+)
 const SESSION = readFileSync(resolve(import.meta.dir, '..', 'src', 'auth', 'session.ts'), 'utf8')
 
 const EXPORT_PATHS = [
@@ -43,17 +47,17 @@ describe('③ 六条导出端点各自挂自己那一类的读权限点，且路
   }
 
   test('权限点与资源类型一一对应，没有串台', () => {
-    for (const [segment, point] of [
-      ['agents', 'agents:read'],
-      ['skills', 'skills:read'],
-      ['mcps', 'mcps:read'],
-      ['plugins', 'plugins:read'],
-      ['workflows', 'workflows:read'],
-      ['workgroups', 'workgroups:read'],
+    for (const [kind, point] of [
+      ['agent', 'agents:read'],
+      ['skill', 'skills:read'],
+      ['mcp', 'mcps:read'],
+      ['plugin', 'plugins:read'],
+      ['workflow', 'workflows:read'],
+      ['workgroup', 'workgroups:read'],
     ] as const) {
-      const idx = SRC.indexOf(`path: '/api/${segment}/:id/export-package'`)
+      const idx = OPERATIONS.indexOf(`'resource-catalog.export-${kind}-package.v1'`)
       expect(idx).toBeGreaterThan(0)
-      expect(SRC.slice(idx, idx + 200)).toContain(`permissions: ['${point}']`)
+      expect(OPERATIONS.slice(idx, idx + 260)).toContain(`'${point}'`)
     }
   })
 
@@ -64,10 +68,13 @@ describe('③ 六条导出端点各自挂自己那一类的读权限点，且路
 
 describe('① 导入两条不挂资源类型权限点', () => {
   test('preview / commit 的 permissions 都是空数组', () => {
-    for (const path of ['/api/resource-packages/preview', '/api/resource-packages/commit']) {
-      const idx = SRC.indexOf(`path: '${path}'`)
+    for (const operationId of [
+      'resource-catalog.inspect-package.v1',
+      'resource-catalog.apply-package.v1',
+    ]) {
+      const idx = OPERATIONS.indexOf(operationId)
       expect(idx).toBeGreaterThan(0)
-      const block = SRC.slice(idx, idx + 900)
+      const block = OPERATIONS.slice(idx, idx + 900)
       expect(block).toContain('permissions: [],')
       // 反向锁：挂上任何一类 `*:read` 都会与逐条预检自相矛盾。
       expect(block).not.toMatch(/permissions: \['[a-z-]+:read'\]/)
@@ -75,7 +82,7 @@ describe('① 导入两条不挂资源类型权限点', () => {
   })
 })
 
-describe('② 身份仍是必需的 —— `publicReason` 不等于免登录', () => {
+describe('② 身份仍是必需的 —— descriptor `publicReason` 不等于免登录', () => {
   test('两条导入路径都**不在** multiAuth 的公开前缀里', () => {
     // 公开前缀是真正「在任何身份存在之前应答」的那些（登录流程）。配置包不在其中，
     // 所以未认证调用方在 handler 之前就被 401 拒掉。
@@ -83,11 +90,11 @@ describe('② 身份仍是必需的 —— `publicReason` 不等于免登录', (
     expect(SESSION).not.toContain('/api/resource-packages')
   })
 
-  test('publicReason 明说了「身份仍是必需的」，免得下一个人误读', () => {
-    const count = SRC.split('publicReason:').length - 1
-    expect(count).toBe(2)
-    expect(SRC).toContain('Identity is still REQUIRED')
-    expect(SRC).toContain('PUBLIC_PATH_PREFIXES')
+  test('两条 import descriptor 明说权限由包内条目逐项决定', () => {
+    expect(
+      OPERATIONS.match(/Package entries determine their own exact resource permissions\./g),
+    ).toHaveLength(2)
+    expect(SRC).toContain('路径不在 multiAuth 的 `PUBLIC_PATH_PREFIXES`')
   })
 })
 
@@ -109,7 +116,8 @@ describe('decisions 走 Zod，不用 `as T` 绕过校验', () => {
   test('human 与 secret 映射也逐字段严格校验后才进入 service', () => {
     expect(SRC).toContain('HumanMemberMappingsSchema.safeParse(')
     expect(SRC).toContain('PackageSecretInputsSchema.safeParse(')
-    expect(SRC).toContain('PackageSecretRefSchema.extend({ value: z.string() }).strict()')
+    expect(SRC).toContain('const PackageSecretInputsSchema = z.array(')
+    expect(SRC).toContain('value: z.string(),')
     expect(SRC).not.toContain('as PackageSecretInput[]')
   })
 })

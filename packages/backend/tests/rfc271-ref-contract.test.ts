@@ -92,14 +92,12 @@ function markerCallSites(symbol: string): string[] {
   return hits
 }
 
-describe('调用级三属性 —— 每条 policy 都必须真的被某个调用点用上', () => {
-  test('四条 policy 各自至少有一个生产调用点（删掉调用点 ⇒ 这条红）', () => {
+describe('调用级三属性 —— active legacy closure policies 必须真的被调用点消费', () => {
+  test('validate / preview policy 各自至少有一个生产调用点（删掉调用点 ⇒ 这条红）', () => {
     // `resolveNodeAgentRef` 拿到 policy 后 `void call`——它是**文档标记**，
     // 真正的分支在调用点。标记的价值全在「被传出去」这一下：一条谁都不传的
     // policy 就是纯装饰，正是 T43 删掉那两条的判据。
     const named: Array<[string, RefCallPolicy]> = [
-      ['DISPATCH_CALL_POLICY', DISPATCH_CALL_POLICY],
-      ['FANOUT_HYDRATE_CALL_POLICY', FANOUT_HYDRATE_CALL_POLICY],
       ['VALIDATE_CALL_POLICY', VALIDATE_CALL_POLICY],
       ['PREVIEW_CALL_POLICY', PREVIEW_CALL_POLICY],
     ]
@@ -117,7 +115,7 @@ describe('调用级三属性 —— 每条 policy 都必须真的被某个调用
     }
   })
 
-  test('派发与水合的归属**相反**，且这个差异写在两个不同调用点上', () => {
+  test('派发与水合的 legacy policy 取值仍相反，但 mechanics 已切到同一 catalog session', () => {
     // 这两条不是「常量等于自己」——它锁的是 R7-P1-5 那条实测差异：同一种解析，
     // 主派发失败要记到 node、fanout 水合失败要记到 wrapper。两者一旦被"统一"，
     // 故障归属就整个塌掉，而运行期看不出来。
@@ -125,15 +123,19 @@ describe('调用级三属性 —— 每条 policy 都必须真的被某个调用
     expect(DISPATCH_CALL_POLICY.failureOwner).toBe('node')
     expect(FANOUT_HYDRATE_CALL_POLICY.onMissing).toBe('skip')
     expect(FANOUT_HYDRATE_CALL_POLICY.failureOwner).toBe('wrapper')
-    // RFC-339 后两条分别落在 node mechanics 与 task-execution wrapper 位点上。
-    expect(nodeMechanics).toContain('DISPATCH_CALL_POLICY')
-    expect(wrapperMechanics).toContain('FANOUT_HYDRATE_CALL_POLICY')
+    // RFC-345 T4a 后，production mechanics 不再携带 legacy resolver policy；
+    // 同一 task resource session 返回 closed typed failure，调用点只决定归属。
+    expect(nodeMechanics).not.toContain('DISPATCH_CALL_POLICY')
+    expect(wrapperMechanics).not.toContain('FANOUT_HYDRATE_CALL_POLICY')
+    expect(nodeMechanics).toContain('state.taskExecutionResources.injection(agentRef.id)')
+    expect(wrapperMechanics).toContain('state.taskExecutionResources.injection(agentId)')
   })
 })
 
 describe('四处失败归属：调用点各用各的策略，且映射逐条不变', () => {
-  test('① 主派发用 DISPATCH，两个错误码分开（missing ≠ 查不到行）', () => {
-    expect(nodeMechanics).toContain('resolveNodeAgentRef(db, node, DISPATCH_CALL_POLICY)')
+  test('① 主派发用 catalog session，两个错误码分开（missing ≠ 查不到行）', () => {
+    expect(nodeMechanics).toContain('const agentRef = agentRefOfNode(node)')
+    expect(nodeMechanics).toContain('state.taskExecutionResources.injection(agentRef.id)')
     // 两个分支必须都在，且 `missing` 那支先判——合并会让两个码塌成一个。
     expect(nodeMechanics).toMatch(
       /resolvedAgent\.reason === 'missing'[\s\S]{0,200}agent-identity-missing/,
@@ -141,13 +143,13 @@ describe('四处失败归属：调用点各用各的策略，且映射逐条不�
     expect(nodeMechanics).toContain("message: 'agent-not-found'")
   })
 
-  test('② fanout inner 水合用 FANOUT_HYDRATE，且解析失败**不产生任何失败返回**', () => {
-    const idx = wrapperMechanics.indexOf('resolveNodeAgentRef(')
+  test('② fanout inner 水合复用 catalog session，失败作为 wrapper data-port 结果返回', () => {
+    const idx = wrapperMechanics.indexOf('async resolveFanoutAgent(node)')
     expect(idx).toBeGreaterThan(0)
-    const after = wrapperMechanics.slice(idx, idx + 320)
-    expect(after).toContain('FANOUT_HYDRATE_CALL_POLICY')
-    expect(after).toContain('return resolved.ok ? resolved.value : null')
-    expect(after).not.toContain("kind: 'failed'")
+    const after = wrapperMechanics.slice(idx, idx + 520)
+    expect(after).toContain('state.taskExecutionResources.injection(agentId)')
+    expect(after).toContain("resolution.kind === 'ok'")
+    expect(after).toContain(': resolution')
     expect(after).not.toContain('throw ')
   })
 

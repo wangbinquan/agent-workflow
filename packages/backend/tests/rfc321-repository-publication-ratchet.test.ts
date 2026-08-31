@@ -380,7 +380,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(webhookDispatch).not.toContain('TaskRepositoryPublicationTransport')
     expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
     expect(cli).toMatch(
-      /composeTaskExecutionRuntime\(\{\s*db,\s*identityAccess,\s*repositoryPublicationTransport,?\s*\}\)/,
+      /composeTaskExecutionRuntime\(\{\s*db,\s*identityAccess: integrationIdentityAccess,\s*repositoryPublicationTransport,?\s*\}\)/,
     )
 
     const callsByFunction = directFunctionCalls([

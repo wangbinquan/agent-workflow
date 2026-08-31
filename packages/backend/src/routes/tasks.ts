@@ -146,10 +146,13 @@ type TaskExecutionIdentityAccess = NonNullable<AppDeps['identityAccess']> & {
 function requireTaskExecutionIdentityAccess(
   identityAccess: AppDeps['identityAccess'],
 ): TaskExecutionIdentityAccess {
-  if (identityAccess === undefined || !('taskExecutionResources' in identityAccess)) {
+  if (identityAccess?.taskExecutionResources === undefined) {
     throw new Error('task-execution-resources-not-composed')
   }
-  return identityAccess as TaskExecutionIdentityAccess
+  return Object.freeze({
+    ...identityAccess,
+    taskExecutionResources: identityAccess.taskExecutionResources,
+  })
 }
 
 function taskExecutionResourceAuthority(

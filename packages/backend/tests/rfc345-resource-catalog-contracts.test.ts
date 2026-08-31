@@ -971,12 +971,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     expect(route).toContain('McpAclIdentityParticipant')
     for (const consumer of [
-      'operations.create',
-      'operations.update',
-      'operations.delete',
-      'operations.rename',
-      'operations.list',
-      'operations.get',
+      'descriptor: operations.create',
+      'descriptor: operations.update',
+      'descriptor: operations.delete',
+      'descriptor: operations.rename',
+      'descriptor: operations.list',
+      'descriptor: operations.get',
       'queries.list(',
       'queries.get(',
       'aclIdentity.load(',
@@ -1032,8 +1032,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .sort()
     expect(legacyConsumers).toEqual([
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
-      'services/intent/legacyIntentApplyResourceDependencies.ts',
+      'services/execution/legacyTaskExecutionResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/resourceCatalogProjections.ts',
       'services/mcpRuntimeTest.ts',
     ])
@@ -1067,14 +1068,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).toContain('PluginQueries')
     expect(route).toContain('PluginAclIdentityParticipant')
     for (const consumer of [
-      'operations.create',
-      'operations.update',
-      'operations.delete',
-      'operations.rename',
-      'operations.checkUpdate',
-      'operations.upgrade',
-      'operations.list',
-      'operations.get',
+      'descriptor: operations.create',
+      'descriptor: operations.update',
+      'descriptor: operations.delete',
+      'descriptor: operations.rename',
+      'descriptor: operations.checkUpdate',
+      'descriptor: operations.upgrade',
+      'descriptor: operations.list',
+      'descriptor: operations.get',
       'queries.get(',
       'aclIdentity.load(',
       'aclIdentity.nextUpdatedAt(',
@@ -1142,8 +1143,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .sort()
     expect(legacyConsumers).toEqual([
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
-      'services/intent/legacyIntentApplyResourceDependencies.ts',
+      'services/execution/legacyTaskExecutionResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/resourceCatalogProjections.ts',
       'services/pluginGenerationGc.ts',
       'services/workflow.validator.ts',
@@ -1184,13 +1186,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).toContain('WorkgroupQueries')
     expect(route).toContain('WorkgroupAclIdentityParticipant')
     for (const consumer of [
-      'operations.create',
-      'operations.copy',
-      'operations.update',
-      'operations.delete',
-      'operations.rename',
-      'operations.list',
-      'operations.get',
+      'descriptor: operations.create',
+      'descriptor: operations.copy',
+      'descriptor: operations.update',
+      'descriptor: operations.delete',
+      'descriptor: operations.rename',
+      'descriptor: operations.list',
+      'descriptor: operations.get',
       'queries.get(',
       'aclIdentity.load(',
     ]) {
@@ -1267,11 +1269,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .map((path) => path.slice(sourceRoot.length + 1))
       .sort()
     expect(legacyConsumers).toEqual([
+      'cli/start.ts',
+      'server.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/execution/closure.ts',
-      'services/intent/legacyIntentApplyResourceDependencies.ts',
+      'services/execution/legacyTaskExecutionResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
-      'services/scheduledTasks.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/workgroup/launch.ts',
     ])
   })
@@ -1308,12 +1312,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(route).toContain('AgentReferenceQueries')
     expect(route).toContain('AgentAclIdentityParticipant')
     for (const consumer of [
-      'operations.create',
-      'operations.update',
-      'operations.delete',
-      'operations.rename',
-      'operations.list',
-      'operations.get',
+      'descriptor: operations.create',
+      'descriptor: operations.update',
+      'descriptor: operations.delete',
+      'descriptor: operations.rename',
+      'descriptor: operations.list',
+      'descriptor: operations.get',
       'referenceQueries.labels(',
       'aclIdentity.load(',
     ]) {
@@ -1403,7 +1407,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(mcpBindings).toContain(operationId)
     }
     expect(operations).toContain('agent-catalog.rename-agent.v1')
-    expect(operations).toContain("submission: { kind: 'json-body'")
+    expect(operations).toContain('inputSchema: updateAgentInputSchema')
+    expect(operations).toContain('inputSchema: deleteAgentInputSchema')
     expect(server).toContain('composeAgentCatalog({ db: effectiveDeps.db })')
     expect(server).toContain('operations: agentCatalog.operations')
     expect(server).toContain('queries: agentCatalog.queries')
@@ -1420,23 +1425,25 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .map((path) => path.slice(sourceRoot.length + 1))
       .sort()
     expect(legacyConsumers).toEqual([
+      'cli/start.ts',
       'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
       'modules/resource-catalog/infrastructure/sqliteAgentRepository.ts',
       'modules/task-execution/composition/agentActionExecution.ts',
       'modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts',
       'modules/task-execution/composition/digitalEmployeeExecution.ts',
+      'server.ts',
       'services/agentLaunch.ts',
       'services/agentResourceIntegrity.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/codeReviewAgentCaller.ts',
       'services/demoSeed.ts',
       'services/dynamicWorkflowRunner.ts',
+      'services/execution/legacyTaskExecutionResourceDependencies.ts',
       'services/fusion.ts',
-      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/ref/runtimeRef.ts',
       'services/review.ts',
-      'services/scheduledTasks.ts',
       'services/workflow.validator.ts',
       'services/workgroup/memberTurns.ts',
       'services/workgroup/state.ts',
@@ -1484,11 +1491,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(route).toContain(contract)
     }
     for (const consumer of [
-      'operations.create',
-      'operations.save',
-      'operations.delete',
-      'operations.list',
-      'operations.get',
+      'descriptor: operations.create',
+      'descriptor: operations.save',
+      'descriptor: operations.delete',
+      'descriptor: operations.list',
+      'descriptor: operations.get',
       'fileCommands.write(',
       'fileCommands.delete(',
       'versionCommands.restore(',
@@ -1642,12 +1649,12 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       expect(route).toContain(contract)
     }
     for (const consumer of [
-      'operations.create',
-      'operations.copy',
-      'operations.update',
-      'operations.delete',
-      'operations.list',
-      'operations.get',
+      'descriptor: operations.create',
+      'descriptor: operations.copy',
+      'descriptor: operations.update',
+      'descriptor: operations.delete',
+      'descriptor: operations.list',
+      'descriptor: operations.get',
       'aclIdentity.load(',
     ]) {
       expect(route).toContain(consumer)
@@ -1718,19 +1725,20 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       .map((path) => path.slice(sourceRoot.length + 1))
       .sort()
     expect(legacyConsumers).toEqual([
+      'cli/start.ts',
       'modules/execution-contract/infrastructure/taskExecutionAdapter.ts',
       'modules/resource-catalog/infrastructure/sqliteWorkflowRepository.ts',
       'routes/tasks.ts',
+      'server.ts',
       'services/backup.ts',
       'services/bundle/legacyResourcePackageMutationDependencies.ts',
       'services/demoSeed.ts',
+      'services/execution/legacyTaskExecutionResourceDependencies.ts',
       'services/fusion.ts',
-      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/intent/dumpBuilder.ts',
-      'services/scheduledTasks.ts',
+      'services/intent/legacyIntentApplyResourceDependencies.ts',
       'services/task.ts',
       'services/taskLaunchGate.ts',
-      'services/webhook/triggerValidation.ts',
       'services/workflow.validator.ts',
       'services/workflow.yaml.ts',
       'services/workgroup/dwActions.ts',
@@ -1869,10 +1877,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(packageRoute.split('registerOperationRoute(app, {').length - 1).toBe(9)
     expect(packageRoute).not.toContain('registerRoute(')
     expect(packageRoute).toContain(
-      "app.use('/api/resource-packages/preview', resourcePackageBodyLimit)",
+      "registerRouteMiddleware(app, '/api/resource-packages/preview', resourcePackageBodyLimit)",
     )
     expect(packageRoute).toContain(
-      "app.use('/api/resource-packages/commit', resourcePackageBodyLimit)",
+      "registerRouteMiddleware(app, '/api/resource-packages/commit', resourcePackageBodyLimit)",
     )
     expect(packageCli).toContain('catalog.operations.exports[type]')
     expect(bindings).toContain("implementation: 'descriptor'")

@@ -67,6 +67,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/rfc205-mirror-origin-sanitize.test.ts#skipIf': 1,
   'packages/backend/tests/claude-skill-injection-2026-08-09.test.ts#skipIf': 1,
   'packages/backend/tests/claude-dependency-injection-2026-08-09.test.ts#skipIf': 5,
+  // RFC-349 real PostgreSQL integration requires an explicitly supplied,
+  // disposable PG17 target and is otherwise covered by provider fakes.
+  'packages/backend/tests/rfc349-database-migration-coordinator.integration.test.ts#skip': 1,
+  'packages/backend/tests/rfc349-postgresql-logical-migration.integration.test.ts#skip': 1,
   'e2e/clarify.spec.ts#skip': 1,
   'e2e/focus-ring-clip.spec.ts#skip': 1,
   // RFC-319 REPO-42（2026-08-26）：这里曾是 2 —— 一条是 gitea 夹具未配置时的条件跳过

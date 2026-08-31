@@ -2,7 +2,6 @@
 // runs on the existing backup worker; the operation directory receives the
 // file only after integrity verification and atomic replacement.
 
-import { createHash } from 'node:crypto'
 import { Database } from 'bun:sqlite'
 import {
   chmodSync,
@@ -18,16 +17,17 @@ import {
 import { dirname, join } from 'node:path'
 import type { DatabaseMigrationSafetyBackupPort } from '../application/databaseMigrationRunner'
 import { vacuumIntoOffThread } from '@/services/backup'
+import { createSha256DigestBuilder } from '@/util/hash'
 
 async function digestFile(path: string): Promise<string> {
-  const hash = createHash('sha256')
+  const hash = createSha256DigestBuilder()
   await new Promise<void>((resolve, reject) => {
     const stream = createReadStream(path)
     stream.on('data', (chunk) => hash.update(chunk))
     stream.on('error', reject)
     stream.on('end', resolve)
   })
-  return `sha256:${hash.digest('hex')}`
+  return `sha256:${hash.digestHex()}`
 }
 
 function fsyncDirectory(path: string): void {

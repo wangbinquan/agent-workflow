@@ -127,7 +127,16 @@ describe('围栏的另一面：授权之后、提交之前的 owner 转移', () 
 describe('intent apply 的 MCP update 分支已经带上围栏（源码层）', () => {
   test('传的是「授权时看到的 owner」，不是 actor 自己', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'intent', 'applyChangeset.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'aggregateAdapters',
+        'legacyIntentApplyResourceParticipants.ts',
+      ),
       'utf8',
     )
     // `existing` 是 preflight 期读到的那一行 —— 用它才能同时覆盖「伪造」与

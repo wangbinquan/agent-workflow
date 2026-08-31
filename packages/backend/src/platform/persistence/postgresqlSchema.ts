@@ -2,7 +2,7 @@
 // SQL is never replayed: the canonical logical contract produces a fresh PG
 // schema, with constraints/indexes applied after logical copy.
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from '@/util/hash'
 import {
   buildLogicalSchemaContract,
   canonicalSchemaJson,
@@ -44,7 +44,7 @@ function quote(identifier: string): string {
 
 function boundedIdentifier(identifier: string): string {
   if (Buffer.byteLength(identifier, 'utf8') <= 63) return identifier
-  const digest = createHash('sha256').update(identifier).digest('hex').slice(0, 12)
+  const digest = sha256Hex(identifier).slice(0, 12)
   let prefix = identifier
   while (Buffer.byteLength(`${prefix}_${digest}`, 'utf8') > 63) prefix = prefix.slice(0, -1)
   return `${prefix}_${digest}`
@@ -276,7 +276,7 @@ export function buildPostgresqlSchemaPlan(
   }
   return {
     ...withoutDigest,
-    digest: `sha256:${createHash('sha256').update(canonicalSchemaJson(withoutDigest)).digest('hex')}`,
+    digest: `sha256:${sha256Hex(canonicalSchemaJson(withoutDigest))}`,
   }
 }
 

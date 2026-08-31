@@ -121,6 +121,7 @@ const OFFERED_CONTEXT_EDGES: ReadonlyArray<readonly [TargetContext, TargetContex
   ['development-automation', 'execution-contract'],
   ['digital-employee', 'event-center'],
   ['digital-employee', 'execution-contract'],
+  ['resource-catalog', 'digital-employee'],
   ['task-execution', 'event-center'],
   ['event-center', 'identity-access'],
   ['task-execution', 'execution-contract'],

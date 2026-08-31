@@ -152,7 +152,7 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
       readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
     ].join('\n')
     expect(text).not.toContain('await resolveInjection(')
-    expect(text.split('taskExecutionResources.injection(').length - 1).toBe(4)
+    expect(text.split('taskExecutionResources.injection(').length - 1).toBe(5)
     expect(text.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(2)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')
@@ -179,8 +179,8 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
     for (const { text, marker } of sites) {
       const idx = text.indexOf(marker)
       expect(idx).toBeGreaterThan(0)
-      const before = text.slice(Math.max(0, idx - 700), idx)
-      expect(before).toContain('signal: state.opts.signal')
+      const call = text.slice(idx, idx + 2_000)
+      expect(call).toContain('signal: state.opts.signal')
     }
   })
 })

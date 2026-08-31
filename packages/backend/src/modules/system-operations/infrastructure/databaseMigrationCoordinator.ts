@@ -2,8 +2,9 @@
 // the only place that assembles source, target, control-plane and admission
 // mechanisms; public commands never receive provider clients or transactions.
 
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
+import { sha256Hex } from '@/util/hash'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { createDatabaseMigrationControlPlane } from '../application/databaseMigrationControlPlane'
 import {
@@ -163,10 +164,7 @@ export function createDatabaseMigrationCoordinator(
       .sort((left, right) => right.updatedAt - left.updatedAt)[0]
     const databaseFingerprint =
       latest === undefined
-        ? `sqlite-file:${createHash('sha256')
-            .update(`${contract.digest}:${stat.size}:${stat.mtimeMs}`)
-            .digest('hex')
-            .slice(0, 24)}`
+        ? `sqlite-file:${sha256Hex(`${contract.digest}:${stat.size}:${stat.mtimeMs}`).slice(0, 24)}`
         : controlPlane.readManifest(latest.operationId).payload.source.databaseFingerprint
     return Object.freeze({
       databaseFingerprint,

@@ -109,6 +109,11 @@ const OVERLAY_CALLSITES = {
     family: 'access-and-settings',
     count: 2,
   },
+  // RFC-349 — switching database providers requires an explicit confirmation.
+  'components/settings/DatabaseMigrationSection.tsx': {
+    family: 'access-and-settings',
+    count: 1,
+  },
   'components/users/CreateUserDialog.tsx': { family: 'access-and-settings', count: 1 },
   'components/users/EditUserDialog.tsx': { family: 'access-and-settings', count: 1 },
   'components/users/ResetUserPasswordDialog.tsx': {

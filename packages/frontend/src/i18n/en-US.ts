@@ -3372,6 +3372,7 @@ export const enUS: Resources = {
     loading: 'Loading…',
     open: 'Open',
     edit: 'Edit',
+    confirm: 'Confirm',
     delete: 'Delete',
     remove: 'Remove',
     deleteResourceActionHint: 'Permanently delete this resource.',

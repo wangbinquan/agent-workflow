@@ -3,7 +3,7 @@
 // cross-table snapshot; a separate pool probe keeps the live generation fence
 // observable while a long backup or reverse migration is running.
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from '@/util/hash'
 import {
   decodeLogicalValue,
   encodeLogicalRow,
@@ -186,7 +186,7 @@ export async function openPostgresqlLogicalSource(input: {
         tableRows: counts,
       })
       snapshot = Object.freeze({
-        databaseFingerprint: `pg:${createHash('sha256').update(stable).digest('hex').slice(0, 24)}`,
+        databaseFingerprint: `pg:${sha256Hex(stable).slice(0, 24)}`,
         generationId: input.generationId,
         schemaDigest: input.contract.digest,
         totalRows,

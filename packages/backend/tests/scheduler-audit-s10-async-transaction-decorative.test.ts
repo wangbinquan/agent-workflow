@@ -185,6 +185,8 @@ const RAW_TRANSACTION_SITES: Record<string, number> = {
   'modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts': 1,
   'modules/event-center/infrastructure/sqliteEventStore.ts': 4,
   'modules/development-automation/composition/missionOperations.ts': 1,
+  // RFC-349: Bun.SQL owns the provider transaction/session boundary.
+  'platform/persistence/postgresqlDatabaseClient.ts': 1,
 }
 
 describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必须逐处可见', () => {

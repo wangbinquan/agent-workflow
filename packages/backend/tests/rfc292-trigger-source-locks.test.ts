@@ -62,13 +62,11 @@ describe('RFC-292 trigger namespace source locks', () => {
     // adjacency and exact frozen-context identity without coupling RFC-292 to
     // that callback's indentation depth.
     expect(source).toMatch(/\bagent,\n\s+triggerContext: state\.triggerContext/)
-    // RFC-287 T4 同 aggAgent 那条：迁入装配回调只改了缩进，锁「相邻性 + 身份」
-    // 而不绑死嵌套深度。
-    expect(source).toMatch(/agent: innerAgent,\n\s+triggerContext: state\.triggerContext/)
-    // RFC-287 moved this call into an assembly callback and therefore changed
-    // indentation only. Keep the adjacency/identity lock without coupling the
-    // RFC-292 invariant to a particular nesting depth.
-    expect(source).toMatch(/agent: aggAgent,\n\s+triggerContext: state\.triggerContext/)
+    // RFC-345 T4a freezes the resolved agent inside the injection snapshot;
+    // both wrapper arms must pass that exact snapshot value to the runtime.
+    expect(
+      source.match(/agent: injection\.spec\.agent,\n\s+triggerContext: state\.triggerContext/g),
+    ).toHaveLength(2)
     expect(source).toContain('ctx: { ports: upstreamInputs, triggerContext: state.triggerContext }')
     expect(source).toContain('{ triggerContext: state.triggerContext }')
     expect(source).toContain('renderCallGoal(goalTemplate, inputs, state.triggerContext')

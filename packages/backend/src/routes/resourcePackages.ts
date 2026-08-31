@@ -30,6 +30,7 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import { invokeOperation } from '@/platform/operations/invoke'
 import { registerOperationRoute } from '@/routes/operationRoute'
+import { registerRouteMiddleware } from '@/routes/registry'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
 
@@ -317,7 +318,7 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
     encode: (_c, receipt) => exportResponse(deps, receipt),
   })
 
-  app.use('/api/resource-packages/preview', resourcePackageBodyLimit)
+  registerRouteMiddleware(app, '/api/resource-packages/preview', resourcePackageBodyLimit)
   registerOperationRoute(app, {
     descriptor: deps.catalog.operations.inspect,
     method: 'POST',
@@ -335,7 +336,7 @@ export function registerResourcePackageRoutes(app: Hono, deps: ResourcePackageRo
     },
   })
 
-  app.use('/api/resource-packages/commit', resourcePackageBodyLimit)
+  registerRouteMiddleware(app, '/api/resource-packages/commit', resourcePackageBodyLimit)
   registerOperationRoute(app, {
     descriptor: deps.catalog.operations.apply,
     method: 'POST',

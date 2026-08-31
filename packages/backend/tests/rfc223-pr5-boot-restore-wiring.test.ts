@@ -22,7 +22,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { createBackup } from '../src/services/backup'
 import { maybePreMigrationBackup } from '../src/services/backupScheduler'
 import { rawCopyDb } from '../src/services/rawDbSnapshot'
 import { restoreBackup, validateBackupForStage } from '../src/services/restore'
@@ -338,10 +337,16 @@ async function makeSkillBackup(
   }
   writeTree(join(appHome, 'skills', name, 'files'), `${name}-live`)
   writeTree(join(appHome, 'skills', name, 'versions', 'v1', 'files'), `${name}-v1`)
-  const backup = await createBackup({ db, appHome, now: Date.now() })
   raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   raw.close()
-  return backup.path
+  return (
+    await rawCopyDb({
+      kind: 'pre-restore',
+      appHome,
+      dbPath,
+      now: Date.now(),
+    })
+  ).path
 }
 
 function assertRestoredCanonical(appHome: string, name: string, id: string): void {

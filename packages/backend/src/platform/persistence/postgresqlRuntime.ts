@@ -2,9 +2,10 @@
 // The connection URL is resolved once from the configured environment-variable
 // name and is never retained in status, errors, logs, manifests or receipts.
 
-import { createHash } from 'node:crypto'
 import { SQL } from 'bun'
 import type { DatabaseConfig } from '@agent-workflow/shared'
+import { sha256Hex } from '@/util/hash'
+import { timeoutSignal } from '@/util/timeoutSignal'
 import type { DatabaseHealth, DatabaseRuntime } from './runtime'
 
 type PostgresqlConfig = Extract<DatabaseConfig, { provider: 'postgresql' }>
@@ -126,7 +127,7 @@ function fingerprint(row: Record<string, unknown>): string {
     String(row.server_port ?? ''),
     String(row.server_version_num ?? ''),
   ].join('\0')
-  return `pg:${createHash('sha256').update(stable).digest('hex').slice(0, 24)}`
+  return `pg:${sha256Hex(stable).slice(0, 24)}`
 }
 
 function errorCategory(error: unknown): DatabaseHealth['errorCategory'] {
@@ -188,10 +189,13 @@ export function createPostgresqlDatabaseRuntime(input: {
     }
     const startedAt = performance.now()
     let connection: PostgresqlReservedConnection | undefined
+    const deadline = timeoutSignal(input.config.connectTimeoutMs)
     try {
-      connection = await pool.reserve({
-        signal: AbortSignal.timeout(input.config.connectTimeoutMs),
-      })
+      try {
+        connection = await pool.reserve({ signal: deadline.signal })
+      } finally {
+        deadline.cancel()
+      }
       await configureConnection(connection, input.config)
       const rows = await connection.unsafe(
         'SELECT current_database() AS database_name, ' +
@@ -258,9 +262,13 @@ export function createPostgresqlDatabaseRuntime(input: {
           'PostgreSQL runtime is closed',
         )
       }
-      const connection = await pool.reserve({
-        signal: AbortSignal.timeout(input.config.connectTimeoutMs),
-      })
+      const deadline = timeoutSignal(input.config.connectTimeoutMs)
+      let connection: PostgresqlReservedConnection
+      try {
+        connection = await pool.reserve({ signal: deadline.signal })
+      } finally {
+        deadline.cancel()
+      }
       let held = false
       try {
         await configureConnection(connection, input.config)

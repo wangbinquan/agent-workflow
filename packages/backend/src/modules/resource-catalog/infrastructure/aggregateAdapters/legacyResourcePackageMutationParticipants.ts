@@ -703,12 +703,18 @@ export function createLegacyResourcePackageMutationAdapter(
   return {
     participants,
     createScenarioProvider({ scenario, operations, lowered, context }) {
-      const loweredByOperationId = new Map(lowered.map((operation) => [operation.opId, operation]))
+      const loweredByMutation = new Map(
+        operations.map((mutation, index) => [mutation, lowered[index]] as const),
+      )
       const loweredAs = <T extends ResourcePackageMutationOperation>(
         mutation: BundleOp,
         resourceType: T['resourceType'],
       ): T => {
-        const operation = loweredByOperationId.get(mutation.opId)
+        // A bundle's opId is an idempotency/audit label, not the identity of
+        // the in-memory planned mutation. Some compatibility callers still
+        // supply repeated labels; indexing by opId aliases their pre-minted
+        // resource ids and can make a dependency commit before its target.
+        const operation = loweredByMutation.get(mutation)
         if (operation === undefined || operation.resourceType !== resourceType) {
           throw new Error(`resource-package-lowered-operation-missing:${mutation.opId}`)
         }

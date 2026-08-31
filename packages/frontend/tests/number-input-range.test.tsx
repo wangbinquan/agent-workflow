@@ -165,9 +165,10 @@ describe('RFC-290 NumberInput range hint', () => {
     // RFC-310 Event Center adds two bounded observer fields on top of the
     // guided employee/resource inputs; RFC-321 adds the SSH port mapping.
     // RFC-323 retires the four bounded fields from the hidden generic Adapter
-    // editor; every remaining authoring field keeps its hint.
-    expect(bounded).toHaveLength(31)
-    expect(bounded.length - optedOut.length).toBe(30)
+    // editor; RFC-349 adds four bounded migration controls. Every remaining
+    // authoring field keeps its hint.
+    expect(bounded).toHaveLength(35)
+    expect(bounded.length - optedOut.length).toBe(34)
     expect(optedOut.map(({ file }) => file)).toEqual(['components/Pagination.tsx'])
   })
 })

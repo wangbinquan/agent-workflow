@@ -2,7 +2,7 @@
 // system-operations application as Settings; only human/JSON projection and
 // the offline daemon-lock boundary live here.
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from '@/util/hash'
 import type { Lock } from '@/util/lock'
 import { acquireLock, DaemonLockHeldError } from '@/util/lock'
 import { Paths } from '@/util/paths'
@@ -91,7 +91,7 @@ function targetFromArgs(argv: readonly string[]): DatabaseMigrationTargetView {
 }
 
 function idempotencyKey(target: DatabaseMigrationTargetView): string {
-  return `cli:${createHash('sha256').update(JSON.stringify(target)).digest('hex').slice(0, 32)}`
+  return `cli:${sha256Hex(JSON.stringify(target)).slice(0, 32)}`
 }
 
 function formatBytes(bytes: number): string {

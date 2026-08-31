@@ -2759,6 +2759,7 @@ export interface Resources {
     loading: string
     open: string
     edit: string
+    confirm: string
     delete: string
     remove: string
     deleteResourceActionHint: string
@@ -9898,6 +9899,7 @@ export const zhCN: Resources = {
     loading: '加载中…',
     open: '打开',
     edit: '编辑',
+    confirm: '确认',
     delete: '删除',
     remove: '移除',
     deleteResourceActionHint: '永久删除此资源。',

@@ -902,6 +902,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/database/migrations/:id/cancel' },
   { method: 'POST', path: '/api/database/migrations/:id/rollback' },
   { method: 'POST', path: '/api/database/migrations/:id/finalize' },
+  { method: 'GET', path: '/api/database/migrations/:id/artifacts/:kind' },
+  { method: 'GET', path: '/api/database/migrations/:id/legacy/:table' },
+  { method: 'GET', path: '/api/database/migrations/:id/legacy/:table/chunks/:chunk' },
 
   // ---- backup ----
   { method: 'POST', path: '/api/backup' },

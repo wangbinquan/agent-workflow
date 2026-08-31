@@ -652,17 +652,27 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
 describe('RFC-104 — source-level guard anchors (regression: do not delete the guards)', () => {
   test('launch + resume/retry + YAML import + ACL guards are present in source', () => {
     const tasksSrc = readFileSync(resolve(SRC, 'routes', 'tasks.ts'), 'utf-8')
-    // RFC-159 T2: the JSON + multipart launch gates were unified into the shared
-    // assertWorkflowLaunchable (services/taskLaunchGate.ts) — it holds the built-in
-    // guard; both launch paths call it. Guard NOT deleted, just deduped.
-    const gateSrc = readFileSync(resolve(SRC, 'services', 'taskLaunchGate.ts'), 'utf-8')
-    expect(gateSrc).toContain("assertNotBuiltin('workflow', wf)")
-    // RFC-284 T25 改锚：multipart 臂迁 services/multipartTaskStart.ts——两臂
-    // 各自文件内至少一处 launch 门调用，意图不变（守卫未删、只随体走）。
-    const launchGateCalls = (tasksSrc.match(/assertWorkflowLaunchable\(/g) ?? []).length
+    // RFC-345 T4a moved the fresh built-in verdict into the task-execution
+    // resource snapshot adapter. Both launch transports consume that frozen
+    // snapshot through the same launch gate; neither re-reads the workflow.
+    const snapshotAdapter = readFileSync(
+      resolve(
+        SRC,
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'aggregateAdapters',
+        'legacyTaskExecutionResourceSnapshots.ts',
+      ),
+      'utf-8',
+    )
+    expect(snapshotAdapter).toContain("dependencies.assertNotBuiltin('workflow', row)")
+    const launchGateCalls = (tasksSrc.match(/assertWorkflowSnapshotLaunchable\(/g) ?? []).length
     expect(launchGateCalls).toBeGreaterThanOrEqual(1) // JSON launch
     const orchSrc = readFileSync(resolve(SRC, 'services', 'multipartTaskStart.ts'), 'utf-8')
-    expect((orchSrc.match(/assertWorkflowLaunchable\(/g) ?? []).length).toBeGreaterThanOrEqual(1)
+    expect(
+      (orchSrc.match(/assertWorkflowSnapshotLaunchable\(/g) ?? []).length,
+    ).toBeGreaterThanOrEqual(1)
     expect(tasksSrc).toContain('assertTaskWorkflowNotBuiltin') // resume + retry routes
     const yaml = readFileSync(resolve(SRC, 'services', 'workflow.yaml.ts'), 'utf-8')
     expect(yaml).toContain("assertNotBuiltin('workflow', existing)")

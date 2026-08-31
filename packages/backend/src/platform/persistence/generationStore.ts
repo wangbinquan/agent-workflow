@@ -4,7 +4,7 @@
 // a verified complete generation or fails closed; it never guesses a provider
 // from config, a half-written target, or the newest-looking database.
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from '@/util/hash'
 import {
   chmodSync,
   closeSync,
@@ -84,7 +84,7 @@ export class DatabaseGenerationError extends Error {
 }
 
 export function digestDatabaseArtifact(value: string | Uint8Array): string {
-  return `sha256:${createHash('sha256').update(value).digest('hex')}`
+  return `sha256:${sha256Hex(value)}`
 }
 
 export function digestGenerationPayload(payload: DatabaseGenerationPayload): string {

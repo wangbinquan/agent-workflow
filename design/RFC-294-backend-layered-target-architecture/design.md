@@ -359,6 +359,7 @@ flowchart LR
   DA --> XC["execution-contract"]
   DE --> EC["event-center"]
   DE --> XC
+  RC --> DE
   TE --> EC
   EC --> IA
   TE --> XC
@@ -392,6 +393,10 @@ consumer-owned required SPI，不是 application 同步反向依赖。同一对 
 
 `WI → RM` 是 WorkspaceInsight 消费 RuntimeManagement purpose-specific immutable runtime snapshot participant 的 offered edge；
 它不暴露 process handle、provider secret、ambient config 或 vendor SDK，也不允许 WorkspaceInsight 直接启动/控制 runtime。
+
+`RC → DE` 仅消费 DigitalEmployee owner-native 的 integration-trigger snapshot participant；resource-catalog 不读取
+digital-employee table/internal type，也不取得 employee mutation 权限。该 offered edge 让 schedule/webhook 的五种冻结资源
+请求在同一事务内完成 identity、ACL 与 content 读取。
 
 上图只画 value/offered 与 required-SPI implementation 两类 edge。所有含 command/query 的 context 还必须登记到
 `identity-access/public/types` 的第三类 **type-only authority edge**；它不做模块初始化，也不能被误记为 required-port implementation：

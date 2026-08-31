@@ -2,9 +2,9 @@
 // worker. Every integer query opts into Bun SQLite safeIntegers so a value is
 // rejected or copied exactly instead of first passing through a JS double.
 
-import { createHash } from 'node:crypto'
 import { Database } from 'bun:sqlite'
 import { statSync } from 'node:fs'
+import { sha256Hex } from '@/util/hash'
 import {
   decodeLogicalValue,
   encodeLogicalRow,
@@ -144,7 +144,7 @@ export function openSqliteLogicalSource(input: {
       tableRows,
     })
     return {
-      databaseFingerprint: `sqlite:${createHash('sha256').update(fingerprintPayload).digest('hex').slice(0, 24)}`,
+      databaseFingerprint: `sqlite:${sha256Hex(fingerprintPayload).slice(0, 24)}`,
       dataVersion,
       pageCount,
       pageSize,

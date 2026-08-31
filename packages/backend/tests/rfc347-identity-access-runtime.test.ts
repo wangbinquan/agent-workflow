@@ -297,7 +297,6 @@ describe('RFC-347 exact production source locks', () => {
     ])
     expect(callPaths('.legacyProjection.fromResolvedSubject(')).toEqual([
       'src/services/intent/dispatcher.ts',
-      'src/services/webhook/webhookDispatch.ts',
     ])
     // The only remaining production plain-facts caller is RFC-342's
     // transaction-fresh Memory oracle, owned by RFC-294 W4-E2.
@@ -326,7 +325,7 @@ describe('RFC-347 exact production source locks', () => {
     expect(mainRoot).not.toContain('fromAuthenticatedPrincipal(')
 
     const packageConsumer = source('src/cli/package.ts')
-    expect(packageConsumer).toContain('.localActorForUser(')
+    expect(packageConsumer).toContain('.localIdentityForUser(')
     expect(packageConsumer).not.toContain('identity-access/composition')
     expect(packageConsumer).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(packageConsumer).not.toContain('fromAuthenticatedPrincipal(')

@@ -24,6 +24,16 @@ import { copyOnlyTargetsFor } from '../src/services/intent/applyChangeset'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src', 'services', 'intent', 'applyChangeset.ts')
+const PARTICIPANT_SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'resource-catalog',
+  'infrastructure',
+  'aggregateAdapters',
+  'legacyIntentApplyResourceParticipants.ts',
+)
 const ARTIFACT_SRC = resolve(
   import.meta.dir,
   '..',
@@ -146,23 +156,23 @@ describe('T15 · **他人拥有的仍然强制 copy** —— ownerUserId 判据�
 })
 
 describe('T17 · plugin 半边的两条要害（源码层）', () => {
-  const src = readFileSync(SRC, 'utf8')
+  const src = readFileSync(PARTICIPANT_SRC, 'utf8')
 
   test('基线 hash 与整行捕获来自**同一次**读取', () => {
     // 分两次读会让「两次读之间被人改掉」的窗口原样复现，而
     // `commitPluginPublishInTx` 的整行 CAS 正是为堵它而存在。
-    expect(src).toContain('const captured = await requirePluginRowForIntent(db, op.resourceId)')
-    expect(src).toContain('pluginOperationConfigHashOf(rowToPluginForIntent(captured))')
+    expect(src).toContain('const captured = await dependencies.getPluginById(db, plan.resourceId)')
+    expect(src).toContain('dependencies.pluginOperationConfigHashOf(captured)')
     // 捕获的那一行直接进提交，不再重读。
-    expect(src).toContain('commitPluginPublishInTx(tx, item.captured, {')
+    expect(src).toContain('dependencies.commitPluginPublishInTx(tx, prepared.captured, {')
   })
 
   test('record-before-act：在 prestage 段内，落 artifact **早于** installPlugin', () => {
     // ⚠️ 断言的是**顺序**，不是「两个词都出现过」——record-before-act 的全部内容
     // 就是这个先后。（初版把锚打在了 `kind: 'plugin-install'` 上，结果命中的是
     // 文件顶部的类型声明，白测一场。）
-    const start = src.indexOf('// ── prestage')
-    const end = src.indexOf('deps.faults?.beforeTx?.()')
+    const start = src.indexOf('async prestage(plan, context)')
+    const end = src.indexOf('async commitInTransaction(', start)
     expect(start).toBeGreaterThan(0)
     expect(end).toBeGreaterThan(start)
     const prestage = src.slice(start, end)
@@ -177,14 +187,15 @@ describe('T17 · plugin 半边的两条要害（源码层）', () => {
 
   test('收敛器只按完整 codec 的精确 generation 目录补偿', () => {
     const codec = readFileSync(ARTIFACT_SRC, 'utf8')
-    expect(src).toContain('rmSync(artifact.generationDir, { recursive: true, force: true })')
+    const converger = readFileSync(SRC, 'utf8')
+    expect(converger).toContain('rmSync(artifact.generationDir, { recursive: true, force: true })')
     expect(codec).toContain('generationId: NonEmptyString')
     expect(codec).toContain('generationDir: NonEmptyString')
     expect(codec).toContain('INTENT_JOURNAL_ARTIFACT_VERSION = 1')
   })
 
   test('spec 没变就**不**预安装（避免为一次纯 options 编辑跑 npm）', () => {
-    expect(src).toContain("item.kind === 'plugin-update' && item.specChanged")
+    expect(src).toContain("prepared.kind === 'plugin-update' && prepared.specChanged")
   })
 })
 

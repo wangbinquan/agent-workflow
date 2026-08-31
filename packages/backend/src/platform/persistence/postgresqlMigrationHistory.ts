@@ -3,9 +3,9 @@
 // production refuses to prepare a target unless the committed (or embedded)
 // baseline and journal are byte/digest-equivalent to that projector.
 
-import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { sha256Hex } from '@/util/hash'
 import { resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
 import { renderPostgresqlBaselineSql, type PostgresqlSchemaPlan } from './postgresqlSchema'
 
@@ -45,7 +45,7 @@ export interface PostgresqlMigrationHistoryReceipt {
 }
 
 function statementDigest(sql: string): string {
-  return `sha256:${createHash('sha256').update(sql).digest('hex')}`
+  return `sha256:${sha256Hex(sql)}`
 }
 
 function expectedJournal(plan: PostgresqlSchemaPlan): PostgresqlMigrationJournal {
