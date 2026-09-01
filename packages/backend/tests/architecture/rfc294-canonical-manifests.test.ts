@@ -393,7 +393,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       digested.every(
         (entry) =>
           String(entry.file).startsWith('external:') ||
-          /\/modules\/[^/]+\/public\/(?:commands|events|participants|queries|types)\.ts$/.test(
+          /\/modules\/[^/]+\/public\/(?:commands|events|operations|participants|queries|types)\.ts$/.test(
             String(entry.file),
           ),
       ),
