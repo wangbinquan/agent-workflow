@@ -152,6 +152,12 @@ export function classifyDatabaseMigrationFailure(
         codes.push(String(candidate))
       }
     }
+    if ('errno' in current) {
+      const candidate = current.errno
+      if (typeof candidate === 'string' || typeof candidate === 'number') {
+        codes.push(String(candidate))
+      }
+    }
     if ('code' in current) {
       const candidate = current.code
       if (typeof candidate === 'string' || typeof candidate === 'number') {

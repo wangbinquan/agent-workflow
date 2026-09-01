@@ -345,7 +345,7 @@ describe('RFC-349 database migration runner', () => {
       classifyDatabaseMigrationFailure(
         Object.assign(new Error('canceling statement due to statement timeout'), {
           code: 'ERR_POSTGRES_SERVER_ERROR',
-          sqlState: '57014',
+          errno: '57014',
         }),
         'copying',
       ),

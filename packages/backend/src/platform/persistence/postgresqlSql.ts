@@ -18,6 +18,14 @@ export class PostgresqlSqlCompatibilityError extends Error {
 export type PostgresqlStatementOperation = 'read' | 'write' | 'transaction' | 'ddl' | 'unknown'
 
 const SQLITE_ONLY_STATEMENT = /^\s*(?:pragma\b|vacuum\b|attach\b|detach\b)/i
+const ON_CONFLICT_TARGET = /\bon\s+conflict\s*\(([^()]*)\)/giu
+const QUALIFIED_QUOTED_COLUMN = /(?:"(?:[^"]|"")*"\.)+"((?:[^"]|"")*)"/gu
+
+function compilePostgresqlConflictTargets(sql: string): string {
+  return sql.replace(ON_CONFLICT_TARGET, (clause, target: string) =>
+    clause.replace(target, target.replace(QUALIFIED_QUOTED_COLUMN, '"$1"')),
+  )
+}
 
 function dollarQuoteTag(sql: string, offset: number): string | null {
   const match = /^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/.exec(sql.slice(offset))
@@ -107,7 +115,12 @@ export function compilePostgresqlSql(sql: string): string {
     output += char
     index += 1
   }
-  return output
+  // SQLite's Drizzle dialect qualifies ON CONFLICT target columns with their
+  // table (and, for the provider projection, schema). PostgreSQL accepts
+  // qualified columns elsewhere but requires conflict-target column names to
+  // be unqualified. Keep this rewrite inside the provider compiler so owner
+  // adapters can use one logical query shape without embedding PG syntax.
+  return compilePostgresqlConflictTargets(output)
 }
 
 /** Classify only executable tokens, ignoring quoted text/comments/CTE bodies. */

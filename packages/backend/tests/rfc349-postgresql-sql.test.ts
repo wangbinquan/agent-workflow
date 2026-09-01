@@ -20,6 +20,19 @@ describe('RFC-349 PostgreSQL SQL compiler', () => {
     )
   })
 
+  test('unqualifies Drizzle conflict targets while preserving the rest of the upsert', () => {
+    expect(
+      compilePostgresqlSql(
+        'insert into "agent_workflow"."employee_os_settings" ("singleton_key", "updated_at") values (?, ?) ' +
+          'on conflict ("agent_workflow"."employee_os_settings"."singleton_key") ' +
+          'do update set "updated_at" = ?',
+      ),
+    ).toBe(
+      'insert into "agent_workflow"."employee_os_settings" ("singleton_key", "updated_at") values ($1, $2) ' +
+        'on conflict ("singleton_key") do update set "updated_at" = $3',
+    )
+  })
+
   test('rejects every SQLite-only physical operation without echoing SQL payloads', () => {
     for (const statement of [
       'PRAGMA quick_check',
