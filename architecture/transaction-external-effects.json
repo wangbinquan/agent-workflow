@@ -5038,8 +5038,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#transaction:434",
-      "line": 434,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#transaction:435",
+      "line": 435,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#createPostgresqlTaskRecoveryOperations",
       "status": "clear",
       "symbol": "createPostgresqlTaskRecoveryOperations",
@@ -5050,8 +5050,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#transaction:766",
-      "line": 766,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#transaction:772",
+      "line": 772,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#createPostgresqlTaskRecoveryOperations",
       "status": "clear",
       "symbol": "createPostgresqlTaskRecoveryOperations",
@@ -5852,7 +5852,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:517ff322c622ff4d7106a90d2a935d1aaec221d86377df2060d72edd107012a6",
+  "sourceDigest": "sha256:5f1e8cd641882bd3fe95e5411af0ae4431eee2a9ad48f659bc8f7218c1d1dc7d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

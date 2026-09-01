@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-08-23",
-    "inboundEdges": 325,
+    "inboundEdges": 323,
     "outboundEdges": 11,
     "registeredFindings": 79,
     "recordedAtShaNote": "采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -71,27 +71,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationTaskAccess.ts#createPostgresqlCollaborationTaskAccessPort"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "to": "packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter",
-      "specifier": "@/modules/execution-contract/infrastructure/taskExecutionAdapter",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "execution-contract",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:c80b85a6dc8f4d177169"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/execution-contract/infrastructure/taskExecutionAdapter.ts#createPostgresqlExecutionContractResourceAdapter"
       ],
       "canonicalFacadeIds": []
     },
@@ -411,27 +390,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts#createSqliteCollaborationRuntimeMechanics"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/start.ts",
-      "to": "packages/backend/src/modules/digital-employee/application/osWorker",
-      "specifier": "@/modules/digital-employee/application/osWorker",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "digital-employee",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:3d2649145408fe9370a2"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/digital-employee/application/osWorker.ts#runDigitalEmployeeOsCycle"
       ],
       "canonicalFacadeIds": []
     },
@@ -9295,15 +9253,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:517ff322c622ff4d7106a90d2a935d1aaec221d86377df2060d72edd107012a6",
+    "sourceDigest": "sha256:5f1e8cd641882bd3fe95e5411af0ae4431eee2a9ad48f659bc8f7218c1d1dc7d",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "05a03a08b87e0da33f9fcb6aa036bd9a4d622c8c",
-    "contentDigest": "sha256:2f3e317c875b4a079bea764381457b1c27f11204b6ef51630832ed784964ff12",
+    "currentSnapshotSha": "6a5bd9817cfd4a835293a3321caa155d65bbd3c4",
+    "contentDigest": "sha256:29bfd44e5de47ac4a3884185adca9eb481837793499c83b79dcd326ffaf4b159",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

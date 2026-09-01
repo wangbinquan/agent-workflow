@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:517ff322c622ff4d7106a90d2a935d1aaec221d86377df2060d72edd107012a6`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:5f1e8cd641882bd3fe95e5411af0ae4431eee2a9ad48f659bc8f7218c1d1dc7d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -21,7 +21,7 @@
 | background work entries | 365 |
 | direct native `setInterval`（call / files） | 24 / 21 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 325 / 11 |
+| RFC-317 boundary census（inbound / outbound） | 323 / 11 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 6036 |
+| `architectureExceptions` | 6035 |
 | `backgroundJobs` | 365 |
-| `crossContextImports` | 6238 |
+| `crossContextImports` | 6239 |
 | `facades` | 354 |
 | `governedFieldSurfaces` | 5 |
 | `moduleSymbolOwners` | 25596 |
 | `mutationEntrypoints` | 1908 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 945 |
+| `publicSurfaces` | 946 |
 | `transactionExternalEffects` | 476 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -197,10 +197,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3892 |
+| legacy-outbound | 3891 |
 | legacy-inbound | 1547 |
 | external-layer-debt | 398 |
-| offered-consumption | 120 |
+| offered-consumption | 122 |
 | temporary-internal-debt | 107 |
 | off-dag-offered | 84 |
 | authority-type-only | 63 |
@@ -210,7 +210,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3892 |
+| legacy-outbound | 3891 |
 | legacy-inbound | 1547 |
 | external-layer-debt | 398 |
 | temporary-internal-debt | 107 |
@@ -225,7 +225,7 @@
 | W4-E1 | 2498 |
 | W4-C | 914 |
 | W9 | 515 |
-| W4-E0 | 369 |
+| W4-E0 | 368 |
 | W4 | 362 |
 | W4-B | 278 |
 | W5 | 241 |
@@ -247,7 +247,7 @@
 | context | 数量 |
 | --- | --- |
 | resource-catalog | 241 |
-| task-execution | 197 |
+| task-execution | 198 |
 | collaboration | 125 |
 | identity-access | 66 |
 | system-operations | 63 |
@@ -263,7 +263,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 945）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 946）
 
 | context | 数量 |
 | --- | --- |

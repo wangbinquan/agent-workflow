@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 849,
+    "consumers": 851,
     "exactEntrypointFiles": 61,
     "governedFieldSurfaces": 5,
-    "methods": 883,
+    "methods": 885,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 18832,
-    "symbols": 945
+    "recursiveFields": 18889,
+    "symbols": 946
   },
   "entries": [
     {
@@ -52358,7 +52358,8 @@
         "public:system-operations:queries:GetRecoveryStatusQuery",
         "public:system-operations:queries:SystemOperationQueries",
         "public:system-operations:queries:SystemOverviewAuthority",
-        "public:system-operations:queries:SystemOverviewQuery"
+        "public:system-operations:queries:SystemOverviewQuery",
+        "public:task-execution:commands:TaskExecutionResourceAuthority"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -95307,7 +95308,8 @@
         "public:resource-catalog:participants:ResourcePackageApplyTx",
         "public:resource-catalog:participants:ResourceScopeAuthorizationInTx",
         "public:resource-catalog:participants:TaskExecutionResourceSnapshotInTx",
-        "public:resource-catalog:queries:ResourceCatalogOverviewQuery"
+        "public:resource-catalog:queries:ResourceCatalogOverviewQuery",
+        "public:task-execution:commands:TaskExecutionResourceAuthority"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -127043,7 +127045,8 @@
       },
       "consumerEdgeIds": [
         "import:07493721f1fcac65c872",
-        "import:7ef274c11f05e00d88a9"
+        "import:7ef274c11f05e00d88a9",
+        "import:83639bef968e0fb7893a"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -127063,7 +127066,8 @@
         {
           "consumerEdgeIds": [
             "import:07493721f1fcac65c872",
-            "import:7ef274c11f05e00d88a9"
+            "import:7ef274c11f05e00d88a9",
+            "import:83639bef968e0fb7893a"
           ],
           "fieldPath": "$variant:0.type",
           "type": "'user'"
@@ -127076,7 +127080,8 @@
         {
           "consumerEdgeIds": [
             "import:07493721f1fcac65c872",
-            "import:7ef274c11f05e00d88a9"
+            "import:7ef274c11f05e00d88a9",
+            "import:83639bef968e0fb7893a"
           ],
           "fieldPath": "$variant:1.type",
           "type": "'scheduled'"
@@ -127099,18 +127104,23 @@
         {
           "consumerEdgeIds": [
             "import:07493721f1fcac65c872",
-            "import:7ef274c11f05e00d88a9"
+            "import:7ef274c11f05e00d88a9",
+            "import:83639bef968e0fb7893a"
           ],
           "fieldPath": "$variant:2.type",
           "type": "'node'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:83639bef968e0fb7893a"
+          ],
           "fieldPath": "$variant:3.eventDeliveryId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:83639bef968e0fb7893a"
+          ],
           "fieldPath": "$variant:3.eventSubscriptionId",
           "type": "string"
         },
@@ -127157,7 +127167,8 @@
         {
           "consumerEdgeIds": [
             "import:07493721f1fcac65c872",
-            "import:7ef274c11f05e00d88a9"
+            "import:7ef274c11f05e00d88a9",
+            "import:83639bef968e0fb7893a"
           ],
           "fieldPath": "$variant:3.triggerContext.contract.definitionRef.id",
           "type": "string"
@@ -127180,7 +127191,8 @@
         {
           "consumerEdgeIds": [
             "import:07493721f1fcac65c872",
-            "import:7ef274c11f05e00d88a9"
+            "import:7ef274c11f05e00d88a9",
+            "import:83639bef968e0fb7893a"
           ],
           "fieldPath": "$variant:3.type",
           "type": "'event'"
@@ -127228,7 +127240,8 @@
         {
           "consumerEdgeIds": [
             "import:07493721f1fcac65c872",
-            "import:7ef274c11f05e00d88a9"
+            "import:7ef274c11f05e00d88a9",
+            "import:83639bef968e0fb7893a"
           ],
           "fieldPath": "$variant:4.triggerContext.contract.definitionRef.id",
           "type": "string"
@@ -127251,7 +127264,8 @@
         {
           "consumerEdgeIds": [
             "import:07493721f1fcac65c872",
-            "import:7ef274c11f05e00d88a9"
+            "import:7ef274c11f05e00d88a9",
+            "import:83639bef968e0fb7893a"
           ],
           "fieldPath": "$variant:4.type",
           "type": "'webhook'"
@@ -127284,6 +127298,12 @@
           "edgeId": "import:7ef274c11f05e00d88a9",
           "file": "packages/backend/src/services/execution/types.ts",
           "ownerEntryId": "owner:packages/backend/src/services/execution/types.ts#$file"
+        },
+        {
+          "context": "integration",
+          "edgeId": "import:83639bef968e0fb7893a",
+          "file": "packages/backend/src/modules/integration/infrastructure/webhookExecutionRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookExecutionRuntime.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -131302,6 +131322,352 @@
       "symbol": "TaskExecutionContextRef",
       "transaction": "own-tx",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 57,
+        "maxUnionVariants": 32
+      },
+      "consumerEdgeIds": [
+        "import:64bdaabeae0a34683197"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.source.$variant:0",
+          "type": "'session'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.source.$variant:1",
+          "type": "'pat'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.source.$variant:2",
+          "type": "'daemon'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64bdaabeae0a34683197"
+          ],
+          "fieldPath": "actor.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actor.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.source.$variant:0",
+          "type": "'session'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.source.$variant:1",
+          "type": "'pat'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.source.$variant:2",
+          "type": "'daemon'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64bdaabeae0a34683197"
+          ],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:pair.actor.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:root.definition",
+          "type": "z.infer<typeof WorkflowDefinitionSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64bdaabeae0a34683197"
+          ],
+          "fieldPath": "resources.$method:freezeCallClosure.$parameter:root.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:freezeCallClosure.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.source.$variant:0",
+          "type": "'session'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.source.$variant:1",
+          "type": "'pat'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.source.$variant:2",
+          "type": "'daemon'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64bdaabeae0a34683197"
+          ],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:pair.actor.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$parameter:requests",
+          "type": "readonly TaskExecutionResourceRequest[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resources.$method:loadAuthorized.$return",
+          "type": "readonly FrozenTaskExecutionResourceSnapshot[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "id": "public:task-execution:commands:TaskExecutionResourceAuthority",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "freezeCallClosure",
+          "signatureDigest": "sha256:2f61da5ea854d180d1c33d4ba308333164a3cb4ef0151ba7a2aa525a0b4565ea"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "loadAuthorized",
+          "signatureDigest": "sha256:4d272963ed6e113de3e7b3afd5ad834857e34795d7a81fa7492a90a7ea939b9c"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "integration",
+          "edgeId": "import:64bdaabeae0a34683197",
+          "file": "packages/backend/src/modules/integration/infrastructure/webhookExecutionRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookExecutionRuntime.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:896cae84f8342987a608769ed1c774dee40ed9bc2a8dd24efd94c01852fbdeec",
+      "status": "target-context-current-surface",
+      "symbol": "TaskExecutionResourceAuthority",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -151794,7 +152160,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:517ff322c622ff4d7106a90d2a935d1aaec221d86377df2060d72edd107012a6",
+  "sourceDigest": "sha256:5f1e8cd641882bd3fe95e5411af0ae4431eee2a9ad48f659bc8f7218c1d1dc7d",
   "targetContexts": [
     "collaboration",
     "development-automation",
