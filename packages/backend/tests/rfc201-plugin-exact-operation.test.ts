@@ -61,6 +61,18 @@ afterEach(async () => {
 })
 
 describe('immutable generation publication', () => {
+  test('explicit same-version reinstall publishes a fresh immutable generation', async () => {
+    const created = await createPlugin(binding, { name: 'same-version', spec: 'same-version@1' })
+    resetNpmProbeCacheForTests()
+    const reinstalled = await reinstallPlugin(binding, created.id)
+
+    expect(reinstalled.resolvedVersion).toBe(created.resolvedVersion)
+    expect(reinstalled.cachedPath).not.toBe(created.cachedPath)
+    expect(pluginOperationConfigHashOf(reinstalled)).not.toBe(pluginOperationConfigHashOf(created))
+    expect(existsSync(created.cachedPath)).toBe(true)
+    expect(existsSync(reinstalled.cachedPath)).toBe(true)
+  })
+
   test('successive available upgrades publish distinct cached paths and exact hashes', async () => {
     const created = await createPlugin(binding, { name: 'same', spec: 'same@1' })
     process.env.FAKE_NPM_VERSION = '2.0.0'

@@ -139,7 +139,12 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
     await expect(deleteMcp(mcpBinding, mcp.id)).rejects.toMatchObject({
       code: 'resource-operation-stale',
     })
-    expect(await getMcpById(mcpBinding, mcp.id)).not.toBeNull()
+    expect(db.select().from(mcps).where(eq(mcps.id, mcp.id)).get()).toMatchObject({
+      id: mcp.id,
+      ownerUserId: 'u-other',
+      visibility: 'private',
+      aclRevision: 1,
+    })
   })
 
   test('plugin: an agent reference saved after the preliminary scan blocks the full-row-fenced DELETE', async () => {

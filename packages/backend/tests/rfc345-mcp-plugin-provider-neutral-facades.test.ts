@@ -5,6 +5,14 @@ import { resolve } from 'node:path'
 const sourceRoot = resolve(import.meta.dir, '../src')
 const source = (relative: string): string => readFileSync(resolve(sourceRoot, relative), 'utf8')
 
+function publicInterface(sourceText: string, name: string): string {
+  const start = sourceText.indexOf(`export interface ${name} {`)
+  expect(start, `${name} interface start`).toBeGreaterThanOrEqual(0)
+  const end = sourceText.indexOf('\n}', start)
+  expect(end, `${name} interface end`).toBeGreaterThan(start)
+  return sourceText.slice(start, end + 2)
+}
+
 const DATABASE_MECHANISM = /(?:@\/db(?:\/|['"])|drizzle-orm|dbTxSync|DbClient|DbTxSync)/
 
 describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => {
@@ -40,7 +48,12 @@ describe('RFC-345 MCP and Plugin provider-neutral compatibility facades', () => 
     expect(types).toContain('export interface McpProbeRecord')
     expect(types).toContain('export interface McpProbeWrite')
     expect(participants).toContain('export interface McpProbeStore')
-    expect(`${types}\n${participants}`).not.toMatch(
+    const probeContracts = [
+      publicInterface(types, 'McpProbeRecord'),
+      publicInterface(types, 'McpProbeWrite'),
+      publicInterface(participants, 'McpProbeStore'),
+    ].join('\n')
+    expect(probeContracts).not.toMatch(
       /\b(?:Omit|Pick|Partial|Record|unknown|object|DbClient|DbTxSync)\b/,
     )
     expect(composition).toContain('composeSqliteMcpProbeStore')

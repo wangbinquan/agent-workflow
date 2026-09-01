@@ -335,8 +335,7 @@ export function createPluginApplication(deps: PluginApplicationDependencies) {
         await deps.access.requireResourceEdit(authority, fresh)
         assertExpectedHash(deps.projection, fresh, expectedConfigHash)
         assertOperationSupported(fresh)
-        const checked = await deps.installer.checkForUpdate(fresh.id, fresh.spec, fresh.cachedPath)
-        if (checked.identityStatus === 'known' && !checked.available) return fresh
+        await deps.installer.checkForUpdate(fresh.id, fresh.spec, fresh.cachedPath)
         return publishInstalled(fresh, fresh.spec, fresh.options, fresh.description, fresh.enabled)
       })
       return Object.freeze({

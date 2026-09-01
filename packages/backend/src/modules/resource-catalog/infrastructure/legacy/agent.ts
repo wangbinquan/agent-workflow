@@ -1245,12 +1245,13 @@ export function rowToAgent(row: AgentRow): Agent {
     fmExtra.outputKinds !== null &&
     typeof fmExtra.outputKinds === 'object'
   ) {
-    outputKinds = {} as Agent['outputKinds']
+    const parsedOutputKinds = {} as NonNullable<Agent['outputKinds']>
     for (const [port, kind] of Object.entries(fmExtra.outputKinds as Record<string, unknown>)) {
       if (typeof kind === 'string' && kind.length > 0) {
-        ;(outputKinds as Record<string, string>)[port] = kind
+        ;(parsedOutputKinds as Record<string, string>)[port] = kind
       }
     }
+    if (Object.keys(parsedOutputKinds).length > 0) outputKinds = parsedOutputKinds
   }
 
   // RFC-060 PR-B: lift role + outputWrapperPortNames out of frontmatter_extra
@@ -1267,13 +1268,16 @@ export function rowToAgent(row: AgentRow): Agent {
     fmExtra.outputWrapperPortNames !== null &&
     typeof fmExtra.outputWrapperPortNames === 'object'
   ) {
-    outputWrapperPortNames = {} as Agent['outputWrapperPortNames']
+    const parsedOutputWrapperPortNames = {} as NonNullable<Agent['outputWrapperPortNames']>
     for (const [port, wrapperName] of Object.entries(
       fmExtra.outputWrapperPortNames as Record<string, unknown>,
     )) {
       if (typeof wrapperName === 'string' && wrapperName.length > 0) {
-        ;(outputWrapperPortNames as Record<string, string>)[port] = wrapperName
+        ;(parsedOutputWrapperPortNames as Record<string, string>)[port] = wrapperName
       }
+    }
+    if (Object.keys(parsedOutputWrapperPortNames).length > 0) {
+      outputWrapperPortNames = parsedOutputWrapperPortNames
     }
   }
 

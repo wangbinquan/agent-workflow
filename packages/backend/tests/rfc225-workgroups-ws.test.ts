@@ -8,6 +8,7 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { resourceGrants, users, workgroups } from '../src/db/schema'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
   createWorkgroup,
   deleteWorkgroup,
@@ -21,6 +22,7 @@ import {
   type WorkgroupDeletedAudienceContext,
 } from '../src/ws/broadcaster'
 import { WS_CHANNELS } from '../src/ws/registry'
+import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -149,6 +151,8 @@ describe('RFC-225 workgroup WS frame gate', () => {
       addedAt: Date.now(),
     })
     const gate = WS_CHANNELS.workgroups.frameGate!
+    const identityAccess = createIdentityAccessRuntime({ db })
+    const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
     const frame: WorkgroupsWsMessage = {
       type: 'workgroup.updated',
       workgroupId,
@@ -160,6 +164,7 @@ describe('RFC-225 workgroup WS frame gate', () => {
     const ctx = (id: string) => ({
       db,
       actor: actor(id),
+      channels,
       cache: new Map<string, boolean>(),
     })
     expect(await gate(ctx('alice'), frame)).toBe(true)
@@ -190,6 +195,8 @@ describe('RFC-225 workgroup WS frame gate', () => {
       version: 1,
     })
     await db.delete(workgroups).where(eq(workgroups.id, workgroupId))
+    const identityAccess = createIdentityAccessRuntime({ db })
+    const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
     const context: WorkgroupDeletedAudienceContext = {
       kind: 'workgroup.deleted-audience',
       workgroupId,
@@ -207,6 +214,7 @@ describe('RFC-225 workgroup WS frame gate', () => {
     const ctx = (id: string) => ({
       db,
       actor: actor(id),
+      channels,
       cache: new Map<string, boolean>(),
     })
     expect(await gate(ctx('alice'), frame, context)).toBe(true)

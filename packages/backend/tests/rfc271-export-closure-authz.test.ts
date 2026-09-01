@@ -396,7 +396,7 @@ describe('AC-7 · 授权复核排在 root fence 之前（不做状态 oracle）'
       src.indexOf('async function assertRootStillCurrent('),
       src.indexOf('async function assertClosureStillCurrent('),
     )
-    expect(fenceFn).toContain('listGrantedResourceIds(db, actor, type)')
+    expect(fenceFn).toContain('reads.listGrantedResourceIds(actor, type)')
     expect(fenceFn).toContain('isVisibleRow(actor, row as never, grants)')
     // 而且授权判断要排在 `assertRootUnchanged` 明文比较**之前**。
     expect(fenceFn.indexOf('isVisibleRow(') < fenceFn.indexOf('assertRootUnchanged(')).toBe(true)
