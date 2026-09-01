@@ -28,7 +28,7 @@ const unitOf = (rel: string): SourceUnit =>
   sourceUnit(rel, readFileSync(resolve(REPO_ROOT, rel), 'utf8'))
 
 const SCHEMA = 'packages/backend/src/db/schema.ts'
-const LIFECYCLE = 'packages/backend/src/services/lifecycle.ts'
+const LIFECYCLE = 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts'
 
 /**
  * 某个 drizzle 列声明的 `enum` 取值域，从 `schema.ts` 的 AST 里取。
@@ -158,7 +158,7 @@ describe('RFC-317 T28（LC-04）—— 通用状态写点的来源中立性', ()
       portReturnTypeName(lifecycleUnit, 'TerminalWorkspacePrunePolicy'),
       '返回 boolean 意味着「要不要回收」外置了、「叫什么名字」没外置——半次反转，' +
         'cause 只能由 kernel 自己铸',
-    ).toBe('TerminalWorkspacePruneDecision')
+    ).toBe('Promise<TerminalWorkspacePruneDecision>')
   })
 })
 

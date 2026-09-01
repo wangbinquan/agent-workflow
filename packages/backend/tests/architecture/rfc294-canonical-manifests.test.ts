@@ -213,7 +213,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       (catalogColumn.consumers as Array<Record<string, unknown>>).some(
         (consumer) =>
           consumer.ownerEntryId ===
-          'owner:packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts#source',
+          'owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts#source',
       ),
     ).toBe(true)
 
@@ -307,12 +307,83 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     expect(
       facades.filter((entry) => entry.status === 'thin-facade').map((entry) => entry.file),
     ).toEqual([
+      'packages/backend/src/services/agent.ts',
+      'packages/backend/src/services/backup.ts',
+      'packages/backend/src/services/backupManifest.ts',
+      'packages/backend/src/services/backupScheduler.ts',
+      'packages/backend/src/services/bundle/apply.ts',
+      'packages/backend/src/services/bundle/lower.ts',
+      'packages/backend/src/services/bundle/postgresqlApply.ts',
+      'packages/backend/src/services/clarify/autoDispatch.ts',
+      'packages/backend/src/services/clarify/queue.ts',
+      'packages/backend/src/services/clarify/rerunLedger.ts',
+      'packages/backend/src/services/clarify/rounds.ts',
+      'packages/backend/src/services/clarify/seal.ts',
+      'packages/backend/src/services/clarify/service.ts',
       'packages/backend/src/services/clarifyAutoDispatch.ts',
+      'packages/backend/src/services/clarifyDecision.ts',
+      'packages/backend/src/services/clarifyDecisionComposition.ts',
       'packages/backend/src/services/clarifyQueue.ts',
       'packages/backend/src/services/clarifyRerunLedger.ts',
       'packages/backend/src/services/clarifyRounds.ts',
       'packages/backend/src/services/clarifySeal.ts',
+      'packages/backend/src/services/eventsArchive.ts',
+      'packages/backend/src/services/execution/closure.ts',
+      'packages/backend/src/services/execution/resolveInjection.ts',
+      'packages/backend/src/services/execution/taskEngineRuntimeOptions.ts',
+      'packages/backend/src/services/gc.ts',
+      'packages/backend/src/services/intent/postgresqlApplyChangeset.ts',
+      'packages/backend/src/services/lifecycle.ts',
+      'packages/backend/src/services/lifecycleRepair.ts',
+      'packages/backend/src/services/lifecycleRepair/helpers.ts',
+      'packages/backend/src/services/lifecycleRepair/options-C1.ts',
+      'packages/backend/src/services/lifecycleRepair/options-CR1.ts',
+      'packages/backend/src/services/lifecycleRepair/options-R1.ts',
+      'packages/backend/src/services/lifecycleRepair/options-R2.ts',
+      'packages/backend/src/services/lifecycleRepair/options-S1.ts',
+      'packages/backend/src/services/lifecycleRepair/options-S2.ts',
+      'packages/backend/src/services/lifecycleRepair/options-S3.ts',
+      'packages/backend/src/services/lifecycleRepair/options-S4.ts',
+      'packages/backend/src/services/lifecycleRepair/options-S5.ts',
+      'packages/backend/src/services/lifecycleRepair/options-S6.ts',
+      'packages/backend/src/services/lifecycleRepair/options-T1.ts',
+      'packages/backend/src/services/lifecycleRepair/options-T2.ts',
+      'packages/backend/src/services/lifecycleRepair/options-T3.ts',
+      'packages/backend/src/services/lifecycleRepair/options-U1.ts',
+      'packages/backend/src/services/lifecycleRepair/types.ts',
+      'packages/backend/src/services/maintenanceDisk.ts',
+      'packages/backend/src/services/maintenanceRetention.ts',
+      'packages/backend/src/services/maintenanceState.ts',
+      'packages/backend/src/services/mcpRuntimeTestTransitions.ts',
+      'packages/backend/src/services/memory.ts',
+      'packages/backend/src/services/overview.ts',
       'packages/backend/src/services/protocol.ts',
+      'packages/backend/src/services/questionDispatchComposition.ts',
+      'packages/backend/src/services/resourcePackage/commit.ts',
+      'packages/backend/src/services/resourceRefs.ts',
+      'packages/backend/src/services/restore.ts',
+      'packages/backend/src/services/review.ts',
+      'packages/backend/src/services/reviewDecisionComposition.ts',
+      'packages/backend/src/services/skill-zip.ts',
+      'packages/backend/src/services/skillBootVerify.ts',
+      'packages/backend/src/services/skillIdentityMigration.ts',
+      'packages/backend/src/services/skillIdentityPaths.ts',
+      'packages/backend/src/services/skillVersion.ts',
+      'packages/backend/src/services/taskClarifyDirective.ts',
+      'packages/backend/src/services/taskCollab.ts',
+      'packages/backend/src/services/taskFeedback.ts',
+      'packages/backend/src/services/taskQuestionDispatch.ts',
+      'packages/backend/src/services/taskQuestions.ts',
+      'packages/backend/src/services/workflow.ts',
+      'packages/backend/src/services/workflow.validator.ts',
+      'packages/backend/src/services/workflow.yaml.ts',
+      'packages/backend/src/services/workflowLaunchInputs.ts',
+      'packages/backend/src/services/workgroup/askerKey.ts',
+      'packages/backend/src/services/workgroup/constants.ts',
+      'packages/backend/src/services/workgroup/engine.ts',
+      'packages/backend/src/services/workgroup/launch.ts',
+      'packages/backend/src/services/workgroup/state.ts',
+      'packages/backend/src/services/workgroups.ts',
     ])
 
     const owners = generated.moduleSymbolOwners.entries as Array<Record<string, unknown>>
@@ -351,12 +422,14 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     const sites = generated.mutationEntrypoints.nodeRunInsertSites as Array<Record<string, unknown>>
     expect(sites.map(({ file, status }) => ({ file, status }))).toEqual([
       {
-        file: 'packages/backend/src/services/nodeRunMint.ts',
+        file:
+          'packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts',
         status: 'canonical-writer',
       },
       {
-        file: 'packages/backend/src/services/taskQuestionDispatch.ts',
-        status: 'reviewed-dispatch-exception',
+        file:
+          'packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
+        status: 'canonical-writer',
       },
     ])
     expect(
@@ -586,24 +659,9 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     expect(Object.isFrozen(worker)).toBe(true)
   })
 
-  test('the two transport-to-db debts no longer point at completed RFC-317 work', () => {
+  test('provider cutover leaves no transport-to-db debt behind', () => {
     const transportDebt = KNOWN_VIOLATIONS.filter((entry) => entry.rule === 'no-transport-to-db')
-    expect(transportDebt).toHaveLength(2)
-    expect(
-      transportDebt.map(({ from, owner, removeWave }) => ({ from, owner, removeWave })),
-    ).toEqual([
-      {
-        from: 'packages/backend/src/ws/registry.ts',
-        owner: 'identity-access + owning visibility contexts',
-        removeWave: 'W4',
-      },
-      {
-        from: 'packages/backend/src/ws/server.ts',
-        owner: 'identity-access + bootstrap',
-        removeWave: 'W9',
-      },
-    ])
-    expect(transportDebt.every((entry) => !entry.removeWhen.includes('RFC-317 B10'))).toBe(true)
+    expect(transportDebt).toEqual([])
   })
 
   test('mutation: deleting an owner, staling a digest or collapsing an edge role fails closed', () => {

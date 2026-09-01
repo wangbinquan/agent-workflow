@@ -44,16 +44,23 @@ export const CANONICAL_MANIFEST_PATHS = {
 
 export type CanonicalManifestName = keyof typeof CANONICAL_MANIFEST_PATHS
 
-const EXACT_PUBLIC = new Set(['commands', 'events', 'participants', 'queries', 'types'])
+const EXACT_PUBLIC = new Set(['commands', 'events', 'operations', 'participants', 'queries', 'types'])
 const GOVERNED_EXTERNAL_SPECIFIERS = new Set(['drizzle-orm'])
 const MODULE_PREFIX = 'packages/backend/src/modules/'
 const BACKEND_PREFIX = 'packages/backend/src/'
 
 export const PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST = [
   'AbortSignal',
+  'Blob',
+  'Exclude',
   'Extract',
+  'Omit',
   'Pick',
+  'ReadableStream',
+  'ReadonlyMap',
   'Record',
+  'RegExp',
+  'Uint8Array',
   'extends:Error',
   'z.infer',
 ] as const
@@ -1840,7 +1847,7 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       ],
       consumers: [
         anchor({
-          file: 'packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts',
           symbol: 'source',
           sourceToken: "catalogVisibility: 'public'",
         }),
@@ -1855,8 +1862,13 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
           sourceToken: "catalogVisibility: 'public'",
         }),
         anchor({
-          file: 'packages/backend/src/services/overview.ts',
-          symbol: '$file',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOverviewQuery.ts',
+          symbol: 'createSqliteTaskOverviewQuery',
+          sourceToken: "eq(tasks.catalogVisibility, 'public')",
+        }),
+        anchor({
+          file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOverviewQuery.ts',
+          symbol: 'createPostgresqlTaskOverviewQuery',
           sourceToken: "eq(tasks.catalogVisibility, 'public')",
         }),
       ],
@@ -2128,8 +2140,21 @@ interface MutationEntry {
 function buildMutationEntries(backend: readonly SourceUnit[]): MutationEntry[] {
   const out: MutationEntry[] = []
   for (const unit of backend) {
-    for (const item of topLevelNamedNodes(unit)) {
+    const namedNodes = topLevelNamedNodes(unit)
+    for (const item of namedNodes) {
       if (!MUTATION_NAME.test(item.name)) continue
+      if (
+        ts.isFunctionDeclaration(item.node) &&
+        item.node.body === undefined &&
+        namedNodes.some(
+          (candidate) =>
+            candidate.name === item.name &&
+            ts.isFunctionDeclaration(candidate.node) &&
+            candidate.node.body !== undefined,
+        )
+      ) {
+        continue
+      }
       const text = item.node.getText(unit.source)
       const evidence = controls(text)
       const missingControls = missingControlNames(evidence)
@@ -2399,6 +2424,146 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'OwnershipToken',
     }
   }
+  // RFC-349 moved the remaining Task Execution writers out of legacy services
+  // and into provider-owned adapters.  Classify those concrete mechanisms by
+  // the authority they consume; a blanket "infrastructure is trusted" rule
+  // would make the ledger blind to future adapters, so every family below is
+  // deliberately named.
+  if (
+    /modules\/collaboration\/infrastructure\/(?:legacySqliteClarify\/seal|legacySqliteReview|postgresqlCollaborationRuntimeMechanics|(?:postgresql|sqlite)HumanGateOpenParticipant|(?:postgresql|sqlite)ReviewRepairParticipant)/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'gate-control',
+      revisionPredicate: 'task-scoped-gate-state-and-node-lifecycle-cas',
+      requiredBrandedProof: 'GateDecisionTransaction+NodeRunLifecycleParticipantInTx',
+    }
+  }
+  if (/modules\/collaboration\/infrastructure\/(?:postgresql|sqlite)HumanGateTerminalSweep/.test(value)) {
+    return {
+      authorityKind: 'terminal-maintenance',
+      controlSubtype: null,
+      revisionPredicate: 'terminal-human-gate-state-and-node-status-cas',
+      requiredBrandedProof: 'TerminalMaintenanceExecutionFence',
+    }
+  }
+  if (/modules\/resource-catalog\/infrastructure\/legacy\/workgroup\//.test(value)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'membership-control',
+      revisionPredicate: 'workgroup-config-revision-and-task-node-cas',
+      requiredBrandedProof: 'AuthorizedWorkgroupTaskRoomCommand',
+    }
+  }
+  if (/modules\/source-control\/infrastructure\/(?:postgresql|sqlite)RepositoryWorkspaceStore/.test(value)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'continuation-admission',
+      revisionPredicate: 'workspace-sealing-generation-and-task-revision',
+      requiredBrandedProof: 'RepositoryWorkspaceMutationAuthority',
+    }
+  }
+  if (/modules\/system-operations\/infrastructure\/(?:postgresql|sqlite)ResourceLimitPersistence/.test(value)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'resource-limit-observation-and-task-lifecycle-cas',
+      requiredBrandedProof: 'ResourceLimitEnforcementDecision',
+    }
+  }
+  if (
+    /platform\/persistence\/(?:postgresqlEventsArchive|sqlite\/(?:systemEventsArchive|systemWorkspaceGc|taskLifecycleRepair\/))/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'terminal-maintenance',
+      controlSubtype: null,
+      revisionPredicate: 'exact-maintenance-fence-claim-and-durable-cutoff',
+      requiredBrandedProof: 'TerminalMaintenanceClaim+MaintenanceExecutionFence',
+    }
+  }
+  if (/platform\/persistence\/sqlite\/taskLifecycle\.ts/.test(value)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'task-or-node-lifecycle-status-cas',
+      requiredBrandedProof: 'CanonicalControlTransaction',
+    }
+  }
+  if (/modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)TaskExecutionRecovery/.test(value)) {
+    return {
+      authorityKind: 'recovery-proof',
+      controlSubtype: null,
+      revisionPredicate: 'effect-attempt-fence-and-recovery-watermark',
+      requiredBrandedProof: 'VerifiedTakeoverOrOutcomeProof',
+    }
+  }
+  if (
+    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)(?:TaskRecoveryOperations|RepositoryPreparationRetryCommand)/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'recovery-proof',
+      controlSubtype: null,
+      revisionPredicate: 'task-recovery-generation-and-lifecycle-revision',
+      requiredBrandedProof: 'RecoveryCandidateProof',
+    }
+  }
+  if (
+    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)(?:TaskArchiveMaintenanceCommand|TerminalMaintenancePersistence)/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'terminal-maintenance',
+      controlSubtype: null,
+      revisionPredicate: 'exact-claim-revision-and-member-set-digest',
+      requiredBrandedProof: 'TerminalMaintenanceClaim',
+    }
+  }
+  if (
+    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)/.test(
+      value,
+    )
+  ) {
+    const membership = /replaceTaskMembers|replaceConfig/.test(input.callable)
+    const terminal =
+      /terminalize|cancel|failTask|deleteTask|interruptSurvivor|SourceTermination/.test(value)
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: membership
+        ? 'membership-control'
+        : terminal
+          ? 'terminal-control'
+          : 'continuation-admission',
+      revisionPredicate: 'task-lifecycle-revision-and-provider-transaction-cas',
+      requiredBrandedProof: 'CanonicalControlTransaction',
+    }
+  }
+  if (/modules\/task-execution\/infrastructure\/sqliteTerminalizeExecutionIntent/.test(value)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'bound-intent-and-decision-revision',
+      requiredBrandedProof: 'TerminalControlDecision',
+    }
+  }
+  if (
+    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)(?:GateContinuationPreDrivePersistence|GateContinuationEffectStep|MergeStateLifecyclePersistence|NodeExecutionPersistence|NodeRunLifecyclePersistence|NodeRunMintParticipant|NodeRunRuntimePersistence|ProcessEffectObserver|RuntimeSessionCapturePersistence|RuntimeSessionLeaseOperations|TaskExecutionEffectPersistence|TaskLifecycleTransaction|TaskOwnershipPersistence|WorkgroupHostLedgerParticipant|WrapperRunPersistence)/.test(
+      value,
+    )
+  ) {
+    return {
+      authorityKind: 'worker-epoch',
+      controlSubtype: null,
+      revisionPredicate: 'exact-owner-id-daemon-generation-epoch-and-claimed-state',
+      requiredBrandedProof: 'OwnershipToken+OwnedTaskTx',
+    }
+  }
   return null
 }
 
@@ -2452,7 +2617,7 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
   {
     subtype: 'continuation-admission',
     file: 'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
-    symbol: 'submitTaskContinuationTx',
+    symbol: 'submitTaskContinuation',
     allowedTables: ['tasks', 'taskExecutionIntents', 'taskExecutionLineageOperationRecords'],
     allowedTransitions: [
       'business-state->pending',
@@ -2482,8 +2647,8 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
   },
   {
     subtype: 'membership-control',
-    file: 'packages/backend/src/services/taskCollab.ts',
-    symbol: 'updateTaskMembers',
+    file: 'packages/backend/src/modules/task-execution/public/taskRoutes.ts',
+    symbol: 'TaskRouteOperations',
     allowedTables: ['tasks', 'taskCollaborators'],
     allowedTransitions: ['membership-revision-cas'],
     revisionPredicate: 'task-membership-revision',
@@ -2544,6 +2709,11 @@ interface NodeRunInsertSite {
   readonly guard: 'rfc098-node-run-mint-grep-guard'
 }
 
+const CANONICAL_NODE_RUN_INSERT_FILES = new Set([
+  'packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts',
+])
+
 function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRunInsertSite[] {
   const out: NodeRunInsertSite[] = []
   for (const unit of backend) {
@@ -2561,7 +2731,7 @@ function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRunInsertS
         const owner = enclosingTopLevelSymbol(unit, node)
         const symbol = owner?.name ?? '$file'
         const nearby = lines.slice(Math.max(0, line - 6), line).join('\n')
-        const status = unit.path.endsWith('/services/nodeRunMint.ts')
+        const status = CANONICAL_NODE_RUN_INSERT_FILES.has(unit.path)
           ? 'canonical-writer'
           : /rfc098-allow-direct-node-run-insert/.test(nearby)
             ? 'reviewed-dispatch-exception'
@@ -2733,6 +2903,9 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         let effectKind: string | null = null
         if (callee === 'createProcessEffectAttemptObserver') effectKind = 'process'
         else if (callee === 'createCodeHostEffectAttemptObserver') effectKind = 'code-host-mutation'
+        else if (callee === 'createLocalEffectAttemptObserver' && symbol === 'runTaskLocalEffect') {
+          effectKind = 'local-provider-effect'
+        }
         else effectKind = literalText(objectProperty(argument, 'kind'))
         if (effectKind === null) {
           unknown.push({
@@ -4088,8 +4261,15 @@ export function validateCanonicalArtifacts(artifacts: CanonicalArtifacts): strin
 
   const nodeRunSites = recordArray(artifacts.mutationEntrypoints, 'nodeRunInsertSites')
   if (nodeRunSites.length === 0) errors.push('node_runs INSERT inventory is empty')
-  if (nodeRunSites.filter((entry) => entry.status === 'canonical-writer').length !== 1) {
-    errors.push('node_runs canonical writer is not unique')
+  const canonicalNodeRunWriterFiles = nodeRunSites
+    .filter((entry) => entry.status === 'canonical-writer')
+    .map((entry) => String(entry.file))
+    .sort()
+  if (
+    stableJson(canonicalNodeRunWriterFiles) !==
+    stableJson([...CANONICAL_NODE_RUN_INSERT_FILES].sort())
+  ) {
+    errors.push('node_runs canonical provider writers differ from the reviewed adapter set')
   }
   if (nodeRunSites.some((entry) => entry.status === 'unreviewed')) {
     errors.push('unreviewed node_runs INSERT site')

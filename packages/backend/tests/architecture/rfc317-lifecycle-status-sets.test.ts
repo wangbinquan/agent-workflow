@@ -136,18 +136,18 @@ interface StatusListExemption {
  */
 const EXEMPTIONS: readonly StatusListExemption[] = [
   {
-    site: 'packages/backend/src/services/lifecycle.ts',
+    site: 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
     why: '`SOURCE_TERMINATION_BLOCKED_NODE_STATUSES` 是 **NodeRunStatus** 的集合，不是 TaskStatus。两个状态域恰好共用这四个字面量，但它们分属两台状态机——把它改成 import 任务侧的常量，会在任一侧新增状态时静默串台。',
     removeWhen:
       'node_run 侧也从自己的转移表派生出对应集合（RFC-317 B7 的 T47 会把 node 侧的 allowedFrom 一并纳入表判据），届时这里改 import 那一个。',
   },
   {
-    site: 'packages/backend/src/services/lifecycleRepair/options-R1.ts',
+    site: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts',
     why: '这不是一个状态集合常量，而是一次 `setTaskStatus({ to, allowedFrom })` 调用的**逐调用 allowed-from**。它恰好等于可取消集是巧合；语义是「这条修复动作允许从哪些状态发起」。',
     removeWhen: 'T47（LC-01）把所有 allowedFrom 站点纳入转移表判据后，这里由那条规则接管。',
   },
   {
-    site: 'packages/backend/src/services/lifecycleRepair/options-R2.ts',
+    site: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts',
     why: '同 options-R1 —— 逐调用 allowed-from，不是状态集合常量。',
     removeWhen: '同 options-R1。',
   },

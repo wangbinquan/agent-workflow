@@ -22,7 +22,7 @@ import { getTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 import * as schema from '../../src/db/schema'
 import { SQLITE_ACL_TABLES } from '../../src/modules/resource-catalog/infrastructure/sqliteAclRegistry'
-import type { ForeignResourceAclType } from '../../src/modules/resource-catalog/public/operations'
+import type { ForeignResourceAclType } from '../../src/modules/resource-catalog/application/ports/resourceAclPersistence'
 
 /** RFC-099 的行级 ACL 列集。 */
 const ACL_COLUMNS = ['owner_user_id', 'visibility'] as const

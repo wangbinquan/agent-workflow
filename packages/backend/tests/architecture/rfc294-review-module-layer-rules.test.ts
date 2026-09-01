@@ -93,20 +93,6 @@ export function moduleLayerViolations(units: readonly SourceUnit[]): ModuleLayer
 export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = [
   {
     rule: 'infrastructure-import',
-    file: 'packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts',
-    specifier: '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix',
-    why: 'application 直接 new 本模块 SQLite infrastructure；应由 composition 注入 port 实现。',
-    removeAfterWave: 'W4-E8',
-  },
-  {
-    rule: 'infrastructure-import',
-    file: 'packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts',
-    specifier: '@/modules/code-capability/infrastructure/sqliteDeliveryChain',
-    why: 'application 直接 new 本模块 SQLite infrastructure；应由 composition 注入 port 实现。',
-    removeAfterWave: 'W4-E8',
-  },
-  {
-    rule: 'infrastructure-import',
     file: 'packages/backend/src/modules/collaboration/application/adapters/task-execution-human-gate-adapter.ts',
     specifier: '../../infrastructure/sqliteHumanGateOpenParticipant',
     why: 'provider adapter 直接 new SQLite participant/store；应由 composition 注入，adapter 只依赖本域 ports。',
@@ -146,41 +132,6 @@ export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = [
     specifier: '@/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry',
     why: 'application 直接 import infrastructure 实现（registry/participant）；应由 composition 注入 port。',
     removeAfterWave: 'W4-E1',
-  },
-  {
-    rule: 'schema-table-import',
-    file: 'packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts',
-    specifier: '@/db/schema',
-    why: 'legacy history/template compatibility island 的 application 直读 Drizzle 表；W4-E8 收成 exact compatibility surface 或退役。',
-    removeAfterWave: 'W4-E8',
-  },
-  {
-    rule: 'schema-table-import',
-    file: 'packages/backend/src/modules/code-capability/application/codeMetricsQuery.ts',
-    specifier: '@/db/schema',
-    why: 'legacy history/template compatibility island 的 application 直读 Drizzle 表；W4-E8 收成 exact compatibility surface 或退役。',
-    removeAfterWave: 'W4-E8',
-  },
-  {
-    rule: 'schema-table-import',
-    file: 'packages/backend/src/modules/code-capability/application/readinessFacts.ts',
-    specifier: '@/db/schema',
-    why: 'legacy history/template compatibility island 的 application 直读 Drizzle 表；W4-E8 收成 exact compatibility surface 或退役。',
-    removeAfterWave: 'W4-E8',
-  },
-  {
-    rule: 'schema-table-import',
-    file: 'packages/backend/src/modules/code-capability/application/resolveRepoEndpoint.ts',
-    specifier: '@/db/schema',
-    why: 'legacy history/template compatibility island 的 application 直读 Drizzle 表；W4-E8 收成 exact compatibility surface 或退役。',
-    removeAfterWave: 'W4-E8',
-  },
-  {
-    rule: 'schema-table-import',
-    file: 'packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts',
-    specifier: '@/db/schema',
-    why: 'legacy history/template compatibility island 的 application 直读 Drizzle 表；W4-E8 收成 exact compatibility surface 或退役。',
-    removeAfterWave: 'W4-E8',
   },
   {
     rule: 'schema-table-import',

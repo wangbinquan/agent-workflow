@@ -38,14 +38,13 @@ const ROUTES_ROOT = resolve(REPO_ROOT, 'packages', 'backend', 'src', 'routes')
 
 /** `mountAclEndpoints` 的**定义**所在处；它自然不需要 owner 判据。 */
 const ACL_MOUNTER_DEFINITION = 'packages/backend/src/routes/resourceAcl.ts'
+const CAPABILITY_TEMPLATE_ROUTE = 'packages/backend/src/routes/capabilityTemplates.ts'
 
 /**
  * 只读地使用 `canViewResource` 的路由文件。每条必须写清「读什么、为什么不是写门」。
  * 新增条目 = 新增一次「这里可以只判可见性」的例外，必须是有意识的决定。
  */
 const READ_ONLY_VISIBILITY_ALLOWLIST: Readonly<Record<string, string>> = {
-  [ACL_MOUNTER_DEFINITION]:
-    '它就是 mountAclEndpoints 的定义处。模板化处理器自己只调 canViewResource 做「不可见 ⇒ 404 同形」；PUT /acl 的写权由它委托的 updateResourceAcl 在服务层判（services/resourceAcl.ts 的 requireResourceGovern——RFC-324 起授权面是治理档，编辑授权不含改授权），所以路由文件本身没有写门调用是设计，不是缺口。',
   'packages/backend/src/routes/tasks.ts':
     '跨域只读：判「这个 actor 看不看得见本任务引用的那个 workflow」来决定 sync 预览是否可用（tasks.ts:822），不是任何资源的写门。',
 }
@@ -69,6 +68,8 @@ interface RouteSource {
   readonly calledNames: ReadonlySet<string>
   /** 该文件里真实引用过的 property 名；用于识别 data-only descriptor binding。 */
   readonly referencedPropertyNames: ReadonlySet<string>
+  /** capability-template route 把四个 ACL 方法完整委托给已注入 owner。 */
+  readonly exactCapabilityTemplateAclDelegate: boolean
 }
 
 /**
@@ -99,6 +100,24 @@ function calledIdentifierNames(path: string, text: string): Set<string> {
   return names
 }
 
+function calledPropertyNamesForReceiver(path: string, text: string, receiver: string): Set<string> {
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const names = new Set<string>()
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === receiver
+    ) {
+      names.add(node.expression.name.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return names
+}
+
 function referencedPropertyNames(path: string, text: string): Set<string> {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const names = new Set<string>()
@@ -110,6 +129,78 @@ function referencedPropertyNames(path: string, text: string): Set<string> {
   return names
 }
 
+const CAPABILITY_TEMPLATE_ACL_METHODS = ['load', 'canView', 'read', 'update'] as const
+
+/**
+ * Capability Template 的 ACL owner 已经是 required route dependency；route 只负责把同一个
+ * owner 的四个方法原样交给通用 ACL mounter。这里必须锁 exact object binding，不能因为
+ * 文件里碰巧出现 `load` / `update` 等常见名字就把它当成一道写门。
+ */
+function hasExactCapabilityTemplateAclDelegation(path: string, text: string): boolean {
+  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const ownerAliases = new Map<string, ts.Node>()
+  const aclBindings: { readonly binding: ts.ObjectLiteralExpression; readonly scope: ts.Node }[] = []
+
+  const enclosingFunction = (node: ts.Node): ts.Node | undefined => {
+    let current = node.parent
+    while (current !== undefined) {
+      if (ts.isFunctionLike(current)) return current
+      current = current.parent
+    }
+    return undefined
+  }
+  const isRouteMountScope = (scope: ts.Node | undefined): scope is ts.FunctionDeclaration =>
+    scope !== undefined &&
+    ts.isFunctionDeclaration(scope) &&
+    scope.name?.text === 'mountCapabilityTemplateRoutes'
+
+  const visit = (node: ts.Node): void => {
+    const scope = enclosingFunction(node)
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.Const) !== 0 &&
+      isRouteMountScope(scope) &&
+      node.initializer !== undefined &&
+      ts.isPropertyAccessExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === 'deps' &&
+      node.initializer.name.text === 'capabilityTemplateAcl'
+    ) {
+      ownerAliases.set(node.name.text, scope)
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'mountAclEndpoints' &&
+      isRouteMountScope(scope)
+    ) {
+      const binding = node.arguments[1]
+      if (binding !== undefined && ts.isObjectLiteralExpression(binding)) {
+        aclBindings.push({ binding, scope })
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+
+  return aclBindings.some(({ binding, scope }) =>
+    CAPABILITY_TEMPLATE_ACL_METHODS.every((method) =>
+      binding.properties.some(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          ((ts.isIdentifier(property.name) && property.name.text === method) ||
+            (ts.isStringLiteral(property.name) && property.name.text === method)) &&
+          ts.isPropertyAccessExpression(property.initializer) &&
+          ts.isIdentifier(property.initializer.expression) &&
+          ownerAliases.get(property.initializer.expression.text) === scope &&
+          property.initializer.name.text === method,
+      ),
+    ),
+  )
+}
+
 const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
   const rel = relative(REPO_ROOT, path).split('\\').join('/')
   const text = readFileSync(path, 'utf8')
@@ -117,6 +208,7 @@ const SOURCES: readonly RouteSource[] = routeFiles().map((path) => {
     rel,
     calledNames: calledIdentifierNames(rel, text),
     referencedPropertyNames: referencedPropertyNames(rel, text),
+    exactCapabilityTemplateAclDelegate: hasExactCapabilityTemplateAclDelegation(rel, text),
   }
 })
 
@@ -133,6 +225,8 @@ const WORKFLOW_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/workflows/workflowApplication.ts'
 const WORKGROUP_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupApplication.ts'
+const CAPABILITY_TEMPLATE_OPERATION_SOURCE =
+  'packages/backend/src/modules/code-capability/application/capabilityTemplateOperations.ts'
 const RESOURCE_ACL_OPERATION_SOURCE =
   'packages/backend/src/modules/resource-catalog/application/resourceAcl.ts'
 const RESOURCE_ACL_OPERATION_GATES = calledIdentifierNames(
@@ -144,6 +238,15 @@ const aggregateAndAclGates = (source: string): ReadonlySet<string> =>
     ...calledIdentifierNames(source, readFileSync(resolve(REPO_ROOT, source), 'utf8')),
     ...RESOURCE_ACL_OPERATION_GATES,
   ])
+const capabilityTemplateAccessCalls = calledPropertyNamesForReceiver(
+  CAPABILITY_TEMPLATE_OPERATION_SOURCE,
+  readFileSync(resolve(REPO_ROOT, CAPABILITY_TEMPLATE_OPERATION_SOURCE), 'utf8'),
+  'access',
+)
+const CAPABILITY_TEMPLATE_OPERATION_GATES = new Set<string>([
+  ...(capabilityTemplateAccessCalls.has('requireEdit') ? ['requireResourceEdit'] : []),
+  ...(capabilityTemplateAccessCalls.has('requireGovern') ? ['requireResourceGovern'] : []),
+])
 const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = {
   'packages/backend/src/routes/developmentConfig.ts': calledIdentifierNames(
     CONFIG_OPERATION_SOURCE,
@@ -155,9 +258,13 @@ const OPERATION_GATE_DELEGATES: Readonly<Record<string, ReadonlySet<string>>> = 
   'packages/backend/src/routes/skills.ts': aggregateAndAclGates(SKILL_OPERATION_SOURCE),
   'packages/backend/src/routes/workflows.ts': aggregateAndAclGates(WORKFLOW_OPERATION_SOURCE),
   'packages/backend/src/routes/workgroups.ts': aggregateAndAclGates(WORKGROUP_OPERATION_SOURCE),
+  [CAPABILITY_TEMPLATE_ROUTE]: CAPABILITY_TEMPLATE_OPERATION_GATES,
 }
 
 const calledNamesFor = (source: RouteSource): ReadonlySet<string> => {
+  if (source.rel === CAPABILITY_TEMPLATE_ROUTE && !source.exactCapabilityTemplateAclDelegate) {
+    return source.calledNames
+  }
   const delegated = OPERATION_GATE_DELEGATES[source.rel]
   if (delegated === undefined) return source.calledNames
   return new Set([...source.calledNames, ...delegated])
@@ -197,6 +304,16 @@ describe('RFC-317 T6 —— ACL 资源族必须用 owner 判据当写门', () =>
 
   test('前提复核：确实存在挂载 /acl 的消费方，否则规则①无处可施', () => {
     expect(SOURCES.filter(usesAclEndpoints).length).toBeGreaterThan(5)
+  })
+
+  test('Capability Template 的 ACL endpoint 只委托同一个 required owner', () => {
+    const source = SOURCES.find(
+      (candidate) => candidate.rel === CAPABILITY_TEMPLATE_ROUTE,
+    )
+    expect(source?.exactCapabilityTemplateAclDelegate).toBe(true)
+    expect(CAPABILITY_TEMPLATE_OPERATION_GATES).toEqual(
+      new Set(['requireResourceEdit', 'requireResourceGovern']),
+    )
   })
 
   test('①凡挂载 /acl 端点的路由文件，都必须用到一道真写门（govern 或 edit）', () => {
@@ -311,5 +428,32 @@ describe('RFC-317 T14 —— matcher 自证：调用名提取的边界', () => {
   test('只是引用而不调用也不算（`const f = requireResourceGovern` 不构成一道门）', () => {
     const fabricated = 'const gate = requireResourceGovern\nexport { gate }\n'
     expect(calledIdentifierNames('probe.ts', fabricated).has('requireResourceGovern')).toBe(false)
+  })
+
+  test('Capability Template 只认同一 required owner 的四方法 exact 委托', () => {
+    const exact =
+      'function mountCapabilityTemplateRoutes(app, deps) {\n' +
+      '  const acl = deps.capabilityTemplateAcl\n' +
+      '  mountAclEndpoints(app, {\n' +
+      "    type: 'capability_template',\n" +
+      '    load: acl.load,\n' +
+      '    canView: acl.canView,\n' +
+      '    read: acl.read,\n' +
+      '    update: acl.update,\n' +
+      '  })\n' +
+      '}\n'
+    expect(hasExactCapabilityTemplateAclDelegation('probe.ts', exact)).toBe(true)
+
+    const splitOwner = exact.replace('update: acl.update', 'update: deps.otherAcl.update')
+    expect(hasExactCapabilityTemplateAclDelegation('probe.ts', splitOwner)).toBe(false)
+    expect(
+      hasExactCapabilityTemplateAclDelegation(
+        'probe.ts',
+        'function mountCapabilityTemplateRoutes(app, deps) {\n' +
+          '  const load = deps.capabilityTemplateAcl.load\n' +
+          '  const update = deps.capabilityTemplateAcl.update\n' +
+          '}\n',
+      ),
+    ).toBe(false)
   })
 })

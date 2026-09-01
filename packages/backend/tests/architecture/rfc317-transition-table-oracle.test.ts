@@ -214,77 +214,77 @@ interface OffTableDeviation {
  */
 const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
   {
-    site: 'services/clarify/service.ts:done',
+    site: 'modules/collaboration/infrastructure/legacySqliteClarify/service.ts:done',
     offTable: ['pending'],
     why: 'clarify run 在**还没开跑**时就收到答案：直接从 pending 收成 done，不经过 running。表里 `resume-clarify` 只允许从 awaiting_human 出发。',
   },
   {
-    site: 'services/lifecycleRepair/options-CR1.ts:interrupted',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-CR1.ts:interrupted',
     offTable: ['failed'],
     why: 'CR-1 修复：把误判为 failed 的任务恢复成 interrupted（可续跑）。表里 `interrupt` 只允许从 pending|running 出发——修复动作的存在前提正是「行已经走到了表说不该到的地方」。',
   },
   {
-    site: 'services/lifecycleRepair/options-R1.ts:done',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts:done',
     offTable: ['canceled', 'exhausted', 'failed', 'interrupted', 'pending'],
     why: 'R1 修复：把一条卡住的 node_run 直接收成 done。五个来源覆盖了它可能卡在的所有形态。',
   },
   {
-    site: 'services/lifecycleRepair/options-R2.ts:awaiting_review',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts:awaiting_review',
     offTable: ['done'],
     why: 'R2 修复：评审行丢失时把 done 的 run 退回 awaiting_review 重新评审。',
   },
   {
-    site: 'services/lifecycleRepair/options-S1.ts:interrupted',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-S1.ts:interrupted',
     offTable: ['awaiting_review'],
     why: 'S1 修复：卡在评审等待里的任务打回 interrupted。',
   },
   {
-    site: 'services/lifecycleRepair/options-S2.ts:interrupted',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-S2.ts:interrupted',
     offTable: ['awaiting_human'],
     why: 'S2 修复：卡在人工等待里的任务打回 interrupted。',
   },
   {
-    site: 'services/lifecycleRepair/options-S3.ts:pending',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-S3.ts:pending',
     offTable: ['canceled', 'exhausted', 'failed', 'interrupted'],
     why: 'S3 修复（两处）：把终态 node_run 重置回 pending 以便重跑。',
   },
   {
-    site: 'services/lifecycleRepair/options-T1.ts:interrupted',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T1.ts:interrupted',
     offTable: ['awaiting_review'],
     why: 'T1 修复：任务级——评审等待打回 interrupted。',
   },
   {
-    site: 'services/lifecycleRepair/options-T1.ts:awaiting_review',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T1.ts:awaiting_review',
     offTable: ['canceled', 'exhausted', 'failed', 'interrupted'],
     why: 'T1 修复：node 级——终态 run 退回评审等待。',
   },
   {
-    site: 'services/lifecycleRepair/options-T2.ts:interrupted',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T2.ts:interrupted',
     offTable: ['awaiting_human'],
     why: 'T2 修复：任务级——人工等待打回 interrupted。',
   },
   {
-    site: 'services/lifecycleRepair/options-T2.ts:awaiting_human',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T2.ts:awaiting_human',
     offTable: ['canceled', 'exhausted', 'failed', 'interrupted'],
     why: 'T2 修复：node 级——终态 run 退回人工等待。',
   },
   {
-    site: 'services/lifecycleRepair/options-T3.ts:interrupted',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T3.ts:interrupted',
     offTable: ['done'],
     why: 'T3 修复：把误判为完成的任务打回 interrupted。',
   },
   {
-    site: 'services/lifecycleRepair/options-T3.ts:failed',
+    site: 'platform/persistence/sqlite/taskLifecycleRepair/options-T3.ts:failed',
     offTable: ['done'],
     why: 'T3 修复：把误判为完成的任务打成 failed。表里 `fail` 不接受 done 出发。',
   },
   {
-    site: 'services/review.ts:canceled',
+    site: 'modules/collaboration/infrastructure/legacySqliteReview.ts:canceled',
     offTable: ['done'],
     why: '评审 supersede：新一轮评审到来时把上一轮已完成的 run 作废。**这是正常用户流程**——与 lifecycle.ts 头注释「never in normal flows」冲突，见 allowTerminal 账本同址条目。',
   },
   {
-    site: 'services/review.ts:pending',
+    site: 'modules/collaboration/infrastructure/legacySqliteReview.ts:pending',
     offTable: ['awaiting_human', 'done', 'pending', 'running'],
     why: '评审兄弟级联：一条被打回时，同批兄弟 run 一并重置为 pending，无论它们当前处在哪一态。',
   },

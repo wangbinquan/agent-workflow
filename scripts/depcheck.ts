@@ -107,13 +107,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   },
   {
     rule: 'no-circular',
-    from: `${B}/services/gitRepoCache.ts`,
-    to: `${B}/services/repoGroup.ts`,
-    why: '同一环族，RFC-248/249 仓库组接入后新增的一支。',
-    removeWhen: '与 util/git 叶子化同批消失。属独立切片（未编号）。',
-  },
-  {
-    rule: 'no-circular',
     from: `${B}/services/gitSubmodule.ts`,
     to: `${B}/util/git.ts`,
     why: '同一环族，从 gitSubmodule 侧被报告的那条。',
@@ -121,28 +114,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   },
 
   // ── 其余存量环 ────────────────────────────────────────────────────────
-  {
-    rule: 'no-circular',
-    from: `${B}/services/agent.ts`,
-    to: `${B}/services/agentDeps.ts`,
-    why: 'deps 闭包解析调 getAgent，而 agent.ts 又用 resolveDependsClosure。原本写在 .dependency-cruiser.cjs 的 pathNot 里。',
-    removeWhen:
-      '把 agent 查找函数作为参数传进 resolveDependsClosure（DI 掉这条边）。属独立切片（未编号）。',
-  },
-  {
-    rule: 'no-circular',
-    from: `${B}/services/agent.ts`,
-    to: `${B}/services/agentResourceIntegrity.ts`,
-    why: '同 agent.ts 的资源完整性校验反向回调 getAgent。门禁复明后新暴露。',
-    removeWhen: '与 agentDeps 同批 DI 化（查找函数改注入）。属独立切片（未编号）。',
-  },
-  {
-    rule: 'no-circular',
-    from: `${B}/services/workflow.ts`,
-    to: `${B}/services/workflow.validator.ts`,
-    why: 'workflow.ts 保存期调 validator，validator 又回取 workflow 的引用解析。门禁复明后新暴露。',
-    removeWhen: 'validator 的引用解析改为注入式，与 agent 系列同型。属独立切片（未编号）。',
-  },
   {
     rule: 'no-circular',
     from: `${S}/outputKinds/list.ts`,
@@ -159,74 +130,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   },
 
   // ── 分层违规 ──────────────────────────────────────────────────────────
-  // ── RFC-284 T2 新规则的存量记账（2026-08-12 审计 N10/A8；棘轮只减不增）──
-  // no-routes-to-db：路由层直查 db 的 18 条值级边（type-only 已被规则过滤）。
-  // webhook 三件是审计主证（整个 CRUD 长在路由层、无 service 对应物）——
-  // removeWhen 指 RFC-284 T28（blocked by RFC-283）；其余 15 条是读模型/存在性
-  // 检查直查 schema，removeWhen 指审计报告 N10 的下沉路线（随各域 RFC 顺带，
-  // 本账目冻结现状、禁止任何文件新增查询面）。
-  ...(
-    [
-      [
-        'auth',
-        '登录/会话行读写直查。随 auth 域收口下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      [
-        'clarify',
-        '存在性/可见性行读取。随 clarify 域下沉（RFC-284 T27 迁目录后顺带），属审计 N10 独立切片。',
-      ],
-      [
-        'health',
-        'dbVersion/runningTasks 探针读。随观测面收口下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      [
-        'intentSessions',
-        'intent 会话行读取。随 intent 域下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      [
-        'oidc-auth',
-        'OIDC 回调行读写。随 auth 域下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      [
-        'port-artifacts',
-        'node_run 行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      ['repos', '仓库行读取。随 repo 域下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。'],
-      ['reviews', '评审行读取。RFC-285 B6① 触碰同文件时顺带评估下沉，属审计 N10 独立切片。'],
-      [
-        'taskClarifyDirective',
-        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      [
-        'taskFeedback',
-        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      [
-        'taskQuestions',
-        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-      ['tasks', '存在性检查再委托的样板 ×4 + multipart 编排读。RFC-284 T25 编排归位时一并下沉。'],
-      [
-        'webhookDeliveries',
-        'webhook 域：deliveries 原生 sql 模板直查。CRUD 对已随 RFC-284 T28 薄壳化；本读面属 dispatch 链路，随 webhook 读模型下沉的独立切片处置（RFC-284 登记）。',
-      ],
-      [
-        'webhooks',
-        'webhook 域：入站分发行读取。CRUD 对已随 RFC-284 T28 薄壳化；ingress 读面随 webhook 读模型下沉的独立切片处置（RFC-284 登记）。',
-      ],
-      [
-        'worktree-files',
-        '任务行读取。随任务读模型下沉——审计 N10 下沉路线的独立切片（RFC-284 登记）。',
-      ],
-    ] as const
-  ).map(([route, note]) => ({
-    rule: 'no-routes-to-db' as const,
-    from: `${B}/routes/${route}.ts`,
-    to: `${B}/db/schema.ts`,
-    why: `路由层直查 db/schema（应经 service 层拿 ACL/OCC/审计语义）：${note.split('。')[0]}。`,
-    // 每条 note 的第二段即 removeWhen（元测试强制 >10 字且含 WP/RFC/独立切片标记）。
-    removeWhen: note.split('。').slice(1).join('。'),
-  })),
   // no-util-to-upper：util/git.ts 的三条反向值边（惰性 import 民俗）。与上面
   // no-circular 的 git 环族同一批边、同一个 removeWhen——规则维度不同故各记一次。
   ...(['gitRepoCache', 'gitSubmodule'] as const).map((svc) => ({
@@ -237,34 +140,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
     removeWhen:
       '把 resolveSubmoduleParams/syncSubmodules/buildGitignoreBlock 以参数注入下沉（no-circular git 环族账目的同一方案）；RFC-284 后续批次或独立切片执行。',
   })),
-
-  // ── RFC-317 T41：no-transport-to-db 的开账存量（2 条）──────────────────
-  //
-  // 这条规则是本次新加的（TP-03：ws/ 与 mcp/ 此前**不被任何 dep 规则覆盖**）。
-  // 加规则当天的真实存量就是下面两条——同批已经修掉的是那条更糟的形态：
-  // `ws/registry.ts` 手写的 `SELECT status, access_revision FROM users`
-  // （另一个 context 的私表，且是 SQL 字符串，任何基于 import 边的守卫都看不见），
-  // 现已改走 identity-access 的同步 public 端口。
-  {
-    rule: 'no-transport-to-db',
-    from: `${B}/ws/registry.ts`,
-    to: `${B}/db/schema.ts`,
-    why: 'WS registry 的 frameGate 直接 import 6 张业务表（memories / nodeRunEvents / nodeRuns / tasks / workflows / workgroups）跑 Drizzle select 做逐帧可见性判定。这是 RFC-152 把三份手抄 per-frame 块收敛成单一管道时一并搬过来的形状，不是本次引入的。',
-    removeWhen:
-      'RFC-294 W4 inbound/WS visibility port cutover：把逐帧可见性判定下沉为各域 actor-filtered public query port（tasks / workflows / workgroups / memories 各一条），registry 只留 transport gate 组合逻辑。',
-    owner: 'identity-access + owning visibility contexts',
-    removeWave: 'W4',
-  },
-  {
-    rule: 'no-transport-to-db',
-    from: `${B}/ws/server.ts`,
-    to: `${B}/db/client.ts`,
-    why: 'server.ts 取的是 `allowsLegacyDaemonTestAccess`（连接握手期的测试后门判据），不是业务表——它恰好住在 db/client.ts 里。危害与「传输层绕过 service 直查表」不同级，但规则按路径匹配，故照实入账而不是给规则开路径豁免（按文件排除会连带放过未来经过同一文件的新边）。',
-    removeWhen:
-      'RFC-294 W9 bootstrap/auth-helper 收口：把 allowsLegacyDaemonTestAccess 迁出 db/client.ts；它是启动鉴权兼容判据，不是数据库客户端职责。',
-    owner: 'identity-access + bootstrap',
-    removeWave: 'W9',
-  },
 ]
 
 // ---------------------------------------------------------------------------

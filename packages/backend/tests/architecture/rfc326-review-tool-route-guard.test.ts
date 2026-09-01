@@ -16,13 +16,12 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { Hono, type MiddlewareHandler } from 'hono'
-import { buildActor } from '@/auth/actor'
+import { Hono } from 'hono'
 import { ALL_TOOLS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountTaskRoutes } from '@/routes/tasks'
-import type { AppDeps } from '@/server'
+import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
 import {
   recordingOperationHandles,
   type RecordedOperationCall,
@@ -132,7 +131,7 @@ export function reviewSurfaceDrift(
 function mountedReviewRoutes(): string[] {
   resetRouteMetaRegistry()
   // Handlers are never invoked: the registry only needs the declarations.
-  mountReviewRoutes(new Hono(), { db: {} as AppDeps['db'], configPath: '' } as AppDeps)
+  mountReviewRoutes(new Hono(), {} as CollaborationRouteOperations, '')
   const routes = allRouteMeta()
     .filter((meta) => meta.path.startsWith(REVIEW_PREFIX))
     .map((meta) => canonicalTemplate(meta.method, meta.path))
@@ -142,35 +141,13 @@ function mountedReviewRoutes(): string[] {
 
 describe('RFC-326 AC-31 — /api/reviews* routes ⟷ MCP gate tools, both directions', () => {
   test('route composition fails explicitly when required read/context owners are absent', async () => {
-    expect(() =>
-      mountTaskRoutes(new Hono(), { db: {} as AppDeps['db'], configPath: '' } as AppDeps),
-    ).toThrow('task-execution-read-models-not-composed')
+    expect(() => Reflect.apply(mountTaskRoutes, undefined, [new Hono(), { configPath: '' }])).toThrow(
+      'task-execution-read-models-not-composed',
+    )
 
-    resetRouteMetaRegistry()
-    const app = new Hono()
-    const injectActor: MiddlewareHandler = async (c, next) => {
-      c.set(
-        'actor',
-        buildActor({
-          user: {
-            id: 'rfc326-composition-guard',
-            username: 'rfc326-composition-guard',
-            displayName: 'RFC-326 composition guard',
-            role: 'admin',
-            status: 'active',
-          },
-          source: 'daemon',
-        }),
-      )
-      await next()
-    }
-    app.use('*', injectActor)
-    app.onError((error, c) => c.text(error.message, 500))
-    mountReviewRoutes(app, { db: {} as AppDeps['db'], configPath: '' } as AppDeps)
-    const response = await app.request('/api/reviews')
-    expect(response.status).toBe(500)
-    expect(await response.text()).toBe('collaboration-context-not-composed')
-    resetRouteMetaRegistry()
+    expect(() => Reflect.apply(mountReviewRoutes, undefined, [new Hono(), undefined, ''])).toThrow(
+      'collaboration-route-operations-not-composed',
+    )
   })
 
   test('corpus: the review route table and the tool table are both non-trivial', async () => {

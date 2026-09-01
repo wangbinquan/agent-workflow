@@ -312,12 +312,12 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
   })
 
   test('④ 「async helper 进不了同步事务」这个理由不得与同步内核入口共存', () => {
-    // 派生端：services/lifecycle.ts 是否导出同步事务版内核入口。
+    // 派生端：SQLite lifecycle persistence 是否导出同步事务版内核入口。
     // findings LC-12：三处直写拿这句话当理由，而它写下三天后就有了 setNodeRunStatusTx。
     const lifecycle = CORPUS.find(
-      (u) => u.path === 'packages/backend/src/services/lifecycle.ts',
+      (u) => u.path === 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
     )
-    expect(lifecycle, '派生端文件不存在：services/lifecycle.ts').toBeDefined()
+    expect(lifecycle, '派生端文件不存在：SQLite taskLifecycle persistence').toBeDefined()
     const hasSyncEntry = /export function setNodeRunStatusTx/.test(lifecycle!.text)
     if (!hasSyncEntry) return
 
@@ -327,7 +327,7 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
     expect(
       offenders,
       '这些文件仍用「异步生命周期 helper 无法加入同步事务」为直写辩护，' +
-        '而同步事务版内核入口 setNodeRunStatusTx 就在 services/lifecycle.ts 里。' +
+        '而同步事务版内核入口 setNodeRunStatusTx 就在 SQLite taskLifecycle persistence 里。' +
         '一个已经失效的技术理由比一条记在账上的债更坏：它让下一个 reviewer 得到「不能」这个答案。',
     ).toEqual([])
   })

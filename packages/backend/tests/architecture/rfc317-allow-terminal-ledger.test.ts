@@ -63,7 +63,7 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
       'done→failed（workgroup host 的 ask-back 被晚到策略关闭）与 pending|interrupted|canceled→running（call child adoption 复用既有行）。',
   },
   {
-    file: 'packages/backend/src/services/review.ts',
+    file: 'packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts',
     count: 2,
     rewrites:
       'done→canceled（评审被 supersede，旧轮次作废）、done→pending（兄弟级联重开）。**这两处是正常用户流程**，与 lifecycle.ts 头注释「never in normal flows」直接冲突——账本先如实记下，语义处置另立决策。',
@@ -75,37 +75,37 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
       'resumeTask / retryNode / syncTaskWorkflow 三条——正是头注释点名的持有者中的三个，终态→pending。',
   },
   {
-    file: 'packages/backend/src/services/lifecycleRepair/options-R1.ts',
+    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts',
     count: 1,
     rewrites: 'R1 修复：把卡住的 node_run 收成终态。',
   },
   {
-    file: 'packages/backend/src/services/lifecycleRepair/options-R2.ts',
+    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts',
     count: 1,
     rewrites: 'R2 修复：done→awaiting_review（评审行丢失，把任务退回评审）。',
   },
   {
-    file: 'packages/backend/src/services/lifecycleRepair/options-T1.ts',
+    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-T1.ts',
     count: 1,
     rewrites: 'T1 修复：failed|canceled|interrupted|exhausted→awaiting_review。',
   },
   {
-    file: 'packages/backend/src/services/lifecycleRepair/options-T2.ts',
+    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-T2.ts',
     count: 1,
     rewrites: 'T2 修复：failed|canceled|interrupted|exhausted→awaiting_human。',
   },
   {
-    file: 'packages/backend/src/services/lifecycleRepair/options-T3.ts',
+    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-T3.ts',
     count: 2,
     rewrites: 'T3 修复：done→interrupted 与 done→failed（把误判为完成的任务打回）。',
   },
   {
-    file: 'packages/backend/src/services/lifecycleRepair/options-S3.ts',
+    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-S3.ts',
     count: 2,
     rewrites: 'S3 修复：两处 failed|canceled|interrupted|exhausted→pending 的重跑。',
   },
   {
-    file: 'packages/backend/src/services/lifecycleRepair/options-CR1.ts',
+    file: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair/options-CR1.ts',
     count: 1,
     rewrites: 'CR-1 修复：failed→interrupted（把误判失败的任务恢复成可续跑）。',
   },
@@ -163,7 +163,7 @@ describe('RFC-317 T49 —— allowTerminal 站点账本（只减不增）', () =
     // `no-direct-node-run-status-write` 在全仓只有一处命中：那句声称它存在的注释本身。
     // 审内核是否密封的人第一眼读到的就是它，会据此认定存在 lint 级、不可绕过的守卫。
     const lifecycle = units.find(
-      (unit) => unit.path === 'packages/backend/src/services/lifecycle.ts',
+      (unit) => unit.path === 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
     )
     expect(lifecycle).toBeDefined()
     expect(

@@ -49,7 +49,7 @@ import {
 } from './census'
 import { NODE_KIND_BEHAVIORS, SYSTEM_CHANNEL_PORTS } from '@agent-workflow/shared'
 import { DISABLED_RESOURCE_POLICY } from '@/services/execution/resourcePolicy'
-import { SKILL_OP_RECOVERY_REGISTRY } from '@/services/skillOpRegistry'
+import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { REPAIR_OPTIONS } from '@/services/lifecycleRepair'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { INVARIANT_RULES, STUCK_RULES } from '@/services/lifecycleInvariants'
@@ -114,14 +114,15 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
   },
   {
     symbol: 'SKILL_OP_RECOVERY_REGISTRY',
-    declaringFile: 'packages/backend/src/services/skillOpRegistry.ts',
+    declaringFile:
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry.ts',
     keys: Object.keys(SKILL_OP_RECOVERY_REGISTRY),
     consumption: 'direct',
     why: '技能操作的中断恢复表；daemon 重启修复路径按 op 读。',
   },
   {
     symbol: 'REPAIR_OPTIONS',
-    declaringFile: 'packages/backend/src/services/lifecycleRepair.ts',
+    declaringFile: 'packages/backend/src/platform/persistence/sqlite/taskLifecycleRepair.ts',
     keys: Object.keys(REPAIR_OPTIONS),
     consumption: { via: 'listRepairOptionsForAlert' },
     why: '每条 lifecycle alert 规则的可选修复动作；路由经 listRepairOptionsForAlert 取，不直接读表。',
