@@ -443,7 +443,9 @@ function taughtInputFieldNames(): Set<string> {
 describe('RFC-348 — read sites name nothing the registries do not teach (AST reverse check)', () => {
   test('workflow.validator.ts read* helpers', () => {
     const found = helperArgNames(
-      parseFile('packages/backend/src/services/workflow.validator.ts'),
+      parseFile(
+        'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+      ),
       VALIDATOR_READ_HELPERS,
     )
     expect([...found].sort()).toEqual(VALIDATOR_BASELINE)
@@ -463,7 +465,9 @@ describe('RFC-348 — read sites name nothing the registries do not teach (AST r
   })
 
   test('workflowLaunchInputs.ts numberField / stringField / as-cast reads', () => {
-    const sf = parseFile('packages/backend/src/services/workflowLaunchInputs.ts')
+    const sf = parseFile(
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflowLaunchInputs.ts',
+    )
     const found = new Set([
       ...helperArgNames(sf, ['numberField', 'stringField']),
       ...propertyReads(sf, []),

@@ -36,7 +36,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 /** 永久 allowlist：唯一合法的 tasks.status 直写者（setTaskStatus 的 CAS 写）。 */
 const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
-  'services/lifecycle.ts': 1,
+  'platform/persistence/sqlite/taskLifecycle.ts': 1,
 }
 
 /**
@@ -78,7 +78,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'services/gc.ts': 8,
   // RFC-165 (R3-2-r4): the revive gate stamps workspace_pruned_at when the
   // dir vanished pre-tombstone (heal-forward) — companion-column write only.
-  'services/lifecycle.ts': 1,
+  'platform/persistence/sqlite/taskLifecycle.ts': 1,
   // RFC-164 PR-3: gate approve/reject + mid-run config edit both rewrite
   // workgroup_config_json (the task-owned runtime copy) — never `status`
   // (the gate's status flip rides transitionTaskStatusByEvent separately).
@@ -87,7 +87,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // rides it through setTaskStatus extra (Codex impl-gate P1 — the phase
   // and the status can never tear).
   // RFC-217 T2 — gate 写改走 workgroup_task_state CAS，仅剩 config PUT 一处；
-  // T4/T6 把该写点随 handler 本体下沉 services/workgroup/configActions.ts
+  // T4/T6 把该写点随 handler 本体下沉 Resource Catalog workgroup compatibility owner
   // （updateTaskConfig 是 workgroupConfigJson 的唯一 UPDATE 属主）。
   // RFC-311 —— 删除路径上的祖先链 branchStartedAt 重算（与 task.ts 的维护写点
   // 同族：单伴随列，永不触碰 status；归属 RFC-311 session，锁由 RFC-310
@@ -95,7 +95,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-328 +1: crash recovery of a claimed delete repeats that same ancestor
   // branchStartedAt recomputation after the member rows are removed.
   'services/taskDelete.ts': 2,
-  'services/workgroup/configActions.ts': 1,
+  'modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts': 1,
   // RFC-243 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
   // （status 由调度器或 fallback CAS 落定）之后，把 errorMessage 幂等改写为
   // 'canceled-by-parent-cascade'（WHERE status='canceled' 守卫，绝不翻状态）。
@@ -174,7 +174,7 @@ function countUpdateTasksSites(): SiteCounts {
   return { status, nonStatus }
 }
 
-describe('S-14 ratchet: direct tasks.status writes confined to services/lifecycle.ts', () => {
+describe('S-14 ratchet: direct tasks.status writes confined to SQLite lifecycle persistence', () => {
   const counts = countUpdateTasksSites()
 
   test('status writes: exactly the allowlist, pending-migration files only ratchet DOWN', () => {
@@ -198,11 +198,14 @@ describe('S-14 ratchet: direct tasks.status writes confined to services/lifecycl
     expect(violations).toEqual([])
     // allowlist 本身必须被占用：lifecycle.ts 的那 1 处 CAS 写真实存在
     // （防止扫描器失效导致全文件 0 命中的空洞绿）。
-    expect(counts.status['services/lifecycle.ts']).toBe(1)
+    expect(counts.status['platform/persistence/sqlite/taskLifecycle.ts']).toBe(1)
   })
 
   test('the single allowlisted write carries the rfc097 marker comment', () => {
-    const helper = readFileSync(join(BACKEND_SRC, 'services', 'lifecycle.ts'), 'utf8')
+    const helper = readFileSync(
+      join(BACKEND_SRC, 'platform', 'persistence', 'sqlite', 'taskLifecycle.ts'),
+      'utf8',
+    )
     expect(helper).toContain('rfc097-allow-direct-task-status-write')
   })
 

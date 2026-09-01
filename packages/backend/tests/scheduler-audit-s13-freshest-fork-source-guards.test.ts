@@ -47,7 +47,7 @@ const NODE_MECHANICS_SRC = readFileSync(
 )
 const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')
 const REPAIR_HELPERS_SRC = readFileSync(
-  join(SRC_ROOT, 'services', 'lifecycleRepair', 'helpers.ts'),
+  join(SRC_ROOT, 'platform', 'persistence', 'sqlite', 'taskLifecycleRepair', 'helpers.ts'),
   'utf-8',
 )
 const FRESHNESS_SRC = readFileSync(join(SRC_ROOT, 'services', 'freshness.ts'), 'utf-8')

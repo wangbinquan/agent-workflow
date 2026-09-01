@@ -8,6 +8,7 @@
 // happened. If this goes red, RFC-026 has accidentally bled inline behavior
 // into the default isolated path — investigate before relaxing.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -195,6 +196,7 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
       )[0]
       await autoDispatchClarifyRound({
         db: h.db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: sessionRow!.intermediaryNodeRunId,
         directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
         answers: [

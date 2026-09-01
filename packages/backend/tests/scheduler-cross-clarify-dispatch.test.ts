@@ -16,6 +16,7 @@
 //      External Feedback context (## External Feedback section appears
 //      in node_runs.promptText).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -490,6 +491,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // directive. We don't run scheduler again, just verify state.
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: crossNodeRunId,
       answers: [
         { questionId: 'q1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
@@ -610,6 +612,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // shape as rfc096-port-read-done-only) — the test's subject is the DESIGNER rerun prompt.
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: session.intermediaryNodeRunId,
       answers: [
         { questionId: 'q1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
@@ -731,6 +734,7 @@ describe('RFC-056 scheduler cross-clarify dispatch', () => {
     // questioner run results, its prompt must carry the prior cross Q&A so it does not re-ask.
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: session.intermediaryNodeRunId,
       answers: [
         {
@@ -916,6 +920,7 @@ describe('RFC-056 A16 — cross-clarify questioner inline session resume', () =>
     // dispatch (stop suppresses designer entries; only the questioner rerun mints).
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [
         { questionId: 'q1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },

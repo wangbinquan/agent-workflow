@@ -25,6 +25,7 @@ import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
 import { agents } from '../src/db/schema'
 import { ulid } from 'ulid'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -45,7 +46,7 @@ async function buildHarness(): Promise<Harness> {
   const configPath = join(tmp, 'config.json')
   loadConfig(configPath)
   const db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   const app = createApp({
     token: DAEMON_TOKEN,
     configPath,
@@ -178,7 +179,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       name: 'create-probed',
       lastProbe: CONFORMING_SMOKE,
     })
-    const stored = await getRuntime(h.db, 'create-probed')
+    const stored = await getRuntime(runtimeRegistryPersistence(h.db), 'create-probed')
     expect(JSON.parse(stored!.lastProbeJson!)).toMatchObject({
       codec: 1,
       target: {
@@ -212,7 +213,9 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect(probed).toMatchObject({ protocol: 'claude-code', isSandbox: true })
     const json = (await res.json()) as { runtime: { isSandbox: boolean } }
     expect(json.runtime.isSandbox).toBe(true)
-    expect((await getRuntime(h.db, 'claude-compat'))?.isSandbox).toBe(true)
+    expect((await getRuntime(runtimeRegistryPersistence(h.db), 'claude-compat'))?.isSandbox).toBe(
+      true,
+    )
 
     const invalid = await reqAs(app, DAEMON_TOKEN, '/api/runtimes', {
       method: 'POST',
@@ -255,7 +258,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   })
 
   test('PUT /api/runtimes/:name updates a custom binary; built-in PUT now ALLOWED (RFC-113 D8)', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'my-oc',
       protocol: 'opencode',
       binaryPath: canonicalBinaryPath('a'),
@@ -281,7 +284,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   test.each([null, '   '])(
     'PUT accepts clearing an OpenCode model with %p and delegates selection to the CLI',
     async (model) => {
-      await createRuntime(h.db, {
+      await createRuntime(runtimeRegistryPersistence(h.db), {
         name: 'policy-oc',
         protocol: 'opencode',
         model: 'openai/gpt-5.6',
@@ -302,7 +305,10 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   )
 
   test('DELETE custom ok; preseeded claude-code ok (RFC-153); in-use → 409', async () => {
-    await createRuntime(h.db, { name: 'my-oc', protocol: 'opencode' })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'my-oc',
+      protocol: 'opencode',
+    })
     const del = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/my-oc', { method: 'DELETE' })
     expect(del.status).toBe(200)
 
@@ -313,7 +319,10 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     })
     expect(preseeded.status).toBe(200)
 
-    await createRuntime(h.db, { name: 'used-rt', protocol: 'opencode' })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'used-rt',
+      protocol: 'opencode',
+    })
     await h.db.insert(agents).values({ id: ulid(), name: 'auditor', runtime: 'used-rt' })
     const inUse = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/used-rt', { method: 'DELETE' })
     expect(inUse.status).toBe(409)
@@ -413,7 +422,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   })
 
   test('saved-runtime probe rejects a receipt after a concurrent execution-profile PUT', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-profile-race',
       protocol: 'opencode',
       binaryPath: canonicalBinaryPath('old-opencode'),
@@ -451,7 +460,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       }),
     })
     expect(changed.status).toBe(200)
-    const changedRow = (await getRuntime(h.db, 'probe-profile-race'))!
+    const changedRow = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-profile-race'))!
     expect(changedRow.binaryPath).toBe(canonicalBinaryPath('old-opencode'))
     expect(changedRow.probeFence).toBe(1)
     finish.resolve(CONFORMING_SMOKE)
@@ -462,11 +471,13 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       code: 'runtime-probe-stale',
     })
     expect(reachedProbeCacheBoundary).toBe(true)
-    expect((await getRuntime(h.db, 'probe-profile-race'))?.lastProbeJson).toBeNull()
+    expect(
+      (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-profile-race'))?.lastProbeJson,
+    ).toBeNull()
   })
 
   test('saved-runtime probe cannot attach to a delete + same-name recreation', async () => {
-    const original = await createRuntime(h.db, {
+    const original = await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-recreate-race',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('same-binary'),
@@ -482,8 +493,8 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       method: 'POST',
     })
     await entered.promise
-    await deleteRuntime(h.db, 'probe-recreate-race', {})
-    const replacement = await createRuntime(h.db, {
+    await deleteRuntime(runtimeRegistryPersistence(h.db), 'probe-recreate-race', {})
+    const replacement = await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-recreate-race',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('same-binary'),
@@ -496,11 +507,13 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect((await stale.json()) as Record<string, unknown>).toMatchObject({
       code: 'runtime-probe-stale',
     })
-    expect((await getRuntime(h.db, 'probe-recreate-race'))?.lastProbeJson).toBeNull()
+    expect(
+      (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-recreate-race'))?.lastProbeJson,
+    ).toBeNull()
   })
 
   test('saved-runtime probe rejects a receipt after its inherited config binary changes', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-config-race',
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
@@ -539,11 +552,13 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect((await stale.json()) as Record<string, unknown>).toMatchObject({
       code: 'runtime-probe-stale',
     })
-    expect((await getRuntime(h.db, 'probe-config-race'))?.lastProbeJson).toBeNull()
+    expect(
+      (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-config-race'))?.lastProbeJson,
+    ).toBeNull()
   })
 
   test('config path change persistently invalidates completed inherited receipts', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-config-sequential',
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
@@ -559,7 +574,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       method: 'POST',
     })
     expect(probed.status).toBe(200)
-    const before = (await getRuntime(h.db, 'probe-config-sequential'))!
+    const before = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-config-sequential'))!
     expect(before.lastProbeJson).not.toBeNull()
 
     const changed = await reqAs(app, DAEMON_TOKEN, '/api/config', {
@@ -567,13 +582,13 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       body: JSON.stringify({ opencodePath: '/new-sequential-opencode' }),
     })
     expect(changed.status).toBe(200)
-    const after = (await getRuntime(h.db, 'probe-config-sequential'))!
+    const after = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-config-sequential'))!
     expect(after.probeFence).toBe(before.probeFence + 1)
     expect(after.lastProbeJson).toBeNull()
   })
 
   test('external config drift hides a persisted receipt whose effective binary no longer matches', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-config-external',
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
@@ -584,13 +599,13 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
       method: 'POST',
     })
     expect(probed.status).toBe(200)
-    const before = (await getRuntime(h.db, 'probe-config-external'))!
+    const before = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-config-external'))!
     expect(before.lastProbeJson).not.toBeNull()
 
     // Bypass the HTTP coordinator to model an editor/other process replacing
     // config.json. The self-bound receipt must still fail closed on materialize.
     applyConfigPatch(h.configPath, { opencodePath: '/new-external-opencode' })
-    const stored = (await getRuntime(h.db, 'probe-config-external'))!
+    const stored = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-config-external'))!
     expect(stored.probeFence).toBe(before.probeFence)
     expect(stored.lastProbeJson).toBe(before.lastProbeJson)
 
@@ -604,7 +619,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   })
 
   test('no-op config path PUT preserves a completed inherited receipt and fence', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-config-noop',
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
@@ -622,14 +637,14 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
         })
       ).status,
     ).toBe(200)
-    const before = (await getRuntime(h.db, 'probe-config-noop'))!
+    const before = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-config-noop'))!
 
     const unchanged = await reqAs(app, DAEMON_TOKEN, '/api/config', {
       method: 'PUT',
       body: JSON.stringify({ opencodePath: '/same-config-opencode' }),
     })
     expect(unchanged.status).toBe(200)
-    const after = (await getRuntime(h.db, 'probe-config-noop'))!
+    const after = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-config-noop'))!
     expect(after.probeFence).toBe(before.probeFence)
     expect(after.lastProbeJson).toBe(before.lastProbeJson)
 
@@ -643,7 +658,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
   })
 
   test('config PUT cannot enter the final config-check to probe-cache CAS boundary', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-final-boundary',
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
@@ -682,13 +697,13 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     releaseCache.resolve()
     expect((await probePending).status).toBe(200)
     expect((await configPending).status).toBe(200)
-    const stored = (await getRuntime(h.db, 'probe-final-boundary'))!
+    const stored = (await getRuntime(runtimeRegistryPersistence(h.db), 'probe-final-boundary'))!
     expect(stored.probeFence).toBe(1)
     expect(stored.lastProbeJson).toBeNull()
   })
 
   test('saved-runtime probe may cache across a concurrent no-op profile PUT', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'probe-noop-race',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('same-binary'),
@@ -716,7 +731,7 @@ describe('runtime registry routes (RFC-112 PR-B)', () => {
     expect((await fresh.json()) as Record<string, unknown>).toMatchObject({
       smoke: CONFORMING_SMOKE,
     })
-    const stored = await getRuntime(h.db, 'probe-noop-race')
+    const stored = await getRuntime(runtimeRegistryPersistence(h.db), 'probe-noop-race')
     expect(JSON.parse(stored!.lastProbeJson!)).toMatchObject({
       codec: 1,
       target: {

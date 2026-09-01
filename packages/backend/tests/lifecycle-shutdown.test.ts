@@ -19,6 +19,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { startLifecycleInvariantsLoop } from '../src/services/lifecycleInvariants'
 import { startStuckTaskDetectorLoop } from '../src/services/stuckTaskDetector'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -100,7 +101,7 @@ describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
     try {
       // Use absurdly large intervals so they never fire during the test.
       const ticker = startLifecycleInvariantsLoop({
-        db: env.db,
+        operations: taskRecoveryOperations(env.db),
         bootDelayMs: 60_000,
         intervalMs: 60_000,
         onAlert: () => {
@@ -131,7 +132,7 @@ describe('RFC-053 — startLifecycleInvariantsLoop.stop()', () => {
     cleanup = env.cleanup
     await seedRunningTask(env.db)
     const ticker = startLifecycleInvariantsLoop({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       bootDelayMs: 60_000,
       intervalMs: 60_000,
     })
@@ -159,7 +160,10 @@ describe('RFC-053 — startStuckTaskDetectorLoop.stop()', () => {
       return origClear(h)
     }) as typeof clearInterval
     try {
-      const ticker = startStuckTaskDetectorLoop({ db: env.db, intervalMs: 60_000 })
+      const ticker = startStuckTaskDetectorLoop({
+        operations: taskRecoveryOperations(env.db),
+        intervalMs: 60_000,
+      })
       ticker.stop()
       expect(cleared).toBeGreaterThanOrEqual(1)
     } finally {
@@ -172,7 +176,10 @@ describe('RFC-053 — startStuckTaskDetectorLoop.stop()', () => {
     const env = freshDb()
     cleanup = env.cleanup
     await seedRunningTask(env.db)
-    const ticker = startStuckTaskDetectorLoop({ db: env.db, intervalMs: 60_000 })
+    const ticker = startStuckTaskDetectorLoop({
+      operations: taskRecoveryOperations(env.db),
+      intervalMs: 60_000,
+    })
     ticker.stop()
     expect(() => ticker.stop()).not.toThrow()
   })

@@ -31,6 +31,7 @@
 // If any of these go red the wrapper-loop reject persistence vs Q&A
 // reset contract is broken — investigate before relaxing.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -183,6 +184,7 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
@@ -211,6 +213,7 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     // Iter 0 user submitted continue — designer reran already in iter 0.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: iter0Session.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
@@ -250,6 +253,7 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
@@ -306,6 +310,7 @@ describe('RFC-056 C5 — wrapper-loop partial persistence', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',

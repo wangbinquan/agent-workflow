@@ -25,10 +25,13 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { workflows } from '../src/db/schema'
 import { buildActor, type Actor } from '../src/auth/actor'
+import { assertSqliteWebhookTriggerSaveable } from '../src/modules/integration/infrastructure/sqliteWebhookTriggerValidation'
 import { createUser } from '../src/services/users'
-import { assertTriggerSaveable } from '../src/services/webhook/triggerValidation'
 import { NotFoundError, ValidationError } from '../src/util/errors'
-import { integrationTriggerResourceAuthority } from './helpers/integrationTriggerResourceBinding'
+import {
+  integrationTriggerResourceAuthority,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -119,8 +122,8 @@ describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
     const h = await harness()
     let thrown: unknown
     try {
-      await assertTriggerSaveable(
-        h.db,
+      await assertSqliteWebhookTriggerSaveable(
+        scheduledTaskRuntime(h.db).operations,
         h.outsider,
         integrationTriggerResourceAuthority(h.db, h.outsider),
         candidateFor(h.workflowId, leakyPayload()),
@@ -147,8 +150,8 @@ describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
     const h = await harness()
     let thrown: unknown
     try {
-      await assertTriggerSaveable(
-        h.db,
+      await assertSqliteWebhookTriggerSaveable(
+        scheduledTaskRuntime(h.db).operations,
         h.outsider,
         integrationTriggerResourceAuthority(h.db, h.outsider),
         candidateFor('01JMISSINGWORKFLOWID0000', leakyPayload()),
@@ -165,8 +168,8 @@ describe('webhook 触发器保存期 · ACL 顺序不变量', () => {
     const h = await harness()
     let thrown: unknown
     try {
-      await assertTriggerSaveable(
-        h.db,
+      await assertSqliteWebhookTriggerSaveable(
+        scheduledTaskRuntime(h.db).operations,
         h.owner,
         integrationTriggerResourceAuthority(h.db, h.owner),
         candidateFor(h.workflowId, leakyPayload()),

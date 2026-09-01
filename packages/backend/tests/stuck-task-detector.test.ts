@@ -28,6 +28,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -119,7 +120,10 @@ describe('RFC-053 PR-E — S4 (pending too long)', () => {
 
   test('stuck: pending > 5 min → S4 alert', async () => {
     h = await buildHarness('pending', T0 - 10 * MIN_MS)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     const s4 = r.openAlerts.filter((a) => a.rule === 'S4')
     expect(s4).toHaveLength(1)
     expect(s4[0]!.detail).toMatchObject({
@@ -130,7 +134,10 @@ describe('RFC-053 PR-E — S4 (pending too long)', () => {
 
   test('not stuck: pending < 5 min → no S4 alert', async () => {
     h = await buildHarness('pending', T0 - 2 * MIN_MS)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S4')).toHaveLength(0)
   })
 
@@ -162,14 +169,20 @@ describe('RFC-053 PR-E — S4 (pending too long)', () => {
   test('D11 child: pending 10 min (5<t<30) → NO S4 alert (childBudget legitimate wait)', async () => {
     h = await buildHarness('pending', T0 - 10 * MIN_MS)
     await markAsChild(h)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S4')).toHaveLength(0)
   })
 
   test('D11 child: pending 40 min → S4 alert with 30min threshold + childBudgetWaitHint', async () => {
     h = await buildHarness('pending', T0 - 40 * MIN_MS)
     await markAsChild(h)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     const s4 = r.openAlerts.filter((a) => a.rule === 'S4')
     expect(s4).toHaveLength(1)
     expect(s4[0]!.detail).toMatchObject({
@@ -187,7 +200,10 @@ describe('RFC-053 PR-E — S1 (awaiting_review without pending dv)', () => {
   test('stuck: awaiting_review > 30 min + no pending dv → S1 alert', async () => {
     h = await buildHarness('awaiting_review', T0 - 60 * MIN_MS)
     // No pending doc_version, no events.
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S1')).toHaveLength(1)
   })
 
@@ -206,7 +222,10 @@ describe('RFC-053 PR-E — S1 (awaiting_review without pending dv)', () => {
       bodyPath: 'dv/v1.md',
       decision: 'pending',
     })
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S1')).toHaveLength(0)
   })
 
@@ -214,7 +233,10 @@ describe('RFC-053 PR-E — S1 (awaiting_review without pending dv)', () => {
     h = await buildHarness('awaiting_review', T0 - 60 * MIN_MS)
     const run = await insertRun(h.db, h.taskId, { nodeId: 'rev', status: 'awaiting_review' })
     await insertEvent(h.db, run, T0 - 5 * MIN_MS)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S1')).toHaveLength(0)
   })
 })
@@ -225,7 +247,10 @@ describe('RFC-053 PR-E — S2 (awaiting_human without open clarify_session)', ()
 
   test('stuck: awaiting_human > 30 min + no open session → S2 alert', async () => {
     h = await buildHarness('awaiting_human', T0 - 45 * MIN_MS)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(1)
   })
 
@@ -258,7 +283,10 @@ describe('RFC-053 PR-E — S2 (awaiting_human without open clarify_session)', ()
       answeredAt: null,
       answeredBy: null,
     })
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(0)
   })
 
@@ -291,7 +319,10 @@ describe('RFC-053 PR-E — S2 (awaiting_human without open clarify_session)', ()
       answeredAt: T0 - 40 * MIN_MS,
       answeredBy: null,
     })
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(1)
   })
 
@@ -327,7 +358,10 @@ describe('RFC-053 PR-E — S2 (awaiting_human without open clarify_session)', ()
       answeredAt: null,
       answeredBy: null,
     })
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(0)
   })
 })
@@ -340,7 +374,10 @@ describe('RFC-053 PR-E — S3 (running but all node_runs terminal)', () => {
     h = await buildHarness('running', T0 - 60 * MIN_MS)
     await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'done', finishedAt: T0 - 35 * MIN_MS })
     await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'done', finishedAt: T0 - 32 * MIN_MS })
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     const s3 = r.openAlerts.filter((a) => a.rule === 'S3')
     expect(s3).toHaveLength(1)
     expect(s3[0]!.detail).toMatchObject({ totalRuns: 2, terminalRuns: 2 })
@@ -350,7 +387,10 @@ describe('RFC-053 PR-E — S3 (running but all node_runs terminal)', () => {
     h = await buildHarness('running', T0 - 60 * MIN_MS)
     await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'done', finishedAt: T0 - 35 * MIN_MS })
     await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S3')).toHaveLength(0)
     // RFC-098 WP-8: this exact scenario (active run, 60 min of silence) used
     // to be the S-15 blind spot — it is now S5 by definition. Asserted
@@ -361,7 +401,10 @@ describe('RFC-053 PR-E — S3 (running but all node_runs terminal)', () => {
   test('vacuous: running with empty node_runs → no S3 (different layer)', async () => {
     h = await buildHarness('running', T0 - 60 * MIN_MS)
     // Deliberately no node_runs → bootstrap state; S3 conservatively skips.
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S3')).toHaveLength(0)
     // ... and no S5 either: there is no active run to be wedged.
     expect(r.openAlerts.filter((a) => a.rule === 'S5')).toHaveLength(0)
@@ -376,7 +419,10 @@ describe('RFC-098 WP-8 — S5 (running, active runs, events stalled)', () => {
     h = await buildHarness('running', T0 - 60 * MIN_MS)
     const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
     await h.db.update(nodeRuns).set({ pid: 4242 }).where(eq(nodeRuns.id, runId))
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     const s5 = r.openAlerts.filter((a) => a.rule === 'S5')
     expect(s5).toHaveLength(1)
     expect(s5[0]!.detail).toMatchObject({
@@ -391,7 +437,10 @@ describe('RFC-098 WP-8 — S5 (running, active runs, events stalled)', () => {
     h = await buildHarness('running', T0 - 120 * MIN_MS)
     const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
     await insertEvent(h.db, runId, T0 - 40 * MIN_MS)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     const s5 = r.openAlerts.filter((a) => a.rule === 'S5')
     expect(s5).toHaveLength(1)
     expect(s5[0]!.detail).toMatchObject({
@@ -405,7 +454,10 @@ describe('RFC-098 WP-8 — S5 (running, active runs, events stalled)', () => {
     h = await buildHarness('running', T0 - 120 * MIN_MS)
     const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
     await insertEvent(h.db, runId, T0 - 10 * MIN_MS)
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S5')).toHaveLength(0)
   })
 
@@ -415,7 +467,10 @@ describe('RFC-098 WP-8 — S5 (running, active runs, events stalled)', () => {
     h = await buildHarness('running', T0 - 60 * MIN_MS)
     await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'failed', finishedAt: T0 - 50 * MIN_MS })
     await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'awaiting_review' })
-    const r = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r.openAlerts.filter((a) => a.rule === 'S3')).toHaveLength(0)
     const s5 = r.openAlerts.filter((a) => a.rule === 'S5')
     expect(s5).toHaveLength(1)
@@ -433,9 +488,15 @@ describe('RFC-053 PR-E — reconcile + WS onAlert', () => {
 
   test('second scan with no fix → no second insert, same open row', async () => {
     h = await buildHarness('pending', T0 - 10 * MIN_MS)
-    const r1 = await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    const r1 = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0,
+    })
     expect(r1.newAlerts).toBe(1)
-    const r2 = await runStuckTaskDetector({ db: h.db, now: () => T0 + MIN_MS })
+    const r2 = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0 + MIN_MS,
+    })
     expect(r2.newAlerts).toBe(0)
     const rows = await h.db
       .select()
@@ -446,12 +507,15 @@ describe('RFC-053 PR-E — reconcile + WS onAlert', () => {
 
   test('resolution: when the condition lifts the open row gets resolved_at', async () => {
     h = await buildHarness('pending', T0 - 10 * MIN_MS)
-    await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    await runStuckTaskDetector({ operations: taskRecoveryOperations(h.db), now: () => T0 })
     // Promote task out of pending.
     await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
     // Give it an active run so S3 doesn't immediately fire.
     await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'running' })
-    const r2 = await runStuckTaskDetector({ db: h.db, now: () => T0 + MIN_MS })
+    const r2 = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(h.db),
+      now: () => T0 + MIN_MS,
+    })
     expect(r2.resolvedAlerts).toBe(1)
     expect(r2.openAlerts.filter((a) => a.rule === 'S4')).toHaveLength(0)
   })
@@ -460,7 +524,7 @@ describe('RFC-053 PR-E — reconcile + WS onAlert', () => {
     h = await buildHarness('pending', T0 - 10 * MIN_MS)
     const calls: Array<{ rule: string; transition: 'new' | 'promoted' }> = []
     await runStuckTaskDetector({
-      db: h.db,
+      operations: taskRecoveryOperations(h.db),
       now: () => T0,
       onAlert: (row, transition) => calls.push({ rule: row.rule, transition }),
     })
@@ -480,7 +544,7 @@ describe('RFC-053 PR-E — reconcile + WS onAlert', () => {
       resolvedAt: null,
     })
     // Stuck detector runs — should add S4, NOT touch the R1 row.
-    await runStuckTaskDetector({ db: h.db, now: () => T0 })
+    await runStuckTaskDetector({ operations: taskRecoveryOperations(h.db), now: () => T0 })
     const rows = await h.db
       .select()
       .from(lifecycleAlerts)

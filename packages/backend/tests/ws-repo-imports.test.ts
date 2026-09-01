@@ -18,6 +18,8 @@ import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
+import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
 type AnyServer = Server<unknown>
 
@@ -40,10 +42,11 @@ async function buildHarness(): Promise<Harness> {
     dbVersion: 1,
     db,
   })
+  const identityAccess = createIdentityAccessRuntime({ db })
   const ws = buildWebSocketAdapter({
     daemonToken: TOKEN,
-    db,
-    identityAccess: createIdentityAccessRuntime({ db }),
+    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
+    identityAccess,
   })
   const server = Bun.serve({
     port: 0,
@@ -83,7 +86,10 @@ const hasType = (msgs: Array<{ type: string }>, type: string): boolean =>
 function seedBatch(db: DbClient, ownerUserId: string): string {
   // stub resolver 永不返回：本套件只做频道语义，不跑真实 clone。
   const result = startBatchImport(
-    { db, resolveCachedRepo: () => new Promise(() => {}) as never },
+    {
+      store: composeSqliteRepositoryWorkspaceStore(db),
+      resolveCachedRepo: () => new Promise(() => {}) as never,
+    },
     { urls: ['https://h/seed.git'] },
     { userId: ownerUserId },
   )

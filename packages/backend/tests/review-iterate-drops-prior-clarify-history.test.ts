@@ -32,6 +32,7 @@
 // `priorCompletedTopLevelRun` block + the validate-before-insert ordering
 // in runner.ts.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -262,6 +263,7 @@ async function buildHarness(): Promise<Harness> {
   if (clarifyNodeRunId === undefined) throw new Error('clarify session not created on first run')
   await autoDispatchClarifyRound({
     db,
+    memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: clarifyNodeRunId,
     answers: [CLARIFY_ANSWER],
     directive: 'stop', // finalize → the designer outputs v1

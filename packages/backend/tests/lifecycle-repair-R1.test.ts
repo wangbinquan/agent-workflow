@@ -17,6 +17,7 @@ import { R1_OPTIONS } from '../src/services/lifecycleRepair/options-R1'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { cancelTask } from '../src/services/task'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
+import { createSqliteHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep'
 import {
   buildHarness,
   insertAlert,
@@ -156,6 +157,7 @@ describe('RFC-057 — R1.approve-run', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'R1.approve-run',
@@ -196,6 +198,7 @@ describe('RFC-057 — R1.approve-run', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'R1.approve-run',
@@ -308,6 +311,7 @@ describe('RFC-057 — R1.unapprove-doc', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'R1.unapprove-doc',
@@ -397,6 +401,7 @@ describe('RFC-057 — R1.mark-task-failed', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'R1.mark-task-failed',
@@ -475,7 +480,11 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          sealOpenHumanGatesForTask(db, taskId, `task-${to}`)
+          void sealOpenHumanGatesForTask(
+            createSqliteHumanGateTerminalSweepCommand(db),
+            taskId,
+            `task-${to}`,
+          )
         },
       })
       // Preflight above deliberately happened before cancellation. Queue the
@@ -516,7 +525,11 @@ describe('RFC-057 — R1 writers vs task cancellation linearization', () => {
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          sealOpenHumanGatesForTask(db, taskId, `task-${to}`)
+          void sealOpenHumanGatesForTask(
+            createSqliteHumanGateTerminalSweepCommand(db),
+            taskId,
+            `task-${to}`,
+          )
         },
       })
       const [repairResult, cancelResult] = await settleR1InOrder(

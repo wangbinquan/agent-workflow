@@ -14,6 +14,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { frozenRuntimeOfSession, resolveFrozenRuntime } from '../src/services/nodeRunMint'
 import { createRuntime, seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -98,8 +99,8 @@ describe('resolveFrozenRuntime — built-in protocols (RFC-111 D15)', () => {
 describe('resolveFrozenRuntime — custom runtimes freeze a (protocol, binary) snapshot (RFC-112 P1)', () => {
   test('first dispatch of a custom runtime freezes its protocol + binary', async () => {
     const { db, id } = await seedRun()
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'my-cc',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('my-cc'),
@@ -114,15 +115,17 @@ describe('resolveFrozenRuntime — custom runtimes freeze a (protocol, binary) s
 
   test('resume reads the frozen binary snapshot even after the runtime is re-pointed (registry-independent)', async () => {
     const { db, id } = await seedRun()
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'my-cc',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('v1'),
     })
     await resolveFrozenRuntime(db, id, 'my-cc', undefined) // freeze /opt/v1
     // the runtime is later re-pointed to a new binary — resume must NOT pick it up.
-    await updateRuntime(db, 'my-cc', { binaryPath: canonicalBinaryPath('v2') })
+    await updateRuntime(runtimeRegistryPersistence(db), 'my-cc', {
+      binaryPath: canonicalBinaryPath('v2'),
+    })
     const r = await resolveFrozenRuntime(db, id, 'my-cc', undefined)
     expect(r.protocol).toBe('claude-code')
     expect(r.binary).toBe(canonicalBinaryPath('v1')) // the frozen snapshot, not the mutated registry
@@ -130,8 +133,8 @@ describe('resolveFrozenRuntime — custom runtimes freeze a (protocol, binary) s
 
   test('a deleted custom runtime still resumes on its frozen snapshot', async () => {
     const { db, id } = await seedRun()
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'my-oc',
       protocol: 'opencode',
       binaryPath: canonicalBinaryPath('oc'),
@@ -217,8 +220,8 @@ describe('resume inherits the session owner’s frozen runtime (RFC-112 Codex im
 describe('resolveFrozenRuntime — freezes the runtime PARAMS too (RFC-113 Codex P1-2)', () => {
   test('first dispatch freezes model/params; resume reads the snapshot, not the mutated runtime', async () => {
     const { db, id } = await seedRun()
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'cc-opus',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('cc'),
@@ -230,7 +233,7 @@ describe('resolveFrozenRuntime — freezes the runtime PARAMS too (RFC-113 Codex
     expect(r.params.model).toBe('opus')
     expect(r.params.temperature).toBe(0.5)
     // the runtime's model is later changed — a resume must use the FROZEN params.
-    await updateRuntime(db, 'cc-opus', { model: 'haiku' })
+    await updateRuntime(runtimeRegistryPersistence(db), 'cc-opus', { model: 'haiku' })
     const resume = await resolveFrozenRuntime(db, id, 'cc-opus', undefined)
     expect(resume.params.model).toBe('opus') // frozen snapshot, NOT 'haiku'
   })

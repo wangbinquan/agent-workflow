@@ -15,6 +15,7 @@
 // goes red, the underlying patch logic was preserved but a corner case
 // regressed.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -178,6 +179,7 @@ describe('RFC-058 baseline T4 — patch-2026-05-23 designer retry index', () => 
     // designer node + dispatching that designer entry (the legacy scope/direct trigger is gone).
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
       actor,
@@ -311,6 +313,7 @@ describe('RFC-058 baseline T4 — patch-2026-05-22 cascade BFS smoke', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
       actor,
@@ -358,6 +361,7 @@ describe('RFC-058 baseline T4 — patch-2026-05-25 questioner cascade visibility
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
       ifMatchIteration: 0,
@@ -413,6 +417,7 @@ describe('RFC-058 baseline T4 — patch-2026-05-25 questioner cascade visibility
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
       directive: 'stop',

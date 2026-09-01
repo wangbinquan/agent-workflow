@@ -34,6 +34,7 @@ import {
 } from '../src/services/lifecycleInvariants'
 import { configureLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 import { createLogger } from '../src/util/log'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const GRACE_MS = 24 * 3_600_000
 
@@ -295,9 +296,17 @@ describe('lifecycle invariants boot log — tiering by task terminality', () => 
   // Detect at t0 (severity=warning), rescan past the 24h grace so the finding
   // promotes to error — the state that made the real daemon log ERROR.
   async function detectThenPromote(db: DbClient, taskId: string): Promise<void> {
-    await runLifecycleInvariants({ db, scope: { taskId }, now: () => 0 })
+    await runLifecycleInvariants({
+      operations: taskRecoveryOperations(db),
+      scope: { taskId },
+      now: () => 0,
+    })
     captured = '' // ignore the first (warning) scan; assert on the promoting scan only
-    await runLifecycleInvariants({ db, scope: { taskId }, now: () => GRACE_MS + 1 })
+    await runLifecycleInvariants({
+      operations: taskRecoveryOperations(db),
+      scope: { taskId },
+      now: () => GRACE_MS + 1,
+    })
   }
 
   test('error finding on a terminal (done) task → WARN, not ERROR', async () => {
@@ -330,12 +339,24 @@ describe('lifecycle invariants boot log — tiering by task terminality', () => 
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedOffendingTask(db, 'awaiting_human')
     // Scan 1: detect (newAlerts=1 → stateChanged=true → logs)
-    await runLifecycleInvariants({ db, scope: { taskId }, now: () => 0 })
+    await runLifecycleInvariants({
+      operations: taskRecoveryOperations(db),
+      scope: { taskId },
+      now: () => 0,
+    })
     // Scan 2: promote (promotedAlerts=1 → stateChanged=true → logs ERROR)
-    await runLifecycleInvariants({ db, scope: { taskId }, now: () => GRACE_MS + 1 })
+    await runLifecycleInvariants({
+      operations: taskRecoveryOperations(db),
+      scope: { taskId },
+      now: () => GRACE_MS + 1,
+    })
     captured = ''
     // Scan 3: nothing changed (newAlerts=0, promotedAlerts=0, resolvedAlerts=0)
-    await runLifecycleInvariants({ db, scope: { taskId }, now: () => GRACE_MS + 2 })
+    await runLifecycleInvariants({
+      operations: taskRecoveryOperations(db),
+      scope: { taskId },
+      now: () => GRACE_MS + 2,
+    })
 
     const lines = parse(captured).filter((l) => l.service === 'lifecycle.invariants')
     // INFO 'scan complete' must still be present

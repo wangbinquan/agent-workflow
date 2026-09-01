@@ -34,8 +34,11 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runNode } from '../src/services/runner'
-import { renderWgProtocolBlock, wgHostRolePorts } from '../src/services/workgroup/context'
+import { runNode } from './helpers/runner'
+import {
+  renderWgProtocolBlock,
+  wgHostRolePorts,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
 import type { Logger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

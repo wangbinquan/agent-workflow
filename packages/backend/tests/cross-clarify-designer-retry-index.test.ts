@@ -26,6 +26,7 @@
 // retry_index at the same wrapper-loop iteration. If this test goes red,
 // the freshness shield is gone — investigate before relaxing.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -226,6 +227,7 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
 
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
@@ -270,6 +272,7 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
@@ -320,6 +323,7 @@ describe('RFC-056 patch 2026-05-23 — designer rerun retry_index bump', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,

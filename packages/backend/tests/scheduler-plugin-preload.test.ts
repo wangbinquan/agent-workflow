@@ -8,15 +8,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { plugins } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import { createPlugin } from '../src/services/plugin'
-import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
-import { resolveInjection } from '../src/services/execution/resolveInjection'
+import {
+  createSqliteLegacyAgentDependencyLookup,
+  resolveInjection,
+} from '../src/services/execution/resolveInjection'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 let pluginsDir = ''
 
@@ -45,23 +46,26 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
   let pluginIdByName: Map<string, string>
   beforeEach(async () => {
     pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-sched-'))
-    resetNpmProbeCacheForTests()
-    process.env.FAKE_NPM_MODE = 'success'
     db = createInMemoryDb(MIGRATIONS)
     pluginIdByName = new Map()
     // Seed three plugins so the agents below can reference their canonical ids.
-    for (const name of ['p-root', 'p-leaf', 'p-extra']) {
-      const plugin = await createPlugin(
-        db,
-        { name, spec: `${name}@1` },
-        { pluginsDir, npmBin: FAKE_NPM },
-      )
-      pluginIdByName.set(plugin.name, plugin.id)
+    for (const [index, name] of ['p-root', 'p-leaf', 'p-extra'].entries()) {
+      const id = `plugin-${index + 1}`
+      db.insert(plugins)
+        .values({
+          id,
+          name,
+          spec: `${name}@1`,
+          sourceKind: 'npm',
+          cachedPath: join(pluginsDir, name),
+          installedAt: 1,
+        })
+        .run()
+      pluginIdByName.set(name, id)
     }
   })
   afterEach(async () => {
     await rm(pluginsDir, { recursive: true, force: true }).catch(() => undefined)
-    delete process.env.FAKE_NPM_MODE
   })
 
   test('agent without plugins[] → plugins array is empty', async () => {
@@ -70,6 +74,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins).toEqual([])
@@ -81,6 +86,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-root'])
@@ -100,6 +106,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-extra', 'p-root', 'p-leaf'])
@@ -115,6 +122,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.plugins.map((p) => p.name)).toEqual(['p-root'])
@@ -131,6 +139,7 @@ describe('prepareNodeRunInjection — RFC-031 plugin union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     expect(result).toMatchObject({ kind: 'failed', message: 'plugin-not-found' })
   })

@@ -67,6 +67,7 @@ describe('RFC-057 — S1.recreate-doc-version', () => {
 
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S1.recreate-doc-version',
@@ -153,6 +154,7 @@ describe('RFC-057 — S1.recreate-doc-version', () => {
     const cancel = cancelTask(h.db, h.taskId)
     const repair = applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S1.recreate-doc-version',
@@ -206,6 +208,7 @@ describe('RFC-057 — S1.demote-task', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S1', detail: { rule: 'S1' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S1.demote-task',

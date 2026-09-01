@@ -5,6 +5,8 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import { mcps } from '../../src/db/schema'
+import { composeSqliteMcpProbeStore } from '../../src/modules/resource-catalog/composition/mcpProbeStore'
+import type { McpProbeStore } from '../../src/modules/resource-catalog/public/participants'
 import type { ProbeResult } from '../../src/services/mcpProbe'
 import { getProbeByMcpId, listProbes, upsertProbe } from '../../src/services/mcpProbeStore'
 
@@ -42,31 +44,33 @@ function okResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
 
 describe('mcpProbeStore', () => {
   let db: DbClient
+  let store: McpProbeStore
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    store = composeSqliteMcpProbeStore(db)
   })
 
   test('getProbeByMcpId returns null when never probed', async () => {
     const id = seedMcp(db, 'pg')
-    expect(await getProbeByMcpId(db, id)).toBeNull()
+    expect(await getProbeByMcpId(store, id)).toBeNull()
   })
 
   test('upsert inserts first time; getProbeByMcpId round-trips full shape', async () => {
     const id = seedMcp(db, 'pg')
-    const inserted = await upsertProbe(db, id, 'pg', okResult())
+    const inserted = await upsertProbe(store, id, 'pg', okResult())
     expect(inserted.status).toBe('ok')
     expect(inserted.tools).toEqual([{ name: 't1' }])
     expect(inserted.mcpName).toBe('pg')
 
-    const fetched = await getProbeByMcpId(db, id)
+    const fetched = await getProbeByMcpId(store, id)
     expect(fetched).not.toBeNull()
     expect(fetched!.id).toBe(inserted.id)
   })
 
   test('upsert is idempotent — second call overwrites without throwing', async () => {
     const id = seedMcp(db, 'pg')
-    const first = await upsertProbe(db, id, 'pg', okResult({ latencyMs: 100 }))
-    const second = await upsertProbe(db, id, 'pg', okResult({ latencyMs: 9999 }))
+    const first = await upsertProbe(store, id, 'pg', okResult({ latencyMs: 100 }))
+    const second = await upsertProbe(store, id, 'pg', okResult({ latencyMs: 9999 }))
     // Same row identity (UNIQUE(mcp_id) implies row id is reused via update).
     expect(second.id).toBe(first.id)
     expect(second.latencyMs).toBe(9999)
@@ -75,19 +79,19 @@ describe('mcpProbeStore', () => {
   test('listProbes returns rows sorted by mcpName', async () => {
     const idB = seedMcp(db, 'beta')
     const idA = seedMcp(db, 'alpha')
-    await upsertProbe(db, idB, 'beta', okResult())
-    await upsertProbe(db, idA, 'alpha', okResult())
-    const all = await listProbes(db)
+    await upsertProbe(store, idB, 'beta', okResult())
+    await upsertProbe(store, idA, 'alpha', okResult())
+    const all = await listProbes(store)
     expect(all.map((p) => p.mcpName)).toEqual(['alpha', 'beta'])
   })
 
   test('listProbes is empty when no probes exist', async () => {
     seedMcp(db, 'pg') // no probe row
-    expect(await listProbes(db)).toEqual([])
+    expect(await listProbes(store)).toEqual([])
   })
 
   test('upsert with unknown mcpId throws ValidationError', async () => {
-    await expect(upsertProbe(db, 'm_does_not_exist', 'ghost', okResult())).rejects.toThrow(
+    await expect(upsertProbe(store, 'm_does_not_exist', 'ghost', okResult())).rejects.toThrow(
       /not found/,
     )
   })
@@ -111,7 +115,7 @@ describe('mcpProbeStore', () => {
       startedAt: 1,
       finishedAt: 2,
     }
-    const r = await upsertProbe(db, id, 'broken', errResult)
+    const r = await upsertProbe(store, id, 'broken', errResult)
     expect(r.status).toBe('error')
     expect(r.errorCode).toBe('connect-failed')
     expect(r.tools).toBeNull()

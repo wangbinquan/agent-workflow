@@ -42,6 +42,7 @@ import {
 } from '../src/services/runtimeRegistry'
 import { resolveFrozenRuntime } from '../src/services/nodeRunMint'
 import { getRuntimeDriver } from '../src/services/runtime'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   buildClaudeSpawn,
   CLAUDE_PLATFORM_OWNED_FLAGS,
@@ -152,23 +153,23 @@ describe('validateExtraArgs — fail-closed write gate', () => {
 describe('registry persistence + frozen snapshot', () => {
   test('create persists extraArgs; view + resolve expose it; opencode create rejects it', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'codeagent',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('codeagentcli'),
       model: 'GLM-5.1-NN',
       extraArgs: ['--skip-safe-check'],
     })
-    const row = await getRuntime(db, 'codeagent')
+    const row = await getRuntime(runtimeRegistryPersistence(db), 'codeagent')
     expect(row?.extraArgsJson).toBe('["--skip-safe-check"]')
     const view = runtimeRowToView(row!, null, canonicalBinaryPath('codeagentcli'))
     expect(view.extraArgs).toEqual(['--skip-safe-check'])
-    const resolved = await resolveRuntimeByName(db, 'codeagent')
+    const resolved = await resolveRuntimeByName(runtimeRegistryPersistence(db), 'codeagent')
     expect(resolved.extraArgs).toEqual(['--skip-safe-check'])
 
     await expect(
-      createRuntime(db, {
+      createRuntime(runtimeRegistryPersistence(db), {
         name: 'oc-fork',
         protocol: 'opencode',
         extraArgs: ['--flag'],
@@ -178,14 +179,14 @@ describe('registry persistence + frozen snapshot', () => {
 
   test('update validates against the ROW protocol and flips the execution profile', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'codeagent',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('codeagentcli'),
     })
-    const before = await getRuntime(db, 'codeagent')
-    const updated = await updateRuntime(db, 'codeagent', {
+    const before = await getRuntime(runtimeRegistryPersistence(db), 'codeagent')
+    const updated = await updateRuntime(runtimeRegistryPersistence(db), 'codeagent', {
       extraArgs: ['--skip-safe-check'],
     })
     expect(updated.extraArgsJson).toBe('["--skip-safe-check"]')
@@ -193,19 +194,21 @@ describe('registry persistence + frozen snapshot', () => {
     // long-running probe against the OLD argv cannot cache onto the new row.
     expect(updated.probeFence).toBeGreaterThan(before!.probeFence)
     // clearing back to null is a change too
-    const cleared = await updateRuntime(db, 'codeagent', { extraArgs: null })
+    const cleared = await updateRuntime(runtimeRegistryPersistence(db), 'codeagent', {
+      extraArgs: null,
+    })
     expect(cleared.extraArgsJson).toBeNull()
     expect(cleared.probeFence).toBeGreaterThan(updated.probeFence)
     // and an update on an opencode row rejects extraArgs
-    await expect(updateRuntime(db, 'opencode', { extraArgs: ['--x'] })).rejects.toThrow(
-      /not supported/i,
-    )
+    await expect(
+      updateRuntime(runtimeRegistryPersistence(db), 'opencode', { extraArgs: ['--x'] }),
+    ).rejects.toThrow(/not supported/i)
   })
 
   test('frozen runtime snapshot carries extraArgs and isSandbox; later row edits do not re-route', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'codeagent',
       protocol: 'claude-code',
       extraArgs: ['--skip-safe-check'],
@@ -215,7 +218,10 @@ describe('registry persistence + frozen snapshot', () => {
     const first = await resolveFrozenRuntime(db, runId, 'codeagent', null)
     expect(first.params.extraArgs).toEqual(['--skip-safe-check'])
     expect(first.params.isSandbox).toBe(true)
-    await updateRuntime(db, 'codeagent', { extraArgs: ['--other-flag'], isSandbox: false })
+    await updateRuntime(runtimeRegistryPersistence(db), 'codeagent', {
+      extraArgs: ['--other-flag'],
+      isSandbox: false,
+    })
     const resumed = await resolveFrozenRuntime(db, runId, 'codeagent', null)
     expect(resumed.params.extraArgs).toEqual(['--skip-safe-check'])
     expect(resumed.params.isSandbox).toBe(true)

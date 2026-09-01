@@ -14,11 +14,15 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { skills, skillOperationLocks } from '../src/db/schema'
-import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
+import {
+  advancePhase,
+  beginOperation,
+  getActiveOp,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import {
   recoverSkillOperations,
   type OpRecoveryRegistry,
-} from '../src/services/skillOpRecoveryDriver'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FS = { appHome: '/tmp/aw-recovery-driver-noop' } // handlers here are spies; no real FS

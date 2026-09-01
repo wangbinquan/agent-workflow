@@ -33,6 +33,7 @@ import {
 } from '../src/services/memoryInject'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent } from '@agent-workflow/shared'
+import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -96,7 +97,7 @@ describe('loadInjectableMemories', () => {
   })
 
   test('returns all-empty when no rows match', async () => {
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: ['a1'],
       workflowId: 'w1',
       repoIds: ['r1'],
@@ -114,7 +115,7 @@ describe('loadInjectableMemories', () => {
     seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'w1', title: 'W' })
     seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'r1', title: 'R' })
     seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'G' })
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: ['a1'],
       workflowId: 'w1',
       repoIds: ['r1'],
@@ -131,7 +132,7 @@ describe('loadInjectableMemories', () => {
     seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'primary', title: 'P', createdAt: 100 })
     seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'dep1', title: 'D1', createdAt: 200 })
     seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'dep2', title: 'D2', createdAt: 300 })
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: ['primary', 'dep1', 'dep2'],
       workflowId: null,
       repoIds: [],
@@ -147,7 +148,7 @@ describe('loadInjectableMemories', () => {
     seedNonApprovedMemory(db, { scopeType: 'global', scopeId: null, status: 'superseded' })
     seedNonApprovedMemory(db, { scopeType: 'global', scopeId: null, status: 'archived' })
     seedNonApprovedMemory(db, { scopeType: 'global', scopeId: null, status: 'rejected' })
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -161,7 +162,7 @@ describe('loadInjectableMemories', () => {
     seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'w-not-active', title: 'W' })
     seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'r-not-active', title: 'R' })
     seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'G' })
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -175,7 +176,7 @@ describe('loadInjectableMemories', () => {
 
   test('agentIds dedupe: same id repeated → memory only appears once', async () => {
     seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'a1', title: 'A' })
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: ['a1', 'a1', 'a1'],
       workflowId: null,
       repoIds: [],
@@ -188,7 +189,7 @@ describe('loadInjectableMemories', () => {
   test('workflow scope: only the active workflowId, not siblings', async () => {
     seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'wf-1', title: 'mine' })
     seedApprovedMemory(db, { scopeType: 'workflow', scopeId: 'wf-2', title: 'other' })
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: 'wf-1',
       repoIds: [],
@@ -491,7 +492,7 @@ describe('injectMemoryForRun', () => {
   test('returns null when the task has no scope memories anywhere', async () => {
     const { taskId } = seedTask()
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -501,7 +502,7 @@ describe('injectMemoryForRun', () => {
 
   test('returns null when taskId does not exist (degraded gracefully)', async () => {
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId: 't_nope',
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -513,7 +514,7 @@ describe('injectMemoryForRun', () => {
     const { taskId, workflowId } = seedTask()
     seedApprovedMemory(db, { scopeType: 'workflow', scopeId: workflowId, title: 'WF' })
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -541,7 +542,7 @@ describe('injectMemoryForRun', () => {
     const { taskId } = seedTask({ repoUrl: url, cachedRepoId: 'cr-1' })
     seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'cr-1', title: 'REPO' })
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -569,7 +570,7 @@ describe('injectMemoryForRun', () => {
     })
     seedApprovedMemory(db, { scopeType: 'repo', scopeId: 'cr-priv', title: 'PRIV' })
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -582,7 +583,7 @@ describe('injectMemoryForRun', () => {
     seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'primary', title: 'P' })
     seedApprovedMemory(db, { scopeType: 'agent', scopeId: 'dep-1', title: 'D' })
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('primary'),
       dependents: [mkAgent('dep-1', 'dep-1')],
@@ -595,7 +596,7 @@ describe('injectMemoryForRun', () => {
     const { taskId } = seedTask()
     seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'GG' })
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -608,7 +609,7 @@ describe('injectMemoryForRun', () => {
     seedApprovedMemory(db, { scopeType: 'workflow', scopeId: workflowId, title: 'WF' })
     seedApprovedMemory(db, { scopeType: 'global', scopeId: null, title: 'GG' })
     const { block } = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -619,9 +620,10 @@ describe('injectMemoryForRun', () => {
 })
 
 describe('source-code grep guards', () => {
-  test('runner.ts must call injectMemoryForRun (prevent silent regression)', () => {
+  test('runner.ts must call the provider-neutral injection participant', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
-    expect(src).toContain('injectMemoryForRun(')
+    expect(src).toContain('memoryInjectionQueries.injectForRun(')
+    expect(src).not.toContain("from '@/services/memoryInject'")
   })
 
   test('memoryInject.ts must keep BEGIN/END anchors (downstream may regex-strip)', () => {

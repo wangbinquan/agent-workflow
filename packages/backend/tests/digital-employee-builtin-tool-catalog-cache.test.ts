@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { readPersistedDigitalEmployeeTypePackageDescriptorJsons } from '@/modules/digital-employee/composition'
+import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
+import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 
@@ -12,7 +14,12 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 describe('digital employee builtin tool catalog boot snapshot', () => {
   test('repeated catalog reads do not issue SQLite selects after composition', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await ensureDigitalEmployeeAgentTemplates(db)
+    await ensureDigitalEmployeeAgentTemplates(
+      composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+        db,
+        composeDigitalEmployeeAgentTemplateCatalogParticipant,
+      ),
+    )
 
     let selectCalls = 0
     const countedDb = new Proxy(db, {
@@ -28,8 +35,12 @@ describe('digital employee builtin tool catalog boot snapshot', () => {
       },
     }) as DbClient
 
-    const catalog = composeDigitalEmployeeBuiltinToolCatalog({
-      db: countedDb,
+    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      countedDb,
+      composeDigitalEmployeeAgentTemplateCatalogParticipant,
+    )
+    const catalog = await composeDigitalEmployeeBuiltinToolCatalog({
+      agentTemplates,
       typePackageDescriptorJsons: [
         ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(countedDb),
         developmentEmployeeTypePackage.descriptorJson,

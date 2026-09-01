@@ -27,6 +27,7 @@ import {
   STUCK_RULES,
   type LifecycleAlertRow,
 } from '../src/services/lifecycleInvariants'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_MS = 60_000
@@ -94,7 +95,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -112,7 +113,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -129,7 +130,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -146,7 +147,7 @@ describe('RFC-053 — `{ since }` scope filter', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -184,7 +185,11 @@ describe('RFC-053 — workflow snapshot corrupt degrades gracefully', () => {
       finishedAt: T0,
     })
 
-    const r = await runLifecycleInvariants({ db: env.db, scope: { taskId }, now: () => T0 })
+    const r = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(env.db),
+      scope: { taskId },
+      now: () => T0,
+    })
     // R2 silently degrades because the workflow can't be parsed → no R2 finding.
     expect(r.openAlerts.filter((a) => a.rule === 'R2')).toHaveLength(0)
     // T1 still fires (it doesn't need workflow knowledge — just task status +
@@ -200,7 +205,11 @@ describe('RFC-053 — workflow snapshot corrupt degrades gracefully', () => {
       startedAt: T0 - MIN_MS,
       snapshotJson: JSON.stringify({ $schema_version: 2, nodes: 'oops', edges: [] }),
     })
-    const r = await runLifecycleInvariants({ db: env.db, scope: { taskId }, now: () => T0 })
+    const r = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(env.db),
+      scope: { taskId },
+      now: () => T0,
+    })
     // Just smoke — must not throw, scanned=1.
     expect(r.scanned).toBe(1)
   })
@@ -232,7 +241,11 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
       detectedAt: T0 - 24 * HOUR_MS,
       resolvedAt: null,
     })
-    const r = await runLifecycleInvariants({ db: env.db, scope: { taskId }, now: () => T0 })
+    const r = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(env.db),
+      scope: { taskId },
+      now: () => T0,
+    })
     expect(r.promotedAlerts).toBe(1)
     const t1 = r.openAlerts.find((a) => a.rule === 'T1')!
     expect(t1.severity).toBe('error')
@@ -255,7 +268,11 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
       detectedAt: T0 - 24 * HOUR_MS + 1,
       resolvedAt: null,
     })
-    const r = await runLifecycleInvariants({ db: env.db, scope: { taskId }, now: () => T0 })
+    const r = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(env.db),
+      scope: { taskId },
+      now: () => T0,
+    })
     expect(r.promotedAlerts).toBe(0)
     expect(r.openAlerts.find((a) => a.rule === 'T1')!.severity).toBe('warning')
   })
@@ -277,7 +294,11 @@ describe('RFC-053 — 24h grace boundary (severity warning → error)', () => {
       detectedAt: T0 - 48 * HOUR_MS,
       resolvedAt: null,
     })
-    const r = await runLifecycleInvariants({ db: env.db, scope: { taskId }, now: () => T0 })
+    const r = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(env.db),
+      scope: { taskId },
+      now: () => T0,
+    })
     // No second promotion, severity stays error.
     expect(r.promotedAlerts).toBe(0)
     expect(r.openAlerts.find((a) => a.rule === 'T1')!.severity).toBe('error')
@@ -340,7 +361,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
     let calls = 0
     try {
       await runLifecycleInvariants({
-        db: env.db,
+        operations: taskRecoveryOperations(env.db),
         scope: { taskId: t1 },
         now: () => T0 + MIN_MS,
         onAlert: () => {
@@ -368,7 +389,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
     })
     const calls: Array<{ rule: string; transition: 'new' | 'promoted' }> = []
     await reconcileLifecycleAlerts({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       taskIds: [taskId],
       findings: [
         { taskId, rule: 'S1', detail: { rule: 'S1' } },
@@ -391,7 +412,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     await reconcileLifecycleAlerts({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       taskIds: [taskId],
       findings: [
         { taskId, rule: 'S1', detail: { rule: 'S1' } },
@@ -402,7 +423,7 @@ describe('RFC-053 — onAlert callback throw does not break reconcile', () => {
     })
     const resolved: string[] = []
     const result = await reconcileLifecycleAlerts({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       taskIds: [taskId],
       findings: [],
       now: T0 + MIN_MS,
@@ -442,7 +463,7 @@ describe('RFC-053 — detail JSON round-trip with special characters', () => {
       quote: 'he said "hi"',
     }
     await reconcileLifecycleAlerts({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       taskIds: [taskId],
       findings: [{ taskId, rule: 'S4', detail: exotic }],
       now: T0,
@@ -469,7 +490,7 @@ describe('RFC-053 — detail JSON round-trip with special characters', () => {
       deep = { rule: 'S4', nested: deep, depth: i }
     }
     await reconcileLifecycleAlerts({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       taskIds: [taskId],
       findings: [{ taskId, rule: 'S4', detail: deep as unknown as Record<string, unknown> }],
       now: T0,

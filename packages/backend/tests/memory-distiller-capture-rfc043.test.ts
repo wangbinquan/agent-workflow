@@ -22,6 +22,7 @@ import {
 } from '../src/services/memoryDistiller'
 import { rowToDistillJob } from '../src/services/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -77,8 +78,10 @@ function seedGlobalApproved(db: DbClient, title: string) {
 
 describe('runDistill RFC-043 capture extensions', () => {
   let db: DbClient
+  let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
@@ -91,7 +94,13 @@ describe('runDistill RFC-043 capture extensions', () => {
       stdout: `{"sessionID":"sess-xyz","type":"step-start"}\n${emptyDistillerStdout(input)}`,
       stderr: 'some warning',
     })
-    await runDistill({ db, job, siblings: [job], spawnFn })
+    await runDistill({
+      store: memory.store,
+      reviewedArtifacts: memory.reviewedArtifacts,
+      job,
+      siblings: [job],
+      spawnFn,
+    })
     const refreshed = db
       .select()
       .from(memoryDistillJobs)
@@ -122,7 +131,13 @@ describe('runDistill RFC-043 capture extensions', () => {
       stdout: '',
       stderr: '',
     })
-    await runDistill({ db, job, siblings: [job], spawnFn })
+    await runDistill({
+      store: memory.store,
+      reviewedArtifacts: memory.reviewedArtifacts,
+      job,
+      siblings: [job],
+      spawnFn,
+    })
     const refreshed = db
       .select()
       .from(memoryDistillJobs)
@@ -142,9 +157,15 @@ describe('runDistill RFC-043 capture extensions', () => {
       stdout: '{"sessionID":"sess-fail"}\n',
       stderr: 'fatal: distiller crashed',
     })
-    await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toThrow(
-      /exited with code 1/,
-    )
+    await expect(
+      runDistill({
+        store: memory.store,
+        reviewedArtifacts: memory.reviewedArtifacts,
+        job,
+        siblings: [job],
+        spawnFn,
+      }),
+    ).rejects.toThrow(/exited with code 1/)
     const refreshed = db
       .select()
       .from(memoryDistillJobs)
@@ -163,7 +184,13 @@ describe('runDistill RFC-043 capture extensions', () => {
       stdout: 'not json at all',
       stderr: '',
     })
-    await runDistill({ db, job, siblings: [job], spawnFn })
+    await runDistill({
+      store: memory.store,
+      reviewedArtifacts: memory.reviewedArtifacts,
+      job,
+      siblings: [job],
+      spawnFn,
+    })
     const refreshed = db
       .select()
       .from(memoryDistillJobs)

@@ -16,7 +16,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { plugins } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
-import { createPlugin } from '../src/services/plugin'
+import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import { createApp } from '../src/server'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -468,9 +468,8 @@ describe('/api/plugins install path (PATH-injected fake npm)', () => {
     const { db, app } = buildHarness()
     const external = await mkdtemp(join(pluginsDir, 'external-'))
     const plugin = await createPlugin(
-      db,
+      composePluginServiceBindingForTest(db, { pluginsDir, npmBin: FAKE_NPM }),
       { name: 'external', spec: external },
-      { pluginsDir, npmBin: FAKE_NPM },
     )
     const detail = await req(app, `/api/plugins/${plugin.id}`)
     const wire = (await detail.json()) as { operationConfigHash: string }

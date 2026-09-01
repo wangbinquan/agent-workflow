@@ -26,16 +26,23 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills, skillVersions } from '../src/db/schema'
-import { commitSkillZipBuffer, type SkillZipFsOptions } from '../src/services/skill-zip'
-import { createManagedSkill, createManagedSkillWithFiles, listSkills } from '../src/services/skill'
+import {
+  commitSkillZipBuffer,
+  type SkillZipFsOptions,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
+import {
+  createManagedSkill,
+  createManagedSkillWithFiles,
+  listSkills,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { backfillLegacySkillVersions } from '../src/services/skillVersion'
+import { backfillLegacySkillVersions } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
   activateBootReverifyForTest,
   isSkillBootVerified,
   resetSkillBootVerifyForTest,
   runBootSnapshotReverify,
-} from '../src/services/skillBootVerify'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { SkillZipDecisionMap } from '@agent-workflow/shared'
 
@@ -219,7 +226,16 @@ describe('zip import create under the ACTIVE boot availability gate', () => {
 
   test('the pre-fix bare-insert path is gone from the importer source', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'skill-zip.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'skill-zip.ts',
+      ),
       'utf-8',
     )
     // Code-shape locks (comments may still MENTION the incident): no direct

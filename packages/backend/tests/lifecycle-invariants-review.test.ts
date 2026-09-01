@@ -25,6 +25,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { docVersions, lifecycleAlerts, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants, type LifecycleAlertRow } from '../src/services/lifecycleInvariants'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HOUR_MS = 3_600_000
@@ -141,7 +142,10 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
     h = await buildHarness('done')
     const run = await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
     await insertDoc(h.db, h.taskId, { reviewNodeRunId: run, decision: 'approved', versionIndex: 1 })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(rulesOf(result.openAlerts)).toEqual([])
   })
 
@@ -153,7 +157,10 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
       decision: 'approved',
       versionIndex: 1,
     })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     const r1 = result.openAlerts.filter((a) => a.rule === 'R1')
     expect(r1).toHaveLength(1)
     expect(r1[0]!.severity).toBe('warning')
@@ -175,7 +182,7 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
     }
     // First scan: warning + 'new' callback
     const r1 = await runLifecycleInvariants({
-      db: h.db,
+      operations: taskRecoveryOperations(h.db),
       scope: { taskId: h.taskId },
       now: () => t0,
       onAlert,
@@ -189,7 +196,7 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
     // Second scan, within 24h: still warning, no callback
     calls = []
     const r2 = await runLifecycleInvariants({
-      db: h.db,
+      operations: taskRecoveryOperations(h.db),
       scope: { taskId: h.taskId },
       now: () => t0 + 23 * HOUR_MS,
       onAlert,
@@ -202,7 +209,7 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
     // Third scan, past 24h: promoted to error + 'promoted' callback fires once
     calls = []
     const r3 = await runLifecycleInvariants({
-      db: h.db,
+      operations: taskRecoveryOperations(h.db),
       scope: { taskId: h.taskId },
       now: () => t0 + 25 * HOUR_MS,
       onAlert,
@@ -216,7 +223,7 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
     // Fourth scan, still violating: no second promotion (only one transition per row)
     calls = []
     const r4 = await runLifecycleInvariants({
-      db: h.db,
+      operations: taskRecoveryOperations(h.db),
       scope: { taskId: h.taskId },
       now: () => t0 + 48 * HOUR_MS,
       onAlert,
@@ -230,7 +237,10 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
     const run = await insertReviewRun(h.db, h.taskId, { status: 'awaiting_review' })
     await insertDoc(h.db, h.taskId, { reviewNodeRunId: run, decision: 'approved', versionIndex: 1 })
     // First scan: R1 violates (T1 also satisfied — there *is* an awaiting_review run).
-    const r1 = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const r1 = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(r1.openAlerts.filter((a) => a.rule === 'R1')).toHaveLength(1)
     // Fix shape: run becomes done, task moves to done too so T1 doesn't fire.
     await h.db
@@ -239,7 +249,10 @@ describe('RFC-053 PR-D — R1 (approved doc_version ⟹ done review node_run)', 
       .where(eq(nodeRuns.id, run))
     await h.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, h.taskId))
     // Second scan: R1 row resolved; no new R1 inserted.
-    const r2 = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const r2 = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(r2.resolvedAlerts).toBeGreaterThanOrEqual(1)
     expect(r2.openAlerts.filter((a) => a.rule === 'R1')).toHaveLength(0)
     // Historical R1 row exists with resolved_at set.
@@ -260,7 +273,10 @@ describe('RFC-053 PR-D — R2 (done review node_run ⟹ ∃ approved doc_version
     h = await buildHarness('done')
     const run = await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
     await insertDoc(h.db, h.taskId, { reviewNodeRunId: run, decision: 'approved', versionIndex: 1 })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(result.openAlerts.filter((a) => a.rule === 'R2')).toHaveLength(0)
   })
 
@@ -268,7 +284,10 @@ describe('RFC-053 PR-D — R2 (done review node_run ⟹ ∃ approved doc_version
     h = await buildHarness('failed')
     const run = await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
     await insertDoc(h.db, h.taskId, { reviewNodeRunId: run, decision: 'rejected', versionIndex: 1 })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     const r2 = result.openAlerts.filter((a) => a.rule === 'R2')
     expect(r2).toHaveLength(1)
     expect(r2[0]!.detail).toMatchObject({ reviewNodeRunId: run, reviewNodeId: 'rev_1' })
@@ -277,7 +296,10 @@ describe('RFC-053 PR-D — R2 (done review node_run ⟹ ∃ approved doc_version
   test('violated: done review run with no doc_version at all → R2 alert', async () => {
     h = await buildHarness('failed')
     await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(result.openAlerts.filter((a) => a.rule === 'R2')).toHaveLength(1)
   })
 
@@ -285,9 +307,15 @@ describe('RFC-053 PR-D — R2 (done review node_run ⟹ ∃ approved doc_version
     h = await buildHarness('failed')
     const run = await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
     // Two scans without fixing the violation: still 1 open row, no dup insert.
-    const r1 = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const r1 = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(r1.newAlerts).toBe(1)
-    const r2 = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const r2 = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(r2.newAlerts).toBe(0)
     expect(r2.openAlerts.filter((a) => a.rule === 'R2')).toHaveLength(1)
     const openR2 = await h.db

@@ -23,6 +23,7 @@
 // user's "I refuse to be asked again" intent is being lost — investigate
 // before relaxing.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
@@ -177,6 +178,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
@@ -206,6 +208,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
@@ -225,6 +228,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: b.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
@@ -250,6 +254,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
@@ -301,6 +306,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
@@ -328,6 +334,7 @@ describe('RFC-056 C4 — reject persistence cross-cascade', () => {
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',

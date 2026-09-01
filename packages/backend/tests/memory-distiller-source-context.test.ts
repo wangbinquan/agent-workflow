@@ -30,6 +30,7 @@ import {
   rowToDistillJob,
 } from '../src/services/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -200,8 +201,10 @@ function mkReviewJob(taskId: string, reviewId: string) {
 
 describe('loadSourceEvents — clarify transcript', () => {
   let db: DbClient
+  let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
@@ -214,7 +217,9 @@ describe('loadSourceEvents — clarify transcript', () => {
     insertTextEvent(db, sourceRunId, 1, 'I will start by reading the routes.')
     insertTextEvent(db, sourceRunId, 2, 'Should the endpoint live in /api/hello?')
 
-    const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)])
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkClarifyJob(taskId, clarifyId),
+    ])
     expect(loaded.clarify.length).toBe(1)
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).not.toBeNull()
@@ -261,7 +266,9 @@ describe('loadSourceEvents — clarify transcript', () => {
     db.run(sql`PRAGMA foreign_keys = OFF`)
     db.delete(nodeRuns).where(eq(nodeRuns.id, orphanRunId)).run()
     db.run(sql`PRAGMA foreign_keys = ON`)
-    const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)])
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkClarifyJob(taskId, clarifyId),
+    ])
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).toBeNull()
     expect(c.sourceTranscriptReason).toContain('not found')
@@ -272,7 +279,9 @@ describe('loadSourceEvents — clarify transcript', () => {
     const sourceRunId = seedSourceAgentNodeRun(db, taskId)
     const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
     // intentionally no events
-    const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)])
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkClarifyJob(taskId, clarifyId),
+    ])
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).toBeNull()
     expect(c.sourceTranscriptReason).toContain('no events')
@@ -287,10 +296,15 @@ describe('loadSourceEvents — clarify transcript', () => {
     insertTextEvent(db, sourceRunId, 2, longChunk)
     insertTextEvent(db, sourceRunId, 3, longChunk)
 
-    const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)], {
-      clarifyTranscriptMaxBytes: 2048,
-      reviewBodyMaxBytes: 16384,
-    })
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkClarifyJob(taskId, clarifyId)],
+      {
+        clarifyTranscriptMaxBytes: 2048,
+        reviewBodyMaxBytes: 16384,
+      },
+    )
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).not.toBeNull()
     expect(c.sourceTranscriptMd).toContain('[truncated ')
@@ -303,10 +317,15 @@ describe('loadSourceEvents — clarify transcript', () => {
     const sourceRunId = seedSourceAgentNodeRun(db, taskId)
     const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
     insertTextEvent(db, sourceRunId, 1, 'something the model said')
-    const loaded = await loadSourceEvents(db, [mkClarifyJob(taskId, clarifyId)], {
-      clarifyTranscriptMaxBytes: 0,
-      reviewBodyMaxBytes: 16384,
-    })
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkClarifyJob(taskId, clarifyId)],
+      {
+        clarifyTranscriptMaxBytes: 0,
+        reviewBodyMaxBytes: 16384,
+      },
+    )
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).toBeNull()
     expect(c.sourceTranscriptReason).toBe('disabled by config')
@@ -315,6 +334,7 @@ describe('loadSourceEvents — clarify transcript', () => {
 
 describe('loadSourceEvents — review body', () => {
   let db: DbClient
+  let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
   let prevHome: string | undefined
   let tmpHome: string
   beforeEach(() => {
@@ -323,6 +343,7 @@ describe('loadSourceEvents — review body', () => {
     tmpHome = mkdtempSync(join(tmpdir(), 'rfc044-'))
     prevHome = process.env.AGENT_WORKFLOW_HOME
     process.env.AGENT_WORKFLOW_HOME = tmpHome
+    memory = createSqliteMemoryDistillTestContext(db, tmpHome)
   })
   afterEach(() => {
     if (prevHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
@@ -371,7 +392,9 @@ describe('loadSourceEvents — review body', () => {
   test('reads body file when present', async () => {
     const { taskId } = seedTask(db)
     const dvId = seedReview(taskId, '# Hello\n\nworld')
-    const loaded = await loadSourceEvents(db, [mkReviewJob(taskId, dvId)])
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkReviewJob(taskId, dvId),
+    ])
     const r = loaded.review[0]!
     expect(r.reviewedBodyMd).toBe('# Hello\n\nworld')
     expect(r.reviewedBodyReason).toBeNull()
@@ -380,7 +403,9 @@ describe('loadSourceEvents — review body', () => {
   test('falls back to null + reason when body file is missing', async () => {
     const { taskId } = seedTask(db)
     const dvId = seedReview(taskId, null, 'docs/missing.md')
-    const loaded = await loadSourceEvents(db, [mkReviewJob(taskId, dvId)])
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      mkReviewJob(taskId, dvId),
+    ])
     const r = loaded.review[0]!
     expect(r.reviewedBodyMd).toBeNull()
     expect(r.reviewedBodyReason).toContain('unreadable')
@@ -390,10 +415,15 @@ describe('loadSourceEvents — review body', () => {
     const { taskId } = seedTask(db)
     const big = 'a'.repeat(32 * 1024)
     const dvId = seedReview(taskId, big)
-    const loaded = await loadSourceEvents(db, [mkReviewJob(taskId, dvId)], {
-      clarifyTranscriptMaxBytes: 16384,
-      reviewBodyMaxBytes: 4096,
-    })
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkReviewJob(taskId, dvId)],
+      {
+        clarifyTranscriptMaxBytes: 16384,
+        reviewBodyMaxBytes: 4096,
+      },
+    )
     const r = loaded.review[0]!
     expect(r.reviewedBodyMd).not.toBeNull()
     expect(r.reviewedBodyMd).toContain('[truncated ')
@@ -403,10 +433,15 @@ describe('loadSourceEvents — review body', () => {
   test('budget.reviewBodyMaxBytes=0 disables review body', async () => {
     const { taskId } = seedTask(db)
     const dvId = seedReview(taskId, 'doc body present')
-    const loaded = await loadSourceEvents(db, [mkReviewJob(taskId, dvId)], {
-      clarifyTranscriptMaxBytes: 16384,
-      reviewBodyMaxBytes: 0,
-    })
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkReviewJob(taskId, dvId)],
+      {
+        clarifyTranscriptMaxBytes: 16384,
+        reviewBodyMaxBytes: 0,
+      },
+    )
     const r = loaded.review[0]!
     expect(r.reviewedBodyMd).toBeNull()
     expect(r.reviewedBodyReason).toBe('disabled by config')

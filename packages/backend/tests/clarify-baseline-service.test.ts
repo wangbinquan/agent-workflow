@@ -15,6 +15,7 @@
 // (RFC-132 retired the legacy quick-channel outcome contract; its unified
 // equivalents are locked by rfc128-p5-d-autodispatch.test.ts.)
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -666,6 +667,7 @@ describe('RFC-058 baseline T3 — evaluateDesignerRerunReadiness ready/pending l
     const cnrA = ccAlphaRunRows[0]!.intermediaryNodeRunId
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: cnrA!,
       answers: [makeAnswer()],
       ifMatchIteration: 0,
@@ -729,6 +731,7 @@ describe('RFC-058 baseline T3 — resolveCrossNodeStopped reject persistence', (
     // directive; resolveCrossNodeStopped reads it (RFC-132 T7 single source).
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: cnrStop,
       answers: [makeAnswer()],
       directive: 'stop',

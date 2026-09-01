@@ -16,6 +16,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -84,7 +85,10 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
       nodes: [{ id: 'rev_1', kind: 'review' } as WorkflowNode],
     })
     const runId = await addRun(db, taskId, 'rev_1', 'interrupted')
-    const r = await runStuckTaskDetector({ db, taskIdFilter: [taskId] })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      taskIdFilter: [taskId],
+    })
     expect(r.openAlerts).toHaveLength(1)
     expect(r.openAlerts[0]!.detail).toMatchObject({
       rule: 'S3',
@@ -99,7 +103,10 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
       nodes: [{ id: 'clarify_1', kind: 'clarify' } as WorkflowNode],
     })
     const runId = await addRun(db, taskId, 'clarify_1', 'interrupted')
-    const r = await runStuckTaskDetector({ db, taskIdFilter: [taskId] })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      taskIdFilter: [taskId],
+    })
     expect(r.openAlerts[0]!.detail).toMatchObject({
       rule: 'S3',
       repairHint: { kind: 'clarify', nodeRunId: runId },
@@ -114,7 +121,10 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
     })
     const runId = await addRun(db, taskId, 'rev_1', 'awaiting_review')
     // No doc_versions → S1 violates.
-    const r = await runStuckTaskDetector({ db, taskIdFilter: [taskId] })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      taskIdFilter: [taskId],
+    })
     expect(r.openAlerts.map((a) => a.rule)).toContain('S1')
     const s1 = r.openAlerts.find((a) => a.rule === 'S1')!
     expect(s1.detail).toMatchObject({
@@ -129,7 +139,10 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
       nodes: [{ id: 'clarify_1', kind: 'clarify' } as WorkflowNode],
     })
     const runId = await addRun(db, taskId, 'clarify_1', 'awaiting_human')
-    const r = await runStuckTaskDetector({ db, taskIdFilter: [taskId] })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      taskIdFilter: [taskId],
+    })
     const s2 = r.openAlerts.find((a) => a.rule === 'S2')
     expect(s2?.detail).toMatchObject({
       repairHint: { kind: 'clarify', nodeRunId: runId },
@@ -143,7 +156,10 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
       nodes: [],
       startedAtAgoMs: 10 * 60 * 1000,
     })
-    const r = await runStuckTaskDetector({ db, taskIdFilter: [taskId] })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      taskIdFilter: [taskId],
+    })
     const s4 = r.openAlerts.find((a) => a.rule === 'S4')
     expect(s4).toBeDefined()
     expect(s4!.detail).not.toHaveProperty('repairHint')
@@ -157,7 +173,10 @@ describe('RFC-057 — stuckTaskDetector.repairHint', () => {
       nodes: [{ id: 'out_1', kind: 'output', ports: [] } as unknown as WorkflowNode],
     })
     await addRun(db, taskId, 'out_1', 'done')
-    const r = await runStuckTaskDetector({ db, taskIdFilter: [taskId] })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      taskIdFilter: [taskId],
+    })
     expect(r.openAlerts[0]!.detail).not.toHaveProperty('repairHint')
   })
 })

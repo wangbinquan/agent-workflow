@@ -16,7 +16,10 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import { resolveInjection } from '../src/services/execution/resolveInjection'
+import {
+  createSqliteLegacyAgentDependencyLookup,
+  resolveInjection,
+} from '../src/services/execution/resolveInjection'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -77,7 +80,11 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 
-    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
+    const out = await resolveInjection(db, root, {
+      appHome: '/tmp/app-home',
+      log: NOOP_LOG,
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+    })
     expect(out.kind).toBe('ok')
     if (out.kind !== 'ok') throw new Error('unreachable')
     expect(out.spec.dependents.map((d) => d.name)).toEqual(['b', 'c'])
@@ -93,7 +100,11 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'top')
     if (root === null) throw new Error('seed missing')
 
-    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
+    const out = await resolveInjection(db, root, {
+      appHome: '/tmp/app-home',
+      log: NOOP_LOG,
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+    })
     expect(out.kind).toBe('ok')
     if (out.kind !== 'ok') throw new Error('unreachable')
     // Order: top.skills first, then leaf.skills entries not already seen.
@@ -111,7 +122,11 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'top')
     if (root === null) throw new Error('seed missing')
 
-    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
+    const out = await resolveInjection(db, root, {
+      appHome: '/tmp/app-home',
+      log: NOOP_LOG,
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+    })
     expect(out.kind).toBe('failed')
     if (out.kind !== 'failed') throw new Error('unreachable')
     expect(out.message).toBe('agent-dependency-not-found')
@@ -131,7 +146,11 @@ describe('RFC-022 scheduler.prepareNodeRunInjection', () => {
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 
-    const out = await resolveInjection(db, root, { appHome: '/tmp/app-home', log: NOOP_LOG })
+    const out = await resolveInjection(db, root, {
+      appHome: '/tmp/app-home',
+      log: NOOP_LOG,
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+    })
     expect(out.kind).toBe('failed')
     if (out.kind !== 'failed') throw new Error('unreachable')
     // RFC-223 (PR-1): the cycle path is expressed in agent IDS.

@@ -10,6 +10,7 @@ import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createRuntime, resolveInternalAgentRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 function freshDb(): DbClient {
@@ -19,13 +20,13 @@ function freshDb(): DbClient {
 describe('resolveInternalAgentRuntime (RFC-117)', () => {
   test('runtimeName wins: resolves the named profile (protocol + binary + model)', async () => {
     const db = freshDb()
-    await createRuntime(db, {
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'oc-haiku',
       protocol: 'opencode',
       binaryPath: canonicalBinaryPath('oc-haiku'),
       model: 'anthropic/haiku',
     })
-    const rt = await resolveInternalAgentRuntime(db, {
+    const rt = await resolveInternalAgentRuntime(runtimeRegistryPersistence(db), {
       runtimeName: 'oc-haiku',
       deprecatedModel: 'ignored/model',
       defaultRuntime: 'opencode',
@@ -38,7 +39,7 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
 
   test('no runtimeName + deprecated model → opencode + that model (transition fallback)', async () => {
     const db = freshDb()
-    const rt = await resolveInternalAgentRuntime(db, {
+    const rt = await resolveInternalAgentRuntime(runtimeRegistryPersistence(db), {
       runtimeName: null,
       deprecatedModel: 'legacy/model',
       defaultRuntime: 'opencode',
@@ -50,7 +51,7 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
 
   test('empty runtimeName is treated as unset → falls through to deprecated model', async () => {
     const db = freshDb()
-    const rt = await resolveInternalAgentRuntime(db, {
+    const rt = await resolveInternalAgentRuntime(runtimeRegistryPersistence(db), {
       runtimeName: '',
       deprecatedModel: 'legacy/model',
     })
@@ -60,13 +61,13 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
 
   test('no runtimeName + no model → inherits the defaultRuntime profile', async () => {
     const db = freshDb()
-    await createRuntime(db, {
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'cc-default',
       protocol: 'claude-code',
       binaryPath: canonicalBinaryPath('cc'),
       model: 'claude-sonnet',
     })
-    const rt = await resolveInternalAgentRuntime(db, {
+    const rt = await resolveInternalAgentRuntime(runtimeRegistryPersistence(db), {
       runtimeName: null,
       deprecatedModel: null,
       defaultRuntime: 'cc-default',
@@ -78,7 +79,7 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
 
   test('nothing set → opencode fall-safe (null model = the binary default)', async () => {
     const db = freshDb()
-    const rt = await resolveInternalAgentRuntime(db, {})
+    const rt = await resolveInternalAgentRuntime(runtimeRegistryPersistence(db), {})
     expect(rt.protocol).toBe('opencode')
     expect(rt.binaryPath).toBeNull()
     expect(rt.model).toBeNull()
@@ -86,7 +87,9 @@ describe('resolveInternalAgentRuntime (RFC-117)', () => {
 
   test('dangling runtimeName fall-safe to opencode (does not brick the job)', async () => {
     const db = freshDb()
-    const rt = await resolveInternalAgentRuntime(db, { runtimeName: 'does-not-exist' })
+    const rt = await resolveInternalAgentRuntime(runtimeRegistryPersistence(db), {
+      runtimeName: 'does-not-exist',
+    })
     expect(rt.protocol).toBe('opencode')
   })
 })

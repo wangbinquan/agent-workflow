@@ -15,6 +15,7 @@ import {
   seedBuiltinRuntimes,
   setRuntimeEnabled,
 } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -35,7 +36,7 @@ describe('RFC-111/F6: agent runtime reference validation', () => {
   let db: DbClient
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db) // built-in opencode + claude-code rows
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db)) // built-in opencode + claude-code rows
   })
 
   test('createAgent rejects an unknown / typo runtime name', async () => {
@@ -65,8 +66,8 @@ describe('RFC-111/F6: agent runtime reference validation', () => {
 
   // RFC-118: a disabled runtime stays registered but can't be a NEW pin.
   test('RFC-118: createAgent rejects a NEW pin to a disabled runtime', async () => {
-    await createRuntime(db, { name: 'oc-x', protocol: 'opencode' })
-    await setRuntimeEnabled(db, 'oc-x', false, 'opencode')
+    await createRuntime(runtimeRegistryPersistence(db), { name: 'oc-x', protocol: 'opencode' })
+    await setRuntimeEnabled(runtimeRegistryPersistence(db), 'oc-x', false, 'opencode')
     await expect(createAgent(db, { ...base, name: 'a', runtime: 'oc-x' })).rejects.toThrow(
       /disabled runtime/,
     )
@@ -75,17 +76,17 @@ describe('RFC-111/F6: agent runtime reference validation', () => {
   // RFC-118 D6: KEEPING an already-pinned, now-disabled runtime is allowed so the
   // agent's OTHER fields stay editable (mirrors RFC-099 "only validate NEW refs").
   test('RFC-118: updateAgent allows re-saving an already-pinned now-disabled runtime', async () => {
-    await createRuntime(db, { name: 'oc-y', protocol: 'opencode' })
+    await createRuntime(runtimeRegistryPersistence(db), { name: 'oc-y', protocol: 'opencode' })
     const agent = await createAgent(db, { ...base, name: 'a', runtime: 'oc-y' })
-    await setRuntimeEnabled(db, 'oc-y', false, 'opencode') // disabled AFTER the agent pinned it
+    await setRuntimeEnabled(runtimeRegistryPersistence(db), 'oc-y', false, 'opencode') // disabled AFTER the agent pinned it
     const updated = await updateAgent(db, agent.id, { runtime: 'oc-y', description: 'edited' })
     expect(updated.runtime).toBe('oc-y')
     expect(updated.description).toBe('edited')
   })
 
   test('RFC-118: updateAgent rejects CHANGING the pin to a disabled runtime', async () => {
-    await createRuntime(db, { name: 'oc-z', protocol: 'opencode' })
-    await setRuntimeEnabled(db, 'oc-z', false, 'opencode')
+    await createRuntime(runtimeRegistryPersistence(db), { name: 'oc-z', protocol: 'opencode' })
+    await setRuntimeEnabled(runtimeRegistryPersistence(db), 'oc-z', false, 'opencode')
     const agent = await createAgent(db, { ...base, name: 'a', runtime: 'opencode' })
     await expect(updateAgent(db, agent.id, { runtime: 'oc-z' })).rejects.toThrow(/disabled runtime/)
   })

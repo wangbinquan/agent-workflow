@@ -14,6 +14,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { gracefulShutdown } from '../src/services/shutdown'
 import { taskExecutionModule } from '../src/modules/task-execution/composition'
+import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -72,7 +73,19 @@ describe('gracefulShutdown', () => {
 
   test('returns immediately when no tasks are running', async () => {
     const t0 = Date.now()
-    await gracefulShutdown(h.db, 5000)
+    const persistence = createSqliteTaskExecutionPersistence(h.db)
+    await gracefulShutdown(
+      {
+        controller: {
+          async shutdownActive() {
+            return []
+          },
+        },
+        operations: persistence.shutdown,
+        recovery: persistence.recoveryAdministration,
+      },
+      5000,
+    )
     expect(Date.now() - t0).toBeLessThan(500)
   })
 
@@ -81,7 +94,19 @@ describe('gracefulShutdown', () => {
     // No AbortController registered — abortAllActiveTasks is a no-op, and
     // the row stays running. After the short budget, the survivor path
     // marks it interrupted.
-    await gracefulShutdown(h.db, 300)
+    const persistence = createSqliteTaskExecutionPersistence(h.db)
+    await gracefulShutdown(
+      {
+        controller: {
+          async shutdownActive() {
+            return []
+          },
+        },
+        operations: persistence.shutdown,
+        recovery: persistence.recoveryAdministration,
+      },
+      300,
+    )
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('interrupted')
     // RFC-202 T4: survivors stamp DAEMON_RESTART_ERROR_SUMMARY ('daemon-restart')

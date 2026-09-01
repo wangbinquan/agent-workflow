@@ -11,8 +11,15 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills, skillVersions } from '../src/db/schema'
-import { commitSkillVersion, ensureInitialSkillVersion } from '../src/services/skillVersion'
-import { createManagedSkill, listSkills, type SkillFsOptions } from '../src/services/skill'
+import {
+  commitSkillVersion,
+  ensureInitialSkillVersion,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import {
+  createManagedSkill,
+  listSkills,
+  type SkillFsOptions,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import {
   activateBootReverifyForTest,
@@ -24,14 +31,14 @@ import {
   resetSkillBootVerifyForTest,
   runBootSnapshotReverify,
   verifyManagedSnapshot,
-} from '../src/services/skillBootVerify'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { readFileSync } from 'node:fs'
-import { hashDir } from '../src/services/skillHash'
+import { hashDir } from '../src/modules/resource-catalog/infrastructure/legacy/skillHash'
 import {
   skillFilesAbs,
   skillVersionAbs,
   skillVersionRelPath,
-} from '../src/services/skillIdentityPaths'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

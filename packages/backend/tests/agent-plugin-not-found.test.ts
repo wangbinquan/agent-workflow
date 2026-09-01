@@ -12,7 +12,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent, updateAgent } from '../src/services/agent'
-import { createPlugin } from '../src/services/plugin'
+import {
+  composePluginServiceBindingForTest,
+  createPlugin,
+  type PluginServiceBinding,
+} from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { ValidationError } from '../src/util/errors'
 
@@ -52,12 +56,14 @@ function agentInput(name: string, plugins: string[] = []): Parameters<typeof cre
 
 describe('agent.plugins save-time guard', () => {
   let db: DbClient
+  let binding: PluginServiceBinding
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    binding = composePluginServiceBindingForTest(db, opts())
   })
 
   test('create succeeds when every plugin resolves + enabled (stored by id)', async () => {
-    const p1 = await createPlugin(db, { name: 'p1', spec: 'p1@1' }, opts())
+    const p1 = await createPlugin(binding, { name: 'p1', spec: 'p1@1' })
     const a = await createAgent(db, agentInput('consumer', [p1.id]))
     // RFC-223: the service boundary accepts and persists canonical plugin ids.
     expect(a.plugins).toEqual([p1.id])
@@ -76,11 +82,11 @@ describe('agent.plugins save-time guard', () => {
   })
 
   test('create fails 422 plugin-disabled when referenced plugin has enabled=false', async () => {
-    const p = await createPlugin(db, { name: 'off', spec: 'p@1' }, opts())
+    const p = await createPlugin(binding, { name: 'off', spec: 'p@1' })
     // Flip enabled off via direct service call.
     await (
-      await import('../src/services/plugin')
-    ).updatePlugin(db, p.id, { enabled: false }, opts())
+      await import('./helpers/pluginServiceBinding')
+    ).updatePlugin(binding, p.id, { enabled: false })
     try {
       await createAgent(db, agentInput('a', [p.id]))
       throw new Error('expected ValidationError')
@@ -92,7 +98,7 @@ describe('agent.plugins save-time guard', () => {
   })
 
   test('update fails 422 plugin-not-found when patched id is unknown', async () => {
-    const p1 = await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
+    const p1 = await createPlugin(binding, { name: 'p1', spec: 'p@1' })
     const agent = await createAgent(db, agentInput('a', [p1.id]))
     try {
       await updateAgent(db, agent.id, { plugins: ['nope'] })
@@ -104,11 +110,11 @@ describe('agent.plugins save-time guard', () => {
   })
 
   test('update without `plugins` rejects a disabled final Agent closure', async () => {
-    const p1 = await createPlugin(db, { name: 'p1', spec: 'p@1' }, opts())
+    const p1 = await createPlugin(binding, { name: 'p1', spec: 'p@1' })
     const agent = await createAgent(db, agentInput('a', [p1.id]))
     // Disable the plugin from under the Agent, then patch an unrelated field.
-    const { updatePlugin } = await import('../src/services/plugin')
-    await updatePlugin(db, p1.id, { enabled: false }, opts())
+    const { updatePlugin } = await import('./helpers/pluginServiceBinding')
+    await updatePlugin(binding, p1.id, { enabled: false })
     await expect(updateAgent(db, agent.id, { description: 'unrelated' })).rejects.toMatchObject({
       code: 'agent-resources-invalid',
       details: { issues: [{ code: 'plugin-disabled', refKind: 'plugin' }] },

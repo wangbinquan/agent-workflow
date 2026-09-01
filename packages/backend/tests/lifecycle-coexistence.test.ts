@@ -20,6 +20,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { docVersions, lifecycleAlerts, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIN_MS = 60_000
@@ -131,7 +132,7 @@ describe('RFC-053 — invariants + stuck-detector共存（同一 task 同时被�
 
     // Run only invariants. R1 should be inserted; S1 must NOT be resolved.
     await runLifecycleInvariants({
-      db: env.db,
+      operations: taskRecoveryOperations(env.db),
       scope: { taskId: t1.taskId },
       now: () => T0 + MIN_MS,
     })
@@ -160,7 +161,7 @@ describe('RFC-053 — invariants + stuck-detector共存（同一 task 同时被�
       resolvedAt: null,
     })
 
-    await runStuckTaskDetector({ db: env.db, now: () => T0 })
+    await runStuckTaskDetector({ operations: taskRecoveryOperations(env.db), now: () => T0 })
 
     const rows = await env.db
       .select()
@@ -265,7 +266,10 @@ describe('RFC-053 — multi-task reconcile isolation', () => {
       decidedAt: T0,
     })
 
-    const result = await runLifecycleInvariants({ db: env.db, now: () => T0 + MIN_MS })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(env.db),
+      now: () => T0 + MIN_MS,
+    })
 
     // tA: resolved
     const tARows = await env.db
@@ -331,7 +335,10 @@ describe('RFC-053 — deleted task is invisible to both modules', () => {
       decision: 'approved',
       decidedAt: T0,
     })
-    const r = await runLifecycleInvariants({ db: env.db, now: () => T0 + MIN_MS })
+    const r = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(env.db),
+      now: () => T0 + MIN_MS,
+    })
     expect(r.scanned).toBe(0)
     expect(r.openAlerts).toEqual([])
   })
@@ -343,7 +350,10 @@ describe('RFC-053 — deleted task is invisible to both modules', () => {
       deletedAt: T0 - 60 * MIN_MS,
       startedAt: T0 - 30 * MIN_MS,
     })
-    const r = await runStuckTaskDetector({ db: env.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(env.db),
+      now: () => T0,
+    })
     expect(r.scanned).toBe(0)
     expect(r.openAlerts).toEqual([])
   })
@@ -357,7 +367,10 @@ describe('RFC-053 — terminal task is invisible to stuck-detector', () => {
     const env = await freshDb()
     cleanup = env.cleanup
     await seedTask(env.db, 'done', { startedAt: T0 - 24 * 60 * MIN_MS })
-    const r = await runStuckTaskDetector({ db: env.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(env.db),
+      now: () => T0,
+    })
     expect(r.scanned).toBe(0)
   })
 
@@ -365,7 +378,10 @@ describe('RFC-053 — terminal task is invisible to stuck-detector', () => {
     const env = await freshDb()
     cleanup = env.cleanup
     await seedTask(env.db, 'canceled', { startedAt: T0 - 24 * 60 * MIN_MS })
-    const r = await runStuckTaskDetector({ db: env.db, now: () => T0 })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(env.db),
+      now: () => T0,
+    })
     expect(r.scanned).toBe(0)
   })
 })

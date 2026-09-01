@@ -14,6 +14,7 @@
 // frontend's useClarifyWs hook tests landing in PR-C) catch that — here
 // we lock the payload shape end-to-end through the runtime path.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -147,6 +148,7 @@ describe('clarify.* events broadcast on TASK_CHANNEL (RFC-023 T14)', () => {
 
     const res = await autoDispatchClarifyRoundWithDecision({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [
         {

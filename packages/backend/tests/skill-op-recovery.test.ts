@@ -8,8 +8,14 @@
 // (phase ∉ kind spine) → quarantine.
 
 import { describe, expect, test } from 'bun:test'
-import type { SkillOpKind, SkillOpPhase } from '../src/services/skillOperations'
-import { SKILL_OP_PHASE_SEQUENCES, recoveryDirection } from '../src/services/skillOpRecovery'
+import type {
+  SkillOpKind,
+  SkillOpPhase,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
+import {
+  SKILL_OP_PHASE_SEQUENCES,
+  recoveryDirection,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecovery'
 
 const ALL_PHASES: SkillOpPhase[] = [
   'intent',

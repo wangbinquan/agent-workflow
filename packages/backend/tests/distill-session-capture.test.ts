@@ -13,12 +13,38 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memoryDistillEvents, memoryDistillJobs } from '../src/db/schema'
-import {
-  captureDistillJobSession,
-  DISTILL_CAPTURE_FAILED_KIND,
-} from '../src/services/runtime/opencode/distillSessionCapture'
+import { captureDistillJobSession } from '../src/services/runtime/opencode/distillSessionCapture'
+import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/runtime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+function capture(
+  db: DbClient,
+  input: Omit<Parameters<typeof captureDistillJobSession>[0], 'sink'>,
+) {
+  return captureDistillJobSession({
+    ...input,
+    sink: {
+      async append(events) {
+        if (events.length > 0) await db.insert(memoryDistillEvents).values([...events])
+      },
+      async markFailed(failure) {
+        await db.insert(memoryDistillEvents).values({
+          distillJobId: failure.distillJobId,
+          attemptIndex: failure.attemptIndex,
+          ts: Date.now(),
+          kind: DISTILL_CAPTURE_FAILED_KIND,
+          payload: JSON.stringify({
+            sessionID: failure.rootSessionId,
+            reason: failure.reason,
+          }),
+          sessionId: failure.rootSessionId,
+          parentSessionId: null,
+        })
+      },
+    },
+  })
+}
 
 function seedJob(db: DbClient): string {
   const id = ulid()
@@ -116,11 +142,10 @@ describe('captureDistillJobSession', () => {
   })
 
   test('missing opencode DB writes a capture-failed marker and returns failed=true', async () => {
-    const result = await captureDistillJobSession({
+    const result = await capture(db, {
       rootSessionId: 'root',
       distillJobId: jobId,
       attemptIndex: 0,
-      db,
       opencodeDbPath: '/tmp/definitely-does-not-exist-rfc043/opencode.db',
     })
     expect(result.failed).toBe(true)
@@ -151,11 +176,10 @@ describe('captureDistillJobSession', () => {
           },
         ],
       })
-      const result = await captureDistillJobSession({
+      const result = await capture(db, {
         rootSessionId: 'root-distill',
         distillJobId: jobId,
         attemptIndex: 0,
-        db,
         opencodeDbPath: opencodeDb,
       })
       expect(result.failed).toBe(false)
@@ -189,18 +213,16 @@ describe('captureDistillJobSession', () => {
           },
         ],
       })
-      await captureDistillJobSession({
+      await capture(db, {
         rootSessionId: 'sess-X',
         distillJobId: jobId,
         attemptIndex: 0,
-        db,
         opencodeDbPath: opencodeDb,
       })
-      await captureDistillJobSession({
+      await capture(db, {
         rootSessionId: 'sess-X',
         distillJobId: jobId,
         attemptIndex: 1,
-        db,
         opencodeDbPath: opencodeDb,
       })
       const rows = db
@@ -243,11 +265,10 @@ describe('captureDistillJobSession', () => {
           },
         ],
       })
-      const result = await captureDistillJobSession({
+      const result = await capture(db, {
         rootSessionId: 'root',
         distillJobId: jobId,
         attemptIndex: 0,
-        db,
         opencodeDbPath: opencodeDb,
       })
       expect(result.capturedSessionIds.sort()).toEqual(['child', 'root'])

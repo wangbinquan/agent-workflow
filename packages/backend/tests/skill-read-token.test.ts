@@ -11,9 +11,12 @@ import {
   createManagedSkill,
   getSkillPreconditionTokenById,
   readSkillContent,
-} from '../src/services/skill'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { decodeSkillToken, encodeSkillToken } from '../src/services/skillToken'
+import {
+  decodeSkillToken,
+  encodeSkillToken,
+} from '../src/modules/resource-catalog/application/skills/skillToken'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

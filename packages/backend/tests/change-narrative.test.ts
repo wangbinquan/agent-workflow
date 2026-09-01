@@ -25,19 +25,26 @@ import { parseNumstatZ, runGit } from '../src/util/git'
 import { computeContentDigest } from '../src/services/structuralDiff/digest'
 import {
   buildNarrativePrompt,
-  buildNarrativeInput,
+  buildNarrativeInput as buildNarrativeInputWithPort,
   extractJsonObject,
   getChangeNarrativeStatus,
   resetChangeNarrativeStateForTests,
   triggerChangeNarrative,
   type ChangeNarrativeDeps,
 } from '../src/services/changeNarrative'
+import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
+import { requireTaskMember } from '../src/services/taskCollab'
+import { resolveInternalAgentRuntime } from '../src/services/runtimeRegistry'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunResult,
 } from '../src/services/systemAgentRun'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const buildNarrativeInput = (db: DbClient, task: Task) =>
+  buildNarrativeInputWithPort(createSqliteCodeWorkspaceRead(db), task)
 
 let home: string
 beforeAll(() => {
@@ -255,7 +262,22 @@ describe('computeContentDigest', () => {
 
 describe('triggerChangeNarrative', () => {
   function deps(db: DbClient, runFn: ChangeNarrativeDeps['runFn']): ChangeNarrativeDeps {
-    return runFn === undefined ? { db } : { db, runFn }
+    const runtimes = runtimeRegistryPersistence(db)
+    const base: ChangeNarrativeDeps = {
+      workspace: createSqliteCodeWorkspaceRead(db),
+      async requireMember(actor, taskId) {
+        const rows = await db
+          .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
+          .from(tasks)
+          .where(eq(tasks.id, taskId))
+          .limit(1)
+        const row = rows[0]
+        if (row === undefined) throw new Error(`task '${taskId}' not found`)
+        await requireTaskMember(db, actor, row)
+      },
+      resolveRuntime: (input) => resolveInternalAgentRuntime(runtimes, input),
+    }
+    return runFn === undefined ? base : { ...base, runFn }
   }
 
   test('member gate: owner/collaborator/non-member admin pass, outsider 403', async () => {
@@ -366,7 +388,7 @@ describe('triggerChangeNarrative', () => {
       return okRun(GOOD_OUTPUT)
     }
     await triggerChangeNarrative(
-      { db, runFn, runtimeName: 'narr-claude', defaultRuntime: null },
+      { ...deps(db, runFn), runtimeName: 'narr-claude', defaultRuntime: null },
       w.task,
       w.owner,
     )

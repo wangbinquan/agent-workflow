@@ -35,6 +35,7 @@
 //     SQLite engine concurrency bugs (those are the engine's problem).
 
 import { describe, expect, test } from 'bun:test'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import fc from 'fast-check'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -270,7 +271,7 @@ describe('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', () => {
 
         const alerts: Array<{ row: LifecycleAlertRow; transition: 'new' | 'promoted' }> = []
         const result = await runLifecycleInvariants({
-          db,
+          operations: taskRecoveryOperations(db),
           scope: { taskId },
           onAlert: (row, transition) => alerts.push({ row, transition }),
         })
@@ -329,7 +330,7 @@ describe('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', () => {
 
     const alerts: Array<{ row: LifecycleAlertRow; transition: 'new' | 'promoted' }> = []
     const result = await runLifecycleInvariants({
-      db,
+      operations: taskRecoveryOperations(db),
       scope: { taskId },
       onAlert: (row, transition) => alerts.push({ row, transition }),
     })

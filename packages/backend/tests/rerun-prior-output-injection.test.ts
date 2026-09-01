@@ -26,6 +26,7 @@ import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
 } from '../src/modules/task-execution/composition/nodeMechanics'
+import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
 import {
   ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE,
   ASKBACK_PRIOR_OUTPUT_DIRECTIVE_BLOCK_TITLE,
@@ -35,6 +36,8 @@ import {
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const seedUlid = monotonicFactory()
+
+const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
 
 async function seedTask(db: DbClient): Promise<string> {
   const taskId = `task_${seedUlid()}`
@@ -109,7 +112,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     await seedOutput(db, prior, 'design', '# draft v1')
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -131,7 +134,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     await seedOutput(db, prior, 'design', '# rejected draft')
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -145,7 +148,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
   test('no prior run → undefined', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -163,7 +166,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     const currentId = seedUlid()
 
     // Current run is at iteration 1 → the iteration-0 output must NOT leak in.
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 1,
@@ -182,7 +185,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     await seedOutput(db, sameShard, 'design', '# shardA output')
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -202,7 +205,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     const failedNoOutput = await seedRun(db, taskId, 'agent', { status: 'failed' })
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -228,7 +231,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     await seedOutput(db, priorAgg, 'summary', '# prior aggregated output')
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'aggnode',
       iteration: 0,
@@ -257,7 +260,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     const currentId = seedUlid()
 
     // Looking up shardKey 'fileA' must return the fileA child, NOT fileB.
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'inner',
       iteration: 0,
@@ -276,7 +279,7 @@ describe('RFC-119 — freshestPriorRunWithOutput', () => {
     await seedOutput(db, newer, 'design', '# v2')
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -296,7 +299,11 @@ describe('RFC-119 — composePriorOutputBlock', () => {
     await seedOutput(db, run, 'design', '# big doc')
     await seedOutput(db, run, 'blank', '   ')
 
-    const block = await composePriorOutputBlock(db, run, ['design', 'summary', 'blank'])
+    const block = await composePriorOutputBlock(nodePersistence(db), run, [
+      'design',
+      'summary',
+      'blank',
+    ])
     const designIdx = block.indexOf('### design')
     const summaryIdx = block.indexOf('### summary')
     expect(designIdx).toBeGreaterThan(-1)
@@ -310,7 +317,7 @@ describe('RFC-119 — composePriorOutputBlock', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
     const run = await seedRun(db, taskId, 'agent', { status: 'done' })
-    expect(await composePriorOutputBlock(db, run, ['design'])).toBe('')
+    expect(await composePriorOutputBlock(nodePersistence(db), run, ['design'])).toBe('')
   })
 
   test('D10 onlyPorts restricts to the given ports (review-iterate target)', async () => {
@@ -321,7 +328,7 @@ describe('RFC-119 — composePriorOutputBlock', () => {
     await seedOutput(db, run, 'plan', '# plan body')
 
     const onlyDesign = await composePriorOutputBlock(
-      db,
+      nodePersistence(db),
       run,
       ['design', 'plan'],
       new Set(['design']),
@@ -339,7 +346,7 @@ describe('RFC-119 — composePriorOutputBlock', () => {
     // markdown_file port: node_run_outputs.content is the path, not the body.
     await seedOutput(db, run, 'auditdoc', 'docs/audit.md', 'markdown_file')
 
-    const block = await composePriorOutputBlock(db, run, ['auditdoc'])
+    const block = await composePriorOutputBlock(nodePersistence(db), run, ['auditdoc'])
     expect(block).toContain('### auditdoc')
     expect(block).toContain('docs/audit.md')
   })
@@ -356,7 +363,7 @@ describe('RFC-119 — end-to-end: canceled prior outputs render into the prompt'
     await seedOutput(db, prior, 'design', '# the prior draft body')
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -365,7 +372,7 @@ describe('RFC-119 — end-to-end: canceled prior outputs render into the prompt'
     })
     expect(found?.id).toBe(prior)
 
-    const block = await composePriorOutputBlock(db, found!.id, ['design'])
+    const block = await composePriorOutputBlock(nodePersistence(db), found!.id, ['design'])
     const prompt = renderUserPrompt({
       promptTemplate: 'Body.',
       inputs: {},
@@ -390,7 +397,7 @@ describe('RFC-119 — end-to-end: canceled prior outputs render into the prompt'
     await seedOutput(db, prior, 'docpath', 'docs/snake-game-design.md')
     const currentId = seedUlid()
 
-    const found = await freshestPriorRunWithOutput(db, {
+    const found = await freshestPriorRunWithOutput(nodePersistence(db), {
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -399,7 +406,7 @@ describe('RFC-119 — end-to-end: canceled prior outputs render into the prompt'
     })
     expect(found?.id).toBe(prior)
 
-    const block = await composePriorOutputBlock(db, found!.id, ['docpath'])
+    const block = await composePriorOutputBlock(nodePersistence(db), found!.id, ['docpath'])
     const prompt = renderUserPrompt({
       promptTemplate: 'Body.',
       inputs: {},

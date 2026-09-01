@@ -11,9 +11,17 @@ import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
-import { getTaskStructuralDiff } from '../src/services/structuralDiff/service'
+import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
+import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const getTaskStructuralDiff = (
+  db: DbClient,
+  ...args: Parameters<typeof getTaskStructuralDiffWithPort> extends [unknown, ...infer Rest]
+    ? Rest
+    : never
+) => getTaskStructuralDiffWithPort(createSqliteCodeWorkspaceRead(db), ...args)
 
 const dirs: string[] = []
 afterAll(() => {

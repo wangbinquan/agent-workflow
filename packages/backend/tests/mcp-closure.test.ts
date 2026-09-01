@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
-import { createMcp } from '../src/services/mcp'
+import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -74,56 +74,56 @@ describe('loadMcpsByIds', () => {
   })
 
   test('empty input does not hit DB', async () => {
-    expect(await loadMcpsByIds(db, [])).toEqual([])
+    expect(await loadMcpsByIds(composeMcpClosureQueryForTest(db), [])).toEqual([])
   })
 
   test('returns rows for known ids; silently skips unknown', async () => {
-    const present = await createMcp(db, {
+    const present = await createMcpFixture(db, {
       name: 'present',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const out = await loadMcpsByIds(db, [present.id, 'missing-id'])
+    const out = await loadMcpsByIds(composeMcpClosureQueryForTest(db), [present.id, 'missing-id'])
     expect(out.map((m) => m.name)).toEqual(['present'])
   })
 
   test('preserves caller-supplied id order', async () => {
-    const a = await createMcp(db, {
+    const a = await createMcpFixture(db, {
       name: 'a',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const b = await createMcp(db, {
+    const b = await createMcpFixture(db, {
       name: 'b',
       description: '',
       type: 'remote',
       config: { url: 'https://b.io' },
       enabled: true,
     })
-    const c = await createMcp(db, {
+    const c = await createMcpFixture(db, {
       name: 'c',
       description: '',
       type: 'local',
       config: { command: ['y'] },
       enabled: true,
     })
-    const out = await loadMcpsByIds(db, [c.id, a.id, b.id])
+    const out = await loadMcpsByIds(composeMcpClosureQueryForTest(db), [c.id, a.id, b.id])
     expect(out.map((m) => m.name)).toEqual(['c', 'a', 'b'])
   })
 
   test('returned shape is the validated public Mcp type (config parsed)', async () => {
-    const created = await createMcp(db, {
+    const created = await createMcpFixture(db, {
       name: 'm',
       description: '',
       type: 'local',
       config: { command: ['x', '-v'], env: { K: '1' }, timeoutMs: 4000 },
       enabled: true,
     })
-    const [m] = await loadMcpsByIds(db, [created.id])
+    const [m] = await loadMcpsByIds(composeMcpClosureQueryForTest(db), [created.id])
     if (m?.type !== 'local') throw new Error('expected local')
     expect(m.config.command).toEqual(['x', '-v'])
     expect(m.config.env).toEqual({ K: '1' })

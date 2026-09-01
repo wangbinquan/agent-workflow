@@ -22,7 +22,7 @@ import {
   gcOrphanLocks,
   getActiveOp,
   listActiveOps,
-} from '../src/services/skillOperations'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { ConflictError, ValidationError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

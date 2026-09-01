@@ -15,6 +15,7 @@ import { runGit } from '../src/util/git'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -385,7 +386,10 @@ describe('runTask: linear DAG (M1)', () => {
 
     // End-to-end T3 invariant guard: a done task with this workflow must
     // produce zero T3 findings. Locks in the fix at the integration level.
-    const inv = await runLifecycleInvariants({ db: h.db, scope: { taskId } })
+    const inv = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId },
+    })
     expect(inv.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
   })
 

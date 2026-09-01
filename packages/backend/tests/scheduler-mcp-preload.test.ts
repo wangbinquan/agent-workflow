@@ -6,10 +6,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import { createMcp } from '../src/services/mcp'
-import { resolveInjection } from '../src/services/execution/resolveInjection'
+import {
+  createSqliteLegacyAgentDependencyLookup,
+  resolveInjection,
+} from '../src/services/execution/resolveInjection'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -41,30 +44,34 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     db = createInMemoryDb(MIGRATIONS)
     mcpIdByName = new Map()
     // Seed a small fleet of MCPs so agents can reference their canonical ids.
-    for (const mcp of [
-      await createMcp(db, {
+    for (const [index, mcp] of [
+      {
         name: 'm-root',
         description: '',
-        type: 'local',
+        type: 'local' as const,
         config: { command: ['x'] },
         enabled: true,
-      }),
-      await createMcp(db, {
+      },
+      {
         name: 'm-leaf',
         description: '',
-        type: 'remote',
+        type: 'remote' as const,
         config: { url: 'https://leaf.io/mcp' },
         enabled: true,
-      }),
-      await createMcp(db, {
+      },
+      {
         name: 'm-extra',
         description: '',
-        type: 'local',
+        type: 'local' as const,
         config: { command: ['y'] },
         enabled: true,
-      }),
-    ]) {
-      mcpIdByName.set(mcp.name, mcp.id)
+      },
+    ].entries()) {
+      const id = `mcp-${index + 1}`
+      db.insert(mcps)
+        .values({ ...mcp, id, config: JSON.stringify(mcp.config) })
+        .run()
+      mcpIdByName.set(mcp.name, id)
     }
   })
 
@@ -74,6 +81,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps).toEqual([])
@@ -85,6 +93,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-root'])
@@ -105,6 +114,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-extra', 'm-root', 'm-leaf'])
@@ -120,6 +130,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, root, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     if (result.kind !== 'ok') throw new Error('expected ok')
     expect(result.spec.mcps.map((m) => m.name)).toEqual(['m-root'])
@@ -139,6 +150,7 @@ describe('prepareNodeRunInjection — RFC-028 mcp union', () => {
     const result = await resolveInjection(db, agent, {
       appHome: '/tmp/aw',
       log: createLogger('test'),
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
     })
     expect(result).toMatchObject({ kind: 'failed', message: 'mcp-not-found' })
   })

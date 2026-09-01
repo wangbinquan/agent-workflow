@@ -29,6 +29,10 @@ import {
 import { resolveRepoSourceSingle } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  type RepositoryWorkspaceStore,
+} from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -92,12 +96,14 @@ beforeAll(async () => {
 
 describe('gitRepoCache (RFC-024 T3)', () => {
   let db: DbClient
+  let store: RepositoryWorkspaceStore
   let appHome: string
   let remoteDir: string
   let remoteUrl: string
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    store = composeSqliteRepositoryWorkspaceStore(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-grc-home-'))
     const r = await buildFixtureRemote()
     remoteDir = r.dir
@@ -118,7 +124,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('cold clone creates cache row, dir, and detects default branch', async () => {
-    const r = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const r = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     expect(r.cold).toBe(true)
     expect(r.cached.defaultBranch).toBe('main')
     expect(existsSync(r.cached.localPath)).toBe(true)
@@ -131,8 +137,8 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('second call hits cache without re-cloning', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
-    const b = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const b = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     expect(a.cold).toBe(true)
     expect(b.cold).toBe(false)
     expect(a.cached.id).toBe(b.cached.id)
@@ -140,12 +146,12 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('fetchOnReuse=true runs git fetch and bumps lastFetchedAt', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     const aTs = a.cached.lastFetchedAt
     // Force time forward so the second fetch's timestamp is strictly greater.
     let t = Date.parse(aTs)
     const b = await resolveCachedRepo(
-      { db, appHome, fetchOnReuse: true, now: () => (t += 1000) },
+      { store, appHome, fetchOnReuse: true, now: () => (t += 1000) },
       { url: remoteUrl },
     )
     expect(b.cold).toBe(false)
@@ -155,8 +161,8 @@ describe('gitRepoCache (RFC-024 T3)', () => {
 
   test('concurrent same-URL cold launches result in a single cache row', async () => {
     const [a, b] = await Promise.all([
-      resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl }),
-      resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl }),
+      resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl }),
+      resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl }),
     ])
     // Exactly one of the two callers experienced the cold path; the other
     // observed a warm cache after the first finished.
@@ -168,7 +174,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   test('invalid URL throws repo-url-invalid', async () => {
     let err: unknown
     try {
-      await resolveCachedRepo({ db, appHome }, { url: '/not/a/url' })
+      await resolveCachedRepo({ store, appHome }, { url: '/not/a/url' })
     } catch (e) {
       err = e
     }
@@ -180,7 +186,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
     let err: unknown
     try {
       await resolveCachedRepo(
-        { db, appHome },
+        { store, appHome },
         { url: 'file:///tmp/aw-grc-definitely-not-a-repo-xyz.git' },
       )
     } catch (e) {
@@ -192,9 +198,9 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('cache row pointing at missing dir self-heals on next resolve', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     rmSync(a.cached.localPath, { recursive: true, force: true })
-    const b = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const b = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     expect(b.cold).toBe(true)
     expect(existsSync(b.cached.localPath)).toBe(true)
     expect(db.select().from(cachedRepos).all().length).toBe(1)
@@ -205,11 +211,14 @@ describe('gitRepoCache (RFC-024 T3)', () => {
     // URL (which we won't actually use, but it exercises redaction).
     const r2 = await buildFixtureRemote()
     try {
-      await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+      await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
       // Force timestamps apart.
       let t = Date.now() + 10_000
-      await resolveCachedRepo({ db, appHome, fetchOnReuse: false, now: () => t++ }, { url: r2.url })
-      const items = await listCachedRepos(db)
+      await resolveCachedRepo(
+        { store, appHome, fetchOnReuse: false, now: () => t++ },
+        { url: r2.url },
+      )
+      const items = await listCachedRepos(store)
       expect(items.length).toBe(2)
       expect(Date.parse(items[0]!.lastFetchedAt)).toBeGreaterThanOrEqual(
         Date.parse(items[1]!.lastFetchedAt),
@@ -222,20 +231,20 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('refreshCachedRepo runs fetch and updates timestamp', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     let t = Date.parse(a.cached.lastFetchedAt) + 5_000
-    const r = await refreshCachedRepo({ db, appHome, now: () => t++ }, a.cached.id)
+    const r = await refreshCachedRepo({ store, appHome, now: () => t++ }, a.cached.id)
     expect(r.fetchOk).toBe(true)
     expect(Date.parse(r.item.lastFetchedAt)).toBeGreaterThan(Date.parse(a.cached.lastFetchedAt))
   })
 
   test('failed manual refresh is an error and preserves the last successful fetch time', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     rmSync(remoteDir, { recursive: true, force: true })
     let err: unknown
     try {
       await refreshCachedRepo(
-        { db, appHome, now: () => Date.parse(a.cached.lastFetchedAt) + 60_000 },
+        { store, appHome, now: () => Date.parse(a.cached.lastFetchedAt) + 60_000 },
         a.cached.id,
       )
     } catch (error) {
@@ -247,7 +256,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('URL task launch refuses a warm cache when fetch failed instead of running stale code', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     const unreachableUrl = 'https://127.0.0.1:1/unreachable.git'
     const parsed = parseGitUrl(unreachableUrl)
     expect(parsed).not.toBeNull()
@@ -286,11 +295,11 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('refreshCachedRepo on missing dir throws repo-cache-corrupt', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     rmSync(a.cached.localPath, { recursive: true, force: true })
     let err: unknown
     try {
-      await refreshCachedRepo({ db, appHome }, a.cached.id)
+      await refreshCachedRepo({ store, appHome }, a.cached.id)
     } catch (e) {
       err = e
     }
@@ -299,9 +308,9 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   })
 
   test('deleteCachedRepo removes dir + row when no references', async () => {
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: remoteUrl })
+    const a = await resolveCachedRepo({ store, appHome, fetchOnReuse: false }, { url: remoteUrl })
     expect(existsSync(a.cached.localPath)).toBe(true)
-    const r = await deleteCachedRepo({ db, appHome }, a.cached.id)
+    const r = await deleteCachedRepo({ store, appHome }, a.cached.id)
     expect(r.deletedLocalPath).toBe(a.cached.localPath)
     expect(existsSync(a.cached.localPath)).toBe(false)
     expect(db.select().from(cachedRepos).all().length).toBe(0)
@@ -339,6 +348,7 @@ async function advanceFixtureRemote(bareUrl: string): Promise<string> {
 
 describe('gitRepoCache RFC-068 fast-forward', () => {
   let db: DbClient
+  let store: RepositoryWorkspaceStore
   let appHome: string
   let remoteDir: string
   let remoteUrl: string
@@ -346,6 +356,7 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
+    store = composeSqliteRepositoryWorkspaceStore(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-grc-068-home-'))
     const r = await buildFixtureRemote()
     remoteDir = r.dir
@@ -371,7 +382,10 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     // branch that only exists as origin/<branch> in the fresh clone made the
     // first launch's `rev-parse <branch>` fail. Cold now runs the same FF
     // loop as warm (syncBranchToRemote CREATES the missing local ref).
-    const r = await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
+    const r = await resolveCachedRepo(
+      { store, appHome, syncBranches: ['main'] },
+      { url: remoteUrl },
+    )
     expect(r.cold).toBe(true)
     expect(r.ffOutcomes.length).toBe(1)
     expect(r.ffOutcomes[0]!.warning).toBe(null)
@@ -381,7 +395,7 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
 
   test('BC-02 warm reuse + origin advanced → FF moves local branch and surfaces toSha', async () => {
     const first = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['main'] },
+      { store, appHome, syncBranches: ['main'] },
       { url: remoteUrl },
     )
     // Pre-advance: local main equals origin/main at clone time.
@@ -390,7 +404,7 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     expect(newSha).not.toBe(beforeLocal)
 
     const second = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['main'] },
+      { store, appHome, syncBranches: ['main'] },
       { url: remoteUrl },
     )
     expect(second.cold).toBe(false)
@@ -409,31 +423,37 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
   })
 
   test('BC-02b same warm reuse but origin unchanged → ffOutcome.advanced=false', async () => {
-    await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
-    const r = await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteUrl })
+    await resolveCachedRepo({ store, appHome, syncBranches: ['main'] }, { url: remoteUrl })
+    const r = await resolveCachedRepo(
+      { store, appHome, syncBranches: ['main'] },
+      { url: remoteUrl },
+    )
     expect(r.ffOutcomes.length).toBe(1)
     expect(r.ffOutcomes[0]!.advanced).toBe(false)
     expect(r.ffOutcomes[0]!.warning).toBeNull()
   })
 
   test('BC-04 tag base ref is skipped (no FF attempt)', async () => {
-    const first = await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
+    const first = await resolveCachedRepo({ store, appHome }, { url: remoteUrl })
     await runGit(first.cached.localPath, ['tag', 'v1.0', 'main'])
-    const r = await resolveCachedRepo({ db, appHome, syncBranches: ['v1.0'] }, { url: remoteUrl })
+    const r = await resolveCachedRepo(
+      { store, appHome, syncBranches: ['v1.0'] },
+      { url: remoteUrl },
+    )
     expect(r.ffOutcomes).toEqual([])
   })
 
   test('BC-05 sha base ref is skipped (no FF attempt)', async () => {
-    const first = await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
+    const first = await resolveCachedRepo({ store, appHome }, { url: remoteUrl })
     const sha = (await runGit(first.cached.localPath, ['rev-parse', 'main'])).stdout.trim()
-    const r = await resolveCachedRepo({ db, appHome, syncBranches: [sha] }, { url: remoteUrl })
+    const r = await resolveCachedRepo({ store, appHome, syncBranches: [sha] }, { url: remoteUrl })
     expect(r.ffOutcomes).toEqual([])
   })
 
   test('BC-03 origin/<branch> base ref is skipped (already remote-tracking)', async () => {
-    await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
+    await resolveCachedRepo({ store, appHome }, { url: remoteUrl })
     const r = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['origin/main'] },
+      { store, appHome, syncBranches: ['origin/main'] },
       { url: remoteUrl },
     )
     expect(r.ffOutcomes).toEqual([])
@@ -445,11 +465,11 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     // path-mode fidelity contract ("read the source's live state") — the
     // source dir being gone must fail the launch. Non-file schemes keep the
     // warning-and-stale behavior (network blips are expected there).
-    await resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteFileUrl })
+    await resolveCachedRepo({ store, appHome, syncBranches: ['main'] }, { url: remoteFileUrl })
     // Nuke the bare remote so subsequent fetch fails.
     rmSync(remoteDir, { recursive: true, force: true })
     await expect(
-      resolveCachedRepo({ db, appHome, syncBranches: ['main'] }, { url: remoteFileUrl }),
+      resolveCachedRepo({ store, appHome, syncBranches: ['main'] }, { url: remoteFileUrl }),
     ).rejects.toThrow(/missing or unreadable/)
   })
 
@@ -457,14 +477,14 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     // Pre-RFC-165 this was warning=origin-ref-missing and the launch kept the
     // stale local branch. A file:// source's deleted branch must fail loudly.
     const first = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['main'] },
+      { store, appHome, syncBranches: ['main'] },
       { url: remoteFileUrl },
     )
     // Create a local-only branch (no origin/feature in the remote).
     await runGit(first.cached.localPath, ['branch', 'feature/local-only', 'main'])
     await expect(
       resolveCachedRepo(
-        { db, appHome, syncBranches: ['feature/local-only'] },
+        { store, appHome, syncBranches: ['feature/local-only'] },
         { url: remoteFileUrl },
       ),
     ).rejects.toThrow(/ref 'feature\/local-only' not found in/)
@@ -489,14 +509,14 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     }
     // First resolve clones the cache. classifyBaseRef on cold-clone won't see
     // the local branch yet — but warm path will. Run twice.
-    await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
+    await resolveCachedRepo({ store, appHome }, { url: remoteUrl })
     // Manually create the local branch in the cache so classifyBaseRef sees
     // it as 'branch' (otherwise it'd be 'unknown' and the FF still runs but
     // wouldn't actually advance an existing ref). We mimic what a real user
     // path would do: select 'feature/foo' (matches remote-tracking) → ref
     // dropdown picks the launcher-canonical name. Either way, FF works.
     const before = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['feature/foo'] },
+      { store, appHome, syncBranches: ['feature/foo'] },
       { url: remoteUrl },
     )
     expect(before.ffOutcomes.length).toBe(1)
@@ -505,24 +525,24 @@ describe('gitRepoCache RFC-068 fast-forward', () => {
     // Re-resolve: local feature/foo now exists, FF is now a happy no-op
     // (advanced=false) since origin didn't move further.
     const second = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['feature/foo'] },
+      { store, appHome, syncBranches: ['feature/foo'] },
       { url: remoteUrl },
     )
     expect(second.ffOutcomes[0]!.warning).toBeNull()
   })
 
   test('BC-09 deduplicates same branch listed twice in syncBranches', async () => {
-    await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
+    await resolveCachedRepo({ store, appHome }, { url: remoteUrl })
     const r = await resolveCachedRepo(
-      { db, appHome, syncBranches: ['main', 'main'] },
+      { store, appHome, syncBranches: ['main', 'main'] },
       { url: remoteUrl },
     )
     expect(r.ffOutcomes.length).toBe(1)
   })
 
   test('BC-11 syncBranches undefined → empty ffOutcomes (RFC-024 callers unaffected)', async () => {
-    await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
-    const r = await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
+    await resolveCachedRepo({ store, appHome }, { url: remoteUrl })
+    const r = await resolveCachedRepo({ store, appHome }, { url: remoteUrl })
     expect(r.ffOutcomes).toEqual([])
   })
 })

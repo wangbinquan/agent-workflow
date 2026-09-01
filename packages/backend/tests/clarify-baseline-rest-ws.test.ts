@@ -10,6 +10,7 @@
 // new optional field is fine; renaming `clarifyNodeRunId` would break
 // frontend code).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
@@ -453,6 +454,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
     await autoDispatchClarifyRoundWithDecision({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
       directive: 'continue',
@@ -506,6 +508,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
     await autoDispatchClarifyRoundWithDecision({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAnswer()],
       directive: 'stop',
@@ -543,6 +546,7 @@ describe('RFC-058 baseline T6 — WS event payload shape', () => {
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
     await autoDispatchClarifyRoundWithDecision({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [makeAnswer()],
       directive: 'continue',

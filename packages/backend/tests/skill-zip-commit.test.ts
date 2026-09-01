@@ -19,10 +19,13 @@ import {
   commitSkillZipBuffer,
   parseSkillZipBuffer,
   type SkillZipFsOptions,
-} from '../src/services/skill-zip'
-import { getSkillById, createManagedSkill } from '../src/services/skill'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
+import {
+  getSkillById,
+  createManagedSkill,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { commitSkillVersion } from '../src/services/skillVersion'
+import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { SkillZipDecision, SkillZipDecisionMap } from '@agent-workflow/shared'
 

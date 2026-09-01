@@ -9,8 +9,17 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { collectPluginIdsFromClosure, loadPluginsByIds } from '../src/services/pluginClosure'
-import { createPlugin } from '../src/services/plugin'
+import { createSqlitePluginRepository } from '../src/modules/resource-catalog/infrastructure/sqlitePluginRepository'
+import {
+  collectPluginIdsFromClosure,
+  loadPluginsByIds,
+  type PluginClosureQuery,
+} from '../src/services/pluginClosure'
+import {
+  composePluginServiceBindingForTest,
+  createPlugin,
+  type PluginServiceBinding,
+} from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -68,11 +77,21 @@ describe('collectPluginIdsFromClosure', () => {
 
 describe('loadPluginsByIds', () => {
   let db: DbClient
+  let binding: PluginServiceBinding
+  let query: PluginClosureQuery
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
     pluginsDir = await mkdtemp(join(tmpdir(), 'rfc031-cls-'))
     resetNpmProbeCacheForTests()
     process.env.FAKE_NPM_MODE = 'success'
+    binding = composePluginServiceBindingForTest(db, { pluginsDir, npmBin: FAKE_NPM })
+    const repository = createSqlitePluginRepository(db).repository
+    query = Object.freeze({
+      async loadByIds(ids: readonly string[]) {
+        const rows = await Promise.all(ids.map((id: string) => repository.get(id)))
+        return rows.filter((row): row is NonNullable<typeof row> => row !== null)
+      },
+    })
   })
   afterEach(async () => {
     await rm(pluginsDir, { recursive: true, force: true }).catch(() => undefined)
@@ -80,21 +99,21 @@ describe('loadPluginsByIds', () => {
   })
 
   test('empty input → [] without hitting DB', async () => {
-    expect(await loadPluginsByIds(db, [])).toEqual([])
+    expect(await loadPluginsByIds(query, [])).toEqual([])
   })
 
   test('hydrates matching ids, preserves caller order', async () => {
-    const p1 = await createPlugin(db, { name: 'p1', spec: 's@1' }, { pluginsDir, npmBin: FAKE_NPM })
-    const p2 = await createPlugin(db, { name: 'p2', spec: 's@2' }, { pluginsDir, npmBin: FAKE_NPM })
-    const p3 = await createPlugin(db, { name: 'p3', spec: 's@3' }, { pluginsDir, npmBin: FAKE_NPM })
+    const p1 = await createPlugin(binding, { name: 'p1', spec: 's@1' })
+    const p2 = await createPlugin(binding, { name: 'p2', spec: 's@2' })
+    const p3 = await createPlugin(binding, { name: 'p3', spec: 's@3' })
 
-    const r = await loadPluginsByIds(db, [p2.id, p3.id, p1.id])
+    const r = await loadPluginsByIds(query, [p2.id, p3.id, p1.id])
     expect(r.map((p) => p.name)).toEqual(['p2', 'p3', 'p1'])
   })
 
   test('unknown ids silently skipped (no throw)', async () => {
-    const p1 = await createPlugin(db, { name: 'p1', spec: 's@1' }, { pluginsDir, npmBin: FAKE_NPM })
-    const r = await loadPluginsByIds(db, [p1.id, 'no-such', 'gone'])
+    const p1 = await createPlugin(binding, { name: 'p1', spec: 's@1' })
+    const r = await loadPluginsByIds(query, [p1.id, 'no-such', 'gone'])
     expect(r.map((p) => p.name)).toEqual(['p1'])
   })
 })

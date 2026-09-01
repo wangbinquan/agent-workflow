@@ -20,6 +20,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -113,7 +114,10 @@ describe('RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not a
     h = await buildHarness()
     const run = await insertClarifyRun(h.db, h.taskId, 'done')
     await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
   })
 
@@ -121,7 +125,10 @@ describe('RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not a
     h = await buildHarness()
     const run = await insertClarifyRun(h.db, h.taskId, 'running')
     await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
   })
 
@@ -132,7 +139,10 @@ describe('RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not a
       clarifyNodeRunId: run,
       status: 'awaiting_human',
     })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     // C1 only fires on closed sessions; an open one is fine.
     expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
   })
@@ -144,7 +154,10 @@ describe('RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not a
       clarifyNodeRunId: run,
       status: 'answered',
     })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     const c1 = result.openAlerts.filter((a) => a.rule === 'C1')
     expect(c1).toHaveLength(1)
     expect(c1[0]!.detail).toMatchObject({
@@ -162,7 +175,10 @@ describe('RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not a
       clarifyNodeRunId: run,
       status: 'canceled',
     })
-    const result = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(1)
   })
 
@@ -170,13 +186,19 @@ describe('RFC-053 PR-D — C1 (closed clarify_session ⟹ clarify node_run not a
     h = await buildHarness()
     const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
     await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
-    const r1 = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const r1 = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(r1.newAlerts).toBe(1)
     await h.db
       .update(nodeRuns)
       .set({ status: 'done', finishedAt: Date.now() })
       .where(eq(nodeRuns.id, run))
-    const r2 = await runLifecycleInvariants({ db: h.db, scope: { taskId: h.taskId } })
+    const r2 = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId: h.taskId },
+    })
     expect(r2.resolvedAlerts).toBe(1)
     expect(r2.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
   })

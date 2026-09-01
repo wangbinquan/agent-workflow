@@ -15,6 +15,7 @@ import { runGit } from '../src/util/git'
 import { runCommitPush, type CommitPushParams } from '../src/services/commitPushRunner'
 import type { CommitPushMeta } from '@agent-workflow/shared'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
+import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -125,7 +126,10 @@ describe('runCommitPush', () => {
   test('happy path: stage + commit + push, remote advanced, node done', async () => {
     f = await build()
     writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
-    const { nodeRunId, meta } = await runCommitPush(baseParams(f), { db: f.db })
+    const { nodeRunId, meta } = await runCommitPush(
+      baseParams(f),
+      composeSqliteCommitPushDeps(f.db),
+    )
     expect(meta.pushOutcome).toBe('pushed')
     expect(meta.messageSource).toBe('llm')
     expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
@@ -145,9 +149,10 @@ describe('runCommitPush', () => {
     // asserting the author string proves the fallback took effect here.
     f = await build()
     writeFileSync(join(f.repo, 'b.txt'), 'x\n')
-    const { meta } = await runCommitPush(baseParams(f, { gitUserName: null, gitUserEmail: null }), {
-      db: f.db,
-    })
+    const { meta } = await runCommitPush(
+      baseParams(f, { gitUserName: null, gitUserEmail: null }),
+      composeSqliteCommitPushDeps(f.db),
+    )
     expect(meta.pushOutcome).toBe('pushed')
     const author = await runGit(f.repo, ['log', '-1', '--format=%an <%ae>'])
     expect(author.stdout.trim()).toBe('agent-workflow <agent-workflow@localhost>')
@@ -169,7 +174,7 @@ describe('runCommitPush', () => {
     try {
       const { meta } = await runCommitPush(
         baseParams(f, { gitUserName: null, gitUserEmail: null }),
-        { db: f.db },
+        composeSqliteCommitPushDeps(f.db),
       )
       expect(meta.pushOutcome).toBe('pushed')
       const author = await runGit(f.repo, ['log', '-1', '--format=%an <%ae> %cn <%ce>'])
@@ -191,7 +196,7 @@ describe('runCommitPush', () => {
 
   test('no changes → skipped-empty, no commit', async () => {
     f = await build()
-    const { meta } = await runCommitPush(baseParams(f), { db: f.db })
+    const { meta } = await runCommitPush(baseParams(f), composeSqliteCommitPushDeps(f.db))
     expect(meta.pushOutcome).toBe('skipped-empty')
     expect(meta.commitSha).toBeNull()
     expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(false)
@@ -201,9 +206,10 @@ describe('runCommitPush', () => {
     f = await build()
     writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
     writeFileSync(join(f.repo, 'b.txt'), 'publish me\n')
-    const { meta } = await runCommitPush(baseParams(f, { excludePatterns: ['/a.txt'] }), {
-      db: f.db,
-    })
+    const { meta } = await runCommitPush(
+      baseParams(f, { excludePatterns: ['/a.txt'] }),
+      composeSqliteCommitPushDeps(f.db),
+    )
 
     expect(meta.pushOutcome).toBe('pushed')
     expect(meta.exclusions).toMatchObject({ count: 1, paths: ['a.txt'], historyBlocked: false })
@@ -218,9 +224,10 @@ describe('runCommitPush', () => {
     f = await build()
     writeFileSync(join(f.repo, 'a.txt'), 'must stay local\n')
     const before = (await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim()
-    const { meta } = await runCommitPush(baseParams(f, { excludePatterns: ['/a.txt'] }), {
-      db: f.db,
-    })
+    const { meta } = await runCommitPush(
+      baseParams(f, { excludePatterns: ['/a.txt'] }),
+      composeSqliteCommitPushDeps(f.db),
+    )
 
     expect(meta.pushOutcome).toBe('skipped-excluded')
     expect(meta.exclusions?.paths).toEqual(['a.txt'])
@@ -237,7 +244,7 @@ describe('runCommitPush', () => {
 
     const { nodeRunId, meta } = await runCommitPush(
       baseParams(f, { excludePatterns: ['*.trace'] }),
-      { db: f.db },
+      composeSqliteCommitPushDeps(f.db),
     )
     expect(meta.pushOutcome).toBe('commit-local-excluded-history')
     expect(meta.exclusions).toMatchObject({ paths: ['leak.trace'], historyBlocked: true })
@@ -252,10 +259,10 @@ describe('runCommitPush', () => {
       args[0] === 'add'
         ? { stdout: '', stderr: 'fatal: index is locked', exitCode: 128 }
         : runGit(cwd, args, opts)) as typeof runGit
-    const { nodeRunId, meta } = await runCommitPush(baseParams(f), {
-      db: f.db,
-      runGit: fakeRunGit,
-    })
+    const { nodeRunId, meta } = await runCommitPush(
+      baseParams(f),
+      composeSqliteCommitPushDeps(f.db, { runGit: fakeRunGit }),
+    )
     expect(meta.pushOutcome).toBe('commit-local-failed')
     expect(meta.pushError).toContain('index is locked')
     expect((await readMeta(f, nodeRunId)).status).toBe('failed')
@@ -267,7 +274,7 @@ describe('runCommitPush', () => {
     writeFileSync(join(f.repo, 'b.txt'), 'x\n')
     const { meta } = await runCommitPush(
       baseParams(f, { generateMessage: async () => ({ message: null }) }),
-      { db: f.db },
+      composeSqliteCommitPushDeps(f.db),
     )
     expect(meta.pushOutcome).toBe('pushed')
     expect(meta.messageSource).toBe('fallback')
@@ -280,7 +287,7 @@ describe('runCommitPush', () => {
       baseParams(f, {
         generateMessage: async () => ({ message: null, processUnreaped: true }),
       }),
-      { db: f.db },
+      composeSqliteCommitPushDeps(f.db),
     )
     expect(meta.pushOutcome).toBe('commit-local-failed')
     expect(meta.pushError).toContain('could not be reaped')
@@ -297,7 +304,10 @@ describe('runCommitPush', () => {
         ? { stdout: '', stderr: 'fatal: Authentication failed for https://host/x.git', exitCode: 1 }
         : runGit(cwd, args)) as typeof runGit
 
-    const { nodeRunId, meta } = await runCommitPush(baseParams(f), { db: f.db, runGit: fakeRunGit })
+    const { nodeRunId, meta } = await runCommitPush(
+      baseParams(f),
+      composeSqliteCommitPushDeps(f.db, { runGit: fakeRunGit }),
+    )
     expect(meta.pushOutcome).toBe('commit-local-auth')
     expect(meta.repairAttempts).toBe(0)
     expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
@@ -354,7 +364,7 @@ describe('runCommitPush', () => {
           throw new Error('authentication failures must not enter repair')
         },
       }),
-      { db: f.db, publicationTransport },
+      composeSqliteCommitPushDeps(f.db, { publicationTransport }),
     )
 
     expect(meta.pushOutcome).toBe('commit-local-auth')
@@ -377,7 +387,7 @@ describe('runCommitPush', () => {
         generateMessage: async () => ({ message: 'bad message' }),
         generateRepair: async () => ({ message: 'OK: corrected subject' }),
       }),
-      { db: f.db },
+      composeSqliteCommitPushDeps(f.db),
     )
     expect(meta.pushOutcome).toBe('pushed')
     expect(meta.messageSource).toBe('llm-repair')
@@ -398,7 +408,7 @@ describe('runCommitPush', () => {
         generateMessage: async () => ({ message: 'still bad' }),
         generateRepair: async () => ({ message: 'also bad' }),
       }),
-      { db: f.db },
+      composeSqliteCommitPushDeps(f.db),
     )
     expect(meta.pushOutcome).toBe('commit-local-failed')
     expect(meta.repairAttempts).toBe(2)
@@ -427,9 +437,10 @@ describe('runCommitPush', () => {
 
     // Local commit on the stale feature/x → first push is non-FF.
     writeFileSync(join(f.repo, 'local-side.txt'), 'from local\n')
-    const { meta } = await runCommitPush(baseParams(f, { excludePatterns: ['/remote-side.txt'] }), {
-      db: f.db,
-    })
+    const { meta } = await runCommitPush(
+      baseParams(f, { excludePatterns: ['/remote-side.txt'] }),
+      composeSqliteCommitPushDeps(f.db),
+    )
     expect(meta.pushOutcome).toBe('pushed')
     expect(meta.repairAttempts).toBe(1) // one non-FF merge cycle
     // Remote now has both files reachable from feature/x.
@@ -464,7 +475,7 @@ describe('runCommitPush', () => {
           return { message: 'feat: locked capture' }
         },
       }),
-      { db: f.db, runGit: observedRunGit },
+      composeSqliteCommitPushDeps(f.db, { runGit: observedRunGit }),
     )
     // Capture is locked, message generation is not, and local commit reacquires
     // the lock before touching Git's shared index/ref state.
@@ -487,7 +498,7 @@ describe('runCommitPush', () => {
           released = true
         },
       }),
-      { db: f.db },
+      composeSqliteCommitPushDeps(f.db),
     )
     // The finally around stage+diff must release even on the early skip return.
     expect(meta.pushOutcome).toBe('skipped-empty')

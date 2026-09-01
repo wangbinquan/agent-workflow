@@ -34,6 +34,7 @@ describe('RFC-057 — R2.demote-run-to-awaiting', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'R2.demote-run-to-awaiting',
@@ -108,6 +109,7 @@ describe('RFC-057 — R2.mark-task-failed', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'R2.mark-task-failed',

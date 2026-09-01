@@ -10,10 +10,13 @@ import {
   employeeDefinitions,
   employeeTypePackages,
 } from '../src/db/schema'
+import { assertSqliteWebhookTriggerSaveable } from '../src/modules/integration/infrastructure/sqliteWebhookTriggerValidation'
 import { createUser } from '../src/services/users'
-import { assertTriggerSaveable } from '../src/services/webhook/triggerValidation'
 import { ValidationError } from '../src/util/errors'
-import { integrationTriggerResourceAuthority } from './helpers/integrationTriggerResourceBinding'
+import {
+  integrationTriggerResourceAuthority,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -80,8 +83,8 @@ describe('Webhook Digital Employee trigger validation', () => {
     }
 
     await expect(
-      assertTriggerSaveable(
-        db,
+      assertSqliteWebhookTriggerSaveable(
+        scheduledTaskRuntime(db).operations,
         actor,
         integrationTriggerResourceAuthority(db, actor),
         candidate,
@@ -103,8 +106,8 @@ describe('Webhook Digital Employee trigger validation', () => {
 
     let thrown: unknown
     try {
-      await assertTriggerSaveable(
-        db,
+      await assertSqliteWebhookTriggerSaveable(
+        scheduledTaskRuntime(db).operations,
         actor,
         integrationTriggerResourceAuthority(db, actor),
         candidate,

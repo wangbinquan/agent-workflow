@@ -23,22 +23,26 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { skillOperationLocks, skills, skillVersions } from '../src/db/schema'
-import { createManagedSkill } from '../src/services/skill'
+import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { commitSkillVersion } from '../src/services/skillVersion'
+import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
   skillFilesAbs,
   skillRootAbs,
   skillVersionAbs,
   skillVersionRelPath,
-} from '../src/services/skillIdentityPaths'
-import { hashDir } from '../src/services/skillHash'
-import { opStagedDir } from '../src/services/skillFsPublish'
-import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
-import { recoverSkillOperations } from '../src/services/skillOpRecoveryDriver'
-import { SKILL_OP_RECOVERY_REGISTRY } from '../src/services/skillOpRegistry'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
+import { hashDir } from '../src/modules/resource-catalog/infrastructure/legacy/skillHash'
+import { opStagedDir } from '../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
+import {
+  advancePhase,
+  beginOperation,
+  getActiveOp,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
+import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
+import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { ConflictError } from '../src/util/errors'
-import { isSkillBootVerified } from '../src/services/skillBootVerify'
+import { isSkillBootVerified } from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

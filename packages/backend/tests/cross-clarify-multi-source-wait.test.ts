@@ -22,6 +22,7 @@
 // If any of these go red the multi-source aggregation contract drifted —
 // investigate before relaxing.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -251,6 +252,7 @@ describe('RFC-056 C3 — multi-source wait', () => {
     const { db, taskId, sec } = await buildHarness()
     const ret = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
       answers: [makeAns('q1')],
       actor,
@@ -275,12 +277,14 @@ describe('RFC-056 C3 — multi-source wait', () => {
     const { db, taskId, sec, ux } = await buildHarness()
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
       answers: [makeAns('q1')],
       actor,
     })
     const ret = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
       answers: [makeAns('q1')],
       actor,
@@ -301,12 +305,14 @@ describe('RFC-056 C3 — multi-source wait', () => {
     const { db, taskId, sec, ux } = await buildHarness()
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
       answers: [makeAns('q1')],
       actor,
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
       answers: [makeAns('q1')],
       actor,
@@ -323,18 +329,21 @@ describe('RFC-056 C3 — multi-source wait', () => {
     const { db, taskId, sec, ux, perf } = await buildHarness()
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
       answers: [makeAns('q1')],
       actor,
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
       answers: [makeAns('q1')],
       actor,
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: perf,
       answers: [makeAns('q1')],
       actor,
@@ -352,18 +361,21 @@ describe('RFC-056 C3 — multi-source wait', () => {
     const { db, taskId, sec, ux, perf } = await buildHarness()
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
       answers: [makeAns('q1')],
       actor,
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
       answers: [makeAns('q1')],
       actor,
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: perf,
       answers: [makeAns('q1')],
       actor,

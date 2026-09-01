@@ -35,6 +35,7 @@ describe('RFC-057 — T2.demote-task', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T2.demote-task',
@@ -113,6 +114,7 @@ describe('RFC-057 — T2.resurrect-clarify-run', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T2.resurrect-clarify-run',
@@ -264,6 +266,7 @@ describe('RFC-074 PR-C — T2.resurrect id-ordered generation selection', () => 
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T2', detail: { rule: 'T2' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T2.resurrect-clarify-run',

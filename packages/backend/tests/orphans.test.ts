@@ -13,6 +13,8 @@ import {
   claimNewRuntimeSession,
   repairRuntimeSessionLeasesAfterOrphanReap,
 } from '../src/services/runtimeSessionLease'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -77,13 +79,13 @@ describe('reapOrphanRuns', () => {
   afterEach(() => h.cleanup())
 
   test('no-op when no running rows exist', async () => {
-    const r = await reapOrphanRuns(h.db)
+    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
     expect(r).toEqual({ tasks: 0, runs: 0 })
   })
 
   test('flips running tasks + node_runs to interrupted with daemon-restart message', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    const r = await reapOrphanRuns(h.db)
+    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
     expect(r).toEqual({ tasks: 1, runs: 1 })
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(t?.status).toBe('interrupted')
@@ -95,7 +97,7 @@ describe('reapOrphanRuns', () => {
   test('a child which survives SIGKILL aborts the barrier and leaves its run live', async () => {
     const { runId } = await seedRunning(h.db)
     await expect(
-      reapOrphanRuns(h.db, {
+      reapOrphanRuns(taskRecoveryOperations(h.db), {
         killStaleRunProcessTree: async () => 'kill-failed',
       }),
     ).rejects.toThrow('boot recovery refused')
@@ -105,7 +107,7 @@ describe('reapOrphanRuns', () => {
 
   test('terminal run with a held native lease is reaped before lease repair', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    claimNewRuntimeSession(h.db, {
+    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'terminal-held-native',
       taskId,
@@ -119,14 +121,19 @@ describe('reapOrphanRuns', () => {
       .where(eq(nodeRuns.id, runId))
     const calls: string[] = []
 
-    await reapOrphanRuns(h.db, {
+    await reapOrphanRuns(taskRecoveryOperations(h.db), {
       killStaleRunProcessTree: async (row) => {
         calls.push(`kill:${row.pid}`)
         return 'killed'
       },
     })
     expect(calls).toEqual(['kill:4242'])
-    expect(repairRuntimeSessionLeasesAfterOrphanReap(h.db, true)).toBe(1)
+    expect(
+      await repairRuntimeSessionLeasesAfterOrphanReap(
+        createSqliteRuntimeSessionLeaseOperations(h.db),
+        true,
+      ),
+    ).toBe(1)
     expect(
       h.db
         .select()
@@ -138,7 +145,7 @@ describe('reapOrphanRuns', () => {
 
   test('terminal child that survives keeps its native lease held and aborts boot recovery', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    claimNewRuntimeSession(h.db, {
+    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'terminal-live-native',
       taskId,
@@ -149,7 +156,9 @@ describe('reapOrphanRuns', () => {
     await h.db.update(nodeRuns).set({ status: 'failed', pid: 4343 }).where(eq(nodeRuns.id, runId))
 
     await expect(
-      reapOrphanRuns(h.db, { killStaleRunProcessTree: async () => 'kill-failed' }),
+      reapOrphanRuns(taskRecoveryOperations(h.db), {
+        killStaleRunProcessTree: async () => 'kill-failed',
+      }),
     ).rejects.toThrow('boot recovery refused')
     expect(
       h.db
@@ -162,7 +171,7 @@ describe('reapOrphanRuns', () => {
 
   test('a held native lease with no PID is not treated as proof that its child is gone', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    claimNewRuntimeSession(h.db, {
+    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'held-without-pid',
       taskId,
@@ -172,7 +181,9 @@ describe('reapOrphanRuns', () => {
     })
 
     await expect(
-      reapOrphanRuns(h.db, { killStaleRunProcessTree: async () => 'no-pid' }),
+      reapOrphanRuns(taskRecoveryOperations(h.db), {
+        killStaleRunProcessTree: async () => 'no-pid',
+      }),
     ).rejects.toThrow('reap was unproven')
     expect(
       h.db

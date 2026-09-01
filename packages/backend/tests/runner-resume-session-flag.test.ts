@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
 import { buildCommand } from '../src/services/runtime/opencode/spawn'
-import type { RunNodeOptions } from '../src/services/runner'
+import type { RunNodeOptions } from './helpers/runner'
 
 const AGENT: Agent = {
   id: 'a',

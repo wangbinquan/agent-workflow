@@ -19,7 +19,7 @@ import {
   opStagedDir,
   restoreFromBackup,
   swapInStaged,
-} from '../src/services/skillFsPublish'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 
 describe('skillFsPublish — op-scoped atomic publish', () => {
   let root: string

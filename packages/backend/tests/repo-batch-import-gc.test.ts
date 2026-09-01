@@ -13,6 +13,7 @@ import {
   type RepoBatchImportDeps,
 } from '../src/services/repoBatchImport'
 import type { resolveCachedRepo } from '../src/services/gitRepoCache'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -53,7 +54,11 @@ describe('gcBatches (RFC-033-T2)', () => {
 
   test('evicts completed batch past TTL', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const myDeps: RepoBatchImportDeps = { db, resolveCachedRepo: happyResolver(), emit: () => {} }
+    const myDeps: RepoBatchImportDeps = {
+      store: composeSqliteRepositoryWorkspaceStore(db),
+      resolveCachedRepo: happyResolver(),
+      emit: () => {},
+    }
     const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
     await waitForCompleted(r.batchId)
     expect(getBatchSnapshot(r.batchId)).not.toBeNull()
@@ -71,7 +76,11 @@ describe('gcBatches (RFC-033-T2)', () => {
       new Promise(() => {
         /* never resolve */
       })) as Resolver
-    const myDeps: RepoBatchImportDeps = { db, resolveCachedRepo: heldResolver, emit: () => {} }
+    const myDeps: RepoBatchImportDeps = {
+      store: composeSqliteRepositoryWorkspaceStore(db),
+      resolveCachedRepo: heldResolver,
+      emit: () => {},
+    }
     const r = startBatchImport(myDeps, { urls: ['https://h/a.git'] }, { userId: 'u_batch_owner' })
     const future = Date.now() + 10 * 60 * 60 * 1000
     const result = gcBatches({ now: () => future })

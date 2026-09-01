@@ -24,6 +24,7 @@
 // RFC-040 has regressed. See design/RFC-040-wrapper-await-bubble/design.md
 // §4.2 (loop) and §4.3 (git) for the contract these tests lock.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -316,6 +317,7 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
     // User answers clarify (unified driver: seal + auto-dispatch mints the rerun).
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: clarifyRunId,
       directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted
       answers: [
@@ -536,6 +538,7 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
 
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessions[0]!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted
       answers: [

@@ -15,8 +15,8 @@ import {
   deleteSkillFile,
   getSkillPreconditionTokenById,
   writeSkillFile,
-} from '../src/services/skill'
-import { restoreSkillVersion } from '../src/services/skillVersion'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { restoreSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { ConflictError, ValidationError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

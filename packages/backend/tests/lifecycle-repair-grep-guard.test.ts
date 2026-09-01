@@ -23,9 +23,16 @@ import {
 
 import { REPAIR_OPTIONS } from '../src/services/lifecycleRepair'
 
-const SVC_DIR = resolve(import.meta.dir, '..', 'src', 'services')
-const ENGINE_FILE = resolve(SVC_DIR, 'lifecycleRepair.ts')
-const OPTIONS_DIR = resolve(SVC_DIR, 'lifecycleRepair')
+const SQLITE_PERSISTENCE_DIR = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'platform',
+  'persistence',
+  'sqlite',
+)
+const ENGINE_FILE = resolve(SQLITE_PERSISTENCE_DIR, 'taskLifecycleRepair.ts')
+const OPTIONS_DIR = resolve(SQLITE_PERSISTENCE_DIR, 'taskLifecycleRepair')
 
 function loadEngineSources(): { path: string; content: string }[] {
   const files: { path: string; content: string }[] = []

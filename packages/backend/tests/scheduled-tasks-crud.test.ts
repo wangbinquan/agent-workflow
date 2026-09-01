@@ -16,7 +16,7 @@ import {
   deleteScheduledTask,
   getScheduledTask,
   listScheduledTasks,
-} from '../src/services/scheduledTasks'
+} from './helpers/integrationTriggerResourceBinding'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,

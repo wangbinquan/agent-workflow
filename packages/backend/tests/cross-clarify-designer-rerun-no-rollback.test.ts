@@ -22,6 +22,7 @@
 // clone / no stash push-pop — the non-flaky class per
 // scheduler-audit-s11-stash-gc-prune-rollback.test.ts; NOT RUN_GIT_NETWORK-gated.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -215,6 +216,7 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAns('q1')],
       actor,

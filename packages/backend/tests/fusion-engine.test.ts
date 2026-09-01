@@ -54,19 +54,33 @@ import {
 import { getTask } from '../src/services/task'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
+import { createSqliteHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep'
 import { createRuntime } from '../src/services/runtimeRegistry'
-import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
-import { getSkillVersionContent } from '../src/services/skillVersion'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import {
+  createManagedSkill,
+  type SkillFsOptions,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
+import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
+import { composeSqliteFusionOperations } from '../src/modules/memory/composition/fusion'
+import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
-import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
+import {
+  resourceScopeAuthority,
+  TEST_RESOURCE_SCOPE_AUTHORIZATION,
+} from './helpers/resourceScopeAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
+type TestFusionDeps = FusionDeps & { readonly db: DbClient }
+
 function createFusion(
   input: Parameters<typeof createFusionWithAuthority>[0],
-  deps: Parameters<typeof createFusionWithAuthority>[1],
+  deps: TestFusionDeps,
   actor: Actor,
   launchInitiator: Parameters<typeof createFusionWithAuthority>[3],
 ) {
@@ -168,22 +182,33 @@ process.exit(1)
 interface H {
   db: DbClient
   appHome: string
-  deps: FusionDeps
+  deps: TestFusionDeps
   cleanup: () => void
 }
 async function build(): Promise<H> {
   const tmp = mkdtempSync(pjoin(tmpdir(), 'aw-fusion-'))
   const appHome = pjoin(tmp, 'home')
   const db = createInMemoryDb(MIGRATIONS)
-  await createRuntime(db, {
+  await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',
   })
-  const deps: FusionDeps = {
+  const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
+  const memoryCatalog = composeSqliteMemoryCatalogOperations({
     db,
+    contexts: composeIdentityAccess(db).contexts,
+    authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+  })
+  const deps: TestFusionDeps = {
+    db,
+    operations: composeSqliteFusionOperations({
+      db,
+      appHome,
+      memories: memoryCatalog,
+      tasks: createSqliteFusionEngineTaskOperations({ db, appHome, schedulerDriver }),
+    }),
     appHome,
-    schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
     binaryOverride: makeClarifyStub(tmp),
     awaitScheduler: true,
     defaultRuntime: VALID_OPENCODE_RUNTIME,
@@ -290,7 +315,7 @@ describe('createFusion preconditions', () => {
       frontmatterExtra: {},
     })
     const mem = approvedGlobalMemory(h.db, 'm')
-    const deps: FusionDeps = {
+    const deps: TestFusionDeps = {
       ...h.deps,
       seedGit: async () => ({ stdout: '', stderr: 'injected seed failure', exitCode: 73 }),
     }
@@ -418,7 +443,8 @@ describe('launch → reconcile → approve', () => {
     await reconcileFusion(h.deps, fusion.id)
 
     // A concurrent editor save bumps the skill (base was 1, now 2).
-    const { writeSkillContent } = await import('../src/services/skill')
+    const { writeSkillContent } =
+      await import('../src/modules/resource-catalog/infrastructure/legacy/skill')
     await writeSkillContent(
       h.db,
       fsOpts,
@@ -571,7 +597,8 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     const taskBefore = fusion.currentTaskId
 
     // A concurrent editor bumps the skill (token drifts).
-    const { writeSkillContent } = await import('../src/services/skill')
+    const { writeSkillContent } =
+      await import('../src/modules/resource-catalog/infrastructure/legacy/skill')
     await writeSkillContent(
       h.db,
       fsOpts,
@@ -682,13 +709,14 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     // Both decision entry points call the recheck helper before claiming.
     const calls =
       src.match(
-        /requireCurrentSkillWritable\(db, actor, row\.skillId, row\.preconditionToken\)/g,
+        /requireCurrentSkillWritable\(persistence, actor, row\.skillId, row\.preconditionToken\)/g,
       ) ?? []
     expect(calls.length).toBeGreaterThanOrEqual(2) // approve + reject
     // RFC-324 —— 判据从「当前 owner」放宽为「当前**写得动**」：owner、`write` 授权
     // 或 ACL bypass。锁的东西没变——helper 必须对**当前**行重新判一次写权，而不是
     // 沿用融合发起时的那次判定（发起后 owner 可能已转移、授权可能已撤销）。
-    expect(src).toMatch(/!\(await canEditResource\(db, actor, 'skill', skill\)\)/)
+    expect(src).toMatch(/const access = await persistence\.loadSkillAccess\(actor, skillId\)/)
+    expect(src).toMatch(/access\.access !== 'write' && access\.access !== 'own'/)
   })
 
   // RFC-170 T6 (Codex re-review F8): the owner recheck is ALSO folded into the
@@ -696,8 +724,26 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   // TOCTOU). Locks that claimFusionDecision authorises against the CURRENT owner
   // atomically with the status transition.
   test('claimFusionDecision re-checks the current owner in-tx (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
-    expect(src).toMatch(/live!\.ownerUserId !== actor\.user\.id/)
+    const adapter = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'memory',
+        'infrastructure',
+        'sqliteFusionPersistence.ts',
+      ),
+      'utf8',
+    )
+    expect(adapter).toMatch(
+      /function assertClaimSkill\(tx: DbTxSync, row: FusionRow, actor: Actor\)/,
+    )
+    expect(adapter).toMatch(
+      /const access = resolveFusionSkillAccess\(actor, live, grantInTx\(tx, actor, live\.id\)\)/,
+    )
+    expect(adapter).toMatch(/if \(!canEditFusionSkill\(access\)\)/)
+    expect(adapter).toMatch(/assertClaimSkill\(tx, row, command\.actor\)/)
   })
 
   // RFC-170 T6 (Codex re-review F10): a null precondition token at create time
@@ -792,7 +838,7 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
     )[0]?.status
   }
 
-  test("'applying' whose version already committed rolls FORWARD to done", () => {
+  test("'applying' whose version already committed rolls FORWARD to done", async () => {
     seedFusion('fz-fwd', { status: 'applying', currentTaskId: null })
     // A committed version carries this fusionId (proof the apply landed durably).
     const lintId = h.db.select({ id: skills.id }).from(skills).where(eq(skills.name, 'lint')).get()!
@@ -810,12 +856,12 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
         createdAt: Date.now(),
       })
       .run()
-    const r = recoverFusionDecisions(h.db)
+    const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledForward).toBe(1)
     expect(rawStatus('fz-fwd')).toBe('done')
   })
 
-  test("'applying' with duplicate same-skill fusion ledgers fails closed", () => {
+  test("'applying' with duplicate same-skill fusion ledgers fails closed", async () => {
     seedFusion('fz-duplicate', { status: 'applying', currentTaskId: null })
     const lintId = skillIdOf(h.db, 'lint')
     for (const versionIndex of [7, 8]) {
@@ -833,13 +879,13 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
         })
         .run()
     }
-    const r = recoverFusionDecisions(h.db)
+    const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledForward).toBe(0)
     expect(r.rolledBack).toBe(1)
     expect(rawStatus('fz-duplicate')).toBe('failed')
   })
 
-  test("'applying' with a conflicting stored applied version fails closed", () => {
+  test("'applying' with a conflicting stored applied version fails closed", async () => {
     seedFusion('fz-applied-mismatch', {
       status: 'applying',
       currentTaskId: null,
@@ -859,29 +905,29 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
         createdAt: Date.now(),
       })
       .run()
-    const r = recoverFusionDecisions(h.db)
+    const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledForward).toBe(0)
     expect(r.rolledBack).toBe(1)
     expect(rawStatus('fz-applied-mismatch')).toBe('failed')
   })
 
-  test("'applying' with NO committed version rolls BACK to failed", () => {
+  test("'applying' with NO committed version rolls BACK to failed", async () => {
     seedFusion('fz-back', { status: 'applying', currentTaskId: null })
-    const r = recoverFusionDecisions(h.db)
+    const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledBack).toBe(1)
     expect(rawStatus('fz-back')).toBe('failed')
   })
 
-  test("'running' with currentTaskId=null (reject that never attached) → failed", () => {
+  test("'running' with currentTaskId=null (reject that never attached) → failed", async () => {
     seedFusion('fz-rej', { status: 'running', currentTaskId: null })
-    const r = recoverFusionDecisions(h.db)
+    const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rejectFailed).toBe(1)
     expect(rawStatus('fz-rej')).toBe('failed')
   })
 
-  test('a normal running fusion (task in flight) is NOT touched', () => {
+  test('a normal running fusion (task in flight) is NOT touched', async () => {
     seedFusion('fz-live', { status: 'running', currentTaskId: 'task-live' })
-    const r = recoverFusionDecisions(h.db)
+    const r = await recoverFusionDecisions(h.deps.operations.persistence)
     expect(r.rolledForward + r.rolledBack + r.rejectFailed).toBe(0)
     expect(rawStatus('fz-live')).toBe('running')
   })
@@ -955,7 +1001,7 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
   test('seedFusionFromSnapshot verifies the token skillId around the copy (source lock)', () => {
     const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
     // Generation check keys on the token's skillId, not just (name, version).
-    expect(src).toMatch(/s\.id === t\.skillId && s\.contentVersion === t\.contentVersion/)
+    expect(src).toMatch(/identity\.id === skillId && identity\.contentVersion === contentVersion/)
     // No live fallback remains.
     expect(src).not.toMatch(/return existsSync\(snapshot\) \? snapshot : live/)
   })
@@ -965,8 +1011,9 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
   // repoint to a different (private) skill B.
   test('createFusion binds the token to the authorized skill id (source lock)', () => {
     const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
-    expect(src).toMatch(/getSkillPreconditionTokenById\(db, skill\.id\)/)
-    expect(src).not.toMatch(/getSkillPreconditionToken\(db, input\.skillName\)/) // no by-name re-read
+    expect(src).toMatch(/operations\.persistence\.loadSkillAccess\(actor, input\.skillId\)/)
+    expect(src).toMatch(/const preconditionToken = skillAccess\.preconditionToken/)
+    expect(src).not.toMatch(/loadSkillAccess\(actor, input\.skillName\)/) // no by-name re-read
   })
 })
 
@@ -1044,7 +1091,11 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     })
     const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
       onTerminalTask(hookDb, hookTaskId, to) {
-        sealOpenHumanGatesForTask(hookDb, hookTaskId, `task-${to}`)
+        void sealOpenHumanGatesForTask(
+          createSqliteHumanGateTerminalSweepCommand(hookDb),
+          hookTaskId,
+          `task-${to}`,
+        )
       },
     })
 
@@ -1108,8 +1159,20 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
 
   test('cancel claim captures currentTaskId in the CAS (source lock)', () => {
     const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const adapter = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'memory',
+        'infrastructure',
+        'sqliteFusionPersistence.ts',
+      ),
+      'utf8',
+    )
     // The cancel claim reads + returns currentTaskId, then cancels THAT exact task.
-    expect(src).toMatch(/return \{ ok: true as const, taskId: cur\.currentTaskId \}/)
+    expect(adapter).toMatch(/return \{ ok: true as const, taskId: row\.currentTaskId \}/)
     expect(src).toMatch(/if \(claim\.taskId !== null\) await cancelFusionEngineTask/)
   })
 

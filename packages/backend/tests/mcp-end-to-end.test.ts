@@ -15,7 +15,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
-import { createMcp } from '../src/services/mcp'
+import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { resolveDependsClosure } from '../src/services/agentDeps'
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
@@ -30,7 +30,7 @@ describe('RFC-028 end-to-end inline injection', () => {
   })
 
   test('single agent + single MCP → inline JSON has mcp.{name} with opencode wire fields', async () => {
-    const postgres = await createMcp(db, {
+    const postgres = await createMcpFixture(db, {
       name: 'postgres-prod',
       description: 'prod DB',
       type: 'local',
@@ -59,7 +59,7 @@ describe('RFC-028 end-to-end inline injection', () => {
     const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle: ' + closure.cyclePath.join(' → '))
     const mcpIds = collectMcpIdsFromClosure(closure.agents)
-    const mcps = await loadMcpsByIds(db, mcpIds)
+    const mcps = await loadMcpsByIds(composeMcpClosureQueryForTest(db), mcpIds)
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
 
     // The env-var contents (what opencode actually sees on its stdin):
@@ -84,21 +84,21 @@ describe('RFC-028 end-to-end inline injection', () => {
   })
 
   test('dependsOn closure merges MCPs across agents; order = root first, BFS for deps', async () => {
-    const leafMcp = await createMcp(db, {
+    const leafMcp = await createMcpFixture(db, {
       name: 'm-leaf',
       description: '',
       type: 'remote',
       config: { url: 'https://leaf.io/mcp' },
       enabled: true,
     })
-    const midMcp = await createMcp(db, {
+    const midMcp = await createMcpFixture(db, {
       name: 'm-mid',
       description: '',
       type: 'local',
       config: { command: ['mid-tool'] },
       enabled: true,
     })
-    const rootMcp = await createMcp(db, {
+    const rootMcp = await createMcpFixture(db, {
       name: 'm-root',
       description: '',
       type: 'local',
@@ -149,7 +149,7 @@ describe('RFC-028 end-to-end inline injection', () => {
     const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle')
     const mcpIds = collectMcpIdsFromClosure(closure.agents)
-    const mcps = await loadMcpsByIds(db, mcpIds)
+    const mcps = await loadMcpsByIds(composeMcpClosureQueryForTest(db), mcpIds)
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
 
     // All three agents present in the inline agent map.
@@ -161,14 +161,14 @@ describe('RFC-028 end-to-end inline injection', () => {
   })
 
   test('enabled=false MCP is skipped (never appears in inline)', async () => {
-    const enabledMcp = await createMcp(db, {
+    const enabledMcp = await createMcpFixture(db, {
       name: 'on',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const disabledMcp = await createMcp(db, {
+    const disabledMcp = await createMcpFixture(db, {
       name: 'off',
       description: '',
       type: 'local',
@@ -192,7 +192,10 @@ describe('RFC-028 end-to-end inline injection', () => {
     const agent = (await getAgent(db, 'a'))!
     const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle')
-    const mcps = await loadMcpsByIds(db, collectMcpIdsFromClosure(closure.agents))
+    const mcps = await loadMcpsByIds(
+      composeMcpClosureQueryForTest(db),
+      collectMcpIdsFromClosure(closure.agents),
+    )
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
     expect(Object.keys(inline.mcp ?? {})).toEqual(['on'])
   })
@@ -214,7 +217,10 @@ describe('RFC-028 end-to-end inline injection', () => {
     const agent = (await getAgent(db, 'minimal'))!
     const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
     if (closure.ok === false) throw new Error('cycle')
-    const mcps = await loadMcpsByIds(db, collectMcpIdsFromClosure(closure.agents))
+    const mcps = await loadMcpsByIds(
+      composeMcpClosureQueryForTest(db),
+      collectMcpIdsFromClosure(closure.agents),
+    )
     const inline = buildInlineConfig(agent, new Map(), closure.agents.slice(1), mcps)
     expect('mcp' in inline).toBe(false)
     expect(JSON.stringify(inline)).not.toContain('"mcp"')

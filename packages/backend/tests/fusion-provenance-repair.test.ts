@@ -4,7 +4,8 @@ import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { fusions, memories, skills, skillVersions } from '../src/db/schema'
 import { repairFusionProvenance } from '../src/services/fusion'
-import { encodeSkillToken } from '../src/services/skillToken'
+import { encodeSkillToken } from '../src/modules/resource-catalog/application/skills/skillToken'
+import { createSqliteFusionPersistence } from '../src/modules/memory/infrastructure/sqliteFusionPersistence'
 import { QUARANTINED_FUSION_SKILL_ID } from '../src/services/systemResources'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -61,8 +62,12 @@ function addFusion(
 }
 
 describe('RFC-223 fusion provenance boot repair', () => {
-  test('uses only trustworthy token/ledger oracles, quarantines conflicts, and is idempotent', () => {
+  test('uses only trustworthy token/ledger oracles, quarantines conflicts, and is idempotent', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    const persistence = createSqliteFusionPersistence({
+      db,
+      appHome: resolve(import.meta.dir, '.rfc223-unused-app-home'),
+    })
     for (const id of ['skill-ledger', 'skill-other', 'skill-duplicate', 'skill-applied']) {
       addSkill(db, id)
     }
@@ -182,7 +187,7 @@ describe('RFC-223 fusion provenance boot repair', () => {
       ])
       .run()
 
-    const first = repairFusionProvenance(db)
+    const first = await repairFusionProvenance(persistence)
     expect(first.repairedFusions).toBe(2)
     expect(first.terminalizedFusions).toBe(1)
     expect(first.repairedMemories).toBe(1)
@@ -231,7 +236,7 @@ describe('RFC-223 fusion provenance boot repair', () => {
         .get(),
     ).toEqual({ skillId: null })
 
-    expect(repairFusionProvenance(db)).toEqual({
+    expect(await repairFusionProvenance(persistence)).toEqual({
       repairedFusions: 0,
       quarantinedFusions: 0,
       terminalizedFusions: 0,

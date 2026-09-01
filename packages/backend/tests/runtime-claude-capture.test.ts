@@ -19,8 +19,11 @@ import {
 } from '../src/services/runtime/claudeCode/sessionCapture'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { createLogger, type Logger } from '../src/util/log'
+import { createSqliteRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const capturePersistence = (db: DbClient) => createSqliteRuntimeSessionCapturePersistence(db)
 
 async function seed(): Promise<{ db: DbClient; nodeRunId: string }> {
   const db = createInMemoryDb(MIGRATIONS)
@@ -95,7 +98,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       rootSessionId: rootSession,
       nodeRunId,
       taskId: 'ignored',
-      db,
+      persistence: capturePersistence(db),
       log: createLogger('test'),
       configRoots: [configDir],
       worktreePath: worktree,
@@ -139,7 +142,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       rootSessionId: rootSession,
       nodeRunId,
       taskId: 'ignored',
-      db,
+      persistence: capturePersistence(db),
       log: createLogger('test'),
       configRoots: [configDir],
       worktreePath: worktree,
@@ -259,7 +262,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       rootSessionId: rootSession,
       nodeRunId,
       taskId: 'ignored',
-      db,
+      persistence: capturePersistence(db),
       log: createLogger('test'),
       configRoots: [configDir],
       worktreePath: worktree,
@@ -297,23 +300,21 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       ).join('\n'),
     )
 
-    let eventInsertCalls = 0
-    let failFirstInsert = true
+    let transactionCalls = 0
+    let failFirstTransaction = true
     const transientDb = new Proxy(db, {
       get(target, property) {
-        if (property === 'insert') {
-          return (table: unknown) => {
-            if (table === nodeRunEvents) {
-              eventInsertCalls++
-              if (failFirstInsert) {
-                failFirstInsert = false
-                const error = new Error('database is locked') as Error & { code: string }
-                error.name = 'SQLiteError'
-                error.code = 'SQLITE_BUSY'
-                throw error
-              }
+        if (property === 'transaction') {
+          return (...args: Parameters<DbClient['transaction']>) => {
+            transactionCalls++
+            if (failFirstTransaction) {
+              failFirstTransaction = false
+              const error = new Error('database is locked') as Error & { code: string }
+              error.name = 'SQLiteError'
+              error.code = 'SQLITE_BUSY'
+              throw error
             }
-            return (target.insert as unknown as (value: unknown) => unknown)(table)
+            return target.transaction(...args)
           }
         }
         const value = Reflect.get(target, property, target) as unknown
@@ -333,7 +334,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       rootSessionId: rootSession,
       nodeRunId,
       taskId: 'ignored',
-      db: transientDb,
+      persistence: capturePersistence(transientDb),
       log,
       configRoots: [configDir],
       worktreePath: worktree,
@@ -342,15 +343,8 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
     const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
     expect(rows).toHaveLength(205)
     // One failed attempt + two batches (200 and 5), not 205 autocommit writes.
-    expect(eventInsertCalls).toBe(3)
-    expect(
-      warnings.some(
-        (entry) =>
-          entry.message === 'sqlite-write-retry' &&
-          entry.fields?.operation === 'claude-subagent-event-batch' &&
-          entry.fields.sqliteCode === 'SQLITE_BUSY',
-      ),
-    ).toBe(true)
+    expect(transactionCalls).toBe(3)
+    expect(warnings).toEqual([])
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -360,7 +354,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       rootSessionId: 'nope',
       nodeRunId,
       taskId: 't',
-      db,
+      persistence: capturePersistence(db),
       log: createLogger('test'),
       configRoots: [join(tmpdir(), 'does-not-exist-' + ulid())],
       worktreePath: '/w',
@@ -398,7 +392,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       rootSessionId: rootSession,
       nodeRunId,
       taskId: 'ignored',
-      db,
+      persistence: capturePersistence(db),
       log: createLogger('test'),
       configRoots: [decoy, real],
       worktreePath: worktree,
@@ -494,7 +488,7 @@ describe('claudeCodeDriver.captureSessions (RFC-154 profile → operator root)',
         rootSessionId: 'sess-env',
         nodeRunId,
         taskId: 'ignored',
-        db,
+        persistence: capturePersistence(db),
         log: createLogger('test'),
         worktreePath: worktree,
       })
@@ -526,7 +520,7 @@ describe('claudeCodeDriver.captureSessions (RFC-154 profile → operator root)',
         rootSessionId: 'sess-fork',
         nodeRunId,
         taskId: 'ignored',
-        db,
+        persistence: capturePersistence(db),
         log: createLogger('test'),
         worktreePath: worktree,
         configDirEnv: 'AW_TEST_FORK_CONFIG_DIR',

@@ -35,6 +35,7 @@ describe('RFC-057 — T1.demote-task', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T1.demote-task',
@@ -110,6 +111,7 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T1.resurrect-review-run',
@@ -195,6 +197,7 @@ describe('RFC-057 — T1.resurrect-review-run', () => {
     // Apply resurrects the fresh row; the stale storm row is left untouched.
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T1.resurrect-review-run',

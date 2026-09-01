@@ -27,7 +27,7 @@ import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous test seeding (pure-id freshness)
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runNode } from '../src/services/runner'
+import { runNode } from './helpers/runner'
 import { TASK_CHANNEL, resetBroadcastersForTests, taskBroadcaster } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

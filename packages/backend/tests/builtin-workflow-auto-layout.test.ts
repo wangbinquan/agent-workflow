@@ -21,6 +21,7 @@ import {
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { createInMemoryDb } from '@/db/client'
 import { workflows } from '@/db/schema'
+import { createSqliteFusionPersistence } from '@/modules/memory/infrastructure/sqliteFusionPersistence'
 import { buildAgentHostSnapshot } from '@/services/agentLaunch'
 import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/services/fusion'
@@ -181,7 +182,8 @@ describe('built-in workflow automatic layout', () => {
 
   test('the persisted built-in seeder lays out new rows and repairs legacy geometry once', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedFusionResources(db)
+    const fusion = createSqliteFusionPersistence({ db, appHome: '/tmp' })
+    await seedFusionResources(fusion)
     const first = db.select().from(workflows).where(eq(workflows.builtin, true)).get()!
     const firstDefinition = WorkflowDefinitionSchema.parse(JSON.parse(first.definition))
     expectNoNodeOverlap(firstDefinition)
@@ -195,12 +197,12 @@ describe('built-in workflow automatic layout', () => {
       .where(eq(workflows.id, first.id))
       .run()
 
-    await seedFusionResources(db)
+    await seedFusionResources(fusion)
     const repaired = db.select().from(workflows).where(eq(workflows.id, first.id)).get()!
     expect(repaired.version).toBe(first.version + 1)
     expectNoNodeOverlap(WorkflowDefinitionSchema.parse(JSON.parse(repaired.definition)))
 
-    await seedFusionResources(db)
+    await seedFusionResources(fusion)
     expect(db.select().from(workflows).where(eq(workflows.id, first.id)).get()!.version).toBe(
       repaired.version,
     )

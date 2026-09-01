@@ -2,6 +2,7 @@
 // review decision both enqueue a `memory_distill_jobs` row (best-effort,
 // must not break the original decision path).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { resolve } from 'node:path'
@@ -112,6 +113,7 @@ describe('autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回
     const fx = await seedFixture(db)
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: fx.intermediaryNodeRunId,
       answers: [
         {
@@ -137,6 +139,7 @@ describe('autoDispatchClarifyRound enqueues a distill job (RFC-132 缺口① 回
     const fx = await seedFixture(db)
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: fx.intermediaryNodeRunId,
       answers: [
         {

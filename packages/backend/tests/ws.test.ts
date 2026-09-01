@@ -14,10 +14,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/workflow'
-import { createTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjector'
+import { createSqliteTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -38,10 +39,11 @@ async function buildHarness(): Promise<Harness> {
     dbVersion: 1,
     db,
   })
+  const identityAccess = createIdentityAccessRuntime({ db })
   const ws = buildWebSocketAdapter({
     daemonToken: TOKEN,
-    db,
-    identityAccess: createIdentityAccessRuntime({ db }),
+    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
+    identityAccess,
   })
   const server = Bun.serve({
     port: 0,
@@ -249,7 +251,7 @@ describe('WebSocket channels', () => {
     ws.addEventListener('message', (e) => received.push(JSON.parse(String(e.data))))
     await waitUntil(() => hasType(received, 'hello'))
 
-    createTaskLifecycleWsProjector(h.db).handle({
+    await createSqliteTaskLifecycleWsProjector(h.db).handle({
       eventId: `task-lifecycle:${taskId}:2`,
       eventGroupId: `task-lifecycle:${taskId}:2`,
       eventGroupOrdinal: 0,

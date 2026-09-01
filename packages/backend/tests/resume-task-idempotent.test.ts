@@ -27,6 +27,8 @@ import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -115,6 +117,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -131,6 +134,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('interrupted')
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -143,6 +147,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('awaiting_review')
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -155,6 +160,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('awaiting_human')
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -167,6 +173,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     h = await buildHarness('failed')
     await resumeTask(h.db, h.taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -176,6 +183,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, h.taskId, {
         db: h.db,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,
@@ -193,6 +201,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, h.taskId, {
         db: h.db,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,
@@ -210,6 +219,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, 'no-such-task', {
         db: h.db,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,
@@ -251,6 +261,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     await expect(
       resumeTask(h.db, h.taskId, {
         db: h.db,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,
@@ -316,6 +327,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -361,6 +373,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     try {
       await resumeTask(h.db, h.taskId, {
         db: h.db,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,
@@ -401,7 +414,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       pid: null,
       startedAt: Date.now() - 200,
     })
-    await claimNewRuntimeSession(h.db, {
+    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
       sessionId: 'resume-held-native',
       taskId: h.taskId,
@@ -417,6 +430,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     await expect(
       resumeTask(h.db, h.taskId, {
         db: h.db,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,

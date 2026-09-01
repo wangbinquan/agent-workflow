@@ -25,6 +25,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -62,9 +63,9 @@ async function seedAgentWithDefaults(
   // RFC-113: the model/variant/temperature live on the agent's RUNTIME, not the
   // agent. Create a per-agent runtime carrying the defaults + point the agent at
   // it (the agent itself no longer stores model/variant/temperature).
-  await seedBuiltinRuntimes(db)
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   const runtimeName = `rt-${name}`
-  await createRuntime(db, {
+  await createRuntime(runtimeRegistryPersistence(db), {
     name: runtimeName,
     protocol: 'opencode',
     model: defaults.model ?? null,

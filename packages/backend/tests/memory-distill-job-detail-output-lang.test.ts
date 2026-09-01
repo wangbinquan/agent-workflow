@@ -14,9 +14,14 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memoryDistillJobs } from '../src/db/schema'
-import { getDistillJobDetail } from '../src/services/memoryDistillJobDetail'
+import { getDistillJobDetail as getDistillJobDetailService } from '../src/services/memoryDistillJobDetail'
+import { composeSqliteMemoryDistillQueries } from '../src/modules/memory/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+function getDistillJobDetail(db: DbClient, jobId: string) {
+  return getDistillJobDetailService(composeSqliteMemoryDistillQueries(db), jobId)
+}
 
 function seedJob(db: DbClient, outputLang: string | null | undefined): string {
   const id = ulid()

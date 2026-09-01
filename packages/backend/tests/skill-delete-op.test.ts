@@ -12,12 +12,19 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { skills } from '../src/db/schema'
-import { createManagedSkill, deleteSkill } from '../src/services/skill'
+import {
+  createManagedSkill,
+  deleteSkill,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { deleteManagedSkillOp } from '../src/services/skillDeleteOp'
-import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
-import { recoverSkillOperations } from '../src/services/skillOpRecoveryDriver'
-import { SKILL_OP_RECOVERY_REGISTRY } from '../src/services/skillOpRegistry'
+import { deleteManagedSkillOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
+import {
+  advancePhase,
+  beginOperation,
+  getActiveOp,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
+import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
+import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.

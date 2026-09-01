@@ -12,6 +12,10 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  openReadonlySqliteDatabase,
+  type ReadonlySqliteDatabase,
+} from '../src/platform/persistence/sqlite/readonlySqliteDatabase'
+import {
   walkOpencodeSessions,
   type OpencodeSessionRow,
   type WalkedSession,
@@ -30,7 +34,7 @@ interface BuildOpts {
 }
 
 /** Build a throwaway opencode-shaped SQLite and return an open readonly handle. */
-function openOpencodeDb(opts: BuildOpts): Database {
+function openOpencodeDb(opts: BuildOpts): ReadonlySqliteDatabase {
   const dir = mkdtempSync(join(tmpdir(), 'rfc077-walk-'))
   const dbPath = join(dir, 'opencode.db')
   const w = new Database(dbPath, { create: true })
@@ -63,10 +67,10 @@ function openOpencodeDb(opts: BuildOpts): Database {
     )
   }
   w.close()
-  return new Database(dbPath, { readonly: true })
+  return openReadonlySqliteDatabase(dbPath)
 }
 
-function walkedIds(db: Database, root: string, includeRoot: boolean): string[] {
+function walkedIds(db: ReadonlySqliteDatabase, root: string, includeRoot: boolean): string[] {
   return [...walkOpencodeSessions(db, root, { includeRoot })].map((w) => w.session.id)
 }
 

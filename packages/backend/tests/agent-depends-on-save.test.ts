@@ -19,10 +19,12 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {
+  agentsDependingOnIn,
   findAgentsDependingOn,
   resolveDependsClosure,
   validateDependsOn,
 } from '../src/services/agentDeps'
+import { agents } from '../src/db/schema'
 import type { DomainError } from '../src/util/errors'
 import { PREVIEW_CALL_POLICY, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
 
@@ -32,6 +34,17 @@ interface AgentSeed {
   name: string
   dependsOn?: string[]
   mcp?: string[]
+}
+
+function reverseDependencies(db: DbClient) {
+  return {
+    async findDependents(agentId: string) {
+      return agentsDependingOnIn(db.select().from(agents).all(), agentId).map(({ id, name }) => ({
+        id,
+        name,
+      }))
+    },
+  }
 }
 
 // RFC-223 (PR-1): dependsOn is stored + validated BY ID. createAgent resolves
@@ -185,8 +198,8 @@ describe('RFC-223 findAgentsDependingOn (id match + JSON exactness)', () => {
     const ids = await seed(db, { name: 'foo' }, { name: 'foobar' })
     const callerIds = await seed(db, { name: 'caller', dependsOn: ['foobar'] })
 
-    expect(await findAgentsDependingOn(db, ids.get('foo')!)).toEqual([])
-    expect(await findAgentsDependingOn(db, ids.get('foobar')!)).toEqual([
+    expect(await findAgentsDependingOn(reverseDependencies(db), ids.get('foo')!)).toEqual([])
+    expect(await findAgentsDependingOn(reverseDependencies(db), ids.get('foobar')!)).toEqual([
       { id: callerIds.get('caller')!, name: 'caller' },
     ])
   })

@@ -22,6 +22,7 @@
 //   lock below stays: answering a self-clarify still yields exactly one pending
 //   rerun + a done clarify row.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -145,6 +146,7 @@ describe('RFC-076 PR-0 — clarify rerun write-ordering', () => {
 
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'continue',

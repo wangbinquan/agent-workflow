@@ -8,26 +8,70 @@ import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
+import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
+import { createSqliteMcpRepository } from '../src/modules/resource-catalog/infrastructure/sqliteMcpRepository'
+import type { McpCatalogModule } from '../src/modules/resource-catalog/public/operations'
+import type { McpOperationContext } from '../src/modules/resource-catalog/public/participants'
 import { createAgent } from '../src/services/agent'
 import {
-  createMcp,
-  deleteMcp,
-  findAgentsReferencingMcp,
-  listMcps,
-  renameMcp,
-  updateMcp,
-} from '../src/services/mcp'
+  createMcpForTest as createMcp,
+  deleteMcpForTest as deleteMcp,
+  listMcpsForTest as listMcps,
+  renameMcpForTest as renameMcp,
+  type McpCatalogTestBinding as McpServiceBinding,
+  updateMcpForTest as updateMcp,
+} from './helpers/mcpServiceBinding'
+import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { getAgent, getMcp } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
-const T6_ACTOR = buildActor({
-  user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
-  source: 'session',
-})
-
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+function authorityFor(userId: string, role: 'admin' | 'user' = 'admin'): McpOperationContext {
+  const projection = buildActor({
+    user: { id: userId, username: userId, displayName: userId, role, status: 'active' },
+    source: 'session',
+  })
+  return new AuthorityClaimRegistry().mintDirectAuthority(
+    { userId, source: 'session' },
+    { ...projection, userId },
+  ).actor
+}
+
+function composeTestMcpCatalog(db: DbClient): McpCatalogModule {
+  return composeMcpCatalog({
+    db,
+    coordinator: new ResourceOperationCoordinator(),
+    nextMutationTimestamp: async (mcp) => mcp.updatedAt + 1,
+    runtime: Object.freeze({
+      prepareDelete: async () => undefined,
+      reconcileDurableIntents: async () => undefined,
+    }),
+    transitionMutationInTx: () => undefined,
+    deletePreparedInTx: () => undefined,
+  })
+}
+
+function serviceBinding(
+  catalog: McpCatalogModule,
+  userId = 'u-t6-test',
+  role: 'admin' | 'user' = 'admin',
+): McpServiceBinding {
+  return Object.freeze({ catalog, authority: authorityFor(userId, role) })
+}
+
+function findAgentReferences(db: DbClient, mcpId: string) {
+  return createSqliteMcpRepository({
+    db,
+    lifecycle: Object.freeze({
+      transitionMutation: () => undefined,
+      deletePrepared: () => undefined,
+    }),
+  }).repository.findAgentReferences(mcpId)
+}
 
 function localMcp(name: string): Parameters<typeof createMcp>[1] {
   return {
@@ -41,12 +85,16 @@ function localMcp(name: string): Parameters<typeof createMcp>[1] {
 
 describe('services/mcp.ts CRUD', () => {
   let db: DbClient
+  let catalog: McpCatalogModule
+  let binding: McpServiceBinding
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    catalog = composeTestMcpCatalog(db)
+    binding = serviceBinding(catalog)
   })
 
   test('create + get round-trip (local)', async () => {
-    const m = await createMcp(db, {
+    const m = await createMcp(binding, {
       name: 'postgres-prod',
       description: 'prod replica',
       type: 'local',
@@ -66,7 +114,7 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('create + get round-trip (remote)', async () => {
-    const m = await createMcp(db, {
+    const m = await createMcp(binding, {
       name: 'sentry',
       description: '',
       type: 'remote',
@@ -81,27 +129,27 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('list returns all rows', async () => {
-    await createMcp(db, {
+    await createMcp(binding, {
       name: 'a',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    await createMcp(db, {
+    await createMcp(binding, {
       name: 'b',
       description: '',
       type: 'remote',
       config: { url: 'https://b.io' },
       enabled: false,
     })
-    const list = await listMcps(db)
+    const list = await listMcps(binding)
     expect(list.map((m) => m.name).sort()).toEqual(['a', 'b'])
     expect(list.find((m) => m.name === 'b')?.enabled).toBe(false)
   })
 
   test('name conflict on create → 409 mcp-name-in-use', async () => {
-    await createMcp(db, {
+    await createMcp(binding, {
       name: 'dup',
       description: '',
       type: 'local',
@@ -109,7 +157,7 @@ describe('services/mcp.ts CRUD', () => {
       enabled: true,
     })
     await expect(
-      createMcp(db, {
+      createMcp(binding, {
         name: 'dup',
         description: '',
         type: 'remote',
@@ -120,28 +168,30 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('RFC-223 scopes create and rename conflicts to the owner bucket', async () => {
-    const source = await createMcp(db, localMcp('source'), { ownerUserId: 'owner-a' })
-    await createMcp(db, localMcp('shared'), { ownerUserId: 'owner-b' })
+    const ownerA = serviceBinding(catalog, 'owner-a', 'user')
+    const ownerB = serviceBinding(catalog, 'owner-b', 'user')
+    const ownerC = serviceBinding(catalog, 'owner-c', 'user')
+    const source = await createMcp(ownerA, localMcp('source'))
+    await createMcp(ownerB, localMcp('shared'))
 
-    await expect(renameMcp(db, source.id, { newName: 'shared' })).resolves.toMatchObject({
+    await expect(renameMcp(ownerA, source.id, { newName: 'shared' })).resolves.toMatchObject({
       id: source.id,
       name: 'shared',
     })
 
-    await createMcp(db, localMcp('taken'), { ownerUserId: 'owner-a' })
-    await expect(renameMcp(db, source.id, { newName: 'taken' })).rejects.toMatchObject({
+    await createMcp(ownerA, localMcp('taken'))
+    await expect(renameMcp(ownerA, source.id, { newName: 'taken' })).rejects.toMatchObject({
       code: 'mcp-name-in-use',
     })
-    await expect(
-      createMcp(db, localMcp('taken'), { ownerUserId: 'owner-a' }),
-    ).rejects.toMatchObject({
+    await expect(createMcp(ownerA, localMcp('taken'))).rejects.toMatchObject({
       code: 'mcp-name-in-use',
     })
 
-    await expect(
-      createMcp(db, localMcp('shared'), { ownerUserId: 'owner-c' }),
-    ).resolves.toMatchObject({ name: 'shared', ownerUserId: 'owner-c' })
-    await expect(renameMcp(db, source.id, { newName: 'shared' })).resolves.toMatchObject({
+    await expect(createMcp(ownerC, localMcp('shared'))).resolves.toMatchObject({
+      name: 'shared',
+      ownerUserId: 'owner-c',
+    })
+    await expect(renameMcp(ownerA, source.id, { newName: 'shared' })).resolves.toMatchObject({
       id: source.id,
       name: 'shared',
     })
@@ -149,8 +199,8 @@ describe('services/mcp.ts CRUD', () => {
 
   test('RFC-223 maps a same-owner create race to one stable 409 conflict', async () => {
     const results = await Promise.allSettled([
-      createMcp(db, localMcp('raced'), { ownerUserId: 'owner-a' }),
-      createMcp(db, localMcp('raced'), { ownerUserId: 'owner-a' }),
+      createMcp(serviceBinding(catalog, 'owner-a', 'user'), localMcp('raced')),
+      createMcp(serviceBinding(catalog, 'owner-a', 'user'), localMcp('raced')),
     ])
 
     expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected'])
@@ -161,27 +211,27 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('update: description + enabled patch', async () => {
-    const created = await createMcp(db, {
+    const created = await createMcp(binding, {
       name: 'm',
       description: 'old',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const updated = await updateMcp(db, created.id, { description: 'new', enabled: false })
+    const updated = await updateMcp(binding, created.id, { description: 'new', enabled: false })
     expect(updated.description).toBe('new')
     expect(updated.enabled).toBe(false)
   })
 
   test('update: config replacement (local)', async () => {
-    const created = await createMcp(db, {
+    const created = await createMcp(binding, {
       name: 'm',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const updated = await updateMcp(db, created.id, {
+    const updated = await updateMcp(binding, created.id, {
       type: 'local',
       config: { command: ['y', '-v'], env: { K: 'v' }, timeoutMs: 7000 },
     })
@@ -191,7 +241,7 @@ describe('services/mcp.ts CRUD', () => {
   })
 
   test('update: type change rejected', async () => {
-    const created = await createMcp(db, {
+    const created = await createMcp(binding, {
       name: 'm',
       description: '',
       type: 'local',
@@ -199,12 +249,12 @@ describe('services/mcp.ts CRUD', () => {
       enabled: true,
     })
     await expect(
-      updateMcp(db, created.id, { type: 'remote', config: { url: 'https://x.io' } }),
+      updateMcp(binding, created.id, { type: 'remote', config: { url: 'https://x.io' } }),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
   test('update: invalid config payload rejected', async () => {
-    const created = await createMcp(db, {
+    const created = await createMcp(binding, {
       name: 'm',
       description: '',
       type: 'local',
@@ -212,48 +262,54 @@ describe('services/mcp.ts CRUD', () => {
       enabled: true,
     })
     await expect(
-      updateMcp(db, created.id, { type: 'local', config: { command: [] } }),
+      updateMcp(binding, created.id, { type: 'local', config: { command: [] } }),
     ).rejects.toBeInstanceOf(ValidationError)
   })
 
   test('update on missing mcp → NotFoundError', async () => {
-    await expect(updateMcp(db, 'nope', { description: 'x' })).rejects.toBeInstanceOf(NotFoundError)
+    await expect(updateMcp(binding, 'nope', { description: 'x' })).rejects.toBeInstanceOf(
+      NotFoundError,
+    )
   })
 
   test('delete: happy path when no agents reference it', async () => {
-    const created = await createMcp(db, {
+    const created = await createMcp(binding, {
       name: 'lonely',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    await deleteMcp(db, created.id, T6_ACTOR)
+    await deleteMcp(binding, created.id)
     expect(await getMcp(db, 'lonely')).toBeNull()
   })
 
   test('delete on missing mcp → NotFoundError', async () => {
-    await expect(deleteMcp(db, 'nope', T6_ACTOR)).rejects.toBeInstanceOf(NotFoundError)
+    await expect(deleteMcp(binding, 'nope')).rejects.toBeInstanceOf(NotFoundError)
   })
 })
 
 describe('services/mcp.ts reference cascade', () => {
   let db: DbClient
+  let catalog: McpCatalogModule
+  let binding: McpServiceBinding
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    catalog = composeTestMcpCatalog(db)
+    binding = serviceBinding(catalog)
   })
 
   // RFC-223 (PR-1): agents.mcp stores mcp IDS, so the reverse lookup keys on the
   // mcp id — only the agent that references THIS id is returned.
   test('findAgentsReferencingMcp: matches by id, not another mcp', async () => {
-    const sentry = await createMcp(db, {
+    const sentry = await createMcp(binding, {
       name: 'sentry',
       description: '',
       type: 'remote',
       config: { url: 'https://s.io' },
       enabled: true,
     })
-    const staging = await createMcp(db, {
+    const staging = await createMcp(binding, {
       name: 'sentry-staging',
       description: '',
       type: 'remote',
@@ -287,18 +343,16 @@ describe('services/mcp.ts reference cascade', () => {
       bodyMd: '',
     })
 
-    const refs = await findAgentsReferencingMcp(db, sentry.id)
+    const refs = await findAgentReferences(db, sentry.id)
     expect(refs).toEqual([
       { id: expect.any(String), name: 'a-prod', ownerUserId: null, visibility: 'private' },
     ])
     // The other mcp's id resolves to its own consumer only.
-    expect((await findAgentsReferencingMcp(db, staging.id)).map((r) => r.name)).toEqual([
-      'a-staging',
-    ])
+    expect((await findAgentReferences(db, staging.id)).map((r) => r.name)).toEqual(['a-staging'])
   })
 
   test('delete with references → ConflictError + principal-aware visible list', async () => {
-    const mcp = await createMcp(db, {
+    const mcp = await createMcp(binding, {
       name: 'm',
       description: '',
       type: 'local',
@@ -320,7 +374,7 @@ describe('services/mcp.ts reference cascade', () => {
     })
     let err: unknown
     try {
-      await deleteMcp(db, mcp.id, T6_ACTOR)
+      await deleteMcp(binding, mcp.id)
     } catch (e) {
       err = e
     }
@@ -336,7 +390,7 @@ describe('services/mcp.ts reference cascade', () => {
   // ID, which is stable across the rename, so referencing rows are untouched and
   // still resolve the (now-renamed) mcp by id.
   test('rename: does NOT rewrite agents.mcp (ids are stable)', async () => {
-    const oldMcp = await createMcp(db, {
+    const oldMcp = await createMcp(binding, {
       name: 'old-name',
       description: '',
       type: 'local',
@@ -345,14 +399,14 @@ describe('services/mcp.ts reference cascade', () => {
     })
     // T5 save-time guard: also seed the unrelated MCPs that the consumer
     // agents reference, otherwise createAgent rejects with mcp-not-found.
-    const other = await createMcp(db, {
+    const other = await createMcp(binding, {
       name: 'other',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const otherMcp = await createMcp(db, {
+    const otherMcp = await createMcp(binding, {
       name: 'other-mcp',
       description: '',
       type: 'local',
@@ -399,7 +453,7 @@ describe('services/mcp.ts reference cascade', () => {
       bodyMd: '',
     })
 
-    const renamed = await renameMcp(db, oldMcp.id, { newName: 'new-name' })
+    const renamed = await renameMcp(binding, oldMcp.id, { newName: 'new-name' })
     expect(renamed.name).toBe('new-name')
 
     const a1 = await getAgent(db, 'consumer-1')
@@ -416,36 +470,36 @@ describe('services/mcp.ts reference cascade', () => {
   })
 
   test('rename: identical name is a no-op', async () => {
-    const m = await createMcp(db, {
+    const m = await createMcp(binding, {
       name: 'same',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    const renamed = await renameMcp(db, m.id, { newName: 'same' })
+    const renamed = await renameMcp(binding, m.id, { newName: 'same' })
     expect(renamed.id).toBe(m.id)
   })
 
   test('rename: target name conflict → ConflictError', async () => {
-    const a = await createMcp(db, {
+    const a = await createMcp(binding, {
       name: 'a',
       description: '',
       type: 'local',
       config: { command: ['x'] },
       enabled: true,
     })
-    await createMcp(db, {
+    await createMcp(binding, {
       name: 'b',
       description: '',
       type: 'local',
       config: { command: ['y'] },
       enabled: true,
     })
-    await expect(renameMcp(db, a.id, { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
+    await expect(renameMcp(binding, a.id, { newName: 'b' })).rejects.toBeInstanceOf(ConflictError)
   })
 
   test('rename: missing source → NotFoundError', async () => {
-    await expect(renameMcp(db, 'gone', { newName: 'x' })).rejects.toBeInstanceOf(NotFoundError)
+    await expect(renameMcp(binding, 'gone', { newName: 'x' })).rejects.toBeInstanceOf(NotFoundError)
   })
 })

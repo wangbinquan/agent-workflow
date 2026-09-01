@@ -238,7 +238,7 @@ describe('schedulerMintCause — 对抗检视修订 #11 merge rule (pinned)', ()
 })
 
 // ── RFC-284 T21 —— nextRetryIndex：七处手写「下一个 retry_index」口径的唯一实现 ──
-import { nextRetryIndex } from '../src/services/nodeRunMint'
+import { nextRetryIndex } from '../src/modules/task-execution/application/nextRetryIndex'
 import { readFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 
@@ -276,8 +276,8 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
   test('结构锁：五文件全部经 nextRetryIndex，手写 max-over-retryIndex 归零', () => {
     const files = [
       'services/task.ts',
-      'services/review.ts',
-      'services/taskQuestionDispatch.ts',
+      'modules/collaboration/infrastructure/legacySqliteReview.ts',
+      'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
       'modules/task-execution/composition/nodeMechanics.ts',
     ]
     for (const f of files) {
@@ -294,7 +294,15 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
       expect(/retryIndex: \w+\.retryIndex \+ 1/.test(src)).toBe(false)
     }
     expect(
-      readFileSync(resolvePath(import.meta.dir, '..', 'src', 'services/nodeRunMint.ts'), 'utf8'),
+      readFileSync(
+        resolvePath(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules/task-execution/application/nextRetryIndex.ts',
+        ),
+        'utf8',
+      ),
     ).toContain('export function nextRetryIndex')
   })
 })

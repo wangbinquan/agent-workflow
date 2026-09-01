@@ -25,6 +25,8 @@
 // If any of these go red the runtime contract drifted — investigate before
 // relaxing.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -342,6 +344,7 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAns('q1')],
       actor: { userId: 'u1', role: 'owner' },
@@ -461,6 +464,7 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     // (no designer rerun) and the readiness scan lists crossSec pending.
     const ret = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor: { userId: 'u1', role: 'owner' },
@@ -544,6 +548,7 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     // designer entries at all).
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       directive: 'stop',
@@ -555,6 +560,7 @@ describe('RFC-056 evaluateDesignerRerunReadiness — multi-source aggregation', 
     // ONLY ux's designer entry (the legacy sources=[ux only] / sourceCount=1).
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor: { userId: 'u1', role: 'owner' },
@@ -637,6 +643,7 @@ describe('RFC-125 follow-up — failed→resume must NOT drop answered cross-cla
     // completes-with-output (the task fails) → the round stays answered+UNCONSUMED.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAns('q1')],
       actor: { userId: 'u1', role: 'owner' },
@@ -646,7 +653,7 @@ describe('RFC-125 follow-up — failed→resume must NOT drop answered cross-cla
     // RETIRED → the lifecycle scan must NOT abandon the round; it stays 'answered'
     // so the human's answer is preserved (the deferred queue re-injects it on resume).
     await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
-    await runLifecycleInvariants({ db })
+    await runLifecycleInvariants({ operations: taskRecoveryOperations(db) })
     const sess = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)))[0]
     expect(sess?.status).toBe('answered') // RFC-126: NOT abandoned anymore
 
@@ -693,6 +700,7 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     // deleted); its entries are materialized, sealed and consumed by the unified dispatch.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAns('q1'), makeAns('q2')],
       actor,
@@ -745,12 +753,14 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     const results = await Promise.allSettled([
       autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
         answers: [makeAns('q1')],
         actor,
       }),
       autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
         answers: [makeAns('q1')],
         actor,
@@ -825,6 +835,7 @@ describe('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', () => {
     const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [makeAns('q1')],
       actor,

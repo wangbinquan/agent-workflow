@@ -22,16 +22,19 @@ import {
   setMemoryDistillLangProvider,
 } from '../src/services/memoryDistillScheduler'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
   let db: DbClient
+  let memory: ReturnType<typeof createSqliteMemoryDistillTestContext>
 
   beforeEach(() => {
     resetBroadcastersForTests()
     resetMemoryDistillLangProviderForTest()
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
   })
 
   afterEach(() => {
@@ -40,7 +43,7 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
 
   test('explicit outputLang wins over the ambient provider', async () => {
     setMemoryDistillLangProvider(() => 'en-US')
-    const { jobId } = await enqueueDistillJob(db, {
+    const { jobId } = await enqueueDistillJob(memory.store, {
       sourceKind: 'feedback',
       sourceEventId: 'evt-1',
       taskId: null,
@@ -52,7 +55,7 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
 
   test('ambient provider used when explicit outputLang omitted (production path)', async () => {
     setMemoryDistillLangProvider(() => 'zh-CN')
-    const { jobId } = await enqueueDistillJob(db, {
+    const { jobId } = await enqueueDistillJob(memory.store, {
       sourceKind: 'feedback',
       sourceEventId: 'evt-2',
       taskId: null,
@@ -62,7 +65,7 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
   })
 
   test('no provider + no explicit → DB row carries NULL (RFC-041 baseline)', async () => {
-    const { jobId } = await enqueueDistillJob(db, {
+    const { jobId } = await enqueueDistillJob(memory.store, {
       sourceKind: 'feedback',
       sourceEventId: 'evt-3',
       taskId: null,
@@ -73,7 +76,7 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
 
   test('explicit null overrides a provider-set language → DB row NULL', async () => {
     setMemoryDistillLangProvider(() => 'zh-CN')
-    const { jobId } = await enqueueDistillJob(db, {
+    const { jobId } = await enqueueDistillJob(memory.store, {
       sourceKind: 'feedback',
       sourceEventId: 'evt-4',
       taskId: null,
@@ -92,13 +95,13 @@ describe('RFC-050 enqueueDistillJob — output language snapshot', () => {
     // and stable through retry.
     let current: 'zh-CN' | 'en-US' = 'zh-CN'
     setMemoryDistillLangProvider(() => current)
-    const a = await enqueueDistillJob(db, {
+    const a = await enqueueDistillJob(memory.store, {
       sourceKind: 'feedback',
       sourceEventId: 'sibling-a',
       taskId: 't-shared',
     })
     current = 'en-US'
-    const b = await enqueueDistillJob(db, {
+    const b = await enqueueDistillJob(memory.store, {
       sourceKind: 'feedback',
       sourceEventId: 'sibling-b',
       taskId: 't-shared',

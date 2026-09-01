@@ -60,6 +60,7 @@ describe('RFC-057 — U1.cancel-older-keep-newest', () => {
     const toCancel = sorted.slice(0, -1)
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId: setup.alertId,
       optionId: 'U1.cancel-older-keep-newest',
@@ -84,6 +85,7 @@ describe('RFC-057 — U1.cancel-older-keep-newest', () => {
     const toCancel = sorted.slice(0, -1)
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId: setup.alertId,
       optionId: 'U1.cancel-older-keep-newest',
@@ -138,6 +140,7 @@ describe('RFC-057 — U1.cancel-newer-keep-oldest', () => {
     const toCancel = sorted.slice(1)
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId: setup.alertId,
       optionId: 'U1.cancel-newer-keep-oldest',

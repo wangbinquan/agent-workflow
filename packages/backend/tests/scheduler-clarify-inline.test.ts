@@ -14,6 +14,7 @@
 // Uses MOCK_OPENCODE_CAPTURE_ARGV_TO + MOCK_OPENCODE_EMIT_SESSION_ID added in
 // fixtures/mock-opencode.ts (RFC-026 additive helpers).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -263,6 +264,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     expect(sessionRow).toBeDefined()
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessionRow!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
@@ -362,6 +364,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     expect(firstRound).toBeDefined()
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: firstRound!.intermediaryNodeRunId,
       directive: 'continue',
       answers: [
@@ -396,6 +399,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     expect(secondRound).toBeDefined()
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: secondRound!.intermediaryNodeRunId,
       directive: 'stop',
       answers: [
@@ -465,6 +469,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     )[0]
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessionRow!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [
@@ -534,6 +539,7 @@ describe('RFC-026 scheduler clarify inline-mode', () => {
     expect(sessionRow).toBeDefined()
     await autoDispatchClarifyRound({
       db: h.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessionRow!.intermediaryNodeRunId,
       directive: 'stop', // RFC-100: finalize round → <workflow-output> accepted
       answers: [

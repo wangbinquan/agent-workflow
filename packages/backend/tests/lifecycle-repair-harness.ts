@@ -24,6 +24,8 @@ import {
 import { abortAllActiveTasks } from '../src/services/task'
 import type { StartTaskDeps } from '../src/services/task'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import type { TaskRecoveryOperations } from '../src/modules/task-execution/application/ports/taskRecoveryOperations'
 
 export const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -38,6 +40,7 @@ export interface RepairHarness {
    *  by task.ts's `.catch`. Tests should call abortAllActiveTasks + a short
    *  sleep after applyRepairOption() before asserting to avoid races. */
   deps: StartTaskDeps
+  operations: TaskRecoveryOperations
 }
 
 export async function buildHarness(opts: {
@@ -97,6 +100,7 @@ export async function buildHarness(opts: {
       appHome: tmp,
       binaryOverride: ['/nonexistent-opencode-binary-rfc057-test'],
     },
+    operations: taskRecoveryOperations(db),
   }
 }
 

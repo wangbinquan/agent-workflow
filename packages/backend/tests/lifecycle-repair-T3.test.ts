@@ -28,6 +28,7 @@ describe('RFC-057 — T3.demote-task', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T3.demote-task',
@@ -91,6 +92,7 @@ describe('RFC-057 — T3.mark-task-failed', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T3', detail: { rule: 'T3' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T3.mark-task-failed',
@@ -122,6 +124,7 @@ describe('RFC-057 — T3.mark-task-failed', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'T3', detail: { rule: 'T3' } })
     await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'T3.mark-task-failed',

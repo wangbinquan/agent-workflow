@@ -16,6 +16,7 @@
 // Driven end-to-end through the REAL scheduler + REAL clarify-answer driver
 // (autoDispatchClarifyRound) — same harness as clarify-review-combination-scenarios.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -288,6 +289,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
   // That rerun is the qa handler and exits done WITHOUT output (clarify-ask ending).
   await autoDispatchClarifyRound({
     db,
+    memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: await openClarifyRunId(task.id),
     answers: [answerFor('qa')],
     directive: 'continue',
@@ -312,6 +314,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
   // capped by qb's answer rerun; the v1 output run never enters it).
   await autoDispatchClarifyRound({
     db,
+    memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: await openClarifyRunId(task.id),
     answers: [answerFor('qb')],
     directive: 'stop',

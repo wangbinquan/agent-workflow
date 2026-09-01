@@ -20,6 +20,7 @@ import {
 import { getAgent } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -220,7 +221,11 @@ describe('agent service', () => {
   test('update writes runtime: pin, preserve on unrelated patch, clear to inherit', async () => {
     // RFC-111/F6: a pinned runtime must resolve to a runtimes row
     // (validateRuntimeReference) — seed the registry row this test pins to.
-    await createRuntime(db, { name: 'opencode-1', protocol: 'opencode', binaryPath: null })
+    await createRuntime(runtimeRegistryPersistence(db), {
+      name: 'opencode-1',
+      protocol: 'opencode',
+      binaryPath: null,
+    })
     const created = await createAgent(db, {
       name: 'rt',
       description: 'orig',

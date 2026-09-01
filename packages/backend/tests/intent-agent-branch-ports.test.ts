@@ -21,17 +21,28 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import { getAgentById } from '../src/services/agent'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
-import { buildIntentDump } from '../src/services/intent/dumpBuilder'
+import {
+  buildIntentDumpForTest as buildIntentDump,
+  intentResourceCatalogBinding,
+} from './helpers/intentResourceCatalogBinding'
 import { buildAgentFence, type IntentContextManifest } from '../src/services/intent/manifest'
+import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
 import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
 import { createIntentSession } from '../src/services/intent/session'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
+import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import type {
+  IntentDumpAuxiliaryQueries,
+  IntentPersistence,
+} from '../src/modules/intent/public/operations'
+import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_bports_000000000'
 
 let db: DbClient
 let appHome: string
+let persistence: IntentPersistence
 
 const actor: Actor = {
   user: { id: OWNER, username: 'owner', displayName: 'Owner', role: 'user', status: 'active' },
@@ -41,6 +52,10 @@ const actor: Actor = {
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
+  persistence = composeSqliteIntentPersistence({
+    db,
+    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+  })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-bports-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })
   await db.insert(users).values({
@@ -93,6 +108,32 @@ const deps = (): ApplyIntentDeps => ({
   ...intentApplyResourceBinding(db, actor),
 })
 
+const dumpAuxiliary: IntentDumpAuxiliaryQueries = Object.freeze({
+  runtimeInventory: Object.freeze({
+    async list(): Promise<
+      readonly { readonly name: string; readonly protocol: 'opencode'; readonly enabled: boolean }[]
+    > {
+      return [{ name: 'opencode', protocol: 'opencode', enabled: true }]
+    },
+    async resolveDefault(): Promise<{ readonly name: string; readonly protocol: 'opencode' }> {
+      return { name: 'opencode', protocol: 'opencode' }
+    },
+  }),
+  async loadAgentPorts() {
+    return new Map()
+  },
+  platformInventory: Object.freeze({
+    async listRows() {
+      return []
+    },
+  }),
+})
+
+function createSession(message: string) {
+  const catalog = intentResourceCatalogBinding(db, actor, appHome)
+  return createIntentSession(persistence, intentResourceVisibility(catalog), actor, { message })
+}
+
 const createOp = (payload: Record<string, unknown>) => ({
   $schema_version: 1,
   ops: [
@@ -113,7 +154,7 @@ const createOp = (payload: Record<string, unknown>) => ({
 })
 
 async function createAgent(payload: Record<string, unknown>): Promise<string> {
-  const { session } = await createIntentSession(db, actor, { message: 'make a router agent' })
+  const { session } = await createSession('make a router agent')
   const draft = installDraft(session.id, createOp(payload), [])
   const receipt = await applyIntentChangeset(deps(), {
     sessionId: session.id,
@@ -129,7 +170,7 @@ async function createAgent(payload: Record<string, unknown>): Promise<string> {
 async function updateAgent(id: string, payload: Record<string, unknown>): Promise<void> {
   const existing = await getAgentById(db, id)
   if (existing === null) throw new Error('agent missing')
-  const { session } = await createIntentSession(db, actor, { message: 'tweak the router agent' })
+  const { session } = await createSession('tweak the router agent')
   const manifest: IntentContextManifest = [
     {
       handle: 'res#agent#1',
@@ -224,6 +265,7 @@ describe('RFC-348 — agent branchPorts through the intent seams', () => {
       actor,
       appHome,
       mounts: [{ resourceType: 'agent', resourceId: id }],
+      ...dumpAuxiliary,
     })
     const mounted = dump.seedFiles.find(
       (f) => f.path.startsWith('mounted/') && f.content.includes('brancher'),
@@ -245,6 +287,7 @@ describe('RFC-348 — draft validation sees the stored branch ports of a mounted
       actor,
       appHome,
       mounts: [{ resourceType: 'agent', resourceId: id }],
+      ...dumpAuxiliary,
     })
     expect(dump.agentBranchPorts.get(id)).toEqual(['needs_fix'])
     const handle = dump.manifest.find((e) => e.resourceId === id)?.handle

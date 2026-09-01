@@ -17,8 +17,11 @@ import {
   resolveOpencodeDbPath,
 } from '../src/services/runtime/opencode/sessionCapture'
 import type { Logger } from '../src/util/log'
+import { createSqliteRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const capturePersistence = (db: DbClient) => createSqliteRuntimeSessionCapturePersistence(db)
 
 function seedNodeRun(db: DbClient): string {
   const wfId = ulid()
@@ -151,7 +154,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: '/tmp/definitely-does-not-exist-xyz/opencode.db',
     })
     expect(result.failed).toBe(true)
@@ -201,7 +204,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
     })
     expect(result.failed).toBe(false)
@@ -237,7 +240,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
     })
     expect(result.capturedSessionIds).toEqual([])
@@ -266,7 +269,7 @@ describe('captureChildSessions', () => {
     await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
     })
     // Verify no writes happened to the opencode db (row counts unchanged).
@@ -288,7 +291,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: dbPath,
     })
     expect(result.failed).toBe(true)
@@ -357,7 +360,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
     })
     expect(result.failed).toBe(false)
@@ -427,7 +430,7 @@ describe('captureChildSessions', () => {
       rootSessionId: 'root',
       nodeRunId, // this run, NOT the sibling
       taskId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
     })
     expect(result.failed).toBe(false)
@@ -477,7 +480,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
       alreadyInsertedPartIds: already,
     })
@@ -508,7 +511,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
       alreadyInsertedPartIds: new Map([['A', new Set(['pA'])]]),
     })
@@ -536,7 +539,7 @@ describe('captureChildSessions', () => {
     const result = await captureChildSessions({
       rootSessionId: 'root',
       nodeRunId,
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
     })
     expect(result.insertedEventRows).toBe(1)
@@ -563,7 +566,7 @@ describe('captureChildSessions', () => {
       rootSessionId: 'root',
       nodeRunId,
       // taskId intentionally omitted — backward compat with pre-dedup callers
-      db,
+      persistence: capturePersistence(db),
       opencodeDbPath: opencodeDb,
     })
     expect(result.failed).toBe(false)

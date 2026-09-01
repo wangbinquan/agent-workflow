@@ -28,6 +28,7 @@ describe('RFC-057 — S4.kick-task', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S4.kick-task',
@@ -84,6 +85,7 @@ describe('RFC-057 — S4.cancel-task', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S4', detail: { rule: 'S4' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S4.cancel-task',

@@ -12,8 +12,8 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createManagedSkill } from '../src/services/skill'
-import { commitSkillVersion } from '../src/services/skillVersion'
+import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -63,7 +63,16 @@ describe('commitSkillVersion atomic publish', () => {
 
   test('source uses swapInStaged, not the old non-atomic cpSync(staging → filesDir)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'skillVersion.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'skillVersion.ts',
+      ),
       'utf-8',
     )
     expect(src).toContain('swapInStaged(filesDir, publishId)')

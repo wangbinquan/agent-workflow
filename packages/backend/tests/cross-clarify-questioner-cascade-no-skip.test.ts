@@ -52,6 +52,7 @@
 // If any of these go red, do NOT relax — re-read
 // design/RFC-056-clarify-cross-agent/patch-2026-05-25-questioner-cascade-no-skip.md.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { insertLegacyCrossClarify } from './clarify-fixtures'
@@ -347,6 +348,7 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
     // User continues.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('hwdacf')],
       actor,
@@ -422,6 +424,7 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
 
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('cx1')],
       actor,
@@ -485,6 +488,7 @@ describe('RFC-056 patch 2026-05-25 — questioner cascade no-skip + cci inherita
 
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,

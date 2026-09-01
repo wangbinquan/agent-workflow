@@ -18,6 +18,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { cachedRepos } from '../src/db/schema'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -143,7 +144,12 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
 
   test('cold clone with submoduleMode=auto populates child working dir', async () => {
     const result = await resolveCachedRepo(
-      { db, appHome, submoduleMode: 'auto', submoduleJobs: 4 },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db),
+        appHome,
+        submoduleMode: 'auto',
+        submoduleJobs: 4,
+      },
       { url: fix.parentUrl },
     )
 
@@ -162,7 +168,12 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
 
   test('cold clone with submoduleMode=never leaves submodule dir empty', async () => {
     const result = await resolveCachedRepo(
-      { db, appHome, submoduleMode: 'never', submoduleJobs: 4 },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db),
+        appHome,
+        submoduleMode: 'never',
+        submoduleJobs: 4,
+      },
       { url: fix.parentUrl },
     )
     expect(result.cold).toBe(true)
@@ -177,12 +188,23 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
   test('warm hit re-runs submodule sync + update', async () => {
     // First call: cold clone populates everything.
     await resolveCachedRepo(
-      { db, appHome, submoduleMode: 'auto', submoduleJobs: 1 },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db),
+        appHome,
+        submoduleMode: 'auto',
+        submoduleJobs: 1,
+      },
       { url: fix.parentUrl },
     )
     // Second call: warm hit. Should re-run sync/update without erroring.
     const second = await resolveCachedRepo(
-      { db, appHome, submoduleMode: 'auto', submoduleJobs: 1, fetchOnReuse: false },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db),
+        appHome,
+        submoduleMode: 'auto',
+        submoduleJobs: 1,
+        fetchOnReuse: false,
+      },
       { url: fix.parentUrl },
     )
     expect(second.cold).toBe(false)
@@ -193,11 +215,21 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
 
   test('refreshCachedRepo re-runs submodule sync and updates DB telemetry', async () => {
     const first = await resolveCachedRepo(
-      { db, appHome, submoduleMode: 'auto', submoduleJobs: 2 },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db),
+        appHome,
+        submoduleMode: 'auto',
+        submoduleJobs: 2,
+      },
       { url: fix.parentUrl },
     )
     const refresh = await refreshCachedRepo(
-      { db, appHome, submoduleMode: 'auto', submoduleJobs: 2 },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db),
+        appHome,
+        submoduleMode: 'auto',
+        submoduleJobs: 2,
+      },
       first.cached.id,
     )
     expect(refresh.submoduleSyncOk).toBe(true)
@@ -221,7 +253,12 @@ describe.skipIf(!RUN_GIT_NETWORK)('gitRepoCache RFC-034 submodule recursion', ()
     // Reuse the child as a parent — it has no submodules of its own.
     const childUrl = `file://${fix.childBare}`
     const result = await resolveCachedRepo(
-      { db, appHome, submoduleMode: 'auto', submoduleJobs: 4 },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db),
+        appHome,
+        submoduleMode: 'auto',
+        submoduleJobs: 4,
+      },
       { url: childUrl },
     )
     expect(result.hasSubmodules).toBe(false)

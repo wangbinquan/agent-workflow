@@ -12,12 +12,20 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { skillOperationLocks, skills } from '../src/db/schema'
-import { createManagedSkill, createManagedSkillWithFiles, listSkills } from '../src/services/skill'
+import {
+  createManagedSkill,
+  createManagedSkillWithFiles,
+  listSkills,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
-import { recoverSkillOperations } from '../src/services/skillOpRecoveryDriver'
-import { SKILL_OP_RECOVERY_REGISTRY } from '../src/services/skillOpRegistry'
-import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
+import {
+  advancePhase,
+  beginOperation,
+  getActiveOp,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
+import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
+import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
+import { runSkillIdentityMigrationBarrier } from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

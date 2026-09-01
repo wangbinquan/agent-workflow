@@ -16,7 +16,7 @@ import {
   readSkillContent,
   saveSkillWithToken,
   writeSkillContent,
-} from '../src/services/skill'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import { ConflictError, ValidationError } from '../src/util/errors'
 

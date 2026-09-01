@@ -35,6 +35,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, openDb, type DbClient } from '../../src/db/client'
 import { nodeRuns, tasks, workflows } from '../../src/db/schema'
 import { reapOrphanRuns } from '../../src/services/orphans'
+import { taskRecoveryOperations } from '../helpers/taskRecoveryOperations'
 
 const RUN_CHAOS = process.env.RUN_CHAOS === '1'
 const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
@@ -115,7 +116,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
     let reapErr: unknown = null
     let reapResult: Awaited<ReturnType<typeof reapOrphanRuns>> | null = null
     try {
-      reapResult = await reapOrphanRuns(db)
+      reapResult = await reapOrphanRuns(taskRecoveryOperations(db))
     } catch (err) {
       reapErr = err
     }

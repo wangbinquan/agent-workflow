@@ -37,8 +37,16 @@ import { rowToDistillJob } from '../src/services/memoryDistiller'
 import { promoteCandidate } from '../src/services/memory'
 import { injectMemoryForRun } from '../src/services/memoryInject'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
+import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
+import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+type MemoryTestContext = ReturnType<typeof createSqliteMemoryDistillTestContext>
+
+function distillDeps(memory: MemoryTestContext) {
+  return { store: memory.store, reviewedArtifacts: memory.reviewedArtifacts }
+}
 
 function distillerStdout(
   input: Parameters<DistillerSpawnFn>[0],
@@ -223,8 +231,10 @@ later draft:
 
 describe('loadSourceEvents + loadScopeContexts', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
@@ -323,7 +333,10 @@ describe('loadSourceEvents + loadScopeContexts', () => {
       finishedAt: null,
     })
 
-    const loaded = await loadSourceEvents(db, [job, feedbackJob])
+    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
+      job,
+      feedbackJob,
+    ])
     expect(loaded.clarify.length).toBe(1)
     expect(loaded.clarify[0]!.id).toBe(clarifyId)
     expect(loaded.feedback.length).toBe(1)
@@ -373,7 +386,7 @@ describe('loadSourceEvents + loadScopeContexts', () => {
         createdAt: Date.now(),
       })
       .run()
-    const ctx = await loadScopeContexts(db, {
+    const ctx = await loadScopeContexts(memory.store, {
       agentIds: ['a1'],
       workflowId: null,
       repoId: null,
@@ -452,8 +465,10 @@ describe('buildDistillerUserPrompt', () => {
 
 describe('validateAndPersistCandidate', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
@@ -474,7 +489,7 @@ describe('validateAndPersistCandidate', () => {
       finishedAt: null,
     })
     const ok = await validateAndPersistCandidate(
-      db,
+      memory.store,
       {
         scopeType: 'global',
         scopeId: null,
@@ -513,7 +528,7 @@ describe('validateAndPersistCandidate', () => {
       finishedAt: null,
     })
     const r = await validateAndPersistCandidate(
-      db,
+      memory.store,
       {
         scopeType: 'global',
         scopeId: 'should-be-null',
@@ -531,8 +546,10 @@ describe('validateAndPersistCandidate', () => {
 
 describe('runDistill orchestration (mocked spawnFn)', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
@@ -584,7 +601,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       }
     }
     const r = await runDistill({
-      db,
+      ...distillDeps(memory),
       job: rowToDistillJob(jobRow),
       siblings: [rowToDistillJob(jobRow)],
       spawnFn,
@@ -642,7 +659,9 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
         }),
       ),
     })
-    expect(await runDistill({ db, job, siblings: [job], spawnFn })).toMatchObject({
+    expect(
+      await runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
+    ).toMatchObject({
       candidatesCreated: 1,
     })
 
@@ -673,7 +692,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     } as unknown as Agent
 
     const beforeApproval = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId: nextTaskId,
       primaryAgent,
       dependents: [],
@@ -682,7 +701,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
 
     await promoteCandidate(db, candidate.id, { action: 'approve' }, 'closed-loop-admin')
     const afterApproval = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId: nextTaskId,
       primaryAgent,
       dependents: [],
@@ -729,7 +748,7 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       }
     }
     await runDistill({
-      db,
+      ...distillDeps(memory),
       job,
       siblings: [job],
       spawnFn,
@@ -767,9 +786,9 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
       stderr: 'boom',
       stdout: '',
     })
-    await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toThrow(
-      /exited with code 1/,
-    )
+    await expect(
+      runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
+    ).rejects.toThrow(/exited with code 1/)
   })
 
   test('cleanup failure preserves the outer cwd and reports an ordinary cleanup error', async () => {
@@ -805,9 +824,9 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     }
 
     try {
-      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toThrow(
-        'distiller scratch cleanup did not complete safely',
-      )
+      await expect(
+        runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
+      ).rejects.toThrow('distiller scratch cleanup did not complete safely')
       expect(cleanupCalled).toBe(true)
       expect(cwd).not.toBe('')
       expect(existsSync(cwd)).toBe(true)
@@ -840,9 +859,9 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     }
 
     try {
-      await expect(runDistill({ db, job, siblings: [job], spawnFn })).rejects.toThrow(
-        'runtime spawn state is indeterminate',
-      )
+      await expect(
+        runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
+      ).rejects.toThrow('runtime spawn state is indeterminate')
       expect(cwd).not.toBe('')
       expect(existsSync(cwd)).toBe(true)
     } finally {

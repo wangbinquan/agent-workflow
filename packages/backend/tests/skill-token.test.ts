@@ -8,7 +8,7 @@ import {
   encodeSkillToken,
   skillTokenMatches,
   type SkillPreconditionToken,
-} from '../src/services/skillToken'
+} from '../src/modules/resource-catalog/application/skills/skillToken'
 
 const T = (
   skillId: string,

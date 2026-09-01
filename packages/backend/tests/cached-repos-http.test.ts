@@ -15,6 +15,10 @@ import { cachedRepos, tasks, workflows, taskRepos } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { nonInteractiveGitEnv } from '../src/util/git'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  type RepositoryWorkspaceStore,
+} from '../src/modules/source-control/composition'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -40,6 +44,7 @@ function git(...args: string[]): void {
 
 interface Harness {
   db: DbClient
+  store: RepositoryWorkspaceStore
   app: Hono
   appHome: string
   remoteUrl: string
@@ -73,15 +78,17 @@ function buildHarness(): Harness {
     mkdirSync(appHome, { recursive: true })
     process.env.AGENT_WORKFLOW_HOME = appHome
     const db = createInMemoryDb(MIGRATIONS)
+    const store = composeSqliteRepositoryWorkspaceStore(db)
     const app = createApp({
       token: TOKEN,
       configPath: join(tmp, 'config.json'),
       opencodeVersion: '1.14.25',
       dbVersion: 8,
       db,
+      repositoryWorkspaceStore: store,
     })
     const remoteUrl = buildBareRemote(tmp)
-    return { db, app, appHome, remoteUrl }
+    return { db, store, app, appHome, remoteUrl }
   } catch (error) {
     cleanup()
     cleanupHarness = undefined
@@ -115,7 +122,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
 
   test('GET /api/cached-repos lists cached entries with redacted URL', async () => {
     await resolveCachedRepo(
-      { db: h.db, appHome: h.appHome, fetchOnReuse: false },
+      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
       { url: h.remoteUrl },
     )
     const res = await req(h.app, '/api/cached-repos')
@@ -130,7 +137,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
 
   test('POST /api/cached-repos/:id/refresh updates lastFetchedAt', async () => {
     const r = await resolveCachedRepo(
-      { db: h.db, appHome: h.appHome, fetchOnReuse: false },
+      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
       { url: h.remoteUrl },
     )
     const initial = r.cached.lastFetchedAt
@@ -144,7 +151,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
 
   test('DELETE /api/cached-repos/:id with no references succeeds', async () => {
     const r = await resolveCachedRepo(
-      { db: h.db, appHome: h.appHome, fetchOnReuse: false },
+      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
       { url: h.remoteUrl },
     )
     const res = await req(h.app, `/api/cached-repos/${r.cached.id}`, { method: 'DELETE' })
@@ -154,7 +161,7 @@ describe('cached-repos HTTP routes (RFC-024 T5)', () => {
 
   test('DELETE blocked by reference count without ?force=1', async () => {
     const r = await resolveCachedRepo(
-      { db: h.db, appHome: h.appHome, fetchOnReuse: false },
+      { store: h.store, appHome: h.appHome, fetchOnReuse: false },
       { url: h.remoteUrl },
     )
     // RFC-204: references are counted by MIRROR ID (task_repos.cached_repo_id),

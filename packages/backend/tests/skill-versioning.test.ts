@@ -21,7 +21,7 @@ import {
   writeSkillContent,
   writeSkillFile,
   type SkillFsOptions,
-} from '../src/services/skill'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import {
   commitSkillVersion,
@@ -35,7 +35,7 @@ import {
   restoreSkillVersion,
   skillVersionRelPath,
   type TreeEntry,
-} from '../src/services/skillVersion'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -339,7 +339,19 @@ describe('lazy backfill + reconcile', () => {
 
 describe('write-path single funnel (source guard)', () => {
   test('skill.ts no longer writes SKILL.md outside commitSkillVersion', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'skill.ts'), 'utf-8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'skill.ts',
+      ),
+      'utf-8',
+    )
     // The only writeFileSync(...) calls remaining must be inside produce()
     // closures handed to commitSkillVersion — never a direct write to the live
     // root's SKILL.md (which would bypass versioning).

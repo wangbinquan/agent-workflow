@@ -23,8 +23,8 @@ import {
   getWorkflow,
   listWorkflows,
   updateWorkflow,
-  validateWorkflow,
 } from '../src/services/workflow'
+import { validateWorkflowById } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 
 const TOKEN = 'a'.repeat(64)
@@ -226,7 +226,7 @@ describe('workflow service', () => {
       description: '',
       definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
     })
-    const result = await validateWorkflow(db, wf.id)
+    const result = await validateWorkflowById(db, wf.id)
     expect(result).toEqual({ ok: true, issues: [] })
   })
 
@@ -236,7 +236,7 @@ describe('workflow service', () => {
       description: '',
       definition: sampleDefinition(),
     })
-    const result = await validateWorkflow(db, wf.id)
+    const result = await validateWorkflowById(db, wf.id)
     expect(result.ok).toBe(false)
     const codes = result.issues.map((i) => i.code)
     // sampleDefinition references agent 'code-worker' (not seeded) and edges

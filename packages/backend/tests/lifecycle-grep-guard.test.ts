@@ -1,7 +1,7 @@
 // RFC-053 PR-B P-1 — source-grep guard against direct node_runs.status writes.
 //
 // Forbids any future code from doing `db.update(nodeRuns).set({ status: ... })`
-// outside the single allowlisted writer (`services/lifecycle.ts` itself).
+// outside the single allowlisted SQLite writer (`platform/persistence/sqlite/taskLifecycle.ts`).
 // Forces consumers through `transitionNodeRunStatus()` or `setNodeRunStatus()`,
 // which enforce the state machine and CAS predicate.
 //
@@ -151,7 +151,7 @@ const KERNEL_DIRECT_WRITES = 3
  * 改造前这条守卫的形态是：扫到直写 → 检查前 5 行有没有
  * `rfc053-allow-direct-status-write` → 有就当作没看见。任意文件、任意状态、任意次数。
  * 而它的两个兄弟棘轮（`tasks.status` 的 s14、`merge_state` 的 rfc144）**都是**逐文件
- * 精确计数的硬 allowlist（`{ 'services/lifecycle.ts': 1 }` / `{ …: 2 }`，并各自单独断言
+ * 精确计数的硬 allowlist（`{ 'platform/persistence/sqlite/taskLifecycle.ts': 1 }` / `{ …: 2 }`，并各自单独断言
  * 那个数字，防止空绿）。三台状态机里，调度器实际驱动的那一台防线最弱。
  *
  * 每一条被标记逃逸的直写同时绕过 `assertNodeRunSourceTerminationAdmission`
@@ -164,11 +164,12 @@ const KERNEL_DIRECT_WRITES = 3
  */
 const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   // 内核：`transitionNodeRunStatus` 与 `setNodeRunStatus` 各一处，外加 CAS 的重试写。
-  'services/lifecycle.ts': KERNEL_DIRECT_WRITES,
-  // RFC-303 之前就存在的三处终态清扫：把超时/孤儿 run 收成 'canceled'。
-  'services/terminalSweep.ts': 3,
+  'platform/persistence/sqlite/taskLifecycle.ts': KERNEL_DIRECT_WRITES,
+  // Provider-specific terminal sweeps: parked clarify run + remaining human gates.
+  'modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep.ts': 2,
+  'modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts': 2,
   // clarify 封存：把已回答的澄清 run 收成 'done'。
-  'services/clarify/seal.ts': 1,
+  'modules/collaboration/infrastructure/legacySqliteClarify/seal.ts': 1,
 }
 
 describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件精确账本', () => {
@@ -199,13 +200,17 @@ describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件�
     // 标记还有价值——它让读代码的人知道「这是有意的，不是漏改」。
     // 它失去的只是「让扫描器闭眼」这项权力。
     const unmarked = matches
-      .filter((match) => match.file !== 'services/lifecycle.ts' && !match.marked)
+      .filter(
+        (match) => match.file !== 'platform/persistence/sqlite/taskLifecycle.ts' && !match.marked,
+      )
       .map((match) => `${match.file}:${match.line}`)
     expect(unmarked, '非内核直写没有写明意图标记').toEqual([])
   })
 
   test('内核自己的直写都带标记（回归守卫）', () => {
-    const kernel = matches.filter((match) => match.file === 'services/lifecycle.ts')
+    const kernel = matches.filter(
+      (match) => match.file === 'platform/persistence/sqlite/taskLifecycle.ts',
+    )
     expect(kernel.length).toBe(KERNEL_DIRECT_WRITES)
     expect(kernel.every((match) => match.marked)).toBe(true)
   })

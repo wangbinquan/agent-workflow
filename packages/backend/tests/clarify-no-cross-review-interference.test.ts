@@ -14,6 +14,7 @@
 //     inheritance) preserves reviewIteration on the new source-agent row
 //     (locked here too).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -159,6 +160,7 @@ describe('clarify activity does not perturb in-flight reviews', () => {
 
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [
         {

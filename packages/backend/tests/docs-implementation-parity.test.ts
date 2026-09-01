@@ -129,8 +129,10 @@ describe('docs ↔ implementation parity', () => {
     // This is that entry. Implementation signal: the revalidation trigger being
     // wired into the credential write points. If it is wired, the plan index
     // must say Done (not Draft); if it is not, it must not say Done.
-    const sessionStore = read('packages/backend/src/auth/sessionStore.ts')
-    const shipped = sessionStore.includes("triggerRevalidation(db, 'session-revoked')")
+    const sessionStore = read(
+      'packages/backend/src/auth/infrastructure/legacySqliteSessionStore.ts',
+    )
+    const shipped = sessionStore.includes("triggerRevalidation('session-revoked')")
 
     const planRow = read('design', 'plan.md')
       .split(/\r?\n/)

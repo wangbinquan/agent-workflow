@@ -24,7 +24,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skillOperationLocks, skills, skillVersions } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
-import { deleteManagedSkillOp } from '../src/services/skillDeleteOp'
+import { deleteManagedSkillOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
 import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
 import {
   skillFilesAbs,
@@ -33,9 +33,16 @@ import {
   skillVersionAbs,
   skillVersionRelPath,
 } from '../src/services/skillIdentityPaths'
-import { hashDir } from '../src/services/skillHash'
-import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
-import { opBackupDir, opStagedDir } from '../src/services/skillFsPublish'
+import { hashDir } from '../src/modules/resource-catalog/infrastructure/legacy/skillHash'
+import {
+  advancePhase,
+  beginOperation,
+  getActiveOp,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
+import {
+  opBackupDir,
+  opStagedDir,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

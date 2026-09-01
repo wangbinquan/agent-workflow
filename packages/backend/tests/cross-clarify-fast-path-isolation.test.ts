@@ -14,6 +14,7 @@
 //   B's dispatch alone fires exactly one designer rerun; A contributes no designer entry
 //   to the batch.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -190,6 +191,7 @@ describe('RFC-059 C4 — questioner-scope sibling resolution unblocks the design
     // the designer → NO designer entry). The designer must NOT rerun on A's answer.
     const aResult = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: aRunId,
       answers: [
         { questionId: 'a1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
@@ -209,6 +211,7 @@ describe('RFC-059 C4 — questioner-scope sibling resolution unblocks the design
     // rerun, carrying only B's designer entry (A never produced one).
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: bRunId,
       answers: [
         { questionId: 'b1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },

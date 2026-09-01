@@ -18,6 +18,7 @@ import {
   getTaskFileContent,
   openContainedFile,
 } from '../src/services/worktreeFileContent'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -153,20 +154,36 @@ describe('getTaskFileContent', () => {
 
     // worktree side: live edit visible
     writeFileSync(join(dir, 'doc.md'), 'edited text\n')
-    const wt = await getTaskFileContent(db, taskId, { path: 'doc.md', side: 'worktree' })
+    const wt = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+      path: 'doc.md',
+      side: 'worktree',
+    })
     expect(wt).toEqual({ exists: true, content: 'edited text\n', size: 12 })
 
     // base side: original content
-    const base = await getTaskFileContent(db, taskId, { path: 'doc.md', side: 'base' })
+    const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+      path: 'doc.md',
+      side: 'base',
+    })
     expect(base.content).toBe('original text\n')
 
     // pure add → no base side; pure delete → no worktree side. Neither errors.
     writeFileSync(join(dir, 'new.md'), 'brand new\n')
-    expect(await getTaskFileContent(db, taskId, { path: 'new.md', side: 'base' })).toEqual({
+    expect(
+      await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'new.md',
+        side: 'base',
+      }),
+    ).toEqual({
       exists: false,
     })
     rmSync(join(dir, 'README.md'))
-    expect(await getTaskFileContent(db, taskId, { path: 'README.md', side: 'worktree' })).toEqual({
+    expect(
+      await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'README.md',
+        side: 'worktree',
+      }),
+    ).toEqual({
       exists: false,
     })
   })
@@ -178,11 +195,16 @@ describe('getTaskFileContent', () => {
     renameSync(join(dir, 'doc.md'), join(dir, 'renamed.md'))
 
     // without basePath the base side is a miss (file never existed there) …
-    expect(await getTaskFileContent(db, taskId, { path: 'renamed.md', side: 'base' })).toEqual({
+    expect(
+      await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'renamed.md',
+        side: 'base',
+      }),
+    ).toEqual({
       exists: false,
     })
     // … with basePath (the structural renamedFrom) it reads the old blob.
-    const base = await getTaskFileContent(db, taskId, {
+    const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
       path: 'renamed.md',
       side: 'base',
       basePath: 'doc.md',
@@ -234,18 +256,25 @@ describe('getTaskFileContent', () => {
     ])
 
     // repo param required for multi-repo
-    await expect(getTaskFileContent(db, taskId, { path: 'doc.md', side: 'base' })).rejects.toThrow(
-      /repo query param required/,
-    )
+    await expect(
+      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'doc.md',
+        side: 'base',
+      }),
+    ).rejects.toThrow(/repo query param required/)
     // the SECONDARY repo's own base commit serves its content (v2, not v1)
-    const base = await getTaskFileContent(db, taskId, {
+    const base = await getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
       path: 'doc.md',
       side: 'base',
       repo: 'secondary',
     })
     expect(base.content).toBe('secondary v2\n')
     await expect(
-      getTaskFileContent(db, taskId, { path: 'doc.md', side: 'base', repo: 'nope' }),
+      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'doc.md',
+        side: 'base',
+        repo: 'nope',
+      }),
     ).rejects.toThrow(/not found/)
   })
 
@@ -253,22 +282,34 @@ describe('getTaskFileContent', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { dir } = await makeRepo()
     const noBase = await seedTask(db, { worktreePath: dir, baseCommit: null })
-    await expect(getTaskFileContent(db, noBase, { path: 'doc.md', side: 'base' })).rejects.toThrow(
-      /no base commit/,
-    )
+    await expect(
+      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), noBase, {
+        path: 'doc.md',
+        side: 'base',
+      }),
+    ).rejects.toThrow(/no base commit/)
 
     const { dir: dir2, commit } = await makeRepo()
     const taskId = await seedTask(db, { worktreePath: dir2, baseCommit: commit })
     await expect(
-      getTaskFileContent(db, taskId, { path: '../etc/hosts', side: 'worktree' }),
+      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: '../etc/hosts',
+        side: 'worktree',
+      }),
     ).rejects.toThrow(/outside the worktree/)
     writeFileSync(join(dir2, 'big.md'), 'x'.repeat(FILE_CONTENT_MAX_BYTES + 1))
     await expect(
-      getTaskFileContent(db, taskId, { path: 'big.md', side: 'worktree' }),
+      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'big.md',
+        side: 'worktree',
+      }),
     ).rejects.toThrow(/rendered-view limit/)
     writeFileSync(join(dir2, 'bin.md'), Buffer.from([0x00, 0x01]))
     await expect(
-      getTaskFileContent(db, taskId, { path: 'bin.md', side: 'worktree' }),
+      getTaskFileContent(composeSqliteRepositoryWorkspaceStore(db), taskId, {
+        path: 'bin.md',
+        side: 'worktree',
+      }),
     ).rejects.toThrow(/binary/)
   })
 })

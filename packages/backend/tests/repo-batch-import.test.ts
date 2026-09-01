@@ -18,6 +18,7 @@ import {
 import { DomainError } from '../src/util/errors'
 import type { resolveCachedRepo } from '../src/services/gitRepoCache'
 import type { RepoImportWsMessage } from '@agent-workflow/shared'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -80,7 +81,7 @@ function stubResolver(
 
 function deps(harness: Harness, resolver: StubResolver, concurrency = 3): RepoBatchImportDeps {
   return {
-    db: harness.db,
+    store: composeSqliteRepositoryWorkspaceStore(harness.db),
     resolveCachedRepo: resolver,
     concurrency,
     emit: (batchId, msg) => {

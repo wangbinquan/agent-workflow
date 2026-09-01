@@ -10,6 +10,7 @@ import { createApp } from '../src/server'
 import { applyConfigPatch, loadConfig } from '../src/config'
 import { clearOpencodeModelsCache } from '../src/services/runtime/opencode/models'
 import { createRuntime, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { FIXTURE_RUNTIME_DIAGNOSTICS } from './helpers/runtimeOpencodeFixture'
 
 const TOKEN = 'a'.repeat(64)
@@ -272,10 +273,14 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
     writeBinary(defaultBin, { modelsStdout: 'default/d-model' })
     h = makeHarness({ binary: defaultBin })
     clearOpencodeModelsCache()
-    await seedBuiltinRuntimes(h.db)
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(h.db))
     customBin = stubBinaryPath(h.tmp, 'oc-fork')
     writeBinary(customBin, { modelsStdout: 'fork/special' })
-    await createRuntime(h.db, { name: 'oc-fork', protocol: 'opencode', binaryPath: customBin })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'oc-fork',
+      protocol: 'opencode',
+      binaryPath: customBin,
+    })
   })
   afterEach(() => rmSync(h.tmp, { recursive: true, force: true }))
 
@@ -299,7 +304,11 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
   test('P1-1: a runtime NAMED "claude" (opencode) is NOT hijacked into the static list', async () => {
     const claudeNamedBin = stubBinaryPath(h.tmp, 'oc-claude')
     writeBinary(claudeNamedBin, { modelsStdout: 'fork/named-claude' })
-    await createRuntime(h.db, { name: 'claude', protocol: 'opencode', binaryPath: claudeNamedBin })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'claude',
+      protocol: 'opencode',
+      binaryPath: claudeNamedBin,
+    })
     const res = await req(h.app, '/api/runtime/models?runtime=claude')
     expect(res.status).toBe(200)
     const json = (await res.json()) as Record<string, unknown>
@@ -316,7 +325,11 @@ describe('GET /api/runtime/models?runtime=<name> — runtime-aware binary (RFC-1
       modelsExit: 4,
       modelsStderr: 'clone https://u:supersecrettoken@github.com/x.git failed',
     })
-    await createRuntime(h.db, { name: 'oc-fail', protocol: 'opencode', binaryPath: failBin })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'oc-fail',
+      protocol: 'opencode',
+      binaryPath: failBin,
+    })
     const res = await req(h.app, '/api/runtime/models?runtime=oc-fail')
     expect(res.status).toBe(502)
     const json = (await res.json()) as Record<string, unknown>

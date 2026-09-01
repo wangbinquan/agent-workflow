@@ -31,7 +31,7 @@ import {
   isReadonlyAgentPermission,
   type WakeInput,
   type WakeItem,
-} from '../src/services/workgroup/wake'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
 import { loadWorkgroupTaskState, setPauseReason } from '../src/services/workgroup/state'
 import { workgroupTaskState } from '../src/db/schema'

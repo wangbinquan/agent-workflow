@@ -10,6 +10,7 @@
 // `[KNOWN-INCIDENT]` are expected to expose the live bug from task
 // 01KSHVXCH6RQ5F5P64MZ4FZVN6 on current code.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -556,6 +557,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       directive: 'stop',
@@ -604,6 +606,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // answer clarify #1 → designer reruns, asks clarify #2
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: continue — this answer leads to ANOTHER clarify round (#2), not output.
@@ -636,6 +639,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // answer clarify #2 → designer reruns, emits output v2 → review awaiting v2
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -735,6 +739,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -950,6 +955,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       directive: 'stop',
@@ -977,6 +983,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human') // designer asked clarify
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1085,6 +1092,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1198,6 +1206,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1295,6 +1304,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1504,6 +1514,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // answer A's clarify
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1516,6 +1527,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1630,6 +1642,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1748,6 +1761,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.
@@ -1898,6 +1912,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(ccRows.length).toBe(1)
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: ccRows[0]!.intermediaryNodeRunId,
       answers: [CLARIFY_ANSWER],
       directive: 'stop',
@@ -2245,6 +2260,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // A asked clarify; B should already be awaiting_review.
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [CLARIFY_ANSWER],
       // RFC-100: stop = finalize round so the post-answer rerun's <workflow-output> is accepted.

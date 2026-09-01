@@ -17,6 +17,7 @@
 //   - shutdown.ts graceful drives the same as cancel (covered by
 //     daemon-related tests)
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -42,6 +43,7 @@ import { reapOrphanRuns } from '../src/services/orphans'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -541,6 +543,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
         cascade: false,
         deps: {
           db: h.db,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
           appHome: h.appHome,
@@ -579,6 +582,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
         cascade: true,
         deps: {
           db: h.db,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
           appHome: h.appHome,
@@ -617,7 +621,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
         startedAt: Date.now() - 50,
       })
 
-      const result = await reapOrphanRuns(h.db)
+      const result = await reapOrphanRuns(taskRecoveryOperations(h.db))
       expect(result.tasks).toBe(1)
       expect(result.runs).toBe(2)
 
@@ -649,7 +653,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
         finishedAt: Date.now() - 50,
       })
 
-      await reapOrphanRuns(h.db)
+      await reapOrphanRuns(taskRecoveryOperations(h.db))
 
       const taskAfter = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
       // awaiting_review tasks are NOT reaped (only `running` is).
@@ -721,6 +725,7 @@ describe('RFC-053 PR-A T1a — node_run.status transition matrix (current behavi
       })
       await autoDispatchClarifyRound({
         db: h.db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: clarifyRunId,
         answers: [
           {

@@ -22,11 +22,14 @@ import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
+import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
 import { createLogger } from '../src/util/log'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test-picker-baseline')
+
+const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
 
 async function seedTask(db: DbClient): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
@@ -131,7 +134,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       { spec: 'FRESH-post-clarify' },
     )
     const { inputs, consumed } = await resolveUpstreamInputs(
-      db,
+      nodePersistence(db),
       taskId,
       [edge('designer', 'spec', 'review', 'doc')],
       'review',
@@ -166,7 +169,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       {},
     )
     const { inputs, consumed } = await resolveUpstreamInputs(
-      db,
+      nodePersistence(db),
       taskId,
       [edge('designer', 'spec', 'review', 'doc')],
       'review',
@@ -199,8 +202,12 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       { out: 'ITER1' },
     )
     const e = [edge('builder', 'out', 'sink', 'in')]
-    expect((await resolveUpstreamInputs(db, taskId, e, 'sink', 0, log)).inputs.in).toBe('ITER0')
-    expect((await resolveUpstreamInputs(db, taskId, e, 'sink', 1, log)).inputs.in).toBe('ITER1')
+    expect(
+      (await resolveUpstreamInputs(nodePersistence(db), taskId, e, 'sink', 0, log)).inputs.in,
+    ).toBe('ITER0')
+    expect(
+      (await resolveUpstreamInputs(nodePersistence(db), taskId, e, 'sink', 1, log)).inputs.in,
+    ).toBe('ITER1')
   })
 
   // PB4 — multi-source join + child-row exclusion. Two upstream nodes feed the
@@ -233,7 +240,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       { o: 'CHILD-should-not-win' },
     )
     const { inputs, consumed } = await resolveUpstreamInputs(
-      db,
+      nodePersistence(db),
       taskId,
       [edge('a', 'o', 'sink', 'merged'), edge('b', 'o', 'sink', 'merged')],
       'sink',
@@ -270,7 +277,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       { spec: 'answered content' },
     )
     const { inputs, consumed } = await resolveUpstreamInputs(
-      db,
+      nodePersistence(db),
       taskId,
       [edge('questioner', 'spec', 'review', 'doc')],
       'review',
@@ -302,7 +309,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
     mirror.boundary = 'wrapper-input'
 
     const { inputs, consumed } = await resolveUpstreamInputs(
-      db,
+      nodePersistence(db),
       taskId,
       [edge('source', 'out', 'sink', 'normal'), mirror],
       'sink',
@@ -369,14 +376,30 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       edges,
     }
 
-    const sink = await resolveUpstreamInputs(db, taskId, edges, 'sink', 0, log, definition)
+    const sink = await resolveUpstreamInputs(
+      nodePersistence(db),
+      taskId,
+      edges,
+      'sink',
+      0,
+      log,
+      definition,
+    )
     expect(sink.inputs).toEqual({ normal: 'REAL-DATAFLOW' })
     expect(sink.consumed).toEqual({ source: '01SOURCE' })
 
     // The agent question edge into cross-agent clarify is deliberately a real
     // dependency. Only the prompt-injected response/feedback directions skip
     // ordinary dataflow resolution.
-    const cross = await resolveUpstreamInputs(db, taskId, edges, 'cross', 0, log, definition)
+    const cross = await resolveUpstreamInputs(
+      nodePersistence(db),
+      taskId,
+      edges,
+      'cross',
+      0,
+      log,
+      definition,
+    )
     expect(cross.inputs).toEqual({ questions: 'REAL-CROSS-CLARIFY-DEPENDENCY' })
     expect(cross.consumed).toEqual({ questioner: '01QUESTIONER' })
   })

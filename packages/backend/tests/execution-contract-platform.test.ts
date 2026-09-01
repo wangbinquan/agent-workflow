@@ -28,6 +28,8 @@ import {
 } from '@/modules/execution-contract/domain/model'
 import { executionContractRefKey } from '@/modules/execution-contract/public/types'
 import { createProgramArtifactStore } from '@/modules/digital-employee/infrastructure/programArtifactStore'
+import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
+import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
@@ -831,8 +833,12 @@ describe('platform execution contracts', () => {
 
   test('Agent compatibility requires both the output port and an explicit contract declaration', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await ensureDigitalEmployeeAgentTemplates(db)
-    const templates = await listDigitalEmployeeAgentTemplates(db)
+    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      db,
+      composeDigitalEmployeeAgentTemplateCatalogParticipant,
+    )
+    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+    const templates = await listDigitalEmployeeAgentTemplates(agentTemplates)
     const codeWriter = templates.find(
       (agent) => agent.frontmatterExtra.digitalEmployeeTemplate === 'code-writing',
     )!

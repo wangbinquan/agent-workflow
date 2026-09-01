@@ -17,18 +17,29 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
-import { buildIntentDump } from '../src/services/intent/dumpBuilder'
+import {
+  buildIntentDumpForTest as buildIntentDump,
+  intentResourceCatalogBinding,
+} from './helpers/intentResourceCatalogBinding'
 import { buildMcpFence, type IntentContextManifest } from '../src/services/intent/manifest'
+import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
 import { deriveIntentSlots, validateDraftChangeset } from '../src/services/intent/resolveChangeset'
 import { createIntentSession } from '../src/services/intent/session'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
-import { getMcpById } from '../src/services/mcp'
+import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import type {
+  IntentDumpAuxiliaryQueries,
+  IntentPersistence,
+} from '../src/modules/intent/public/operations'
+import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { getMcpFixtureById } from './helpers/mcpServiceBinding'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_oauth_0000000000'
 
 let db: DbClient
 let appHome: string
+let persistence: IntentPersistence
 
 const actor: Actor = {
   user: { id: OWNER, username: 'owner', displayName: 'Owner', role: 'user', status: 'active' },
@@ -38,6 +49,10 @@ const actor: Actor = {
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
+  persistence = composeSqliteIntentPersistence({
+    db,
+    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+  })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-oauth-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })
   await db.insert(users).values({
@@ -90,6 +105,32 @@ const deps = (): ApplyIntentDeps => ({
   ...intentApplyResourceBinding(db, actor),
 })
 
+const dumpAuxiliary: IntentDumpAuxiliaryQueries = Object.freeze({
+  runtimeInventory: Object.freeze({
+    async list(): Promise<
+      readonly { readonly name: string; readonly protocol: 'opencode'; readonly enabled: boolean }[]
+    > {
+      return [{ name: 'opencode', protocol: 'opencode', enabled: true }]
+    },
+    async resolveDefault(): Promise<{ readonly name: string; readonly protocol: 'opencode' }> {
+      return { name: 'opencode', protocol: 'opencode' }
+    },
+  }),
+  async loadAgentPorts() {
+    return new Map()
+  },
+  platformInventory: Object.freeze({
+    async listRows() {
+      return []
+    },
+  }),
+})
+
+function createSession(message: string) {
+  const catalog = intentResourceCatalogBinding(db, actor, appHome)
+  return createIntentSession(persistence, intentResourceVisibility(catalog), actor, { message })
+}
+
 const remoteCreate = (config: Record<string, unknown>, name = 'remote-svc') => ({
   $schema_version: 1,
   ops: [
@@ -113,7 +154,7 @@ async function createRemote(
   slots: Array<{ slotId: string; value: string }> = [],
   name = 'remote-svc',
 ): Promise<string> {
-  const { session } = await createIntentSession(db, actor, { message: 'add a remote mcp' })
+  const { session } = await createSession('add a remote mcp')
   const draft = installDraft(session.id, remoteCreate(config, name), [])
   const receipt = await applyIntentChangeset(deps(), {
     sessionId: session.id,
@@ -131,9 +172,9 @@ async function updateRemote(
   config: Record<string, unknown>,
   slots: Array<{ slotId: string; value: string }> = [],
 ): Promise<void> {
-  const existing = await getMcpById(db, id)
+  const existing = await getMcpFixtureById(db, id)
   if (existing === null) throw new Error('mcp missing')
-  const { session } = await createIntentSession(db, actor, { message: 'edit the remote mcp' })
+  const { session } = await createSession('edit the remote mcp')
   const manifest: IntentContextManifest = [
     {
       handle: 'res#mcp#1',
@@ -172,7 +213,7 @@ async function updateRemote(
 }
 
 const storedConfig = async (id: string): Promise<Record<string, unknown>> => {
-  const row = await getMcpById(db, id)
+  const row = await getMcpFixtureById(db, id)
   if (row === null) throw new Error('mcp missing')
   return row.config as Record<string, unknown>
 }
@@ -234,6 +275,7 @@ describe('RFC-348 — remote MCP oauth through the intent seams', () => {
       actor,
       appHome,
       mounts: [{ resourceType: 'mcp', resourceId: id }],
+      ...dumpAuxiliary,
     })
     const text = dump.seedFiles
       .filter((f) => f.path.startsWith('mounted/'))

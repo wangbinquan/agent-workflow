@@ -22,6 +22,7 @@ import {
 } from '../src/services/memoryInject'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent } from '@agent-workflow/shared'
+import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -128,7 +129,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
       approvedAt: 1_700_000_000_000,
     })
     const out = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -168,7 +169,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
       createdAt: 1_000_000_000_000,
     })
     const out = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -182,7 +183,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
   test('B3: four-scope empty → block null AND snapshot null (in lock-step)', async () => {
     const { taskId } = seedTask(db)
     const out = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -200,7 +201,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
       tags: '{not-an-array',
     })
     const out = await injectMemoryForRun({
-      db,
+      store: sqliteMemoryInjectionStore(db),
       taskId,
       primaryAgent: mkAgent('agent-1'),
       dependents: [],
@@ -217,7 +218,7 @@ describe('RFC-046 — injectMemoryForRun snapshot capture', () => {
       title: 'WF',
       tags: 'not-json-at-all',
     })
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId,
       repoIds: [],
@@ -299,7 +300,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       },
     ])
     const runId = seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: payload })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(db, {
+    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
       taskId,
       nodeId: 'agent-1',
       iteration: 0,
@@ -314,7 +315,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
   test('B7: attempt-0 column NULL → returns null (not throw)', async () => {
     const { taskId } = seedTask(db)
     const runId = seedNodeRun({ taskId, nodeId: 'agent-1', retryIndex: 0, json: null })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(db, {
+    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
       taskId,
       nodeId: 'agent-1',
       iteration: 0,
@@ -367,7 +368,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       shardKey: 'shard-b',
       json: payloadB,
     })
-    const snapA = await loadInjectedSnapshotFromFirstAttempt(db, {
+    const snapA = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
       taskId,
       nodeId: 'agent-1',
       iteration: 0,
@@ -376,7 +377,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       runId: runIdA,
     })
     expect(snapA?.[0]?.id).toBe('mA')
-    const snapB = await loadInjectedSnapshotFromFirstAttempt(db, {
+    const snapB = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
       taskId,
       nodeId: 'agent-1',
       iteration: 0,
@@ -424,7 +425,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       status: 'pending',
       json: null,
     })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(db, {
+    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
       taskId,
       nodeId: 'designer',
       iteration: 0,
@@ -464,7 +465,7 @@ describe('RFC-046 — loadInjectedSnapshotFromFirstAttempt', () => {
       status: 'pending',
       json: null,
     })
-    const snap = await loadInjectedSnapshotFromFirstAttempt(db, {
+    const snap = await loadInjectedSnapshotFromFirstAttempt(sqliteMemoryInjectionStore(db), {
       taskId,
       nodeId: 'agent-1',
       iteration: 0,

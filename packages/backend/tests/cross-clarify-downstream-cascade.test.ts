@@ -24,6 +24,7 @@
 // End-to-end downstream re-run after a cross-clarify is covered by the
 // combination scenarios (S13/S15) running the real scheduler.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -219,6 +220,7 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
 
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
@@ -297,6 +299,7 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
@@ -332,6 +335,7 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,
@@ -375,6 +379,7 @@ describe('RFC-074 — designer rerun no longer eagerly cascades downstream', () 
     })
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
       answers: [makeAns('q1')],
       actor,

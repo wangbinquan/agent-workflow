@@ -14,6 +14,7 @@ import {
 } from '../src/services/repoBatchImport'
 import { DomainError, NotFoundError } from '../src/util/errors'
 import type { resolveCachedRepo } from '../src/services/gitRepoCache'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -81,7 +82,11 @@ async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise
 }
 
 function deps(db: DbClient, resolver: Resolver): RepoBatchImportDeps {
-  return { db, resolveCachedRepo: resolver, emit: () => {} }
+  return {
+    store: composeSqliteRepositoryWorkspaceStore(db),
+    resolveCachedRepo: resolver,
+    emit: () => {},
+  }
 }
 
 describe('retryBatchRow (RFC-033-T2)', () => {
@@ -212,7 +217,7 @@ describe('retryBatchRow (RFC-033-T2)', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const events: string[] = []
     const myDeps: RepoBatchImportDeps = {
-      db,
+      store: composeSqliteRepositoryWorkspaceStore(db),
       resolveCachedRepo: happyResolver(),
       emit: (_b, msg) => {
         if (msg.type === 'batch.completed') events.push('completed')

@@ -16,8 +16,12 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
 import { fuseMemoriesTx, patchMemory, unfuseMemoriesTx } from '../src/services/memory'
-import { createManagedSkill, writeSkillContent, type SkillFsOptions } from '../src/services/skill'
-import { restoreSkillVersion } from '../src/services/skillVersion'
+import {
+  createManagedSkill,
+  writeSkillContent,
+  type SkillFsOptions,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { restoreSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

@@ -32,7 +32,7 @@ import { ulid } from 'ulid'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
-import { createTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjector'
+import { createSqliteTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/sqliteTaskLifecycleWsProjection'
 import {
   resetBroadcastersForTests,
   TASK_CHANNEL,
@@ -195,7 +195,7 @@ function subscribeInterleaved(taskId: string): {
   return { timeline, unsubscribe: () => (offList(), offTask()) }
 }
 
-function projectStatus(
+async function projectStatus(
   db: DbClient,
   input: {
     taskId: string
@@ -205,8 +205,8 @@ function projectStatus(
     errorSummary?: string | null
     canceledNodeRuns?: readonly { id: string; nodeId: string }[]
   },
-): void {
-  createTaskLifecycleWsProjector(db).handle({
+): Promise<void> {
+  await createSqliteTaskLifecycleWsProjector(db).handle({
     eventId: `task-lifecycle:${input.taskId}:${input.revision}`,
     eventGroupId: `task-lifecycle:${input.taskId}:${input.revision}`,
     eventGroupOrdinal: 0,
@@ -242,11 +242,11 @@ beforeEach(() => resetBroadcastersForTests())
 afterEach(() => resetBroadcastersForTests())
 
 describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
-  test('RFC-341 committed-event projector preserves terminal and canceled-node ordering', () => {
+  test('RFC-341 committed-event projector preserves terminal and canceled-node ordering', async () => {
     const taskId = `task_${ulid()}`
     const db = createInMemoryDb(MIGRATIONS)
     const { received, unsubscribe } = subscribeBoth(taskId)
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 2,
       previousStatus: 'running',
@@ -276,7 +276,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
     // pending → running.
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 2,
       previousStatus: 'pending',
@@ -285,7 +285,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     })
 
     // running → done.
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 3,
       previousStatus: 'running',
@@ -307,14 +307,14 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { taskId } = await seedTask(db)
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 2,
       previousStatus: 'pending',
       status: 'running',
       errorSummary: null,
     })
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 3,
       previousStatus: 'running',
@@ -331,14 +331,14 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { taskId } = await seedTask(db)
     const { timeline, unsubscribe } = subscribeInterleaved(taskId)
 
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 2,
       previousStatus: 'pending',
       status: 'running',
       errorSummary: null,
     })
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 3,
       previousStatus: 'running',
@@ -359,7 +359,7 @@ describe('RFC-054 W2-2 — WS broadcast golden sequences', () => {
     const { taskId } = await seedTask(db)
     const { received, unsubscribe } = subscribeBoth(taskId)
 
-    projectStatus(db, {
+    await projectStatus(db, {
       taskId,
       revision: 2,
       previousStatus: 'running',

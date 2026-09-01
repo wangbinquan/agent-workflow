@@ -28,6 +28,7 @@ describe('RFC-057 — S2.demote-task', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S2', detail: { rule: 'S2' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S2.demote-task',
@@ -93,6 +94,7 @@ describe('RFC-057 — S2.reopen-session', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S2', detail: { rule: 'S2' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S2.reopen-session',

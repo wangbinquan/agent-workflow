@@ -56,6 +56,7 @@ describe('RFC-057 — C1.resume-run', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'C1.resume-run',
@@ -143,6 +144,7 @@ describe('RFC-057 — C1.reopen-session', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'C1.reopen-session',

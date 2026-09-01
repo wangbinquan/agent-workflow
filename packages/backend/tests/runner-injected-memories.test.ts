@@ -7,9 +7,8 @@
 //     sibling (no new SELECT against memories; mirrors the model still
 //     seeing the original block in its resumed opencode session).
 //   - envelope-followup with NULL on attempt 0 → column stays NULL.
-//   - grep guard: `formatMemoryBlock(` (RFC-041) and
-//     `loadInjectedSnapshotFromFirstAttempt(` (RFC-046) only ever appear in
-//     runner.ts's inject section — scheduler must not duplicate the path.
+//   - grep guard: the provider-neutral injection participant remains the only
+//     runner-facing persistence seam; scheduler must not duplicate the path.
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -21,7 +20,7 @@ import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous seeding under pure-id freshness
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runNode } from '../src/services/runner'
+import { runNode } from './helpers/runner'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -347,13 +346,13 @@ describe('RFC-046 — runner.ts source-code grep guards', () => {
   test('R5: runner.ts wires injectedMemoriesJson into the final node_runs UPDATE', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
     expect(src).toContain('injectedMemoriesJson')
-    // The legacy formatMemoryBlock grep guard from RFC-041 is kept intact:
-    // the runner must still go through injectMemoryForRun, which delegates
-    // to formatMemoryBlockWithSnapshot internally.
-    expect(src).toContain('injectMemoryForRun(')
+    // The runner consumes the Promise query participant; provider adapters
+    // own the actual memory reads.
+    expect(src).toContain('memoryInjectionQueries.injectForRun(')
     // RFC-046 followup helper must be called from runner only (scheduler
     // and other services have no business reading attempt 0's snapshot).
-    expect(src).toContain('loadInjectedSnapshotFromFirstAttempt(')
+    expect(src).toContain('memoryInjectionQueries.loadFirstAttemptSnapshot(')
+    expect(src).not.toContain("from '@/services/memoryInject'")
   })
 
   test('R6: scheduler.ts does not call the followup-inherit helper', () => {

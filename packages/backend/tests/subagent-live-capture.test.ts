@@ -20,8 +20,11 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { startLiveSubagentCapture } from '../src/services/runtime/opencode/subagentLiveCapture'
+import { createSqliteRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const capturePersistence = (db: DbClient) => createSqliteRuntimeSessionCapturePersistence(db)
 
 function seedTaskWithNodeRun(db: DbClient): { taskId: string; nodeRunId: string } {
   const wfId = ulid()
@@ -141,7 +144,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 0,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -175,7 +178,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000, // long — we drive ticks manually
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -207,7 +210,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -236,7 +239,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -272,7 +275,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -340,7 +343,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -379,7 +382,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -399,7 +402,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => null,
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -417,7 +420,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 3,
       opencodeDbPath,
@@ -442,7 +445,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 10,
       opencodeDbPath,
@@ -489,7 +492,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,
@@ -508,7 +511,7 @@ describe('startLiveSubagentCapture', () => {
       taskId,
       nodeId: 'n1',
       getRootSessionId: () => 'root',
-      db,
+      persistence: capturePersistence(db),
       pollMs: 50_000,
       consecutiveFailureLimit: 5,
       opencodeDbPath,

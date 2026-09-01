@@ -31,6 +31,7 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 // Same-ms inserts must keep a deterministic id order (freshness is pure ULID
 // id-order elsewhere; here it just keeps row identification stable). See the
@@ -116,7 +117,7 @@ describe('gap5 — reapOrphanRuns vs task status（锚点行缺陷锁 + RFC-097 
     // submit would mint / the scheduler would reuse via pendingExisting).
     const anchorRunId = await seedRun(h.db, taskId, 'designer', 'pending')
 
-    const r = await reapOrphanRuns(h.db)
+    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
 
     // Task-level reap scans task.status ∈ {'running','pending'} (RFC-097) →
     // awaiting_human is outside the set, 0 tasks flipped.
@@ -144,7 +145,7 @@ describe('gap5 — reapOrphanRuns vs task status（锚点行缺陷锁 + RFC-097 
     const taskId = await seedTask(h.db, 'pending')
     const runId = await seedRun(h.db, taskId, 'a', 'pending')
 
-    const r = await reapOrphanRuns(h.db)
+    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
 
     // RFC-097 (design §3): a pending task at boot time is by construction an
     // orphan (boot reap runs before HTTP listen; startTask kicks in-process)

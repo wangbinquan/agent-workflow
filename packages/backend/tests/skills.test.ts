@@ -23,7 +23,7 @@ import {
   writeSkillContent,
   writeSkillFile,
   type SkillFsOptions,
-} from '../src/services/skill'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'

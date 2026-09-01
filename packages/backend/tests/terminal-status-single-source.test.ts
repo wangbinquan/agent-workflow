@@ -27,8 +27,8 @@ describe('终态集合单源化（flag-audit W0）', () => {
       'services/gc.ts',
       'services/stuckTaskDetector.ts',
       'services/fusion.ts',
-      'services/lifecycleRepair/options-R1.ts',
-      'services/lifecycleRepair/options-R2.ts',
+      'platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts',
+      'platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts',
     ]) {
       expect(HAND_COPIED_TERMINAL.test(SRC(rel)), `${rel} still hand-copies the terminal set`).toBe(
         false,

@@ -20,7 +20,7 @@ import {
   skillRoot,
   writeSkillFile,
   type SkillFsOptions,
-} from '../src/services/skill'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import { ConflictError } from '../src/util/errors'
 

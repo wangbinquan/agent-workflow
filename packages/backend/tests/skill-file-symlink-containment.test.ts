@@ -18,9 +18,9 @@ import {
   writeSkillContent,
   writeSkillFile,
   type SkillFsOptions,
-} from '../src/services/skill'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { getSkillVersionContent } from '../src/services/skillVersion'
+import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { ValidationError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

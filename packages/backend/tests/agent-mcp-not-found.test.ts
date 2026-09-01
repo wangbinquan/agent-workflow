@@ -8,8 +8,12 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent, updateAgent } from '../src/services/agent'
-import { createMcp } from '../src/services/mcp'
 import { ValidationError } from '../src/util/errors'
+import {
+  composeMcpServiceBindingForTest,
+  createMcpForTest,
+  type McpCatalogTestBinding,
+} from './helpers/mcpServiceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -31,12 +35,14 @@ function agentInput(name: string, mcp: string[] = []): Parameters<typeof createA
 
 describe('agent.mcp save-time guard', () => {
   let db: DbClient
+  let mcpCatalog: McpCatalogTestBinding
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    mcpCatalog = composeMcpServiceBindingForTest(db)
   })
 
   test('create succeeds when every mcp resolves (stored by id)', async () => {
-    const m1 = await createMcp(db, {
+    const m1 = await createMcpForTest(mcpCatalog, {
       name: 'm1',
       description: '',
       type: 'local',
@@ -62,7 +68,7 @@ describe('agent.mcp save-time guard', () => {
   })
 
   test('create reports ALL missing ids, not just the first', async () => {
-    const present = await createMcp(db, {
+    const present = await createMcpForTest(mcpCatalog, {
       name: 'present',
       description: '',
       type: 'local',
@@ -82,7 +88,7 @@ describe('agent.mcp save-time guard', () => {
   })
 
   test('update succeeds when patched mcp resolves (stored by id)', async () => {
-    const m1 = await createMcp(db, {
+    const m1 = await createMcpForTest(mcpCatalog, {
       name: 'm1',
       description: '',
       type: 'local',
@@ -109,7 +115,7 @@ describe('agent.mcp save-time guard', () => {
   })
 
   test('update without `mcp` still rejects a dangling final Agent closure', async () => {
-    const m1 = await createMcp(db, {
+    const m1 = await createMcpForTest(mcpCatalog, {
       name: 'm1',
       description: '',
       type: 'local',

@@ -26,8 +26,11 @@ import {
   readSkillContent,
   saveSkillWithToken,
   writeSkillFile,
-} from '../src/services/skill'
-import { commitSkillVersion, restoreSkillVersion } from '../src/services/skillVersion'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import {
+  commitSkillVersion,
+  restoreSkillVersion,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { ConflictError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

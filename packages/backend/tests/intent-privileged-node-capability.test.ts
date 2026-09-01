@@ -51,8 +51,13 @@ import { intentDrafts, intentSessions, users, workflows } from '../src/db/schema
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
 import { createIntentSession } from '../src/services/intent/session'
+import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import type { IntentContextManifest } from '../src/services/intent/manifest'
+import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import type { IntentPersistence } from '../src/modules/intent/public/operations'
+import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const PLAIN = 'user_plain_priv_0000000000'
@@ -60,6 +65,7 @@ const BOSS = 'user_manager_priv_00000000'
 
 let db: DbClient
 let appHome: string
+let persistence: IntentPersistence
 
 /** Resolve the same preset + per-account grants used by production. */
 function actorOf(
@@ -268,7 +274,13 @@ async function applyAs(
   manifest: IntentContextManifest = [],
   decisions: unknown[] = [],
 ): Promise<unknown> {
-  const { session } = await createIntentSession(db, actor, { message: 'do a thing' })
+  const catalog = intentResourceCatalogBinding(db, actor, appHome)
+  const { session } = await createIntentSession(
+    persistence,
+    intentResourceVisibility(catalog),
+    actor,
+    { message: 'do a thing' },
+  )
   const draft = installDraft(session.id, bundle, manifest)
   return applyIntentChangeset(deps(actor), {
     sessionId: session.id,
@@ -286,6 +298,10 @@ async function storedNodes(id: string): Promise<Array<Record<string, unknown>>> 
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
+  persistence = composeSqliteIntentPersistence({
+    db,
+    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+  })
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-priv-'))
   mkdirSync(join(appHome, 'skills'), { recursive: true })
   await seedUser(PLAIN, 'user')

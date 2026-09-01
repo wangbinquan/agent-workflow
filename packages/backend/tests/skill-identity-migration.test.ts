@@ -34,9 +34,16 @@ import {
   skillVersionAbs,
   skillVersionRelPath,
 } from '../src/services/skillIdentityPaths'
-import { hashDir } from '../src/services/skillHash'
-import { advancePhase, beginOperation, getActiveOp } from '../src/services/skillOperations'
-import { opBackupDir, opStagedDir } from '../src/services/skillFsPublish'
+import { hashDir } from '../src/modules/resource-catalog/infrastructure/legacy/skillHash'
+import {
+  advancePhase,
+  beginOperation,
+  getActiveOp,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
+import {
+  opBackupDir,
+  opStagedDir,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

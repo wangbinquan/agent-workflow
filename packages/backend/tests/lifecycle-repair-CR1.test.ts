@@ -36,6 +36,7 @@ describe('RFC-057 — CR-1.acknowledge', () => {
     const taskStatusBefore = await readTaskStatus(h.db, h.taskId)
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'CR-1.acknowledge',
@@ -97,6 +98,7 @@ describe('RFC-057 — CR-1.retry-designer-rerun', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'CR-1', detail: { rule: 'CR-1' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'CR-1.retry-designer-rerun',

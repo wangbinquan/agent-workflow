@@ -19,7 +19,8 @@ import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { getTaskStructuralDiff } from '../src/services/structuralDiff/service'
+import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
+import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
 import { startTask } from '../src/services/task'
 import { nodeRuns, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
@@ -27,6 +28,13 @@ import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const getTaskStructuralDiff = (
+  db: DbClient,
+  ...args: Parameters<typeof getTaskStructuralDiffWithPort> extends [unknown, ...infer Rest]
+    ? Rest
+    : never
+) => getTaskStructuralDiffWithPort(createSqliteCodeWorkspaceRead(db), ...args)
 
 interface Harness {
   db: DbClient

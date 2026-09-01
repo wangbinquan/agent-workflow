@@ -14,6 +14,7 @@ async function createUserCommandFixture() {
   const [
     { SYSTEM_USER_ID },
     { runUserCommand },
+    { createSqliteAuthRuntime },
     { openDb },
     { composeIdentityAccess },
     { composeIdentityUserOperations },
@@ -22,6 +23,7 @@ async function createUserCommandFixture() {
   ] = await Promise.all([
     import('../src/auth/systemIdentity'),
     import('../src/cli/userBootstrap'),
+    import('../src/auth/composition'),
     import('../src/db/client'),
     import('../src/modules/identity-access/composition'),
     import('../src/modules/identity-access/composition/userOperations'),
@@ -30,16 +32,16 @@ async function createUserCommandFixture() {
   ])
   const migrationsFolder = await resolveMigrationsFolder()
   const db = openDb({ path: Paths.db, migrationsFolder })
+  const auth = createSqliteAuthRuntime({ db })
   const identityAccess = composeIdentityAccess(db)
-  const operations = composeIdentityUserOperations({ db, identityAccess })
+  const operations = composeIdentityUserOperations({ auth, identityAccess })
   const principal = { userId: SYSTEM_USER_ID, source: 'cli' } as const
 
   return (args: string[]) =>
     runUserCommand(args, {
-      db,
+      auth,
       identity: {
         operations,
-        initialUserAccess: identityAccess.initialUserAccess,
         commandContext: () => identityAccess.contexts.fromAuthenticatedPrincipal(principal, 'cli'),
         queryContext: () =>
           identityAccess.contexts.queryFromAuthenticatedPrincipal(principal, 'cli'),

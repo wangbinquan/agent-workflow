@@ -30,6 +30,7 @@ import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
+import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 import { createLogger } from '../src/util/log'
@@ -41,6 +42,8 @@ const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('test-s05-fanout-chain')
+
+const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
 
 beforeEach(() => resetBroadcastersForTests())
 afterAll(() => resetBroadcastersForTests())
@@ -151,7 +154,7 @@ describe('S-5 layer 1 — resolveUpstreamInputs excludes shard child rows wholes
     )
 
     const { inputs, consumed } = await resolveUpstreamInputs(
-      db,
+      nodePersistence(db),
       taskId,
       [chainEdge()],
       'fix',
@@ -177,7 +180,7 @@ describe('S-5 layer 1 — resolveUpstreamInputs excludes shard child rows wholes
       { result: 'TOP-LEVEL-FINDING' },
     )
     const { inputs, consumed } = await resolveUpstreamInputs(
-      db,
+      nodePersistence(db),
       taskId,
       [chainEdge()],
       'fix',

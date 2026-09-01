@@ -24,6 +24,7 @@ import {
 } from '../src/services/memoryDistiller'
 import { createInMemoryDb } from '../src/db/client'
 import { resolve } from 'node:path'
+import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -85,8 +86,10 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       }
     }
     const db = createInMemoryDb(MIGRATIONS)
+    const memory = createSqliteMemoryDistillTestContext(db)
     await runDistill({
-      db,
+      store: memory.store,
+      reviewedArtifacts: memory.reviewedArtifacts,
       spawnFn,
       job: {
         id: 'job-zh',
@@ -112,7 +115,8 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       siblings: [],
     })
     await runDistill({
-      db,
+      store: memory.store,
+      reviewedArtifacts: memory.reviewedArtifacts,
       spawnFn,
       job: {
         id: 'job-null',

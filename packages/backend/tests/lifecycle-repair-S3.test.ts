@@ -50,6 +50,7 @@ describe('RFC-057 — S3.resurrect-review-run', () => {
 
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S3.resurrect-review-run',
@@ -107,6 +108,7 @@ describe('RFC-057 — S3.resurrect-review-run', () => {
     try {
       await applyRepairOption({
         db: h.db,
+        operations: h.operations,
         taskId: h.taskId,
         alertId,
         optionId: 'S3.resurrect-review-run',
@@ -154,6 +156,7 @@ describe('RFC-057 — S3.resurrect-clarify-run', () => {
     })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S3.resurrect-clarify-run',
@@ -202,6 +205,7 @@ describe('RFC-057 — S3.demote-task', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S3.demote-task',
@@ -221,6 +225,7 @@ describe('RFC-057 — S3.demote-task', () => {
     try {
       await applyRepairOption({
         db: h.db,
+        operations: h.operations,
         taskId: h.taskId,
         alertId,
         optionId: 'S3.demote-task',
@@ -257,6 +262,7 @@ describe('RFC-057 — S3.mark-task-failed', () => {
     const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: { rule: 'S3' } })
     const res = await applyRepairOption({
       db: h.db,
+      operations: h.operations,
       taskId: h.taskId,
       alertId,
       optionId: 'S3.mark-task-failed',
@@ -277,6 +283,7 @@ describe('RFC-057 — S3.mark-task-failed', () => {
     try {
       await applyRepairOption({
         db: h.db,
+        operations: h.operations,
         taskId: h.taskId,
         alertId,
         optionId: 'S3.mark-task-failed',
@@ -329,6 +336,7 @@ describe('RFC-057 — S3 cross-cutting', () => {
     try {
       await applyRepairOption({
         db: h.db,
+        operations: h.operations,
         taskId: h.taskId,
         alertId,
         optionId: 'S3.demote-task',
@@ -350,6 +358,7 @@ describe('RFC-057 — S3 cross-cutting', () => {
     try {
       await applyRepairOption({
         db: h.db,
+        operations: h.operations,
         taskId: h.taskId,
         alertId,
         optionId: 'T1.demote-task',
@@ -371,6 +380,7 @@ describe('RFC-057 — S3 cross-cutting', () => {
     try {
       await applyRepairOption({
         db: h.db,
+        operations: h.operations,
         taskId: h.taskId,
         alertId,
         optionId: 'S99.do-nothing',

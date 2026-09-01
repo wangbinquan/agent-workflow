@@ -38,8 +38,19 @@ import {
 } from '../src/services/memoryDistillScheduler'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { DistillerSpawnFn } from '../src/services/memoryDistiller'
+import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+type MemoryTestContext = ReturnType<typeof createSqliteMemoryDistillTestContext>
+
+function workerDeps(memory: MemoryTestContext) {
+  return {
+    store: memory.store,
+    reviewedArtifacts: memory.reviewedArtifacts,
+    runtimeResolver: memory.runtimeResolver,
+  }
+}
 
 function emptyDistillerStdout(input: Parameters<DistillerSpawnFn>[0]): string {
   return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
@@ -228,12 +239,14 @@ describe('extractAgentIdsFromWorkgroupConfig', () => {
 
 describe('computeEligibleScopes', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
   test('null taskId → empty agentIds + workflowId=null + includeGlobal=true', async () => {
-    const r = await computeEligibleScopes(db, null)
+    const r = await computeEligibleScopes(memory.store, null)
     expect(r).toEqual({ agentIds: [], workflowId: null, repoId: null, includeGlobal: true })
   })
   test('resolves workflowId + agentIds from frozen ids only', async () => {
@@ -258,7 +271,7 @@ describe('computeEligibleScopes', () => {
         { name: 'no-such-agent' },
       ],
     })
-    const r = await computeEligibleScopes(db, taskId)
+    const r = await computeEligibleScopes(memory.store, taskId)
     expect(r.workflowId).toBe(workflowId)
     expect(r.agentIds).toEqual(['agent-codegen']) // unknown agent silently dropped
     expect(r.includeGlobal).toBe(true)
@@ -268,7 +281,7 @@ describe('computeEligibleScopes', () => {
       snapshotAgents: [{ name: 'workgroup-member' }],
       workgroupAgentIds: ['agent-lead', 'agent-worker', 'agent-lead'],
     })
-    const r = await computeEligibleScopes(db, taskId)
+    const r = await computeEligibleScopes(memory.store, taskId)
     expect(r.agentIds).toEqual(['agent-lead', 'agent-worker'])
   })
   // RFC-204: resolves through tasks.cached_repo_id. The previous URL join
@@ -290,27 +303,29 @@ describe('computeEligibleScopes', () => {
       repoUrl: 'https://github.com/acme/web.git',
       cachedRepoId: 'cr-1',
     })
-    const r = await computeEligibleScopes(db, taskId)
+    const r = await computeEligibleScopes(memory.store, taskId)
     expect(r.repoId).toBe('cr-1')
   })
 
   test('a task with no cached mirror resolves to no repo scope', async () => {
     const { taskId } = seedTask(db, { repoUrl: 'https://github.com/acme/web.git' })
-    const r = await computeEligibleScopes(db, taskId)
+    const r = await computeEligibleScopes(memory.store, taskId)
     expect(r.repoId).toBeNull()
   })
 })
 
 describe('enqueueDistillJob', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
   test('writes a pending row with next_run_at = now + 5s + correct debounce key', async () => {
     const { taskId } = seedTask(db)
     const before = Date.now()
-    const r = await enqueueDistillJob(db, {
+    const r = await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
@@ -324,7 +339,7 @@ describe('enqueueDistillJob', () => {
   })
   test('respects debounceMs override (used by tests + manual control)', async () => {
     const before = Date.now()
-    const r = await enqueueDistillJob(db, {
+    const r = await enqueueDistillJob(memory.store, {
       sourceKind: 'feedback',
       sourceEventId: 'f1',
       taskId: null,
@@ -336,25 +351,27 @@ describe('enqueueDistillJob', () => {
 
 describe('distillTick', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
   test('idle: no pending due rows → no-op', async () => {
-    const r = await distillTick({ db, spawnFn: EMPTY_ENVELOPE_SPAWN })
+    const r = await distillTick({ ...workerDeps(memory), spawnFn: EMPTY_ENVELOPE_SPAWN })
     expect(r).toEqual({ picked: 0, succeeded: 0, failed: 0, candidatesCreated: 0 })
   })
 
   test('happy path: one row due → status flips to done', async () => {
     const { taskId } = seedTask(db)
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
       debounceMs: 0,
     })
-    const r = await distillTick({ db, spawnFn: EMPTY_ENVELOPE_SPAWN })
+    const r = await distillTick({ ...workerDeps(memory), spawnFn: EMPTY_ENVELOPE_SPAWN })
     expect(r.succeeded).toBe(1)
     expect(r.failed).toBe(0)
     expect(r.candidatesCreated).toBe(0)
@@ -366,7 +383,7 @@ describe('distillTick', () => {
   test('debounce: 3 pending rows on same key → one merged distill run', async () => {
     const { taskId } = seedTask(db)
     for (const e of ['c1', 'c2', 'c3']) {
-      await enqueueDistillJob(db, {
+      await enqueueDistillJob(memory.store, {
         sourceKind: 'clarify',
         sourceEventId: e,
         taskId,
@@ -382,7 +399,7 @@ describe('distillTick', () => {
         stdout: emptyDistillerStdout(input),
       }
     }
-    const r = await distillTick({ db, spawnFn })
+    const r = await distillTick({ ...workerDeps(memory), spawnFn })
     expect(spawnCalls).toBe(1)
     expect(r.succeeded).toBe(1)
     const rows = db.select().from(memoryDistillJobs).all()
@@ -391,7 +408,7 @@ describe('distillTick', () => {
 
   test('failure: attempt 1 / 2 → pending with exp backoff, attempt 3 → failed', async () => {
     const { taskId } = seedTask(db)
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
@@ -405,7 +422,7 @@ describe('distillTick', () => {
     // is immediately due. Each subsequent attempt jumps to the new
     // backoff-shifted next_run_at.
     let now = Date.now() + 1
-    await distillTick({ db, spawnFn: explodeSpawn, now: () => now })
+    await distillTick({ ...workerDeps(memory), spawnFn: explodeSpawn, now: () => now })
     let row = db.select().from(memoryDistillJobs).all()[0]!
     expect(row.attempts).toBe(1)
     expect(row.status).toBe('pending')
@@ -413,14 +430,14 @@ describe('distillTick', () => {
 
     // Attempt 2 — pump time past backoff.
     now = row.nextRunAt + 1
-    await distillTick({ db, spawnFn: explodeSpawn, now: () => now })
+    await distillTick({ ...workerDeps(memory), spawnFn: explodeSpawn, now: () => now })
     row = db.select().from(memoryDistillJobs).all()[0]!
     expect(row.attempts).toBe(2)
     expect(row.status).toBe('pending')
 
     // Attempt 3 = max — flip to failed.
     now = row.nextRunAt + 1
-    await distillTick({ db, spawnFn: explodeSpawn, now: () => now })
+    await distillTick({ ...workerDeps(memory), spawnFn: explodeSpawn, now: () => now })
     row = db.select().from(memoryDistillJobs).all()[0]!
     expect(row.attempts).toBe(DISTILL_MAX_ATTEMPTS)
     expect(row.status).toBe('failed')
@@ -429,7 +446,7 @@ describe('distillTick', () => {
 
   test('ordinary runtime failure follows the normal retry budget', async () => {
     const { taskId } = seedTask(db)
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: 'runtime-failure',
       taskId,
@@ -438,7 +455,7 @@ describe('distillTick', () => {
     const failure = new Error('runtime launch failed')
 
     const result = await distillTick({
-      db,
+      ...workerDeps(memory),
       spawnFn: async () => {
         throw failure
       },
@@ -456,7 +473,7 @@ describe('distillTick', () => {
     // 6 distinct tasks → 6 distinct keys; only 5 should execute.
     for (let i = 0; i < 6; i++) {
       const { taskId } = seedTask(db)
-      await enqueueDistillJob(db, {
+      await enqueueDistillJob(memory.store, {
         sourceKind: 'clarify',
         sourceEventId: 'c' + i,
         taskId,
@@ -465,7 +482,7 @@ describe('distillTick', () => {
     }
     let calls = 0
     const r = await distillTick({
-      db,
+      ...workerDeps(memory),
       spawnFn: async (input) => {
         calls += 1
         return {
@@ -481,13 +498,17 @@ describe('distillTick', () => {
 
   test('not yet due: tick at t < next_run_at → no pick', async () => {
     const { taskId } = seedTask(db)
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
       debounceMs: 60_000, // due 1 min in the future
     })
-    const r = await distillTick({ db, spawnFn: EMPTY_ENVELOPE_SPAWN, now: () => Date.now() })
+    const r = await distillTick({
+      ...workerDeps(memory),
+      spawnFn: EMPTY_ENVELOPE_SPAWN,
+      now: () => Date.now(),
+    })
     expect(r.picked).toBe(0)
   })
 
@@ -559,7 +580,7 @@ describe('distillTick', () => {
       })
       .run()
 
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: clarifyId,
       taskId,
@@ -576,7 +597,7 @@ describe('distillTick', () => {
       }
     }
     await distillTick({
-      db,
+      ...workerDeps(memory),
       spawnFn: captureSpawn,
       sourceContextBudget: { clarifyTranscriptMaxBytes: 0, reviewBodyMaxBytes: 0 },
     })
@@ -590,7 +611,7 @@ describe('distillTick', () => {
       .update(memoryDistillJobs)
       .set({ status: 'pending', attempts: 0, nextRunAt: Date.now() - 1 })
     capturedPrompt = null
-    await distillTick({ db, spawnFn: captureSpawn })
+    await distillTick({ ...workerDeps(memory), spawnFn: captureSpawn })
     expect(capturedPrompt!).toContain('Source agent transcript:')
     expect(capturedPrompt!).toContain('PLUMBING-MARKER')
   })
@@ -598,21 +619,23 @@ describe('distillTick', () => {
 
 describe('recoverRunning + manual control', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
   test('recoverRunning flips leftover running rows back to pending', async () => {
     const { taskId } = seedTask(db)
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
       debounceMs: 0,
     })
     await db.update(memoryDistillJobs).set({ status: 'running' })
-    const r = await recoverRunning(db)
+    const r = await recoverRunning(memory.store)
     expect(r.recovered).toBe(1)
     const row = db.select().from(memoryDistillJobs).all()[0]!
     expect(row.status).toBe('pending')
@@ -635,7 +658,7 @@ describe('recoverRunning + manual control', () => {
         createdAt: Date.now(),
       })
       .run()
-    expect(await retryFailedJob(db, id)).toBe(true)
+    expect(await retryFailedJob(memory.store, id)).toBe(true)
     const row = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)).all()[0]!
     expect(row.status).toBe('pending')
     expect(row.attempts).toBe(0)
@@ -658,7 +681,7 @@ describe('recoverRunning + manual control', () => {
         createdAt: Date.now(),
       })
       .run()
-    expect(await retryFailedJob(db, id)).toBe(false)
+    expect(await retryFailedJob(memory.store, id)).toBe(false)
   })
 
   test('cancelPendingJob: pending → canceled', async () => {
@@ -677,7 +700,7 @@ describe('recoverRunning + manual control', () => {
         createdAt: Date.now(),
       })
       .run()
-    expect(await cancelPendingJob(db, id)).toBe(true)
+    expect(await cancelPendingJob(memory.store, id)).toBe(true)
     const row = db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)).all()[0]!
     expect(row.status).toBe('canceled')
   })
@@ -711,8 +734,8 @@ describe('recoverRunning + manual control', () => {
         createdAt: Date.now(),
       })
       .run()
-    expect((await listDistillJobs(db, { status: 'failed' })).length).toBe(1)
-    expect((await listDistillJobs(db, {})).length).toBe(2)
+    expect((await listDistillJobs(memory.store, { status: 'failed' })).length).toBe(1)
+    expect((await listDistillJobs(memory.store, {})).length).toBe(2)
   })
 })
 
@@ -724,8 +747,10 @@ describe('recoverRunning + manual control', () => {
 // coverage before this.
 describe('startMemoryDistillLoop reentrancy', () => {
   let db: DbClient
+  let memory: MemoryTestContext
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    memory = createSqliteMemoryDistillTestContext(db)
     resetBroadcastersForTests()
   })
 
@@ -737,13 +762,13 @@ describe('startMemoryDistillLoop reentrancy', () => {
     // spawn is ever in-flight. Without the guard, a second tick fires, finds the
     // still-`pending` second head, claims it and spawns CONCURRENTLY → 2.
     const { taskId } = seedTask(db)
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'clarify',
       sourceEventId: 'c1',
       taskId,
       debounceMs: 0,
     })
-    await enqueueDistillJob(db, {
+    await enqueueDistillJob(memory.store, {
       sourceKind: 'review',
       sourceEventId: 'r1',
       taskId,
@@ -766,7 +791,11 @@ describe('startMemoryDistillLoop reentrancy', () => {
       return { exitCode: 0, stderr: '', stdout: emptyDistillerStdout(input) }
     }
 
-    const loop = startMemoryDistillLoop({ db, spawnFn: slowSpawn, intervalMs: 5 })
+    const loop = startMemoryDistillLoop({
+      ...workerDeps(memory),
+      spawnFn: slowSpawn,
+      intervalMs: 5,
+    })
     try {
       // Two waits, and they are NOT the same kind — conflating them is what made
       // this assertion flaky twice.
