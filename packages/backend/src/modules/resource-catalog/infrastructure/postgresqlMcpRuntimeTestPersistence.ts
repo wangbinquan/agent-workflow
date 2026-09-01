@@ -281,7 +281,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async markCaptureTerminal(input) {
-      runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      await runPostgresqlResourceCatalogTransaction(db, async (tx) => {
         const turn = await tx
           .select({ captureState: mcpRuntimeTestTurns.captureState })
           .from(mcpRuntimeTestTurns)
@@ -1705,7 +1705,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
     },
 
     async failBeforeRun(input) {
-      runPostgresqlResourceCatalogTransaction(db, async (tx) => {
+      await runPostgresqlResourceCatalogTransaction(db, async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)

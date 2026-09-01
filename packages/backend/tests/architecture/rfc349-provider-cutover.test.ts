@@ -407,4 +407,31 @@ describe('RFC-349 provider cutover', () => {
     expect(source).not.toMatch(/\bopenDb\s*\(/)
     expect(source).toContain('resolveDatabaseProviderRuntime')
   })
+
+  /**
+   * The SQLite twin of every one of these adapters is synchronous (`dbTxSync`),
+   * so a dropped `await` changes nothing there and everything here: the caller
+   * resolves while the PostgreSQL transaction is still open, later reads race
+   * it, and a failure surfaces as an unhandled rejection instead of the
+   * operation's error. Two runtime-test persistence writers
+   * (`markCaptureTerminal`, `failBeforeRun`) shipped exactly that shape.
+   */
+  test('every PostgreSQL transaction is awaited or returned, never fired and forgotten', () => {
+    const floating: string[] = []
+    for (const candidate of units) {
+      if (!candidate.path.startsWith('packages/backend/src/')) continue
+      const lines = candidate.text.split('\n')
+      lines.forEach((line, index) => {
+        if (!/^\s*runPostgresql[A-Za-z]*Transaction\s*\(/.test(line)) return
+        // A concise arrow body (`… =>` on the line above) is a return.
+        const previous = lines
+          .slice(0, index)
+          .reverse()
+          .find((candidateLine) => candidateLine.trim().length > 0)
+        if (previous !== undefined && /=>\s*$/.test(previous)) return
+        floating.push(`${candidate.path}:${index + 1}`)
+      })
+    }
+    expect(floating).toEqual([])
+  })
 })
