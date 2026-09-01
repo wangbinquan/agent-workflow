@@ -5,11 +5,10 @@
 // a fresh replay before the daemon exposes any service.
 
 import { Database } from 'bun:sqlite'
-import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { readMigrationFiles } from 'drizzle-orm/migrator'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { migrateSqlite } from './sqliteMigrator'
 
 export type SchemaDriftStage =
   | 'migration-history-preflight'
@@ -323,7 +322,7 @@ function expectedPhysicalSchemaManifest(
   let manifest: PhysicalSchemaManifest
   try {
     reference.exec('PRAGMA foreign_keys = OFF;')
-    migrate(drizzle(reference), { migrationsFolder: resolve(migrationsFolder) })
+    migrateSqlite(reference, { migrationsFolder: resolve(migrationsFolder) })
     reference.exec('PRAGMA foreign_keys = ON;')
     manifest = collectPhysicalSchemaManifest(reference)
   } finally {

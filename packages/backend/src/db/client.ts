@@ -3,7 +3,6 @@
 
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { chmodSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as schema from './schema'
@@ -12,6 +11,7 @@ import {
   assertPhysicalSchema,
   readExpectedMigrationChain,
 } from './schemaAdmission'
+import { migrateSqlite } from './sqliteMigrator'
 
 export type DbClient = ReturnType<typeof drizzle<typeof schema>>
 
@@ -244,7 +244,7 @@ export function openDb(opts: OpenDbOptions): DbClient {
       // review_comments wiped via ON DELETE cascade; 0035/0041 are the same shape
       // for node_runs). Toggle OUTSIDE drizzle's tx, then re-enable + verify.
       sqlite.exec('PRAGMA foreign_keys = OFF;')
-      migrate(db, { migrationsFolder })
+      migrateSqlite(sqlite, { migrationsFolder })
       // F1-followup (Codex gate): WARN, don't throw. foreign_key_check runs AFTER
       // drizzle's migration tx has COMMITTED, so throwing can't roll back — it would
       // only brick startup on a pre-existing orphan (a half-upgraded DB that fails
@@ -320,7 +320,7 @@ function migratedSnapshot(migrationsFolder: string): Uint8Array {
     // RFC-115 (Codex audit F1): migrate with FK OFF (see openDb) so 12-step
     // rebuilds don't cascade-delete child rows; the serialized image is FK-ON.
     template.exec('PRAGMA foreign_keys = OFF;')
-    migrate(drizzle(template, { schema }), { migrationsFolder: key })
+    migrateSqlite(template, { migrationsFolder: key })
     template.exec('PRAGMA foreign_keys = ON;')
     snapshot = template.serialize()
     template.close()

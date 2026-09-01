@@ -306,6 +306,7 @@ import {
   createPostgresqlHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
 import { enforceLimits } from '@/services/limits'
+import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
 
 export interface StartOptions {
   port?: number
@@ -559,6 +560,16 @@ async function composePostgresqlProviderSession(input: {
         throw new Error('postgresql-maintenance-status-not-bound')
       }
       return boundMaintenanceStatus()
+    },
+  })
+  await initializeRuntimeRegistryBoot({
+    operations: application.core.runtimeRegistry,
+    config: input.config,
+    configPath: Paths.config,
+    onRecoverableFailure(error) {
+      input.log.warn('builtin runtime seed/migration on boot failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     },
   })
   const runtime = application.runtime
@@ -2105,26 +2116,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // them by name and the Settings list shows them out of the box. RFC-153: they
   // are editable + deletable now; a deleted row is NOT re-seeded (seed no-ops on a
   // non-empty table). migrateConfigIntoBuiltins then backfills binary from config.
-  try {
-    await runtimeRegistry.seedBuiltinRuntimes()
-    // RFC-113 (idempotent): config defaults land on the built-in runtime rows
-    // (§3.1). RFC-115 removed the one-time agent-param re-home pass — the agent
-    // contract dropped its model/variant/temperature/steps/maxSteps columns
-    // (migration 0057), so generation params now live solely on the runtimes.
-    await runtimeRegistry.migrateConfigIntoBuiltins(config)
-  } catch (err) {
-    log.warn('builtin runtime seed/migration on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
-  // RFC-115 (Codex impl-gate): fail-loud guard for the config-only skip-upgrade
-  // data-loss path — OUTSIDE the warn-and-continue try above so it actually
-  // aborts boot (symmetric with migration 0057's agents guard). If raw config
-  // still has the 6 dropped generation defaults but every built-in runtime
-  // profile is NULL, RFC-113's config→runtime backfill never ran and continuing
-  // would silently change every inherited runtime's default model.
-  await runtimeRegistry.assertConfigDefaultsMigrated(Paths.config)
+  await initializeRuntimeRegistryBoot({
+    operations: runtimeRegistry,
+    config,
+    configPath: Paths.config,
+    onRecoverableFailure(error) {
+      log.warn('builtin runtime seed/migration on boot failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
 
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes resolve the same DB-keyed daemon singleton.

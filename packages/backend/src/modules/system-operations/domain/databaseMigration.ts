@@ -402,6 +402,9 @@ export interface AdvanceDatabaseMigrationInput {
   readonly idempotencyKey: string
   readonly now: number
   readonly progress?: Partial<DatabaseMigrationProgress>
+  /** Authoritative point-in-time SQLite snapshot captured only after admission
+   * has frozen and drained every writer. */
+  readonly sourceDatabaseFingerprint?: string
   readonly targetDatabaseFingerprint?: string
   readonly sourceBackupDigest?: string
   readonly logicalBackupDigest?: string
@@ -486,6 +489,12 @@ export function advanceDatabaseMigration(
   ) {
     return current
   }
+  if (input.sourceDatabaseFingerprint !== undefined && input.nextPhase !== 'source-frozen') {
+    throw new DatabaseMigrationStateError(
+      'migration-invalid-transition',
+      'the SQLite source fingerprint can only be fixed at source-frozen',
+    )
+  }
   assertMutationAuthority(current, input)
   if (current.payload.failure !== null) {
     throw new DatabaseMigrationStateError(
@@ -529,6 +538,12 @@ export function advanceDatabaseMigration(
     previousDigest: current.digest,
     phase: input.nextPhase,
     lastIdempotencyKey: input.idempotencyKey,
+    source: {
+      ...current.payload.source,
+      ...(input.sourceDatabaseFingerprint === undefined
+        ? {}
+        : { databaseFingerprint: input.sourceDatabaseFingerprint }),
+    },
     target: {
       ...current.payload.target,
       ...(input.targetDatabaseFingerprint === undefined

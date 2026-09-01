@@ -293,9 +293,13 @@ export function createDatabaseMigrationRunner(deps: {
   const now = deps.now ?? Date.now
   const chunkRows = deps.chunkRows ?? 250
   const ownerLeaseMs = deps.ownerLeaseMs ?? 60_000
+  // The operation is planned while SQLite is still live. The authoritative
+  // snapshot is therefore refreshed after admission freezes and drains every
+  // writer, then retained for the rest of this runner instance.
+  let sourceSnapshot = deps.sourceSnapshot
   const targetVerification = (): readonly LogicalTargetTableVerification[] =>
     deps.contract.tables.map((table) => {
-      const rowCount = deps.sourceSnapshot.tableRows[table.id]
+      const rowCount = sourceSnapshot.tableRows[table.id]
       if (rowCount === undefined) {
         throw new DatabaseMigrationRunnerError(
           'database-migration-source-mismatch',
@@ -416,7 +420,7 @@ export function createDatabaseMigrationRunner(deps: {
       if (deps.controlPlane.readManifest(operationId).payload.cancellationRequestedAt !== null) {
         return null
       }
-      await deps.source.assertUnchanged(deps.sourceSnapshot)
+      await deps.source.assertUnchanged(sourceSnapshot)
       const chunks: LogicalTableChunk[] = []
       let afterKey = null
       let chunkIndex = 0
@@ -458,7 +462,7 @@ export function createDatabaseMigrationRunner(deps: {
         if (rows.length < chunkRows) break
       }
       const entry = tableEntryFromChunks(deps.contract, table.id, chunks)
-      const expectedRows = deps.sourceSnapshot.tableRows[table.id]
+      const expectedRows = sourceSnapshot.tableRows[table.id]
       if (entry.rowCount !== expectedRows) {
         throw new DatabaseMigrationRunnerError(
           'database-migration-source-mismatch',
@@ -485,7 +489,7 @@ export function createDatabaseMigrationRunner(deps: {
         },
       })
     }
-    await deps.source.assertUnchanged(deps.sourceSnapshot)
+    await deps.source.assertUnchanged(sourceSnapshot)
     const artifactManifest = createLogicalArtifactManifest({
       operationId,
       sourceProvider: 'sqlite',
@@ -510,7 +514,11 @@ export function createDatabaseMigrationRunner(deps: {
   const runner: DatabaseMigrationRunner = {
     async run(operationId, options) {
       let manifest = deps.controlPlane.readManifest(operationId)
-      if (manifest.payload.source.databaseFingerprint !== deps.sourceSnapshot.databaseFingerprint) {
+      if (
+        manifest.payload.phase !== 'planned' &&
+        manifest.payload.phase !== 'preflighted' &&
+        manifest.payload.source.databaseFingerprint !== sourceSnapshot.databaseFingerprint
+      ) {
         throw new DatabaseMigrationRunnerError(
           'database-migration-source-mismatch',
           'migration operation source fingerprint differs from the frozen SQLite source',
@@ -553,7 +561,6 @@ export function createDatabaseMigrationRunner(deps: {
 
           switch (manifest.payload.phase) {
             case 'planned': {
-              await deps.source.assertUnchanged(deps.sourceSnapshot)
               const health = await (deps.preflightTarget === undefined
                 ? preflightPostgresqlTarget({ runtime: deps.targetRuntime, operationId })
                 : deps.preflightTarget(operationId))
@@ -568,8 +575,11 @@ export function createDatabaseMigrationRunner(deps: {
                 sourceGenerationId: manifest.payload.source.generationId,
                 timeoutMs: deps.drainTimeoutMs ?? 30_000,
               })
-              await deps.source.assertUnchanged(deps.sourceSnapshot)
-              advance(operationId, 'source-frozen')
+              sourceSnapshot = await deps.source.preflight()
+              await deps.source.assertUnchanged(sourceSnapshot)
+              advance(operationId, 'source-frozen', {
+                sourceDatabaseFingerprint: sourceSnapshot.databaseFingerprint,
+              })
               break
             case 'source-frozen': {
               const backup = await deps.safetyBackup.create({
@@ -597,7 +607,7 @@ export function createDatabaseMigrationRunner(deps: {
               break
             }
             case 'verifying': {
-              await deps.source.assertUnchanged(deps.sourceSnapshot)
+              await deps.source.assertUnchanged(sourceSnapshot)
               await deps.target.finalizeSchema(now(), targetVerification())
               const generationId = targetGenerationId(operationId)
               await deps.target.prepareGeneration({
@@ -608,7 +618,7 @@ export function createDatabaseMigrationRunner(deps: {
                 version: 1,
                 operationId,
                 sourceGenerationId: manifest.payload.source.generationId,
-                sourceFingerprint: deps.sourceSnapshot.databaseFingerprint,
+                sourceFingerprint: sourceSnapshot.databaseFingerprint,
                 targetFingerprint: manifest.payload.target.databaseFingerprint,
                 schemaDigest: deps.contract.digest,
                 logicalBackupDigest: manifest.payload.logicalBackupDigest,

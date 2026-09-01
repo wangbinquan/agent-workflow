@@ -97,6 +97,7 @@ function harness(
     firstLiveWriteAt?: number | null
     cancelAfterFirstChunk?: boolean
     failFinalizeOnce?: boolean
+    frozenSourceFingerprint?: string
     failAt?: 'target-activation' | 'target-readiness' | 'admission-activation' | 'admission-open'
   } = {},
 ) {
@@ -121,7 +122,10 @@ function harness(
   const source: SqliteLogicalSource = {
     provider: 'sqlite',
     path: join(root, 'db.sqlite'),
-    preflight: async () => sourceSnapshot,
+    preflight: async () =>
+      options.frozenSourceFingerprint === undefined
+        ? sourceSnapshot
+        : { ...sourceSnapshot, databaseFingerprint: options.frozenSourceFingerprint },
     assertUnchanged: async () => undefined,
     readChunk: async (_table, afterKey) => (afterKey === null ? SOURCE_ROWS : []),
     close: async () => undefined,
@@ -410,6 +414,18 @@ describe('RFC-349 database migration runner', () => {
     ).toBe(true)
     expect((await fixture.runner.finalize('dbm_operation_01')).phase).toBe('finalized')
     expect(fixture.calls.at(-1)).toBe('target:finalized')
+  })
+
+  test('fixes the authoritative source snapshot only after admission drains live writers', async () => {
+    const fixture = harness({ frozenSourceFingerprint: 'sqlite:frozen' })
+
+    const status = await fixture.runner.run('dbm_operation_01')
+
+    expect(status.phase).toBe('accepting-writes')
+    expect(
+      fixture.controlPlane.readManifest('dbm_operation_01').payload.source.databaseFingerprint,
+    ).toBe('sqlite:frozen')
+    expect(fixture.calls[0]).toBe('admission:frozen')
   })
 
   test('a transient chunk failure keeps SQLite live and explicit resume reuses the operation', async () => {

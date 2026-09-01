@@ -83,15 +83,16 @@ function stripLineComments(src: string): string {
     .join('\n')
 }
 
-// RFC-099 mounts GET/PUT `${base}/:${param}/acl` through a helper, using a
-// COMPUTED path (`const path = \`${cfg.base}/:${cfg.param}/acl\``). ROUTE_RE
-// requires a string literal, so all ten of those endpoints — the write entry
-// point for owner transfer and grants — were invisible to this guard and had no
-// registry entry, hence no 401 gate and no contract test of any kind.
-// Reconstruct them from the call sites.
+// RFC-099 mounts GET/PUT `${base}/:${param}/acl` through provider-neutral
+// helpers, using a COMPUTED path (`const path = \`${cfg.base}/:${cfg.param}/acl\``).
+// ROUTE_RE requires a string literal, so these endpoints — the write entry
+// point for owner transfer and grants — are otherwise invisible to this source
+// guard. Reconstruct both current call shapes from their literal call sites.
 // See design/test-guard-audit-2026-07-21 gap B1-routes-3.
 const ACL_MOUNT_RE =
-  /mountAclEndpoints\s*\(\s*app\s*,\s*deps\s*,\s*\{[\s\S]{0,400}?base:\s*['"]([^'"]+)['"][\s\S]{0,400}?param:\s*['"]([^'"]+)['"]/g
+  /mountAclEndpoints\s*\(\s*app\s*,\s*\{[\s\S]{0,400}?base:\s*['"]([^'"]+)['"][\s\S]{0,400}?param:\s*['"]([^'"]+)['"]/g
+const DIGITAL_EMPLOYEE_ACL_MOUNT_RE =
+  /\bpersistence\.mountAcl\s*\(\s*\{[\s\S]{0,400}?base:\s*['"]([^'"]+)['"]/g
 
 function discoverAclRoutes(src: string, source: string): DiscoveredRoute[] {
   const out: DiscoveredRoute[] = []
@@ -99,6 +100,12 @@ function discoverAclRoutes(src: string, source: string): DiscoveredRoute[] {
   ACL_MOUNT_RE.lastIndex = 0
   while ((m = ACL_MOUNT_RE.exec(src)) !== null) {
     const path = `${m[1]!}/:${m[2]!}/acl`
+    out.push({ method: 'GET', path, source })
+    out.push({ method: 'PUT', path, source })
+  }
+  DIGITAL_EMPLOYEE_ACL_MOUNT_RE.lastIndex = 0
+  while ((m = DIGITAL_EMPLOYEE_ACL_MOUNT_RE.exec(src)) !== null) {
+    const path = `${m[1]!}/:id/acl`
     out.push({ method: 'GET', path, source })
     out.push({ method: 'PUT', path, source })
   }
@@ -244,9 +251,10 @@ describe('API contract registry coverage', () => {
         '/api/workgroups/:id',
         '/api/plugins/:id',
         '/api/workflows/:id',
-        // RFC-317 T8 —— 员工定义与 Code Capability 的旧字面 ACL
-        // 路由已随 provider cutover 退役。
-        //
+        '/api/capability-templates/:id',
+        '/api/digital-employee-job-templates/:id',
+        '/api/digital-employee-tools/:id',
+        '/api/digital-employees/:id',
         // 注意这里只列字面 base：RFC-310 的五类配置
         // 资源经 routes/developmentConfig.ts 的工厂挂载（`type: cfg.aclType`，一个
         // 变量），`discoverRoutes()` 的字面量重建规则看不见它们——与 findings.md
