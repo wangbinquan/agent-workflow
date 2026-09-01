@@ -1,99 +1,63 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 473,
-    "architectureExceptions": 2174,
-    "backgroundJobs": 282,
-    "crossContextImports": 2228,
-    "facades": 385,
+    "ambientWiring": 493,
+    "architectureExceptions": 6028,
+    "backgroundJobs": 365,
+    "crossContextImports": 6231,
+    "facades": 354,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 20964,
-    "mutationEntrypoints": 1273,
+    "moduleSymbolOwners": 25580,
+    "mutationEntrypoints": 1906,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 590,
-    "transactionExternalEffects": 305
+    "publicSurfaces": 934,
+    "transactionExternalEffects": 476
   },
   "metrics": {
-    "ambientWiringEntries": 473,
-    "appDepsConsumers": [
-      "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
-      "packages/backend/src/routes/agents.ts",
-      "packages/backend/src/routes/auth.ts",
-      "packages/backend/src/routes/cached-repos.ts",
-      "packages/backend/src/routes/capabilityTemplates.ts",
-      "packages/backend/src/routes/clarify.ts",
-      "packages/backend/src/routes/codeHosts.ts",
-      "packages/backend/src/routes/config.ts",
-      "packages/backend/src/routes/daemon.ts",
-      "packages/backend/src/routes/docs.ts",
-      "packages/backend/src/routes/fusions.ts",
-      "packages/backend/src/routes/health.ts",
-      "packages/backend/src/routes/intentSessions.ts",
-      "packages/backend/src/routes/maintenance.ts",
-      "packages/backend/src/routes/maintenanceDisk.ts",
-      "packages/backend/src/routes/mcps.ts",
-      "packages/backend/src/routes/memories.ts",
-      "packages/backend/src/routes/memoryDistillJobs.ts",
-      "packages/backend/src/routes/missionInputUploads.ts",
-      "packages/backend/src/routes/oidc-auth.ts",
-      "packages/backend/src/routes/oidc.ts",
-      "packages/backend/src/routes/overview.ts",
-      "packages/backend/src/routes/plantuml.ts",
-      "packages/backend/src/routes/plugins.ts",
-      "packages/backend/src/routes/port-artifacts.ts",
-      "packages/backend/src/routes/repoGroups.ts",
-      "packages/backend/src/routes/repos.ts",
-      "packages/backend/src/routes/reviews.ts",
-      "packages/backend/src/routes/runtime.ts",
-      "packages/backend/src/routes/runtimes.ts",
-      "packages/backend/src/routes/scheduledTasks.ts",
-      "packages/backend/src/routes/skills.ts",
-      "packages/backend/src/routes/taskArchive.ts",
-      "packages/backend/src/routes/taskClarifyDirective.ts",
-      "packages/backend/src/routes/taskFeedback.ts",
-      "packages/backend/src/routes/taskQuestions.ts",
-      "packages/backend/src/routes/tasks.ts",
-      "packages/backend/src/routes/webhookDeliveries.ts",
-      "packages/backend/src/routes/webhookEndpoints.ts",
-      "packages/backend/src/routes/webhookTriggers.ts",
-      "packages/backend/src/routes/webhooks.ts",
-      "packages/backend/src/routes/workflows.ts",
-      "packages/backend/src/routes/workgroupTasks.ts",
-      "packages/backend/src/routes/workgroups.ts",
-      "packages/backend/src/routes/worktree-files.ts"
-    ],
-    "backendProductionFiles": 1174,
+    "ambientWiringEntries": 493,
+    "appDepsConsumers": [],
+    "backendProductionFiles": 1875,
     "backendValueSccs": [
       [
-        "packages/backend/src/services/agent.ts",
-        "packages/backend/src/services/agentDeps.ts",
-        "packages/backend/src/services/agentResourceIntegrity.ts"
+        "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
+        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
+        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationEffectPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRuntimeLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/public/participants.ts",
+        "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+        "packages/backend/src/services/lifecycle.ts"
       ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
-        "packages/backend/src/services/repoGroup.ts",
         "packages/backend/src/util/git.ts"
-      ],
-      [
-        "packages/backend/src/services/workflow.ts",
-        "packages/backend/src/services/workflow.validator.ts"
       ]
     ],
-    "backgroundEntries": 282,
+    "backgroundEntries": 365,
     "directNativeIntervalFiles": [
-      "packages/backend/src/cli/start.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
       "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts",
       "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "packages/backend/src/platform/background/maintenanceService.ts",
       "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "packages/backend/src/platform/background/providerBackupScheduler.ts",
       "packages/backend/src/services/autoKill.ts",
       "packages/backend/src/services/autoRepair.ts",
-      "packages/backend/src/services/backupScheduler.ts",
       "packages/backend/src/services/execution/childBudget.ts",
       "packages/backend/src/services/execution/executionWatch.ts",
       "packages/backend/src/services/fusion.ts",
@@ -106,29 +70,29 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 24,
-    "directNativeTimers": 74,
-    "inboundBoundaryEdges": 57,
-    "knownViolations": 29,
+    "directNativeTimers": 78,
+    "inboundBoundaryEdges": 404,
+    "knownViolations": 8,
     "moduleContexts": [
       {
         "context": "code-capability",
-        "files": 29
+        "files": 65
       },
       {
         "context": "collaboration",
-        "files": 54
+        "files": 127
       },
       {
         "context": "development-automation",
-        "files": 124
+        "files": 153
       },
       {
         "context": "digital-employee",
-        "files": 27
+        "files": 39
       },
       {
         "context": "event-center",
-        "files": 20
+        "files": 23
       },
       {
         "context": "execution-contract",
@@ -136,27 +100,35 @@
       },
       {
         "context": "identity-access",
-        "files": 35
+        "files": 51
       },
       {
         "context": "integration",
-        "files": 34
+        "files": 84
       },
       {
         "context": "intent",
-        "files": 9
+        "files": 33
+      },
+      {
+        "context": "memory",
+        "files": 28
       },
       {
         "context": "resource-catalog",
-        "files": 68
+        "files": 228
+      },
+      {
+        "context": "runtime-management",
+        "files": 8
       },
       {
         "context": "source-control",
-        "files": 22
+        "files": 36
       },
       {
         "context": "system-operations",
-        "files": 31
+        "files": 41
       },
       {
         "context": "task-catalog",
@@ -164,49 +136,59 @@
       },
       {
         "context": "task-execution",
-        "files": 125
+        "files": 316
       }
     ],
-    "moduleFiles": 589,
+    "moduleFiles": 1243,
     "nodeRunInsertSites": [
       {
-        "file": "packages/backend/src/services/nodeRunMint.ts",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/nodeRunMint.ts#325",
-        "line": 325,
-        "ownerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#mintNodeRunTx",
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts#53",
+        "line": 53,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts#createPostgresqlNodeRunMintParticipantInTx",
         "removeAfterWave": null,
         "status": "canonical-writer",
-        "symbol": "mintNodeRunTx"
+        "symbol": "createPostgresqlNodeRunMintParticipantInTx"
       },
       {
-        "file": "packages/backend/src/services/taskQuestionDispatch.ts",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/services/taskQuestionDispatch.ts#1499",
-        "line": 1499,
-        "ownerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#commitDispatchPlan",
-        "removeAfterWave": "W2/W7",
-        "status": "reviewed-dispatch-exception",
-        "symbol": "commitDispatchPlan"
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#53",
+        "line": 53,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx",
+        "removeAfterWave": null,
+        "status": "canonical-writer",
+        "symbol": "createSqliteNodeRunMintParticipantInTx"
       }
     ],
-    "outboundBoundaryEdges": 23,
+    "outboundBoundaryEdges": 12,
     "repoValueSccs": [
       [
-        "packages/backend/src/services/agent.ts",
-        "packages/backend/src/services/agentDeps.ts",
-        "packages/backend/src/services/agentResourceIntegrity.ts"
+        "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
+        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
+        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationEffectPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRuntimeLifecyclePersistence.ts",
+        "packages/backend/src/modules/task-execution/public/participants.ts",
+        "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+        "packages/backend/src/services/lifecycle.ts"
       ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
-        "packages/backend/src/services/repoGroup.ts",
         "packages/backend/src/util/git.ts"
-      ],
-      [
-        "packages/backend/src/services/workflow.ts",
-        "packages/backend/src/services/workflow.validator.ts"
       ],
       [
         "packages/frontend/src/components/node-session/ConversationFlow.tsx",
@@ -217,11 +199,11 @@
         "packages/shared/src/outputKinds/registry.ts"
       ]
     ],
-    "routeToDbEdges": 15,
-    "serviceFiles": 385,
-    "transportToDbEdges": 2,
+    "routeToDbEdges": 0,
+    "serviceFiles": 354,
+    "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ec91e56167a9abea78eab79ec95be32088986ed2c1fdaeff0b0823267e7f4eae"
+  "sourceDigest": "sha256:bd3417c2067f801ea3b3e653795b3d377d396e53ff14a36fd948dba400506973"
 }
