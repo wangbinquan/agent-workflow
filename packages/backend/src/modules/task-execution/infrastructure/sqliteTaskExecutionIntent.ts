@@ -6,7 +6,7 @@ import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type {
   SubmittedTaskExecutionIntent,
   TaskExecutionIntentStore,
-} from '../application/ports/taskExecutionIntentStore'
+} from './taskExecutionIntentTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import {
   canonicalJson,

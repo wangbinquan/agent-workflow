@@ -1,5 +1,3 @@
-import { and, desc, eq } from 'drizzle-orm'
-import { nodeRuns } from '@/db/schema'
 import type { WrapperRunLedgerPort } from '../application/ports/wrapperRunLedger'
 import type { WrapperStatusPublisherPort } from '../application/ports/wrapperStatusPublisher'
 import {
@@ -7,71 +5,11 @@ import {
   type OpenWrapperGeneration,
   type WrapperExecutionRequest,
   type WrapperNodeKind,
-  type WrapperRunSnapshot,
   type WrapperSettlement,
 } from '../domain/wrapperExecution'
 import { wrapperExternalUpstreamSources } from '@/services/dispatchFrontier'
-import { pickUpstreamSourceRun } from '@/services/freshness'
-import { setNodeRunStatus, transitionNodeRunStatus } from '@/services/lifecycle'
-import { mintNodeRun } from '@/services/nodeRunMint'
-import { withCurrentTaskExecutionMutation } from '@/services/taskExecutionParticipants'
-import { decodeWrapperProgress, encodeWrapperProgress } from '../domain/wrapperProgress'
 import { createLogger } from '@/util/log'
 import { broadcastNodeStatus, type SchedulerState } from './nodeMechanics'
-
-function snapshot(row: typeof nodeRuns.$inferSelect): WrapperRunSnapshot {
-  return {
-    id: row.id,
-    status: row.status,
-    wrapperProgressJson: row.wrapperProgressJson,
-    consumedUpstreamRunsJson: row.consumedUpstreamRunsJson,
-    mergeState: row.mergeState,
-    isoBaseSnapshot: row.isoBaseSnapshot,
-    isoBaseSnapshotReposJson: row.isoBaseSnapshotReposJson,
-    isoSubmodulesJson: row.isoSubmodulesJson,
-    isoSubmodulesReposJson: row.isoSubmodulesReposJson,
-  }
-}
-
-async function findResumableWrapperRun(
-  state: SchedulerState,
-  nodeId: string,
-  iteration: number,
-): Promise<typeof nodeRuns.$inferSelect | null> {
-  const rows = await state.db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, state.taskId),
-        eq(nodeRuns.nodeId, nodeId),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
-    .orderBy(desc(nodeRuns.id))
-    .limit(1)
-  const row = rows[0]
-  if (row === undefined) return null
-  return row.status === 'done' || row.status === 'failed' || row.status === 'exhausted' ? null : row
-}
-
-async function computeWrapperConsumed(
-  state: SchedulerState,
-  wrapperId: string,
-  iteration: number,
-): Promise<Record<string, string>> {
-  const consumed: Record<string, string> = {}
-  const sources = [...wrapperExternalUpstreamSources(wrapperId, state.definition)].sort()
-  for (const sourceNodeId of sources) {
-    const rows = await state.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, state.taskId), eq(nodeRuns.nodeId, sourceNodeId)))
-    const run = pickUpstreamSourceRun(rows, iteration)
-    if (run !== undefined) consumed[sourceNodeId] = run.id
-  }
-  return consumed
-}
 
 function isSupersedableTransitionError(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code
@@ -79,18 +17,15 @@ function isSupersedableTransitionError(error: unknown): boolean {
 }
 
 async function supersedingWrapperOutcome(state: SchedulerState, wrapperRunId: string) {
-  const [current] = await state.db
-    .select({ status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, wrapperRunId))
-  if (current?.status === 'canceled') {
+  const current = await state.opts.persistence.wrapperRuns.readStatus(wrapperRunId)
+  if (current === 'canceled') {
     return {
       kind: 'canceled' as const,
       summary: 'wrapper canceled while finalizing',
       message: 'wrapper-superseded-canceled',
     }
   }
-  if (current?.status === 'interrupted') {
+  if (current === 'interrupted') {
     return {
       kind: 'failed' as const,
       summary: 'wrapper interrupted while finalizing',
@@ -104,21 +39,11 @@ async function clearWrapperReuseDisabled(
   state: SchedulerState,
   wrapperRunId: string,
 ): Promise<void> {
-  const [row] = await state.db
-    .select({ wrapperProgressJson: nodeRuns.wrapperProgressJson })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, wrapperRunId))
-  const progress = decodeWrapperProgress(row?.wrapperProgressJson, () => {})
-  if (progress === null || progress.reuseDisabled !== true) return
-  const { reuseDisabled: _cleared, ...rest } = progress
-  withCurrentTaskExecutionMutation({
-    db: state.db,
-    run: (tx) =>
-      tx
-        .update(nodeRuns)
-        .set({ wrapperProgressJson: encodeWrapperProgress(rest) })
-        .where(eq(nodeRuns.id, wrapperRunId))
-        .run(),
+  await state.opts.persistence.wrapperRuns.clearReuseDisabled({
+    nodeRunId: wrapperRunId,
+    ...(state.opts.executionContext === undefined
+      ? {}
+      : { executionContext: state.opts.executionContext }),
   })
 }
 
@@ -128,8 +53,7 @@ async function settleTerminal(
   settlement: WrapperSettlement,
 ): Promise<void> {
   try {
-    await setNodeRunStatus({
-      db: state.db,
+    await state.opts.persistence.nodeRuns.set({
       nodeRunId: wrapperRunId,
       to: settlement.rowStatus as 'done' | 'failed' | 'canceled' | 'exhausted',
       allowedFrom: ['running', 'awaiting_review', 'awaiting_human'],
@@ -138,6 +62,9 @@ async function settleTerminal(
         finishedAt: Date.now(),
         ...(settlement.errorMessage === undefined ? {} : { errorMessage: settlement.errorMessage }),
       },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
   } catch (error) {
     if (!isSupersedableTransitionError(error)) throw error
@@ -160,12 +87,15 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
       kind: K,
       request: WrapperExecutionRequest<K>,
     ): Promise<OpenWrapperGeneration<K>> {
-      const existing = await findResumableWrapperRun(state, request.node.id, request.iteration)
+      const existing = await state.opts.persistence.wrapperRuns.findResumable({
+        taskId: state.taskId,
+        nodeId: request.node.id,
+        iteration: request.iteration,
+      })
       if (existing !== null) {
         const enteredRunning = existing.status !== 'running'
         if (enteredRunning) {
-          await setNodeRunStatus({
-            db: state.db,
+          await state.opts.persistence.nodeRuns.set({
             nodeRunId: existing.id,
             to: 'running',
             allowedFrom: [
@@ -177,6 +107,9 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
             ],
             allowTerminal: true,
             reason: kind === 'wrapper-fanout' ? 'wrapper-fanout-resume' : 'wrapper-resume',
+            ...(state.opts.executionContext === undefined
+              ? {}
+              : { executionContext: state.opts.executionContext }),
           })
         }
         return {
@@ -184,15 +117,21 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
           runId: existing.id,
           resumed: true,
           enteredRunning,
-          previous: snapshot(existing),
+          previous: existing.previous,
         }
       }
 
       const consumed =
         kind === 'wrapper-fanout'
           ? undefined
-          : await computeWrapperConsumed(state, request.node.id, request.iteration)
-      const runId = await mintNodeRun(state.db, {
+          : await state.opts.persistence.wrapperRuns.resolveConsumed({
+              taskId: state.taskId,
+              sourceNodeIds: [
+                ...wrapperExternalUpstreamSources(request.node.id, state.definition),
+              ].sort(),
+              iteration: request.iteration,
+            })
+      const runId = await state.opts.persistence.nodeRuns.mint({
         taskId: state.taskId,
         nodeId: request.node.id,
         status: 'pending',
@@ -201,11 +140,16 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
         ...(consumed === undefined
           ? {}
           : { overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) } }),
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
       })
-      await transitionNodeRunStatus({
-        db: state.db,
+      await state.opts.persistence.nodeRuns.transition({
         nodeRunId: runId,
         event: { kind: 'mark-running' },
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
       })
       return { kind, runId, resumed: false, enteredRunning: true, previous: null }
     },
@@ -215,13 +159,15 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
       settlement: WrapperSettlement,
     ): Promise<void> {
       if (settlement.rowStatus === 'awaiting_human' || settlement.rowStatus === 'awaiting_review') {
-        await transitionNodeRunStatus({
-          db: state.db,
+        await state.opts.persistence.nodeRuns.transition({
           nodeRunId: generation.runId,
           event:
             settlement.rowStatus === 'awaiting_human'
               ? { kind: 'park-human' }
               : { kind: 'park-review' },
+          ...(state.opts.executionContext === undefined
+            ? {}
+            : { executionContext: state.opts.executionContext }),
         })
         return
       }

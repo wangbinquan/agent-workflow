@@ -3,11 +3,14 @@
 // the RFC-339 WrapperRuntime and consume this file only through typed ports.
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents, nodeRunOutputs, nodeRuns, taskCollaborators, tasks } from '@/db/schema'
-import type { DbTxSync } from '@/db/txSync'
-import type { CollaborationNodeGatePort } from '@/modules/task-execution/application/ports/collaborationNodeGate'
+import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
+import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
+import type {
+  NodeExecutionPersistence,
+  NodeExecutionSnapshot,
+} from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
+import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import {
   decideRetryShape,
   DEFAULT_SESSION_RESTART_BUDGET,
@@ -21,19 +24,13 @@ import {
 } from '@/modules/task-execution/domain/inboundEdges'
 import { pickInheritableRunConfig } from '@/modules/task-execution/public/commands'
 import { retryAttemptCap } from '@/platform/contracts/retryAttemptCap'
-import {
-  dispatchCrossClarifyNode,
-  findClarifyNode,
-  resolveCrossNodeStopped,
-} from '@/services/clarify/service'
-import { buildClarifyQueueContext } from '@/services/clarifyQueue'
+import { findClarifyNode } from '@/services/clarify/service'
 import {
   computeRemaining,
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
 } from '@/services/clarifyRounds'
 import { executeCodeHostCall } from '@/services/codeHost/call'
-import { resolveCodeHostConnectionsFromKeyFile } from '@/services/codeHost/connections'
 import { resolveProjectFallback } from '@/services/codeHost/project'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
@@ -52,8 +49,8 @@ import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
 import type {
-  LegacyNodeResult,
-  LegacyTaskMechanicsState,
+  NodeMechanicsResult,
+  TaskMechanicsState,
 } from '@/services/execution/taskMechanicsState'
 import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
 import { pickFreshestRun, pickUpstreamSourceRun } from '@/services/freshness'
@@ -62,15 +59,9 @@ import {
   markMergeFailed,
   mergeBackAndSettle,
   persistIsoBase,
+  type IsolatedAgentRunBinding,
   type MergeSettleOutcome,
 } from '@/services/isolatedAgentRun'
-import {
-  setNodeRunStatus,
-  setNodeRunStatusTx,
-  transitionMergeState,
-  transitionNodeRunStatus,
-  tryTransitionMergeState,
-} from '@/services/lifecycle'
 import {
   buildMergeAgent,
   buildMergeResolvePrompt,
@@ -88,19 +79,14 @@ import {
 import { ORCHESTRATOR_AGENT_ID } from '@/services/orchestratorAgent'
 import {
   continuesClarifyLineage,
-  frozenRuntimeOfSession,
+  frozenRuntimeOfSessionWith,
   isClarifyRerunCause,
-  loadRunEnvelopeNonce,
-  mintNodeRun,
-  resolveFrozenRuntime,
-  resolveSchedulerRunRow,
+  resolveFrozenRuntimeWith,
 } from '@/services/nodeRunMint'
-import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
+import { toContainerRelative } from '@/services/portArtifacts'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
-import { buildReviewPromptContext, dispatchReviewNode } from '@/services/review'
 import { runNode, type RunResult } from '@/services/runner'
 import { getRuntimeDriver, runRootFor } from '@/services/runtime'
-import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
 import {
   ensureScriptDepsEnv,
@@ -117,7 +103,6 @@ import {
   decideResumeSessionId,
   type ClarifyInlineFallbackReason,
 } from '@/services/sessionModeFallback'
-import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import {
   createCodeHostEffectAttemptObserver,
   createProcessEffectAttemptObserver,
@@ -125,28 +110,19 @@ import {
   encodeLineageSlotPath,
   taskExecutionRequestHash as executionEffectRequestHash,
   operationFamilyKey,
-  taskExecutionModule,
-  withCurrentTaskExecutionMutation,
-  withTaskExecutionMutation,
   type LineageSlot,
   type ProcessEffectAttemptObserver,
   type TaskExecutionContext,
 } from '@/services/taskExecutionParticipants'
-import { resolveBorrowForNode } from '@/services/taskQuestionDispatch'
-import {
-  type WorkgroupEngineHooks,
-  type WorkgroupHostRunRequest,
-  type WorkgroupHostRunResult,
-} from '@/services/workgroup/engine'
-import {
-  dismissOpenClarifyParksForAutonomous,
-  isTaskClarifySuppressed,
-} from '@/services/workgroup/lifecycle'
+import type {
+  WorkgroupTurnHostOperations,
+  WorkgroupTurnHostRequest,
+  WorkgroupTurnHostResult,
+} from '../application/ports/workgroupTurnsOperations'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { runGit, worktreeFilesChanged } from '@/util/git'
 import { sha256Hex } from '@/util/hash'
 import { type Logger } from '@/util/log'
-import { Paths } from '@/util/paths'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import type {
   ClarifyCrossAgentNode,
@@ -188,7 +164,6 @@ import {
   type Permission,
   type StartTask,
 } from '@agent-workflow/shared'
-import { and, asc, desc, eq, notLike, sql } from 'drizzle-orm'
 import { mkdirSync } from 'node:fs'
 import { basename } from 'node:path'
 import { ulid } from 'ulid'
@@ -216,7 +191,50 @@ type NodeStatus =
   | 'awaiting_review'
   | 'awaiting_human'
 
-export type SchedulerState = LegacyTaskMechanicsState
+export type SchedulerState = TaskMechanicsState
+
+function executionContextInput(state: SchedulerState) {
+  return state.opts.executionContext === undefined
+    ? {}
+    : { executionContext: state.opts.executionContext }
+}
+
+export function isolatedRunBinding(state: SchedulerState): IsolatedAgentRunBinding {
+  return {
+    persistence: state.opts.persistence,
+    ...executionContextInput(state),
+  }
+}
+
+async function setRunStatus(
+  state: SchedulerState,
+  input: Omit<Parameters<NodeRunLifecyclePersistence['set']>[0], 'executionContext'>,
+) {
+  return await state.opts.persistence.nodeRuns.set({
+    ...input,
+    ...executionContextInput(state),
+  })
+}
+
+async function transitionRunStatus(
+  state: SchedulerState,
+  input: Omit<Parameters<NodeRunLifecyclePersistence['transition']>[0], 'executionContext'>,
+) {
+  return await state.opts.persistence.nodeRuns.transition({
+    ...input,
+    ...executionContextInput(state),
+  })
+}
+
+async function mintRun(
+  state: SchedulerState,
+  input: Omit<Parameters<NodeRunLifecyclePersistence['mint']>[0], 'executionContext'>,
+): Promise<string> {
+  return await state.opts.persistence.nodeRuns.mint({
+    ...input,
+    ...executionContextInput(state),
+  })
+}
 
 /** D6/Q5 compatibility: a historical NULL owner is deliberately not the
  * literal system account and therefore carries no permissions. */
@@ -269,17 +287,16 @@ async function delegatedCallActor(
 
 export async function executeWorkgroupHostMechanics(
   state: SchedulerState,
-  req: WorkgroupHostRunRequest,
-  collaboration: CollaborationNodeGatePort,
-): Promise<WorkgroupHostRunResult> {
-  const { db, taskId, task, opts, log, definition } = state
+  req: WorkgroupTurnHostRequest,
+  collaboration: CollaborationRuntimeMechanics,
+): Promise<WorkgroupTurnHostResult> {
+  const { taskId, task, opts, log, definition } = state
   const injection =
     req.agent.id === ORCHESTRATOR_AGENT_ID
       ? resolveSyntheticTaskExecutionInjection(req.agent)
       : await state.taskExecutionResources.injection(req.agent.id)
   if (injection.kind === 'failed') {
-    await setNodeRunStatus({
-      db,
+    await setRunStatus(state, {
       nodeRunId: req.nodeRunId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -302,9 +319,9 @@ export async function executeWorkgroupHostMechanics(
   let keepHookIso = false
   let hookIso: IsoHandle | null = null
   type HostSpawn =
-    | { kind: 'early'; out: WorkgroupHostRunResult }
+    | { kind: 'early'; out: WorkgroupTurnHostResult }
     | { kind: 'ran'; result: RunResult; projected: Record<string, string> }
-  return await runAssembly<Record<string, never>, HostSpawn, WorkgroupHostRunResult>(
+  return await runAssembly<Record<string, never>, HostSpawn, WorkgroupTurnHostResult>(
     {},
     {
       // RFC-208：许可由骨架自己取自己放——外面先抢再传进来会留出「抢到许可 ~
@@ -316,7 +333,7 @@ export async function executeWorkgroupHostMechanics(
             writeSem: state.writeSem,
             appHome: opts.appHome,
             taskId,
-            db,
+            binding: isolatedRunBinding(state),
             isoKeyRunId: req.nodeRunId,
             canonRepos: state.repos,
             log,
@@ -326,7 +343,8 @@ export async function executeWorkgroupHostMechanics(
         },
         persistBase: 'in-setup',
         persist: async (h: IsoLike) => {
-          if (!h.passthrough) await persistIsoBase(db, req.nodeRunId, task.repoCount, iso)
+          if (!h.passthrough)
+            await persistIsoBase(isolatedRunBinding(state), req.nodeRunId, task.repoCount, iso)
         },
       },
       onIsoSetupFailure: (err) => {
@@ -335,8 +353,9 @@ export async function executeWorkgroupHostMechanics(
         return { status: 'failed', outputs: {}, errorMessage: `iso-setup-failed: ${message}` }
       },
       spawn: async (): Promise<HostSpawn> => {
-        const frozen = await resolveFrozenRuntime(
-          db,
+        const frozen = await resolveFrozenRuntimeWith(
+          opts.persistence.nodeRunRuntime,
+          opts.runtimeRegistry,
           req.nodeRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
@@ -372,16 +391,9 @@ export async function executeWorkgroupHostMechanics(
         // A leader run is shardKey=null → pass `undefined` (node-scoped = exact pre-route-2 leader
         // behavior); a member run passes its assignment shard so concurrent members never inject each
         // other's Q&A. Fresh (non-answer) turns get an empty queue → no injection.
-        const runRow = (
-          await db
-            .select({ shardKey: nodeRuns.shardKey, envelopeNonce: nodeRuns.envelopeNonce })
-            .from(nodeRuns)
-            .where(eq(nodeRuns.id, req.nodeRunId))
-            .limit(1)
-        )[0]
+        const runRow = await state.opts.persistence.nodeExecution.read(req.nodeRunId)
         const runShardKey = runRow?.shardKey ?? null
-        const clarifyQueue = await buildClarifyQueueContext({
-          db,
+        const clarifyQueue = await collaboration.buildClarifyQueueContext({
           definition,
           taskId,
           consumerNodeId: req.nodeId,
@@ -399,7 +411,7 @@ export async function executeWorkgroupHostMechanics(
         // no projection (design.md §2.2/§2.4).
         const hostAgent =
           req.hostOutputPorts !== undefined
-            ? { ...injection.spec.agent, outputs: req.hostOutputPorts, outputKinds: undefined }
+            ? { ...injection.spec.agent, outputs: [...req.hostOutputPorts], outputKinds: undefined }
             : injection.spec.agent
         const result = await runNode({
           taskId,
@@ -469,7 +481,11 @@ export async function executeWorkgroupHostMechanics(
                   // direction (a human leaving mid-flight must silence it at once).
                   req.clarifyEnabled === false
                     ? Promise.resolve(true)
-                    : isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey),
+                    : collaboration.isTaskClarifySuppressed({
+                        taskId,
+                        nodeId: req.nodeId,
+                        shardKey: runShardKey,
+                      }),
               }
             : {}),
           ...(clarifyQueue !== undefined
@@ -480,15 +496,18 @@ export async function executeWorkgroupHostMechanics(
           mcps: injection.spec.mcps,
           plugins: injection.spec.plugins,
           appHome: opts.appHome,
+          memoryInjectionQueries: opts.memoryInjectionQueries,
+          runtimeSessionLeases: opts.runtimeSessionLeases,
+          runtimeRegistry: opts.runtimeRegistry,
+          persistence: opts.persistence,
           ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-          db,
           log,
           ...(opts.signal ? { signal: opts.signal } : {}),
           ...(opts.subagentLiveCapture !== undefined
             ? { subagentLiveCapture: opts.subagentLiveCapture }
             : {}),
         })
-        const early = await (async (): Promise<WorkgroupHostRunResult | null> => {
+        const early = await (async (): Promise<WorkgroupTurnHostResult | null> => {
           if (result.processUnreaped === true) keepHookIso = true
           broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, result.status)
           if (result.status === 'canceled') {
@@ -509,11 +528,10 @@ export async function executeWorkgroupHostMechanics(
             // on. The row is already terminal `done` here (valid clarify keeps
             // status=done), hence the allowTerminal correction so the DB row, the
             // broadcast and the RFC-182 room card all tell the truth.
-            const lateSuppress = async (): Promise<WorkgroupHostRunResult> => {
+            const lateSuppress = async (): Promise<WorkgroupTurnHostResult> => {
               const dropped = result.clarify?.questions.length ?? 0
               const suppressedMsg = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back disabled mid-run (autonomous); dropped ${dropped} question(s)`
-              await setNodeRunStatus({
-                db,
+              await setRunStatus(state, {
                 nodeRunId: req.nodeRunId,
                 to: 'failed',
                 allowedFrom: ['done'],
@@ -538,7 +556,11 @@ export async function executeWorkgroupHostMechanics(
             }
             if (
               req.clarifyEnabled !== undefined &&
-              (await isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey))
+              (await collaboration.isTaskClarifySuppressed({
+                taskId,
+                nodeId: req.nodeId,
+                shardKey: runShardKey,
+              }))
             ) {
               return await lateSuppress()
             }
@@ -553,9 +575,7 @@ export async function executeWorkgroupHostMechanics(
             if (clarifyNodeId === undefined) {
               return { status: 'failed', outputs: {}, errorMessage: 'clarify-no-channel' }
             }
-            const currentRunRow = (
-              await db.select().from(nodeRuns).where(eq(nodeRuns.id, req.nodeRunId)).limit(1)
-            )[0]
+            const currentRunRow = await state.opts.persistence.nodeExecution.read(req.nodeRunId)
             // RFC-172 (route 2, R2-T6): host clarify GENERATION — count this (node, iteration, shard)'s
             // prior DONE clarify generations (shardKey-aware; mirrors the normal-node path ~scheduler.ts
             // 3540) instead of the old hardcoded 0. A host run (leader OR member) asking a SECOND round
@@ -565,7 +585,7 @@ export async function executeWorkgroupHostMechanics(
             // their OWN prior generations.
             const askingGeneration = currentRunRow
               ? (
-                  await priorDoneGenerationsForRun(db, {
+                  await priorDoneGenerationsForRun(state.opts.persistence.nodeExecution, {
                     taskId,
                     nodeId: req.nodeId,
                     iteration: currentRunRow.iteration,
@@ -583,6 +603,9 @@ export async function executeWorkgroupHostMechanics(
               intermediaryNodeId: clarifyNodeId,
               iteration: askingGeneration,
               questions: result.clarify.questions,
+              ...(opts.executionContext === undefined
+                ? {}
+                : { executionContext: opts.executionContext }),
               ...(result.clarify.truncationWarnings.length > 0
                 ? { truncationWarnings: result.clarify.truncationWarnings }
                 : {}),
@@ -595,9 +618,15 @@ export async function executeWorkgroupHostMechanics(
             // (both CAS on awaiting_human, the loser no-ops).
             if (
               req.clarifyEnabled !== undefined &&
-              (await isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey))
+              (await collaboration.isTaskClarifySuppressed({
+                taskId,
+                nodeId: req.nodeId,
+                shardKey: runShardKey,
+              }))
             ) {
-              const dismissed = await dismissOpenClarifyParksForAutonomous(db, taskId)
+              const dismissed = await collaboration.dismissOpenClarifyParksForAutonomous({
+                taskId,
+              })
               // 182 impl-gate P1 — only rewrite the asking run when the dismissal
               // actually took the session down. Zero dismissals means an answer
               // beat this re-check (session already answered / continuation
@@ -659,10 +688,10 @@ export async function executeWorkgroupHostMechanics(
             keep: false,
             then: {
               produce: async () => {
-                await tryTransitionMergeState({
-                  db,
+                await state.opts.persistence.mergeStates.tryTransition({
                   nodeRunId: req.nodeRunId,
                   event: { kind: 'abandon', reason: 'discard-writes' },
+                  ...executionContextInput(state),
                 })
                 return { status: 'done' as const, outputs: s.projected }
               },
@@ -678,7 +707,7 @@ export async function executeWorkgroupHostMechanics(
         run: async () => {
           const merge = await (async (): Promise<MergeSettleOutcome> => {
             return await mergeBackAndSettle({
-              db,
+              binding: isolatedRunBinding(state),
               writeSem: state.writeSem,
               handle: iso as IsoHandle,
               nodeRunId: req.nodeRunId,
@@ -704,10 +733,10 @@ export async function executeWorkgroupHostMechanics(
           onConflictHuman: (detail) => ({
             keep: false,
             produce: async () => {
-              await tryTransitionMergeState({
-                db,
+              await state.opts.persistence.mergeStates.tryTransition({
                 nodeRunId: req.nodeRunId,
                 event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' },
+                ...executionContextInput(state),
               })
               return {
                 status: 'failed',
@@ -740,7 +769,7 @@ export async function executeWorkgroupHostMechanics(
 
 export function buildWorkgroupEngineSupport(
   state: SchedulerState,
-): Omit<WorkgroupEngineHooks, 'runHostNode'> {
+): Omit<WorkgroupTurnHostOperations, 'runHost'> {
   const { taskId } = state
   return {
     broadcastNodeStatus: (nodeRunId, nodeId, status) =>
@@ -851,18 +880,11 @@ export const FRAMEWORK_AUDIT_EVENT_PREFIX = '[rfc'
  * 靠源码锁间接保护，而这条判据一旦失真，RFC-042 的续跑判据与 RFC-313 的形状判定会一起
  * 走偏（详见 {@link FRAMEWORK_AUDIT_EVENT_PREFIX}）。
  */
-export async function countAgentTextEvents(db: DbClient, nodeRunId: string): Promise<number> {
-  const row = await db
-    .select({ c: sql<number>`count(*)` })
-    .from(nodeRunEvents)
-    .where(
-      and(
-        eq(nodeRunEvents.nodeRunId, nodeRunId),
-        eq(nodeRunEvents.kind, 'text'),
-        notLike(nodeRunEvents.payload, `${FRAMEWORK_AUDIT_EVENT_PREFIX}%`),
-      ),
-    )
-  return Number(row[0]?.c ?? 0)
+export async function countAgentTextEvents(
+  persistence: NodeExecutionPersistence,
+  nodeRunId: string,
+): Promise<number> {
+  return await persistence.countAgentTextEvents(nodeRunId, FRAMEWORK_AUDIT_EVENT_PREFIX)
 }
 
 export function decideEnvelopeFollowup(prev: PreviousAttemptShape): EnvelopeFollowupDecision {
@@ -917,7 +939,7 @@ export function shouldRetryNodeFailure(
 // per-node execution
 // -----------------------------------------------------------------------------
 
-export type OneNodeResult = LegacyNodeResult
+export type OneNodeResult = NodeMechanicsResult
 
 export interface OneNodeArgs {
   node: WorkflowNode
@@ -1038,8 +1060,8 @@ export async function resolveMergeConflicts(
     iteration: number
   },
 ): Promise<{ allResolved: boolean; detail: string }> {
-  const { db, task, log } = state
-  const rt = await resolveInternalAgentRuntime(db, {
+  const { task, log } = state
+  const rt = await state.opts.runtimeRegistry.resolveInternalAgentRuntime({
     runtimeName: state.opts.mergeAgentRuntime,
     deprecatedModel: state.opts.mergeAgentModel,
     defaultRuntime: state.opts.defaultRuntime,
@@ -1050,7 +1072,7 @@ export async function resolveMergeConflicts(
     cwd: string,
     manifest: MergeConflictManifest,
   ): Promise<void> => {
-    const sessionRunId = await mintNodeRun(db, {
+    const sessionRunId = await mintRun(state, {
       taskId: task.id,
       nodeId: mergeNodeId,
       status: 'pending',
@@ -1058,8 +1080,9 @@ export async function resolveMergeConflicts(
       iteration: opts.iteration,
       overrides: { parentNodeRunId: opts.conflictNodeRunId },
     })
-    const frozen = await resolveFrozenRuntime(
-      db,
+    const frozen = await resolveFrozenRuntimeWith(
+      state.opts.persistence.nodeRunRuntime,
+      state.opts.runtimeRegistry,
       sessionRunId,
       null,
       null,
@@ -1079,7 +1102,7 @@ export async function resolveMergeConflicts(
       // Codex impl-gate P1-2: same config-head fold as the commit-session site.
       freezeBinaryConfig(state.opts.configPath),
     )
-    const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
+    const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(sessionRunId)
     const mergeAgent = buildMergeAgent()
     // RFC-282 B2 — single-resolver derivation (writeSem held: signal threaded).
     const mergeInjection = resolveSyntheticTaskExecutionInjection(mergeAgent)
@@ -1116,7 +1139,10 @@ export async function resolveMergeConflicts(
       mcps: mergeInjection.spec.mcps,
       plugins: mergeInjection.spec.plugins,
       appHome: state.opts.appHome,
-      db,
+      memoryInjectionQueries: state.opts.memoryInjectionQueries,
+      runtimeSessionLeases: state.opts.runtimeSessionLeases,
+      runtimeRegistry: state.opts.runtimeRegistry,
+      persistence: state.opts.persistence,
       log: log.child('merge'),
       gitUserName: task.gitUserName,
       gitUserEmail: task.gitUserEmail,
@@ -1203,7 +1229,7 @@ export async function runCallWorkflowNode(
   state: SchedulerState,
   args: OneNodeArgs,
 ): Promise<OneNodeResult> {
-  const { db, task, taskId, definition, opts, writeSem, log } = state
+  const { task, taskId, definition, opts, writeSem, log } = state
   const { node, iteration } = args
   const taskRow = task as unknown as {
     refClosureJson?: string | null
@@ -1245,7 +1271,7 @@ export async function runCallWorkflowNode(
   }
 
   const { inputs: upstreamInputs, consumed: consumedUpstream } = await resolveUpstreamInputs(
-    db,
+    state.opts.persistence.nodeExecution,
     taskId,
     definition.edges,
     node.id,
@@ -1259,17 +1285,13 @@ export async function runCallWorkflowNode(
   // ---- locate the row: adopt an in-flight/interrupted call row, else reuse
   // pending, else mint (agent-path idiom; fanout shard rows never reach here —
   // the validator rejects call nodes inside wrapper-fanout in v1).
-  const sameNodeIterRuns = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
-    .orderBy(asc(nodeRuns.startedAt))
+  const sameNodeIterRuns = [
+    ...(await state.opts.persistence.nodeExecution.list({
+      taskId,
+      nodeId: node.id,
+      iteration,
+    })),
+  ].sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0))
   let adoptedChildTaskId: string | null = null
   let launchedChildId: string | null = null
   let liveIso: IsoHandle | null = null
@@ -1278,7 +1300,11 @@ export async function runCallWorkflowNode(
   // RFC-243-LOCK 说明为什么这里绝不能 mint）。以 preResolve 回调短路：拿到
   // latestExisting 后本线自己判领养，命中即整段前奏不执行。
   const resolvedCallRow = await resolveSchedulerRunRow({
-    db,
+    lifecycle: state.opts.persistence.nodeRuns,
+    projections: state.opts.persistence.nodeExecution,
+    ...(state.opts.executionContext === undefined
+      ? {}
+      : { executionContext: state.opts.executionContext }),
     taskId,
     nodeId: node.id,
     iteration,
@@ -1311,8 +1337,7 @@ export async function runCallWorkflowNode(
         // Wrapper-revive escape hatch (RFC-053/095 precedent): the parked /
         // reaped / shutdown-canceled call row RESUMES in place — never a fresh
         // mint (see header).
-        await setNodeRunStatus({
-          db,
+        await setRunStatus(state, {
           nodeRunId: latestExisting.id,
           to: 'running',
           allowedFrom: ['pending', 'interrupted', 'canceled'],
@@ -1332,7 +1357,7 @@ export async function runCallWorkflowNode(
   const nodeRunId = resolvedCallRow.nodeRunId
   const latestExisting = resolvedCallRow.latestExisting
   if (!resolvedCallRow.adopted) {
-    await transitionNodeRunStatus({ db, nodeRunId, event: { kind: 'mark-running' } })
+    await transitionRunStatus(state, { nodeRunId, event: { kind: 'mark-running' } })
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
 
     // ---- gates BEFORE side effects: depth, then the global child budget
@@ -1341,8 +1366,7 @@ export async function runCallWorkflowNode(
     const childDepth = (taskRow.invocationDepth ?? 0) + 1
     if (childDepth > maxDepth) {
       await failCallRow(
-        db,
-        taskId,
+        state,
         nodeRunId,
         node.id,
         'invocation-depth-exceeded',
@@ -1354,18 +1378,16 @@ export async function runCallWorkflowNode(
         message: 'invocation-depth-exceeded',
       }
     }
-    const budget = await ensureChildTaskBudget(db, () => opts.maxActiveChildTasks ?? 8)
+    const budget = await ensureChildTaskBudget(
+      opts.persistence.childBudget,
+      () => opts.maxActiveChildTasks ?? 8,
+    )
     const ancestors: string[] = [taskId]
     {
       let cursor = taskRow.parentTaskId ?? null
       while (cursor !== null && !ancestors.includes(cursor)) {
         ancestors.push(cursor)
-        const row = await db
-          .select({ parentTaskId: tasks.parentTaskId })
-          .from(tasks)
-          .where(eq(tasks.id, cursor))
-          .get()
-        cursor = row?.parentTaskId ?? null
+        cursor = await opts.persistence.childBudget.parentTaskId(cursor)
       }
     }
     let hold: Awaited<ReturnType<typeof budget.acquire>>
@@ -1375,8 +1397,7 @@ export async function runCallWorkflowNode(
       })
     } catch {
       await failCallRow(
-        db,
-        taskId,
+        state,
         nodeRunId,
         node.id,
         'canceled',
@@ -1394,7 +1415,7 @@ export async function runCallWorkflowNode(
         writeSem,
         appHome: opts.appHome,
         taskId,
-        db,
+        binding: isolatedRunBinding(state),
         isoKeyRunId: nodeRunId,
         canonRepos: state.repos,
         log,
@@ -1403,8 +1424,7 @@ export async function runCallWorkflowNode(
       hold.release()
       const msg = err instanceof Error ? err.message : String(err)
       await failCallRow(
-        db,
-        taskId,
+        state,
         nodeRunId,
         node.id,
         'iso-setup-failed',
@@ -1416,7 +1436,8 @@ export async function runCallWorkflowNode(
         message: 'iso-setup-failed',
       }
     }
-    if (!liveIso.passthrough) await persistIsoBase(db, nodeRunId, task.repoCount, liveIso)
+    if (!liveIso.passthrough)
+      await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, liveIso)
     const childIso: IsoHandle = liveIso
 
     // ---- L: launch the child through the executor facade. The child task id
@@ -1424,11 +1445,10 @@ export async function runCallWorkflowNode(
     // child INSERT — a crash between the two surfaces as `child-deleted`
     // (dangling stamp) instead of a duplicate child on redispatch.
     const childId = ulid()
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, nodeRunId)).run(),
+    await opts.persistence.nodeExecution.patch({
+      nodeRunId,
+      values: { childTaskId: childId },
+      ...executionContextInput(state),
     })
     try {
       if (isWorkgroupCall) {
@@ -1461,11 +1481,10 @@ export async function runCallWorkflowNode(
       launchedChildId = childId
     } catch (err) {
       hold.release()
-      withTaskExecutionMutation({
-        db,
-        taskId,
-        run: (tx) =>
-          tx.update(nodeRuns).set({ childTaskId: null }).where(eq(nodeRuns.id, nodeRunId)).run(),
+      await opts.persistence.nodeExecution.patch({
+        nodeRunId,
+        values: { childTaskId: null },
+        ...executionContextInput(state),
       })
       await discardNodeIso(liveIso, log, writeSem)
       const code =
@@ -1473,7 +1492,7 @@ export async function runCallWorkflowNode(
           ? err.code
           : 'child-launch-failed'
       const msg = err instanceof Error ? err.message : String(err)
-      await failCallRow(db, taskId, nodeRunId, node.id, code, `child launch failed: ${msg}`)
+      await failCallRow(state, nodeRunId, node.id, code, `child launch failed: ${msg}`)
       return { kind: 'failed', summary: `child launch failed: ${msg}`, message: code }
     }
   }
@@ -1501,28 +1520,19 @@ export async function runCallWorkflowNode(
       : parseCallLedger(null)
   const persistLedger = async (): Promise<void> => {
     try {
-      withTaskExecutionMutation({
-        db,
-        taskId,
-        run: (tx) =>
-          tx
-            .update(nodeRuns)
-            .set({ wrapperProgressJson: JSON.stringify(ledger) })
-            .where(eq(nodeRuns.id, nodeRunId))
-            .run(),
+      await opts.persistence.nodeExecution.patch({
+        nodeRunId,
+        values: { wrapperProgressJson: JSON.stringify(ledger) },
+        ...executionContextInput(state),
       })
     } catch {
       // Best-effort progress telemetry; the child terminal observation remains authoritative.
     }
   }
   const observeChild = async (): Promise<void> => {
-    const row = await db
-      .select({ status: tasks.status })
-      .from(tasks)
-      .where(eq(tasks.id, childTaskId))
-      .get()
+    const row = await opts.persistence.reads.statusProjection.find(childTaskId)
     const awaiting =
-      row !== undefined && (row.status === 'awaiting_review' || row.status === 'awaiting_human')
+      row !== null && (row.status === 'awaiting_review' || row.status === 'awaiting_human')
     const now = Date.now()
     if (awaiting && ledger.callHumanWaitSince === null) {
       ledger = { ...ledger, callHumanWaitSince: now }
@@ -1544,7 +1554,7 @@ export async function runCallWorkflowNode(
     }, CALL_CHILD_OBSERVE_MS)
     let watched: Awaited<ReturnType<typeof watchTaskTerminal>>
     try {
-      watched = await watchTaskTerminal(db, childTaskId, {
+      watched = await watchTaskTerminal(opts.persistence.reads.statusProjection, childTaskId, {
         ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
         pollMs: 20_000,
       })
@@ -1560,7 +1570,7 @@ export async function runCallWorkflowNode(
         try {
           await state.topology.schedulerDriver.cancelChild({
             taskId: childTaskId,
-            cascadeFromParent: true,
+            cause: { kind: 'parent-cascade', parentTaskId: state.task.id },
           })
         } catch (error) {
           // Preserve the legacy terminal/race tolerance without swallowing a
@@ -1574,7 +1584,7 @@ export async function runCallWorkflowNode(
             throw error
           }
         }
-        await failCallRow(db, taskId, nodeRunId, node.id, 'canceled', 'task canceled', 'canceled')
+        await failCallRow(state, nodeRunId, node.id, 'canceled', 'task canceled', 'canceled')
         return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
       }
       // Daemon shutdown: leave the row running — boot reap flips it to
@@ -1583,8 +1593,7 @@ export async function runCallWorkflowNode(
     }
     if (watched.kind === 'missing') {
       await failCallRow(
-        db,
-        taskId,
+        state,
         nodeRunId,
         node.id,
         'child-deleted',
@@ -1623,13 +1632,9 @@ export async function runCallWorkflowNode(
         // lifecycle race. Preserve the legacy re-read path for business
         // failures, but never disguise a TypeError as successful reattachment.
         if (error instanceof TypeError) throw error
-        const fresh = await db
-          .select({ status: tasks.status, errorSummary: tasks.errorSummary })
-          .from(tasks)
-          .where(eq(tasks.id, childTaskId))
-          .get()
+        const fresh = await opts.persistence.reads.statusProjection.find(childTaskId)
         if (
-          fresh !== undefined &&
+          fresh !== null &&
           !(TERMINAL_TASK_STATUSES as readonly string[]).includes(fresh.status)
         ) {
           continue // someone else revived it — re-attach
@@ -1658,8 +1663,7 @@ export async function runCallWorkflowNode(
           return { kind: 'canceled', summary: 'daemon shutdown', message: 'signal aborted' }
         }
         await failCallRow(
-          db,
-          taskId,
+          state,
           nodeRunId,
           node.id,
           'child-interrupted',
@@ -1676,24 +1680,15 @@ export async function runCallWorkflowNode(
   }
 
   // ---- terminal child → finalize. Non-done children map per design §6.2.
-  const outcome = await getExecutionOutcome(db, childTaskId)
+  const outcome = await getExecutionOutcome(opts.persistence.reads.executionOutcome, childTaskId)
   if (outcome.status === 'canceled') {
     const cascade = outcome.error?.message === 'canceled-by-parent-cascade'
     if (cascade) {
-      await failCallRow(
-        db,
-        taskId,
-        nodeRunId,
-        node.id,
-        'canceled',
-        'canceled with parent',
-        'canceled',
-      )
+      await failCallRow(state, nodeRunId, node.id, 'canceled', 'canceled with parent', 'canceled')
       return { kind: 'canceled', summary: 'task canceled', message: 'canceled-with-parent' }
     }
     await failCallRow(
-      db,
-      taskId,
+      state,
       nodeRunId,
       node.id,
       'child-canceled',
@@ -1715,8 +1710,7 @@ export async function runCallWorkflowNode(
       return { kind: 'canceled', summary: 'daemon shutdown', message: 'signal aborted' }
     }
     await failCallRow(
-      db,
-      taskId,
+      state,
       nodeRunId,
       node.id,
       'child-interrupted',
@@ -1731,8 +1725,7 @@ export async function runCallWorkflowNode(
   if (outcome.status !== 'done') {
     const summary = outcome.error?.summary ?? `child task '${childTaskId}' failed`
     await failCallRow(
-      db,
-      taskId,
+      state,
       nodeRunId,
       node.id,
       'child-task-failed',
@@ -1765,38 +1758,22 @@ export async function runCallWorkflowNode(
           },
         }
     : outcome.outputs
-  for (const [portName, v] of Object.entries(projectedOutputs)) {
-    // RFC-306 D17: a branch closed INSIDE the child keeps propagating in the
-    // parent graph — the child's inactive port projects onto an inactive parent
-    // port, so a reusable "decider" workflow can be called as a sub-workflow.
-    const active = v.active !== false
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId,
-            portName,
-            content: v.content,
-            kind: v.kind,
-            archiveJson: v.archiveJson ?? null,
-            active,
-          })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content: v.content, kind: v.kind, archiveJson: v.archiveJson ?? null, active },
-          })
-          .run(),
-    })
-  }
+  await opts.persistence.nodeExecution.upsertOutputs({
+    nodeRunId,
+    ...executionContextInput(state),
+    outputs: Object.entries(projectedOutputs).map(([portName, value]) => ({
+      portName,
+      content: value.content,
+      kind: value.kind,
+      archiveJson: value.archiveJson ?? null,
+      active: value.active !== false,
+    })),
+  })
   // Row goes done BEFORE merge (runner precedent) — downstream still gates on
   // merge_state (deriveFrontier D15), so nothing dispatches early.
-  const currentRow = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
-  if (currentRow !== undefined && currentRow.status !== 'done') {
-    await setNodeRunStatus({
-      db,
+  const currentRow = await opts.persistence.nodeExecution.read(nodeRunId)
+  if (currentRow !== null && currentRow.status !== 'done') {
+    await setRunStatus(state, {
       nodeRunId,
       to: 'done',
       allowedFrom: ['running'],
@@ -1837,7 +1814,12 @@ export async function runCallWorkflowNode(
         Object.assign(baseSnapshots, parseIsoJsonMap(currentRow?.isoBaseSnapshotReposJson ?? null))
       }
       if (Object.keys(baseSnapshots).length === 0) {
-        await markMergeFailed(db, nodeRunId, 'call adoption: iso base snapshot missing', log)
+        await markMergeFailed(
+          isolatedRunBinding(state),
+          nodeRunId,
+          'call adoption: iso base snapshot missing',
+          log,
+        )
         return {
           kind: 'failed',
           summary: 'call adoption could not rebuild the iso handle (base snapshot missing)',
@@ -1849,8 +1831,7 @@ export async function runCallWorkflowNode(
         const h = await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
         taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
       }
-      const submodules =
-        currentRow !== undefined ? parseIsoSubmodules(currentRow, task.repoCount) : {}
+      const submodules = currentRow !== null ? parseIsoSubmodules(currentRow, task.repoCount) : {}
       handle = rebuildIsoHandle({
         appHome: state.opts.appHome,
         taskId,
@@ -1859,13 +1840,13 @@ export async function runCallWorkflowNode(
         baseSnapshots,
         taskBaseHeads,
         submodules,
-        forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
+        forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
       })
     }
     if (!handle.passthrough) {
       try {
         const merge = await mergeBackAndSettle({
-          db,
+          binding: isolatedRunBinding(state),
           writeSem,
           handle,
           nodeRunId,
@@ -1895,7 +1876,7 @@ export async function runCallWorkflowNode(
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         log.warn('call merge-back failed', { nodeId: node.id, error: msg })
-        await markMergeFailed(db, nodeRunId, msg, log)
+        await markMergeFailed(isolatedRunBinding(state), nodeRunId, msg, log)
         return {
           kind: 'failed',
           summary: `merge-back failed: ${msg}`,
@@ -1910,16 +1891,14 @@ export async function runCallWorkflowNode(
 
 /** Settle a call row into a terminal status with its failure metadata. */
 async function failCallRow(
-  db: DbClient,
-  taskId: string,
+  state: SchedulerState,
   nodeRunId: string,
   nodeId: string,
   failureCode: string,
   errorMessage: string,
   to: 'failed' | 'canceled' = 'failed',
 ): Promise<void> {
-  const ok = await setNodeRunStatus({
-    db,
+  const ok = await setRunStatus(state, {
     nodeRunId,
     to,
     allowedFrom: ['pending', 'running'],
@@ -1928,7 +1907,7 @@ async function failCallRow(
   })
     .then(() => true)
     .catch(() => false)
-  if (ok) broadcastNodeStatus(taskId, nodeRunId, nodeId, to)
+  if (ok) broadcastNodeStatus(state.taskId, nodeRunId, nodeId, to)
 }
 
 function isShutdownAbort(signal: AbortSignal | undefined): boolean {
@@ -1975,25 +1954,6 @@ function buildChildRuntime(state: SchedulerState) {
   }
 }
 
-/** Child launch deps assembled from the parent scheduler's runtime options. */
-function buildChildDeps(state: SchedulerState) {
-  const { db } = state
-  const runtime = buildChildRuntime(state)
-  return {
-    db,
-    schedulerDriver: state.topology.schedulerDriver,
-    // RFC-292: child/grandchild tasks inherit the root launch fact atomically
-    // with their parent linkage; they never re-read a webhook delivery.
-    ...(runtime.triggerContext === undefined ? {} : { triggerContext: runtime.triggerContext }),
-    actorUserId: runtime.actorUserId,
-    // RFC-284 T20：继承面整体透传（唯一登记 INHERITABLE_RUN_CONFIG_KEYS）。
-    // 历史逐字段展开的三段关键注释（RFC-282 收尾门 configPath 漏斗第三段 /
-    // RFC-266 两个 daemon-wide 池 resize-on-read 连坐 / RFC-269 code-host 池同理）
-    // 已并入注册表与处置表测试——漏配从「人肉记得展开」变「编译期表态」。
-    ...runtime.runConfig,
-  }
-}
-
 /** L — assemble and fire the child launch through the executor facade. */
 async function launchCallChild(
   state: SchedulerState,
@@ -2008,26 +1968,12 @@ async function launchCallChild(
     childDepth: number
   },
 ): Promise<void> {
-  const { db, task, taskId } = state
-  const taskRow = task as unknown as {
-    refClosureJson?: string | null
-    ownerUserId?: string | null
-  }
+  const { task, taskId } = state
   const { node, nodeRunId, childId, frozen, workflowName, inputs, iso, childDepth } = args
   const frozenSnapshotJson = JSON.stringify(frozen.definition)
 
   // Child collaborators = the parent task's members (D11).
-  const memberRows = await db
-    .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.taskId, taskId))
-  const collaboratorUserIds = [
-    ...new Set(
-      memberRows
-        .filter((m) => m.role !== 'owner' && m.userId !== null)
-        .map((m) => m.userId as string),
-    ),
-  ]
+  const collaboratorUserIds = state.collaboratorUserIds
 
   const limits = ((): { maxDurationMs?: number; maxTotalTokens?: number } => {
     const raw = (node as unknown as Record<string, unknown>).limits
@@ -2093,55 +2039,37 @@ async function launchCallChild(
     autoCommitPush: false,
   } as StartTask
 
-  const { startExecution } = await import('@/services/execution/executor')
   // RFC-285 B3 + RFC-347：closed delegated factory 取代伪造幽灵与
   // central inherited-Actor facade。owner 失活/缺行 → 子任务拒启（外层
   // catch 把 code 直通 failCallRow → 节点以 call-owner-inactive 失败）；
   // NULL owner legacy 行按 Q5 的 pure projection 放行。
-  const actor = await delegatedCallActor(
-    state,
-    'call-workflow',
-    taskRow.ownerUserId ?? null,
-    nodeRunId,
-  )
+  const actor = await delegatedCallActor(state, 'call-workflow', task.ownerUserId, nodeRunId)
   if (actor === null) {
     throw new ValidationError(
       'call-owner-inactive',
-      `task owner '${taskRow.ownerUserId}' is not an active user; refusing to start call child`,
+      `task owner '${task.ownerUserId}' is not an active user; refusing to start call child`,
     )
   }
-  await startExecution(
-    db,
+  await state.opts.childLaunch.launchWorkflow({
     actor,
-    {
-      kind: 'workflow',
-      refId: frozen.id,
-      invoker: {
-        type: 'node',
-        parentTaskId: taskId,
-        parentNodeRunId: nodeRunId,
-        invocationDepth: childDepth,
-      },
-      payload,
-    },
-    {
-      ...buildChildDeps(state),
-      materializedSpace: space,
-      callLaunch: {
-        parentTaskId: taskId,
-        parentNodeRunId: nodeRunId,
-        invocationDepth: childDepth,
-        frozenSnapshotJson,
-        refClosureJson: childClosureSubset(
-          taskRow.refClosureJson ?? null,
-          frozen.definition as Parameters<typeof childClosureSubset>[1],
-          // RFC-271 T6e：子集裁剪要用**子工作流自己的 id** 当 source（v2 边键）。
-          // 调用点本来就持有 frozen.id，此前只是没传进去。
-          frozen.id,
-        ),
-      },
-    },
-  )
+    workflowId: frozen.id,
+    frozenWorkflowVersion: frozen.version,
+    payload,
+    parentTaskId: taskId,
+    parentNodeRunId: nodeRunId,
+    invocationDepth: childDepth,
+    materializedSpace: space,
+    runtime: buildChildRuntime(state),
+    schedulerDriver: state.topology.schedulerDriver,
+    frozenSnapshotJson,
+    refClosureJson: childClosureSubset(
+      task.refClosureJson,
+      frozen.definition as Parameters<typeof childClosureSubset>[1],
+      // RFC-271 T6e：子集裁剪要用**子工作流自己的 id** 当 source（v2 边键）。
+      // 调用点本来就持有 frozen.id，此前只是没传进去。
+      frozen.id,
+    ),
+  })
   void workflowName
 }
 
@@ -2216,10 +2144,7 @@ async function launchCallWorkgroupChild(
     inheritedShardKey: string | null
   },
 ): Promise<void> {
-  const { db, task, taskId } = state
-  const taskRow = task as unknown as {
-    ownerUserId?: string | null
-  }
+  const { task, taskId } = state
   const { node, nodeRunId, childId, frozenGroup, inputs, iso, childDepth } = args
 
   const goalTemplate = pickString(node, 'goalTemplate') ?? ''
@@ -2238,17 +2163,7 @@ async function launchCallWorkgroupChild(
     })),
   })
 
-  const memberRows = await db
-    .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.taskId, taskId))
-  const collaboratorUserIds = [
-    ...new Set(
-      memberRows
-        .filter((m) => m.role !== 'owner' && m.userId !== null)
-        .map((m) => m.userId as string),
-    ),
-  ]
+  const collaboratorUserIds = state.collaboratorUserIds
 
   const limits = ((): { maxDurationMs?: number; maxTotalTokens?: number } => {
     const raw = (node as unknown as Record<string, unknown>).limits
@@ -2299,46 +2214,30 @@ async function launchCallWorkgroupChild(
     })),
   }
 
-  const { startWorkgroupTaskFromFrozen } = await import('@/services/workgroup/launch')
   // RFC-285 B3 + RFC-347：本臂不消费 legacy projection，但同经 closed
   // delegated factory 做 owner preflight；失败经外层 catch 落
   // call-owner-inactive。
-  if (
-    (await delegatedCallActor(state, 'call-workgroup', taskRow.ownerUserId ?? null, nodeRunId)) ===
-    null
-  ) {
+  const actor = await delegatedCallActor(state, 'call-workgroup', task.ownerUserId, nodeRunId)
+  if (actor === null) {
     throw new ValidationError(
       'call-owner-inactive',
-      `task owner '${taskRow.ownerUserId}' is not an active user; refusing to start call child`,
+      `task owner '${task.ownerUserId}' is not an active user; refusing to start call child`,
     )
   }
-  await startWorkgroupTaskFromFrozen(
-    db,
-    {
-      frozenGroup: frozenGroup.group as Parameters<
-        typeof startWorkgroupTaskFromFrozen
-      >[1]['frozenGroup'],
-      workgroupId: frozenGroup.id,
-      goal,
-      name: childName,
-      collaboratorUserIds,
-      ...limits,
-    },
-    {
-      ...buildChildDeps(state),
-      materializedSpace: space,
-      callLaunch: {
-        parentTaskId: taskId,
-        parentNodeRunId: nodeRunId,
-        invocationDepth: childDepth,
-        // The host snapshot is composed INSIDE the frozen launch face (it
-        // needs the runtime config); the workgroupLaunch dep drives the
-        // snapshot — this arm only carries the parent linkage + closure rules.
-        frozenSnapshotJson: null,
-        refClosureJson: null,
-      },
-    },
-  )
+  await state.opts.childLaunch.launchWorkgroup({
+    actor,
+    frozenGroup,
+    goal,
+    name: childName,
+    collaboratorUserIds,
+    ...limits,
+    parentTaskId: taskId,
+    parentNodeRunId: nodeRunId,
+    invocationDepth: childDepth,
+    materializedSpace: space,
+    runtime: buildChildRuntime(state),
+    schedulerDriver: state.topology.schedulerDriver,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -2370,7 +2269,7 @@ export async function runCodeHostCallNode(
   state: SchedulerState,
   args: OneNodeArgs,
 ): Promise<OneNodeResult> {
-  const { db, task, taskId, definition, opts, log, codeHostSem } = state
+  const { task, taskId, definition, opts, log, codeHostSem } = state
   const { node, iteration } = args
 
   const provider = pickString(node, 'provider')
@@ -2391,7 +2290,7 @@ export async function runCodeHostCallNode(
   }
 
   const { inputs: upstreamInputs, consumed } = await resolveUpstreamInputs(
-    db,
+    state.opts.persistence.nodeExecution,
     taskId,
     definition.edges,
     node.id,
@@ -2408,23 +2307,21 @@ export async function runCodeHostCallNode(
   // forever and make `isFresherNodeRun` pick between two rows for the same
   // attempt.
   const consumedUpstreamJson = JSON.stringify(consumed)
-  const sameNodeIterRuns = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
-    .orderBy(asc(nodeRuns.startedAt))
+  const sameNodeIterRuns = [
+    ...(await opts.persistence.nodeExecution.list({
+      taskId,
+      nodeId: node.id,
+      iteration,
+    })),
+  ].sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0))
   // RFC-287 T8：取行前奏收编。本线两处与其余三线不同，**都不能统一掉**：
   //   · 不追 retryIndex —— 代码平台调用没有节点级重试（只有 HTTP 幂等重试）；
   //   · 不广播 pending —— 它铸完立刻转 running（下方），多播一条 WS 事件会让
   //     前台看到一个根本不存在的 pending 态。
   const { nodeRunId } = await resolveSchedulerRunRow({
-    db,
+    lifecycle: opts.persistence.nodeRuns,
+    projections: opts.persistence.nodeExecution,
+    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
     iteration,
@@ -2435,8 +2332,7 @@ export async function runCodeHostCallNode(
     trackRetryIndex: false,
     broadcastPending: null,
   })
-  await setNodeRunStatus({
-    db,
+  await setRunStatus(state, {
     nodeRunId,
     to: 'running',
     allowedFrom: ['pending'],
@@ -2450,8 +2346,7 @@ export async function runCodeHostCallNode(
     reason: string,
     extra: Record<string, unknown>,
   ): Promise<void> => {
-    await setNodeRunStatus({
-      db,
+    await setRunStatus(state, {
       nodeRunId,
       to,
       allowedFrom: ['running'],
@@ -2461,11 +2356,11 @@ export async function runCodeHostCallNode(
     broadcastNodeStatus(taskId, nodeRunId, node.id, to)
   }
 
-  // 注入优先（测试注 stub）；生产没人注入，落到密钥文件懒解析——见
-  // `resolveCodeHostConnectionsFromKeyFile` 的注释：这条接线曾经整条断开。
-  const connections =
-    opts.codeHostConnections ?? resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)
-  const connection = connections?.resolve(provider) ?? null
+  // RFC-349: provider bootstrap owns credential persistence. The execution
+  // plane consumes only the async connection participant and never reopens a
+  // SQLite key-file adapter as an implicit fallback.
+  const connections = opts.codeHostConnections
+  const connection = connections === undefined ? null : await connections.resolve(provider)
   if (connection === null) {
     await settle('failed', 'code-host-not-configured', {
       errorMessage: `no ${provider} connection is configured; set its base URL and token in Settings`,
@@ -2491,17 +2386,9 @@ export async function runCodeHostCallNode(
       ? (node as unknown as { timeoutMs: number }).timeoutMs
       : opts.codeHostRequestTimeoutMs
 
-  const attemptObserver = (() => {
+  const attemptObserver = await (async () => {
     if (opts.executionContext === undefined) return undefined
-    const run = db
-      .select({
-        continuationSlotKey: nodeRuns.continuationSlotKey,
-        lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
-        operationGeneration: nodeRuns.operationGeneration,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .get()
+    const run = await opts.persistence.nodeExecution.read(nodeRunId)
     const executionLineageId = task.executionLineageId ?? taskId
     const fallbackPath: readonly LineageSlot[] = [
       {
@@ -2532,8 +2419,7 @@ export async function runCodeHostCallNode(
       effectKind: 'code-host-mutation',
       stableActionOrdinal: `${node.id}:${iteration}:${action}`,
     })
-    const attemptPlan = taskExecutionModule.effects.planCodeHostAttempt({
-      db,
+    const attemptPlan = await opts.persistence.effects.planCodeHostAttempt({
       executionLineageId,
       operationFamilyKey: familyKey,
     })
@@ -2543,7 +2429,7 @@ export async function runCodeHostCallNode(
         .map((key) => [key, params[key]]),
     )
     return createCodeHostEffectAttemptObserver({
-      db,
+      persistence: opts.persistence.effects,
       context: opts.executionContext as TaskExecutionContext,
       action,
       nodeRunId,
@@ -2608,13 +2494,17 @@ export async function runCodeHostCallNode(
       if (descriptor === null) break
       const probe = await probeCodeHostMutation({
         descriptor,
-        resolveConnection: (targetProvider) =>
-          targetProvider === provider ? connection : (connections?.resolve(targetProvider) ?? null),
+        resolveConnection: async (targetProvider) =>
+          targetProvider === provider
+            ? connection
+            : connections === undefined
+              ? null
+              : await connections.resolve(targetProvider),
         ...(opts.codeHostFetch !== undefined ? { fetchImpl: opts.codeHostFetch } : {}),
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       })
       if (probe.kind === 'definitely-not-applied' && recoveryCycle > 0) break
-      const resolution = attemptObserver.resolveTerminalProbe(probe)
+      const resolution = await attemptObserver.resolveTerminalProbe(probe)
       if (resolution === 'applied' && probe.kind === 'applied') {
         outcome = {
           ok: true,
@@ -2641,16 +2531,14 @@ export async function runCodeHostCallNode(
       : outcome.message
     const finishedAt = Date.now()
     const settledWithEffect =
-      attemptObserver?.settleTerminal((tx) => {
-        setNodeRunStatusTx({
-          tx,
-          nodeRunId,
-          to: 'failed',
-          allowedFrom: ['running'],
-          reason: failureCode,
-          extra: { finishedAt, errorMessage, failureCode },
-        })
-      }) === true
+      (await attemptObserver?.settleTerminal({
+        nodeRunId,
+        status: 'failed',
+        reason: failureCode,
+        finishedAt,
+        errorMessage,
+        failureCode,
+      })) === true
     if (settledWithEffect) broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
     else {
       await settle('failed', failureCode, {
@@ -2665,36 +2553,26 @@ export async function runCodeHostCallNode(
     }
   }
 
-  const persistOutputs = (tx: DbTxSync | DbClient): void => {
-    for (const value of [
-      { nodeRunId, portName: 'response', content: outcome.body },
-      { nodeRunId, portName: 'status', content: String(outcome.status) },
-    ]) {
-      tx.insert(nodeRunOutputs)
-        .values(value)
-        .onConflictDoUpdate({
-          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-          set: { content: value.content },
-        })
-        .run()
-    }
-  }
+  const outputs = [
+    { portName: 'response', content: outcome.body },
+    { portName: 'status', content: String(outcome.status) },
+  ] as const
   const finishedAt = Date.now()
   const settledWithEffect =
-    attemptObserver?.settleTerminal((tx) => {
-      persistOutputs(tx)
-      setNodeRunStatusTx({
-        tx,
-        nodeRunId,
-        to: 'done',
-        allowedFrom: ['running'],
-        reason: 'code-host-call-done',
-        extra: { finishedAt },
-      })
-    }) === true
+    (await attemptObserver?.settleTerminal({
+      nodeRunId,
+      status: 'done',
+      reason: 'code-host-call-done',
+      finishedAt,
+      outputs,
+    })) === true
   if (settledWithEffect) broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
   else {
-    withTaskExecutionMutation({ db, taskId, run: persistOutputs })
+    await opts.persistence.nodeExecution.upsertOutputs({
+      nodeRunId,
+      outputs,
+      ...executionContextInput(state),
+    })
     await settle('done', 'code-host-call-done', {})
   }
   return {
@@ -2710,7 +2588,7 @@ export async function runScriptNode(
 ): Promise<OneNodeResult> {
   // RFC-266: the SCRIPT pool, not the agent pool — a second-scale script must
   // not queue behind multi-minute agent runs (and cannot starve them either).
-  const { db, task, taskId, definition, opts, log, scriptSem, writeSem } = state
+  const { task, taskId, definition, opts, log, scriptSem, writeSem } = state
   const { node, iteration } = args
 
   const language = readScriptLanguage(node)
@@ -2720,7 +2598,7 @@ export async function runScriptNode(
   const isReadonly = resolveScriptReadonly(node)
 
   const { inputs: upstreamInputs, consumed: consumedUpstream } = await resolveUpstreamInputs(
-    db,
+    state.opts.persistence.nodeExecution,
     taskId,
     definition.edges,
     node.id,
@@ -2733,21 +2611,19 @@ export async function runScriptNode(
 
   // Row selection mirrors the agent branch: adopt a pending row if one exists,
   // otherwise mint the next retry index.
-  const sameNodeIterRuns = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
-    .orderBy(asc(nodeRuns.startedAt))
+  const sameNodeIterRuns = [
+    ...(await opts.persistence.nodeExecution.list({
+      taskId,
+      nodeId: node.id,
+      iteration,
+    })),
+  ].sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0))
   // RFC-287 T8：取行前奏收编（脚本线不继承 reviewIteration、不写 agentOverrideName
   // ——它没有评审轮次也没有代理借用；其余四维与 agent 线同）。
   const resolvedRow = await resolveSchedulerRunRow({
-    db,
+    lifecycle: opts.persistence.nodeRuns,
+    projections: opts.persistence.nodeExecution,
+    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
     iteration,
@@ -2763,8 +2639,7 @@ export async function runScriptNode(
 
   const interpreter = await resolveScriptInterpreter(language, opts.scriptInterpreters ?? {})
   if (interpreter === null) {
-    await setNodeRunStatus({
-      db,
+    await setRunStatus(state, {
       nodeRunId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -2805,7 +2680,7 @@ export async function runScriptNode(
       writeSem,
       appHome: opts.appHome,
       taskId,
-      db,
+      binding: isolatedRunBinding(state),
       isoKeyRunId,
       canonRepos: state.repos,
       log,
@@ -2823,7 +2698,8 @@ export async function runScriptNode(
         // 传播——design §10.10 的按线声明）。
         persistBase: 'in-window',
         persist: async () => {
-          if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+          if (isoHandle !== null)
+            await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
         },
       },
       onIsoSetupFailure: (err) => {
@@ -2901,7 +2777,7 @@ export async function runScriptNode(
           }
         },
         onNextAttempt: async (attempt) => {
-          nodeRunId = await mintNodeRun(db, {
+          nodeRunId = await mintRun(state, {
             taskId,
             nodeId: node.id,
             status: 'pending',
@@ -2911,7 +2787,8 @@ export async function runScriptNode(
             overrides: { consumedUpstreamRunsJson: consumedUpstreamJson },
           })
           broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
-          if (isoHandle !== null) await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+          if (isoHandle !== null)
+            await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
         },
       },
       mergePhase: (_c, outcome) => {
@@ -2939,7 +2816,7 @@ export async function runScriptNode(
         run: async () => {
           const iso = isoHandle as IsoHandle
           const merge = await mergeBackAndSettle({
-            db,
+            binding: isolatedRunBinding(state),
             writeSem,
             handle: iso,
             nodeRunId,
@@ -2972,7 +2849,7 @@ export async function runScriptNode(
             then: {
               produce: async () => {
                 const msg = err instanceof Error ? err.message : String(err)
-                await markMergeFailed(db, nodeRunId, msg, log)
+                await markMergeFailed(isolatedRunBinding(state), nodeRunId, msg, log)
                 return {
                   kind: 'failed' as const,
                   summary: `script node ${node.id} merge failed`,
@@ -3024,7 +2901,7 @@ async function runOneScriptAttempt(
   state: SchedulerState,
   a: ScriptAttemptArgs,
 ): Promise<ScriptAttemptOutcome> {
-  const { db, task, taskId, opts, log } = state
+  const { task, taskId, opts, log } = state
   const runDir = runRootFor(taskId, a.nodeRunId)
   mkdirSync(runDir, { recursive: true })
 
@@ -3059,29 +2936,20 @@ async function runOneScriptAttempt(
         specs,
         timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
         ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-        onLine: async (stream: 'stdout' | 'stderr', line: string) => {
-          withTaskExecutionMutation({
-            db,
-            taskId,
-            run: (tx) =>
-              tx
-                .insert(nodeRunEvents)
-                .values({
-                  nodeRunId: a.nodeRunId,
-                  ts: Date.now(),
-                  kind: stream === 'stderr' ? 'stderr' : 'text',
-                  payload: JSON.stringify({ phase: 'deps-install', line }),
-                })
-                .run(),
-          })
-        },
+        onLine: async (stream: 'stdout' | 'stderr', line: string) =>
+          await opts.persistence.nodeExecution.appendEvent({
+            nodeRunId: a.nodeRunId,
+            ts: Date.now(),
+            kind: stream === 'stderr' ? 'stderr' : 'text',
+            payload: JSON.stringify({ phase: 'deps-install', line }),
+            ...executionContextInput(state),
+          }),
         log,
       })
     } catch (err) {
       const detail = err instanceof ScriptDepsInstallError ? err.detail : String(err)
       const message = err instanceof Error ? err.message : String(err)
-      await setNodeRunStatus({
-        db,
+      await setRunStatus(state, {
         nodeRunId: a.nodeRunId,
         to: 'failed',
         allowedFrom: ['pending', 'running'],
@@ -3097,7 +2965,7 @@ async function runOneScriptAttempt(
     }
   }
 
-  const envelopeNonce = await loadRunEnvelopeNonce(db, a.nodeRunId)
+  const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(a.nodeRunId)
 
   // RFC-253 T28 — resolved once and shared by every diagnostic sink below, so
   // no sink can drift into persisting what another one masks.
@@ -3105,8 +2973,7 @@ async function runOneScriptAttempt(
 
   // DB first, then broadcast — a client must never observe `running` for a row
   // the database still calls `pending`.
-  await setNodeRunStatus({
-    db,
+  await setRunStatus(state, {
     nodeRunId: a.nodeRunId,
     to: 'running',
     allowedFrom: ['pending'],
@@ -3144,7 +3011,7 @@ async function runOneScriptAttempt(
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
     beforeSpawn: async ({ argv, cwd }) => {
       processEffect = createProcessEffectAttemptObserver({
-        db,
+        persistence: opts.persistence.effects,
         taskId,
         nodeRunId: a.nodeRunId,
         processKind: 'script',
@@ -3159,27 +3026,29 @@ async function runOneScriptAttempt(
     onSpawned: async ({ pid, spawnBinaryPath, launchNonce }) => {
       // Persist before reading a single byte of output: a daemon crash after
       // this point leaves the boot reaper something to match (design-gate P0-3).
-      const persist = (tx: DbTxSync | DbClient) =>
-        tx
-          .update(nodeRuns)
-          .set({
+      const runtimeParamsJson = JSON.stringify({
+        script: {
+          interpreter: a.interpreter.path,
+          interpreterVersion: a.interpreter.version,
+          depsHash: depsEnv?.hash ?? null,
+        },
+      })
+      if (processEffect === undefined) {
+        await opts.persistence.nodeExecution.patch({
+          nodeRunId: a.nodeRunId,
+          values: {
             pid,
             spawnBinaryPath,
             spawnLaunchNonce: launchNonce ?? null,
-            runtimeParamsJson: JSON.stringify({
-              script: {
-                interpreter: a.interpreter.path,
-                interpreterVersion: a.interpreter.version,
-                depsHash: depsEnv?.hash ?? null,
-              },
-            }),
-          })
-          .where(eq(nodeRuns.id, a.nodeRunId))
-          .run()
-      if (processEffect === undefined) {
-        withTaskExecutionMutation({ db, taskId, run: persist })
+            runtimeParamsJson,
+          },
+          ...executionContextInput(state),
+        })
       } else {
-        processEffect.recordSpawnReceipt({ pid, spawnBinaryPath, launchNonce }, persist)
+        await processEffect.recordSpawnReceipt(
+          { pid, spawnBinaryPath, launchNonce },
+          runtimeParamsJson,
+        )
       }
     },
     requireSpawnReceipt: true,
@@ -3188,19 +3057,12 @@ async function runOneScriptAttempt(
       // the port value verbatim (AC-27), so masking this mirror would show the
       // operator something the downstream node never sees. A script that prints
       // its own credential to stdout has published it as data.
-      withTaskExecutionMutation({
-        db,
-        taskId,
-        run: (tx) =>
-          tx
-            .insert(nodeRunEvents)
-            .values({
-              nodeRunId: a.nodeRunId,
-              ts: Date.now(),
-              kind: 'text',
-              payload: JSON.stringify({ line }),
-            })
-            .run(),
+      await opts.persistence.nodeExecution.appendEvent({
+        nodeRunId: a.nodeRunId,
+        ts: Date.now(),
+        kind: 'text',
+        payload: JSON.stringify({ line }),
+        ...executionContextInput(state),
       })
     },
     onStderrLine: async (line) => {
@@ -3209,19 +3071,12 @@ async function runOneScriptAttempt(
       // replay). Masking only the failure detail below was not enough: that
       // value is `stderrTail`, a strict SUFFIX of the very bytes this sink
       // stores, so the same secret stayed in the clear one table over.
-      withTaskExecutionMutation({
-        db,
-        taskId,
-        run: (tx) =>
-          tx
-            .insert(nodeRunEvents)
-            .values({
-              nodeRunId: a.nodeRunId,
-              ts: Date.now(),
-              kind: 'stderr',
-              payload: JSON.stringify({ line: maskScriptEnvValues(line, scriptEnv) }),
-            })
-            .run(),
+      await opts.persistence.nodeExecution.appendEvent({
+        nodeRunId: a.nodeRunId,
+        ts: Date.now(),
+        kind: 'stderr',
+        payload: JSON.stringify({ line: maskScriptEnvValues(line, scriptEnv) }),
+        ...executionContextInput(state),
       })
     },
     log,
@@ -3229,33 +3084,25 @@ async function runOneScriptAttempt(
 
   if (outcome.result.outcome === 'aborted') {
     const daemonShutdown = opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
-    await setNodeRunStatus({
-      db,
+    await setRunStatus(state, {
       nodeRunId: a.nodeRunId,
       to: daemonShutdown ? 'interrupted' : 'canceled',
       allowedFrom: ['running'],
       reason: 'script-aborted',
       extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
     })
-    processEffect?.settle(outcome.result)
+    await processEffect?.settle(outcome.result)
     broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, daemonShutdown ? 'interrupted' : 'canceled')
     return { kind: 'canceled', message: daemonShutdown ? 'daemon-shutdown' : 'canceled' }
   }
 
   if (outcome.result.truncated.stdout) {
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .insert(nodeRunEvents)
-          .values({
-            nodeRunId: a.nodeRunId,
-            ts: Date.now(),
-            kind: 'error',
-            payload: JSON.stringify({ truncated: 'stdout' }),
-          })
-          .run(),
+    await opts.persistence.nodeExecution.appendEvent({
+      nodeRunId: a.nodeRunId,
+      ts: Date.now(),
+      kind: 'error',
+      payload: JSON.stringify({ truncated: 'stdout' }),
+      ...executionContextInput(state),
     })
   }
 
@@ -3311,8 +3158,7 @@ async function runOneScriptAttempt(
   }
 
   if (failureCode !== null) {
-    await setNodeRunStatus({
-      db,
+    await setRunStatus(state, {
       nodeRunId: a.nodeRunId,
       to: 'failed',
       allowedFrom: ['running'],
@@ -3324,7 +3170,7 @@ async function runOneScriptAttempt(
         failureCode,
       },
     })
-    processEffect?.settle(outcome.result)
+    await processEffect?.settle(outcome.result)
     broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
     return {
       kind: 'failed',
@@ -3333,24 +3179,16 @@ async function runOneScriptAttempt(
     }
   }
 
-  for (const [portName, content] of Object.entries(ports)) {
-    // RFC-306: a script closes a branch the same way an agent does; the flag has
-    // to reach the row or the marker is decoration.
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: a.nodeRunId,
-            portName,
-            content,
-            active: !inactivePorts.has(portName),
-          })
-          .run(),
-    })
-  }
+  await opts.persistence.nodeExecution.upsertOutputs({
+    nodeRunId: a.nodeRunId,
+    outputs: Object.entries(ports).map(([portName, content]) => ({
+      portName,
+      content,
+      // RFC-306: a script closes a branch the same way an agent does.
+      active: !inactivePorts.has(portName),
+    })),
+    ...executionContextInput(state),
+  })
   // RFC-276 regression fix: a readonly script's iso is discarded without a
   // merge-back, but its 'isolating' stamp must still SETTLE — deriveFrontier's
   // D15 gate only completes done rows whose merge_state is settled, so a
@@ -3358,21 +3196,20 @@ async function runOneScriptAttempt(
   // nodes in scope"; pre-RFC-276 readonly scripts ran in place and stayed NULL).
   // Settled BEFORE the done write so no done+unsettled state is ever observable.
   if (a.isReadonly && a.isoHandle !== null && !a.isoHandle.passthrough) {
-    await transitionMergeState({
-      db,
+    await state.opts.persistence.mergeStates.transition({
       nodeRunId: a.nodeRunId,
       event: { kind: 'discard-readonly' },
+      ...executionContextInput(state),
     })
   }
-  await setNodeRunStatus({
-    db,
+  await setRunStatus(state, {
     nodeRunId: a.nodeRunId,
     to: 'done',
     allowedFrom: ['running'],
     reason: 'script-done',
     extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
   })
-  processEffect?.settle(outcome.result)
+  await processEffect?.settle(outcome.result)
   broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'done')
   return { kind: 'done' }
 }
@@ -3408,7 +3245,7 @@ export async function judgeBranchActivation(
   node: WorkflowNode,
   iteration: number,
 ): Promise<OneNodeResult | null> {
-  const { db, taskId, definition, log } = state
+  const { taskId, definition, log } = state
   // Fast path: a node with NO inbound dependency at all can never be branched
   // away (graph roots included), so a workflow that uses no branch ports pays
   // zero extra queries per dispatch — "existing behavior is unchanged" has to
@@ -3423,21 +3260,16 @@ export async function judgeBranchActivation(
     collectImplicitInboundRefs(node as { kind: string; inputSource?: unknown; ports?: unknown })
       .length > 0
   if (!hasInbound) return null
-  const existing = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
+  const existing = await state.opts.persistence.nodeExecution.list({
+    taskId,
+    nodeId: node.id,
+    iteration,
+  })
   const latest = pickFreshestRun(existing, { topLevelOnly: true })
   const forceActivated = latest?.forceActivated === true
 
   const decision = await resolveNodeActivationForDispatch({
-    db,
+    reader: state.opts.persistence.nodeActivation,
     taskId,
     definition,
     node,
@@ -3465,33 +3297,26 @@ export async function judgeBranchActivation(
   let nodeRunId: string
   if (latest?.status === 'pending') {
     nodeRunId = latest.id
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({ consumedUpstreamRunsJson: consumedJson })
-          .where(eq(nodeRuns.id, nodeRunId))
-          .run(),
+    await state.opts.persistence.nodeExecution.patch({
+      nodeRunId,
+      values: { consumedUpstreamRunsJson: consumedJson },
+      ...executionContextInput(state),
     })
-    await transitionNodeRunStatus({
-      db,
+    await transitionRunStatus(state, {
       nodeRunId,
       event: { kind: 'mark-skipped', reason: decision.activation.reason },
       extra: { finishedAt: Date.now() },
     })
   } else {
     if (latest?.status === 'awaiting_review' || latest?.status === 'awaiting_human') {
-      await transitionNodeRunStatus({
-        db,
+      await transitionRunStatus(state, {
         nodeRunId: latest.id,
         event: { kind: 'cancel-by-supersede', reason: 'branch-skipped' },
         extra: { finishedAt: Date.now() },
       })
       broadcastNodeStatus(taskId, latest.id, node.id, 'canceled')
     }
-    nodeRunId = await mintNodeRun(db, {
+    nodeRunId = await mintRun(state, {
       taskId,
       nodeId: node.id,
       status: 'pending',
@@ -3499,8 +3324,7 @@ export async function judgeBranchActivation(
       iteration,
       overrides: { consumedUpstreamRunsJson: consumedJson },
     })
-    await transitionNodeRunStatus({
-      db,
+    await transitionRunStatus(state, {
       nodeRunId,
       event: { kind: 'mark-skipped', reason: decision.activation.reason },
       extra: { finishedAt: Date.now() },
@@ -3522,7 +3346,7 @@ export async function runOutputNode(
   state: SchedulerState,
   args: OneNodeArgs,
 ): Promise<OneNodeResult> {
-  const { db, taskId, definition } = state
+  const { taskId, definition } = state
   const { node, iteration } = args
   // Output nodes are display-only sinks: no subprocess, no envelope. The
   // node's declared `ports[]` bindings resolve to upstream (nodeId, portName)
@@ -3550,7 +3374,7 @@ export async function runOutputNode(
     // RFC-193 D16: copy kind + archive reference with the content — an
     // output node is pure projection, its row must stay artifact-readable.
     const row = await readPortRowAtIteration(
-      db,
+      state.opts.persistence.nodeExecution,
       taskId,
       resolved.source.nodeId,
       resolved.source.portName,
@@ -3559,7 +3383,7 @@ export async function runOutputNode(
     if (row.runId !== null) consumed[resolved.source.nodeId] = row.runId
     projected.push({ binding: b, row })
   }
-  const nrId = await mintNodeRun(db, {
+  const nrId = await mintRun(state, {
     taskId,
     nodeId: node.id,
     status: 'done',
@@ -3567,28 +3391,18 @@ export async function runOutputNode(
     iteration,
     overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
   })
-  for (const { binding, row } of projected) {
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: nrId,
-            portName: binding.name,
-            content: row.content,
-            kind: row.kind,
-            archiveJson: row.archiveJson,
-            // RFC-306: an output node is pure projection, and that includes the
-            // branch state. With joinMode 'any' the node itself can be active while
-            // ONE of its bound sources sits on a closed branch — that port then
-            // renders as "not produced" instead of as a genuine empty result.
-            active: row.active,
-          })
-          .run(),
-    })
-  }
+  await state.opts.persistence.nodeExecution.upsertOutputs({
+    nodeRunId: nrId,
+    outputs: projected.map(({ binding, row }) => ({
+      portName: binding.name,
+      content: row.content,
+      kind: row.kind,
+      archiveJson: row.archiveJson,
+      // RFC-306: the virtual projection preserves branch activation.
+      active: row.active,
+    })),
+    ...executionContextInput(state),
+  })
   broadcastNodeStatus(taskId, nrId, node.id, 'done')
   return { kind: 'ok', summary: '', message: '' }
 }
@@ -3597,7 +3411,7 @@ export async function runInputNode(
   state: SchedulerState,
   args: OneNodeArgs,
 ): Promise<OneNodeResult> {
-  const { db, taskId, inputsMap } = state
+  const { taskId, inputsMap } = state
   const { node, iteration } = args
   const inputKey = pickString(node, 'inputKey')
   if (inputKey === null) {
@@ -3608,7 +3422,7 @@ export async function runInputNode(
     }
   }
   const value = inputsMap[inputKey] ?? ''
-  const nrId = await mintNodeRun(db, {
+  const nrId = await mintRun(state, {
     taskId,
     nodeId: node.id,
     status: 'done',
@@ -3617,14 +3431,10 @@ export async function runInputNode(
   })
   // RFC-004: an input node's single output port is named after its inputKey,
   // so edges authored on the canvas resolve to the visible handle label.
-  withTaskExecutionMutation({
-    db,
-    taskId,
-    run: (tx) =>
-      tx
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: nrId, portName: inputKey, content: value })
-        .run(),
+  await state.opts.persistence.nodeExecution.upsertOutputs({
+    nodeRunId: nrId,
+    outputs: [{ portName: inputKey, content: value }],
+    ...executionContextInput(state),
   })
   broadcastNodeStatus(taskId, nrId, node.id, 'done')
   return { kind: 'ok', summary: '', message: '' }
@@ -3633,11 +3443,11 @@ export async function runInputNode(
 export async function runReviewNode(
   state: SchedulerState,
   args: OneNodeArgs,
+  collaboration: CollaborationRuntimeMechanics,
 ): Promise<OneNodeResult> {
-  const { db, taskId, definition, opts } = state
+  const { taskId, definition, opts } = state
   const { node, iteration } = args
-  return dispatchReviewNode({
-    db,
+  return collaboration.dispatchReviewNode({
     taskId,
     appHome: opts.appHome,
     definition,
@@ -3646,14 +3456,16 @@ export async function runReviewNode(
     // RFC-193 D9: the review's fallback read root is THIS scope's canonical.
     scopeRoot: state.scopeRoot,
     repoDirName: state.repos[0]?.worktreeDirName ?? '',
+    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
   })
 }
 
 export async function runCrossClarifyNode(
   state: SchedulerState,
   args: OneNodeArgs,
+  collaboration: CollaborationRuntimeMechanics,
 ): Promise<OneNodeResult> {
-  const { db, taskId, definition } = state
+  const { taskId, definition, opts } = state
   const { node, iteration } = args
   // RFC-056: cross-clarify nodes are activated by the questioner emitting
   // <workflow-clarify> — the runner forwards into createClarifyRound(kind='cross')
@@ -3677,16 +3489,11 @@ export async function runCrossClarifyNode(
   // runner will create the node_run when the questioner emits clarify.
   // If a live row already exists (pending or awaiting_human) from a
   // prior runner-side creation, also do nothing — idempotency guard.
-  const liveRows = await db
-    .select({ status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
+  const liveRows = await state.opts.persistence.nodeExecution.list({
+    taskId,
+    nodeId: node.id,
+    iteration,
+  })
   const hasLive = liveRows.some((r) => r.status === 'pending' || r.status === 'awaiting_human')
   if (hasLive) {
     return { kind: 'ok', summary: '', message: 'cross-clarify-live-row-exists' }
@@ -3694,15 +3501,14 @@ export async function runCrossClarifyNode(
   // Validator runtime defense: a node without a questioner means the
   // workflow is malformed — fail and let the user see it in the UI.
   if (findQuestionerNodeForCrossClarify(definition, node.id) === undefined) {
-    const failId = await mintNodeRun(db, {
+    const failId = await mintRun(state, {
       taskId,
       nodeId: node.id,
       status: 'pending',
       cause: 'cross-clarify-guard',
       iteration,
     })
-    await setNodeRunStatus({
-      db,
+    await setRunStatus(state, {
       nodeRunId: failId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -3725,10 +3531,13 @@ export async function runCrossClarifyNode(
   // fallback is defensive only.
   const reenableQuestionerNodeId = findQuestionerNodeForCrossClarify(definition, node.id)
   const stopped = reenableQuestionerNodeId
-    ? await resolveCrossNodeStopped(db, taskId, reenableQuestionerNodeId)
+    ? (await collaboration.getNodeClarifyDirective({
+        taskId,
+        nodeId: reenableQuestionerNodeId,
+      })) === 'stop'
     : false
   if (stopped) {
-    const stopRunId = await mintNodeRun(db, {
+    const stopRunId = await mintRun(state, {
       taskId,
       nodeId: node.id,
       status: 'pending',
@@ -3737,12 +3546,12 @@ export async function runCrossClarifyNode(
     })
     // RFC-217 T9: the pending→done short-circuit transition (+ its reason
     // string) is owned by the clarify service — single dispatch policy.
-    const dispatched = await dispatchCrossClarifyNode({
-      db,
+    const dispatched = await collaboration.inspectCrossClarify({
       taskId,
       crossClarifyNodeId: node.id,
       nodeRunId: stopRunId,
       definition,
+      ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     })
     // Codex impl-gate P2-3: honor the helper's verdict. A user flipping the
     // questioner's directive stop→continue between the outer read and the
@@ -3751,8 +3560,7 @@ export async function runCrossClarifyNode(
     // strand the pending row. Retire the speculative mint and fall through
     // to the common awaiting path (the runner mints its own row on emit).
     if (dispatched.kind !== 'short-circuit-stop') {
-      await setNodeRunStatus({
-        db,
+      await setRunStatus(state, {
         nodeRunId: stopRunId,
         to: 'canceled',
         allowedFrom: ['pending'],
@@ -3775,9 +3583,9 @@ export async function runCrossClarifyNode(
 export async function runAgentSingleNode(
   state: SchedulerState,
   args: OneNodeArgs,
-  collaboration: CollaborationNodeGatePort,
+  collaboration: CollaborationRuntimeMechanics,
 ): Promise<OneNodeResult> {
-  const { db, task, taskId, definition, opts, agentSem, writeSem, log } = state
+  const { task, taskId, definition, opts, agentSem, writeSem, log } = state
   const { node, iteration } = args
 
   // RFC-271 T6d：解析走统一 resolver（services/ref/runtimeRef.ts），但**两个错误码
@@ -3808,7 +3616,7 @@ export async function runAgentSingleNode(
   // ConflictError surfaces as a node-level failure (don't reject the scope tick — runTask would
   // fail the WHOLE task).
   try {
-    await resolveBorrowForNode(db, taskId, node.id, iteration, definition)
+    await collaboration.resolveBorrowForNode({ taskId, nodeId: node.id, iteration, definition })
   } catch (err) {
     if (err instanceof ConflictError) {
       return { kind: 'failed', summary: err.message, message: err.code }
@@ -3823,7 +3631,7 @@ export async function runAgentSingleNode(
   // upstream run each input was read from; recorded on every row this dispatch
   // mints/reuses so read-time freshness can later tell if an upstream advanced.
   const { inputs: upstreamInputs, consumed: consumedUpstream } = await resolveUpstreamInputs(
-    db,
+    state.opts.persistence.nodeExecution,
     taskId,
     definition.edges,
     node.id,
@@ -3863,7 +3671,12 @@ export async function runAgentSingleNode(
   // through the {{__review_comments__}} / {{__review_rejection__}} tokens.
   // Returns undefined for first runs and for runs whose latest downstream
   // decision is approve/pending — see buildReviewPromptContext.
-  const reviewContext = await buildReviewPromptContext(db, opts.appHome, node.id, taskId, iteration)
+  const reviewContext = await collaboration.buildReviewPromptContext({
+    appHome: opts.appHome,
+    upstreamNodeId: node.id,
+    taskId,
+    iteration,
+  })
   // RFC-023: when this node has a clarify channel wired AND a clarify_iteration
   // > 0, surface the last-round Q&A through {{__clarify_*}} tokens / auto-
   // appended sections. The protocol block is appended by the runner when
@@ -3885,17 +3698,11 @@ export async function runAgentSingleNode(
 
   // Pick up an existing pending node_run at this iteration; otherwise create
   // a fresh run with retry_index = max-existing-in-iter + 1 (or 0).
-  const sameNodeIterRuns = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
-    .orderBy(asc(nodeRuns.startedAt))
+  const sameNodeIterRuns = await opts.persistence.nodeExecution.list({
+    taskId,
+    nodeId: node.id,
+    iteration,
+  })
   // RFC-287 T8：取行前奏收编到 `resolveSchedulerRunRow`（四线单一实现）。
   // RFC-074 PR-C: no clarifyIteration inheritance — freshness is pure id-order
   // and the clarify generation is derived from prior-done id-order at dispatch
@@ -3903,7 +3710,9 @@ export async function runAgentSingleNode(
   // context all key off id-order / the RFC-070 consumed-by stamps, so nothing
   // needs to be carried forward on the row.
   const resolvedRow = await resolveSchedulerRunRow({
-    db,
+    lifecycle: opts.persistence.nodeRuns,
+    projections: opts.persistence.nodeExecution,
+    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
     iteration,
@@ -3920,7 +3729,7 @@ export async function runAgentSingleNode(
   const inheritedReviewIteration = latestExisting?.reviewIteration ?? 0
   const inheritedShardKey = latestExisting?.shardKey ?? null
   const inheritedParentNodeRunId = latestExisting?.parentNodeRunId ?? null
-  let envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
+  let envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)
 
   // Lock order: writeSem ≺ (agentSem | scriptSem) ≺ subprocessSem (no cycles —
   // RFC-098 survey §wp5-4). RFC-266 split the old single `globalSem` into two
@@ -4004,7 +3813,10 @@ export async function runAgentSingleNode(
       // 排除判据是载荷前缀：框架审计载荷一律以 `[rfc` 开头，由 rfc313-source-locks
       // 的断言钉死。误伤面是保守的——万一模型的正文真以 `[rfc` 开头，结果只是这一轮
       // 退回 fresh（换会话重来），不会错误地续跑一个没说过话的会话。
-      const agentTextCount = await countAgentTextEvents(db, nodeRunId)
+      const agentTextCount = await countAgentTextEvents(
+        state.opts.persistence.nodeExecution,
+        nodeRunId,
+      )
       // RFC-049: read the structured port-validation failures the prior
       // attempt's runner persisted (NULL → undefined; malformed JSON →
       // null via parsePortValidationFailuresJson, then coerced to
@@ -4012,14 +3824,10 @@ export async function runAgentSingleNode(
       // the failures array to populate the per-port repair prompt; absent
       // / empty arrays degrade gracefully (followup still fires on the
       // outer prefix, but the prompt skips per-kind specifics).
-      const priorRunRow = (
-        await db
-          .select({ pvf: nodeRuns.portValidationFailuresJson })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, nodeRunId))
-          .limit(1)
-      )[0]
-      const priorFailures = parsePortValidationFailuresJson(priorRunRow?.pvf ?? null)
+      const priorRunRow = await opts.persistence.nodeExecution.read(nodeRunId)
+      const priorFailures = parsePortValidationFailuresJson(
+        priorRunRow?.portValidationFailuresJson ?? null,
+      )
       followupDecision = decideEnvelopeFollowup({
         status: prev.status,
         exitCode: prev.exitCode,
@@ -4038,7 +3846,7 @@ export async function runAgentSingleNode(
       // 链顶恰逢翻转时升级会抢先生效，把用户的正常翻转执行成升级（AC-8 违反 + 未合并
       // 成果丢失）。只读这一个值、只在挂了 clarify 通道时读。
       const stopOverrideNow = hasClarifyChannel
-        ? (await getNodeClarifyDirectiveRow(db, taskId, node.id))?.directive === 'stop'
+        ? (await collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })) === 'stop'
         : false
       const clarifyFlipPending =
         priorAttemptStopOverride !== undefined && stopOverrideNow !== priorAttemptStopOverride
@@ -4075,7 +3883,7 @@ export async function runAgentSingleNode(
         // the answered Q&A via id-order generation derivation + the RFC-070
         // consumed-by stamps, not a carried clarifyIteration. shardKey /
         // parentNodeRunId still belong to this run-of-the-node and persist.
-        nodeRunId = await mintNodeRun(db, {
+        nodeRunId = await mintRun(state, {
           taskId,
           nodeId: node.id,
           status: 'pending',
@@ -4090,12 +3898,12 @@ export async function runAgentSingleNode(
             ...(followupDecision.followup && envelopeNonce.length > 0 ? { envelopeNonce } : {}),
           },
         })
-        envelopeNonce = await loadRunEnvelopeNonce(db, nodeRunId)
+        envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)
         broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
         // RFC-130: carry the iso columns onto the freshly-minted retry row so a
         // crash mid-retry can still find the iso worktree (the physical iso is
         // keyed by isoKeyRunId and shared across the invocation's attempts).
-        await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+        await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
 
         // RFC-042 / RFC-049: surface the follow-up decision as an audit
         // event so operators can replay how a green run recovered from a
@@ -4115,46 +3923,32 @@ export async function runAgentSingleNode(
                 ? followupDecision.failures
                 : [{ port: '', kind: '', subReason: '' }]
             for (const f of failures) {
-              withTaskExecutionMutation({
-                db,
-                taskId,
-                run: (tx) =>
-                  tx
-                    .insert(nodeRunEvents)
-                    .values({
-                      nodeRunId,
-                      ts: Date.now(),
-                      kind: 'text',
-                      payload: `[rfc049/port-validation-followup] ${JSON.stringify({
-                        rfc: 'RFC-049',
-                        port: f.port,
-                        kind: f.kind,
-                        subReason: f.subReason,
-                        retryAttempt: attempt,
-                      })}`,
-                    })
-                    .run(),
+              await opts.persistence.nodeExecution.appendEvent({
+                nodeRunId,
+                ts: Date.now(),
+                kind: 'text',
+                payload: `[rfc049/port-validation-followup] ${JSON.stringify({
+                  rfc: 'RFC-049',
+                  port: f.port,
+                  kind: f.kind,
+                  subReason: f.subReason,
+                  retryAttempt: attempt,
+                })}`,
+                ...executionContextInput(state),
               })
             }
           } else {
             const followupReason = followupDecision.reason
-            withTaskExecutionMutation({
-              db,
-              taskId,
-              run: (tx) =>
-                tx
-                  .insert(nodeRunEvents)
-                  .values({
-                    nodeRunId,
-                    ts: Date.now(),
-                    kind: 'text',
-                    payload: `[rfc042/envelope-followup] ${JSON.stringify({
-                      rfc: 'RFC-042',
-                      reason: followupReason,
-                      retryAttempt: attempt,
-                    })}`,
-                  })
-                  .run(),
+            await opts.persistence.nodeExecution.appendEvent({
+              nodeRunId,
+              ts: Date.now(),
+              kind: 'text',
+              payload: `[rfc042/envelope-followup] ${JSON.stringify({
+                rfc: 'RFC-042',
+                reason: followupReason,
+                retryAttempt: attempt,
+              })}`,
+              ...executionContextInput(state),
             })
           }
         }
@@ -4164,25 +3958,18 @@ export async function runAgentSingleNode(
         // 区分的痕迹——用户拍板不新增 rerun cause，事件流就是唯一的区分面。
         // 与上面的 followup 分支互斥：升级时 followupDecision 已被收回成 false。
         if (pendingRestartReason !== undefined) {
-          withTaskExecutionMutation({
-            db,
-            taskId,
-            run: (tx) =>
-              tx
-                .insert(nodeRunEvents)
-                .values({
-                  nodeRunId,
-                  ts: Date.now(),
-                  kind: 'text',
-                  payload: `[rfc313/session-restart] ${JSON.stringify({
-                    rfc: 'RFC-313',
-                    reason: pendingRestartReason,
-                    abandonedAfterFollowups: followupBudget,
-                    restartsUsed: retryShapeState.restartsUsed,
-                    retryAttempt: attempt,
-                  })}`,
-                })
-                .run(),
+          await opts.persistence.nodeExecution.appendEvent({
+            nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: `[rfc313/session-restart] ${JSON.stringify({
+              rfc: 'RFC-313',
+              reason: pendingRestartReason,
+              abandonedAfterFollowups: followupBudget,
+              restartsUsed: retryShapeState.restartsUsed,
+              retryAttempt: attempt,
+            })}`,
+            ...executionContextInput(state),
           })
         }
       }
@@ -4208,9 +3995,7 @@ export async function runAgentSingleNode(
       // round's Q&A. The row may have been minted at any of three sites
       // (pendingExisting, retry-mint, clarify-rerun mint from clarify
       // service); reading off the DB guarantees we see whatever each path set.
-      const currentRunRow = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-      )[0]
+      const currentRunRow = await opts.persistence.nodeExecution.read(nodeRunId)
       const currentShardKey = currentRunRow?.shardKey ?? null
 
       // RFC-074 PR-C: the clarify "generation" is derived from id-order, NOT
@@ -4222,7 +4007,7 @@ export async function runAgentSingleNode(
       // inflate it, and parentNodeRunId === null so fan-out shard children
       // don't either.
       const priorDoneGenerations = currentRunRow
-        ? await priorDoneGenerationsForRun(db, {
+        ? await priorDoneGenerationsForRun(state.opts.persistence.nodeExecution, {
             taskId,
             nodeId: node.id,
             iteration: currentRunRow.iteration,
@@ -4283,7 +4068,7 @@ export async function runAgentSingleNode(
       const isClarifyRerun = isClarifyRerunCause(currentRunRow?.rerunCause)
       const priorSessionId =
         isClarifyRerun && currentRunRow
-          ? await readPriorAgentSessionId(db, {
+          ? await readPriorAgentSessionId(state.opts.persistence.nodeExecution, {
               taskId,
               agentNodeId: node.id,
               shardKey: currentShardKey,
@@ -4303,7 +4088,7 @@ export async function runAgentSingleNode(
         sourceSessionId: priorSessionId,
       })
       if (resumeDecision.fallbackReason !== undefined) {
-        await recordClarifyInlineEvent(db, nodeRunId, {
+        await recordClarifyInlineEvent(state.opts.persistence.nodeExecution, nodeRunId, {
           level: 'warning',
           reason: resumeDecision.fallbackReason,
           extra: { clarifyGeneration },
@@ -4334,9 +4119,9 @@ export async function runAgentSingleNode(
       // can re-open a stopped channel (nodeStopOverride flips false → resolveEffectiveClarifyChannel
       // re-opens). No row ⇒ undefined ⇒ byte-for-byte unchanged.
       const nodeDirectiveRow = hasClarifyChannel
-        ? await getNodeClarifyDirectiveRow(db, taskId, node.id)
+        ? await collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })
         : undefined
-      const nodeDirective = nodeDirectiveRow?.directive
+      const nodeDirective = nodeDirectiveRow
       const nodeStopOverride = nodeDirective === 'stop'
       // RFC-132 (PR-C): the SINGLE unified deferred injector. selectAgentQueue pulls this node's
       // whole agent queue — self / questioner / designer / manual — in ONE query (design §2
@@ -4347,8 +4132,7 @@ export async function runAgentSingleNode(
       // node — an override / borrow target can hold a
       // reassigned question yet wire no clarify channel of its own (this mirrors the pre-PR-C
       // UNCONDITIONAL per-node-queue designer call). An empty queue ⇒ undefined ⇒ no injection.
-      const clarifyQueue = await buildClarifyQueueContext({
-        db,
+      const clarifyQueue = await collaboration.buildClarifyQueueContext({
         definition,
         taskId,
         consumerNodeId: node.id,
@@ -4418,7 +4202,7 @@ export async function runAgentSingleNode(
       // chain decides instead; the inline-resume gate above deliberately
       // keeps the raw `isClarifyRerun` (technical retries never resume).
       const lineageCauses = currentRunRow
-        ? await lineageCausesNewestFirst(db, {
+        ? await lineageCausesNewestFirst(state.opts.persistence.nodeExecution, {
             taskId,
             nodeId: node.id,
             iteration: currentRunRow.iteration,
@@ -4496,8 +4280,8 @@ export async function runAgentSingleNode(
       // restrict to the iterate-target port so the two don't duplicate. review-reject / non-review
       // reruns → all ports (onlyPorts undef).
       let priorOutputUpdate: { block: string } | undefined
-      if (currentRunRow !== undefined && !resumeDecision.inlineMode) {
-        const priorRun = await freshestPriorRunWithOutput(db, {
+      if (currentRunRow !== null && !resumeDecision.inlineMode) {
+        const priorRun = await freshestPriorRunWithOutput(state.opts.persistence.nodeExecution, {
           taskId,
           nodeId: node.id,
           iteration: currentRunRow.iteration,
@@ -4510,7 +4294,7 @@ export async function runAgentSingleNode(
               ? new Set([reviewContext.iterateTargetPort])
               : undefined
           const block = await composePriorOutputBlock(
-            db,
+            state.opts.persistence.nodeExecution,
             priorRun.id,
             agent.outputs ?? [],
             onlyPorts,
@@ -4520,7 +4304,7 @@ export async function runAgentSingleNode(
         }
       }
       if (resumeDecision.inlineMode && resumeDecision.resumeSessionId !== undefined) {
-        await recordClarifyInlineEvent(db, nodeRunId, {
+        await recordClarifyInlineEvent(state.opts.persistence.nodeExecution, nodeRunId, {
           level: 'info',
           sessionIdPrefix: resumeDecision.resumeSessionId.slice(0, 8),
           extra: { clarifyGeneration },
@@ -4575,10 +4359,14 @@ export async function runAgentSingleNode(
       // binary) so the id + runtime stay a pair across the new row.
       const inheritedRuntime =
         effectiveResumeSessionId !== undefined
-          ? await frozenRuntimeOfSession(db, effectiveResumeSessionId)
+          ? await frozenRuntimeOfSessionWith(
+              state.opts.persistence.nodeRunRuntime,
+              effectiveResumeSessionId,
+            )
           : null
-      const frozenRuntime = await resolveFrozenRuntime(
-        db,
+      const frozenRuntime = await resolveFrozenRuntimeWith(
+        state.opts.persistence.nodeRunRuntime,
+        state.opts.runtimeRegistry,
         nodeRunId,
         agent.runtime,
         state.opts.defaultRuntime,
@@ -4696,8 +4484,11 @@ export async function runAgentSingleNode(
         mcps,
         plugins,
         appHome: opts.appHome,
+        memoryInjectionQueries: opts.memoryInjectionQueries,
+        runtimeSessionLeases: opts.runtimeSessionLeases,
+        runtimeRegistry: opts.runtimeRegistry,
+        persistence: opts.persistence,
         ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-        db,
         log: log.child('run'),
         ...(opts.signal ? { signal: opts.signal } : {}),
         ...(opts.subagentLiveCapture !== undefined
@@ -4710,15 +4501,10 @@ export async function runAgentSingleNode(
       // it back via `--session`. NULL on failed / canceled runs is fine.
       if (lastResult.sessionId !== undefined && lastResult.sessionId !== '') {
         const persistedSessionId = lastResult.sessionId
-        withTaskExecutionMutation({
-          db,
-          taskId,
-          run: (tx) =>
-            tx
-              .update(nodeRuns)
-              .set({ opencodeSessionId: persistedSessionId })
-              .where(eq(nodeRuns.id, nodeRunId))
-              .run(),
+        await opts.persistence.nodeExecution.patch({
+          nodeRunId,
+          values: { opencodeSessionId: persistedSessionId },
+          ...executionContextInput(state),
         })
       }
       // RFC-026: post-spawn fallback — opencode rejected the resume id we
@@ -4728,11 +4514,11 @@ export async function runAgentSingleNode(
       // this attempt loop will not carry resumeSessionId (we only set it
       // on the first attempt of a clarify rerun).
       if (resumeDecision.inlineMode && lastResult.status !== 'done') {
-        const stderrText = await readStderrText(db, nodeRunId)
+        const stderrText = await readStderrText(state.opts.persistence.nodeExecution, nodeRunId)
         // RFC-284 T15（D10）：判据下沉 driver 能力面——措辞属各 CLI 私有。
         // 无该能力的 driver 视为「无法判定」（告警可能缺失但绝不误报）。
         if (getRuntimeDriver(frozenRuntime.protocol).detectSessionNotFound?.(stderrText) === true) {
-          await recordClarifyInlineEvent(db, nodeRunId, {
+          await recordClarifyInlineEvent(state.opts.persistence.nodeExecution, nodeRunId, {
             level: 'warning',
             reason: 'session-not-found',
             extra: { clarifyGeneration },
@@ -4748,8 +4534,7 @@ export async function runAgentSingleNode(
       // abandoned each predecessor, while the final pending/isolating row was
       // redispatched and crashed on begin-isolation from an abandoned state.
       // Close the row before the retry policy observes the synthetic failure.
-      await transitionNodeRunStatus({
-        db,
+      await transitionRunStatus(state, {
         nodeRunId,
         event: { kind: 'mark-failed', reason: 'scheduler-node-threw' },
         extra: { finishedAt: Date.now(), errorMessage, exitCode: null },
@@ -4780,7 +4565,7 @@ export async function runAgentSingleNode(
             writeSem,
             appHome: opts.appHome,
             taskId,
-            db,
+            binding: isolatedRunBinding(state),
             isoKeyRunId,
             canonRepos: state.repos,
             log,
@@ -4795,7 +4580,7 @@ export async function runAgentSingleNode(
         // daemon-wide permit per occurrence with no way back short of a restart.
         persistBase: 'in-window',
         persist: async () => {
-          await persistIsoBase(db, nodeRunId, task.repoCount, isoHandle)
+          await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
         },
       },
       onIsoSetupFailure: (err) => {
@@ -4874,7 +4659,7 @@ export async function runAgentSingleNode(
         // throw — RFC-130 D15 keeps downstream gated, RFC-144 §5 try-variant).
         run: async (_c, r) =>
           await mergeBackAndSettle({
-            db,
+            binding: isolatedRunBinding(state),
             writeSem,
             handle: isoHandle,
             nodeRunId,
@@ -4933,7 +4718,7 @@ export async function runAgentSingleNode(
       // ——keep 由骨架默认处置负责；这里只做本线私有的 warn + 结局改写。
       markMergeFailed: async (msg) => {
         log.warn('merge-back failed', { nodeId: node.id, error: msg })
-        await markMergeFailed(db, nodeRunId, msg, log)
+        await markMergeFailed(isolatedRunBinding(state), nodeRunId, msg, log)
         if (lastResult !== null) {
           lastResult = {
             ...lastResult,
@@ -4992,19 +4777,11 @@ export async function runAgentSingleNode(
     // falling through to the RFC-023 self-clarify path below.
     const crossClarifyNodeId = findCrossClarifyNodeForQuestioner(definition, node.id)
     if (crossClarifyNodeId !== undefined) {
-      const currentRunRowXc = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-      )[0]
+      const currentRunRowXc = await opts.persistence.nodeExecution.read(nodeRunId)
       const designerNodeId = findDesignerNodeForCrossClarify(definition, crossClarifyNodeId)
       // Defensive: persistent stop would have been short-circuited at
       // dispatch already. If the questioner still emitted clarify, treat
       // as protocol violation. Caller's retries (RFC-042) kick in.
-      const persistentRow = await db
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, taskId))
-        .limit(1)
-      void persistentRow
       await collaboration.openAgentClarify({
         kind: 'cross',
         taskId,
@@ -5014,6 +4791,7 @@ export async function runAgentSingleNode(
         targetConsumerNodeId: designerNodeId ?? null,
         loopIter: currentRunRowXc?.iteration ?? 0,
         questions: lastResult.clarify.questions,
+        ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
         ...(lastResult.clarify.truncationWarnings.length > 0
           ? { truncationWarnings: lastResult.clarify.truncationWarnings }
           : {}),
@@ -5034,15 +4812,13 @@ export async function runAgentSingleNode(
         message: 'clarify-no-channel',
       }
     }
-    const currentRunRow = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-    )[0]
+    const currentRunRow = await opts.persistence.nodeExecution.read(nodeRunId)
     // RFC-074 PR-C: the clarify round index is the asking run's generation —
     // the count of its prior completed generations (id-order) — not the retired
     // clarifyIteration counter. First clarify round → generation 0.
     const askingGeneration = currentRunRow
       ? (
-          await priorDoneGenerationsForRun(db, {
+          await priorDoneGenerationsForRun(state.opts.persistence.nodeExecution, {
             taskId,
             nodeId: node.id,
             iteration: currentRunRow.iteration,
@@ -5060,6 +4836,7 @@ export async function runAgentSingleNode(
       intermediaryNodeId: clarifyNodeId,
       iteration: askingGeneration,
       questions: lastResult.clarify.questions,
+      ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
       ...(lastResult.clarify.truncationWarnings.length > 0
         ? { truncationWarnings: lastResult.clarify.truncationWarnings }
         : {}),
@@ -5101,7 +4878,7 @@ export function broadcastNodeStatus(
 // highest-iteration-then-isFresherNodeRun) and now returns `consumed`
 // provenance alongside the resolved inputs — see body + design §5.1 / D10.
 export async function resolveUpstreamInputs(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   taskId: string,
   edges: WorkflowEdge[],
   nodeId: string,
@@ -5141,10 +4918,7 @@ export async function resolveUpstreamInputs(
       )
     }
     const source = resolved.source
-    const rows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, source.nodeId)))
+    const rows = await persistence.list({ taskId, nodeId: source.nodeId })
     // RFC-074 (decision D10 / design §5.1): unify the source-run picker with
     // the freshness picker. Previously this sorted by (iteration desc,
     // retryIndex desc) with NO cci term and NO status filter — so it could read
@@ -5163,10 +4937,7 @@ export async function resolveUpstreamInputs(
       continue
     }
     consumed[source.nodeId] = run.id
-    const outRows = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, run.id))
+    const outRows = await persistence.listOutputs(run.id)
     const port = outRows.find((o) => o.portName === source.portName)
     // RFC-306: a closed branch contributes NOTHING to a downstream prompt.
     //
@@ -5204,7 +4975,7 @@ export async function resolveUpstreamInputs(
  * and goes dark after worktree GC (Codex design-gate P1).
  */
 export async function readPortRowAtIteration(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   taskId: string,
   nodeId: string,
   portName: string,
@@ -5223,10 +4994,7 @@ export async function readPortRowAtIteration(
    */
   active: boolean
 }> {
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  const rows = await persistence.list({ taskId, nodeId })
   // Pick the freshest DONE top-level run visible at this iteration. For a
   // normal in-loop source, the current iteration wins. For a historical
   // snapshot that references an outer source, iteration 0 remains visible in
@@ -5248,10 +5016,7 @@ export async function readPortRowAtIteration(
     // a bookkeeping gap masquerade as a deliberate skip.
     return { runId: null, content: '', kind: null, archiveJson: null, active: true }
   }
-  const out = await db
-    .select()
-    .from(nodeRunOutputs)
-    .where(and(eq(nodeRunOutputs.nodeRunId, chosen.id), eq(nodeRunOutputs.portName, portName)))
+  const out = (await persistence.listOutputs(chosen.id)).filter((row) => row.portName === portName)
   // A skipped producing run has no port rows at all, so the port-row check alone
   // would read it as "absent ⇒ active" (the compatibility default). The run
   // status has to be consulted too.
@@ -5308,16 +5073,13 @@ export function readBindings(node: WorkflowNode, key: string): Binding[] {
  * `## Sibling Outputs`; everything else passes undefined (all ports).
  */
 export async function composePriorOutputBlock(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   priorRunId: string,
   agentOutputs: readonly string[],
   onlyPorts?: ReadonlySet<string>,
   envelopeNonce = '',
 ): Promise<string> {
-  const captured = await db
-    .select()
-    .from(nodeRunOutputs)
-    .where(eq(nodeRunOutputs.nodeRunId, priorRunId))
+  const captured = await persistence.listOutputs(priorRunId)
   const byPort = new Map(captured.map((r) => [r.portName, r.content]))
   const ordered = (agentOutputs ?? [])
     .filter((p) => onlyPorts === undefined || onlyPorts.has(p))
@@ -5351,19 +5113,14 @@ export async function composePriorOutputBlock(
  * existence probe is cheap; the freshest candidate normally hits on the first.
  */
 export async function freshestPriorRunWithOutput(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   run: { taskId: string; nodeId: string; iteration: number; shardKey: string | null; id: string },
-): Promise<typeof nodeRuns.$inferSelect | undefined> {
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, run.taskId),
-        eq(nodeRuns.nodeId, run.nodeId),
-        eq(nodeRuns.iteration, run.iteration),
-      ),
-    )
+): Promise<NodeExecutionSnapshot | undefined> {
+  const rows = await persistence.list({
+    taskId: run.taskId,
+    nodeId: run.nodeId,
+    iteration: run.iteration,
+  })
   // shardKey filtered in memory (drizzle IS NULL handling varies; see
   // readPriorAgentSessionId). Walk freshest-first (largest id) and return the
   // first prior run (any parent — see doc) that captured output.
@@ -5371,11 +5128,7 @@ export async function freshestPriorRunWithOutput(
     .filter((r) => (r.shardKey ?? null) === (run.shardKey ?? null) && r.id < run.id)
     .sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
   for (const c of candidates) {
-    const has = await db
-      .select({ p: nodeRunOutputs.portName })
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, c.id))
-      .limit(1)
+    const has = await persistence.listOutputs(c.id)
     if (has.length > 0) return c
   }
   return undefined
@@ -5392,19 +5145,14 @@ export async function freshestPriorRunWithOutput(
  * (RFC-183 design §2.5).
  */
 async function lineageCausesNewestFirst(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   run: { taskId: string; nodeId: string; iteration: number; shardKey: string | null; id: string },
 ): Promise<Array<string | null>> {
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, run.taskId),
-        eq(nodeRuns.nodeId, run.nodeId),
-        eq(nodeRuns.iteration, run.iteration),
-      ),
-    )
+  const rows = await persistence.list({
+    taskId: run.taskId,
+    nodeId: run.nodeId,
+    iteration: run.iteration,
+  })
   return rows
     .filter(
       (r) =>
@@ -5428,20 +5176,15 @@ async function lineageCausesNewestFirst(
  * source.
  */
 async function priorDoneGenerationsForRun(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   run: { taskId: string; nodeId: string; iteration: number; shardKey: string | null; id: string },
-): Promise<Array<typeof nodeRuns.$inferSelect>> {
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, run.taskId),
-        eq(nodeRuns.nodeId, run.nodeId),
-        eq(nodeRuns.iteration, run.iteration),
-        eq(nodeRuns.status, 'done'),
-      ),
-    )
+): Promise<readonly NodeExecutionSnapshot[]> {
+  const rows = await persistence.list({
+    taskId: run.taskId,
+    nodeId: run.nodeId,
+    iteration: run.iteration,
+    status: 'done',
+  })
   return rows.filter(
     (r) =>
       (r.shardKey ?? null) === (run.shardKey ?? null) &&
@@ -5460,7 +5203,7 @@ async function priorDoneGenerationsForRun(
  * nothing matches (will then degrade to isolated via `decideResumeSessionId`).
  */
 async function readPriorAgentSessionId(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   args: {
     taskId: string
     agentNodeId: string
@@ -5469,18 +5212,14 @@ async function readPriorAgentSessionId(
     beforeId: string
   },
 ): Promise<string | null> {
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, args.taskId),
-        eq(nodeRuns.nodeId, args.agentNodeId),
-        eq(nodeRuns.iteration, args.iteration),
-        eq(nodeRuns.status, 'done'),
-      ),
-    )
-    .orderBy(desc(nodeRuns.id))
+  const rows = [
+    ...(await persistence.list({
+      taskId: args.taskId,
+      nodeId: args.agentNodeId,
+      iteration: args.iteration,
+      status: 'done',
+    })),
+  ].sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
   // shardKey is filtered in memory because drizzle's IS NULL handling
   // varies; the result set is tiny (one row per prior attempt). Walk newest
   // first (largest id) and return the first prior generation that captured a
@@ -5502,13 +5241,11 @@ async function readPriorAgentSessionId(
  * runner's stderr pump. Used post-spawn to sniff for `session not found`
  * style messages so the inline-mode fallback can degrade gracefully.
  */
-async function readStderrText(db: DbClient, nodeRunId: string): Promise<string> {
-  const rows = await db
-    .select()
-    .from(nodeRunEvents)
-    .where(and(eq(nodeRunEvents.nodeRunId, nodeRunId), eq(nodeRunEvents.kind, 'stderr')))
-    .orderBy(asc(nodeRunEvents.id))
-  return rows.map((r) => r.payload).join('\n')
+async function readStderrText(
+  persistence: NodeExecutionPersistence,
+  nodeRunId: string,
+): Promise<string> {
+  return await persistence.readStderr(nodeRunId)
 }
 
 /**
@@ -5521,7 +5258,7 @@ async function readStderrText(db: DbClient, nodeRunId: string): Promise<string> 
  * payload is plain-readable in the events tab.
  */
 async function recordClarifyInlineEvent(
-  db: DbClient,
+  persistence: NodeExecutionPersistence,
   nodeRunId: string,
   args:
     | {
@@ -5550,17 +5287,10 @@ async function recordClarifyInlineEvent(
           reason: args.reason,
           ...args.extra,
         })
-  withCurrentTaskExecutionMutation({
-    db,
-    run: (tx) =>
-      tx
-        .insert(nodeRunEvents)
-        .values({
-          nodeRunId,
-          ts: Date.now(),
-          kind: 'text',
-          payload: `${tag} ${payload}`,
-        })
-        .run(),
+  await persistence.appendEvent({
+    nodeRunId,
+    ts: Date.now(),
+    kind: 'text',
+    payload: `${tag} ${payload}`,
   })
 }

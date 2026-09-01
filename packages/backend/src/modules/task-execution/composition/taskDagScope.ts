@@ -1,28 +1,22 @@
-import type { DbClient } from '@/db/client'
-import { and, eq } from 'drizzle-orm'
-import { clarifyRounds, nodeRuns } from '@/db/schema'
-import { autoDispatchDeferredQuestions } from '@/services/clarifyAutoDispatch'
 import { decideScopeOutcome } from '@/services/dispatchFrontier'
-import { loadUndispatchedParkTargets } from '@/services/taskQuestions'
 import { maybeRunCommitPush } from '@/services/scheduler'
 import { deriveFrontier } from './dagFrontier'
 import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
 import type { TaskScopeOutcome } from '../domain/taskEngine'
 import type {
-  LegacyNodeResult,
-  LegacyTaskMechanicsState,
+  NodeMechanicsResult,
+  TaskMechanicsState,
   TaskScopeArgs,
 } from '@/services/execution/taskMechanicsState'
-import { taskExecutionModule } from '../composition'
 import { executeNode } from './nodeExecution'
 import type { WrapperRuntimeFactory } from './taskExecutionComponents'
 
 export async function runScope(
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   args: TaskScopeArgs,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): Promise<TaskScopeOutcome> {
-  const { db, taskId, definition, opts } = state
+  const { taskId, definition, opts } = state
   const { scopeId, scopeIds, iteration, log } = args
 
   // RFC-076 PR-B — completion-driven dispatch frontier (replaces the
@@ -77,7 +71,7 @@ export async function runScope(
   // the terminal block can bubble the right message (a node parked in a PRIOR
   // invocation has no entry → falls back to '' / the generic detail, matching
   // the old `?? ''` wrapper bubbling).
-  const inFlight = new Map<string, Promise<{ nodeId: string; result: LegacyNodeResult }>>()
+  const inFlight = new Map<string, Promise<{ nodeId: string; result: NodeMechanicsResult }>>()
   const dispatchedThisInvocation = new Set<string>()
   // One top-level node can complete more than once in the same scope iteration:
   // a fresh pending clarify/review rerun is deliberately redispatched below.
@@ -132,7 +126,7 @@ export async function runScope(
 
     const handoffRequested =
       opts.executionContext !== undefined &&
-      taskExecutionModule.intents.hasPendingGateSuccessor({ db, taskId })
+      (await opts.persistence.intents.hasPendingGateSuccessor(taskId))
 
     let f: ReturnType<typeof deriveFrontier> | undefined
     if (!handoffRequested) {
@@ -144,27 +138,13 @@ export async function runScope(
       // conflicts keep the marker for the next tick; non-recoverable ones clear it (WARN, back to
       // the manual board). Runs OUTSIDE lock B (dispatch acquires it internally). A successful
       // redispatch mints pending rows that the deriveFrontier below picks up in the same tick.
-      await autoDispatchDeferredQuestions(db, taskId)
+      await opts.taskDagCollaboration.autoDispatchDeferredQuestions(taskId)
       // RFC-311 (audit L2-4): the frontier consumes six scalar columns; the old
       // select() decoded every run's prompt_text + iso/inventory JSON on EVERY
       // scheduler tick (the tick re-enters after each node-run completion), so
       // long tasks made the scheduler itself the event-loop hog.
-      const rows = await db
-        .select({
-          id: nodeRuns.id,
-          nodeId: nodeRuns.nodeId,
-          status: nodeRuns.status,
-          iteration: nodeRuns.iteration,
-          parentNodeRunId: nodeRuns.parentNodeRunId,
-          mergeState: nodeRuns.mergeState,
-          shardKey: nodeRuns.shardKey,
-          consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
-          supersededByReview: nodeRuns.supersededByReview,
-          wrapperProgressJson: nodeRuns.wrapperProgressJson,
-        })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, taskId))
-      const openClarify = await loadOpenClarify(db, taskId)
+      const rows = await opts.persistence.nodeExecution.list({ taskId })
+      const openClarify = await opts.taskDagCollaboration.loadOpenClarifyEvidence(taskId)
       // RFC-132 PR-B (universal deferred model): the park gate applies to ALL tasks now — a
       // sealed-undispatched entry (a designer waiting for its siblings — "park 等齐" — or a
       // self/questioner entry whose auto-dispatch was deferred by a recoverable conflict) parks its
@@ -178,7 +158,8 @@ export async function runScope(
       // rerun of another (the per-role designer source is blind to an in-flight questioner → parks the
       // node → stalls its pending rerun forever). The all-role partition is in-flight-aware across every
       // role, so such a node RUNS its in-flight rerun + re-parks next tick.
-      const deferredHandlerNodeIds = await loadUndispatchedParkTargets(db, taskId)
+      const deferredHandlerNodeIds =
+        await opts.taskDagCollaboration.loadUndispatchedParkTargets(taskId)
       f = deriveFrontier(
         rows,
         definition,
@@ -319,7 +300,7 @@ export async function runScope(
                     kind: 'ok',
                     summary: 'commit&push settled',
                     message: '',
-                  }) as LegacyNodeResult,
+                  }) as NodeMechanicsResult,
             })),
         )
       }
@@ -341,72 +322,4 @@ function detailFor(
 ): { summary: string; message: string; nodeId: string } {
   const d = parked.get(nodeId)
   return { summary: d?.summary ?? '', message: d?.message ?? '', nodeId }
-}
-
-/**
- * RFC-076 PR-B — the open-clarify evidence `deriveFrontier` needs to honor a
- * clarify park while re-deriving the frontier purely from node_runs. Two sets,
- * both from UNANSWERED (`awaiting_human`) self / cross-clarify sessions:
- *
- *   - `clarifyNodeIds` (N6): clarify / cross-clarify NODE ids with an open
- *     session. Positive evidence that prevents settling a clarify leaf without a
- *     row during the "agent emitted <workflow-clarify>, createClarifyRound(kind='self')
- *     mid-write" window (the session row can land before the clarify node_run).
- *
- *   - `askingRunIds`: the node_run ids of the ASKING agent / questioner runs
- *     (`source_agent_node_run_id` / `source_questioner_node_run_id`). When an
- *     agent emits <workflow-clarify>, the runner marks the agent's OWN run
- *     `done` and the node gateway returns `awaiting_human`; the old batch model used
- *     that return value to keep the agent OUT of `completed` (so downstream
- *     stayed blocked until the answer minted a rerun). A DB-derived frontier
- *     sees only the `done` row, so without this set it would complete the asking
- *     agent and run its downstream against an empty/clarify-only output (S12:
- *     the diamond's sibling builder ran twice). An asking run id parks its node
- *     in awaitingHuman until submitClarifyAnswers mints the rerun.
- *
- * A task parked awaiting a clarify never advances its loop iteration, so no
- * iteration filter is needed (a stale awaiting session from a prior iteration
- * cannot coexist with active scheduling of a later one).
- */
-async function loadOpenClarify(
-  db: DbClient,
-  taskId: string,
-): Promise<{ clarifyNodeIds: Set<string>; askingRunIds: Set<string> }> {
-  const clarifyNodeIds = new Set<string>()
-  const askingRunIds = new Set<string>()
-  const self = await db
-    .select({
-      nodeId: clarifyRounds.intermediaryNodeId,
-      askingRunId: clarifyRounds.askingNodeRunId,
-    })
-    .from(clarifyRounds)
-    .where(
-      and(
-        eq(clarifyRounds.kind, 'self'),
-        eq(clarifyRounds.taskId, taskId),
-        eq(clarifyRounds.status, 'awaiting_human'),
-      ),
-    )
-  for (const r of self) {
-    clarifyNodeIds.add(r.nodeId)
-    if (r.askingRunId !== null && r.askingRunId !== '') askingRunIds.add(r.askingRunId)
-  }
-  const cross = await db
-    .select({
-      nodeId: clarifyRounds.intermediaryNodeId,
-      askingRunId: clarifyRounds.askingNodeRunId,
-    })
-    .from(clarifyRounds)
-    .where(
-      and(
-        eq(clarifyRounds.kind, 'cross'),
-        eq(clarifyRounds.taskId, taskId),
-        eq(clarifyRounds.status, 'awaiting_human'),
-      ),
-    )
-  for (const r of cross) {
-    clarifyNodeIds.add(r.nodeId)
-    if (r.askingRunId !== null && r.askingRunId !== '') askingRunIds.add(r.askingRunId)
-  }
-  return { clarifyNodeIds, askingRunIds }
 }

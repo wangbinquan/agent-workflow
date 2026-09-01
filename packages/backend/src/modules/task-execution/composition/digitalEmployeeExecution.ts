@@ -1,4 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm'
+import type { Actor } from '@/auth/actor'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
@@ -9,6 +10,8 @@ import {
   DAEMON_RESTART_ERROR_SUMMARY,
   isTerminalTaskStatus,
   type StartTask,
+  type WorkflowDefinition,
+  WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import { nodeRunOutputs, nodeRuns, tasks, workflows } from '@/db/schema'
@@ -43,6 +46,14 @@ import {
 } from '../domain/digitalEmployeeHost'
 import { ensureDigitalEmployeeHostWorkflow } from './agentActionExecution'
 import type { DigitalEmployeeWorkspacePort } from './required-ports'
+import type {
+  PostgresqlRootTaskLaunchKernel,
+  PostgresqlRootTaskLaunchSubject,
+  PostgresqlTaskRoutePreparedWorkspace,
+  PostgresqlTaskRouteWorkspaceParticipant,
+} from '../infrastructure/postgresqlTaskRouteLaunchOperations'
+import type { TaskExecutionReadModels } from '../public/types'
+import type { TaskRouteOperations } from '../public/taskRoutes'
 
 const exactRefSchema = z
   .object({ id: z.string().min(1), revision: z.number().int().positive() })
@@ -660,4 +671,441 @@ export function composeDigitalEmployeeExecution(deps: {
       await cancelTask(deps.db, executionRef)
     },
   }
+}
+
+export interface PostgresqlDigitalEmployeeExecutionDependencies {
+  readonly appHome: string
+  readonly actor: Actor
+  readonly resourceAuthorityFor: (
+    actor: Actor,
+  ) => Parameters<PostgresqlRootTaskLaunchKernel['launch']>[0]['resourceAuthority']
+  readonly launch: PostgresqlRootTaskLaunchKernel
+  readonly tasks: Pick<TaskRouteOperations, 'get' | 'cancel'>
+  readonly readModels: Pick<TaskExecutionReadModels, 'executionOutcome'>
+  readonly resourceUsage: Readonly<{
+    read(taskId: string): Promise<{
+      readonly effectiveRunningMs: number
+      readonly totalTokens: number
+    } | null>
+  }>
+  readonly agents: Readonly<{
+    get(id: string): Promise<{
+      readonly id: string
+      readonly name: string
+      readonly updatedAt: number
+      readonly outputs: readonly string[]
+    } | null>
+  }>
+  readonly workflows: Readonly<{
+    get(id: string): Promise<{
+      readonly id: string
+      readonly name: string
+      readonly version: number
+      readonly definition: WorkflowDefinition
+    } | null>
+  }>
+  readonly executionMetadata: Readonly<{
+    load(taskId: string): Promise<{
+      readonly roundRef: string | null
+      readonly autoRecoverySuspended: boolean
+    } | null>
+  }>
+  readonly workspace?: DigitalEmployeeWorkspacePort
+  readonly executionContracts: ExecutionContractParticipant & ExecutionContractProjectionParticipant
+}
+
+function borrowedPostgresqlWorkspace(
+  scene: Extract<
+    Awaited<ReturnType<DigitalEmployeeWorkspacePort['prepare']>>,
+    { kind: 'repository' }
+  >,
+): PostgresqlTaskRouteWorkspaceParticipant {
+  return Object.freeze({
+    async prepare(
+      input: Parameters<PostgresqlTaskRouteWorkspaceParticipant['prepare']>[0],
+    ): Promise<PostgresqlTaskRoutePreparedWorkspace> {
+      let state: 'open' | 'committed' | 'rolled-back' = 'open'
+      return Object.freeze({
+        taskId: input.taskId,
+        kind: 'single',
+        spaceKind: 'local',
+        repoPath: scene.workspacePath,
+        repoUrl: null,
+        cachedRepoId: null,
+        repoGroupId: null,
+        repoGroupName: null,
+        worktreePath: scene.workspacePath,
+        baseBranch: scene.baselineSha,
+        branch: '',
+        baseCommit: scene.baselineSha,
+        earlyError: null,
+        repositories: [],
+        nodePaths: [],
+        commit() {
+          if (state !== 'open') throw new Error(`borrowed-workspace-already-${state}`)
+          state = 'committed'
+        },
+        async rollback() {
+          // The workspace belongs to Development Automation. Rolling back a
+          // TaskExecution launch releases only this lease; physical cleanup is
+          // deliberately retained by the owner that materialized the scene.
+          if (state !== 'open') throw new Error(`borrowed-workspace-already-${state}`)
+          state = 'rolled-back'
+          return { taskId: input.taskId, complete: true, failures: [] }
+        },
+      })
+    },
+  })
+}
+
+function parsedPlanOutputPath(planPrompt: string): string | null {
+  const legacyExpectedMatch = /EXPECTED_ANALYSIS_PLAN_PATH_JSON\n("[^"\\]*(?:\\.[^"\\]*)*")/.exec(
+    planPrompt,
+  )
+  const directInputMarker = '\n\nINPUT_JSON\n\n'
+  const directInputStart = planPrompt.lastIndexOf(directInputMarker)
+  if (directInputStart >= 0) {
+    try {
+      const directInput = z
+        .object({ outputFile: z.string().min(1) })
+        .passthrough()
+        .safeParse(JSON.parse(planPrompt.slice(directInputStart + directInputMarker.length)))
+      if (directInput.success) return directInput.data.outputFile
+    } catch {
+      return null
+    }
+  }
+  if (legacyExpectedMatch?.[1] === undefined) return null
+  try {
+    return z.string().parse(JSON.parse(legacyExpectedMatch[1]) as unknown)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * PostgreSQL Digital Employee execution on the exact provider-selected root
+ * launch kernel. It neither reopens SQLite nor owns a second task writer.
+ */
+export function composePostgresqlDigitalEmployeeExecution(
+  deps: PostgresqlDigitalEmployeeExecutionDependencies,
+): DigitalEmployeeExecutionParticipant {
+  const participant: DigitalEmployeeExecutionParticipant = {
+    async launch(planJson: string, attemptJson: string) {
+      const plan = planSchema.parse(JSON.parse(planJson) as unknown)
+      const attempt = attemptSchema.parse(JSON.parse(attemptJson) as unknown)
+      const implementation = executionContractImplementationSchema.parse(
+        JSON.parse(plan.implementationJson) as unknown,
+      )
+      if (implementation.kind !== plan.implementationKind) {
+        throw new Error('reaction plan implementation kind mismatch')
+      }
+      const envelope = inputEnvelopeSchema.parse(JSON.parse(plan.inputEnvelopeJson) as unknown)
+      const environment = environmentSchema.parse(
+        JSON.parse(envelope.executionEnvironmentJson) as unknown,
+      )
+      const scene =
+        deps.workspace === undefined
+          ? ({ kind: 'scratch' } as const)
+          : await deps.workspace.prepare({ planJson: JSON.stringify(plan), attemptJson })
+      const guide = deps.executionContracts.get(plan.workContractRef)
+      const toolInputJson =
+        deps.executionContracts.projectInput?.({
+          contractRef: plan.workContractRef,
+          roundRef: plan.roundRef,
+          executionNonce: plan.executionNonce,
+          inputEnvelopeJson: plan.inputEnvelopeJson,
+          projectionJson: scene.kind === 'repository' ? scene.contractProjectionJson : null,
+        }) ?? plan.inputEnvelopeJson
+      const prompt = buildDigitalEmployeeFixedPrompt(
+        { ...plan, inputEnvelopeJson: toolInputJson },
+        attempt,
+        guide,
+      )
+      const reviewedExecution = envelope.humanReview
+      if (reviewedExecution && implementation.kind !== 'agent') {
+        throw new Error('implementation plan review requires an Agent implementation')
+      }
+      const planPrompt = reviewedExecution
+        ? buildDigitalEmployeePlanPrompt(
+            {
+              ...plan,
+              inputEnvelopeJson:
+                deps.executionContracts.projectInput?.({
+                  contractRef: reviewedExecution.planningTool.workContractRef,
+                  roundRef: plan.roundRef,
+                  executionNonce: plan.executionNonce,
+                  inputEnvelopeJson: plan.inputEnvelopeJson,
+                }) ?? plan.inputEnvelopeJson,
+            },
+            attempt,
+            reviewedExecution.documentPath,
+            deps.executionContracts.get(reviewedExecution.planningTool.workContractRef).inputMode,
+          )
+        : null
+      const task: StartTask = {
+        workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+        name: `employee:${plan.roundRef}`.slice(0, 255),
+        inputs:
+          implementation.kind === 'program'
+            ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: toolInputJson }
+            : reviewedExecution
+              ? {
+                  [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt,
+                  [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: planPrompt!,
+                }
+              : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
+        maxDurationMs: plan.roundBudgetMs,
+        ...(plan.maxTotalTokens === null ? {} : { maxTotalTokens: plan.maxTotalTokens }),
+        ...(scene.kind === 'repository'
+          ? {}
+          : environment.kind === 'scratch'
+            ? { scratch: true }
+            : environment.kind === 'cached-repository'
+              ? { cachedRepoId: environment.cachedRepoId }
+              : { repoGroupId: environment.repoGroupId }),
+      }
+
+      let subject: PostgresqlRootTaskLaunchSubject
+      if (implementation.kind === 'workflow') {
+        const workflow = await deps.workflows.get(implementation.workflowRef.id)
+        if (workflow === null || workflow.version !== implementation.workflowRef.revision) {
+          throw new Error(
+            `exact workflow unavailable: ${implementation.workflowRef.id}@${implementation.workflowRef.revision}`,
+          )
+        }
+        task.workflowId = workflow.id
+        task.expectedWorkflowVersion = workflow.version
+        task.inputs = { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt }
+        subject = {
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+          workflowVersion: workflow.version,
+          workflowSnapshot: workflow.definition,
+        }
+      } else {
+        let snapshot: WorkflowDefinition
+        if (implementation.kind === 'agent') {
+          const agent = await deps.agents.get(implementation.agentRef.id)
+          if (agent === null || agent.updatedAt !== implementation.agentRef.revision) {
+            throw new Error(
+              `exact agent unavailable: ${implementation.agentRef.id}@${implementation.agentRef.revision}`,
+            )
+          }
+          if (!agent.outputs.includes(DIGITAL_EMPLOYEE_RESULT_PORT)) {
+            throw new Error(`agent must expose ${DIGITAL_EMPLOYEE_RESULT_PORT}`)
+          }
+          if (reviewedExecution === null) {
+            snapshot = WorkflowDefinitionSchema.parse(
+              synthesizeDigitalEmployeeHostSnapshot({ agentId: agent.id, agentName: agent.name }),
+            )
+          } else {
+            const planAgentRef = reviewedExecution.planningTool.implementation.agentRef
+            const planAgent = await deps.agents.get(planAgentRef.id)
+            if (planAgent === null || planAgent.updatedAt !== planAgentRef.revision) {
+              throw new Error(
+                `exact implementation plan Agent unavailable: ${planAgentRef.id}@${planAgentRef.revision}`,
+              )
+            }
+            if (!planAgent.outputs.includes(reviewedExecution.artifactPort)) {
+              throw new Error(
+                `implementation plan Agent must expose ${reviewedExecution.artifactPort}`,
+              )
+            }
+            snapshot = WorkflowDefinitionSchema.parse(
+              synthesizeReviewedDigitalEmployeeHostSnapshot({
+                planAgentId: planAgent.id,
+                planAgentName: planAgent.name,
+                implementationAgentId: agent.id,
+                implementationAgentName: agent.name,
+                artifactPort: reviewedExecution.artifactPort,
+                documentPath: reviewedExecution.documentPath,
+                reviewTitle: reviewedExecution.title,
+                reviewDescription: reviewedExecution.description,
+              }),
+            )
+          }
+        } else {
+          const artifactPath = containedArtifact(deps.appHome, implementation.executableArtifactRef)
+          if (artifactPath === null || !existsSync(artifactPath)) {
+            throw new Error('program executable artifact is unavailable')
+          }
+          const source = readFileSync(artifactPath, 'utf8')
+          if (sha256Hex(source) !== implementation.executableDigest) {
+            throw new Error('program executable artifact digest mismatch')
+          }
+          let parametersJson = '{}'
+          if (implementation.parameterValuesRef !== null) {
+            const parameterPath = containedArtifact(deps.appHome, implementation.parameterValuesRef)
+            if (parameterPath === null || !existsSync(parameterPath)) {
+              throw new Error('program parameter artifact is unavailable')
+            }
+            parametersJson = JSON.stringify(
+              programParametersSchema.parse(
+                JSON.parse(readFileSync(parameterPath, 'utf8')) as unknown,
+              ),
+            )
+          }
+          snapshot = WorkflowDefinitionSchema.parse(
+            synthesizeDigitalEmployeeScriptHostSnapshot({
+              inputPort: EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
+              language: implementation.runtimeKind,
+              script: source,
+              dependencies: [],
+              env: {
+                DIGITAL_EMPLOYEE_TOOL_PARAMETERS_JSON: parametersJson,
+                DIGITAL_EMPLOYEE_TOOL_CONNECTION_REF_JSON: JSON.stringify(plan.connectionRef),
+                DIGITAL_EMPLOYEE_TOOL_SLOT: plan.toolSlotRef,
+              },
+              readonly: false,
+            }),
+          )
+        }
+        subject = {
+          workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+          workflowName: '__digital_employee_host__',
+          workflowVersion: 1,
+          workflowSnapshot: snapshot,
+        }
+      }
+
+      const launched = await deps.launch.launch({
+        actor: deps.actor,
+        resourceAuthority: deps.resourceAuthorityFor(deps.actor),
+        invoker: { type: 'user', launchKind: 'direct-json' },
+        task,
+        subject,
+        internal: {
+          catalogVisibility: 'internal',
+          digitalEmployeeLaunch: {
+            actionRunId: plan.roundRef,
+            caseId: plan.caseRef.id,
+          },
+          ...(scene.kind === 'repository'
+            ? {
+                platformInputPaths: scene.platformInputPaths,
+                workspace: borrowedPostgresqlWorkspace(scene),
+              }
+            : {}),
+        },
+      })
+      return { executionRef: launched.id }
+    },
+
+    async inspect(executionRef: string) {
+      const task = await deps.tasks.get(executionRef)
+      if (task === null) {
+        return resultFailure(
+          executionRef,
+          'infrastructure',
+          'execution-not-found',
+          'TaskEngine execution is missing',
+          { sourceRef: `task:${executionRef}`, durationMs: 0, totalTokens: 0 },
+        )
+      }
+      const executionMetadata = await deps.executionMetadata.load(executionRef)
+      if (
+        task.status === 'interrupted' &&
+        task.errorSummary === DAEMON_RESTART_ERROR_SUMMARY &&
+        executionMetadata?.autoRecoverySuspended !== true
+      ) {
+        return { kind: 'pending', executionRef }
+      }
+      if (!isTerminalTaskStatus(task.status)) return { kind: 'pending', executionRef }
+      const usage = (await deps.resourceUsage.read(executionRef)) ?? {
+        effectiveRunningMs: 0,
+        totalTokens: 0,
+      }
+      const metering: DigitalEmployeeExecutionMetering = {
+        sourceRef: `task:${executionRef}`,
+        durationMs: usage.effectiveRunningMs,
+        totalTokens: usage.totalTokens,
+      }
+      const outcome = await deps.readModels.executionOutcome.find(executionRef)
+      if (outcome === null) {
+        return resultFailure(
+          executionRef,
+          'infrastructure',
+          'execution-outcome-missing',
+          'TaskEngine execution outcome is missing',
+          metering,
+        )
+      }
+      if (task.status !== 'done') {
+        return resultFailure(
+          executionRef,
+          'infrastructure',
+          `execution-${task.status}`,
+          outcome.task.errorMessage ?? outcome.task.errorSummary ?? `task ended as ${task.status}`,
+          metering,
+        )
+      }
+      const output =
+        outcome.outputs.find(
+          (candidate) => candidate.active && candidate.portName === DIGITAL_EMPLOYEE_RESULT_PORT,
+        )?.content ?? null
+      const planPrompt = task.inputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
+      if (typeof planPrompt === 'string') {
+        const expectedPath = parsedPlanOutputPath(planPrompt)
+        const planRunIds = new Set(
+          outcome.runs
+            .filter(
+              (run) => run.nodeId === DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID && run.status === 'done',
+            )
+            .map((run) => run.id),
+        )
+        const planOutput = [...outcome.outputs]
+          .reverse()
+          .find(
+            (candidate) =>
+              candidate.active &&
+              candidate.portName === 'analysis-plan' &&
+              planRunIds.has(candidate.nodeRunId),
+          )
+        if (expectedPath === null || planOutput?.content.trim() !== expectedPath) {
+          return resultFailure(
+            executionRef,
+            'semantic',
+            'implementation-plan-path-mismatch',
+            `analysis-plan must publish the exact platform path ${expectedPath ?? '<missing>'}`,
+            metering,
+          )
+        }
+      }
+      const roundRef = executionMetadata?.roundRef ?? null
+      if (deps.workspace !== undefined && roundRef !== null) {
+        const validation = await deps.workspace.validate({
+          roundRef,
+          taskStatus: task.status,
+          outputJson: output,
+        })
+        if (!validation.ok) {
+          return resultFailure(
+            executionRef,
+            validation.errorClass,
+            validation.errorCode,
+            validation.errorDetail,
+            metering,
+          )
+        }
+      }
+      if (output === null) {
+        return resultFailure(
+          executionRef,
+          'semantic',
+          'execution-output-missing',
+          `task did not publish ${DIGITAL_EMPLOYEE_RESULT_PORT}`,
+          metering,
+        )
+      }
+      return { kind: 'completed', executionRef, outputJson: output, metering }
+    },
+
+    async cancel(executionRef: string) {
+      const task = await deps.tasks.get(executionRef)
+      if (task === null || isTerminalTaskStatus(task.status)) return
+      await deps.tasks.cancel(executionRef)
+    },
+  }
+  return Object.freeze(participant)
 }

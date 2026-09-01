@@ -164,7 +164,10 @@ export interface ChildResumeRuntime {
 export interface SchedulerDriverPort {
   /** RFC-332 W2-B task-level application entry; scheduler mechanics do not own this body. */
   drive(request: TaskDriveRequest): Promise<void>
-  cancelChild(input: { readonly taskId: string; readonly cascadeFromParent: true }): Promise<void>
+  cancelChild(input: {
+    readonly taskId: string
+    readonly cause: Readonly<{ readonly kind: 'parent-cascade'; readonly parentTaskId: string }>
+  }): Promise<void>
   resumeChild(input: {
     readonly taskId: string
     readonly runtime: ChildResumeRuntime

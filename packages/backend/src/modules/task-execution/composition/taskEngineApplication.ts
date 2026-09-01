@@ -1,6 +1,9 @@
 import {
+  DAEMON_RESTART_ERROR_SUMMARY,
+  DAEMON_SHUTDOWN_ABORT_REASON,
   NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
+  DwStateSchema,
   exclusionPlanFor,
   isWorkgroupTask,
   migrateWorkflowDefinitionToLatest,
@@ -13,11 +16,12 @@ import {
   type ExecutionScopeIndex,
 } from '../domain/executionScope'
 import type { WrapperNodeKind } from '../domain/wrapperExecution'
-import { and, asc, eq } from 'drizzle-orm'
-import { taskRepos, tasks } from '@/db/schema'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
-import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
+import type {
+  BoundRunTaskOptions,
+  RunTaskOptions,
+} from '@/services/execution/taskEngineRuntimeOptions'
 import { taskEngineOutcomeFromScope, type TaskScopeOutcome } from '../domain/taskEngine'
 import { DagTaskEngine } from '../engine/task/dag/dagTaskEngine'
 import { DynamicWorkflowTaskEngine } from '../engine/task/dynamicWorkflowTaskEngine'
@@ -26,45 +30,177 @@ import {
   resolveTaskEngineSelection,
 } from '../engine/task/taskEngineRegistry'
 import { WorkgroupTaskEngine } from '../engine/task/workgroupTaskEngine'
-import { cancelTaskRow, failTask, inspectReadonlyRepos } from '@/services/scheduler'
+import { inspectReadonlyRepos } from '@/services/scheduler'
 import { runScope } from './taskDagScope'
 import { buildNodeExecutionWorkgroupHooks } from './nodeExecution'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
 import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
-import type { LegacyTaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import { trySetTaskStatus } from '@/services/lifecycle'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import {
   assertTaskExecutionContext,
   exactOwnerMatches,
   runWithTaskExecutionContext,
-  taskExecutionModule,
-  withTaskExecutionMutation,
 } from '@/services/taskExecutionParticipants'
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
-import { runWorkgroupEngine } from '@/services/workgroup/engine'
-import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import type { SchedulerRuntimeTopology } from '../public/participants'
-import type { HumanGateOpenParticipant } from '../application/ports/humanGateOpenParticipant'
 import { createTaskExecutionResourceSession } from '@/services/execution/taskExecutionResources'
-import {
-  ManualQuestionParkRequired,
-  assertNoManualQuestionParkObligationTx,
-  settleManualQuestionParkObligations,
-} from './humanGate'
+import { taskStopProjection, type TaskStopCause } from '../public/types'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
+
+function taskStopCauseFromUnknown(value: unknown): TaskStopCause | null {
+  if (typeof value !== 'object' || value === null || !('kind' in value)) return null
+  const candidate = value as TaskStopCause
+  switch (candidate.kind) {
+    case 'user':
+    case 'daemon-shutdown':
+      return candidate
+    case 'parent-cascade':
+      return typeof candidate.parentTaskId === 'string' ? candidate : null
+    case 'webhook-terminal':
+      return (candidate.terminal === 'closed' || candidate.terminal === 'merged') &&
+        typeof candidate.deliveryId === 'string' &&
+        Number.isInteger(candidate.streamRevision)
+        ? candidate
+        : null
+    default:
+      return null
+  }
+}
+
+async function failRuntimeTask(
+  opts: BoundRunTaskOptions,
+  errorSummary: string,
+  errorMessage: string,
+  failedNodeId?: string,
+): Promise<void> {
+  const won = await opts.persistence.runtimeLifecycle.trySet({
+    taskId: opts.taskId,
+    to: 'failed',
+    allowedFrom: ['pending', 'running'],
+    extra: {
+      finishedAt: Date.now(),
+      errorSummary,
+      errorMessage,
+      ...(failedNodeId === undefined ? {} : { failedNodeId }),
+    },
+    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+    now: Date.now(),
+    reason: `failTask: ${errorSummary}`,
+  })
+  if (!won) {
+    createLogger('scheduler').warn(
+      'failTask write lost to a concurrent transition — respecting winner',
+      { taskId: opts.taskId, errorSummary },
+    )
+  }
+}
+
+async function cancelRuntimeTask(
+  opts: BoundRunTaskOptions,
+  failedNodeId?: string,
+  abortReason?: unknown,
+): Promise<void> {
+  await withTaskReviewMutationLock(opts.taskId, async () => {
+    const now = Date.now()
+    if (abortReason === DAEMON_SHUTDOWN_ABORT_REASON) {
+      await opts.persistence.runtimeLifecycle.trySet({
+        taskId: opts.taskId,
+        to: 'interrupted',
+        allowedFrom: ['running'],
+        extra: {
+          finishedAt: now,
+          errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
+          errorMessage:
+            'daemon shutdown interrupted this task; resume (or auto-resume) continues it',
+          ...(failedNodeId === undefined ? {} : { failedNodeId }),
+        },
+        ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+        now,
+        reason: 'cancelTaskRow-shutdown',
+      })
+      return
+    }
+    const structuredCause = taskStopCauseFromUnknown(abortReason)
+    const projection = taskStopProjection(structuredCause ?? { kind: 'user' })
+    const won = await opts.persistence.runtimeLifecycle.trySet({
+      taskId: opts.taskId,
+      to: 'canceled',
+      allowedFrom: ['running'],
+      extra: {
+        finishedAt: now,
+        errorSummary: projection.summary,
+        errorMessage:
+          structuredCause?.kind === 'webhook-terminal'
+            ? `${projection.code}: delivery=${structuredCause.deliveryId} revision=${structuredCause.streamRevision}`
+            : structuredCause?.kind === 'parent-cascade' && structuredCause.rootCause !== undefined
+              ? `${projection.code}: parent=${structuredCause.parentTaskId} delivery=${structuredCause.rootCause.deliveryId} revision=${structuredCause.rootCause.streamRevision}`
+              : projection.code,
+        ...(failedNodeId === undefined ? {} : { failedNodeId }),
+      },
+      ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+      now,
+      reason: 'cancelTaskRow',
+    })
+    if (!won) {
+      createLogger('scheduler').warn(
+        'cancelTaskRow lost to a concurrent transition — respecting winner',
+        { taskId: opts.taskId },
+      )
+    }
+  })
+}
 
 export async function driveTaskEngineApplication(
   opts: RunTaskOptions,
   topology: SchedulerRuntimeTopology,
-  humanGates: HumanGateOpenParticipant,
   runtimeComponents: TaskExecutionRuntimeComponents,
 ): Promise<void> {
+  if (opts.memoryInjectionQueries === undefined) {
+    throw new Error('memory-injection-queries-not-composed')
+  }
+  if (opts.persistence === undefined) {
+    throw new Error('task-execution-persistence-not-composed')
+  }
+  if (opts.runtimeSessionLeases === undefined) {
+    throw new Error('runtime-session-leases-not-composed')
+  }
+  if (opts.runtimeRegistry === undefined) {
+    throw new Error('runtime-registry-not-composed')
+  }
+  if (opts.taskDagCollaboration === undefined) {
+    throw new Error('task-dag-collaboration-not-composed')
+  }
+  if (opts.collaborationRuntime === undefined) {
+    throw new Error('collaboration-runtime-mechanics-not-composed')
+  }
+  if (opts.workgroupTurns === undefined) {
+    throw new Error('workgroup-turns-not-composed')
+  }
+  if (opts.childLaunch === undefined) {
+    throw new Error('child-execution-launch-not-composed')
+  }
+  if (opts.processConcurrencyScope === undefined) {
+    throw new Error('task-execution-concurrency-scope-not-composed')
+  }
+  const boundOptions: BoundRunTaskOptions = {
+    ...opts,
+    memoryInjectionQueries: opts.memoryInjectionQueries,
+    persistence: opts.persistence,
+    runtimeSessionLeases: opts.runtimeSessionLeases,
+    runtimeRegistry: opts.runtimeRegistry,
+    taskDagCollaboration: opts.taskDagCollaboration,
+    collaborationRuntime: opts.collaborationRuntime,
+    workgroupTurns: opts.workgroupTurns,
+    childLaunch: opts.childLaunch,
+    processConcurrencyScope: opts.processConcurrencyScope,
+  }
   // RFC-098 B1: the per-task write-lock registry entry is gc'd here and ONLY
   // here (taskWriteLocks.ts lifecycle — an HTTP-side gc would split-brain the
   // mutex against our cached legacy mechanics writeSem reference).
@@ -73,10 +209,10 @@ export async function driveTaskEngineApplication(
   // shard concurrency), so it is reclaimed in this one place too.
   try {
     if (opts.executionContext === undefined) {
-      await runTaskEngineOrchestratorInner(opts, topology, humanGates, runtimeComponents)
+      await runTaskEngineOrchestratorInner(boundOptions, topology, runtimeComponents)
     } else {
       await runWithTaskExecutionContext(opts.executionContext, () =>
-        runTaskEngineOrchestratorInner(opts, topology, humanGates, runtimeComponents),
+        runTaskEngineOrchestratorInner(boundOptions, topology, runtimeComponents),
       )
     }
   } finally {
@@ -86,23 +222,22 @@ export async function driveTaskEngineApplication(
 }
 
 async function runTaskEngineOrchestratorInner(
-  opts: RunTaskOptions,
+  opts: BoundRunTaskOptions,
   topology: SchedulerRuntimeTopology,
-  humanGates: HumanGateOpenParticipant,
   runtimeComponents: TaskExecutionRuntimeComponents,
 ): Promise<void> {
   const log = opts.log ?? createLogger('scheduler')
-  const { db, taskId } = opts
+  const { taskId } = opts
 
-  // 1. Load task row.
-  const taskRows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
-  const task = taskRows[0]
-  if (!task) {
+  // 1. Load one provider-owned task/repository snapshot.
+  const driveSnapshot = await opts.persistence.drive.load(taskId)
+  if (driveSnapshot === null) {
     log.error('runTask: task not found', { taskId })
     return
   }
+  const { task, repositories: repoRows, collaborators } = driveSnapshot
 
-  const durableOwner = taskExecutionModule.ownership.read(db, taskId)
+  const durableOwner = await opts.persistence.ownership.read(taskId)
   if (opts.executionContext !== undefined) {
     assertTaskExecutionContext(opts.executionContext, taskId)
     if (durableOwner === null || !exactOwnerMatches(durableOwner, opts.executionContext.token)) {
@@ -118,14 +253,10 @@ async function runTaskEngineOrchestratorInner(
 
   const taskExecutionIdentity = opts.identityAccess
   if (taskExecutionIdentity === undefined) {
-    await failTask(
-      topology,
-      db,
-      taskId,
+    await failRuntimeTask(
+      opts,
       'task execution authority unavailable',
       'identity-access-runtime-not-composed',
-      undefined,
-      opts.executionContext,
     )
     return
   }
@@ -134,19 +265,14 @@ async function runTaskEngineOrchestratorInner(
     taskId,
   })
   if (taskExecutionAdmission === null) {
-    await failTask(
-      topology,
-      db,
-      taskId,
+    await failRuntimeTask(
+      opts,
       'task execution authority unavailable',
       'task-execution-owner-inactive',
-      undefined,
-      opts.executionContext,
     )
     return
   }
   const taskExecutionResources = createTaskExecutionResourceSession(
-    db,
     Object.freeze({
       authority: taskExecutionAdmission.authority,
       actor: taskExecutionAdmission.actor,
@@ -161,12 +287,7 @@ async function runTaskEngineOrchestratorInner(
   // `tasks.*` columns (`worktreeDirName === ''` → `{{__repo_names__}}`
   // renders empty, byte-baseline). Defensive fallback handles the ultra-rare
   // case of a task row predating migration 0034's INSERT FROM backfill.
-  const repoRows = await db
-    .select()
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, taskId))
-    .orderBy(asc(taskRepos.repoIndex))
-  const repos: LegacyTaskMechanicsState['repos'] =
+  const repos: TaskMechanicsState['repos'] =
     repoRows.length > 0
       ? repoRows.map((r) => ({
           repoIndex: r.repoIndex,
@@ -209,29 +330,23 @@ async function runTaskEngineOrchestratorInner(
           worktreePath: repo.worktreePath,
           appHome: opts.appHome ?? Paths.root,
         }).ensure({ directChildMounts: exclusionPlanFor(repo.mountPath, allMounts) })
-        withTaskExecutionMutation({
-          db,
+        const updated = await opts.persistence.drive.updateWorkspaceProfile({
           taskId,
-          run: (tx) =>
-            tx
-              .update(taskRepos)
-              .set({
-                workspaceProfileVersion: receipt.version,
-                workspaceProfileDigest: receipt.digest,
-              })
-              .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.repoIndex, repo.repoIndex)))
-              .run(),
+          repoIndex: repo.repoIndex,
+          version: receipt.version,
+          digest: receipt.digest,
+          ...(opts.executionContext === undefined
+            ? {}
+            : { executionContext: opts.executionContext }),
+          now: Date.now(),
         })
+        if (!updated) throw new Error(`task-repository-not-found:${taskId}:${repo.repoIndex}`)
       }
     } catch (error) {
-      await failTask(
-        topology,
-        db,
-        taskId,
+      await failRuntimeTask(
+        opts,
         'workspace-exclude-profile-failed',
         error instanceof Error ? error.message : String(error),
-        undefined,
-        opts.executionContext,
       )
       return
     }
@@ -243,15 +358,7 @@ async function runTaskEngineOrchestratorInner(
     const raw: unknown = JSON.parse(task.workflowSnapshot)
     definition = migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(raw))
   } catch (err) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'snapshot-invalid',
-      (err as Error).message,
-      undefined,
-      opts.executionContext,
-    )
+    await failRuntimeTask(opts, 'snapshot-invalid', (err as Error).message)
     return
   }
 
@@ -264,15 +371,7 @@ async function runTaskEngineOrchestratorInner(
     source: parsedTriggerContext,
   })
   if (triggerIssue !== null) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      triggerIssue.code,
-      triggerIssue.code,
-      undefined,
-      opts.executionContext,
-    )
+    await failRuntimeTask(opts, triggerIssue.code, triggerIssue.code)
     return
   }
   const triggerContext = parsedTriggerContext.kind === 'ok' ? parsedTriggerContext.value : null
@@ -281,12 +380,12 @@ async function runTaskEngineOrchestratorInner(
   // The unconditional write here used to revive canceled/done tasks and let a
   // second runTask take over a live one. CAS loss → another driver owns the
   // task (or it is terminal): log and step away without minting anything.
-  const claimed = await trySetTaskStatus({
-    db,
+  const claimed = await opts.persistence.runtimeLifecycle.trySet({
     taskId,
     to: 'running',
     allowedFrom: ['pending'],
     ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
+    now: Date.now(),
     reason: 'runTask-start',
   })
   if (!claimed) {
@@ -297,11 +396,10 @@ async function runTaskEngineOrchestratorInner(
   // RFC-333 T7: a manual question may have been created while this task was
   // pending/failed/interrupted. The exact owner consumes its durable park
   // obligation immediately after claim, before any new node work can start.
-  const initialManualPark = settleManualQuestionParkObligations({
-    db,
-    humanGates,
+  const initialManualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
     taskId,
-    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+    ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
+    now: Date.now(),
   })
   if (initialManualPark.parked) {
     log.info('task parked for a durable manual question before drive', { taskId })
@@ -315,14 +413,11 @@ async function runTaskEngineOrchestratorInner(
   for (const node of definition.nodes) {
     // Object.hasOwn (not `in`) — inherited keys must not pass the whitelist.
     if (!Object.hasOwn(NODE_KIND_BEHAVIORS, node.kind)) {
-      await failTask(
-        topology,
-        db,
-        taskId,
+      await failRuntimeTask(
+        opts,
         `scheduler does not yet support ${node.kind} nodes`,
         `node kind ${node.kind} unsupported`,
         node.id,
-        opts.executionContext,
       )
       return
     }
@@ -339,14 +434,11 @@ async function runTaskEngineOrchestratorInner(
   const duplicateNode = [...nodeIdCounts].find(([, count]) => count > 1)
   if (duplicateNode !== undefined) {
     const [nodeId, count] = duplicateNode
-    await failTask(
-      topology,
-      db,
-      taskId,
+    await failRuntimeTask(
+      opts,
       'workflow-node-id-duplicate',
       `node id '${nodeId}' appears ${count} times; node ids must be unique`,
       nodeId,
-      opts.executionContext,
     )
     return
   }
@@ -368,14 +460,11 @@ async function runTaskEngineOrchestratorInner(
         : containmentIssue.code === 'wrapper-child-multiple-parents'
           ? containmentIssue.childId
           : containmentIssue.wrapperId
-    await failTask(
-      topology,
-      db,
-      taskId,
+    await failRuntimeTask(
+      opts,
       'wrapper-containment-invalid',
       `${containmentIssue.code}: ${JSON.stringify(containmentIssue)}`,
       failedNodeId,
-      opts.executionContext,
     )
     return
   }
@@ -395,15 +484,7 @@ async function runTaskEngineOrchestratorInner(
   const topLevelNodes = definition.nodes.filter((n) => topLevelIds.has(n.id))
   const topLevelUpstreams = buildScopeUpstreams(definition, topLevelIds, null, containerOf)
   if (findScopeCycle(topLevelNodes, topLevelUpstreams) !== null) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'workflow has a cycle outside any loop wrapper',
-      'cycle detected',
-      undefined,
-      opts.executionContext,
-    )
+    await failRuntimeTask(opts, 'workflow has a cycle outside any loop wrapper', 'cycle detected')
     return
   }
 
@@ -416,13 +497,19 @@ async function runTaskEngineOrchestratorInner(
     }
   })()
 
-  const state: LegacyTaskMechanicsState = {
-    db,
+  const state: TaskMechanicsState = {
     task,
     taskId,
     definition,
     opts,
     taskExecutionResources,
+    collaboratorUserIds: [
+      ...new Set(
+        collaborators
+          .filter((member) => member.role !== 'owner' && member.userId !== null)
+          .map((member) => member.userId as string),
+      ),
+    ],
     topology,
     // RFC-248: 组名**快照**（`tasks.repo_group_name`）——组被删除后仍能渲染，
     // 这正是 D8 存这一列的理由。
@@ -434,12 +521,22 @@ async function runTaskEngineOrchestratorInner(
     // behind agent runs). Both come from the daemon-scoped registry, which
     // resizes the SAME instance when the setting changes — so a settings save
     // applies to this run, not just to the next launch.
-    agentSem: getNodePoolSemaphore(db, 'agent', opts.maxConcurrentNodes ?? 4, 'seed-only'),
-    scriptSem: getNodePoolSemaphore(db, 'script', opts.maxConcurrentScriptNodes ?? 4, 'seed-only'),
+    agentSem: getNodePoolSemaphore(
+      opts.processConcurrencyScope,
+      'agent',
+      opts.maxConcurrentNodes ?? 4,
+      'seed-only',
+    ),
+    scriptSem: getNodePoolSemaphore(
+      opts.processConcurrencyScope,
+      'script',
+      opts.maxConcurrentScriptNodes ?? 4,
+      'seed-only',
+    ),
     // RFC-269: the third pool — one outbound HTTP request is a second-scale
     // step and holds no subprocess, so it gets its own (larger) budget.
     codeHostSem: getNodePoolSemaphore(
-      db,
+      opts.processConcurrencyScope,
       'code-host',
       opts.maxConcurrentCodeHostCalls ?? 8,
       'seed-only',
@@ -488,10 +585,30 @@ async function runTaskEngineOrchestratorInner(
     // verbatim); this file keeps consuming it. RFC-217 T2: the phase lives in
     // workgroup_task_state (an unknown mode still routes to the turn engine,
     // which fails with its own precise config diagnostics).
-    const dynamicWorkflowPhase = isWorkgroupTask(task)
-      ? ((await loadWorkgroupTaskState(db, taskId)).dwState?.phase ?? null)
-      : null
+    const dynamicWorkflowSnapshot =
+      isWorkgroupTask(task) && opts.dynamicWorkflow !== undefined
+        ? await opts.dynamicWorkflow.persistence.loadTask(taskId)
+        : null
+    const dynamicWorkflowPhase = (() => {
+      if (dynamicWorkflowSnapshot?.dwStateJson == null) return null
+      try {
+        return DwStateSchema.parse(JSON.parse(dynamicWorkflowSnapshot.dwStateJson)).phase
+      } catch {
+        return null
+      }
+    })()
     const { engine, wgDispatch } = resolveTaskEngineSelection(task, dynamicWorkflowPhase)
+    const dynamicWorkflowArgs = () => {
+      const dynamicWorkflow = opts.dynamicWorkflow
+      if (dynamicWorkflow === undefined) {
+        throw new Error('dynamic-workflow-operations-not-composed')
+      }
+      return {
+        persistence: dynamicWorkflow.persistence,
+        nodeRuns: opts.persistence.nodeRuns,
+        validationContext: dynamicWorkflow.validationContext,
+      }
+    }
     if (
       wgDispatch === 'dw-execute' &&
       definition.nodes.some((n) => n.id === DW_ORCHESTRATOR_NODE_ID)
@@ -500,14 +617,10 @@ async function runTaskEngineOrchestratorInner(
       // snapshot is the confirmed generated DAG. Running the generation host
       // snapshot through runScope would dispatch the orchestrator node as a
       // regular agent — refuse loudly instead.
-      await failTask(
-        topology,
-        db,
-        taskId,
+      await failRuntimeTask(
+        opts,
         'dw-phase-invariant',
         `task is phase='executing' but its snapshot still contains the generation host node`,
-        undefined,
-        opts.executionContext,
       )
       return
     }
@@ -530,12 +643,11 @@ async function runTaskEngineOrchestratorInner(
       'workgroup-turns': new WorkgroupTaskEngine({
         driveTurns: async () =>
           taskEngineOutcomeFromScope(
-            await runWorkgroupEngine({
-              db,
+            await opts.workgroupTurns.drive({
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
-              hooks: buildNodeExecutionWorkgroupHooks(
+              host: buildNodeExecutionWorkgroupHooks(
                 state,
                 runtimeComponents.wrapperRuntimeFactory,
               ),
@@ -546,7 +658,7 @@ async function runTaskEngineOrchestratorInner(
         generate: async () =>
           taskEngineOutcomeFromScope(
             await runDynamicWorkflowGenerate({
-              db,
+              ...dynamicWorkflowArgs(),
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
@@ -564,7 +676,7 @@ async function runTaskEngineOrchestratorInner(
       result =
         engine === 'dw-generate'
           ? await runDynamicWorkflowGenerate({
-              db,
+              ...dynamicWorkflowArgs(),
               taskId,
               log,
               ...(opts.signal ? { signal: opts.signal } : {}),
@@ -574,12 +686,11 @@ async function runTaskEngineOrchestratorInner(
               ),
             })
           : engine === 'workgroup-turns'
-            ? await runWorkgroupEngine({
-                db,
+            ? await opts.workgroupTurns.drive({
                 taskId,
                 log,
                 ...(opts.signal ? { signal: opts.signal } : {}),
-                hooks: buildNodeExecutionWorkgroupHooks(
+                host: buildNodeExecutionWorkgroupHooks(
                   state,
                   runtimeComponents.wrapperRuntimeFactory,
                 ),
@@ -597,7 +708,6 @@ async function runTaskEngineOrchestratorInner(
     } else {
       const {
         taskId: _taskId,
-        db: _db,
         executionContext: _executionContext,
         signal: _signal,
         codeHostConnections: _codeHostConnections,
@@ -620,15 +730,7 @@ async function runTaskEngineOrchestratorInner(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log.error('runTask: scope threw — failing task', { taskId, error: message })
-    await failTask(
-      topology,
-      db,
-      taskId,
-      'scheduler error',
-      message,
-      undefined,
-      opts.executionContext,
-    )
+    await failRuntimeTask(opts, 'scheduler error', message)
     return
   }
 
@@ -657,11 +759,10 @@ async function runTaskEngineOrchestratorInner(
   // obligation at the owner-held settle point before choosing any outcome.
   // Explicit cancellation keeps its existing precedence.
   if (result.kind !== 'canceled' && opts.signal?.aborted !== true) {
-    const manualPark = settleManualQuestionParkObligations({
-      db,
-      humanGates,
+    const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
       taskId,
-      ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
+      ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
+      now: Date.now(),
     })
     if (manualPark.parked) {
       log.info('task parked for a durable manual question at settle', { taskId })
@@ -670,26 +771,11 @@ async function runTaskEngineOrchestratorInner(
   }
 
   if (result.kind === 'failed' && result.detail) {
-    await failTask(
-      topology,
-      db,
-      taskId,
-      result.detail.summary,
-      result.detail.message,
-      result.detail.nodeId,
-      opts.executionContext,
-    )
+    await failRuntimeTask(opts, result.detail.summary, result.detail.message, result.detail.nodeId)
     return
   }
   if (result.kind === 'canceled') {
-    await cancelTaskRow(
-      topology,
-      db,
-      taskId,
-      result.detail?.nodeId,
-      opts.signal?.reason,
-      opts.executionContext,
-    )
+    await cancelRuntimeTask(opts, result.detail?.nodeId, opts.signal?.reason)
     return
   }
   if (result.kind === 'awaiting_review') {
@@ -698,82 +784,65 @@ async function runTaskEngineOrchestratorInner(
     // RFC-097: cancel wins — an abort that landed after runScope's last
     // signal check must not be overwritten by a park/terminal write.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(
-        topology,
-        db,
-        taskId,
-        undefined,
-        opts.signal.reason,
-        opts.executionContext,
-      )
+      await cancelRuntimeTask(opts, undefined, opts.signal.reason)
       return
     }
     let parkedForReview = false
     while (true) {
-      try {
-        const statusBeforeReviewPark = db
-          .select({ status: tasks.status })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .get()?.status
-        if (statusBeforeReviewPark === 'awaiting_human') {
-          // RFC-333 parks a clarify as soon as its projection commits. If the
-          // answer lands while this exact driver is still attached, the live
-          // scope can consume the rerun and reach a later review gate without
-          // resumeTask ever owning a second driver. Restore the canonical
-          // running state before parking the new gate; otherwise workgroup
-          // completion can be awaiting_confirmation forever while the task row
-          // remains awaiting_human. This mirrors the done-settle path below.
-          const unparked = await trySetTaskStatus({
-            db,
-            taskId,
-            to: 'running',
-            allowedFrom: ['awaiting_human'],
-            onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
-            ...(opts.executionContext !== undefined
-              ? { executionContext: opts.executionContext }
-              : {}),
-            reason: 'active-clarify-released-before-review',
-          })
-          void unparked
-        }
-        parkedForReview = await trySetTaskStatus({
-          db,
+      let manualQuestionPending = false
+      const statusBeforeReviewPark = await opts.persistence.drive.findStatus(taskId)
+      if (statusBeforeReviewPark === 'awaiting_human') {
+        // RFC-333 parks a clarify as soon as its projection commits. If the
+        // answer lands while this exact driver is still attached, the live
+        // scope can consume the rerun and reach a later review gate without
+        // resumeTask ever owning a second driver. Restore the canonical
+        // running state before parking the new gate; otherwise workgroup
+        // completion can be awaiting_confirmation forever while the task row
+        // remains awaiting_human. This mirrors the done-settle path below.
+        const unparked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
           taskId,
-          to: 'awaiting_review',
-          allowedFrom: ['running'],
-          onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
+          to: 'running',
+          allowedFrom: ['awaiting_human'],
           ...(opts.executionContext !== undefined
             ? { executionContext: opts.executionContext }
             : {}),
+          now: Date.now(),
+          reason: 'active-clarify-released-before-review',
+        })
+        manualQuestionPending = unparked.kind === 'manual-question-pending'
+      }
+      if (!manualQuestionPending) {
+        const parked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
+          taskId,
+          to: 'awaiting_review',
+          allowedFrom: ['running'],
+          ...(opts.executionContext !== undefined
+            ? { executionContext: opts.executionContext }
+            : {}),
+          now: Date.now(),
           reason: 'scope-awaiting-review',
         })
+        manualQuestionPending = parked.kind === 'manual-question-pending'
+        if (parked.kind === 'settled') parkedForReview = parked.won
+      }
+      if (!manualQuestionPending) {
         break
-      } catch (error) {
-        if (!(error instanceof ManualQuestionParkRequired)) throw error
-        const manualPark = settleManualQuestionParkObligations({
-          db,
-          humanGates,
-          taskId,
-          ...(opts.executionContext === undefined
-            ? {}
-            : { executionContext: opts.executionContext }),
-        })
-        if (manualPark.parked) {
-          log.info('task review outcome yielded to a durable manual question', { taskId })
-          return
-        }
+      }
+      const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
+        taskId,
+        ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
+        now: Date.now(),
+      })
+      if (manualPark.parked) {
+        log.info('task review outcome yielded to a durable manual question', { taskId })
+        return
       }
     }
     if (parkedForReview) {
       log.info('task awaiting human review', { taskId })
     } else {
-      const parked = db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get()
-      if (parked?.status === 'awaiting_review') {
+      const parked = await opts.persistence.drive.findStatus(taskId)
+      if (parked === 'awaiting_review') {
         // RFC-333: the review executor already committed TaskParkTx together
         // with the gate projection. Publish that committed status; do not issue
         // a second lifecycle write.
@@ -793,34 +862,23 @@ async function runTaskEngineOrchestratorInner(
     // created when the user POSTs answers. Per design §7.3 awaiting_human
     // outranks awaiting_review on the task chip when both can fire at once.
     if (opts.signal?.aborted === true) {
-      await cancelTaskRow(
-        topology,
-        db,
-        taskId,
-        undefined,
-        opts.signal.reason,
-        opts.executionContext,
-      )
+      await cancelRuntimeTask(opts, undefined, opts.signal.reason)
       return
     }
     if (
-      await trySetTaskStatus({
-        db,
+      await opts.persistence.runtimeLifecycle.trySet({
         taskId,
         to: 'awaiting_human',
         allowedFrom: ['running'],
         ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
+        now: Date.now(),
         reason: 'scope-awaiting-human',
       })
     ) {
       log.info('task awaiting human clarification', { taskId })
     } else {
-      const parked = db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get()
-      if (parked?.status === 'awaiting_human') {
+      const parked = await opts.persistence.drive.findStatus(taskId)
+      if (parked === 'awaiting_human') {
         // RFC-333 T7: clarify creation already committed the node, round,
         // eager question snapshots and task park in one TaskParkTx.
         log.info('task clarify gate already parked atomically', { taskId })
@@ -837,68 +895,62 @@ async function runTaskEngineOrchestratorInner(
   // CAS; a cancelTask fallback racing us resolves by whoever's CAS lands
   // (from-sets are disjoint winners: done from=running vs canceled CAS).
   if (opts.signal?.aborted === true) {
-    await cancelTaskRow(topology, db, taskId, undefined, opts.signal.reason, opts.executionContext)
+    await cancelRuntimeTask(opts, undefined, opts.signal.reason)
     return
   }
   let completed = false
   while (true) {
-    try {
-      const statusBeforeCompletion = db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .get()?.status
-      if (
-        statusBeforeCompletion === 'awaiting_review' ||
-        statusBeforeCompletion === 'awaiting_human'
-      ) {
-        // A human decision can land while this exact driver is still attached.
-        // resumeTask correctly refuses to attach a second driver in that
-        // window; after this scope consumes the released rerun and derives
-        // `done`, first apply the canonical unpark edge, then complete from
-        // running. The scope outcome proves no review/clarify gate remains,
-        // and the in-tx manual-question assertion closes the external
-        // late-arrival path.
-        const unparked = await trySetTaskStatus({
-          db,
-          taskId,
-          to: 'running',
-          allowedFrom: ['awaiting_review', 'awaiting_human'],
-          onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
-          ...(opts.executionContext !== undefined
-            ? { executionContext: opts.executionContext }
-            : {}),
-          reason: 'active-human-gate-released-before-complete',
-        })
-        void unparked
-      }
-      completed = await trySetTaskStatus({
-        db,
+    let manualQuestionPending = false
+    const statusBeforeCompletion = await opts.persistence.drive.findStatus(taskId)
+    if (
+      statusBeforeCompletion === 'awaiting_review' ||
+      statusBeforeCompletion === 'awaiting_human'
+    ) {
+      // A human decision can land while this exact driver is still attached.
+      // resumeTask correctly refuses to attach a second driver in that
+      // window; after this scope consumes the released rerun and derives
+      // `done`, first apply the canonical unpark edge, then complete from
+      // running. The scope outcome proves no review/clarify gate remains,
+      // and the in-tx manual-question assertion closes the external
+      // late-arrival path.
+      const unparked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
+        taskId,
+        to: 'running',
+        allowedFrom: ['awaiting_review', 'awaiting_human'],
+        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
+        now: Date.now(),
+        reason: 'active-human-gate-released-before-complete',
+      })
+      manualQuestionPending = unparked.kind === 'manual-question-pending'
+    }
+    if (!manualQuestionPending) {
+      const settled = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
         taskId,
         to: 'done',
         allowedFrom: ['running'],
         extra: { finishedAt: Date.now() },
-        onTransitionTx: (tx) => assertNoManualQuestionParkObligationTx(tx, taskId, humanGates),
         ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),
+        now: Date.now(),
         reason: 'task-done',
       })
-      break
-    } catch (error) {
-      if (!(error instanceof ManualQuestionParkRequired)) throw error
-      const manualPark = settleManualQuestionParkObligations({
-        db,
-        humanGates,
-        taskId,
-        ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
-      })
-      if (manualPark.parked) {
-        log.info('task completion yielded to a durable manual question', { taskId })
-        return
-      }
-      // The row was dispatched/confirmed between creation and settle. Its
-      // obligation is now completed; retry the terminal CAS with the same
-      // business outcome and a fresh in-transaction no-obligation check.
+      manualQuestionPending = settled.kind === 'manual-question-pending'
+      if (settled.kind === 'settled') completed = settled.won
     }
+    if (!manualQuestionPending) {
+      break
+    }
+    const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
+      taskId,
+      ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
+      now: Date.now(),
+    })
+    if (manualPark.parked) {
+      log.info('task completion yielded to a durable manual question', { taskId })
+      return
+    }
+    // The row was dispatched/confirmed between creation and settle. Its
+    // obligation is now completed; retry the terminal CAS with the same
+    // business outcome and a fresh in-transaction no-obligation check.
   }
   if (completed) {
     log.info('task done', { taskId })

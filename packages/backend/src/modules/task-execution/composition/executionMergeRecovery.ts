@@ -1,14 +1,5 @@
 // RFC-339 — task-execution-owned pre-drive merge recovery mechanics.
 
-import type { MergeState } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
-// RFC-253 — script node execution.
-import { nodeRuns } from '@/db/schema'
-// RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
-// `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import { transitionMergeState } from '@/services/lifecycle'
-
-import { forcedPortPathsForTask } from '@/services/portArtifacts'
 import { type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
@@ -29,6 +20,7 @@ import { runGit } from '@/util/git'
 import { mergeBackAndSettle } from '@/services/isolatedAgentRun'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import {
+  isolatedRunBinding,
   isoKeyOf,
   parseIsoJsonMap,
   parseIsoSubmodules,
@@ -65,16 +57,11 @@ function replaySubmodulesMissing(
  * fails the task loudly (PR-B upgrades the conflict path to the merge agent).
  */
 async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<void> {
-  const { db, taskId, task } = state
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.mergeState, 'pending-merge' satisfies MergeState),
-      ),
-    )
+  const { taskId, task } = state
+  const rows = await state.opts.persistence.nodeExecution.list({
+    taskId,
+    mergeState: 'pending-merge',
+  })
   if (rows.length === 0) return
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
@@ -115,7 +102,7 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
       submodules,
       // RFC-193 K1: the replay's merge-back re-snapshots canonical (ours) —
       // it must keep force-including the task's gitignored port files.
-      forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
+      forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
     })
     // RFC-188: the ONE merge-back assembly — replay passes the PERSISTED node
     // trees (the iso worktree may be gone; the agent is never re-run) so the
@@ -123,7 +110,7 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
     // that now conflicts goes through the SAME merge agent as a live dispatch;
     // unresolved → conflict-human (resume replay #2 completes the human fix).
     const merge = await mergeBackAndSettle({
-      db,
+      binding: isolatedRunBinding(state),
       writeSem: state.writeSem,
       handle,
       nodeRunId: r.id,
@@ -165,16 +152,11 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
  * resume entry (before the scope loop), right after replayPendingMerges.
  */
 async function replayConflictHumanResolutions(state: SchedulerState, log: Logger): Promise<void> {
-  const { db, taskId, task } = state
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.mergeState, 'conflict-human' satisfies MergeState),
-      ),
-    )
+  const { taskId, task } = state
+  const rows = await state.opts.persistence.nodeExecution.list({
+    taskId,
+    mergeState: 'conflict-human',
+  })
   if (rows.length === 0) return
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
@@ -202,7 +184,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       canonRepos: state.repos,
       baseSnapshots,
       taskBaseHeads,
-      forcedContainerPaths: await forcedPortPathsForTask(db, taskId),
+      forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
       // RFC-210: the human-resolve completion re-merges, so it needs the same
       // per-submodule bases the original merge-back had.
       submodules: parseIsoSubmodules(r, task.repoCount),
@@ -211,10 +193,12 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       completeHumanResolvedConflict(handle, nodeTrees, log),
     )
     if (outcome.allResolved) {
-      await transitionMergeState({
-        db,
+      await state.opts.persistence.mergeStates.transition({
         nodeRunId: r.id,
         event: { kind: 'complete-human-resolution' },
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
       })
       log.info('conflict-human resume: human resolution merged back', { nodeRunId: r.id })
       // RFC-210 (review round 5, P2): the park kept the iso for the human;

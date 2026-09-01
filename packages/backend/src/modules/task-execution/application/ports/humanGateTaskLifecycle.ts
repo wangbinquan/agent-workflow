@@ -1,33 +1,39 @@
-// RFC-333 — task-execution's purpose-specific lifecycle dependency.
-// Application orchestration owns the transaction, while infrastructure binds
-// these exact human-gate transitions to the legacy lifecycle implementation.
+import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
+import type { TaskExecutionPostCommitEventRef } from '../../domain/postCommitEventRef'
+import type { OwnershipToken } from '../../domain/ownership'
+import type { TaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
 
-import type { DbTxSync } from '@/db/txSync'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
-import type { TaskNodeChangeV1 } from '../../domain/taskLifecycleCommittedEvent'
+export interface HumanGateTaskParkResult {
+  readonly taskRevision: number
+  readonly gateRevision: number
+  readonly nodeProjectionDigest: string
+  readonly committedEventRef: string
+  readonly eventRefs: readonly TaskExecutionPostCommitEventRef[]
+}
 
-export type HumanGateTaskTransition =
-  | 'park-review'
-  | 'park-human'
-  | 'release-review'
-  | 'release-human'
-
+/** Named cross-context atomic operations. Provider adapters compose the task,
+ * ownership, collaboration gate and committed-event participants privately. */
 export interface HumanGateTaskLifecycle {
-  readManualParkCandidateTx(tx: DbTxSync, taskId: string): Readonly<{ taskRevision: number }> | null
-  transitionTx(input: {
-    readonly tx: DbTxSync
-    readonly taskId: string
-    readonly expectedTaskRevision: number
-    readonly transition: HumanGateTaskTransition
+  parkPrepared(input: {
+    readonly prepared: PreparedHumanGateRef
+    readonly token?: OwnershipToken
     readonly now: number
-    readonly nodeChanges?: readonly TaskNodeChangeV1[]
-    readonly committedEventIdentity?: Readonly<{
-      operationRef: string
-      eventGroupId?: string
-      eventGroupOrdinal?: number
-      correlationRef?: string | null
-      causationRef?: string | null
+  }): Promise<HumanGateTaskParkResult>
+  settleManualQuestionParks(input: {
+    readonly taskId: string
+    readonly token?: OwnershipToken
+    readonly now: number
+  }): Promise<
+    Readonly<{
+      parked: boolean
+      taskRevision: number | null
+      operationIds: readonly string[]
+      eventRefs: readonly TaskExecutionPostCommitEventRef[]
     }>
-  }): Readonly<{ taskRevision: number; eventRefs: readonly CommittedEventRef[] }>
-  publishAfterCommit(eventRefs: readonly CommittedEventRef[]): void
+  >
+  trySetWhenNoManualQuestionParks(
+    input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
+  ): Promise<
+    Readonly<{ kind: 'settled'; won: boolean }> | Readonly<{ kind: 'manual-question-pending' }>
+  >
 }

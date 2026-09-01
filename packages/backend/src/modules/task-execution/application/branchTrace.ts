@@ -1,10 +1,9 @@
 // RFC-306 — read model: the branch TRACE of one task.
 //
-// Lives in `application/`, NOT in `public/`: it needs a `DbClient`, and the
-// RFC-294 preflight forbids infrastructure types on a module's public surface
-// (`rfc294-architecture-preflight.test.ts` — "no type taint"). The only thing
-// crossing a package boundary here is the `BranchTrace` VALUE OBJECT, which
-// already lives in `@agent-workflow/shared` because the frontend renders it.
+// Lives in `application/`, NOT in `public/`: the use case consumes a
+// provider-neutral snapshot reader and returns the `BranchTrace` value object
+// that already lives in `@agent-workflow/shared` because the frontend renders
+// it. Database mechanics stay in the provider adapters.
 //
 // "Which parts of the graph did this run actually take?" answered once, on the
 // server, from the same domain rule the dispatcher used (domain/branchActivation).
@@ -18,9 +17,6 @@
 // for fanout wrappers, rather than collapsing "3 of 20 shards ran" into one
 // boolean that is wrong either way.
 
-import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import {
   WorkflowDefinitionSchema,
   buildWorkflowScopeParentMap,
@@ -32,8 +28,12 @@ import {
 } from '@agent-workflow/shared'
 import { edgeActivationOf } from '../domain/branchActivation'
 import { collectDataflowInboundEdges, nodeKindIndex } from '../domain/inboundEdges'
+import type {
+  BranchTraceRunSnapshot,
+  BranchTraceSnapshotReader,
+} from './ports/branchTraceSnapshotReader'
 
-type RunRow = typeof nodeRuns.$inferSelect
+type RunRow = BranchTraceRunSnapshot
 
 function parseSnapshot(raw: string | null): WorkflowDefinition | null {
   if (raw === null || raw.length === 0) return null
@@ -64,33 +64,19 @@ function latestSettledPerNode(rows: readonly RunRow[]): Map<string, RunRow> {
 }
 
 export async function getTaskBranchTrace(
-  db: DbClient,
+  reader: BranchTraceSnapshotReader,
   taskId: string,
 ): Promise<BranchTrace | null> {
-  const taskRow = (
-    await db
-      .select({ snapshot: tasks.workflowSnapshot })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-  )[0]
-  const definition = parseSnapshot(taskRow?.snapshot ?? null)
+  const snapshot = await reader.read(taskId)
+  if (snapshot === null) return null
+  const definition = parseSnapshot(snapshot.workflowSnapshot)
   if (definition === null) return null
 
-  const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const rows = snapshot.runs
   const latest = latestSettledPerNode(rows)
 
   // Port activation of every settled row we might consult. One query, not N.
-  const outRows = await db
-    .select({
-      nodeRunId: nodeRunOutputs.nodeRunId,
-      portName: nodeRunOutputs.portName,
-      content: nodeRunOutputs.content,
-      active: nodeRunOutputs.active,
-    })
-    .from(nodeRunOutputs)
-    .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))
-    .where(eq(nodeRuns.taskId, taskId))
+  const outRows = snapshot.outputs
   const portsByRun = new Map<string, Map<string, { active: boolean; content: string }>>()
   for (const o of outRows) {
     const m = portsByRun.get(o.nodeRunId) ?? new Map()
@@ -181,10 +167,10 @@ export async function getTaskBranchTrace(
 
 /** Convenience for callers that already hold the task id and want it inline. */
 export async function branchTraceForTask(
-  db: DbClient,
+  reader: BranchTraceSnapshotReader,
   taskId: string,
 ): Promise<BranchTrace | undefined> {
-  const trace = await getTaskBranchTrace(db, taskId)
+  const trace = await getTaskBranchTrace(reader, taskId)
   if (trace === null) return undefined
   // Nothing to say ⇒ omit the field entirely, so a task that used no branches
   // sends exactly the payload it sent before RFC-306.

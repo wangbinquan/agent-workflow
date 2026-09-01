@@ -1,7 +1,10 @@
 // RFC-303 — the only cross-context task-control surface.
 // It deliberately accepts a source binding, never caller-selected task ids.
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
-import type { TaskStatus } from '@agent-workflow/shared'
+import type {
+  CodeHostEffectObserverHandle,
+  DurableCodeHostEffectObserver,
+} from '../application/codeHostEffectObserver'
 import {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,
@@ -9,33 +12,32 @@ import {
 } from '../composition'
 import { createCodeHostEffectAttemptObserver as createCodeHostEffectAttemptObserverInternal } from '../application/codeHostEffectObserver'
 import { createLocalEffectAttemptObserver as createLocalEffectAttemptObserverInternal } from '../application/localEffectObserver'
+import { createProcessEffectAttemptObserver as createProcessEffectAttemptObserverInternal } from '../application/processEffectObserver'
 import {
   withCurrentTaskExecutionMutation as withCurrentTaskExecutionMutationInternal,
   withCurrentTaskExecutionTransaction as withCurrentTaskExecutionTransactionInternal,
   withTaskExecutionMutation as withTaskExecutionMutationInternal,
   withTaskExecutionTransaction as withTaskExecutionTransactionInternal,
-} from '../application/ownedTaskMutation'
-import { createProcessEffectAttemptObserver as createProcessEffectAttemptObserverInternal } from '../application/processEffectObserver'
+} from '../composition/sqliteOwnedTaskMutation'
 import {
   assertTaskExecutionContext as assertTaskExecutionContextInternal,
   createTaskExecutionContext as createTaskExecutionContextInternal,
   currentTaskExecutionContext as currentTaskExecutionContextInternal,
   runWithTaskExecutionContext as runWithTaskExecutionContextInternal,
-} from '../application/taskExecutionContext'
+} from '../composition/sqliteTaskExecutionContext'
 import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
 import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
-import { submitTaskContinuationTx as submitTaskContinuationTxInternal } from '../application/submitTaskContinuation'
+import { submitTaskContinuationTx as submitTaskContinuationTxInternal } from '../composition/continuationAdmission'
 import type {
   AcceptHumanGateDecisionInput,
   AcceptedHumanGateDecision,
-  TaskDecisionParticipantInTx,
 } from '../application/acceptHumanGateDecision'
-import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '../application/acceptHumanGateDecision'
-import { terminalizeTaskExecutionIntentsTx as terminalizeTaskExecutionIntentsTxInternal } from '../application/terminalizeExecutionIntent'
+import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '../composition/humanGate'
+import { terminalizeTaskExecutionIntentsTx as terminalizeTaskExecutionIntentsTxInternal } from '../composition/intentTerminalization'
 import {
   finalizeTaskExecutionRecovery as finalizeTaskExecutionRecoveryInternal,
   prepareTaskExecutionRecovery as prepareTaskExecutionRecoveryInternal,
-} from '../application/recoverTaskExecutions'
+} from '../composition/sqliteTaskExecutionRecovery'
 import {
   buildCodeHostRecoveryDescriptor as buildCodeHostRecoveryDescriptorInternal,
   classifyCodeHostProbeResponse as classifyCodeHostProbeResponseInternal,
@@ -74,7 +76,7 @@ import type {
   TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
-import type { RecoverableTerminalMaintenanceClaim } from '../application/ports/terminalMaintenanceStore'
+import type { RecoverableTerminalMaintenanceClaim } from '../composition/sqliteTerminalMaintenance'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
 import {
   appendTaskCreatedCommittedEventTx as appendTaskCreatedCommittedEventTxInternal,
@@ -83,16 +85,17 @@ import {
   type TaskCommittedEventIdentity,
 } from '../infrastructure/taskLifecycleEventParticipant'
 
-declare const sourceTerminationCapabilityBrand: unique symbol
 declare const workerIdentityBrand: unique symbol
 declare const ownershipTokenBrand: unique symbol
 declare const ownedTaskTxBrand: unique symbol
 declare const maintenanceClaimBrand: unique symbol
-declare const codeHostSendAttemptHandleBrand: unique symbol
 
-export type SourceTerminationEffectCapability = Readonly<{
-  [sourceTerminationCapabilityBrand]: true
-}>
+export type {
+  SourceTerminationEffectCapability,
+  TaskSourceTerminationEffectInput,
+  TaskSourceTerminationParticipant,
+  TaskSourceTerminationReceipt,
+} from '../application/applySourceTerminationEffect'
 
 /** Required runtime participants; production construction has no fallback. */
 export interface SchedulerRuntimeTopology {
@@ -152,7 +155,6 @@ export type {
   TaskExecutionIntentKind,
   TaskExecutionIntentSource,
   TerminalMaintenanceState,
-  TaskDecisionParticipantInTx,
   HumanGateContinuationLineage,
   HumanGateNodeProjectionFence,
   HumanGateWorkspaceRollbackRef,
@@ -160,9 +162,23 @@ export type {
   TaskNodeChangeV1,
 }
 
-export type CodeHostSendAttemptHandle = Readonly<{
-  [codeHostSendAttemptHandleBrand]: true
-}>
+export type {
+  AsyncTaskAuthorizationParticipantInTx,
+  TaskActingMembershipInput,
+  TaskAuthorizationLookupInput,
+  TaskAuthorizationParticipantInTx,
+  TaskAuthorizationQueries,
+  TaskAuthorizationSubject,
+  VisibleTaskIdsInput,
+} from '../application/ports/taskAuthorization'
+
+export type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
+
+export interface TaskDecisionParticipantInTx {
+  acceptGateDecisionTx(input: AcceptHumanGateDecisionInput): AcceptedHumanGateDecision
+}
+
+export type CodeHostSendAttemptHandle = CodeHostEffectObserverHandle
 
 export interface CodeHostSendAttemptInfo {
   readonly candidateId: string
@@ -180,17 +196,7 @@ export interface CodeHostSendAttemptSettlement extends CodeHostSendAttemptInfo {
   readonly errorMessage?: string
 }
 
-export interface CodeHostSendAttemptObserver {
-  beforeSend(
-    info: CodeHostSendAttemptInfo,
-  ): Promise<CodeHostSendAttemptHandle | null> | CodeHostSendAttemptHandle | null
-  afterSend(
-    handle: CodeHostSendAttemptHandle | null,
-    settlement: CodeHostSendAttemptSettlement,
-  ): Promise<void> | void
-  /** True only after a terminal send whose application outcome is ambiguous. */
-  outcomeUnknown?(): boolean
-}
+export type CodeHostSendAttemptObserver = DurableCodeHostEffectObserver
 
 // Exact provider-facing adapters used while the legacy orchestration files are
 // being moved behind RFC-294 W2. Constructors and stores stay owned by this
@@ -247,30 +253,6 @@ export type {
   GateWorkspaceRollbackRef,
   GateWorkspaceRollbackTargetReceipt,
 } from '../application/ports/gateWorkspaceRollback'
-
-export type TaskSourceTerminationEffectInput = Readonly<{
-  effectId: string
-  binding: string
-  streamRevision: number
-  kind: 'fence-closed' | 'fence-merged' | 'clear-closed'
-  deliveryId: string
-}>
-
-export type TaskSourceTerminationReceipt = Readonly<{
-  taskId: string
-  priorStatus: TaskStatus
-  fenceOutcome: 'fenced-closed' | 'fenced-merged' | 'cleared-closed' | 'unchanged'
-  cancelOutcome: 'canceled' | 'already-terminal' | 'not-applicable'
-  releaseOutcome: 'pending' | 'no-active-owner' | 'released' | 'unreaped' | 'not-required'
-  errorCode: string | null
-}>
-
-export interface TaskSourceTerminationParticipant {
-  apply(
-    capability: SourceTerminationEffectCapability,
-    input: TaskSourceTerminationEffectInput,
-  ): Promise<readonly TaskSourceTerminationReceipt[]>
-}
 
 /** RFC-308 task-owned, path-free workspace commit capability for code tasks. */
 export type TaskWorkspaceCommitPreviewResult =

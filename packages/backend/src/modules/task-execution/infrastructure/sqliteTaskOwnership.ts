@@ -9,9 +9,9 @@ import {
   taskExecutionOwners,
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
-import type { TaskOwnershipStore } from '../application/ports/taskOwnershipStore'
+import type { TaskOwnershipStore } from './taskOwnershipTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import { terminalizeTaskExecutionIntentsTx } from '../application/terminalizeExecutionIntent'
+import { terminalizeTaskExecutionIntentsTx } from './sqliteTerminalizeExecutionIntent'
 import {
   assertExclusiveDaemonLockProof,
   assertOwnershipToken,

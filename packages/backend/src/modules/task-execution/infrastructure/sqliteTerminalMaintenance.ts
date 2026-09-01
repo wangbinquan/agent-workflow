@@ -19,7 +19,7 @@ import {
 import type {
   RecoverableTerminalMaintenanceClaim,
   TerminalMaintenanceStore,
-} from '../application/ports/terminalMaintenanceStore'
+} from './terminalMaintenanceTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import { canonicalJson } from '../domain/executionIntent'
 import {

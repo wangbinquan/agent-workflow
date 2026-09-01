@@ -1,13 +1,6 @@
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
-import type {
-  CodeHostSendAttemptHandle,
-  CodeHostSendAttemptInfo,
-  CodeHostSendAttemptObserver,
-  CodeHostSendAttemptSettlement,
-} from '../public/participants'
-import { taskExecutionModule } from '../composition'
-import type { TaskExecutionContext } from './taskExecutionContext'
+// RFC-349 — provider-neutral code-host mutation effect coordinator.
+
+import type { CodeHostAction } from '@agent-workflow/shared'
 import type { RetryAuthority } from '../domain/executionEffect'
 import {
   CODE_HOST_CLASSIFIER_VERSION,
@@ -16,31 +9,27 @@ import {
   type CodeHostProbeOutcome,
   type CodeHostRecoveryDescriptor,
 } from '../domain/codeHostRecovery'
-import type { CodeHostAction } from '@agent-workflow/shared'
+import type {
+  CodeHostNodeSettlementProjection,
+  TaskExecutionEffectPersistence,
+} from './ports/taskExecutionEffectStore'
+import type { TaskExecutionContext } from './taskExecutionContext'
 import { waitForEffectResourceTurn } from './effectResourceWait'
 
-interface ObserverHandle extends CodeHostSendAttemptHandle {
-  readonly effectId: string
-  readonly attemptId: string
-  readonly info: CodeHostSendAttemptInfo
+export interface CodeHostSendAttemptInfo {
+  readonly candidateId: string
+  readonly transportAttempt: number
+  readonly method: string
+  readonly pathname: string
+  readonly recoveryDescriptor: CodeHostRecoveryDescriptor
 }
 
-export interface DurableCodeHostEffectObserver extends CodeHostSendAttemptObserver {
-  /** Aggregate ambiguity across every send in this logical operation. */
-  outcomeUnknown(): boolean
-  /**
-   * Settle the final mutation attempt together with its node projection.
-   * Returns false for read-only/preflight paths that emitted no mutation send.
-   */
-  settleTerminal(onSettledTx: (tx: DbTxSync) => void): boolean
-  /** Descriptor for the terminal ambiguous send; NULL for no-send/read paths. */
-  terminalRecoveryDescriptor(): CodeHostRecoveryDescriptor | null
-  /**
-   * Apply a read-only probe. A proven application is settled by the ordinary
-   * projection callback; a proven non-application authorizes one same-family
-   * attempt without removing the existing manual path.
-   */
-  resolveTerminalProbe(outcome: CodeHostProbeOutcome): 'applied' | 'retry-authorized' | 'unknown'
+export interface CodeHostSendAttemptSettlement extends CodeHostSendAttemptInfo {
+  readonly result: 'response' | 'network-error'
+  readonly status?: number
+  readonly willRetry: boolean
+  readonly retryKind: 'none' | 'transport-policy' | 'compatibility-fallback'
+  readonly errorMessage?: string
 }
 
 export interface CodeHostEffectIdentity {
@@ -54,8 +43,28 @@ export interface CodeHostEffectIdentity {
   readonly resourceKeys: readonly string[]
 }
 
+export interface CodeHostEffectObserverHandle {
+  readonly effectId: string
+  readonly attemptId: string
+  readonly info: CodeHostSendAttemptInfo
+}
+
+export interface DurableCodeHostEffectObserver {
+  beforeSend(info: CodeHostSendAttemptInfo): Promise<CodeHostEffectObserverHandle | null>
+  afterSend(
+    handle: CodeHostEffectObserverHandle | null,
+    settlement: CodeHostSendAttemptSettlement,
+  ): Promise<void>
+  outcomeUnknown(): boolean
+  settleTerminal(projection: CodeHostNodeSettlementProjection): Promise<boolean>
+  terminalRecoveryDescriptor(): CodeHostRecoveryDescriptor | null
+  resolveTerminalProbe(
+    outcome: CodeHostProbeOutcome,
+  ): Promise<'applied' | 'retry-authorized' | 'unknown'>
+}
+
 export function createCodeHostEffectAttemptObserver(input: {
-  db: DbClient
+  persistence: TaskExecutionEffectPersistence
   context: TaskExecutionContext
   action: CodeHostAction
   nodeRunId?: string
@@ -63,19 +72,91 @@ export function createCodeHostEffectAttemptObserver(input: {
   identity: CodeHostEffectIdentity
 }): DurableCodeHostEffectObserver {
   let nextRetryAuthority: RetryAuthority = input.initialRetryAuthority ?? 'none'
-  let outcomeUnknown = false
+  let unknown = false
   let priorAmbiguity = false
   let terminal: Readonly<{
-    handle: ObserverHandle
+    handle: CodeHostEffectObserverHandle
     settlement: CodeHostSendAttemptSettlement
   }> | null = null
   let terminalProbe: Extract<CodeHostProbeOutcome, { kind: 'applied' }> | null = null
+
+  const settleAttempt = async (
+    handle: CodeHostEffectObserverHandle,
+    settlement: CodeHostSendAttemptSettlement,
+    projection?: CodeHostNodeSettlementProjection,
+  ) => {
+    const status = settlement.status ?? null
+    const compatibilityMiss =
+      settlement.retryKind === 'compatibility-fallback' && (status === 404 || status === 405)
+    const applied =
+      terminalProbe !== null ||
+      (settlement.result === 'response' && status !== null && status >= 200 && status < 300)
+    const definitelyNotApplied =
+      terminalProbe === null &&
+      settlement.result === 'response' &&
+      status !== null &&
+      status >= 300 &&
+      status < 500 &&
+      status !== 429
+    const state = settlement.willRetry
+      ? ('retry-authorized' as const)
+      : applied
+        ? ('succeeded' as const)
+        : definitelyNotApplied
+          ? ('failed-not-applied' as const)
+          : ('recovery-required' as const)
+    const record = {
+      token: input.context.token,
+      effectId: handle.effectId,
+      attemptId: handle.attemptId,
+      state,
+      applicationEvidence: applied
+        ? ('applied' as const)
+        : definitelyNotApplied || compatibilityMiss
+          ? ('definitely-not-applied' as const)
+          : ('ambiguous' as const),
+      retryAuthority: settlement.willRetry
+        ? settlement.retryKind === 'compatibility-fallback'
+          ? ('convergent' as const)
+          : ('transport-policy' as const)
+        : ('none' as const),
+      receiptJson: JSON.stringify({
+        v: 1,
+        candidateId: settlement.candidateId,
+        transportAttempt: settlement.transportAttempt,
+        method: settlement.method,
+        pathname: settlement.pathname,
+        result: settlement.result,
+        status,
+        willRetry: settlement.willRetry,
+        retryKind: settlement.retryKind,
+        ...(terminalProbe === null
+          ? {}
+          : {
+              recoveryProbe: {
+                outcome: terminalProbe.kind,
+                proofCode: terminalProbe.proofCode,
+                responseStatus: terminalProbe.responseStatus,
+              },
+            }),
+        ...(settlement.errorMessage === undefined ? {} : { error: settlement.errorMessage }),
+      }),
+      failureCode: applied
+        ? null
+        : settlement.result === 'network-error'
+          ? 'code-host-network-error'
+          : `code-host-http-${status ?? 'unknown'}`,
+    }
+    if (projection === undefined) await input.persistence.settle(record)
+    else await input.persistence.settleCodeHostNode({ settlement: record, projection })
+    terminalProbe = null
+  }
+
   return {
     async beforeSend(info) {
       if (info.method === 'GET') return null
       const prepared = await waitForEffectResourceTurn(() =>
-        taskExecutionModule.effects.prepareAndAcquire({
-          db: input.db,
+        input.persistence.prepareAndAcquire({
           token: input.context.token,
           intentId: input.context.intentId,
           operationKey: input.identity.operationKey,
@@ -99,19 +180,14 @@ export function createCodeHostEffectAttemptObserver(input: {
         }),
       )
       nextRetryAuthority = 'none'
-      return {
-        effectId: prepared.effectId,
-        attemptId: prepared.attemptId,
-        info,
-      } as ObserverHandle
+      return { effectId: prepared.effectId, attemptId: prepared.attemptId, info }
     },
-    afterSend(handle, settlement) {
-      if (handle === null || handle === undefined) return
-      const owned = handle as ObserverHandle
+    async afterSend(handle, settlement) {
+      if (handle === null) return
       if (
-        owned.info.candidateId !== settlement.candidateId ||
-        owned.info.transportAttempt !== settlement.transportAttempt ||
-        owned.info.method !== settlement.method
+        handle.info.candidateId !== settlement.candidateId ||
+        handle.info.transportAttempt !== settlement.transportAttempt ||
+        handle.info.method !== settlement.method
       ) {
         throw new Error('code-host attempt observer handle mismatch')
       }
@@ -119,11 +195,11 @@ export function createCodeHostEffectAttemptObserver(input: {
       const ambiguous =
         settlement.result === 'network-error' || status === null || status === 429 || status >= 500
       if (settlement.willRetry) {
-        settleAttempt(input, owned, settlement)
+        await settleAttempt(handle, settlement)
         priorAmbiguity ||= ambiguous
       } else {
         if (terminal !== null) throw new Error('code-host terminal attempt recorded twice')
-        terminal = { handle: owned, settlement }
+        terminal = { handle, settlement }
         const applied =
           settlement.result === 'response' && status !== null && status >= 200 && status < 300
         const definitelyNotApplied =
@@ -132,7 +208,7 @@ export function createCodeHostEffectAttemptObserver(input: {
           status >= 300 &&
           status < 500 &&
           status !== 429
-        outcomeUnknown = !applied && (ambiguous || (priorAmbiguity && definitelyNotApplied))
+        unknown = !applied && (ambiguous || (priorAmbiguity && definitelyNotApplied))
       }
       nextRetryAuthority = settlement.willRetry
         ? settlement.retryKind === 'compatibility-fallback'
@@ -140,39 +216,25 @@ export function createCodeHostEffectAttemptObserver(input: {
           : 'transport-policy'
         : 'none'
     },
-    outcomeUnknown: () => outcomeUnknown,
-    settleTerminal(onSettledTx) {
+    outcomeUnknown: () => unknown,
+    async settleTerminal(projection) {
       if (terminal === null) return false
       const current = terminal
       terminal = null
-      if (terminalProbe !== null) {
-        settleProbedAppliedAttempt(
-          input,
-          current.handle,
-          current.settlement,
-          terminalProbe,
-          onSettledTx,
-        )
-        terminalProbe = null
-      } else {
-        settleAttempt(input, current.handle, current.settlement, onSettledTx)
-      }
+      await settleAttempt(current.handle, current.settlement, projection)
       return true
     },
-    terminalRecoveryDescriptor() {
-      return terminal?.handle.info.recoveryDescriptor ?? null
-    },
-    resolveTerminalProbe(probe) {
+    terminalRecoveryDescriptor: () => terminal?.handle.info.recoveryDescriptor ?? null,
+    async resolveTerminalProbe(probe) {
       if (terminal === null || probe.kind === 'unknown') return 'unknown'
       if (probe.kind === 'applied') {
         terminalProbe = probe
-        outcomeUnknown = false
+        unknown = false
         return 'applied'
       }
       const current = terminal
       terminal = null
-      taskExecutionModule.effects.settle({
-        db: input.db,
+      await input.persistence.settle({
         token: input.context.token,
         effectId: current.handle.effectId,
         attemptId: current.handle.attemptId,
@@ -195,124 +257,10 @@ export function createCodeHostEffectAttemptObserver(input: {
         }),
       })
       terminalProbe = null
-      outcomeUnknown = false
+      unknown = false
       priorAmbiguity = false
       nextRetryAuthority = 'probe'
       return 'retry-authorized'
     },
   }
-}
-
-function settleProbedAppliedAttempt(
-  input: {
-    db: DbClient
-    context: TaskExecutionContext
-  },
-  handle: ObserverHandle,
-  settlement: CodeHostSendAttemptSettlement,
-  probe: Extract<CodeHostProbeOutcome, { kind: 'applied' }>,
-  onSettledTx: (tx: DbTxSync) => void,
-): void {
-  taskExecutionModule.effects.settle({
-    db: input.db,
-    token: input.context.token,
-    effectId: handle.effectId,
-    attemptId: handle.attemptId,
-    state: 'succeeded',
-    applicationEvidence: 'applied',
-    retryAuthority: 'none',
-    receiptJson: JSON.stringify({
-      v: 1,
-      candidateId: settlement.candidateId,
-      transportAttempt: settlement.transportAttempt,
-      method: settlement.method,
-      pathname: settlement.pathname,
-      transportResult: settlement.result,
-      transportStatus: settlement.status ?? null,
-      recoveryProbe: {
-        outcome: probe.kind,
-        proofCode: probe.proofCode,
-        responseStatus: probe.responseStatus,
-      },
-    }),
-    onSettledTx,
-  })
-}
-
-function settleAttempt(
-  input: {
-    db: DbClient
-    context: TaskExecutionContext
-  },
-  handle: ObserverHandle,
-  settlement: CodeHostSendAttemptSettlement,
-  onSettledTx?: (tx: DbTxSync) => void,
-): void {
-  const status = settlement.status ?? null
-  const isCompatibilityMiss =
-    settlement.retryKind === 'compatibility-fallback' && (status === 404 || status === 405)
-  const isApplied =
-    settlement.result === 'response' && status !== null && status >= 200 && status < 300
-  const definitelyNotApplied =
-    settlement.result === 'response' &&
-    status !== null &&
-    status >= 300 &&
-    status < 500 &&
-    status !== 429
-  const receiptJson = JSON.stringify({
-    v: 1,
-    candidateId: settlement.candidateId,
-    transportAttempt: settlement.transportAttempt,
-    method: settlement.method,
-    pathname: settlement.pathname,
-    result: settlement.result,
-    status,
-    willRetry: settlement.willRetry,
-    retryKind: settlement.retryKind,
-    ...(settlement.errorMessage !== undefined ? { error: settlement.errorMessage } : {}),
-  })
-
-  if (settlement.willRetry) {
-    taskExecutionModule.effects.settle({
-      db: input.db,
-      token: input.context.token,
-      effectId: handle.effectId,
-      attemptId: handle.attemptId,
-      state: 'retry-authorized',
-      applicationEvidence: isCompatibilityMiss ? 'definitely-not-applied' : 'ambiguous',
-      retryAuthority:
-        settlement.retryKind === 'compatibility-fallback' ? 'convergent' : 'transport-policy',
-      receiptJson,
-      failureCode:
-        settlement.result === 'network-error'
-          ? 'code-host-network-error'
-          : `code-host-http-${status ?? 'unknown'}`,
-      ...(onSettledTx === undefined ? {} : { onSettledTx }),
-    })
-    return
-  }
-  taskExecutionModule.effects.settle({
-    db: input.db,
-    token: input.context.token,
-    effectId: handle.effectId,
-    attemptId: handle.attemptId,
-    state: isApplied
-      ? 'succeeded'
-      : definitelyNotApplied
-        ? 'failed-not-applied'
-        : 'recovery-required',
-    applicationEvidence: isApplied
-      ? 'applied'
-      : definitelyNotApplied
-        ? 'definitely-not-applied'
-        : 'ambiguous',
-    retryAuthority: 'none',
-    receiptJson,
-    failureCode: isApplied
-      ? null
-      : settlement.result === 'network-error'
-        ? 'code-host-network-error'
-        : `code-host-http-${status ?? 'unknown'}`,
-    ...(onSettledTx === undefined ? {} : { onSettledTx }),
-  })
 }

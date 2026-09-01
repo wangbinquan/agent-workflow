@@ -1,12 +1,12 @@
-import type { LegacyTaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import type { Logger } from '@/util/log'
 import type { WrapperNodeExecutionPort } from '../application/ports/wrapperNodeExecution'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'
 
-export type WrapperRuntimeFactory = (state: LegacyTaskMechanicsState) => WrapperNodeExecutionPort
+export type WrapperRuntimeFactory = (state: TaskMechanicsState) => WrapperNodeExecutionPort
 
 export type ExecutionMergeRecoveryFactory = (
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   log: Logger,
 ) => ExecutionMergeRecovery
 

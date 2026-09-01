@@ -1,7 +1,3 @@
-import { eq } from 'drizzle-orm'
-
-import type { DbClient } from '@/db/client'
-import { tasks, workflows } from '@/db/schema'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
 import {
   TASK_CHANNEL,
@@ -13,41 +9,24 @@ import {
   decodeTaskLifecycleCommittedEvent,
   TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,
 } from '../domain/taskLifecycleCommittedEvent'
+import type { TaskLifecycleWsProjection } from '../application/ports/taskLifecycleWsProjection'
 
-export function createTaskLifecycleWsProjector(db: DbClient): CommittedEventConsumerDefinition {
+export function createTaskLifecycleWsProjector(
+  projection: TaskLifecycleWsProjection,
+): CommittedEventConsumerDefinition {
   return {
     id: 'task-ws-projector',
     eventTypes: TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,
     deliveryClass: 'ephemeral',
     settle: 'projection-attempted',
-    handle(value) {
+    async handle(value) {
       const event = decodeTaskLifecycleCommittedEvent(value)
       if (event.type === 'task.created.v1') {
-        const row = db
-          .select({ task: tasks, workflowName: workflows.name })
-          .from(tasks)
-          .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
-          .where(eq(tasks.id, event.payload.taskId))
-          .get()
-        if (row === undefined) return
+        const task = await projection.findCreatedTask(event.payload.taskId)
+        if (task === null) return
         tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
           type: 'task.created',
-          task: {
-            id: row.task.id,
-            name: row.task.name,
-            workflowId: row.task.workflowId,
-            workflowName: row.workflowName,
-            repoPath: row.task.repoPath,
-            repoUrl: row.task.repoUrl,
-            cachedRepoId: row.task.cachedRepoId,
-            status: row.task.status,
-            startedAt: row.task.startedAt,
-            finishedAt: row.task.finishedAt,
-            errorSummary: row.task.errorSummary,
-            repoCount: row.task.repoCount,
-            spaceKind: row.task.spaceKind,
-            sourceAgentName: row.task.sourceAgentName,
-          },
+          task,
         })
         return
       }

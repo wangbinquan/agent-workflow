@@ -11,18 +11,9 @@ import type {
   WrapperFanoutPort,
 } from '@agent-workflow/shared'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET, stringifyKind, tryParseKind } from '@agent-workflow/shared'
-import { and, eq, isNotNull } from 'drizzle-orm'
-// RFC-253 — script node execution.
-import type { DbClient } from '@/db/client'
-import { nodeRunOutputs, nodeRuns } from '@/db/schema'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import {
-  setNodeRunStatus,
-  transitionMergeState,
-  tryTransitionMergeState,
-} from '@/services/lifecycle'
-import { loadRunEnvelopeNonce, mintNodeRun, resolveFrozenRuntime } from '@/services/nodeRunMint'
+import { resolveFrozenRuntimeWith } from '@/services/nodeRunMint'
 import { fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 
 import {
@@ -32,16 +23,9 @@ import {
   pickFreshestRun,
   pickReusableShardRun,
 } from '@/services/freshness'
-import { forcedPortPathsForTask, toContainerRelative } from '@/services/portArtifacts'
+import { toContainerRelative } from '@/services/portArtifacts'
 import { runNode, type RunResult } from '@/services/runner'
-import {
-  withCurrentTaskExecutionMutation,
-  withTaskExecutionMutation,
-} from '@/services/taskExecutionParticipants'
-import {
-  encodeWrapperProgress,
-  type WrapperProgress,
-} from '@/modules/task-execution/domain/wrapperProgress'
+import { encodeWrapperProgress } from '@/modules/task-execution/domain/wrapperProgress'
 import type { Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
@@ -74,6 +58,7 @@ import {
   broadcastNodeStatus,
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
+  isolatedRunBinding,
   parseIsoJsonMap,
   parseIsoSubmodules,
   pickString,
@@ -151,12 +136,26 @@ export function createWrapperMechanicsPorts(
     reportDiagnostic(input) {
       executionLog[input.level](input.message, input.fields)
     },
-    persistProgress: (runId, progress) => persistWrapperProgress(state.db, runId, progress),
+    persistProgress: async (runId, progress) => {
+      await state.opts.persistence.nodeExecution.patch({
+        nodeRunId: runId,
+        values: { wrapperProgressJson: encodeWrapperProgress(progress) },
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
+      })
+    },
     readPort: (nodeId, portName, iteration) =>
-      readPortRowAtIteration(state.db, state.taskId, nodeId, portName, iteration),
+      readPortRowAtIteration(
+        state.opts.persistence.nodeExecution,
+        state.taskId,
+        nodeId,
+        portName,
+        iteration,
+      ),
     resolveInputs: (nodeId, iteration) =>
       resolveUpstreamInputs(
-        state.db,
+        state.opts.persistence.nodeExecution,
         state.taskId,
         state.definition.edges,
         nodeId,
@@ -165,29 +164,21 @@ export function createWrapperMechanicsPorts(
         state.definition,
         state.containerOf,
       ),
-    recordConsumed(runId, consumed) {
-      withTaskExecutionMutation({
-        db: state.db,
-        taskId: state.taskId,
-        run: (tx) =>
-          tx
-            .update(nodeRuns)
-            .set({ consumedUpstreamRunsJson: JSON.stringify(consumed) })
-            .where(eq(nodeRuns.id, runId))
-            .run(),
+    async recordConsumed(runId, consumed) {
+      await state.opts.persistence.nodeExecution.patch({
+        nodeRunId: runId,
+        values: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
       })
     },
     async priorFanoutConsumed(nodeId, iteration, excludeRunId) {
-      const rows = await state.db
-        .select()
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, state.taskId),
-            eq(nodeRuns.nodeId, nodeId),
-            eq(nodeRuns.iteration, iteration),
-          ),
-        )
+      const rows = await state.opts.persistence.nodeExecution.list({
+        taskId: state.taskId,
+        nodeId,
+        iteration,
+      })
       const previous = pickFreshestRun(
         rows.filter((row) => row.id !== excludeRunId && row.consumedUpstreamRunsJson !== null),
         { topLevelOnly: true },
@@ -195,11 +186,9 @@ export function createWrapperMechanicsPorts(
       return previous?.consumedUpstreamRunsJson ?? null
     },
     async outputOf(runId, portName) {
-      const rows = await state.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(and(eq(nodeRunOutputs.nodeRunId, runId), eq(nodeRunOutputs.portName, portName)))
-      const row = rows[0]
+      const row = (await state.opts.persistence.nodeExecution.listOutputs(runId)).find(
+        (output) => output.portName === portName,
+      )
       return row === undefined
         ? null
         : {
@@ -209,16 +198,22 @@ export function createWrapperMechanicsPorts(
             active: row.active,
           }
     },
-    upsertOutput(input) {
-      return upsertWrapperOutput(
-        state.db,
-        input.runId,
-        input.portName,
-        input.content,
-        input.kind ?? null,
-        input.archiveJson ?? null,
-        input.active ?? true,
-      )
+    async upsertOutput(input) {
+      await state.opts.persistence.nodeExecution.upsertOutputs({
+        nodeRunId: input.runId,
+        outputs: [
+          {
+            portName: input.portName,
+            content: input.content,
+            kind: input.kind ?? null,
+            archiveJson: input.archiveJson ?? null,
+            active: input.active ?? true,
+          },
+        ],
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
+      })
     },
   }
 
@@ -365,22 +360,6 @@ export function createWrapperMechanicsPorts(
 // minting a fresh one. See design/RFC-040-wrapper-await-bubble/design.md §4.
 // -----------------------------------------------------------------------------
 
-async function persistWrapperProgress(
-  db: DbClient,
-  wrapperRunId: string,
-  progress: WrapperProgress,
-): Promise<void> {
-  withCurrentTaskExecutionMutation({
-    db,
-    run: (tx) =>
-      tx
-        .update(nodeRuns)
-        .set({ wrapperProgressJson: encodeWrapperProgress(progress) })
-        .where(eq(nodeRuns.id, wrapperRunId))
-        .run(),
-  })
-}
-
 // -----------------------------------------------------------------------------
 // wrapper-fanout (RFC-060) — fan a list<T> shardSource into N parallel inner
 // dispatches, optionally aggregated by an inner role='aggregator' agent.
@@ -502,7 +481,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     broadcastInputs,
     log,
   } = args
-  const { db, task, taskId, opts } = state
+  const { task, taskId, opts } = state
 
   const shardKey = shard?.shardKey ?? '__shared__'
   const rowShardKey = shard === null ? null : shardKey
@@ -531,18 +510,13 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   //      done but hash-mismatched or reuse-disabled) → mint a fresh row under
   //      this wrapper, stamped with sha256(shard.value) (shared rows stay NULL).
   const candidates = (
-    await db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.nodeId, innerNode.id),
-          eq(nodeRuns.iteration, iteration),
-          isNotNull(nodeRuns.parentNodeRunId),
-        ),
-      )
-  ).filter((r) => (r.shardKey ?? null) === rowShardKey)
+    await state.opts.persistence.nodeExecution.list({
+      taskId,
+      nodeId: innerNode.id,
+      iteration,
+      childOnly: true,
+    })
+  ).filter((row) => (row.shardKey ?? null) === rowShardKey)
   const freshest = pickFreshestRun(candidates, { topLevelOnly: false })
   const forcedProcessRetry = args.processRetryIndex !== undefined
   const reusable =
@@ -590,10 +564,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // done row that has been SUPERSEDED by a fresher attempt of any status
     // (e.g. a user-targeted shard retry placeholder): replaying it would undo
     // that newer attempt's intent.
-    const outRows = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, reusable.id))
+    const outRows = await state.opts.persistence.nodeExecution.listOutputs(reusable.id)
     const outputs: Record<string, string> = {}
     for (const o of outRows) outputs[o.portName] = o.content
     broadcastNodeStatus(taskId, reusable.id, innerNode.id, 'done')
@@ -609,32 +580,31 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // allowTerminal: a reaped child is 'interrupted' (terminal); reset to
     // pending so runNode's mark-running (pending → running) applies cleanly.
     shardRunId = freshest.id
-    await setNodeRunStatus({
-      db,
+    await state.opts.persistence.nodeRuns.set({
       nodeRunId: shardRunId,
       to: 'pending',
       allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
       allowTerminal: true,
       reason: 'fanout-shard-resume',
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     // The re-run consumes the CURRENT shard value — refresh the stored hash
     // so future reuse decisions compare against what actually ran.
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({ shardValueHash: valueHash })
-          .where(eq(nodeRuns.id, shardRunId))
-          .run(),
+    await state.opts.persistence.nodeExecution.patch({
+      nodeRunId: shardRunId,
+      values: { shardValueHash: valueHash },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     shardRetryIndex = freshest.retryIndex
   } else {
     // Branch 3 — mint a fresh row under this wrapper. The T14 replacement target
     // (priorShardUndo) was already derived above from the latest done+merged
     // candidate and is applied at merge-back.
-    shardRunId = await mintNodeRun(db, {
+    shardRunId = await state.opts.persistence.nodeRuns.mint({
       taskId,
       nodeId: innerNode.id,
       status: 'pending',
@@ -646,6 +616,9 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         shardKey: rowShardKey,
         shardValueHash: valueHash,
       },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     shardRetryIndex = args.processRetryIndex ?? 0
   }
@@ -699,13 +672,15 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
 
   const injection = await state.taskExecutionResources.injection(innerAgent.id)
   if (injection.kind === 'failed') {
-    await setNodeRunStatus({
-      db,
+    await state.opts.persistence.nodeRuns.set({
       nodeRunId: shardRunId,
       to: 'failed',
       allowedFrom: ['pending'],
       reason: 'fanout-shard-injection-failed',
       extra: { finishedAt: Date.now(), errorMessage: injection.message },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
     return { kind: 'failed', shardKey, outputs: {}, message: injection.message }
@@ -733,7 +708,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
             writeSem: state.writeSem,
             appHome: opts.appHome,
             taskId,
-            db,
+            binding: isolatedRunBinding(state),
             isoKeyRunId: shardRunId,
             canonRepos: state.repos,
             log,
@@ -743,7 +718,12 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         persistBase: 'in-setup',
         persist: async (h: IsoLike) => {
           if (!h.passthrough)
-            await persistIsoBase(db, shardRunId, task.repoCount, shardIso as IsoHandle)
+            await persistIsoBase(
+              isolatedRunBinding(state),
+              shardRunId,
+              task.repoCount,
+              shardIso as IsoHandle,
+            )
         },
       },
       beforeSpawn: async () => {
@@ -781,8 +761,9 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       spawn: async () => {
         // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the fanout shard
         // so a claude-selected agent-multi dispatches its shards on claude, not opencode.
-        const shardRuntime = await resolveFrozenRuntime(
-          db,
+        const shardRuntime = await resolveFrozenRuntimeWith(
+          opts.persistence.nodeRunRuntime,
+          opts.runtimeRegistry,
           shardRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
@@ -833,9 +814,12 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           mcps: injection.spec.mcps,
           plugins: injection.spec.plugins,
           appHome: opts.appHome,
+          memoryInjectionQueries: opts.memoryInjectionQueries,
+          runtimeSessionLeases: opts.runtimeSessionLeases,
+          runtimeRegistry: opts.runtimeRegistry,
+          persistence: opts.persistence,
           ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
           ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
-          db,
           log,
           ...(opts.signal ? { signal: opts.signal } : {}),
           ...(opts.subagentLiveCapture !== undefined
@@ -881,7 +865,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         run: async (_c, result) => {
           const iso = shardIso as IsoHandle
           const merge = await mergeBackAndSettle({
-            db,
+            binding: isolatedRunBinding(state),
             writeSem: state.writeSem,
             handle: iso,
             nodeRunId: shardRunId,
@@ -916,10 +900,12 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           onConflictHuman: (detail) => ({
             keep: false,
             produce: async () => {
-              await tryTransitionMergeState({
-                db,
+              await state.opts.persistence.mergeStates.tryTransition({
                 nodeRunId: shardRunId,
                 event: { kind: 'abandon', reason: 'fanout-shard-merge-conflict-unresolved' },
+                ...(state.opts.executionContext === undefined
+                  ? {}
+                  : { executionContext: state.opts.executionContext }),
               })
               return {
                 kind: 'failed' as const,
@@ -934,7 +920,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
             then: {
               produce: async () => {
                 const msg = err instanceof Error ? err.message : String(err)
-                await markMergeFailed(db, shardRunId, msg, log)
+                await markMergeFailed(isolatedRunBinding(state), shardRunId, msg, log)
                 return {
                   kind: 'failed' as const,
                   shardKey,
@@ -1033,7 +1019,7 @@ async function dispatchFanoutAggregatorAttempt(
   args: DispatchAggregatorArgs,
 ): Promise<DispatchAggregatorResult> {
   const { state, wrapperRunId, aggNode, aggAgent, iteration, shards, definition, scope, log } = args
-  const { db, task, taskId, opts } = state
+  const { task, taskId, opts } = state
 
   // Collect each perShard inner's outputs across all shards. The aggregator
   // declares (via its edges' target.portName) which inner port to read; we
@@ -1060,17 +1046,12 @@ async function dispatchFanoutAggregatorAttempt(
   for (const edge of incoming) {
     const blocks: string[] = []
     // For each shard, pick the corresponding inner node_run + read port.
-    const innerRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.nodeId, edge.source.nodeId),
-          eq(nodeRuns.iteration, iteration),
-          isNotNull(nodeRuns.parentNodeRunId),
-        ),
-      )
+    const innerRows = await state.opts.persistence.nodeExecution.list({
+      taskId,
+      nodeId: edge.source.nodeId,
+      iteration,
+      childOnly: true,
+    })
     if (scope.perShard.has(edge.source.nodeId)) {
       // sorted by shardKey dictionary order (matches agent-multi convention).
       const sortedShards = [...shards].sort((a, b) => a.shardKey.localeCompare(b.shardKey))
@@ -1081,10 +1062,7 @@ async function dispatchFanoutAggregatorAttempt(
         })
         if (row === undefined) continue
         participatingRowIds.push(row.id)
-        const outRows = await db
-          .select()
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, row.id))
+        const outRows = await state.opts.persistence.nodeExecution.listOutputs(row.id)
         const port = outRows.find((o) => o.portName === edge.source.portName)
         // RFC-306 D13: only ACTIVE shards feed the aggregation. A shard that
         // closed this branch contributes nothing at all — not an empty `###`
@@ -1102,10 +1080,7 @@ async function dispatchFanoutAggregatorAttempt(
       const row = pickReusableShardRun(innerRows, { shardKey: null, valueHash: null })
       if (row !== undefined) {
         participatingRowIds.push(row.id)
-        const outRows = await db
-          .select()
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, row.id))
+        const outRows = await state.opts.persistence.nodeExecution.listOutputs(row.id)
         const port = outRows.find((o) => o.portName === edge.source.portName)
         // Same rule for a shared (broadcast) upstream — see above.
         if (port !== undefined && port.active !== false) blocks.push(port.content)
@@ -1127,18 +1102,13 @@ async function dispatchFanoutAggregatorAttempt(
   //   3. anything else → mint a fresh row (no shard_value_hash — the
   //      aggregator has no per-shard value).
   const aggCandidates = (
-    await db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.nodeId, aggNode.id),
-          eq(nodeRuns.iteration, iteration),
-          isNotNull(nodeRuns.parentNodeRunId),
-        ),
-      )
-  ).filter((r) => r.shardKey === null)
+    await state.opts.persistence.nodeExecution.list({
+      taskId,
+      nodeId: aggNode.id,
+      iteration,
+      childOnly: true,
+    })
+  ).filter((row) => row.shardKey === null)
   const freshestAgg = pickFreshestRun(aggCandidates, { topLevelOnly: false })
   const forcedProcessRetry = args.processRetryIndex !== undefined
   if (
@@ -1148,10 +1118,7 @@ async function dispatchFanoutAggregatorAttempt(
     freshestAgg.status === 'done' &&
     participatingRowIds.every((id) => isFresherNodeRun<{ id: string }>(freshestAgg, { id }))
   ) {
-    const outRows = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, freshestAgg.id))
+    const outRows = await state.opts.persistence.nodeExecution.listOutputs(freshestAgg.id)
     const outputs: Record<string, string> = {}
     for (const o of outRows) outputs[o.portName] = o.content
     broadcastNodeStatus(taskId, freshestAgg.id, aggNode.id, 'done')
@@ -1168,17 +1135,19 @@ async function dispatchFanoutAggregatorAttempt(
     // Re-run the same-generation residue in place (allowTerminal: a reaped
     // aggregator is 'interrupted'; reset to pending for runNode's mark-running).
     aggRunId = freshestAgg.id
-    await setNodeRunStatus({
-      db,
+    await state.opts.persistence.nodeRuns.set({
       nodeRunId: aggRunId,
       to: 'pending',
       allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
       allowTerminal: true,
       reason: 'fanout-aggregator-resume',
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     aggRetryIndex = freshestAgg.retryIndex
   } else {
-    aggRunId = await mintNodeRun(db, {
+    aggRunId = await state.opts.persistence.nodeRuns.mint({
       taskId,
       nodeId: aggNode.id,
       status: 'pending',
@@ -1186,6 +1155,9 @@ async function dispatchFanoutAggregatorAttempt(
       retryIndex: args.processRetryIndex ?? 0,
       iteration,
       overrides: { parentNodeRunId: wrapperRunId },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     aggRetryIndex = args.processRetryIndex ?? 0
   }
@@ -1193,13 +1165,15 @@ async function dispatchFanoutAggregatorAttempt(
 
   const injection = await state.taskExecutionResources.injection(aggAgent.id)
   if (injection.kind === 'failed') {
-    await setNodeRunStatus({
-      db,
+    await state.opts.persistence.nodeRuns.set({
       nodeRunId: aggRunId,
       to: 'failed',
       allowedFrom: ['pending'],
       reason: 'fanout-aggregator-injection-failed',
       extra: { finishedAt: Date.now(), errorMessage: injection.message },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
     return { kind: 'failed', summary: injection.summary, message: injection.message, outputs: {} }
@@ -1217,7 +1191,7 @@ async function dispatchFanoutAggregatorAttempt(
   // SHARDS are deliberately NOT given prior output: their value-hash replay means
   // an unchanged slice replays without a spawn, and a CHANGED slice's prior
   // output would mis-anchor the agent to stale content.
-  const aggPriorRun = await freshestPriorRunWithOutput(db, {
+  const aggPriorRun = await freshestPriorRunWithOutput(state.opts.persistence.nodeExecution, {
     taskId,
     nodeId: aggNode.id,
     iteration,
@@ -1227,11 +1201,11 @@ async function dispatchFanoutAggregatorAttempt(
   let aggPriorOutputUpdate: { block: string } | undefined
   if (aggPriorRun !== undefined) {
     const block = await composePriorOutputBlock(
-      db,
+      state.opts.persistence.nodeExecution,
       aggPriorRun.id,
       injection.spec.agent.outputs ?? [],
       undefined,
-      await loadRunEnvelopeNonce(db, aggRunId),
+      (await state.opts.persistence.nodeExecution.read(aggRunId))?.envelopeNonce ?? '',
     )
     if (block.length > 0) aggPriorOutputUpdate = { block }
   }
@@ -1258,7 +1232,7 @@ async function dispatchFanoutAggregatorAttempt(
             writeSem: state.writeSem,
             appHome: opts.appHome,
             taskId,
-            db,
+            binding: isolatedRunBinding(state),
             isoKeyRunId: aggRunId,
             canonRepos: state.repos,
             log,
@@ -1268,7 +1242,12 @@ async function dispatchFanoutAggregatorAttempt(
         persistBase: 'in-setup',
         persist: async (h: IsoLike) => {
           if (!h.passthrough)
-            await persistIsoBase(db, aggRunId, task.repoCount, aggIso as IsoHandle)
+            await persistIsoBase(
+              isolatedRunBinding(state),
+              aggRunId,
+              task.repoCount,
+              aggIso as IsoHandle,
+            )
         },
       },
       onIsoSetupFailure: () => ({
@@ -1279,8 +1258,9 @@ async function dispatchFanoutAggregatorAttempt(
       }),
       spawn: async () => {
         // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the aggregator.
-        const aggRuntime = await resolveFrozenRuntime(
-          db,
+        const aggRuntime = await resolveFrozenRuntimeWith(
+          opts.persistence.nodeRunRuntime,
+          opts.runtimeRegistry,
           aggRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
@@ -1332,8 +1312,11 @@ async function dispatchFanoutAggregatorAttempt(
           mcps: injection.spec.mcps,
           plugins: injection.spec.plugins,
           appHome: opts.appHome,
+          memoryInjectionQueries: opts.memoryInjectionQueries,
+          runtimeSessionLeases: opts.runtimeSessionLeases,
+          runtimeRegistry: opts.runtimeRegistry,
+          persistence: opts.persistence,
           ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-          db,
           log,
           ...(opts.signal ? { signal: opts.signal } : {}),
           ...(opts.subagentLiveCapture !== undefined
@@ -1383,7 +1366,7 @@ async function dispatchFanoutAggregatorAttempt(
         run: async (_c, result) => {
           const iso = aggIso as IsoHandle
           const merge = await mergeBackAndSettle({
-            db,
+            binding: isolatedRunBinding(state),
             writeSem: state.writeSem,
             handle: iso,
             nodeRunId: aggRunId,
@@ -1410,10 +1393,12 @@ async function dispatchFanoutAggregatorAttempt(
           onConflictHuman: (detail) => ({
             keep: false,
             produce: async () => {
-              await tryTransitionMergeState({
-                db,
+              await state.opts.persistence.mergeStates.tryTransition({
                 nodeRunId: aggRunId,
                 event: { kind: 'abandon', reason: 'fanout-agg-merge-conflict-unresolved' },
+                ...(state.opts.executionContext === undefined
+                  ? {}
+                  : { executionContext: state.opts.executionContext }),
               })
               return {
                 kind: 'failed' as const,
@@ -1428,7 +1413,7 @@ async function dispatchFanoutAggregatorAttempt(
             then: {
               produce: async () => {
                 const msg = err instanceof Error ? err.message : String(err)
-                await markMergeFailed(db, aggRunId, msg, log)
+                await markMergeFailed(isolatedRunBinding(state), aggRunId, msg, log)
                 return {
                   kind: 'failed' as const,
                   summary: 'aggregator merge failed',
@@ -1556,47 +1541,6 @@ async function captureGitPreDirty(
  * changes — so it must NOT be recreated). A non-git task worktree (mock harness)
  * yields a passthrough handle (the wrapper runs directly on the task canonical).
  */
-/**
- * RFC-144 (PR-5 review P2) — wrapper outputs are written onto the wrapper's
- * OWN row, and wrapper rows are multi-generation (same-row revival after a
- * merged/conflict-human prior generation). The prior generation may have
- * already written its output rows before its merge-back crashed/parked, so a
- * plain INSERT would violate the (node_run_id, port_name) PK on the rerun.
- * Upsert: the new generation's content REPLACES the stale one (mirrors the
- * runner's same-session envelope upsert, runner.ts).
- */
-async function upsertWrapperOutput(
-  db: DbClient,
-  wrapperRunId: string,
-  portName: string,
-  content: string,
-  // RFC-193 D16: projections copy the source row's kind + archive reference
-  // (synthesized outlets — __done__, git_diff — have no source row: NULL).
-  kind: string | null = null,
-  archiveJson: string | null = null,
-  /**
-   * RFC-306 D9 — whether the promoted outlet carries a value. A wrapper outlet
-   * whose bound inner source sat on a closed branch is itself inactive, and that
-   * is how a branch escapes a loop / fanout to the graph outside it. Defaults to
-   * true so synthesized outlets (`__done__`, `git_diff`) and every existing
-   * caller keep their current behavior.
-   */
-  active = true,
-): Promise<void> {
-  withCurrentTaskExecutionMutation({
-    db,
-    run: (tx) =>
-      tx
-        .insert(nodeRunOutputs)
-        .values({ nodeRunId: wrapperRunId, portName, content, kind, archiveJson, active })
-        .onConflictDoUpdate({
-          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-          set: { content, kind, archiveJson, active },
-        })
-        .run(),
-  })
-}
-
 export async function createOrRebuildWrapperIso(
   state: SchedulerState,
   wrapperRunId: string,
@@ -1609,7 +1553,7 @@ export async function createOrRebuildWrapperIso(
     isoSubmodulesReposJson?: string | null
   } | null,
 ): Promise<IsoHandle> {
-  const { db, task, taskId } = state
+  const { task, taskId } = state
   // RFC-144 (Codex impl-gate P2) — same-row wrapper revival: a revived wrapper
   // row may arrive with a SETTLED prior generation ('merged': crash inside
   // mergeBackWrapperIso got its pending-merge replayed at entry;
@@ -1618,15 +1562,9 @@ export async function createOrRebuildWrapperIso(
   // mark-pending-merge (from=isolating) holds at the wrapper's merge-back.
   // isolating (mid-run revival, the common case) and NULL (fresh row /
   // passthrough) rows never emit this.
-  const cur = (
-    await db
-      .select({ mergeState: nodeRuns.mergeState })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, wrapperRunId))
-      .limit(1)
-  )[0]
+  const cur = await state.opts.persistence.nodeExecution.read(wrapperRunId)
   let effectiveExisting = existing
-  if (cur !== undefined && (cur.mergeState === 'merged' || cur.mergeState === 'conflict-human')) {
+  if (cur !== null && (cur.mergeState === 'merged' || cur.mergeState === 'conflict-human')) {
     if (cur.mergeState === 'merged') {
       // Impl-gate P2 second half: the prior generation's delta is ALREADY in
       // canonical — the new generation must branch from the CURRENT canonical,
@@ -1645,8 +1583,7 @@ export async function createOrRebuildWrapperIso(
       // idempotent. conflict-human re-entry keeps base + progress: its delta
       // never reached canonical (D27), so the old base/baseline stay the
       // correct merge/diff anchors.
-      await transitionMergeState({
-        db,
+      await state.opts.persistence.mergeStates.transition({
         nodeRunId: wrapperRunId,
         event: { kind: 'reenter-isolation' },
         extra: {
@@ -1655,13 +1592,18 @@ export async function createOrRebuildWrapperIso(
           isoBaseSnapshotReposJson: null,
           wrapperProgressJson: null,
         },
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
       })
       effectiveExisting = null
     } else {
-      await transitionMergeState({
-        db,
+      await state.opts.persistence.mergeStates.transition({
         nodeRunId: wrapperRunId,
         event: { kind: 'reenter-isolation' },
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
       })
     }
   }
@@ -1688,7 +1630,7 @@ export async function createOrRebuildWrapperIso(
         canonRepos: state.repos,
         baseSnapshots,
         taskBaseHeads,
-        forcedContainerPaths: await forcedPortPathsForTask(state.db, taskId),
+        forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
         // RFC-210: a rebuilt wrapper iso merges back like any other, so it
         // carries the same submodule topology. (The discard-only rebuild below
         // deliberately does not — it needs paths and refs, nothing else.)
@@ -1737,10 +1679,11 @@ export async function createOrRebuildWrapperIso(
     taskId,
     isoKeyRunId: wrapperRunId,
     canonRepos: state.repos,
-    db,
+    binding: isolatedRunBinding(state),
     log: state.log,
   })
-  if (!handle.passthrough) await persistIsoBase(db, wrapperRunId, task.repoCount, handle)
+  if (!handle.passthrough)
+    await persistIsoBase(isolatedRunBinding(state), wrapperRunId, task.repoCount, handle)
   return handle
 }
 
@@ -1769,19 +1712,23 @@ async function mergeBackWrapperIso(
   | { kind: 'conflict-human'; detail: string }
   | { kind: 'merge-failed'; msg: string }
 > {
-  const { db, task, taskId } = state
+  const { task, taskId } = state
   try {
     // RFC-193 K1: re-aggregate at wrapper-final time — the wrapper handle is
     // the one LONG-LIVED handle (inner nodes archived new port files during
     // its lifetime; the create-time roster predates them, design §4.5).
-    const nodeTrees = await snapshotNodeIsoFinal(
-      wrapperIso,
-      log,
-      await forcedPortPathsForTask(db, taskId),
-    )
+    const nodeTrees = await snapshotNodeIsoFinal(wrapperIso, log, [
+      ...(await state.opts.persistence.artifactPaths.forcedPaths(taskId)),
+    ])
     // RFC-210 impl-gate: the handle rides along so a topology the snapshot
     // extended (submodule added inside the wrapper) survives into crash replay.
-    await persistIsoNodeTree(db, wrapperRunId, task.repoCount, nodeTrees, wrapperIso)
+    await persistIsoNodeTree(
+      isolatedRunBinding(state),
+      wrapperRunId,
+      task.repoCount,
+      nodeTrees,
+      wrapperIso,
+    )
     const merge = await state.writeSem.run(async () => {
       const mr = await mergeBackNodeIso(wrapperIso, nodeTrees, log)
       if (mr.clean) return { kind: 'merged' as const }
@@ -1797,29 +1744,35 @@ async function mergeBackWrapperIso(
         : { kind: 'conflict-human' as const, detail: res.detail }
     })
     if (merge.kind !== 'merged') {
-      await transitionMergeState({
-        db,
+      await state.opts.persistence.mergeStates.transition({
         nodeRunId: wrapperRunId,
         event: { kind: 'park-conflict-human', via: 'live' },
+        ...(state.opts.executionContext === undefined
+          ? {}
+          : { executionContext: state.opts.executionContext }),
       })
       // D10: merge_state and status remain orthogonal. This adapter owns only
       // the merge fact; WrapperRunLedger performs the one status CAS and
       // WrapperRuntime publishes only after that write commits.
       return { kind: 'conflict-human', detail: merge.detail }
     }
-    await transitionMergeState({
-      db,
+    await state.opts.persistence.mergeStates.transition({
       nodeRunId: wrapperRunId,
       event: { kind: 'mark-merged', via: 'live' },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     await discardNodeIso(wrapperIso, log, state.writeSem)
     return { kind: 'merged' }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    const flipped = await tryTransitionMergeState({
-      db,
+    const flipped = await state.opts.persistence.mergeStates.tryTransition({
       nodeRunId: wrapperRunId,
       event: { kind: 'mark-merge-failed', reason: msg },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
     })
     if (!flipped) {
       log.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId: wrapperRunId })

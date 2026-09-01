@@ -20,10 +20,10 @@ import type {
   RecoveredManagedProcessResolution,
   SettleEffectAttemptInput,
   TaskExecutionEffectStore,
-} from '../application/ports/taskExecutionEffectStore'
-import type { TaskOwnershipStore } from '../application/ports/taskOwnershipStore'
+} from './taskExecutionEffectTransactionStore'
+import type { TaskOwnershipStore } from './taskOwnershipTransactionStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import { terminalizeTaskExecutionIntentsTx } from '../application/terminalizeExecutionIntent'
+import { terminalizeTaskExecutionIntentsTx } from './sqliteTerminalizeExecutionIntent'
 import {
   aggregateEffectOutcome,
   assertAttemptTransition,

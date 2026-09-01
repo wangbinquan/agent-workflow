@@ -6,8 +6,8 @@
 
 import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { DbClient } from '@/db/client'
 import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
+import type { TaskExecutionPersistence } from './ports/taskExecutionPersistence'
 
 const taskExecutionContextBrand: unique symbol = Symbol('rfc328.task-execution-context')
 const trustedContexts = new WeakSet<object>()
@@ -16,26 +16,34 @@ const taskExecutionContextStorage = new AsyncLocalStorage<TaskExecutionContext>(
 export interface TaskExecutionContext {
   readonly intentId: string
   readonly token: OwnershipToken
-  /** Daemon-internal connection used by deeply nested effect adapters. */
-  readonly db: DbClient
+  readonly persistence: TaskExecutionPersistence
+  /** Composition-only compatibility value. Application code never interprets it. */
+  readonly legacyConnection?: unknown
   readonly [taskExecutionContextBrand]: true
 }
 
-export function createTaskExecutionContext(input: {
+export function createTaskExecutionContext<
+  TCompatibility extends object = Record<never, never>,
+>(input: {
   intentId: string
   token: OwnershipToken
-  db: DbClient
-}): TaskExecutionContext {
+  persistence: TaskExecutionPersistence
+  legacyConnection?: unknown
+  /** Composition-only fields used while legacy infrastructure callers converge. */
+  compatibility?: TCompatibility
+}): TaskExecutionContext & TCompatibility {
   assertOwnershipToken(input.token)
   if (input.intentId.length === 0) throw new Error('task execution context requires intent id')
   const context = Object.freeze({
     intentId: input.intentId,
     token: input.token,
-    db: input.db,
+    persistence: input.persistence,
+    ...(input.legacyConnection === undefined ? {} : { legacyConnection: input.legacyConnection }),
+    ...(input.compatibility ?? ({} as TCompatibility)),
     [taskExecutionContextBrand]: true as const,
   })
   trustedContexts.add(context)
-  return context
+  return context as TaskExecutionContext & TCompatibility
 }
 
 export function assertTaskExecutionContext(

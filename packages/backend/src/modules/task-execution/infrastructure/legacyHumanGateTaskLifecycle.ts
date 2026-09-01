@@ -6,7 +6,7 @@ import type { DbTxSync } from '@/db/txSync'
 import { transitionHumanGateTaskTx } from '@/services/lifecycle'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
-import type { HumanGateTaskLifecycle } from '../application/ports/humanGateTaskLifecycle'
+import type { HumanGateTaskLifecycle } from './humanGateTaskLifecycleTransaction'
 
 export class LegacyHumanGateTaskLifecycle implements HumanGateTaskLifecycle {
   readManualParkCandidateTx(
@@ -38,7 +38,7 @@ export class LegacyHumanGateTaskLifecycle implements HumanGateTaskLifecycle {
     return { taskRevision: transitioned.taskRevision, eventRefs: transitioned.eventRefs }
   }
 
-  publishAfterCommit(eventRefs: readonly CommittedEventRef[]): void {
-    publishCommittedEventsAfterCommit(eventRefs)
+  async publishAfterCommit(eventRefs: readonly CommittedEventRef[]): Promise<void> {
+    await publishCommittedEventsAfterCommit(eventRefs)
   }
 }

@@ -1,81 +1,28 @@
-// RFC-328 — execution-plane mutation gateway for non-lifecycle rows.
+// RFC-349 — provider-neutral owned mutation command. Each consumer supplies a
+// bounded operation record; no transaction callback or provider handle escapes.
 
-import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
-import { taskExecutionModule } from '../composition'
-import { assertTaskExecutionContext, currentTaskExecutionContext } from './taskExecutionContext'
-import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
+import type { OwnershipToken } from '../domain/ownership'
 
-export function withTaskExecutionMutation<T>(input: {
-  db: DbClient
-  taskId: string
-  context?: TaskExecutionContextRef
-  now?: number
-  run: (tx: DbTxSync | DbClient) => T
-}): T {
-  const context = input.context ?? currentTaskExecutionContext(input.taskId)
-  if (context === undefined) return input.run(input.db)
-  assertTaskExecutionContext(context, input.taskId)
-  return taskExecutionModule.ownership.withOwnedTaskTx({
-    db: input.db,
-    token: context.token,
-    now: input.now ?? Date.now(),
-    run: (tx) => input.run(tx),
-  })
+export interface OwnedTaskMutationCommand {
+  readonly kind: string
+  readonly payload: Readonly<Record<string, unknown>>
 }
 
-export function withCurrentTaskExecutionMutation<T>(input: {
-  db: DbClient
-  now?: number
-  run: (tx: DbTxSync | DbClient) => T
-}): T {
-  const context = currentTaskExecutionContext()
-  if (context === undefined) return input.run(input.db)
-  return withTaskExecutionMutation({
-    ...input,
-    taskId: context.token.taskId,
-    context,
-  })
+export interface OwnedTaskMutationPersistence {
+  execute(input: {
+    readonly token: OwnershipToken
+    readonly command: OwnedTaskMutationCommand
+    readonly now?: number
+  }): Promise<void>
 }
 
-/**
- * Transactional companion for a multi-row business mutation.  A worker gets
- * the ownership CAS and all projection writes in one SQLite transaction;
- * control/repair callers without an execution context retain their existing
- * ordinary transaction semantics.
- */
-export function withTaskExecutionTransaction<T>(input: {
-  db: DbClient
-  taskId: string
-  context?: TaskExecutionContextRef
-  now?: number
-  run: (tx: DbTxSync) => T
-}): T {
-  const context = input.context ?? currentTaskExecutionContext(input.taskId)
-  if (context === undefined) {
-    return dbTxSync(input.db, (tx) => input.run(tx) as NotPromise<T>)
-  }
-  assertTaskExecutionContext(context, input.taskId)
-  return taskExecutionModule.ownership.withOwnedTaskTx({
-    db: input.db,
-    token: context.token,
-    now: input.now ?? Date.now(),
-    run: (tx) => input.run(tx) as NotPromise<T>,
-  })
-}
-
-export function withCurrentTaskExecutionTransaction<T>(input: {
-  db: DbClient
-  now?: number
-  run: (tx: DbTxSync) => T
-}): T {
-  const context = currentTaskExecutionContext()
-  if (context === undefined) {
-    return dbTxSync(input.db, (tx) => input.run(tx) as NotPromise<T>)
-  }
-  return withTaskExecutionTransaction({
-    ...input,
-    taskId: context.token.taskId,
-    context,
-  })
+export async function executeOwnedTaskMutation(
+  persistence: OwnedTaskMutationPersistence,
+  input: {
+    readonly token: OwnershipToken
+    readonly command: OwnedTaskMutationCommand
+    readonly now?: number
+  },
+): Promise<void> {
+  await persistence.execute(input)
 }

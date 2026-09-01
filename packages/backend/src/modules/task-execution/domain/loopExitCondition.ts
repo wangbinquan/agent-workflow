@@ -15,20 +15,9 @@
 //                     condition for a loop whose body decides, per iteration,
 //                     whether there is anything left to do.
 
-import { LOOP_EXIT_CONDITION_KINDS, type LoopExitConditionKind } from '@agent-workflow/shared'
+import { parseLoopExitCondition, type LoopExitCondition } from '@agent-workflow/shared'
 
-export type ExitCondition =
-  | { kind: 'port-empty'; nodeId: string; portName: string }
-  | { kind: 'port-inactive'; nodeId: string; portName: string }
-  | { kind: 'port-not-empty'; nodeId: string; portName: string }
-  | { kind: 'port-equals'; nodeId: string; portName: string; value: string }
-  | {
-      kind: 'port-count-lt'
-      nodeId: string
-      portName: string
-      n: number
-      separator?: string
-    }
+export type ExitCondition = LoopExitCondition
 
 /**
  * Parse an unknown wrapper-loop exitCondition shape into a typed union. Returns
@@ -39,52 +28,7 @@ export type ExitCondition =
  * (2026-08-12 审计对账：此注释原先写反成 "always exit / terminates after
  * iteration 0"，与实际 fail 行为相反，已按源码修正。)
  */
-// RFC-348 D1b — the parsed union and the shared kind roster must agree in
-// BOTH directions; a kind added to one without the other fails to compile.
-type _ParsedKindsCoverRoster = LoopExitConditionKind extends ExitCondition['kind'] ? true : never
-type _RosterCoversParsedKinds = ExitCondition['kind'] extends LoopExitConditionKind ? true : never
-const _exitKindRosterLock: [_ParsedKindsCoverRoster, _RosterCoversParsedKinds] = [true, true]
-void _exitKindRosterLock
-
-export function parseExitCondition(raw: unknown): ExitCondition | null {
-  if (typeof raw !== 'object' || raw === null) return null
-  const r = raw as Record<string, unknown>
-  if (
-    typeof r.kind !== 'string' ||
-    !(LOOP_EXIT_CONDITION_KINDS as readonly string[]).includes(r.kind) ||
-    typeof r.nodeId !== 'string' ||
-    r.nodeId.length === 0 ||
-    typeof r.portName !== 'string' ||
-    r.portName.length === 0
-  ) {
-    return null
-  }
-  if (r.kind === 'port-empty') {
-    return { kind: 'port-empty', nodeId: r.nodeId, portName: r.portName }
-  }
-  if (r.kind === 'port-inactive') {
-    return { kind: 'port-inactive', nodeId: r.nodeId, portName: r.portName }
-  }
-  if (r.kind === 'port-not-empty') {
-    return { kind: 'port-not-empty', nodeId: r.nodeId, portName: r.portName }
-  }
-  if (r.kind === 'port-equals') {
-    return {
-      kind: 'port-equals',
-      nodeId: r.nodeId,
-      portName: r.portName,
-      value: typeof r.value === 'string' ? r.value : '',
-    }
-  }
-  if (r.kind === 'port-count-lt') {
-    if (typeof r.n !== 'number' || !Number.isFinite(r.n) || !Number.isInteger(r.n) || r.n < 1) {
-      return null
-    }
-    const sep = typeof r.separator === 'string' && r.separator.length > 0 ? r.separator : '\n'
-    return { kind: 'port-count-lt', nodeId: r.nodeId, portName: r.portName, n: r.n, separator: sep }
-  }
-  return null
-}
+export const parseExitCondition = parseLoopExitCondition
 
 /** The port value one iteration produced, as the exit rule sees it. */
 export interface ExitPortValue {

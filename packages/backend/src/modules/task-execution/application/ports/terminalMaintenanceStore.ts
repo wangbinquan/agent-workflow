@@ -1,48 +1,8 @@
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
+import type { TerminalMaintenanceClaim, TerminalMaintenanceOperation } from '../../domain/ownership'
 import type {
   MaintenanceMemberSnapshot,
   TerminalMaintenanceState,
 } from '../../domain/terminalMaintenance'
-import type { TerminalMaintenanceClaim, TerminalMaintenanceOperation } from '../../domain/ownership'
-
-export interface TerminalMaintenanceStore {
-  snapshotMembers(db: DbClient, taskIds: readonly string[]): readonly MaintenanceMemberSnapshot[]
-  snapshotTree(db: DbClient, rootTaskId: string): readonly MaintenanceMemberSnapshot[]
-  claim(input: {
-    db: DbClient
-    rootTaskId: string
-    operation: TerminalMaintenanceOperation
-    members: readonly MaintenanceMemberSnapshot[]
-    cleanupPlanJson: string
-    now?: number
-  }): TerminalMaintenanceClaim
-  assertClaimTx(input: {
-    tx: DbTxSync
-    claim: TerminalMaintenanceClaim
-    expectedState: TerminalMaintenanceState
-  }): void
-  transition(input: {
-    db: DbClient
-    claim: TerminalMaintenanceClaim
-    to: TerminalMaintenanceState
-    now?: number
-    releaseMembers?: boolean
-  }): TerminalMaintenanceClaim
-  transitionTx(input: {
-    tx: DbTxSync
-    claim: TerminalMaintenanceClaim
-    to: TerminalMaintenanceState
-    now: number
-    releaseMembers?: boolean
-  }): TerminalMaintenanceClaim
-  complete(input: { db: DbClient; claim: TerminalMaintenanceClaim; now?: number }): void
-  listRecoverable(input: {
-    db: DbClient
-    operation?: TerminalMaintenanceOperation
-    rootTaskId?: string
-  }): readonly RecoverableTerminalMaintenanceClaim[]
-}
 
 export interface RecoverableTerminalMaintenanceClaim {
   readonly claim: TerminalMaintenanceClaim
@@ -55,4 +15,31 @@ export interface RecoverableTerminalMaintenanceClaim {
     | 'recovery-required'
   readonly cleanupPlanJson: string
   readonly members: readonly MaintenanceMemberSnapshot[]
+}
+
+/** Promise-shaped CAS/lease boundary for destructive terminal maintenance. */
+export interface TerminalMaintenanceStore {
+  snapshotMembers(taskIds: readonly string[]): Promise<readonly MaintenanceMemberSnapshot[]>
+  snapshotTree(rootTaskId: string): Promise<readonly MaintenanceMemberSnapshot[]>
+  claim(input: {
+    readonly rootTaskId: string
+    readonly operation: TerminalMaintenanceOperation
+    readonly members: readonly MaintenanceMemberSnapshot[]
+    readonly cleanupPlanJson: string
+    readonly now?: number
+  }): Promise<TerminalMaintenanceClaim>
+  transition(input: {
+    readonly claim: TerminalMaintenanceClaim
+    readonly to: TerminalMaintenanceState
+    readonly now?: number
+    readonly releaseMembers?: boolean
+  }): Promise<TerminalMaintenanceClaim>
+  complete(input: {
+    readonly claim: TerminalMaintenanceClaim
+    readonly now?: number
+  }): Promise<void>
+  listRecoverable(input: {
+    readonly operation?: TerminalMaintenanceOperation
+    readonly rootTaskId?: string
+  }): Promise<readonly RecoverableTerminalMaintenanceClaim[]>
 }

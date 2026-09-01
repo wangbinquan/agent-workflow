@@ -1,22 +1,30 @@
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
 import type {
   ApplicationEvidence,
   RetryAuthority,
   TaskExecutionAttemptState,
   TaskExecutionEffectKind,
 } from '../../domain/executionEffect'
-import type {
-  ExclusiveDaemonLockProof,
-  OwnerSnapshot,
-  OwnershipToken,
-  OwnershipTuple,
-  VerifiedOutcomeUnknownClosure,
-  VerifiedStopProof,
-} from '../../domain/ownership'
+import type { OwnershipToken } from '../../domain/ownership'
 
-export interface PrepareEffectAttemptInput {
-  readonly db: DbClient
+export interface TaskEffectLineageSnapshot {
+  readonly executionLineageId: string
+  readonly continuationSlotKey: string
+  readonly slotPathJson: string
+  readonly workflowVersion: number | null
+  readonly nodeId: string | null
+  readonly iteration: number | null
+  readonly retryIndex: number | null
+  readonly shardKey: string | null
+}
+
+export interface TaskEffectAttemptIdentity {
+  readonly effectId: string
+  readonly attemptId: string
+  readonly attemptNo: number
+  readonly resourceKeys: readonly string[]
+}
+
+export interface TaskEffectAttemptPreparation {
   readonly token: OwnershipToken
   readonly intentId: string
   readonly operationKey: string
@@ -37,45 +45,7 @@ export interface PrepareEffectAttemptInput {
   readonly now?: number
 }
 
-export interface PreparedEffectAttempt {
-  readonly effectId: string
-  readonly attemptId: string
-  readonly attemptNo: number
-  readonly resourceKeys: readonly string[]
-}
-
-export interface LinkedWorkspaceRollbackEffect {
-  readonly effectId: string
-  readonly idempotent: boolean
-}
-
-export interface RecoveredManagedProcessResolution {
-  readonly resolvedEffectIds: readonly string[]
-  readonly unresolvedEffectIds: readonly string[]
-}
-
-export interface RecoveredCodeHostMutationInput {
-  readonly effectId: string
-  readonly attemptId: string
-  readonly outcome: 'applied' | 'definitely-not-applied'
-  readonly receiptJson: string
-  readonly nodeRunId: string | null
-  readonly responseStatus: number
-  readonly responseBody: string
-}
-
-export interface RecoveredCodeHostMutationResolution {
-  readonly appliedEffectIds: readonly string[]
-  readonly retryAuthorizedEffectIds: readonly string[]
-}
-
-export interface CodeHostAttemptPlan {
-  readonly operationGeneration: number
-  readonly retryAuthority: RetryAuthority
-}
-
-export interface SettleEffectAttemptInput {
-  readonly db: DbClient
+export interface TaskEffectAttemptSettlement {
   readonly token: OwnershipToken
   readonly effectId: string
   readonly attemptId: string
@@ -92,91 +62,53 @@ export interface SettleEffectAttemptInput {
   readonly receiptJson?: string | null
   readonly failureCode?: string | null
   readonly now?: number
-  /**
-   * Business projection that must become durable with the attempt settlement.
-   * The callback runs only after every effect/attempt/fence/lineage check has
-   * passed, inside the same owned transaction.
-   */
-  readonly onSettledTx?: (tx: DbTxSync) => void
 }
 
-export interface TaskExecutionEffectStore {
-  /**
-   * Admission-time link used only by an RFC-333 gate-continuation transaction.
-   * It creates the logical effect before a worker exists; the exact owner epoch
-   * still prepares the first attempt and acquires resource fences pre-drive.
-   */
-  linkWorkspaceRollbackTx(input: {
-    readonly tx: DbTxSync
+export interface CodeHostNodeSettlementProjection {
+  readonly nodeRunId: string
+  readonly status: 'done' | 'failed'
+  readonly reason: string
+  readonly finishedAt: number
+  readonly errorMessage?: string
+  readonly failureCode?: string
+  readonly outputs?: readonly Readonly<{ portName: string; content: string }>[]
+}
+
+/** Provider-neutral effect journal and resource-fence boundary. Business
+ * projections that must share settlement atomicity are exposed as separate
+ * named ports by their owning use case, never as a transaction callback. */
+export interface TaskExecutionEffectPersistence {
+  readLineage(input: {
     readonly taskId: string
     readonly intentId: string
-    readonly operationKey: string
-    readonly executionLineageId: string
-    readonly operationFamilyKey: string
-    readonly operationGeneration: number
-    readonly requestHash: string
-    readonly slotPathJson: string
-    readonly slotPathDigest: string
-    readonly now: number
-  }): LinkedWorkspaceRollbackEffect
-  /** Reuse an explicitly authorized open generation; otherwise mint N+1. */
+    readonly nodeRunId?: string
+  }): Promise<TaskEffectLineageSnapshot | null>
   planCodeHostAttempt(input: {
-    readonly db: DbClient
     readonly executionLineageId: string
     readonly operationFamilyKey: string
-  }): CodeHostAttemptPlan
-  prepareAndAcquire(input: PrepareEffectAttemptInput): PreparedEffectAttempt
-  settle(input: SettleEffectAttemptInput): void
-  /**
-   * Resolve only RFC-328 pre-activated managed-process attempts after the
-   * successor daemon's orphan-process barrier has completed.  A durable spawn
-   * receipt means the launch happened; its absence means the gated launcher
-   * could not activate the target.  Every other shape remains unresolved.
-   */
-  resolveQuiescedManagedProcesses(
-    input: {
-      readonly db: DbClient
-      readonly quiescenceEvidenceDigest: string
-      readonly now?: number
-    } & (
-      | {
-          readonly authority: 'successor-daemon'
-          readonly owner: OwnershipTuple
-          readonly expectedRevision: number
-          readonly lockProof: ExclusiveDaemonLockProof
-        }
-      | {
-          readonly authority: 'exact-stop'
-          readonly token: OwnershipToken
-          readonly expectedRevision: number
-          readonly proof: VerifiedStopProof
-        }
-    ),
-  ): RecoveredManagedProcessResolution
-  /** Resolve deterministic code-host probes under the successor daemon lock. */
-  resolveQuiescedCodeHostMutations(input: {
-    readonly db: DbClient
-    readonly owner: OwnershipTuple
-    readonly expectedRevision: number
-    readonly lockProof: ExclusiveDaemonLockProof
-    readonly quiescenceEvidenceDigest: string
-    readonly resolutions: readonly RecoveredCodeHostMutationInput[]
-    readonly onAppliedTx?: (tx: DbTxSync, resolution: RecoveredCodeHostMutationInput) => void
-    readonly now?: number
-  }): RecoveredCodeHostMutationResolution
-  closeOutcomeUnknownAndRelease(input: {
-    readonly db: DbClient
+  }): Promise<{ readonly operationGeneration: number; readonly retryAuthority: RetryAuthority }>
+  nextOperationGeneration(input: {
+    readonly executionLineageId: string
+    readonly operationFamilyKey: string
+  }): Promise<number>
+  prepareAndAcquire(input: TaskEffectAttemptPreparation): Promise<TaskEffectAttemptIdentity>
+  settle(input: TaskEffectAttemptSettlement): Promise<void>
+  settleCodeHostNode(input: {
+    readonly settlement: TaskEffectAttemptSettlement
+    readonly projection: CodeHostNodeSettlementProjection
+  }): Promise<void>
+  recordProcessSpawn(input: {
     readonly token: OwnershipToken
-    readonly intentId: string
-    readonly proof: VerifiedOutcomeUnknownClosure
+    readonly effectId: string
+    readonly attemptId: string
+    readonly nodeRunId: string
+    readonly pid: number
+    readonly spawnBinaryPath: string
+    readonly launchNonce: string
+    readonly runtimeParamsJson?: string
     readonly now?: number
-  }): OwnerSnapshot
-  closeRecoveredOutcomeUnknownAndRelease(input: {
-    readonly db: DbClient
-    readonly owner: OwnershipTuple
-    readonly expectedRevision: number
-    readonly lockProof: ExclusiveDaemonLockProof
-    readonly proof: VerifiedOutcomeUnknownClosure
-    readonly now?: number
-  }): OwnerSnapshot
+  }): Promise<void>
 }
+
+/** @deprecated source-compatibility name; the shape is Promise/provider-neutral. */
+export type TaskExecutionEffectStore = TaskExecutionEffectPersistence

@@ -22,16 +22,19 @@ interface PermitState {
 export class TaskClaimGate {
   private readonly permits = new Map<string, PermitState>()
   private sealed = false
+  private paused = false
   private idleWaiters = new Set<() => void>()
   private readonly tokenWaiters = new Map<string, Set<() => void>>()
 
   constructor(readonly generation: string) {}
 
   enter(): ClaimAttachPermit {
-    if (this.sealed) {
+    if (this.sealed || this.paused) {
       throw new TaskExecutionError(
         'task-execution-shutting-down',
-        'task execution admission is sealed for daemon shutdown',
+        this.sealed
+          ? 'task execution admission is sealed for daemon shutdown'
+          : 'task execution admission is paused for provider-session freeze',
       )
     }
     const permit = createClaimAttachPermit({ gateGeneration: this.generation, permitId: ulid() })
@@ -79,16 +82,44 @@ export class TaskClaimGate {
 
   seal(): void {
     this.sealed = true
+    this.paused = true
   }
 
   get isSealed(): boolean {
     return this.sealed
   }
 
+  get isPaused(): boolean {
+    return this.paused
+  }
+
+  /** Reversible provider-session admission freeze. Existing permits drain. */
+  pause(): void {
+    if (this.sealed) {
+      throw new TaskExecutionError(
+        'task-execution-shutting-down',
+        'task execution admission is sealed for daemon shutdown',
+      )
+    }
+    this.paused = true
+  }
+
+  /** Reopen a provider session after a successful rollback or resume. */
+  resume(): void {
+    if (this.sealed) {
+      throw new TaskExecutionError(
+        'task-execution-shutting-down',
+        'task execution admission is sealed for daemon shutdown',
+      )
+    }
+    this.paused = false
+  }
+
   /** Test isolation only; a production daemon never reopens after shutdown. */
   resetForTesting(): void {
     if (this.permits.size !== 0) throw new Error('cannot reset a non-idle claim gate')
     this.sealed = false
+    this.paused = false
     this.idleWaiters.clear()
     this.tokenWaiters.clear()
   }

@@ -1,5 +1,17 @@
-import { parseExitCondition } from '../domain/loopExitCondition'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
+import type { Actor } from '@/auth/actor'
+import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
+
+export { parseLoopExitCondition } from '@agent-workflow/shared'
+
+/**
+ * Task Execution owns the public-task window used by System Overview.  The
+ * adapter applies the exact owner/collaborator visibility rule and never
+ * exposes a provider row or client to the aggregate.
+ */
+export interface TaskOverviewQuery {
+  load(input: { readonly actor: Actor; readonly since: number }): Promise<OverviewTasks>
+}
 
 /**
  * Public read of the loop iteration used by parked-wrapper revival. Malformed
@@ -28,5 +40,5 @@ export interface LoopExitConditionCandidate {
 
 /** Validator-facing interpretation of the runtime's exact loop-exit grammar. */
 export function isValidLoopExitCondition(value: LoopExitConditionCandidate): boolean {
-  return parseExitCondition(value) !== null
+  return parseLoopExitCondition(value) !== null
 }

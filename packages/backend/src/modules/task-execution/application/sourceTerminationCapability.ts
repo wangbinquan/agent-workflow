@@ -4,7 +4,7 @@
 import type {
   SourceTerminationEffectCapability,
   TaskSourceTerminationEffectInput,
-} from '@/modules/task-execution/public/participants'
+} from './applySourceTerminationEffect'
 
 const claims = new WeakMap<object, TaskSourceTerminationEffectInput>()
 

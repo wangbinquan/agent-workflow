@@ -1,94 +1,78 @@
-import type { DbClient } from '@/db/client'
-import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
-import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
-import { cancelTask, isTaskActive, resumeTask } from '@/services/task'
-import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
-import { humanGateComposition } from '@/services/humanGateComposition'
-import type { SchedulerRuntimeTopology } from '../public/participants'
-import type { TaskExecutionReadModels } from '../public/types'
-import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
-import { createPostgresqlTaskExecutionReadModels } from '../infrastructure/postgresqlTaskExecutionReadModels'
-import { createSqliteTaskExecutionReadModels } from '../infrastructure/sqliteTaskExecutionReadModels'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { composeExecutionMergeRecovery } from './executionMergeRecovery'
-import { driveTaskEngineApplication } from './taskEngineApplication'
-import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
-import { composeWrapperRuntime } from './wrapperRuntime'
+export {
+  composeTaskExecutionRuntime,
+  type TaskExecutionRuntime,
+  type TaskRepositoryPublicationTransport,
+} from './runtimeAssembly'
+export {
+  createPostgresqlTaskExecutionPersistence,
+  createSqliteTaskExecutionPersistence,
+} from './taskExecutionPersistence'
+export {
+  createPostgresqlTaskExecutionRuntimeParticipants,
+  type PostgresqlTaskExecutionRuntimeDependencies,
+  type PostgresqlTaskExecutionRuntimeAggregate,
+} from '../infrastructure/postgresqlTaskExecutionRuntimeParticipants'
+export { createSqliteTaskExecutionRuntimeParticipants } from '../infrastructure/sqliteTaskExecutionRuntimeParticipants'
+export {
+  composePostgresqlWorkgroupHostLedgerParticipantFactory,
+  type PostgresqlWorkgroupHostLedgerParticipantFactory,
+} from './workgroupHostLedger'
+export {
+  composePostgresqlNodeRunLifecycleParticipantFactory,
+  type PostgresqlNodeRunLifecycleParticipantFactory,
+} from './nodeRunLifecycle'
+export {
+  composePostgresqlWorkgroupTaskRoomTaskParticipantFactory,
+  type PostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
+  type PostgresqlWorkgroupTaskRoomTaskParticipantFactory,
+} from './workgroupTaskRoomTask'
+export {
+  createPostgresqlChildTaskLifecycleParticipant,
+  type PostgresqlChildTaskLifecycleDependencies,
+} from './childTaskLifecycle'
+export {
+  createPostgresqlChildExecutionLaunchOperations,
+  type PostgresqlChildExecutionLaunchDependencies,
+  type PostgresqlChildWorkgroupLaunchResources,
+} from './childExecutionLaunch'
+export { composeTaskClarifyDirectiveRouteOperations } from './taskClarifyDirectiveRoutes'
+export { composeTaskAutoResumeCommand } from './taskAutoResume'
+export type {
+  RepositoryPreparationRetryCommand,
+  TaskAutoResumeCommand,
+  TaskAutoResumeResult,
+} from '../application/ports/taskAutoResumeCommand'
+export {
+  createBuildScheduleLaunch,
+  createPostgresqlTaskExecutionTriggerParticipant,
+  createSqliteTaskExecutionTriggerParticipant,
+  type SqliteTaskExecutionTriggerDependencies,
+  type TaskExecutionTriggerParticipant,
+} from './triggerExecution'
+export {
+  createPostgresqlRepositoryPreparationRetryCommand,
+  type PostgresqlRepositoryPreparationRetryDependencies,
+} from '../infrastructure/postgresqlRepositoryPreparationRetryCommand'
+export {
+  createPostgresqlTaskRouteWorkspaceParticipant,
+  createPostgresqlTaskWorkspaceMaterializer,
+  type PostgresqlTaskRouteWorkspaceDependencies,
+  type PostgresqlTaskWorkspaceMaterializer,
+  type PostgresqlTaskWorkspacePreparation,
+} from '../infrastructure/postgresqlTaskRouteWorkspaceParticipant'
+export {
+  composePostgresqlTaskExecutionProviderRuntime,
+  composeSqliteTaskExecutionProviderRuntime,
+  type PostgresqlTaskExecutionProviderRuntimeDependencies,
+  type SelectedPostgresqlTaskExecutionProviderRuntime,
+  type SelectedSqliteTaskExecutionProviderRuntime,
+  type SelectedTaskExecutionProviderRuntime,
+  type SqliteTaskExecutionProviderRuntimeDependencies,
+  type TaskExecutionBackgroundControl,
+  type TaskExecutionBackgroundStartDependencies,
+  type TaskExecutionProviderRouteContext,
+} from './providerRuntime'
 
-export type TaskRepositoryPublicationTransport = NonNullable<
-  RunTaskOptions['repositoryPublicationTransport']
->
-
-export interface TaskExecutionRuntime extends TaskExecutionRuntimeComponents {
-  readonly schedulerDriver: SchedulerDriverPort
-  readonly topology: SchedulerRuntimeTopology
-  readonly readModels: TaskExecutionReadModels
-}
-
-export function composeSqliteTaskExecutionReadModels(db: DbClient): TaskExecutionReadModels {
-  return createSqliteTaskExecutionReadModels(db)
-}
-
-export function composePostgresqlTaskExecutionReadModels(
-  db: PostgresqlDatabaseClient,
-): TaskExecutionReadModels {
-  return createPostgresqlTaskExecutionReadModels(db)
-}
-
-export function composeTaskExecutionRuntime(input: {
-  readonly db: DbClient
-  /** Bootstrap-selected provider-neutral reads; direct SQLite tests may omit it. */
-  readonly readModels?: TaskExecutionReadModels
-  readonly identityAccess?: Readonly<{
-    readonly delegatedRequests: DelegatedRequestAuthorityFactory
-    readonly taskExecutionResources: TaskExecutionResourceBinding
-  }>
-  readonly repositoryPublicationTransport?: TaskRepositoryPublicationTransport
-}): TaskExecutionRuntime {
-  const { db, identityAccess, repositoryPublicationTransport } = input
-  const readModels = input.readModels ?? composeSqliteTaskExecutionReadModels(db)
-  const topology = {} as SchedulerRuntimeTopology
-  const runtimeComponents: TaskExecutionRuntimeComponents = Object.freeze({
-    wrapperRuntimeFactory: composeWrapperRuntime,
-    mergeRecoveryFactory: composeExecutionMergeRecovery,
-  })
-  const schedulerDriver: SchedulerDriverPort = {
-    async drive(request) {
-      await driveTaskEngineApplication(
-        {
-          ...request,
-          db,
-          ...(identityAccess === undefined ? {} : { identityAccess }),
-          ...(repositoryPublicationTransport === undefined
-            ? {}
-            : { repositoryPublicationTransport }),
-        } as RunTaskOptions,
-        topology,
-        humanGateComposition.composeTaskExecutionHumanGateAdapter(),
-        runtimeComponents,
-      )
-    },
-    async cancelChild(request) {
-      await cancelTask(db, request.taskId, { cascadeFromParent: request.cascadeFromParent })
-    },
-    async resumeChild(request) {
-      await resumeTask(db, request.taskId, {
-        db,
-        schedulerDriver,
-        ...(request.runtime.triggerContext === undefined
-          ? {}
-          : { triggerContext: request.runtime.triggerContext }),
-        ...(request.runtime.actorUserId === undefined
-          ? {}
-          : { actorUserId: request.runtime.actorUserId }),
-        ...request.runtime.runConfig,
-      })
-    },
-    isTaskActive,
-  }
-  Object.assign(topology, {
-    schedulerDriver,
-  })
-  Object.freeze(topology)
-  return Object.freeze({ schedulerDriver, topology, readModels, ...runtimeComponents })
-}
+export { createSqliteTaskExecutionReadModels as composeSqliteTaskExecutionReadModels } from '../infrastructure/sqliteTaskExecutionReadModels'
+export { createPostgresqlTaskExecutionReadModels as composePostgresqlTaskExecutionReadModels } from '../infrastructure/postgresqlTaskExecutionReadModels'
+export { createPostgresqlTaskExecutionCatalogSourceFactory } from '../infrastructure/postgresqlTaskCatalogSources'

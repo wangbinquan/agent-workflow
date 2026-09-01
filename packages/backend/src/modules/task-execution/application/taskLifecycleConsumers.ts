@@ -15,10 +15,10 @@ export const taskLifecycleCommittedEventCodec = {
 
 export function createTaskLifecycleDurableConsumerDefinitions(input: {
   readonly events: EventObservationParticipant
-  readonly closeTerminalGates: (taskId: string, status: 'done' | 'canceled') => void
-  readonly notifyChildBudget: (taskId: string, status: TaskStatus) => void
-  readonly notifyExecutionWatch: (taskId: string, status: TaskStatus) => void
-  readonly nudgeWorkspacePrune: (taskId: string) => void
+  readonly closeTerminalGates: (taskId: string, status: 'done' | 'canceled') => Promise<void>
+  readonly notifyChildBudget: (taskId: string, status: TaskStatus) => Promise<void>
+  readonly notifyExecutionWatch: (taskId: string, status: TaskStatus) => Promise<void>
+  readonly nudgeWorkspacePrune: (taskId: string) => Promise<void>
 }): readonly CommittedEventConsumerDefinition[] {
   return [
     {
@@ -26,10 +26,10 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
       eventTypes: ['task.created.v1', 'task.lifecycle-transitioned.v1'],
       deliveryClass: 'critical',
       settle: 'durable-effect-recorded',
-      handle(value) {
+      async handle(value) {
         const event = decodeTaskLifecycleCommittedEvent(value)
         if (event.type === 'task.node-statuses-transitioned.v1') return
-        input.events.observe(
+        await input.events.observe(
           taskLifecycleObservation({
             taskId: event.payload.taskId,
             revision: event.payload.lifecycleRevision,
@@ -45,13 +45,13 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
       eventTypes: ['task.lifecycle-transitioned.v1'],
       deliveryClass: 'critical',
       settle: 'durable-effect-recorded',
-      handle(value) {
+      async handle(value) {
         const event = decodeTaskLifecycleCommittedEvent(value)
         if (
           event.type === 'task.lifecycle-transitioned.v1' &&
           (event.payload.status === 'done' || event.payload.status === 'canceled')
         ) {
-          input.closeTerminalGates(event.payload.taskId, event.payload.status)
+          await input.closeTerminalGates(event.payload.taskId, event.payload.status)
         }
       },
     },
@@ -60,10 +60,10 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
       eventTypes: ['task.created.v1', 'task.lifecycle-transitioned.v1'],
       deliveryClass: 'rebuildable',
       settle: 'delivery-accepted',
-      handle(value) {
+      async handle(value) {
         const event = decodeTaskLifecycleCommittedEvent(value)
         if (event.type !== 'task.node-statuses-transitioned.v1') {
-          input.notifyChildBudget(event.payload.taskId, event.payload.status)
+          await input.notifyChildBudget(event.payload.taskId, event.payload.status)
         }
       },
     },
@@ -72,13 +72,13 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
       eventTypes: ['task.lifecycle-transitioned.v1'],
       deliveryClass: 'rebuildable',
       settle: 'delivery-accepted',
-      handle(value) {
+      async handle(value) {
         const event = decodeTaskLifecycleCommittedEvent(value)
         if (
           event.type === 'task.lifecycle-transitioned.v1' &&
           isTerminalTaskStatus(event.payload.status)
         ) {
-          input.notifyExecutionWatch(event.payload.taskId, event.payload.status)
+          await input.notifyExecutionWatch(event.payload.taskId, event.payload.status)
         }
       },
     },
@@ -87,13 +87,13 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
       eventTypes: ['task.lifecycle-transitioned.v1'],
       deliveryClass: 'rebuildable',
       settle: 'delivery-accepted',
-      handle(value) {
+      async handle(value) {
         const event = decodeTaskLifecycleCommittedEvent(value)
         if (
           event.type === 'task.lifecycle-transitioned.v1' &&
           event.payload.workspacePruneClaim !== null
         ) {
-          input.nudgeWorkspacePrune(event.payload.taskId)
+          await input.nudgeWorkspacePrune(event.payload.taskId)
         }
       },
     },

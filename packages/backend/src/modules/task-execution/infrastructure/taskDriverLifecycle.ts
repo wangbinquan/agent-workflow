@@ -8,7 +8,7 @@ import type {
   TaskDriveAttachOutcome,
   TaskDriverLifecyclePort,
 } from '../application/drive/taskDriveCoordinator'
-import { createTaskExecutionContext } from '../application/taskExecutionContext'
+import { createTaskExecutionContext } from '../composition/sqliteTaskExecutionContext'
 import {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,

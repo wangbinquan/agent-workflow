@@ -18,9 +18,6 @@
 //      reversible (RFC-306 D10). A skipped row without provenance is never
 //      "fresh", so the frontier re-dispatches it every tick — a busy loop.
 
-import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRunOutputs, nodeRuns } from '@/db/schema'
 import { pickUpstreamSourceRun } from '@/services/freshness'
 import { joinModeOf, resolveWorkflowSourceRef } from '@agent-workflow/shared'
 import type { PortRef, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -35,6 +32,7 @@ import {
   collectImplicitInboundRefs,
   nodeKindIndex,
 } from '../domain/inboundEdges'
+import type { NodeActivationSnapshotReader } from './ports/nodeActivationSnapshotReader'
 
 export interface NodeActivationDecision {
   activation: NodeActivation
@@ -50,7 +48,7 @@ export interface NodeActivationDecision {
 }
 
 export async function resolveNodeActivationForDispatch(args: {
-  db: DbClient
+  reader: NodeActivationSnapshotReader
   taskId: string
   definition: WorkflowDefinition
   node: WorkflowNode
@@ -59,7 +57,7 @@ export async function resolveNodeActivationForDispatch(args: {
   /** RFC-306 §10 — set when the operator pressed "run anyway" on this node. */
   forceActivated?: boolean
 }): Promise<NodeActivationDecision> {
-  const { db, taskId, definition, node, iteration } = args
+  const { reader, taskId, definition, node, iteration } = args
   // Explicit dataflow edges + the implicit references the scheduler already
   // treats as dependencies (review.inputSource / output ports[].bind). Design
   // gate P1#2: judging activation on edges alone leaves review and output nodes
@@ -90,19 +88,12 @@ export async function resolveNodeActivationForDispatch(args: {
     const source = resolved.ok ? resolved.source : edge.source
 
     if (!runByNode.has(source.nodeId)) {
-      const rows = await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, source.nodeId)))
+      const rows = await reader.findRuns(taskId, source.nodeId)
       const picked = pickUpstreamSourceRun(rows, iteration)
       runByNode.set(source.nodeId, picked)
       if (picked !== undefined) {
         consumed[source.nodeId] = picked.id
-        const outRows = await db
-          .select({ portName: nodeRunOutputs.portName, active: nodeRunOutputs.active })
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, picked.id))
-        portsByRun.set(picked.id, new Map(outRows.map((o) => [o.portName, o.active])))
+        portsByRun.set(picked.id, new Map(await reader.findOutputActivation(picked.id)))
       }
     }
 

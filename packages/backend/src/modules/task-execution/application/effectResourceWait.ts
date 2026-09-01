@@ -13,11 +13,11 @@ const MAX_RESOURCE_WAIT_MS = 250
  * across daemon processes. Exponential backoff keeps long-running shared
  * workspace/process turns from becoming a hot DB poll.
  */
-export async function waitForEffectResourceTurn<T>(acquire: () => T): Promise<T> {
+export async function waitForEffectResourceTurn<T>(acquire: () => T | Promise<T>): Promise<T> {
   let waitMs = INITIAL_RESOURCE_WAIT_MS
   for (;;) {
     try {
-      return acquire()
+      return await acquire()
     } catch (error) {
       if (
         !(error instanceof TaskExecutionError) ||

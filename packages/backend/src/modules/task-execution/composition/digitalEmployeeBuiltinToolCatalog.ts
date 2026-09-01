@@ -1,13 +1,12 @@
 import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
 
-import type { DbClient } from '@/db/client'
+import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import {
   normalizeDispatchRouteDefinitionsJson,
   type DigitalEmployeePlatformToolCatalogParticipant,
 } from '@/modules/digital-employee/public/types'
 import { sha256Hex } from '@/util/hash'
-import { getAgentByIdSync } from '@/services/agent'
 import {
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
   digitalEmployeeBuiltinAgentSuccessorId,
@@ -89,10 +88,10 @@ function declaredDispatchRoutes(value: unknown) {
       }>)
 }
 
-export function composeDigitalEmployeeBuiltinToolCatalog(input: {
-  readonly db: DbClient
+export async function composeDigitalEmployeeBuiltinToolCatalog(input: {
+  readonly agentTemplates: DigitalEmployeeAgentTemplateCatalogParticipant
   readonly typePackageDescriptorJsons: readonly string[]
-}): DigitalEmployeePlatformToolCatalogParticipant {
+}): Promise<DigitalEmployeePlatformToolCatalogParticipant> {
   const descriptorsByTypeRef = new Map<string, z.infer<typeof descriptorSchema>>()
   for (const value of input.typePackageDescriptorJsons) {
     const descriptor = descriptorSchema.parse(JSON.parse(value) as unknown)
@@ -102,10 +101,12 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
     )
   }
   const descriptors = [...descriptorsByTypeRef.values()]
-  const builtinAgents = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.map((agentId) => ({
-    agentId,
-    agent: getAgentByIdSync(input.db, agentId),
-  }))
+  const builtinAgents = await Promise.all(
+    DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.map(async (agentId) => ({
+      agentId,
+      agent: await input.agentTemplates.get(agentId),
+    })),
+  )
   const prefix = 'platform:employee-tool:'
   const parseIdentity = (toolId: string) => {
     if (!toolId.startsWith(prefix)) return null
@@ -242,7 +243,7 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
     }),
   )
 
-  return {
+  const catalog: DigitalEmployeePlatformToolCatalogParticipant = {
     listJson(typeRefJson, workItemRef) {
       const typeRef = typeRefSchema.parse(JSON.parse(typeRefJson) as unknown)
       return JSON.stringify(
@@ -310,4 +311,5 @@ export function composeDigitalEmployeeBuiltinToolCatalog(input: {
     },
     isPlatformTool: (toolId) => toolId.startsWith(prefix),
   }
+  return Object.freeze(catalog)
 }

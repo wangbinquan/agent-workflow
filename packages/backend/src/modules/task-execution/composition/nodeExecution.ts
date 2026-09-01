@@ -1,6 +1,6 @@
 import type { WorkflowNode } from '@agent-workflow/shared'
-import type { LegacyTaskMechanicsState } from '@/services/execution/taskMechanicsState'
-import { createClarifyRound } from '@/services/clarify/service'
+import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { WrapperRuntimeFactory } from './taskExecutionComponents'
 import {
   buildWorkgroupEngineSupport,
@@ -16,7 +16,7 @@ import {
   runScriptNode,
   type OneNodeArgs,
 } from './nodeMechanics'
-import type { WorkgroupEngineHooks } from '@/services/workgroup/hooks'
+import type { WorkgroupTurnHostOperations } from '../application/ports/workgroupTurnsOperations'
 import type { CollaborationNodeGatePort } from '../application/ports/collaborationNodeGate'
 import type {
   WorkgroupHostExecutionPort,
@@ -42,18 +42,18 @@ import { ScriptNodeExecutor } from '../engine/node/scriptNodeExecutor'
 import { InputNodeExecutor, OutputNodeExecutor } from '../engine/node/virtualIoNodeExecutors'
 import { createWrapperDelegatingNodeExecutors } from '../engine/node/wrapperDelegatingNodeExecutors'
 
-const gateways = new WeakMap<LegacyTaskMechanicsState, NodeExecutionGateway>()
+const gateways = new WeakMap<TaskMechanicsState, NodeExecutionGateway>()
 
 function legacyArgs(
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   request: Pick<NodeStepRequest, 'node' | 'iteration'>,
 ): OneNodeArgs {
   return { node: request.node as WorkflowNode, iteration: request.iteration, log: state.log }
 }
 
 function legacyHostPort(
-  state: LegacyTaskMechanicsState,
-  collaboration: CollaborationNodeGatePort,
+  state: TaskMechanicsState,
+  collaboration: CollaborationRuntimeMechanics,
 ): WorkgroupHostExecutionPort {
   return {
     async executeHost(request: WorkgroupHostExecutionRequest) {
@@ -70,48 +70,29 @@ function legacyHostPort(
   }
 }
 
-function collaborationPort(state: LegacyTaskMechanicsState): CollaborationNodeGatePort {
+function collaborationPort(state: TaskMechanicsState): CollaborationNodeGatePort {
+  const mechanics: CollaborationRuntimeMechanics = state.opts.collaborationRuntime
   return {
-    requestReview: (request) => runReviewNode(state, legacyArgs(state, request)),
-    inspectCrossClarify: (request) => runCrossClarifyNode(state, legacyArgs(state, request)),
+    requestReview: (request) => runReviewNode(state, legacyArgs(state, request), mechanics),
+    inspectCrossClarify: (request) =>
+      runCrossClarifyNode(state, legacyArgs(state, request), mechanics),
     async openAgentClarify(request) {
-      const common = {
-        db: state.db,
-        taskId: request.taskId,
-        askingNodeId: request.askingNodeId,
-        askingNodeRunId: request.askingNodeRunId,
-        intermediaryNodeId: request.intermediaryNodeId,
-        questions: [...request.questions],
-        ...(request.truncationWarnings === undefined
+      const result = await mechanics.openAgentClarify({
+        ...request,
+        ...(state.opts.executionContext === undefined
           ? {}
-          : { truncationWarnings: [...request.truncationWarnings] }),
-      }
-      const result =
-        request.kind === 'self'
-          ? await createClarifyRound({
-              ...common,
-              kind: 'self',
-              askingShardKey: request.askingShardKey,
-              iteration: request.iteration,
-              ...(request.parentNodeRunId === undefined
-                ? {}
-                : { parentNodeRunId: request.parentNodeRunId }),
-            })
-          : await createClarifyRound({
-              ...common,
-              kind: 'cross',
-              targetConsumerNodeId: request.targetConsumerNodeId,
-              loopIter: request.loopIter,
-            })
+          : { executionContext: state.opts.executionContext }),
+      })
       return { intermediaryNodeRunId: result.intermediaryNodeRunId }
     },
   }
 }
 
 function buildGateway(
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): NodeExecutionGateway {
+  const mechanics = state.opts.collaborationRuntime
   const collaboration = collaborationPort(state)
   const wrapperRuntime = wrapperRuntimeFactory(state)
   const wrappers = createWrapperDelegatingNodeExecutors(wrapperRuntime, state.wrapperScopes)
@@ -130,10 +111,9 @@ function buildGateway(
   const executors = {
     'agent-single': new AgentSingleNodeExecutor(
       {
-        executeAgent: (request) =>
-          runAgentSingleNode(state, legacyArgs(state, request), collaboration),
+        executeAgent: (request) => runAgentSingleNode(state, legacyArgs(state, request), mechanics),
       },
-      legacyHostPort(state, collaboration),
+      legacyHostPort(state, mechanics),
     ),
     input: new InputNodeExecutor(virtualIo),
     output: new OutputNodeExecutor(virtualIo),
@@ -161,7 +141,7 @@ function buildGateway(
 }
 
 function gatewayFor(
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): NodeExecutionGateway {
   const existing = gateways.get(state)
@@ -173,7 +153,7 @@ function gatewayFor(
 
 /** The sole production entry for one ready DAG node. */
 export function executeNode(
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   args: OneNodeArgs,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): ReturnType<NodeExecutionGateway['executeNode']> {
@@ -188,7 +168,7 @@ export function executeNode(
 
 /** Shared typed host lane used by the workgroup adapter during T10 cutover. */
 export function executeWorkgroupHost(
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   request: WorkgroupHostExecutionRequest,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ) {
@@ -197,12 +177,12 @@ export function executeWorkgroupHost(
 
 /** Workgroup engines keep their hook shape while the host body resolves through the registry. */
 export function buildNodeExecutionWorkgroupHooks(
-  state: LegacyTaskMechanicsState,
+  state: TaskMechanicsState,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
-): WorkgroupEngineHooks {
+): WorkgroupTurnHostOperations {
   return {
     ...buildWorkgroupEngineSupport(state),
-    runHostNode: (host) =>
+    runHost: (host) =>
       executeWorkgroupHost(
         state,
         {

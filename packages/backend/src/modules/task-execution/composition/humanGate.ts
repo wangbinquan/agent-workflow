@@ -7,18 +7,18 @@ import type { PreparedHumanGateRef } from '@/modules/collaboration/public/types'
 import {
   bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal,
   type TaskDecisionParticipantInTx,
-} from '../application/acceptHumanGateDecision'
+} from '../infrastructure/sqliteTaskDecisionParticipant'
 import {
   TaskParkTransaction,
   type ParkTaskAtHumanGateResult,
-} from '../application/parkTaskAtHumanGate'
+} from '../infrastructure/sqliteTaskParkTransaction'
 import {
   ManualQuestionParkRequired,
   ManualQuestionParkTransaction,
   assertNoManualQuestionParkObligationTx as assertNoManualQuestionParkObligationTxInternal,
   type ManualQuestionParkSettleResult,
-} from '../application/parkManualQuestions'
-import type { TaskExecutionEffectStore } from '../application/ports/taskExecutionEffectStore'
+} from '../infrastructure/sqliteManualQuestionParkTransaction'
+import type { TaskExecutionEffectStore } from '../infrastructure/taskExecutionEffectTransactionStore'
 import type { HumanGateOpenParticipant } from '../application/ports/humanGateOpenParticipant'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import { assertTaskExecutionContext } from '../application/taskExecutionContext'
@@ -34,13 +34,13 @@ export function bindTaskDecisionParticipantInTx(
   return bindTaskDecisionParticipantInTxInternal(tx, humanGateTaskLifecycle, effects)
 }
 
-export function parkPreparedHumanGate(input: {
+export async function parkPreparedHumanGate(input: {
   readonly db: DbClient
   readonly humanGates: HumanGateOpenParticipant
   readonly prepared: PreparedHumanGateRef
   readonly executionContext?: TaskExecutionContextRef
   readonly now?: number
-}): ParkTaskAtHumanGateResult {
+}): Promise<ParkTaskAtHumanGateResult> {
   const transaction = new TaskParkTransaction(
     taskExecutionModule.ownership,
     input.humanGates,
@@ -48,10 +48,10 @@ export function parkPreparedHumanGate(input: {
   )
   const now = input.now ?? Date.now()
   if (input.executionContext === undefined) {
-    return transaction.parkOwnerless({ db: input.db, prepared: input.prepared, now })
+    return await transaction.parkOwnerless({ db: input.db, prepared: input.prepared, now })
   }
   assertTaskExecutionContext(input.executionContext, input.prepared.taskId)
-  return transaction.park({
+  return await transaction.park({
     db: input.db,
     token: input.executionContext.token,
     prepared: input.prepared,
@@ -59,17 +59,17 @@ export function parkPreparedHumanGate(input: {
   })
 }
 
-export function settleManualQuestionParkObligations(input: {
+export async function settleManualQuestionParkObligations(input: {
   readonly db: DbClient
   readonly humanGates: HumanGateOpenParticipant
   readonly taskId: string
   readonly executionContext?: TaskExecutionContextRef
   readonly now?: number
-}): ManualQuestionParkSettleResult {
+}): Promise<ManualQuestionParkSettleResult> {
   if (input.executionContext !== undefined) {
     assertTaskExecutionContext(input.executionContext, input.taskId)
   }
-  return new ManualQuestionParkTransaction(
+  return await new ManualQuestionParkTransaction(
     taskExecutionModule.ownership,
     input.humanGates,
     humanGateTaskLifecycle,
