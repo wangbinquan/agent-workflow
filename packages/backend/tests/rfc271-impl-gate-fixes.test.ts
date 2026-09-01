@@ -87,7 +87,7 @@ describe('P2-6 · withApplyLock 的 map 清理必须比较同一个 Promise', ()
     // `applyLocks.get(key)` 恒为 false ⇒ 每个出现过的 serializationKey 都永久留一项。
     // 串行语义仍对，所以只会表现为内存缓慢增长——而 serializationKey 是按资源实例
     // 派生的，基数无上限。
-    const src = read('src/services/bundle/apply.ts')
+    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts')
     expect(src).toContain('const chain = prior.then(() => gate)')
     expect(src).toContain('applyLocks.get(key) === chain')
     expect(src).not.toContain('applyLocks.get(key) === gate')
@@ -95,14 +95,17 @@ describe('P2-6 · withApplyLock 的 map 清理必须比较同一个 Promise', ()
 })
 
 describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
-  test('daemon 启动与每小时任务都调了 convergeResourceBundleApplies', () => {
+  test('daemon 维护 worker 为两个 provider 都注入真实收敛命令', () => {
     // 只有定义、没有调用点的收敛器等于不存在：一次崩在 pre-stage 与 big tx 之间的
     // daemon 会永久留下插件 generation / 暂存技能目录，且那个 importId 每次重放都答
     // `bundle-apply-unsettled`。
     const runner = read('src/platform/background/maintenanceJobRunner.ts')
+    const worker = read('src/platform/background/maintenanceWorker.ts')
     const catalog = read('src/platform/background/maintenanceCatalog.ts')
     expect(runner).toContain("case 'intentRecovery'")
-    expect(runner).toContain('await convergeResourceBundleApplies(')
+    expect(worker).toContain('composeSqliteResourcePackageApplyMaintenance')
+    expect(worker).toContain('composePostgresqlResourcePackageApplyMaintenance')
+    expect(worker).toContain('resourcePackageMaintenanceCommand.converge({ activeApplyIds })')
     // 同一 durable job 由 catalog 明确注册 boot + hourly 两种 admission。
     const intentRecovery = catalog.slice(
       catalog.indexOf("key: 'intentRecovery'"),
@@ -115,7 +118,7 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
   test('committed 分支重放幂等尾，不是只 +1', () => {
     // 一次「DB 已提交、publish 前 SIGKILL」的 run 会留下已入库但**内容未发布**的技能
     // 版本。只 `rolledForward += 1` 等于宣称处理过而实际什么都没做。
-    const src = read('src/services/bundle/apply.ts')
+    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts')
     const adapter = read(
       'src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts',
     )
@@ -131,7 +134,7 @@ describe('P1-6 · 补偿没做干净就不许终态化 failed', () => {
     // 补偿抛错（EBUSY 等）却照样标 failed ⇒ 收敛器显式跳过 failed 行 ⇒ 那次残留再也
     // 不会被重试，而粗粒度 GC 又被任一非终态 run 挡住 ⇒ 永久残留，且 journal 反过来
     // 宣称「这次什么都没留下」。
-    const src = read('src/services/bundle/apply.ts')
+    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts')
     expect(src).toContain('if (compensated) {')
     expect(src).toContain("log.warn('bundle-left-retryable'")
   })
@@ -153,7 +156,7 @@ describe('P2-3 · lower 必须预载 payload 内 external 目标的名字', () =
     // 变成 `external:W`、child 的 create op 被删除。只扫 update target 的话 `nameOfId`
     // 里没有 W 的名字，call 槽拿不到权威名字 ⇒ 整包死在
     // `bundle-ref-invalid ... name is unknown`（一个纯 reuse 的包必然踩中）。
-    const src = read('src/services/bundle/lower.ts')
+    const src = read('src/platform/persistence/sqlite/legacyResourcePackageBundleLower.ts')
     expect(src).toContain('collectExternalRefs(op.payload')
     for (const slot of ['payload.skills', 'payload.dependsOn', 'payload.mcp', 'payload.plugins']) {
       expect(src).toContain(slot)
@@ -176,12 +179,12 @@ describe('P2-5 · 导出的 exact-revision fence（只 fence root）', () => {
     )
     // 技能树/工作组 roster 等后续 live 读取也必须被末端复核包住。
     expect(exportSrc).toContain(
-      'assertRootStillCurrent(db, actor, closure.root.type, closure.root.id, opts.expect)',
+      'assertRootStillCurrent(reads, actor, closure.root.type, closure.root.id, opts.expect)',
     )
     // 末端复核现在要 actor —— 它不只比「产物变没变」，还要重新跑一次**授权复核**
     // （闭包成员的 grant 可能在导出中途被撤销；实现门第四轮的 P1-2 就是这条漏检）。
     expect(exportSrc).toContain(
-      'assertClosureStillCurrent(db, actor, closure, skillTrees, serialized, opts.appHome)',
+      'assertClosureStillCurrent(\n    reads,\n    readPackageSkillTree,\n    actor,\n    closure,\n    skillTrees,\n    serialized,',
     )
     // 产物比较必须拿**序列化器自己的产出**比，不能拿「行」去近似「包」：
     //  · 用引擎 CAS token 会一边漏检（workflow/workgroup 漏 ACL）一边误拒（另四类把
@@ -257,7 +260,7 @@ describe('P2-2 / P2-7 · CLI 的两阶段与身份', () => {
   test('非 active 用户 ⇒ 拒绝（与 HTTP 同构的第二半）', () => {
     // HTTP 侧 session lookup 对停用用户返回 null；只查「行存在」会让 CLI 给一个停用
     // 主体造出可写 Actor，导入的资源归到该主体名下。
-    expect(src).toContain("row.status !== 'active'")
+    expect(src).toContain("resolved.status !== 'active'")
     expect(src).toContain('refusing to act as them')
   })
 })
@@ -285,7 +288,7 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
     // 解析端与 provider 端各拼一次 `${slug} ${username}`，其中一侧的「空格」实际敲成
     // 了 U+0000（编辑器不显示）⇒ 查表永远落空 ⇒ human 成员被当成「用户选了不加入」
     // 整条剔除，全程零报错。
-    const commit = read('src/services/resourcePackage/commit.ts')
+    const commit = read('src/platform/persistence/sqlite/legacyResourcePackageCommit.ts')
     expect(commit).toContain('export function humanMemberKey(')
     expect(commit).toContain('humanMemberKey(workgroupSlug, username)')
     // 分隔符必须是可见字符。
@@ -307,6 +310,8 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
       'src/services/resourcePackage/commit.ts',
       'src/services/resourcePackage/preview.ts',
       'src/services/bundle/lower.ts',
+      'src/platform/persistence/sqlite/legacyResourcePackageBundleLower.ts',
+      'src/platform/persistence/sqlite/legacyResourcePackageCommit.ts',
       'src/services/workflow.validator.ts',
     ]) {
       expect({ rel, hit: hasControlChar(read(rel)) }).toEqual({ rel, hit: false })
@@ -356,6 +361,7 @@ describe('P1-1 · 写权限点表两头受检', () => {
       'src/services/resourcePackage/preview.ts',
       'src/services/resourcePackage/commit.ts',
       'src/services/resourcePackage/importPermissions.ts',
+      'src/platform/persistence/sqlite/legacyResourcePackageCommit.ts',
     ]
       .map((p) => {
         try {

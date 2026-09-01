@@ -290,10 +290,17 @@ describe('RFC-247 impl-gate — redaction covers every door onto node output', (
   test('all three node-output doors call a redactor', () => {
     const tasks = readFileSync(resolve(SRC, 'routes/tasks.ts'), 'utf8')
     const wsRegistry = readFileSync(resolve(SRC, 'ws/registry.ts'), 'utf8')
+    const realtimeChannelAccess = readFileSync(
+      resolve(SRC, 'modules/runtime-management/application/realtimeChannelAccess.ts'),
+      'utf8',
+    )
     // stdout route + events route + WS replay.
     expect(tasks).toContain('redactStdout(text)')
     expect(tasks).toContain('redactEventPayload(e.payload')
-    expect(wsRegistry).toContain('redactEventPayload(payload, ws.data.actor.source)')
+    expect(wsRegistry).toContain('channels.replayTaskEvents(ws.data.actor.source')
+    expect(realtimeChannelAccess).toContain(
+      'policy.redactTaskEventPayload(decodePayload(row.payload), actorSource)',
+    )
   })
 
   test('every plugin serialization point goes through the outlet', () => {

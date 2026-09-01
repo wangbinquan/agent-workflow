@@ -48,7 +48,8 @@ describe('RFC-345 task-scoped Workgroup room provider boundary', () => {
 
     expect(adapter).toContain('runPostgresqlResourceCatalogTransaction')
     expect(adapter).toContain('taskParticipantFactory.inTransaction(transaction)')
-    expect(commands).toContain('participant.loadVisible')
+    expect(adapter).toContain('participant.loadVisible')
+    expect(commands).toContain('loadVisibleTask(transaction, participant')
     expect(commands).toContain('participant.replaceConfig')
     expect(commands).toContain('participant.dismissOpenClarifyParksForAutonomous')
     expect(commands).toContain('participant.continueTask')

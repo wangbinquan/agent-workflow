@@ -1,3 +1,4 @@
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { workgroupAssignments, workgroupMessages, workgroupTaskState } from '@/db/schema'
 import {
@@ -54,7 +55,7 @@ export function createPostgresqlWorkgroupTaskRoomQueries(
       const gateByTask = new Map(states.map((state) => [state.taskId, state.gateStatus]))
       return tasks.flatMap((task) => {
         const parsed = parseConfig(task.workgroupConfigJson)
-        if (task.workgroupId === null || parsed === null) return []
+        if (!isWorkgroupTask(task) || parsed === null) return []
         const gateStatus = gateByTask.get(task.id) ?? null
         const awaitingConfirmation =
           gateStatus === 'awaiting_confirmation' && task.status === 'awaiting_review'

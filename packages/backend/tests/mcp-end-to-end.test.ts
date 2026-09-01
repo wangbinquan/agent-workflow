@@ -18,8 +18,11 @@ import { getAgent } from './helpers/resourceLookup'
 import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
 import { resolveDependsClosure } from '../src/services/agentDeps'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
+
+const dependencyLookup = (db: DbClient) => ({ get: (id: string) => getAgentById(db, id) })
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -56,7 +59,9 @@ describe('RFC-028 end-to-end inline injection', () => {
     })
 
     const agent = (await getAgent(db, 'auditor'))!
-    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
+    const closure = await resolveDependsClosure(dependencyLookup(db), agent, {
+      call: DISPATCH_CALL_POLICY,
+    })
     if (closure.ok === false) throw new Error('cycle: ' + closure.cyclePath.join(' → '))
     const mcpIds = collectMcpIdsFromClosure(closure.agents)
     const mcps = await loadMcpsByIds(composeMcpClosureQueryForTest(db), mcpIds)
@@ -146,7 +151,9 @@ describe('RFC-028 end-to-end inline injection', () => {
     })
 
     const agent = (await getAgent(db, 'root'))!
-    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
+    const closure = await resolveDependsClosure(dependencyLookup(db), agent, {
+      call: DISPATCH_CALL_POLICY,
+    })
     if (closure.ok === false) throw new Error('cycle')
     const mcpIds = collectMcpIdsFromClosure(closure.agents)
     const mcps = await loadMcpsByIds(composeMcpClosureQueryForTest(db), mcpIds)
@@ -190,7 +197,9 @@ describe('RFC-028 end-to-end inline injection', () => {
     })
 
     const agent = (await getAgent(db, 'a'))!
-    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
+    const closure = await resolveDependsClosure(dependencyLookup(db), agent, {
+      call: DISPATCH_CALL_POLICY,
+    })
     if (closure.ok === false) throw new Error('cycle')
     const mcps = await loadMcpsByIds(
       composeMcpClosureQueryForTest(db),
@@ -215,7 +224,9 @@ describe('RFC-028 end-to-end inline injection', () => {
       bodyMd: '',
     })
     const agent = (await getAgent(db, 'minimal'))!
-    const closure = await resolveDependsClosure(db, agent, { call: DISPATCH_CALL_POLICY })
+    const closure = await resolveDependsClosure(dependencyLookup(db), agent, {
+      call: DISPATCH_CALL_POLICY,
+    })
     if (closure.ok === false) throw new Error('cycle')
     const mcps = await loadMcpsByIds(
       composeMcpClosureQueryForTest(db),

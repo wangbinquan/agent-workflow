@@ -32,14 +32,14 @@ describe('normalizeKindString（持久化 canonical 口）', () => {
 })
 
 describe('写入点不再倒灌别名（源码锁）', () => {
-  test('review.ts approve 路径写 canonical path<md>', () => {
-    const src = SRC('services/review.ts')
-    expect(src).toContain("hasSourcePath ? 'path<md>' : null")
+  test('Collaboration owner 的 approve 路径写 canonical path<md>', () => {
+    const src = SRC('modules/collaboration/infrastructure/legacySqliteReview.ts')
+    expect(src).toContain("const approvedDocKind = hasSourcePath ? 'path<md>' : null")
     expect(src).not.toContain("hasSourcePath ? 'markdown_file'")
   })
 
   test('runner.ts 端口 kind 过 normalizeKindString', () => {
-    expect(SRC('services/runner.ts')).toContain('normalizeKindString(rawKind)')
+    expect(SRC('services/runner.ts')).toMatch(/normalizeKindString\(outputKinds\[name\]!\)/)
   })
 })
 

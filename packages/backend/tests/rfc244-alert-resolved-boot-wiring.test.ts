@@ -18,6 +18,30 @@ const MAINTENANCE_SOURCE = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'platform', 'background', 'maintenanceService.ts'),
   'utf8',
 )
+const TASK_PROVIDER_RUNTIME_SOURCE = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'providerRuntime.ts',
+  ),
+  'utf8',
+)
+const TASK_PROVIDER_BACKGROUND_SOURCE = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'providerBackground.ts',
+  ),
+  'utf8',
+)
 
 function assemblySlice(startMarker: string, endMarker: string): string {
   const start = START_SOURCE.indexOf(startMarker)
@@ -37,7 +61,7 @@ describe('RFC-244 lifecycle alert resolution boot wiring', () => {
 
   test('threads the same callback through Worker deltas and the direct auto-repair loop', () => {
     expect(
-      WORKER_SOURCE.match(/onResolved: \(taskId\) => resolvedTaskIds\.push\(taskId\)/g),
+      WORKER_SOURCE.match(/onResolved: \(?taskId\)? => resolvedTaskIds\.push\(taskId\)/g),
     ).toHaveLength(2)
     expect(
       WORKER_SOURCE.match(/delta: \{ kind: 'lifecycle-alerts', alerts, resolvedTaskIds \}/g),
@@ -48,7 +72,16 @@ describe('RFC-244 lifecycle alert resolution boot wiring', () => {
     const workerConsumer = assemblySlice('onLifecycleDelta: (delta) => {', 'onIntentQueued:')
     expect(workerConsumer).toContain('for (const taskId of delta.resolvedTaskIds)')
     expect(workerConsumer).toContain('broadcastResolved(taskId)')
-    const autoRepair = assemblySlice('startAutoRepairLoop({', '// RFC-108 T20')
-    expect(autoRepair).toContain('onResolved: broadcastResolved')
+    // RFC-349 moved the timer into the selected-provider TaskExecution
+    // background participant. Bootstrap still injects the one broadcaster;
+    // both SQLite and PostgreSQL runtime factories bind it to the real repair
+    // command, and the background loop invokes that command.
+    expect(START_SOURCE).toContain('onResolved: broadcastResolved')
+    expect(
+      TASK_PROVIDER_RUNTIME_SOURCE.match(
+        /const lifecycleRepair = create(?:Sqlite|Postgresql)TaskLifecycleAutoRepairCommand/g,
+      ),
+    ).toHaveLength(2)
+    expect(TASK_PROVIDER_BACKGROUND_SOURCE).toContain('await runtime.lifecycleRepair.run({')
   })
 })

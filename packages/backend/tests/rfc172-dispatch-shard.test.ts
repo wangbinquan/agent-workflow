@@ -309,7 +309,15 @@ describe('RFC-172 S3 — buildFrontierMintPlan shard scoping', () => {
 // source-lock guards the wiring from a silent refactor drop in the meantime.
 describe('RFC-172 S2a — dispatch mint-loop shard wiring (source lock)', () => {
   const SRC = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'collaboration',
+      'infrastructure',
+      'legacySqliteTaskQuestionDispatch.ts',
+    ),
     'utf8',
   )
   test('mint loop resolves + splits by shard; reruns map filters entryIds by shard', () => {
@@ -484,14 +492,30 @@ describe('RFC-172 R2-T5 — manual question cannot target the shared __wg_member
     // cycle (workgroupLaunch pulls in heavy services). If the constant is renamed, this catches it.
     expect(WG_MEMBER_NODE_ID).toBe('__wg_member__')
     const SVC = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestions.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteTaskQuestions.ts',
+      ),
       'utf8',
     )
     expect(SVC).toContain("if (target !== '__wg_member__') return")
     expect(SVC).toContain('isTurnEngineWorkgroupTask(t)') // P2 gating
     expect(SVC).toContain('manual-question-workgroup-member-target')
     const DISP = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteTaskQuestionDispatch.ts',
+      ),
       'utf8',
     )
     // dispatch backstop: any shard-less entry at __wg_member__ on a turn-engine workgroup → reject.

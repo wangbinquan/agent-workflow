@@ -232,11 +232,14 @@ describe('RFC-317 T8 —— 三个列表面都接了可见性过滤（AST 断言
     ts.ScriptKind.TS,
   )
 
-  /** 收集所有 `X(...)` 形态里出现的被调用标识符名。 */
+  /** 收集所有 `X(...)` / `owner.X(...)` 形态里出现的被调用方法名。 */
   function calledNames(node: ts.Node): Set<string> {
     const names = new Set<string>()
     const visit = (n: ts.Node): void => {
-      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) names.add(n.expression.text)
+      if (ts.isCallExpression(n)) {
+        if (ts.isIdentifier(n.expression)) names.add(n.expression.text)
+        if (ts.isPropertyAccessExpression(n.expression)) names.add(n.expression.name.text)
+      }
       ts.forEachChild(n, visit)
     }
     visit(node)

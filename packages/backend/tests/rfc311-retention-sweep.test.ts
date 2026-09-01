@@ -304,7 +304,15 @@ describe('RFC-311 C6 — the other two event streams share the window', () => {
   // 必须是一个 predicate-rechecking bounded DELETE，不能退回全阶段同步循环。
   test('all three event streams stay wired into the same window (source lock)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'maintenanceRetention.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'systemMaintenanceRetention.ts',
+      ),
       'utf8',
     )
     for (const table of [

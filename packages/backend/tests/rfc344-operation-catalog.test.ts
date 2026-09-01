@@ -2,7 +2,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { Hono } from 'hono'
 import type { Permission } from '@agent-workflow/shared'
@@ -11,11 +11,13 @@ import { createBoundOperationInvoker } from '../src/platform/operations/boundOpe
 import { ALL_TOOLS } from '../src/mcp/tools'
 import { MCP_TOOL_BINDINGS } from '../src/mcp/operationBindings'
 import {
+  captureOperationCatalogForTests,
   operationDependencies,
   operationId,
   lookupDeclaredHttpOperation,
   registerOperationAlias,
   registerHttpOperationProjection,
+  restoreOperationCatalogForTests,
   validateOperationCatalogSnapshot,
   type DeclaredHttpOperation,
   type OperationCatalogRouteProjection,
@@ -33,7 +35,11 @@ import {
   NotFoundError,
   ValidationError,
 } from '../src/util/errors'
-import { registerRoute, registerRouteMiddleware } from '../src/routes/registry'
+import {
+  registerRoute,
+  registerRouteMiddleware,
+  resetRouteMetaRegistry,
+} from '../src/routes/registry'
 import { registerOperationRoute } from '../src/routes/operationRoute'
 import {
   AuthorityClaimRegistry,
@@ -45,6 +51,16 @@ import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { createDevelopmentActivityWorkerBinding } from '../src/modules/development-automation/composition/activityOperations'
 
 const ROOT = join(import.meta.dir, '..')
+const operationCatalogCheckpoint = captureOperationCatalogForTests()
+
+// Route projections are process-global because production owns one daemon
+// root. This test deliberately registers synthetic routes, so each case must
+// release those projections before another test file builds a real app in the
+// same Bun worker.
+afterEach(() => {
+  resetRouteMetaRegistry()
+  restoreOperationCatalogForTests(operationCatalogCheckpoint)
+})
 
 async function trustedDirectFixture(patScopes: ReadonlyArray<Permission> = []) {
   const registry = new AuthorityClaimRegistry()
@@ -762,7 +778,9 @@ describe('RFC-344 single inbound root source locks', () => {
     expect(authority).toContain('directMcpOperationAuthority')
 
     const server = readFileSync(join(ROOT, 'src/server.ts'), 'utf8')
-    expect(server).toContain('directMcpOperationAuthority(identityAccess.directAuthority, actor)')
+    expect(server).toContain(
+      'directMcpOperationAuthority(deps.core.identityAccess.directAuthority, actor)',
+    )
     expect(server).toContain('const appHome = deps.appHome ?? Paths.root')
     expect(server).not.toContain('dirname(runtimeDeps.configPath)')
 
@@ -807,15 +825,17 @@ describe('RFC-344 single inbound root source locks', () => {
   })
 
   test('pilot transport adapters depend on the narrow database port, not the composition root', () => {
-    for (const relative of [
-      'src/routes/developmentConfig.ts',
-      'src/routes/digitalEmployees.ts',
-      'src/routes/resourceAcl.ts',
-    ]) {
+    const routeContracts = new Map([
+      ['src/routes/developmentConfig.ts', 'DevelopmentConfigOperations'],
+      ['src/routes/digitalEmployees.ts', 'DigitalEmployeeRoutePersistence'],
+      ['src/routes/resourceAcl.ts', 'AclEndpointConfig'],
+    ])
+    for (const [relative, contract] of routeContracts) {
       const source = readFileSync(join(ROOT, relative), 'utf8')
       expect(source).not.toContain("from '@/server'")
       expect(source).not.toContain('AppDeps')
-      expect(source).toContain('DbClient')
+      expect(source).not.toContain('DbClient')
+      expect(source).toContain(contract)
     }
   })
 })

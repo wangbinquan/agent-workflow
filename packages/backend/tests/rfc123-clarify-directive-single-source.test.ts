@@ -374,13 +374,30 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     'utf8',
   )
   const sealSrc = readFileSync(
-    // RFC-284 T27 改锚：正体迁 services/clarify/seal.ts（旧路径为 facade）。
-    resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'seal.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'collaboration',
+      'infrastructure',
+      'legacySqliteClarify',
+      'seal.ts',
+    ),
     'utf8',
   )
   // RFC-217 T9: crossClarify.ts merged into the unified clarify service.
   const crossSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'service.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'collaboration',
+      'infrastructure',
+      'legacySqliteClarify',
+      'service.ts',
+    ),
     'utf8',
   )
 
@@ -390,19 +407,19 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     // resolveEffectiveClarifyChannel；'continue' toggle 因 nodeStopOverride 翻 false 而重开通道。
     // per-round 注入器 override plumbing（directiveOverride/directiveOverrideAt/applyLatestDirective）
     // 随平铺注入器一起删除。
-    expect(nodeMechanicsSrc).toContain('const nodeDirective = nodeDirectiveRow?.directive')
+    expect(nodeMechanicsSrc).toContain('const nodeDirective = nodeDirectiveRow')
     expect(norm(nodeMechanicsSrc)).toContain('contextDirective: nodeDirective')
     expect(nodeMechanicsSrc).not.toContain('directiveOverride')
     expect(nodeMechanicsSrc).not.toContain('applyLatestDirective')
   })
 
-  test('node mechanics + crossClarify：cross 短路经 resolveCrossNodeStopped（questioner node 级 directive 单一事实源）', () => {
+  test('node mechanics + Collaboration port：cross 短路读取 questioner node 级 directive 单一事实源', () => {
     const norm = (s: string) => s.replace(/\s+/g, ' ')
     // RFC-132 T7: node mechanics 传 questioner 节点（reenableQuestionerNodeId），非 cross node.id；
     // resolveCrossNodeStopped 收敛为只读 questioner 节点的 node 级 directive（node last-write-wins
     // 天然等价 RFC-123 recency gate）。旧 recency 闸（latestPersistentStopAt + stopAt 比较）已删。
     expect(norm(nodeMechanicsSrc)).toContain(
-      'resolveCrossNodeStopped(db, taskId, reenableQuestionerNodeId',
+      "await collaboration.getNodeClarifyDirective({ taskId, nodeId: reenableQuestionerNodeId, })) === 'stop'",
     )
     expect(crossSrc).toContain('export async function resolveCrossNodeStopped')
     expect(norm(crossSrc)).toContain(

@@ -1337,13 +1337,11 @@ export function createPostgresqlTaskExecutionLaunchParticipant(
           })
         }
         case 'workgroup': {
-          if (
-            input.target.payload.workgroupId !== undefined &&
-            input.target.payload.workgroupId !== input.target.refId
-          ) {
+          const payloadWorkgroupId = input.target.payload.workgroupId
+          if (typeof payloadWorkgroupId === 'string' && payloadWorkgroupId !== input.target.refId) {
             throw new ValidationError(
               'execution-ref-mismatch',
-              `workgroup ref '${input.target.refId}' does not match payload '${input.target.payload.workgroupId}'`,
+              `workgroup ref '${input.target.refId}' does not match payload '${payloadWorkgroupId}'`,
             )
           }
           return await arms.launchWorkgroup({

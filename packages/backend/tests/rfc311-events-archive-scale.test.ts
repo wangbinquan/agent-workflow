@@ -134,10 +134,20 @@ describe('RFC-311 G3 — 扫描分窗:短语句、不丢行、不跳水位', () 
   // 断言兜底)。
   test('the incremental scan keeps an upper bound on its id range', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'eventsArchive.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'systemEventsArchive.ts',
+      ),
       'utf8',
     )
-    expect(source).toContain('lte(nodeRunEvents.id, scanTo)')
+    expect(source).toContain('throughId: scanTo')
+    expect(source).toContain('listDistinctNodeRunIds({')
+    expect(source).toContain('lte(nodeRunEvents.id, input.throughId)')
     // 无上界的旧形态:直接对 `id > highWater` 做 GROUP BY。
     expect(source).not.toMatch(/where\(gt\(nodeRunEvents\.id, highWater\)\)/)
   })
@@ -167,7 +177,15 @@ describe('RFC-311 — events archiver at backlog scale', () => {
       // 形状锁:删除走「node_run_id = ? AND id <= ?」的区间形式(两个绑定参数),
       // 不得回到 `IN (<toDrop 个 id>)`。
       const src = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'services', 'eventsArchive.ts'),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'platform',
+          'persistence',
+          'sqlite',
+          'systemEventsArchive.ts',
+        ),
         'utf8',
       )
       expect(src).toMatch(/lte\(nodeRunEvents\.id, lastId\)/)

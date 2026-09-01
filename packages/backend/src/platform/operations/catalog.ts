@@ -748,3 +748,52 @@ export function resetOperationRouteProjections(): void {
   }
   ROUTE_DERIVED_DECLARATION_IDS.clear()
 }
+
+/**
+ * Test-only process-global registry checkpoint. Production owns one catalog
+ * for the daemon lifetime; focused catalog tests intentionally add synthetic
+ * descriptors and aliases and must restore the exact pre-test registry before
+ * another test creates a real application in the same Bun worker.
+ */
+export interface OperationCatalogTestCheckpoint {
+  readonly declarationsById: ReadonlyArray<readonly [OperationId, DeclaredHttpOperation]>
+  readonly declarationsByRoute: ReadonlyArray<readonly [string, DeclaredHttpOperation]>
+  readonly routeDerivedDeclarationIds: ReadonlyArray<OperationId>
+  readonly aliases: ReadonlyArray<readonly [OperationId, OperationAlias]>
+  readonly descriptors: ReadonlyArray<readonly [OperationId, OperationDescriptorProjection]>
+  readonly routesById: ReadonlyArray<readonly [OperationId, OperationCatalogRouteProjection]>
+  readonly routesByKey: ReadonlyArray<readonly [string, OperationCatalogRouteProjection]>
+  readonly tools: ReadonlyArray<OperationCatalogToolProjection>
+  readonly resources: ReadonlyArray<OperationCatalogResourceProjection>
+}
+
+export function captureOperationCatalogForTests(): OperationCatalogTestCheckpoint {
+  return Object.freeze({
+    declarationsById: Object.freeze([...DECLARED_BY_ID.entries()]),
+    declarationsByRoute: Object.freeze([...DECLARED_BY_ROUTE.entries()]),
+    routeDerivedDeclarationIds: Object.freeze([...ROUTE_DERIVED_DECLARATION_IDS]),
+    aliases: Object.freeze([...ALIASES_BY_ID.entries()]),
+    descriptors: Object.freeze([...DESCRIPTORS_BY_ID.entries()]),
+    routesById: Object.freeze([...ROUTES_BY_ID.entries()]),
+    routesByKey: Object.freeze([...ROUTES_BY_KEY.entries()]),
+    tools: TOOL_PROJECTION,
+    resources: RESOURCE_PROJECTION,
+  })
+}
+
+export function restoreOperationCatalogForTests(checkpoint: OperationCatalogTestCheckpoint): void {
+  const restoreMap = <K, V>(target: Map<K, V>, entries: ReadonlyArray<readonly [K, V]>): void => {
+    target.clear()
+    for (const [key, value] of entries) target.set(key, value)
+  }
+  restoreMap(DECLARED_BY_ID, checkpoint.declarationsById)
+  restoreMap(DECLARED_BY_ROUTE, checkpoint.declarationsByRoute)
+  ROUTE_DERIVED_DECLARATION_IDS.clear()
+  for (const id of checkpoint.routeDerivedDeclarationIds) ROUTE_DERIVED_DECLARATION_IDS.add(id)
+  restoreMap(ALIASES_BY_ID, checkpoint.aliases)
+  restoreMap(DESCRIPTORS_BY_ID, checkpoint.descriptors)
+  restoreMap(ROUTES_BY_ID, checkpoint.routesById)
+  restoreMap(ROUTES_BY_KEY, checkpoint.routesByKey)
+  TOOL_PROJECTION = checkpoint.tools
+  RESOURCE_PROJECTION = checkpoint.resources
+}

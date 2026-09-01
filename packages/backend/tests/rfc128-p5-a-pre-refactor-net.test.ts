@@ -199,7 +199,7 @@ describe('RFC-128 P5-A #1 → RFC-132 PR-C — self/q 注入收敛为统一平�
     const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
     // RFC-132 (PR-C):整轮 buildPromptContext + per-role consumerKind 调度器接线被单一平铺注入器
     // buildClarifyQueueContext 取代(selectAgentQueue 一次查全 self/questioner/designer)。
-    expect(src).toContain('await buildClarifyQueueContext(')
+    expect(src).toContain('await collaboration.buildClarifyQueueContext(')
     expect(src).not.toContain('await buildPromptContext(')
     expect(src).not.toContain("consumerKind: 'self'")
     expect(src).not.toContain("consumerKind: 'cross-questioner'")

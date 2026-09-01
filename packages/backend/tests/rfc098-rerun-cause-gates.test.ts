@@ -144,7 +144,7 @@ describe('RFC-098 WP-10 — TaskExecution gate wiring', () => {
   test('gate-4 (clarify injection) → one unified query, no per-role SELECT fork (RFC-132 PR-C)', () => {
     // "consumerKind 消失": buildClarifyQueueContext selects self/questioner/designer together.
     expect(NODE_MECHANICS_SRC).not.toContain('isQuestionerCrossClarifyRerun')
-    expect(NODE_MECHANICS_SRC).toContain('await buildClarifyQueueContext(')
+    expect(NODE_MECHANICS_SRC).toContain('await collaboration.buildClarifyQueueContext(')
   })
 
   test('gate-5 (stop scoping) → per-node clarify state, no per-round applyLatestDirective (RFC-132 PR-C)', () => {
@@ -166,8 +166,16 @@ describe('RFC-098 WP-10 — producers mint the cause the gates consume', () => {
   // causeClassForEntry mapping (clarifyRerunLedger). Re-anchor the lock there.
   test("causeClassForEntry maps self→'clarify-answer', questioner→'cross-clarify-questioner-rerun', designer→'cross-clarify-answer'", () => {
     const src = readFileSync(
-      // RFC-284 T27 改锚：正体迁 services/clarify/rerunLedger.ts（旧路径为 facade）。
-      resolve(import.meta.dir, '..', 'src', 'services', 'clarify', 'rerunLedger.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteClarify',
+        'rerunLedger.ts',
+      ),
       'utf8',
     )
     expect(src).toContain("if (e.roleKind === 'self') return 'clarify-answer'")
@@ -181,7 +189,15 @@ describe('RFC-098 WP-10 — producers mint the cause the gates consume', () => {
 
   test('dispatchTaskQuestions mints via causeClassForEntry (no hardcoded per-path cause forks)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteTaskQuestionDispatch.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('causeClassForEntry')

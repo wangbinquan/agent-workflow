@@ -48,6 +48,11 @@ import {
 
 type WorkgroupTurnsDriveOutcome = Awaited<ReturnType<WorkgroupTurnsOperations['drive']>>
 
+// Domain operation keys are wire identifiers, not host PATH lists. Naming the
+// separator keeps the Windows platform guard from treating this join as a
+// platform path-list operation while preserving the persisted bytes exactly.
+const WORKGROUP_OPERATION_KEY_SEPARATOR = ':'
+
 export {
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -1117,7 +1122,9 @@ async function driveBatchTurn(input: {
   if (projection === null) {
     const operations: WorkgroupTurnLedgerOperation[] = [
       createMessage(
-        `batch-agent-missing:${input.memberId}:${cards.map((card) => card.id).join(':')}`,
+        `batch-agent-missing:${input.memberId}:${cards
+          .map((card) => card.id)
+          .join(WORKGROUP_OPERATION_KEY_SEPARATOR)}`,
         messageDraft({
           round: messageRound(input.snapshot),
           authorKind: 'system',

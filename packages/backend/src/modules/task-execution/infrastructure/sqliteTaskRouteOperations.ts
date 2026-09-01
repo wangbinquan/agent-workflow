@@ -279,7 +279,10 @@ export function createSqliteTaskRouteOperations(
         optionId,
         actorUserId: actor.user.id,
         appHome: dependencies.appHome ?? Paths.root,
-        deps: dependencies.startDepsFor(actor),
+        deps: {
+          ...dependencies.startDepsFor(actor),
+          taskRecoveryOperations: dependencies.recovery,
+        },
         onAlert,
         onResolved,
       })

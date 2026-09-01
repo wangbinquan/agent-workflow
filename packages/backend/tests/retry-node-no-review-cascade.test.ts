@@ -20,6 +20,7 @@ import { retryNode } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -149,6 +150,7 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
       cascade: true,
       deps: {
         db,
+        taskRecoveryOperations: taskRecoveryOperations(db),
         schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
           .schedulerDriver,
         appHome,
@@ -226,6 +228,7 @@ describe('retryNode cascade skips non-process kinds (RFC-052)', () => {
       cascade: false,
       deps: {
         db,
+        taskRecoveryOperations: taskRecoveryOperations(db),
         schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
           .schedulerDriver,
         appHome,

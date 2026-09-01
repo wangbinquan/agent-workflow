@@ -1,10 +1,11 @@
 // RFC-243 PR-1 — unified executor facade locks.
 //
 // Locks in (design.md §1.1/§1.2/§1.4):
-//   1. Source-text: the four launch call faces (routes/tasks.ts incl. the
+//   1. Source-text: the launch call faces (routes/tasks.ts incl. the
 //      multipart handoff, routes/agents.ts, routes/workgroups.ts,
-//      services/scheduleLaunch.ts) go through `startExecution` and never call
-//      startTask / startAgentTask / startWorkgroupTask directly again.
+//      services/scheduleLaunch.ts) go through a required closed launch port
+//      (or the remaining compatibility executor) and never call startTask /
+//      startAgentTask / startWorkgroupTask directly again.
 //   2. resolveTaskEngine — the engine fork extracted from scheduler.ts is
 //      byte-equal to the pre-RFC-243 inline decision (RFC-164/167/217
 //      semantics).
@@ -67,6 +68,14 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
         expect(text).toContain('taskLaunch.launch')
         expect(text).not.toContain('AppDeps')
         expect(text).not.toContain('deps.db')
+      } else if (rel === 'routes/tasks.ts') {
+        expect(text).toContain('operations.launchMultipart')
+        expect(text).toContain('operations.launchWorkflow')
+        expect(text).not.toContain('startExecution')
+      } else if (rel.includes('WebhookDispatchRuntime')) {
+        expect(text).toContain('createWebhookExecutionRuntime')
+        expect(text).toContain('taskExecutions: input.taskExecutions')
+        expect(text).not.toContain('startExecution')
       } else {
         expect(text).toContain(`startExecution`)
       }

@@ -62,9 +62,10 @@ describe('RFC-048 source-layout guards', () => {
     expect(disCount).toBe(1)
   })
 
-  test('subagentLiveCapture.ts opens the opencode SQLite read-only', () => {
+  test('subagentLiveCapture.ts opens the external opencode store through the readonly adapter', () => {
     const src = read('packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts')
-    expect(src).toContain('new Database(dbPath, { readonly: true })')
+    expect(src).toContain('openReadonlySqliteDatabase(dbPath)')
+    expect(src).not.toContain('new Database(')
   })
 
   test('sessionCapture.ts captureChildSessions exposes alreadyInsertedPartIds + still loads sibling sessionIds', () => {

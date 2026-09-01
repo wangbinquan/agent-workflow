@@ -25,10 +25,13 @@ import {
   validateDependsOn,
 } from '../src/services/agentDeps'
 import { agents } from '../src/db/schema'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type { DomainError } from '../src/util/errors'
 import { PREVIEW_CALL_POLICY, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const dependencyLookup = (db: DbClient) => ({ get: (id: string) => getAgentById(db, id) })
 
 interface AgentSeed {
   name: string
@@ -88,7 +91,7 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
     // A bogus id that resolves to no row → not-found (validateDependsOn is fed
     // already-resolved ids; a survivor that is really a name lands here too).
     await expect(
-      validateDependsOn(db, ids.get('orchestrator')!, ['no-such-agent-id']),
+      validateDependsOn(dependencyLookup(db), ids.get('orchestrator')!, ['no-such-agent-id']),
     ).rejects.toMatchObject({
       code: 'agent-dependency-not-found',
       details: { notFound: ['no-such-agent-id'] },
@@ -96,14 +99,18 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
   })
 
   test('rejects a name token instead of treating it as identity after the PR-8 flip', async () => {
-    await expect(validateDependsOn(db, 'new-id', ['fresh'])).rejects.toMatchObject({
+    await expect(
+      validateDependsOn(dependencyLookup(db), 'new-id', ['fresh']),
+    ).rejects.toMatchObject({
       code: 'agent-dependency-not-found',
       details: { notFound: ['fresh'] },
     })
   })
 
   test('rejects self-reference by canonical id before the row is persisted', async () => {
-    await expect(validateDependsOn(db, 'new-id', ['new-id'])).rejects.toMatchObject({
+    await expect(
+      validateDependsOn(dependencyLookup(db), 'new-id', ['new-id']),
+    ).rejects.toMatchObject({
       code: 'agent-dependency-self',
       details: { id: 'new-id' },
     })
@@ -121,11 +128,11 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
       { name: 'a', dependsOn: ['b'] },
     )
     const [idA, idB, idC] = [ids.get('a')!, ids.get('b')!, ids.get('c')!]
-    await expect(validateDependsOn(db, idC, [idA])).rejects.toMatchObject({
+    await expect(validateDependsOn(dependencyLookup(db), idC, [idA])).rejects.toMatchObject({
       code: 'agent-dependency-cycle',
     })
     try {
-      await validateDependsOn(db, idC, [idA])
+      await validateDependsOn(dependencyLookup(db), idC, [idA])
     } catch (e) {
       const err = e as DomainError
       // The loop is "c → a → b → c"; the BFS root is the synthetic 'c' so
@@ -148,7 +155,9 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
       { name: 'c', dependsOn: ['d'] },
     )
     const [b, c, d] = [ids.get('b')!, ids.get('c')!, ids.get('d')!]
-    await expect(validateDependsOn(db, 'new-a-id', [b, c, b, d, c])).resolves.toBeUndefined()
+    await expect(
+      validateDependsOn(dependencyLookup(db), 'new-a-id', [b, c, b, d, c]),
+    ).resolves.toBeUndefined()
   })
 
   test('resolveDependsClosure: happy path returns BFS order with root first; onMissing skip 跳过 dangling', async () => {
@@ -172,13 +181,15 @@ describe('RFC-022 validateDependsOn (save-time guard)', () => {
 
     // Default: throws on missing
     await expect(
-      resolveDependsClosure(db, top, { call: VALIDATE_CALL_POLICY }),
+      resolveDependsClosure(dependencyLookup(db), top, { call: VALIDATE_CALL_POLICY }),
     ).rejects.toMatchObject({
       code: 'agent-dependency-not-found',
     })
 
     // onMissing:'skip': missing 'ghost-id' silently skipped, traversal continues
-    const closure = await resolveDependsClosure(db, top, { call: PREVIEW_CALL_POLICY })
+    const closure = await resolveDependsClosure(dependencyLookup(db), top, {
+      call: PREVIEW_CALL_POLICY,
+    })
     expect(closure.ok).toBe(true)
     if (closure.ok === false) throw new Error('unreachable')
     expect(closure.agents.map((a) => a.name)).toEqual(['top', 'mid', 'leaf'])

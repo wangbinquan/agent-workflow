@@ -3147,7 +3147,19 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     // the selected client and authority runtime are still live. Identity owns
     // no database close; the provider is deliberately the last session
     // resource released after HTTP admission and all writers have drained.
-    await daemonProviderBootstrap.stop()
+    try {
+      await daemonProviderBootstrap.stop()
+    } catch (error) {
+      // A shutdown request has already fenced HTTP/WS admission, stopped the
+      // listener, and drained task execution above. Provider close failures are
+      // diagnostics for this retiring process; they must not turn a successful
+      // dev-generation handoff into exit 1 and strand the replacement behind
+      // the still-owned PID lock. PostgreSQL follows the same best-effort
+      // terminal-close contract in servePostgresqlDaemon.
+      log.warn('SQLite daemon shutdown error', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
     // `stop` treats lock disappearance as the terminal acknowledgement. Retract
     // the loopback control endpoint first, otherwise the caller can observe a
     // successful stop while the previous process's control file still exists.

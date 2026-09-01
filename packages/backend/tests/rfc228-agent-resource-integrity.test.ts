@@ -27,7 +27,8 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { composeSqliteAgentResourceInventorySource } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { directOperationAuthority } from '../src/routes/operationAuthority'
+import { createUser } from '../src/services/users'
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_RUNTIME = 'rfc228-opencode'
@@ -113,11 +114,19 @@ describe('RFC-228 Agent resource integrity', () => {
       db,
       authorization: composeSqliteResourceCatalog({ db }).authorization,
     })
-    const viewer = actor()
-    const authority = directOperationAuthority(
-      createIdentityAccessRuntime({ db }).directAuthority,
-      viewer,
-    )
+    const viewer = await createUser(db, {
+      username: 'viewer',
+      displayName: 'Viewer',
+      role: 'user',
+      password: 'longEnoughPassword',
+    })
+    const identityAccess = createIdentityAccessRuntime({ db })
+    const admitted = await admitTestDirectAuthority(identityAccess.directAuthority, {
+      userId: viewer.id,
+      source: 'session',
+    })
+    if (admitted === null) throw new Error('viewer direct authority was not admitted')
+    const authority = admitted.actor
     const mcp = await createMcpFixture(
       db,
       {

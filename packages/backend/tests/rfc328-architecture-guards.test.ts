@@ -106,7 +106,10 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
       {
         callable: 'rollbackNodeRunWorktrees',
         actCallees: new Set(['rollbackToSnapshot']),
-        observerCallees: new Set(['createLocalEffectAttemptObserver']),
+        observerCallees: new Set([
+          'createLocalEffectAttemptObserver',
+          'createLegacySqliteRollbackEffectObserver',
+        ]),
       },
     ],
   ],
@@ -174,6 +177,7 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
   [
     'createOwnershipToken',
     new Set([
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts',
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffect.ts',
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOwnership.ts',
     ]),
@@ -185,20 +189,75 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
   ['createExclusiveDaemonLockProof', new Set(['packages/backend/src/cli/start.ts'])],
   [
     'createVerifiedTakeoverProof',
-    new Set(['packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts']),
+    new Set([
+      'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
+    ]),
   ],
   [
     'createVerifiedStopProof',
-    new Set(['packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts']),
+    new Set([
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
+    ]),
   ],
   [
     'createVerifiedOutcomeUnknownClosure',
     new Set([
       'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
       'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
     ]),
   ],
 ])
+
+/**
+ * Exact provider-bridge debt. These are infrastructure/composition adapters
+ * that bind another context's concrete in-transaction implementation while
+ * the corresponding public participant is being completed. Business and
+ * transport layers are not represented here; any new deep cross-context edge
+ * still fails both this exact inventory and the RFC-349 provider guard.
+ */
+const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
+  'collaboration/infrastructure/postgresqlHumanGateOpenParticipant: packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts',
+  'collaboration/infrastructure/sqliteClarifyContinuationConvergence: packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts',
+  'collaboration/infrastructure/sqliteHumanGateOpenParticipant: packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
+  'collaboration/infrastructure/sqliteHumanGateOperationPersistence: packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts',
+  'collaboration/infrastructure/sqliteHumanGateOperationStore: packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
+  'collaboration/infrastructure/sqliteTaskDagCollaborationOperations: packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+  'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/composition/triggerExecution.ts',
+  'resource-catalog/application/resourceDefaults: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
+  'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
+  'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
+  'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/postgresqlDynamicWorkflowPersistence.ts',
+  'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/sqliteDynamicWorkflowPersistence.ts',
+  'resource-catalog/infrastructure/legacy/workflow.validator: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
+  'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts',
+  'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts',
+])
+
+function crossContextProviderBridges(units: readonly GuardUnit[]): string[] {
+  const observed: string[] = []
+  for (const unit of units) {
+    if (!unit.path.startsWith('packages/backend/src/modules/task-execution/')) continue
+    for (const match of unit.text.matchAll(
+      /from\s+['"]@\/modules\/([^/]+)\/(domain|application|engine|infrastructure|composition)\/([^'"]+)['"]/g,
+    )) {
+      const context = match[1]!
+      const layer = match[2]!
+      const rest = match[3]!
+      if (context === 'task-execution') continue
+      const requiredPortAdapter =
+        unit.path.includes('/application/adapters/') &&
+        layer === 'composition' &&
+        rest === 'required-ports'
+      if (!requiredPortAdapter) observed.push(`${context}/${layer}/${rest}: ${unit.path}`)
+    }
+  }
+  return [...new Set(observed)].sort()
+}
 
 function callableName(node: ts.Node): string | null {
   let cursor: ts.Node | undefined = node
@@ -407,8 +466,9 @@ function rfc328GuardViolations(units: readonly GuardUnit[]): string[] {
           path.includes('/application/adapters/') &&
           layer === 'composition' &&
           rest === 'required-ports'
-        if (!requiredPortAdapter) {
-          violations.push(`cross-context internal import ${context}/${layer}/${rest}: ${path}`)
+        const bridge = `${context}/${layer}/${rest}: ${path}`
+        if (!requiredPortAdapter && !CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT.has(bridge)) {
+          violations.push(`cross-context internal import ${bridge}`)
         }
       }
     }
@@ -474,6 +534,9 @@ describe('RFC-328 architecture guards', () => {
 
   test('real production corpus is non-empty and has no legacy/raw authority bypass', () => {
     expect(corpus.length).toBeGreaterThan(800)
+    expect(crossContextProviderBridges(corpus)).toEqual(
+      [...CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT].sort(),
+    )
     expect(rfc328GuardViolations(corpus)).toEqual([])
     const generated = buildCanonicalArtifacts(REPO_ROOT)
     expect(validateCanonicalArtifacts(generated)).toEqual([])

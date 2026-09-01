@@ -37,6 +37,7 @@ function guards(): MrLaunchGuardCoordinator {
   return {
     supervisor: { abortAll: () => [] },
     abortRevoked: () => 0,
+    hasLaunchBarrier: async () => false,
     reconcileStaleOnBoot: () => {},
   } as unknown as MrLaunchGuardCoordinator
 }
@@ -218,7 +219,19 @@ describe('RFC-294 cross-context participant information budget', () => {
       'public',
       'participants.ts',
     )
-    const source = readFileSync(file, 'utf8')
+    const publicEntrypoint = readFileSync(file, 'utf8')
+    const source = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'applySourceTerminationEffect.ts',
+      ),
+      'utf8',
+    )
     const input = source.match(
       /export type TaskSourceTerminationEffectInput = Readonly<\{[\s\S]*?\n\}>/,
     )?.[0]
@@ -233,6 +246,8 @@ describe('RFC-294 cross-context participant information budget', () => {
     expect(receipt).toBeDefined()
     expect(participant).toBeDefined()
     expect(input).not.toMatch(/\btaskId\b/)
+    expect(publicEntrypoint).toContain('TaskSourceTerminationParticipant,')
+    expect(publicEntrypoint).toContain("from '../application/applySourceTerminationEffect'")
 
     const publicSurface = [input, receipt, participant].join('\n')
     for (const forbidden of [
@@ -252,7 +267,7 @@ describe('RFC-294 cross-context participant information budget', () => {
       expect(publicSurface).not.toContain(forbidden)
     }
     expect(source).not.toMatch(
-      /from ['"]@\/(?:db|services|modules\/task-execution\/(?:application|engine|infrastructure|ports))\b/,
+      /from ['"]@\/(?:db|services|modules\/task-execution\/(?:engine|infrastructure|ports))\b/,
     )
   })
 })

@@ -552,6 +552,11 @@ export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): voi
         closure.agents,
       )
       const visibleAgentIds = new Set(visible.map((a) => a.id))
+      // The unsaved root is a request-local synthetic row, not a persistence
+      // record that the catalog visibility query can load. It is nevertheless
+      // always visible to the caller who supplied the draft; only its persisted
+      // dependency closure is filtered by catalog authority.
+      if (existing === null) visibleAgentIds.add(selfId)
       return c.json({
         ok: true,
         agents: toAgentClosureSummaries(closure.agents, {

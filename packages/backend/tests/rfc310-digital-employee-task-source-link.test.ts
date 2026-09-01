@@ -71,7 +71,9 @@ describe('RFC-310 digital employee task source link', () => {
       'utf8',
     )
 
-    expect(execution.match(/caseId: plan\.caseRef\.id/g)).toHaveLength(2)
+    // SQLite has workflow + synthesized-host arms; PostgreSQL uses the same
+    // closed launch provenance through its provider-neutral launch port.
+    expect(execution.match(/caseId: plan\.caseRef\.id/g)).toHaveLength(3)
     expect(taskService).toContain(
       'digitalEmployeeCaseId: deps.digitalEmployeeLaunch?.caseId ?? null',
     )

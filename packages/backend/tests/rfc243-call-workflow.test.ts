@@ -517,6 +517,7 @@ describe('RFC-243 e2e — 生命周期', () => {
     await retryNode(h.db, parentTaskId, failedCall.id, {
       deps: {
         db: h.db,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
         appHome: h.appHome,
@@ -706,6 +707,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     writeFileSync(h.planFile, JSON.stringify({ worker: { output: { out: 'RESUMED', echo: 'x' } } }))
     await resumeTask(h.db, parentTaskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -713,7 +715,9 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       awaitScheduler: true,
     } as unknown as StartTaskDeps)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
-    expect(parent.status).toBe('done')
+    expect(`${parent.status}:${parent.errorSummary ?? ''}:${parent.errorMessage ?? ''}`).toBe(
+      'done::',
+    )
     const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
     expect(children.length).toBe(1) // 领养同一子任务，绝不重复发起
     expect(children[0]!.id).toBe(childId!)

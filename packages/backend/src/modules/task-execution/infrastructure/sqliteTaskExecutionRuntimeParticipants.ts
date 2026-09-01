@@ -93,6 +93,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
     ) {
       await resumeTask(input.db, request.taskId, {
         db: input.db,
+        taskRecoveryOperations: input.persistence.recoveryAdministration,
         schedulerDriver: topology.schedulerDriver,
         ...(request.runtime.triggerContext === undefined
           ? {}

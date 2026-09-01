@@ -127,8 +127,10 @@ describe('AC-19 —— 语义边界', () => {
     // 条。「只读仓被改动了」不是待修复的不变量违反，是给人看的事实通报——
     // 塞进那张表会被误修。这条锁住实现没有走那条路。
     const body = await inspectorSource()
-    expect(body).toContain('readonlyDirtyCount')
+    expect(body).toContain('recordReadonlyDirty')
+    expect(body).toContain('changedCount: changed.length')
     expect(body).not.toContain('lifecycleAlerts')
+    expect(body).not.toContain('lifecycle_alerts')
   })
 
   test('干净时也写 0 —— 不是只在脏的时候才写', async () => {
@@ -137,7 +139,7 @@ describe('AC-19 —— 语义边界', () => {
     const body = await inspectorSource()
     // 写入语句在 `if (changed.length > 0)` 的**外面**：先无条件写计数，
     // 再按需打日志。
-    const writeAt = body.indexOf('readonlyDirtyCount: changed.length')
+    const writeAt = body.indexOf('recordReadonlyDirty({')
     const guardAt = body.indexOf('if (changed.length > 0)')
     expect(writeAt).toBeGreaterThan(0)
     expect(guardAt).toBeGreaterThan(0)

@@ -19,7 +19,9 @@ function read(p: string): string {
 
 describe('RFC-048 subagentLiveCapture passthrough', () => {
   test('task engine RunTaskOptions declares the field', () => {
-    const src = read('packages/backend/src/services/execution/taskEngineRuntimeOptions.ts')
+    const src = read(
+      'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts',
+    )
     expect(src).toContain(
       'subagentLiveCapture?: { pollMs: number; consecutiveFailureLimit: number }',
     )
@@ -45,7 +47,16 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     expect(matches.length).toBe(4)
     expect(topology).toContain("'subagentLiveCapture',")
     expect(src).toContain('runConfig: pickInheritableRunConfig(state.opts)')
-    expect(src).toContain('...runtime.runConfig')
+    const childLaunchAdapters = [
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts',
+    ]
+      .map(read)
+      .join('\n')
+    expect(childLaunchAdapters).toMatch(/\.\.\.(?:input|request)\.runtime\.runConfig/)
+    expect(childLaunchAdapters).toContain('resolveTaskDriveConfig(request.runtime.runConfig)')
   })
 
   test('StartTaskDeps declares the field and the coordinator freezes it once for every drive path', () => {
@@ -61,7 +72,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     expect(src).toContain('new DefaultTaskDriveCoordinator({\n    runtime,')
   })
 
-  test('subagentLiveCapture is assembled into StartTaskDeps and every launch path carries it', () => {
+  test('bootstrap assembles subagentLiveCapture while the route stays provider-neutral', () => {
     // RFC-159 T2: resolveSubagentLiveCapture + buildStartTaskDeps moved to
     // @/services/startTaskDeps (shared with the scheduled-task scheduler). The wire
     // is unchanged — buildStartTaskDeps resolves the value and conditionally spreads
@@ -69,14 +80,26 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     const deps = read('packages/backend/src/services/startTaskDeps.ts')
     expect(deps).toContain('function resolveSubagentLiveCapture(')
     expect(deps).toContain('...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {})')
-    // tasks.ts carries it on every launch path: JSON via buildStartTaskDeps; multipart
-    // (fallback + success) + resume + retry via the imported resolveSubagentLiveCapture.
-    const src = read('packages/backend/src/routes/tasks.ts')
-    expect(src).toMatch(
-      /buildStartTaskDeps\(\s*deps\.db,\s*requireSchedulerDriver\(deps\.schedulerDriver\),\s*deps\.configPath,/,
-    )
-    const callCount = (src.match(/resolveSubagentLiveCapture\(deps\.configPath\)/g) ?? []).length
-    expect(callCount).toBeGreaterThanOrEqual(3)
+    const assembly = [
+      'packages/backend/src/services/scheduleLaunch.ts',
+      'packages/backend/src/server.ts',
+      'packages/backend/src/cli/start.ts',
+    ]
+      .map(read)
+      .join('\n')
+    expect(assembly).toContain('buildStartTaskDeps(')
+
+    // Multipart launch resolves the same profile once for both fallback and
+    // successful upload paths. The HTTP route itself must not regain a DB or
+    // bootstrap dependency merely to carry this option.
+    const multipart = read('packages/backend/src/services/multipartTaskStart.ts')
+    expect(multipart).toContain('resolveSubagentLiveCapture(deps.configPath)')
+    expect(
+      multipart.match(/subagentLiveCapture !== undefined/g)?.length ?? 0,
+    ).toBeGreaterThanOrEqual(2)
+    const route = read('packages/backend/src/routes/tasks.ts')
+    expect(route).not.toContain('DbClient')
+    expect(route).not.toContain('buildStartTaskDeps(')
   })
 
   test('runner declares the option and falls back to compile-time defaults when omitted', () => {

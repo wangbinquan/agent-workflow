@@ -19,7 +19,12 @@ describe('RFC-201 MCP production callsite ratchet', () => {
     expect(route.match(/mcpOperationCoordinator\.runExclusive/g)?.length).toBeGreaterThanOrEqual(5)
     expect(aggregate.match(/coordinator\.runExclusive/g)?.length).toBe(3)
     expect(route).toContain('runDeduplicatedOperation')
-    expect(route).toContain('loadById: (_db, resourceId) => aclIdentity.load(resourceId)')
+    // RFC-349: the transport now consumes closed query/identity ports. Keep
+    // the stable-id recheck without reintroducing the retired DbClient-shaped
+    // ACL callback.
+    expect(route).toContain('const current = await queries.get(authority, { id: resolved.id })')
+    expect(route).toContain('const identity = await aclIdentity.load(resolved.id)')
+    expect(route).not.toContain('loadById: (_db')
     // RFC-285 B5：路由的 stale 产出收编 staleConflictError helper——锁 helper 在场（比旧字面量锁更强：码+resource 字段单源）。
     expect(route).toContain("staleConflictError('mcp'")
     expect(route).toContain("'resource-operation-superseded'")

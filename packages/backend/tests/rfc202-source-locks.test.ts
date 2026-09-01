@@ -13,20 +13,26 @@ const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (rel: string): string => readFileSync(resolve(ROOT, rel), 'utf8')
 
 describe('RFC-202 source locks', () => {
-  test('scheduler abort checkpoints thread signal.reason into cancelTaskRow', () => {
+  test('task engine abort checkpoints thread signal.reason into the provider-neutral lifecycle', () => {
     const application = read(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
     // All four checkpoints must pass the abort reason — dropping it silently
     // reverts daemon shutdowns to "canceled by user" (audit P1 F-13). RFC-331
-    // makes the application-owned topology the required first argument.
-    const threaded = application.match(
-      /cancelTaskRow\(\s*topology,\s*db,\s*taskId,[\s\S]{0,180}?opts\.signal\??\.reason,\s*opts\.executionContext\s*,?\s*\)/g,
-    )
+    // now owns that decision behind the runtime lifecycle port.
+    const threaded = application.match(/cancelRuntimeTask\([^)]*opts\.signal\??\.reason\)/g)
     expect(threaded?.length ?? 0).toBeGreaterThanOrEqual(4)
-    expect(scheduler).toContain('DAEMON_SHUTDOWN_ABORT_REASON')
-    expect(scheduler).toContain("to: 'interrupted'")
+    const helper = application.slice(
+      application.indexOf('async function cancelRuntimeTask('),
+      application.indexOf(
+        '\nasync function runTaskEngineOrchestratorInner(',
+        application.indexOf('async function cancelRuntimeTask('),
+      ),
+    )
+    expect(helper).toContain('DAEMON_SHUTDOWN_ABORT_REASON')
+    expect(helper).toContain('opts.persistence.runtimeLifecycle.trySet({')
+    expect(helper).toContain("to: 'interrupted'")
+    expect(helper).toContain('DAEMON_RESTART_ERROR_SUMMARY')
   })
 
   test('runner persists shutdown-aborted node_runs as interrupted (resume rollback eligibility)', () => {
@@ -40,11 +46,18 @@ describe('RFC-202 source locks', () => {
 
   test('shutdown survivors + checkpoint interrupts stamp the summary autoResume matches', () => {
     const shutdown = read('packages/backend/src/services/shutdown.ts')
-    expect(shutdown).toContain('DAEMON_RESTART_ERROR_SUMMARY')
-    expect(shutdown).not.toContain("errorSummary: 'daemon-shutdown'")
     expect(shutdown).toContain(
-      'shutdownActiveTaskExecutions(DAEMON_SHUTDOWN_ABORT_REASON, budgetMs)',
+      'dependencies.controller.shutdownActive(DAEMON_SHUTDOWN_ABORT_REASON, budgetMs)',
     )
+    expect(shutdown).toContain('dependencies.operations.interruptSurvivor({')
+    for (const adapter of [
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts',
+    ]) {
+      const source = read(adapter)
+      expect(source).toContain("errorSummary: 'daemon-restart'")
+      expect(source).not.toContain("errorSummary: 'daemon-shutdown'")
+    }
   })
 
   test('frontend cancel affordance covers awaiting_review/awaiting_human', () => {
@@ -83,7 +96,9 @@ describe('RFC-202 source locks', () => {
       'packages/backend/src/modules/task-execution/application/taskLifecycleConsumers.ts',
     )
     expect(start).toContain('createTaskLifecycleDurableConsumerDefinitions')
-    expect(start).toContain('sealOpenHumanGatesForTask')
+    expect(start).toContain('createSqliteHumanGateTerminalSweepCommand')
+    expect(start).toContain('createPostgresqlHumanGateTerminalSweepCommand')
+    expect(start).toContain('closeTerminalGates(taskId, status)')
     expect(consumers).toContain("id: 'task-terminal-gate-close'")
     expect(start).not.toContain('registerTerminalTaskHook')
     const lifecycle = read('packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts')

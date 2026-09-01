@@ -3,6 +3,7 @@ import {
   TASK_LIST_ATTENTION_STATUSES,
   TASK_LIST_FINISHED_STATUSES,
   canonicalTaskStatuses,
+  isWorkgroupTask,
   parseTaskStatusList,
   type TaskCatalogListItem,
   type TaskListItem,
@@ -63,7 +64,7 @@ function text(value: string) {
 
 function sourceOf(item: TaskListItem): TaskExecutionCatalogSourceId {
   if (item.sourceAgentId !== null && item.sourceAgentId !== undefined) return 'agent'
-  if (item.workgroupId !== null && item.workgroupId !== undefined) return 'workgroup'
+  if (isWorkgroupTask(item)) return 'workgroup'
   return 'workflow'
 }
 

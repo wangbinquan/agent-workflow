@@ -338,13 +338,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/agent.ts',
-    'modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts',
-    ['getAgentByIdSync'],
-    'digital-employee built-in Agent lookup',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/agent.ts',
     'modules/task-execution/composition/digitalEmployeeExecution.ts',
     ['getAgentById'],
     'digital-employee Agent execution lookup',
@@ -360,9 +353,16 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   edge(
     'services/agentDeps.ts',
     'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
-    ['resolveDependsClosure'],
+    ['AgentDependencyLookup', 'resolveDependsClosure'],
     'task Agent dependency closure',
     REMOVE_OWNERS.agentDependencies,
+  ),
+  edge(
+    'services/mcpRuntimeTestTransitions.ts',
+    'cli/start.ts',
+    ['deletePreparedMcpRuntimeTestsInTx', 'transitionMcpRuntimeTestsInTx'],
+    'daemon MCP runtime-test lifecycle',
+    REMOVE_OWNERS.mcpRuntimePersistence,
   ),
   edge(
     'services/mcpRuntimeTestTransitions.ts',
@@ -377,6 +377,20 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['deletePreparedMcpRuntimeTestsInTx', 'transitionMcpRuntimeTestsInTx'],
     'bootstrap MCP runtime-test lifecycle',
     REMOVE_OWNERS.mcpRuntimePersistence,
+  ),
+  edge(
+    'services/resourceAcl.ts',
+    'cli/postgresqlDaemonApplication.ts',
+    ['assertNameUnchangedForEditor'],
+    'PostgreSQL daemon resource-name write fence',
+    REMOVE_OWNERS.acl,
+  ),
+  edge(
+    'services/resourceAcl.ts',
+    'cli/start.ts',
+    ['assertNameUnchangedForEditor'],
+    'SQLite daemon resource-name write fence',
+    REMOVE_OWNERS.acl,
   ),
   edge(
     'services/resourceAcl.ts',
@@ -430,6 +444,13 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceAcl.ts',
+    'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
+    ['canViewResource'],
+    'SQLite task route resource visibility',
+    REMOVE_OWNERS.taskExecutionResources,
+  ),
+  edge(
+    'services/resourceAcl.ts',
     'platform/persistence/sqlite/systemOverviewReadModel.ts',
     ['AclColumnRef', 'visibleRowsCondition'],
     'system overview ACL read model',
@@ -455,13 +476,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['canEditAccess', 'canGovernAccess'],
     'scheduled-task ACL projection',
     REMOVE_OWNERS.scheduledTask,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'routes/tasks.ts',
-    ['canViewResource'],
-    'task resource visibility',
-    REMOVE_OWNERS.taskExecution,
   ),
   edge(
     'services/resourceAcl.ts',
@@ -563,17 +577,17 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflow.ts',
+    'modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
+    ['getWorkflow'],
+    'SQLite task route Workflow lookup',
+    REMOVE_OWNERS.taskExecutionResources,
+  ),
+  edge(
+    'services/workflow.ts',
     'platform/persistence/sqlite/systemProviderBackup.ts',
     ['listWorkflows'],
     'provider backup Workflow inventory',
     REMOVE_OWNERS.systemOperations,
-  ),
-  edge(
-    'services/workflow.ts',
-    'routes/tasks.ts',
-    ['getWorkflow'],
-    'task route Workflow lookup',
-    REMOVE_OWNERS.taskExecutionResources,
   ),
   edge(
     'services/workflow.ts',
@@ -595,6 +609,20 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['getWorkflow'],
     'task launch Workflow lookup',
     REMOVE_OWNERS.taskExecutionResources,
+  ),
+  edge(
+    'services/workflow.validator.ts',
+    'cli/start.ts',
+    ['buildWorkflowValidationContext'],
+    'SQLite daemon Workflow validation composition',
+    REMOVE_OWNERS.workflowValidation,
+  ),
+  edge(
+    'services/workflow.validator.ts',
+    'server.ts',
+    ['buildWorkflowValidationContext'],
+    'HTTP application Workflow validation composition',
+    REMOVE_OWNERS.workflowValidation,
   ),
   edge(
     'services/workflow.validator.ts',
@@ -637,6 +665,13 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['stringifyWorkflowYaml'],
     'SQLite backup Workflow serialization',
     REMOVE_OWNERS.systemOperations,
+  ),
+  edge(
+    'services/workflowLaunchInputs.ts',
+    'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    ['assertWorkflowLaunchInputs'],
+    'PostgreSQL task launch input validation',
+    REMOVE_OWNERS.taskExecutionResources,
   ),
   edge(
     'services/workflowLaunchInputs.ts',

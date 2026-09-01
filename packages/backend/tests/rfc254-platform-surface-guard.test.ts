@@ -157,10 +157,10 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
-    file: 'services/taskPlatformInputPaths.ts',
+    file: 'modules/task-execution/domain/taskPlatformInputPaths.ts',
     match: '`${root}/`',
     count: 1,
-    why: 'the roster is a closed repo-relative wire grammar, not a host path: canonicalPath() rejects `\\`, absolute forms, empty/`.`/`..` segments and control chars BEFORE this prefix test runs, so `/` is the only separator that can reach it on any platform (RFC-310 PR-12 platform input mounts)',
+    why: 'the roster is a closed repo-relative wire grammar, not a host path: canonicalPath() rejects `\\`, absolute forms, empty/`.`/`..` segments and control chars BEFORE this prefix test runs, so `/` is the only separator that can reach it on any platform (RFC-310 PR-12; owner moved to Task Execution in RFC-349)',
   },
   {
     rule: 'posix-path-prefix',

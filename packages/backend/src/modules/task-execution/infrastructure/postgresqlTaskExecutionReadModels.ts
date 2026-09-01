@@ -2,6 +2,7 @@
 // read models. Consumers keep the same Promise contracts and never receive a
 // provider client; bootstrap selects this adapter for a PostgreSQL generation.
 
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 
 import {
@@ -173,7 +174,7 @@ export function createPostgresqlTaskExecutionReadModels(
         dwPhase: string | null
         resultMessageBody: string | null
       } | null = null
-      if (task.workgroupId !== null) {
+      if (isWorkgroupTask(task)) {
         const states = await db
           .select({
             gateSummary: workgroupTaskState.gateSummary,

@@ -91,7 +91,7 @@ describe('RFC-099 prompt isolation — source level', () => {
   }
 
   test('renderCommentsForPrompt body references neither author nor authorRole', () => {
-    const review = backendSrc('services/review.ts')
+    const review = backendSrc('modules/collaboration/infrastructure/legacySqliteReview.ts')
     const fn = sliceFunction(review, 'export function renderCommentsForPrompt(')
     expect(fn).not.toContain('author')
     expect(fn).not.toContain('decidedBy')

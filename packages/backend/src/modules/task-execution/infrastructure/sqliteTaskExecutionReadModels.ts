@@ -1,3 +1,4 @@
+import { isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import {
@@ -168,7 +169,7 @@ export function createSqliteTaskExecutionReadModels(db: DbClient): TaskExecution
         dwPhase: string | null
         resultMessageBody: string | null
       } | null = null
-      if (task.workgroupId !== null) {
+      if (isWorkgroupTask(task)) {
         const states = await db
           .select({
             gateSummary: workgroupTaskState.gateSummary,

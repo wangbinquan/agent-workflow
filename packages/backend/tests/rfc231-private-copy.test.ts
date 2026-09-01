@@ -357,7 +357,6 @@ describe('RFC-231 private create invariant', () => {
       mcps: { 'modules/resource-catalog/infrastructure/sqliteMcpRepository.ts': 1 },
       plugins: { 'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts': 1 },
       workflows: {
-        'services/agentLaunch.ts': 1,
         'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
         'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
       },
@@ -373,7 +372,6 @@ describe('RFC-231 private create invariant', () => {
       'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts',
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
-      'services/agentLaunch.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroup/dwActions.ts',
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts',
@@ -414,10 +412,7 @@ describe('RFC-231 private create invariant', () => {
     expect(
       sources.get('modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts'),
     ).toContain('...input.initialAcl')
-    for (const file of [
-      'services/agentLaunch.ts',
-      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
-    ]) {
+    for (const file of ['modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts']) {
       expect(sources.get(file)).toContain('initialBuiltinResourceAcl')
     }
     expect(

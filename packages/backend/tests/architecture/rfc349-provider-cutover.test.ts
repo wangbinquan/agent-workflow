@@ -131,6 +131,22 @@ function isDatabaseMechanism(specifier: string): boolean {
   )
 }
 
+/**
+ * Exact mechanism edges that crossed into a provider-neutral layer. Keeping
+ * syntax and value/type kind in the finding makes static imports, type-only
+ * aliases, re-exports, dynamic imports and require() independently auditable.
+ */
+function databaseMechanismDependencies(source: SourceUnit): string[] {
+  if (!isBusinessOrTransport(source)) return []
+  return importEdges(source)
+    .filter((edge) => isDatabaseMechanism(edge.specifier))
+    .map(
+      (edge) =>
+        `${source.path} -> ${edge.specifier} :: ${edge.syntax}:${edge.kind}`,
+    )
+    .sort()
+}
+
 function isProviderSpecificSpecifier(specifier: string): boolean {
   const basename = specifier.split('/').at(-1) ?? ''
   return /sqlite|postgresql/i.test(basename)
@@ -293,16 +309,33 @@ describe('RFC-349 provider cutover', () => {
   })
 
   test('business, application, public and transport surfaces own ports instead of DB mechanisms', () => {
-    const violations = units
-      .filter(isBusinessOrTransport)
-      .flatMap((source) =>
-        importEdges(source)
-          .filter((edge) => isDatabaseMechanism(edge.specifier))
-          .map((edge) => `${source.path} -> ${edge.specifier}`),
-      )
-      .sort()
+    const violations = units.flatMap(databaseMechanismDependencies).sort()
 
     expect(violations).toEqual([])
+  })
+
+  test('negative fixture: every DB import syntax is rejected outside infrastructure', () => {
+    const service = sourceUnit(
+      'packages/backend/src/services/orders.ts',
+      [
+        "import type { DbClient } from '@/db/client'",
+        "export { orders } from '@/db/schema'",
+        "const dialect = await import('drizzle-orm/pg-core')",
+        "const sqlite = require('bun:sqlite')",
+      ].join('\n'),
+    )
+    expect(databaseMechanismDependencies(service)).toEqual([
+      'packages/backend/src/services/orders.ts -> @/db/client :: static-import:type',
+      'packages/backend/src/services/orders.ts -> @/db/schema :: export:value',
+      'packages/backend/src/services/orders.ts -> bun:sqlite :: require:value',
+      'packages/backend/src/services/orders.ts -> drizzle-orm/pg-core :: dynamic-import:value',
+    ])
+
+    const adapter = sourceUnit(
+      'packages/backend/src/modules/orders/infrastructure/sqliteOrders.ts',
+      "import type { DbClient } from '@/db/client'\n",
+    )
+    expect(databaseMechanismDependencies(adapter)).toEqual([])
   })
 
   test('provider-specific business dependencies are exact legacy debt and cannot grow', () => {

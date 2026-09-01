@@ -44,9 +44,19 @@ const RFC331_LEGACY_CONSUMERS = new Set([
 ])
 
 const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
-  // RFC-334 moved activation behind the node execution gateway; the scheduler
-  // deep import is intentionally extinct rather than transferred to a new legacy consumer.
+  'packages/backend/src/cli/start.ts:@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations',
+  'packages/backend/src/cli/start.ts:@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots',
+  'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
+  'packages/backend/src/routes/tasks.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
+  'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand',
+  'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
+  'packages/backend/src/services/startTaskDeps.ts:@/modules/task-execution/infrastructure/legacySqliteTaskDatabase',
+  'packages/backend/src/services/startTaskDeps.ts:@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/branchTrace',
+  'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
+  'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
+  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
+  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader',
 ])
 
 function legacyDeepImports(units: readonly SourceUnit[]): string[] {
@@ -61,7 +71,7 @@ function legacyDeepImports(units: readonly SourceUnit[]): string[] {
       }
     }
   }
-  return imports.sort()
+  return [...new Set(imports)].sort()
 }
 
 function topologyBoundaryViolations(units: readonly SourceUnit[]): string[] {

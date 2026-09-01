@@ -81,16 +81,16 @@ const agentModule = {
   aclIdentity: {},
   authorityFor: () => ({}),
 } as unknown as Parameters<typeof mountAgentRoutes>[1]
+const workgroupTaskModule = {
+  module: { commands: {}, queries: {} },
+  authorityFor: () => ({}),
+} as unknown as Parameters<typeof mountWorkgroupTaskRoutes>[1]
 
 function mountAll(): void {
   const sink = new Hono()
   const mounts: ReadonlyArray<() => void> = [
     () => mountFusionRoutes(sink, deps),
-    () =>
-      mountWorkgroupTaskRoutes(
-        sink,
-        deps as unknown as Parameters<typeof mountWorkgroupTaskRoutes>[1],
-      ),
+    () => mountWorkgroupTaskRoutes(sink, workgroupTaskModule),
     () =>
       mountScheduledTaskRoutes(
         sink,

@@ -133,6 +133,7 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     // configJson）都是回归。
     const allow = new Set([
       'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts',
     ])
     const offenders: string[] = []
     for (const f of walkTs(SRC)) {
@@ -295,9 +296,11 @@ describe('rfc217 G4 — the workgroup discriminator has ONE oracle', () => {
 })
 
 describe('rfc217 T6 — assignment writes have ONE owning module', () => {
-  test('update(workgroupAssignments) lives only in workgroup/lifecycle.ts', () => {
-    // 状态迁移走 casAssignmentStatus（转换表 CAS），run 指针刷新走
-    // repointAssignmentRun——第二个 update 站点=有人绕开了 D4 写侧收口。
+  test('update(workgroupAssignments) stays inside the exact owner-native infrastructure set', () => {
+    // SQLite compatibility keeps the legacy lifecycle owner. PostgreSQL
+    // composes the same reserved-transaction mutations across Resource Catalog
+    // and Collaboration owner-native adapters. Transport/application code is
+    // deliberately absent; any new writer still changes this exact inventory.
     const offenders: string[] = []
     const walk = (dir: string): void => {
       for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
@@ -309,7 +312,12 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
     }
     walk('packages/backend/src')
     expect(offenders).toEqual([
+      'packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts',
     ])
   })
 })

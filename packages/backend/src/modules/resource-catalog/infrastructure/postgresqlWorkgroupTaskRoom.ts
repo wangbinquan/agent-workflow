@@ -4,6 +4,7 @@ import {
   WorkgroupRuntimeConfigSchema,
   WorkflowNameSchema,
   WORKGROUP_MAX_ROUNDS_LIMIT,
+  isWorkgroupTask,
   parseBatchShardKey,
   parseMsgShardKey,
   type DwState,
@@ -221,7 +222,7 @@ export async function loadVisibleTask(
 ) {
   const task = await participant.loadVisible(authority, taskId)
   const parsed = parseConfig(task?.workgroupConfigJson ?? null)
-  if (task === null || task.workgroupId === null || parsed === null) {
+  if (task === null || !isWorkgroupTask(task) || parsed === null) {
     throw new NotFoundError('workgroup-task-not-found', `workgroup task '${taskId}' not found`)
   }
   return { task, ...parsed, state: await loadState(transaction, taskId) }

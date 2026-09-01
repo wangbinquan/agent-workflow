@@ -32,6 +32,7 @@ import { retryNode } from '../src/services/task'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 // 同毫秒多行排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）——freshest
 // 判定是纯 ULID id 序，monotonicFactory 保证后铸的行恒为 latest。
@@ -268,6 +269,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
           cascade: true,
           deps: {
             db,
+            taskRecoveryOperations: taskRecoveryOperations(db),
             schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
               .schedulerDriver,
             appHome: APP_HOME,
@@ -311,6 +313,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
         cascade: true,
         deps: {
           db,
+          taskRecoveryOperations: taskRecoveryOperations(db),
           schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
             .schedulerDriver,
           appHome: APP_HOME,

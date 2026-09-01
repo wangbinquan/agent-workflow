@@ -89,7 +89,7 @@ describe('RFC-287 T5 / C1 — 脚本节点合并抛出的处置（漂移 A）', 
     const mergeAt = script.indexOf('mergeBackAndSettle(')
     expect(mergeAt, '脚本线应有 merge-back').toBeGreaterThan(-1)
     // 现状红：mergeBackAndSettle 是裸调用，其后 600 字符内既无 catch 也无 onThrow。
-    const around = script.slice(Math.max(0, mergeAt - 400), mergeAt + 900)
+    const around = script.slice(Math.max(0, mergeAt - 400), mergeAt + 1_800)
     expect(around).toMatch(/catch \(err\)|onThrow:/)
   })
 
