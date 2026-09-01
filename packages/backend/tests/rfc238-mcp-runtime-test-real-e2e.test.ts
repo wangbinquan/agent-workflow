@@ -13,9 +13,14 @@ import {
   runtimes,
   tasks,
 } from '../src/db/schema'
-import { getMcpById } from '../src/services/mcp'
 import { McpRuntimeTestService } from '../src/services/mcpRuntimeTest'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
+import { composeSqliteMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
+import {
+  composeMcpServiceBindingForTest,
+  getMcpByIdForTest as getMcpById,
+} from './helpers/mcpServiceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_RUNTIME = resolve(import.meta.dir, 'fixtures', 'rfc238', 'mock-claude-runtime.js')
@@ -192,10 +197,14 @@ describe('RFC-238 real process multi-turn fixture', () => {
             visibility: 'private',
           })
           .run()
-        const mcp = await getMcpById(db, 'mcp-fixture')
+        const mcpBinding = composeMcpServiceBindingForTest(db, { actor })
+        const mcp = await getMcpById(mcpBinding, 'mcp-fixture')
         if (mcp === null) throw new Error('fixture MCP missing')
+        const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
         const service = new McpRuntimeTestService({
-          db,
+          ...composeSqliteMcpRuntimeTestProvider(db),
+          loadMcp: (mcpId) => getMcpById(mcpBinding, mcpId),
+          loadRuntime: (name) => runtimeRegistry.getRuntime(name),
           configPath: join(root, 'config.json'),
           appHome: root,
         })

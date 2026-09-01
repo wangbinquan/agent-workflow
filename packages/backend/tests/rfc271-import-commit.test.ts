@@ -29,14 +29,11 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, resourceBundleApplies, users, workgroups } from '../src/db/schema'
 import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import {
-  buildPackagePreview,
-  signPreviewToken,
-  verifyPreviewToken,
-} from '../src/services/resourcePackage/preview'
+import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))

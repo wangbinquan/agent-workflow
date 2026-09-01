@@ -7,7 +7,10 @@ import { resolve } from 'node:path'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { scheduledTasks, tasks, users, workflows } from '../src/db/schema'
-import { listScheduledTaskItems, listScheduledTasks } from '../src/services/scheduledTasks'
+import {
+  listScheduledTaskItems,
+  listScheduledTasks,
+} from './helpers/integrationTriggerResourceBinding'
 import { OWNER_IDENTITY_SQL_BATCH_SIZE } from '../src/services/ownerIdentity'
 import { listTaskItems } from '../src/services/task'
 

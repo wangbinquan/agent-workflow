@@ -26,14 +26,17 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
+import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 import {
   createWebhookDispatcher,
   migrateTriggerRowTemplateToV2,
   parseTriggerRow,
   renderWebhookLaunch,
   renderedLaunchPayload,
-  resolveRepoForEvent,
   type WebhookDispatchDeps,
 } from '../src/services/webhook/webhookDispatch'
 import type { WebhookEndpointRow } from '../src/services/webhook/dispatcherTypes'
@@ -114,10 +117,8 @@ async function harness(): Promise<Harness> {
   const canceled: string[] = []
   const launchError: Harness['launchError'] = { current: null }
   const deps: WebhookDispatchDeps = {
-    db,
+    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-    configPath: '/nonexistent/config.json',
-    secretBox: box,
     getDefaultRuntime: async () => null,
     launch: async (actor, rendered, invoker) => {
       if (launchError.current) throw launchError.current
@@ -338,13 +339,13 @@ describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
   test('http 导入的仓命中 http 事件；ssh 导入的仓命中同一事件（双 key）', async () => {
     const h = await harness()
     await seedCached(h.db, HTTP_URL)
-    expect(await resolveRepoForEvent(h.db, box, ev(), h.endpoint, true)).toEqual({
+    expect(await h.deps.resolveRepo(ev(), h.endpoint, true)).toEqual({
       kind: 'cached',
       cachedRepoId: 'cr-1',
     })
     const h2 = await harness()
     await seedCached(h2.db, SSH_URL, 'cr-2')
-    expect(await resolveRepoForEvent(h2.db, box, ev(), h2.endpoint, true)).toEqual({
+    expect(await h2.deps.resolveRepo(ev(), h2.endpoint, true)).toEqual({
       kind: 'cached',
       cachedRepoId: 'cr-2',
     })
@@ -365,17 +366,18 @@ describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
       lastFetchedAt: Date.now(),
       createdAt: Date.now(),
     })
-    const r = await resolveRepoForEvent(h.db, box, ev(), h.endpoint, true)
+    const r = await h.deps.resolveRepo(ev(), h.endpoint, true)
     expect(r).toEqual({ kind: 'url', repoUrl: HTTP_URL })
   })
   test('未缓存：autoRegister off → unregistered；on → 按端点偏好选 URL', async () => {
     const h = await harness()
-    expect(await resolveRepoForEvent(h.db, box, ev(), h.endpoint, false)).toEqual({
+    expect(await h.deps.resolveRepo(ev(), h.endpoint, false)).toEqual({
       kind: 'unregistered',
     })
-    expect(
-      await resolveRepoForEvent(h.db, box, ev(), { preferredCloneProtocol: 'ssh' }, true),
-    ).toEqual({ kind: 'url', repoUrl: SSH_URL })
+    expect(await h.deps.resolveRepo(ev(), { preferredCloneProtocol: 'ssh' }, true)).toEqual({
+      kind: 'url',
+      repoUrl: SSH_URL,
+    })
   })
 
   // RFC-287 G5 / T14 实现门 —— webhook 是 `file://` 的第三条绕过通道，也是最隐蔽的
@@ -393,12 +395,12 @@ describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
       repoHttpUrl: 'file:///srv/private/repo',
       repoSshUrl: 'file:///srv/private/repo',
     })
-    expect(await resolveRepoForEvent(h.db, box, fileEv, h.endpoint, true)).toEqual({
+    expect(await h.deps.resolveRepo(fileEv, h.endpoint, true)).toEqual({
       kind: 'unregistered',
     })
-    expect(
-      await resolveRepoForEvent(h.db, box, fileEv, { preferredCloneProtocol: 'ssh' }, true),
-    ).toEqual({ kind: 'unregistered' })
+    expect(await h.deps.resolveRepo(fileEv, { preferredCloneProtocol: 'ssh' }, true)).toEqual({
+      kind: 'unregistered',
+    })
   })
 
   test('RFC-287 G5：只有被选中的那个 URL 是 file:// 才拒（另一个协议仍可用）', async () => {
@@ -406,12 +408,13 @@ describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {
     // 这条防的是「一刀切按 repoPath 拒」——那会把只有一侧被污染的正常仓也误伤。
     const h = await harness()
     const mixed = ev({ repoHttpUrl: 'file:///srv/private/repo', repoSshUrl: SSH_URL })
-    expect(
-      await resolveRepoForEvent(h.db, box, mixed, { preferredCloneProtocol: 'http' }, true),
-    ).toEqual({ kind: 'unregistered' })
-    expect(
-      await resolveRepoForEvent(h.db, box, mixed, { preferredCloneProtocol: 'ssh' }, true),
-    ).toEqual({ kind: 'url', repoUrl: SSH_URL })
+    expect(await h.deps.resolveRepo(mixed, { preferredCloneProtocol: 'http' }, true)).toEqual({
+      kind: 'unregistered',
+    })
+    expect(await h.deps.resolveRepo(mixed, { preferredCloneProtocol: 'ssh' }, true)).toEqual({
+      kind: 'url',
+      repoUrl: SSH_URL,
+    })
   })
 })
 
@@ -625,7 +628,7 @@ describe('RFC-257 T6 · dispatch 集成', () => {
       return originalLaunch(...args)
     }
     const autoRegisterSeen: boolean[] = []
-    h.deps.resolveRepo = async (_db, _box, _event, _endpoint, autoRegister) => {
+    h.deps.resolveRepo = async (_event, _endpoint, autoRegister) => {
       autoRegisterSeen.push(autoRegister)
       return { kind: 'url', repoUrl: HTTP_URL }
     }
@@ -700,7 +703,7 @@ describe('RFC-257 T6 · dispatch 集成', () => {
     const stored = (
       await h.db.select().from(webhookTriggers).where(eq(webhookTriggers.id, id)).limit(1)
     )[0]!
-    const migrated = await migrateTriggerRowTemplateToV2(h.db, stored)
+    const migrated = await migrateTriggerRowTemplateToV2(h.deps.persistence, stored)
     expect(migrated.templateSyntaxVersion).toBe(2)
     expect(JSON.parse(migrated.launchPayload)).toMatchObject({
       inputs: {
@@ -918,11 +921,23 @@ describe('RFC-310 Event Center WorkStart · Digital Employee', () => {
     const { launch: _testLaunch, ...baseDeps } = h.deps
     const dispatcher = createWebhookDispatcher({
       ...baseDeps,
-      digitalEmployeeWorkStart: {
-        launch(input) {
-          starts.push(input)
-          return { caseId: 'case-1' }
-        },
+      launch: async (actor, rendered, invoker) => {
+        if (rendered.kind !== 'digital-employee' || invoker.type !== 'event') {
+          throw new Error('expected digital employee Event Center launch')
+        }
+        starts.push({
+          employeeId: rendered.refId,
+          intake: {
+            ...rendered.intake,
+            idempotencyKey: `event-delivery:${invoker.eventDeliveryId}`,
+          },
+          actorUserId: actor.user.id,
+          origin: {
+            eventSubscriptionId: invoker.eventSubscriptionId,
+            eventDeliveryId: invoker.eventDeliveryId,
+          },
+        })
+        return { kind: 'digital-employee', caseId: 'case-1' }
       },
     })
     const dispatch = {

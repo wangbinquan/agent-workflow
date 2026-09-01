@@ -51,7 +51,7 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
     'services/scheduleLaunch.ts',
     // RFC-257 (design gate F-7): the webhook fan-out is a launch call face —
     // this list is hand-maintained, new faces MUST be registered here.
-    'services/webhook/webhookDispatch.ts',
+    'modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts',
   ]
   for (const rel of CALL_FACES) {
     test(`${rel} has no direct start* launch call`, () => {
@@ -61,7 +61,15 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
       expect(/\bstartTask\(/.test(text)).toBe(false)
       expect(/\bstartAgentTask\(/.test(text)).toBe(false)
       expect(/\bstartWorkgroupTask\(/.test(text)).toBe(false)
-      expect(text).toContain(`startExecution`)
+      if (rel === 'routes/agents.ts' || rel === 'routes/workgroups.ts') {
+        // RFC-345/T8 provider cutover: classic Resource Catalog routes receive
+        // the same executor through a required closed binding instead of a DB.
+        expect(text).toContain('taskLaunch.launch')
+        expect(text).not.toContain('AppDeps')
+        expect(text).not.toContain('deps.db')
+      } else {
+        expect(text).toContain(`startExecution`)
+      }
     })
   }
 

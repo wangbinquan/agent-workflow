@@ -27,6 +27,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users, workflows } from '../src/db/schema'
+import { createSqliteFusionPersistence } from '../src/modules/memory/infrastructure/sqliteFusionPersistence'
 import { seedFusionResources } from '../src/services/fusion'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
 
@@ -52,11 +53,15 @@ async function freshDb(): Promise<DbClient> {
   return db
 }
 
+function seed(db: DbClient): Promise<void> {
+  return seedFusionResources(createSqliteFusionPersistence({ db, appHome: '/tmp' }))
+}
+
 describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', () => {
   test('把一行归一成 built-in ⇒ exact-revision token 变化（旧 fence 不再对得上）', async () => {
     const db = await freshDb()
     // 第一次 seed：建出这一行（此时它已经是 built-in）。
-    await seedFusionResources(db)
+    await seed(db)
     const seeded = agentRow(db, 'aw-skill-merger')
     expect(seeded?.builtin).toBe(true)
 
@@ -70,7 +75,7 @@ describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', ()
     const beforeToken = expectTokenOf('agent', beforeRow)
 
     // 再次 seed ⇒ 触发归一。
-    await seedFusionResources(db)
+    await seed(db)
 
     const afterRow = agentRow(db, 'aw-skill-merger')!
     expect(afterRow.builtin).toBe(true)
@@ -86,12 +91,12 @@ describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', ()
     // 这条是上一条的必要配平。`seedFusionResources` 每次启动都跑；如果它无条件推进
     // token，那么「重启一次服务」就会作废所有在途 fence，409 从信号退化成噪音。
     const db = await freshDb()
-    await seedFusionResources(db)
+    await seed(db)
     const first = agentRow(db, 'aw-skill-merger')!
     const firstToken = expectTokenOf('agent', first)
 
-    await seedFusionResources(db)
-    await seedFusionResources(db)
+    await seed(db)
+    await seed(db)
 
     const third = agentRow(db, 'aw-skill-merger')!
     expect(expectTokenOf('agent', third)).toEqual(firstToken)
@@ -120,7 +125,7 @@ describe('AC-12 · **workflow 路径同样要推 token**（第四轮 P2-1：只�
 
   test('把 workflow 归一成 built-in ⇒ `version` 必须推进（fence 只看它）', async () => {
     const db = await freshDb()
-    await seedFusionResources(db)
+    await seed(db)
     const seeded = workflowRow(db)
     expect(seeded?.builtin).toBe(true)
 
@@ -133,7 +138,7 @@ describe('AC-12 · **workflow 路径同样要推 token**（第四轮 P2-1：只�
     const before = workflowRow(db)!
     const beforeToken = expectTokenOf('workflow', before)
 
-    await seedFusionResources(db)
+    await seed(db)
 
     const after = workflowRow(db)!
     expect(after.builtin).toBe(true)
@@ -145,12 +150,12 @@ describe('AC-12 · **workflow 路径同样要推 token**（第四轮 P2-1：只�
 
   test('workflow 的稳态重启同样逐字不变', async () => {
     const db = await freshDb()
-    await seedFusionResources(db)
+    await seed(db)
     const first = workflowRow(db)!
     const firstToken = expectTokenOf('workflow', first)
 
-    await seedFusionResources(db)
-    await seedFusionResources(db)
+    await seed(db)
+    await seed(db)
 
     const third = workflowRow(db)!
     expect(expectTokenOf('workflow', third)).toEqual(firstToken)

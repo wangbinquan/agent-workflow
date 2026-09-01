@@ -16,17 +16,13 @@ import type { Actor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, runtimes, users, workflows } from '../src/db/schema'
-import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { commitResourcePackage, translateDecisions } from '../src/services/resourcePackage/commit'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import {
-  buildPackagePreview,
-  signPreviewToken,
-  verifyPreviewToken,
-} from '../src/services/resourcePackage/preview'
+import { signPreviewToken, verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { assignSlugs, serializeClosure } from '../src/services/resourcePackage/serialize'
 import { encodeZip } from '../src/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))

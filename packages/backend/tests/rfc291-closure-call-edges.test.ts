@@ -19,7 +19,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users, workflows, workgroups, workgroupMembers } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { buildIntentDump } from '../src/services/intent/dumpBuilder'
+import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { freezeCallClosure, parseCallClosure } from '../src/services/execution/closure'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')

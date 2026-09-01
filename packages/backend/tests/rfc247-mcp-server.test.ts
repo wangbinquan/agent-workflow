@@ -45,6 +45,7 @@ import {
   type RecordedOperationCall,
 } from './helpers/mcpOperationRecording'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createUser } from '../src/services/users'
 
 /** Keep this test independent of the operator's locally configured runtimes. */
@@ -74,7 +75,11 @@ interface Harness {
 
 async function harness(role: 'admin' | 'user' = 'admin'): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'ready' })
-  await createRuntime(db, { name: TEST_RUNTIME, protocol: 'opencode', model: 'openai/gpt-5.6' })
+  await createRuntime(runtimeRegistryPersistence(db), {
+    name: TEST_RUNTIME,
+    protocol: 'opencode',
+    model: 'openai/gpt-5.6',
+  })
   const user = await createUser(db, {
     username: 'alice',
     displayName: 'Alice',

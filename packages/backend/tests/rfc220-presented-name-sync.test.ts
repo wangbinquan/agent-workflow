@@ -49,11 +49,11 @@ function bindInvitedUserWithIdentity(
   return bindInvitedUserWithIdentityService(db, args, identityAccessFixture(db))
 }
 
-function syncPreferredSnapshot(
+async function syncPreferredSnapshot(
   db: DbClient,
   args: Parameters<typeof syncPreferredSnapshotService>[0],
 ) {
-  return syncPreferredSnapshotService(args, identityAccessFixture(db))
+  return await syncPreferredSnapshotService(args, identityAccessFixture(db))
 }
 
 async function makeProvider(db: DbClient, subjectClaim: string | null = null) {
@@ -159,7 +159,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
       .update(users)
       .set({ displayName: 'My Custom Name', gitName: 'My Git Name' })
       .where(eq(users.id, 'u1'))
-    const r = syncPreferredSnapshot(db, {
+    const r = await syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
       displayName: 'zhang hello',
@@ -172,7 +172,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
 
   test('display and Git names refresh independently with the snapshot', async () => {
     await seedIdentity('zhang hello')
-    const r = syncPreferredSnapshot(db, {
+    const r = await syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
       displayName: 'zhang 新签名',
@@ -189,7 +189,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
 
   test('legacy NULL snapshot does not suppress first-login refresh', async () => {
     await seedIdentity(null)
-    const r = syncPreferredSnapshot(db, {
+    const r = await syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
       displayName: 'zhang hello',
@@ -207,7 +207,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
       .update(users)
       .set({ displayName: 'zhang hello', gitName: 'Zhang Git', updatedAt: 11 })
       .where(eq(users.id, 'u1'))
-    const r = syncPreferredSnapshot(db, {
+    const r = await syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
       displayName: 'zhang hello',
@@ -220,7 +220,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
 
   test('email_verified follows normalized claims bidirectionally (S7 存量同步)', async () => {
     await seedIdentity('zhang hello')
-    syncPreferredSnapshot(db, {
+    await syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
       displayName: 'Original Name',
@@ -228,7 +228,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
       emailVerified: true,
     })
     expect((await snapshotOf(db, providerId, 's1'))!.emailVerified).toBe(1)
-    syncPreferredSnapshot(db, {
+    await syncPreferredSnapshot(db, {
       ...baseArgs,
       providerId,
       displayName: 'Original Name',
@@ -268,7 +268,7 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
 
   test('empty account email is filled immediately and audited', async () => {
     await seedEmailIdentity(null, null)
-    const result = syncPreferredSnapshot(db, {
+    const result = await syncPreferredSnapshot(db, {
       providerId,
       subject: 's1',
       userId: 'u1',
@@ -290,7 +290,7 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
 
   test('unchanged IdP email preserves an in-app edit; a later IdP change wins', async () => {
     await seedEmailIdentity('local@example.test', 'idp-old@example.test')
-    syncPreferredSnapshot(db, {
+    await syncPreferredSnapshot(db, {
       providerId,
       subject: 's1',
       userId: 'u1',
@@ -302,7 +302,7 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
     })
     expect(await emailOf(db, 'u1')).toBe('local@example.test')
 
-    syncPreferredSnapshot(db, {
+    await syncPreferredSnapshot(db, {
       providerId,
       subject: 's1',
       userId: 'u1',
@@ -317,7 +317,7 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
 
   test('legacy null snapshot records first sight without replacing an existing account email', async () => {
     await seedEmailIdentity('local@example.test', null)
-    const result = syncPreferredSnapshot(db, {
+    const result = await syncPreferredSnapshot(db, {
       providerId,
       subject: 's1',
       userId: 'u1',
@@ -335,23 +335,21 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
   test('unique conflict rolls back both user and identity snapshots', async () => {
     await seedEmailIdentity('old@example.test', 'old@example.test')
     await seedUser(db, 'u2', 'Bob', 'taken@example.test')
-    const error = (() => {
-      try {
-        syncPreferredSnapshot(db, {
-          providerId,
-          subject: 's1',
-          userId: 'u1',
-          displayName: 'Alice',
-          gitName: 'Alice Git',
-          email: 'taken@example.test',
-          emailVerified: true,
-          ...callbackFence,
-        })
-      } catch (caught) {
-        return caught
-      }
-      return null
-    })()
+    let error: unknown = null
+    try {
+      await syncPreferredSnapshot(db, {
+        providerId,
+        subject: 's1',
+        userId: 'u1',
+        displayName: 'Alice',
+        gitName: 'Alice Git',
+        email: 'taken@example.test',
+        emailVerified: true,
+        ...callbackFence,
+      })
+    } catch (caught) {
+      error = caught
+    }
     expect(error).toBeInstanceOf(DomainError)
     expect((error as DomainError).code).toBe('oidc-email-conflict')
     expect(await emailOf(db, 'u1')).toBe('old@example.test')

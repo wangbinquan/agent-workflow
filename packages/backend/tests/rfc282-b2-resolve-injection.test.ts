@@ -21,7 +21,10 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { skills } from '../src/db/schema'
-import { resolveInjection } from '../src/services/execution/resolveInjection'
+import {
+  createSqliteLegacyAgentDependencyLookup,
+  resolveInjection,
+} from '../src/services/execution/resolveInjection'
 import { buildCommitAgent } from '../src/services/commitPush'
 import { buildMergeAgent } from '../src/services/mergeAgent'
 import {
@@ -81,7 +84,11 @@ describe('RFC-282 B2 — §7-7 skill gates are typed failures (node-level attrib
     // quarantined for the boot epoch (RFC-170 T9).
     activateBootReverifyForTest()
     const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
-    const result = await resolveInjection(db, agent, { appHome: '/tmp/aw', log })
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log,
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+    })
     expect(result.kind).toBe('failed')
     if (result.kind !== 'failed') throw new Error('unreachable')
     expect(result.message).toBe('skill-quarantined')
@@ -102,7 +109,11 @@ describe('RFC-282 B2 — §7-7 skill gates are typed failures (node-level attrib
     activateBootReverifyForTest()
     markSkillBootVerified(skillId)
     const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
-    const result = await resolveInjection(db, agent, { appHome: '/tmp/aw', log })
+    const result = await resolveInjection(db, agent, {
+      appHome: '/tmp/aw',
+      log,
+      agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+    })
     expect(result.kind).toBe('failed')
     if (result.kind !== 'failed') throw new Error('unreachable')
     expect(result.message).toBe('skill-path-not-canonical')
@@ -122,9 +133,13 @@ describe('RFC-282 B2 — §7-7 skill gates are typed failures (node-level attrib
     activateBootReverifyForTest()
     const agent = mkAgent({ skills: [{ kind: 'managed', skillId }] })
     // A throw here would reject; typed failure resolves.
-    await expect(resolveInjection(db, agent, { appHome: '/tmp/aw', log })).resolves.toMatchObject({
-      kind: 'failed',
-    })
+    await expect(
+      resolveInjection(db, agent, {
+        appHome: '/tmp/aw',
+        log,
+        agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      }),
+    ).resolves.toMatchObject({ kind: 'failed' })
   })
 })
 
@@ -132,7 +147,11 @@ describe('RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 
   test('commit-push and merge synthetic agents → ok with empty faces', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     for (const agent of [buildCommitAgent(), buildMergeAgent()]) {
-      const result = await resolveInjection(db, agent, { appHome: '/tmp/aw', log })
+      const result = await resolveInjection(db, agent, {
+        appHome: '/tmp/aw',
+        log,
+        agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+      })
       expect(result.kind).toBe('ok')
       if (result.kind !== 'ok') throw new Error('unreachable')
       expect(result.spec.dependents).toEqual([])

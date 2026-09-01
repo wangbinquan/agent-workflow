@@ -26,6 +26,7 @@ import { createInMemoryDb } from '../src/db/client'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
+import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const created: string[] = []
@@ -178,7 +179,7 @@ describe('RFC-210 recursive commit & push', () => {
 
     const result = await runCommitPush(
       { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
-      { db: await db(parent), publicationTransport },
+      composeSqliteCommitPushDeps(await db(parent), { publicationTransport }),
     )
 
     expect(result.meta.pushOutcome).toBe('pushed')
@@ -228,7 +229,7 @@ describe('RFC-210 recursive commit & push', () => {
 
     const result = await runCommitPush(
       { ...baseParams, worktreePath: parent, ownerUserId: 'submodule-owner' },
-      { db: await db(parent), publicationTransport },
+      composeSqliteCommitPushDeps(await db(parent), { publicationTransport }),
     )
 
     expect(result.meta.pushOutcome).toBe('commit-local-subrepo-failed')
@@ -246,7 +247,7 @@ describe('RFC-210 recursive commit & push', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
     expect(res.meta.pushOutcome).not.toBe('skipped-empty')
     expect(res.meta.subrepos).toHaveLength(1)
@@ -262,7 +263,7 @@ describe('RFC-210 recursive commit & push', () => {
     writeFileSync(join(parent, 'vendor', 'a.txt'), 'published\n')
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
     const sha = res.meta.subrepos?.[0]?.toSha ?? ''
     expect(sha).toMatch(/^[a-f0-9]{40}$/)
@@ -280,7 +281,7 @@ describe('RFC-210 recursive commit & push', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent, excludePatterns: ['/vendor/'] },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
     expect(res.meta.pushOutcome).toBe('skipped-excluded')
     expect(res.meta.exclusions?.paths).toEqual(['vendor'])
@@ -296,7 +297,7 @@ describe('RFC-210 recursive commit & push', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent, excludePatterns: ['*.tmp'] },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
     expect(res.meta.pushOutcome).toBe('skipped-excluded')
     expect(res.meta.exclusions?.paths).toEqual(['vendor/secret.tmp'])
@@ -314,7 +315,7 @@ describe('RFC-210 recursive commit & push', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent, excludePatterns: ['*.trace'] },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
     expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
     expect(res.meta.exclusions).toMatchObject({
@@ -333,7 +334,7 @@ describe('RFC-210 recursive commit & push', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
 
     expect(res.meta.pushOutcome).toBe('commit-local-subrepo-failed')
@@ -358,7 +359,10 @@ describe('RFC-210 recursive commit & push', () => {
     await runGit(plain, ['checkout', '-q', '-b', 'agent-workflow/t1'])
     writeFileSync(join(plain, 'f.txt'), 'v2\n')
 
-    const res = await runCommitPush({ ...baseParams, worktreePath: plain }, { db: await db(plain) })
+    const res = await runCommitPush(
+      { ...baseParams, worktreePath: plain },
+      composeSqliteCommitPushDeps(await db(plain)),
+    )
     expect(res.meta.pushOutcome).toBe('pushed')
     // No submodules ⟹ the field is omitted entirely, keeping these rows
     // byte-identical to pre-RFC-210.

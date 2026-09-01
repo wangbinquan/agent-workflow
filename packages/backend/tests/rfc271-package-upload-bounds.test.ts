@@ -8,9 +8,9 @@ import { describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { Zip, ZipPassThrough, zipSync, type Zippable } from 'fflate'
 import { buildActor } from '../src/auth/actor'
-import type { SecretBox } from '../src/auth/secretBox'
-import type { DbClient } from '../src/db/client'
+import type { ResourcePackageOwnedResourceLookupPort } from '../src/modules/resource-catalog/application/package/ports'
 import { composeResourcePackageOperations } from '../src/modules/resource-catalog/composition/resourcePackageOperations'
+import type { ResourcePackageExecutionAdapter } from '../src/services/resourcePackage/executionAdapter'
 import {
   registerResourcePackageRoutes,
   RESOURCE_PACKAGE_BODY_MAX_BYTES,
@@ -142,11 +142,26 @@ function routeApp(): Hono {
   // Oversize requests must return from the body-limit handler before any route
   // dependency is touched. Deliberately inert dependencies make that boundary
   // observable: falling through would become a test failure rather than a DB IO.
+  const execution: ResourcePackageExecutionAdapter = Object.freeze({
+    async inspect() {
+      throw new Error('body-limit-must-stop-before-package-inspect')
+    },
+    async apply() {
+      throw new Error('body-limit-must-stop-before-package-apply')
+    },
+    async export() {
+      throw new Error('body-limit-must-stop-before-package-export')
+    },
+  })
+  const resources: ResourcePackageOwnedResourceLookupPort = Object.freeze({
+    async findOwnedIdsByName() {
+      throw new Error('body-limit-must-stop-before-package-resource-lookup')
+    },
+  })
   registerResourcePackageRoutes(app, {
     catalog: composeResourcePackageOperations({
-      db: {} as DbClient,
-      appHome: '/unused/resource-package-upload-limit-test',
-      box: {} as SecretBox,
+      execution,
+      resources,
     }),
     commandContextFor() {
       throw new Error('body-limit-must-stop-before-command-context')

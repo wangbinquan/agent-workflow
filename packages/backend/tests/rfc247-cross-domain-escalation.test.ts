@@ -41,7 +41,7 @@ import { mountAgentRoutes } from '@/routes/agents'
 import {
   createAgentOperationDescriptors,
   createWorkgroupOperationDescriptors,
-} from '@/modules/resource-catalog/public/operations'
+} from '@/modules/resource-catalog/composition/catalogOperationDescriptors'
 
 // Mounting is what populates the registry; the deps are never touched because
 // every assertion refuses before the handler runs.
@@ -52,9 +52,11 @@ import {
 // and the tests would fail with "did the route move?", pointing at the wrong
 // thing. Routes registered before a throw are kept, which is all this file needs.
 const deps = {
-  // Metadata-only harness: handlers never execute, but RFC-339 makes the
-  // scheduler driver an explicit mount-time composition boundary.
-  schedulerDriver: {},
+  // Metadata-only harness: handlers never execute, but provider-neutral
+  // operations remain a required mount-time composition boundary.
+  operations: {},
+  configPath: '/tmp/rfc247-config.json',
+  directAuthority: {},
 } as unknown as Parameters<typeof mountFusionRoutes>[1]
 const workgroupQueries = {} as Parameters<typeof createWorkgroupOperationDescriptors>[1]
 const workgroupModule = {
@@ -62,10 +64,11 @@ const workgroupModule = {
   operations: createWorkgroupOperationDescriptors(
     {} as Parameters<typeof createWorkgroupOperationDescriptors>[0],
     workgroupQueries,
+    {} as Parameters<typeof createWorkgroupOperationDescriptors>[2],
   ),
   aclIdentity: {},
   authorityFor: () => ({}),
-} as unknown as Parameters<typeof mountWorkgroupRoutes>[2]
+} as unknown as Parameters<typeof mountWorkgroupRoutes>[1]
 const agentQueries = {} as Parameters<typeof createAgentOperationDescriptors>[1]
 const agentModule = {
   queries: agentQueries,
@@ -73,26 +76,33 @@ const agentModule = {
   operations: createAgentOperationDescriptors(
     {} as Parameters<typeof createAgentOperationDescriptors>[0],
     agentQueries,
+    {} as Parameters<typeof createAgentOperationDescriptors>[2],
   ),
   aclIdentity: {},
   authorityFor: () => ({}),
-} as unknown as Parameters<typeof mountAgentRoutes>[2]
+} as unknown as Parameters<typeof mountAgentRoutes>[1]
 
 function mountAll(): void {
   const sink = new Hono()
   const mounts: ReadonlyArray<() => void> = [
     () => mountFusionRoutes(sink, deps),
-    () => mountWorkgroupTaskRoutes(sink, deps as Parameters<typeof mountWorkgroupTaskRoutes>[1]),
-    () => mountScheduledTaskRoutes(sink, deps as Parameters<typeof mountScheduledTaskRoutes>[1]),
     () =>
-      mountWorkgroupRoutes(
+      mountWorkgroupTaskRoutes(
         sink,
-        deps as Parameters<typeof mountWorkgroupRoutes>[1],
-        workgroupModule,
+        deps as unknown as Parameters<typeof mountWorkgroupTaskRoutes>[1],
       ),
     () =>
-      mountMemoryDistillJobRoutes(sink, deps as Parameters<typeof mountMemoryDistillJobRoutes>[1]),
-    () => mountAgentRoutes(sink, deps as Parameters<typeof mountAgentRoutes>[1], agentModule),
+      mountScheduledTaskRoutes(
+        sink,
+        deps as unknown as Parameters<typeof mountScheduledTaskRoutes>[1],
+      ),
+    () => mountWorkgroupRoutes(sink, workgroupModule),
+    () =>
+      mountMemoryDistillJobRoutes(
+        sink,
+        deps as unknown as Parameters<typeof mountMemoryDistillJobRoutes>[1],
+      ),
+    () => mountAgentRoutes(sink, agentModule),
   ]
   for (const m of mounts) {
     try {

@@ -18,7 +18,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { buildIntentDump } from '../src/services/intent/dumpBuilder'
+import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { createHandleAllocator, parseHandleWatermark } from '../src/services/intent/manifest'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')

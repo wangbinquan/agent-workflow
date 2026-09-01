@@ -78,7 +78,7 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
       [
         'util/hash.ts',
         // 多步 builder（循环/链式多段 update）——不属单步 idiom：
-        'services/skillHash.ts',
+        'modules/resource-catalog/infrastructure/legacy/skillHash.ts',
         'services/structuralDiff/digest.ts',
         'services/codeIntel/snapshot.ts',
         // RFC-310 evidence/baseline/workspace 流式 hash（64KB chunk 循环 update，

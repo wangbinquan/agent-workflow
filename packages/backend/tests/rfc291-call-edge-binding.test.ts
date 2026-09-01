@@ -23,7 +23,7 @@ import { parseIntentChangeset } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users, workflows, workgroups } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { buildIntentDump } from '../src/services/intent/dumpBuilder'
+import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { resolveIntentBundle } from '../src/services/intent/resolveChangeset'
 import type { IntentContextManifest } from '../src/services/intent/manifest'
 

@@ -1,8 +1,8 @@
 // RFC-225 / RFC-345 T5-WG — raw workgroup content writes stay behind the two
 // exact version-fenced authorities during compatibility cutover: the active
-// resource-catalog repository and the legacy facade island. Tests and
-// migrations are out of scope; this inventory must shrink when T9 retires the
-// remaining legacy consumers.
+// resource-catalog repository and its moved legacy provider implementation.
+// Tests and migrations are out of scope; this inventory must shrink when T9
+// retires the remaining legacy consumers.
 
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -35,26 +35,26 @@ describe('RFC-225 workgroup writer inventory', () => {
   test('workgroup row insert/update/delete has only the active and compatibility authorities', () => {
     expect(inventory(/\.insert\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
-      'services/workgroups.ts': 1,
+      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.update\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
-      'services/workgroups.ts': 1,
+      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.delete\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
-      'services/workgroups.ts': 1,
+      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
   })
 
   test('member replacement writes cannot grow a second path', () => {
     expect(inventory(/\.insert\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
-      'services/workgroups.ts': 1,
+      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.delete\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
-      'services/workgroups.ts': 1,
+      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.update\s*\(\s*workgroupMembers\s*\)/g)).toEqual({})
   })

@@ -23,7 +23,7 @@ import {
   deriveWorkgroupRunHistory,
   type HostRunLite,
   type MemberLite,
-} from '../src/services/workgroup/room'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/room'
 import { extractAgentIdsFromSnapshot } from '../src/services/memoryDistillScheduler'
 import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
 import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/constants'

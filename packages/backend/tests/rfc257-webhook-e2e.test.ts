@@ -3,11 +3,11 @@
 import { describe, expect, test } from 'bun:test'
 import { createHmac } from 'node:crypto'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { Hono } from 'hono'
+import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb } from '../src/db/client'
-import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createUser } from '../src/services/users'
 import {
@@ -26,8 +26,23 @@ import {
   renderedLaunchPayload,
 } from '../src/services/webhook/webhookDispatch'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
+import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeSqliteWebhookIngressPersistence } from '../src/modules/integration/composition/webhookIngress'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { composeEventCenter } from '../src/modules/event-center/composition'
+import {
+  createCodeHostWebhookDeliveryConsumer,
+  createCodeHostWebhookRoutingDirectory,
+} from '../src/modules/integration/composition'
+import {
+  codeHostEventCatalogJson,
+  codeHostEventTypeRef,
+} from '../src/modules/integration/public/events'
+import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 3))
@@ -90,10 +105,8 @@ async function harness() {
   // 真 dispatcher；只在 launch/cancel 处注入（fake launch 落真 tasks 行，
   // 让归属列与 supersede 走真实查询面）。
   const dispatcher = createWebhookDispatcher({
-    db,
+    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
     ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-    configPath: '/nonexistent/config.json',
-    secretBox: box,
     getDefaultRuntime: async () => null,
     terminalControl,
     launch: async (actor, rendered, invoker) => {
@@ -134,13 +147,17 @@ async function harness() {
       await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
     },
   })
-  const app = createApp({
-    token: 'a'.repeat(64),
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
+  const eventCenter = await composeEventCenter({
     db,
+    typePackageDescriptorJsons: [codeHostEventCatalogJson],
+    routingSubscriptions: createCodeHostWebhookRoutingDirectory(db),
+    deliveryConsumers: [createCodeHostWebhookDeliveryConsumer(db, dispatcher)],
+  })
+  const app = new Hono()
+  mountWebhookIngressRoutes(app, {
+    webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
     secretBox: box,
+    digitalEmployeeEventCenter: eventCenter,
     webhookDispatcher: dispatcher,
     webhookTerminalControl: terminalControl,
   })
@@ -279,7 +296,12 @@ describe('RFC-257 T14 · HTTP 入站 → 真分发器 → 任务行（全链路�
       await h.db
         .select()
         .from(eventRecords)
-        .where(eq(eventRecords.payloadArtifactRef, `webhook-delivery:${deliveryId}`))
+        .where(
+          and(
+            eq(eventRecords.payloadArtifactRef, `webhook-delivery:${deliveryId}`),
+            eq(eventRecords.eventTypeId, codeHostEventTypeRef('pipeline_failed').id),
+          ),
+        )
         .limit(1)
     )[0]
     if (event === undefined) throw new Error('expected immutable EventRecord')

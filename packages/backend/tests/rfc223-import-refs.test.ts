@@ -8,7 +8,10 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, skills, users, workflows } from '../src/db/schema'
-import { resolveAgentImportRefs, resolveImportRefs } from '../src/services/importRefs'
+import {
+  resolveAgentImportRefs,
+  resolveImportRefs,
+} from '../src/modules/resource-catalog/infrastructure/legacy/importRefs'
 import { importWorkflowYaml, workflowDefinitionToSelectors } from '../src/services/workflow.yaml'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -119,7 +122,13 @@ describe('RFC-223 AC10 portable import reference resolution', () => {
   })
 
   test('candidate, grant, and owner reads stay on the synchronous transaction surface', () => {
-    const source = readFileSync(resolve(import.meta.dir, '../src/services/importRefs.ts'), 'utf8')
+    const source = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/resource-catalog/infrastructure/legacy/importRefs.ts',
+      ),
+      'utf8',
+    )
     expect(source).toContain(
       'return dbTxSync(db, (tx) => resolveImportRefsInTx(tx, actor, selectors, requestedSelections))',
     )

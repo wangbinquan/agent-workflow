@@ -17,6 +17,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos, repoGroupNodes, repoGroups } from '../src/db/schema'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { previewRepoGroupLayout as previewRepoGroupLayoutImpl } from '../src/services/repoGroup'
 import {
   repoGroupNodesFromAttachments,
@@ -51,7 +52,7 @@ function previewRepoGroupLayout(
   database: DbClient,
   input: { name?: string; attachments: readonly RepoGroupAttachmentSpec[] },
 ) {
-  return previewRepoGroupLayoutImpl(database, {
+  return previewRepoGroupLayoutImpl(composeSqliteRepositoryWorkspaceStore(database), {
     ...(input.name === undefined ? {} : { name: input.name }),
     nodes: repoGroupNodesFromAttachments(input.attachments),
   })
@@ -89,18 +90,18 @@ function seedGroup(name: string, repoIds: readonly string[]): string {
 }
 
 describe('RFC-248 —— 干跑布局预览', () => {
-  test('空成员表返回空布局，而不是 422', () => {
+  test('空成员表返回空布局，而不是 422', async () => {
     // 用户刚点开「新建」时就是这个状态，那时报错毫无意义。
-    const r = previewRepoGroupLayout(db, { attachments: [] })
+    const r = await previewRepoGroupLayout(db, { attachments: [] })
     expect(r.repos).toEqual([])
     expect(r.totalRepos).toBe(0)
     expect(r.pendingImports).toBe(0)
   })
 
-  test('按 cachedRepoId 的成员正常展平，挂载路径原样带出', () => {
+  test('按 cachedRepoId 的成员正常展平，挂载路径原样带出', async () => {
     const app = seedRepo('app')
     const sdk = seedRepo('sdk')
-    const r = previewRepoGroupLayout(db, {
+    const r = await previewRepoGroupLayout(db, {
       name: '全栈',
       attachments: [
         { kind: 'repo', cachedRepoId: app, ref: '', subdir: '', mountPath: '', readonly: false },
@@ -119,9 +120,9 @@ describe('RFC-248 —— 干跑布局预览', () => {
     expect(r.groupName).toBe('全栈')
   })
 
-  test('**零副作用**：只给 URL 的成员不导入、不落库，只计入 pendingImports', () => {
+  test('**零副作用**：只给 URL 的成员不导入、不落库，只计入 pendingImports', async () => {
     const before = db.select().from(cachedRepos).all().length
-    const r = previewRepoGroupLayout(db, {
+    const r = await previewRepoGroupLayout(db, {
       attachments: [
         {
           kind: 'repo',
@@ -141,11 +142,11 @@ describe('RFC-248 —— 干跑布局预览', () => {
     expect(db.select().from(repoGroups).all()).toHaveLength(0)
   })
 
-  test('引用真实子组 ⇒ 递归展平，子组成员带上外层挂载前缀', () => {
+  test('引用真实子组 ⇒ 递归展平，子组成员带上外层挂载前缀', async () => {
     const a = seedRepo('a')
     const b = seedRepo('b')
     const child = seedGroup('child', [a, b])
-    const r = previewRepoGroupLayout(db, {
+    const r = await previewRepoGroupLayout(db, {
       attachments: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: false }],
     })
     expect(r.repos.map((x) => x.mountPath).sort()).toEqual(['sub', 'sub/m1'])
@@ -153,29 +154,29 @@ describe('RFC-248 —— 干跑布局预览', () => {
     expect(r.repos[0]?.viaGroups.map((g) => g.name)).toContain('child')
   })
 
-  test('外层标只读 ⇒ 子组成员全部只读（D20 并集）', () => {
+  test('外层标只读 ⇒ 子组成员全部只读（D20 并集）', async () => {
     const a = seedRepo('a')
     const child = seedGroup('child', [a])
-    const r = previewRepoGroupLayout(db, {
+    const r = await previewRepoGroupLayout(db, {
       attachments: [{ kind: 'group', childGroupId: child, mountPath: 'sub', readonly: true }],
     })
     expect(r.repos.every((x) => x.readonly)).toBe(true)
   })
 
-  test('引用不存在的子组 ⇒ 404（而不是静默跳过）', () => {
-    expect(() =>
+  test('引用不存在的子组 ⇒ 404（而不是静默跳过）', async () => {
+    await expect(
       previewRepoGroupLayout(db, {
         attachments: [{ kind: 'group', childGroupId: 'nope', mountPath: '', readonly: false }],
       }),
-    ).toThrow(/not found/i)
+    ).rejects.toThrow(/not found/i)
   })
 
-  test('挂载点冲突在预览期就报出来——不是「预览通过、保存 422」', () => {
+  test('挂载点冲突在预览期就报出来——不是「预览通过、保存 422」', async () => {
     const a = seedRepo('a')
     const b = seedRepo('b')
     let code = ''
     try {
-      previewRepoGroupLayout(db, {
+      await previewRepoGroupLayout(db, {
         attachments: [
           { kind: 'repo', cachedRepoId: a, ref: '', subdir: '', mountPath: 'x', readonly: false },
           { kind: 'repo', cachedRepoId: b, ref: '', subdir: '', mountPath: 'x', readonly: false },
@@ -189,16 +190,16 @@ describe('RFC-248 —— 干跑布局预览', () => {
     expect((code.match(/mount/) ?? []).length).toBeGreaterThan(0)
   })
 
-  test('两个成员都想挂根 ⇒ 报错（D2：至多一个挂根）', () => {
+  test('两个成员都想挂根 ⇒ 报错（D2：至多一个挂根）', async () => {
     const a = seedRepo('a')
     const b = seedRepo('b')
-    expect(() =>
+    await expect(
       previewRepoGroupLayout(db, {
         attachments: [
           { kind: 'repo', cachedRepoId: a, ref: '', subdir: '', mountPath: '', readonly: false },
           { kind: 'repo', cachedRepoId: b, ref: '', subdir: '', mountPath: '', readonly: false },
         ],
       }),
-    ).toThrow()
+    ).rejects.toThrow()
   })
 })

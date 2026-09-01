@@ -16,11 +16,11 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
+import { DEFAULT_MAX_WORKTREE_BYTES } from '../src/services/worktreeBackup'
 import {
   captureWorktrees,
   reconstructWorktrees,
-  DEFAULT_MAX_WORKTREE_BYTES,
-} from '../src/services/worktreeBackup'
+} from '../src/platform/persistence/sqlite/systemWorktreeBackup'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

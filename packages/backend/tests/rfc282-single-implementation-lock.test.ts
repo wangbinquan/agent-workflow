@@ -310,7 +310,10 @@ export const RFC282_DEFINITION_EXCEPTIONS: readonly DuplicateEntry[] = [
     signature: /sourceKind === 'managed'/,
     sites: [
       { file: 'services/execution/agentInjection.ts', count: 1 },
-      { file: 'services/skillBootVerify.ts', count: 1 },
+      {
+        file: 'modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
+        count: 1,
+      },
     ],
   },
 ]
@@ -338,11 +341,8 @@ describe('RFC-282 A2 — inline-duplicate ledger (counts pinned, both directions
 // ---------------------------------------------------------------------------
 
 describe('RFC-282 B3 — plugin-disabled code is single-sourced', () => {
-  test("the 'plugin-disabled' literal exists only at the policy table (+ the issue-code type union)", () => {
-    const allowed = new Map([
-      ['services/execution/resourcePolicy.ts', 1], // PLUGIN_DISABLED_ERROR_CODE definition
-      ['services/agentResourceIntegrity.ts', 1], // the TS literal-type union member
-    ])
+  test("the 'plugin-disabled' literal exists only at the public Resource Catalog contract", () => {
+    const allowed = new Map([['modules/resource-catalog/public/types.ts', 1]])
     for (const f of FILES) {
       const hits = stripComments(f.text).split("'plugin-disabled'").length - 1
       expect(

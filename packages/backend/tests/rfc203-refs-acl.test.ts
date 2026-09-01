@@ -15,6 +15,8 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
+import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import {
   agents as agentsTable,
   scheduledTasks,
@@ -23,9 +25,14 @@ import {
   workgroups,
 } from '../src/db/schema'
 import { createAgent, deleteAgent } from '../src/services/agent'
-import { createMcp, deleteMcp } from '../src/services/mcp'
+import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { deleteWorkgroup } from '../src/services/workgroups'
 import { ConflictError } from '../src/util/errors'
+import {
+  createMcpForTest as createMcp,
+  deleteMcpForTest as deleteMcp,
+  type McpCatalogTestBinding as McpServiceBinding,
+} from './helpers/mcpServiceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -48,6 +55,25 @@ async function seedUser(db: DbClient, id: string, role: 'admin' | 'user'): Promi
   })
 }
 
+function mcpBinding(db: DbClient, actor: Actor): McpServiceBinding {
+  const catalog = composeMcpCatalog({
+    db,
+    coordinator: new ResourceOperationCoordinator(),
+    nextMutationTimestamp: async (mcp) => mcp.updatedAt + 1,
+    runtime: Object.freeze({
+      prepareDelete: async () => undefined,
+      reconcileDurableIntents: async () => undefined,
+    }),
+    transitionMutationInTx: () => undefined,
+    deletePreparedInTx: () => undefined,
+  })
+  const authority = new AuthorityClaimRegistry().mintDirectAuthority(
+    { userId: actor.user.id, source: actor.source },
+    { ...actor, userId: actor.user.id },
+  ).actor
+  return Object.freeze({ catalog, authority })
+}
+
 const AGENT_BASE = {
   description: '',
   outputs: [],
@@ -68,7 +94,19 @@ const AGENT_BASE = {
 // 与 agents/rfc165 系列的全部删除/改名行为测试保证。
 describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => {
   test('deleteAgent 与 renameAgent 的事务体都以 id fence 开场', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'agent.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'agent.ts',
+      ),
+      'utf8',
+    )
     const fences = src.match(/where\(eq\(agents\.id, id\)\)\.get\(\)/g) ?? []
     expect(fences.length).toBeGreaterThanOrEqual(2)
     // delete fence stays after the async disclosure-grant prefetch.
@@ -187,7 +225,8 @@ describe('RFC-203 T6 引用披露 ACL', () => {
   })
 
   test('mcp-still-referenced：他人私有代理引用只计数不泄名', async () => {
-    const mcp = await createMcp(db, {
+    const binding = mcpBinding(db, owner)
+    const mcp = await createMcp(binding, {
       name: 'm1',
       description: '',
       type: 'local',
@@ -211,7 +250,7 @@ describe('RFC-203 T6 引用披露 ACL', () => {
       .where(eq(agentsTable.name, 'priv-user'))
 
     try {
-      await deleteMcp(db, mcp.id, owner)
+      await deleteMcp(binding, mcp.id)
       throw new Error('expected ConflictError')
     } catch (err) {
       expect(err).toBeInstanceOf(ConflictError)

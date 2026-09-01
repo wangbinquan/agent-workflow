@@ -29,10 +29,10 @@ import type {
   CommandContext,
   QueryContext,
 } from '../src/modules/identity-access/public/participants'
-import { composeResourcePackageOperations } from '../src/modules/resource-catalog/composition/resourcePackageOperations'
 import { errorHandler } from '../src/util/errors'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
@@ -99,7 +99,7 @@ function makeApp(db: DbClient, appHome: string): Hono {
   app.use('*', injectActor)
   app.onError(errorHandler)
   registerResourcePackageRoutes(app, {
-    catalog: composeResourcePackageOperations({ db, appHome, box }),
+    catalog: composeSqliteResourcePackageCatalogForTest({ db, appHome, box }),
     commandContextFor: testCommandContext,
     queryContextFor: testQueryContext,
   })

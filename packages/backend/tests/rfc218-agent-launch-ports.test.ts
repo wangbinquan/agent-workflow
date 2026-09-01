@@ -44,7 +44,10 @@ import {
   startAgentTask,
   validateAgentLaunchShape,
 } from '../src/services/agentLaunch'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeSqliteAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
@@ -90,6 +93,13 @@ function daemonActor(): Actor {
   })
 }
 
+function agentResourceIntegrity(db: DbClient) {
+  return composeSqliteAgentResourceIntegrity({
+    db,
+    authorization: composeSqliteResourceCatalog({ db }).authorization,
+  }).launch
+}
+
 let cleanupDirs: string[] = []
 let previousAppHome: string | undefined
 
@@ -116,7 +126,7 @@ function makeTempDir(prefix: string): string {
 }
 
 async function seedValidOpencodeRuntime(db: DbClient): Promise<void> {
-  await createRuntime(db, {
+  await composeSqliteRuntimeRegistryOperations(db).createRuntime({
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',
@@ -325,12 +335,20 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       inputs: { report: 'weekly {{report}} literal', style_guide: 'terse' },
       scratch: true,
     })
-    const task = await startAgentTask(db, daemonActor(), ported.id, body, {
-      db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
-      appHome,
-      launchProvenance: { kind: 'direct-json', initiator: 'api' },
-    })
+    const task = await startAgentTask(
+      composeSqliteAgentLaunchResourceOperations(db),
+      daemonActor(),
+      ported.id,
+      body,
+      {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        integrity: agentResourceIntegrity(db),
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
+      },
+    )
     expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
     expect(task.sourceAgentName).toBe('ported')
     // Values ride ports verbatim — a literal {{...}} is data, not a template.
@@ -347,7 +365,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
     const appHome = makeTempDir('aw-rfc218-b4z-')
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     const task = await startAgentTask(
-      db,
+      composeSqliteAgentLaunchResourceOperations(db),
       daemonActor(),
       solo.id,
       StartAgentTaskSchema.parse({ name: 't', description: 'fix it', scratch: true }),
@@ -356,6 +374,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
         schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
           .schedulerDriver,
         appHome,
+        integrity: agentResourceIntegrity(db),
         launchProvenance: { kind: 'direct-json', initiator: 'api' },
       },
     )

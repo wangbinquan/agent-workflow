@@ -13,6 +13,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { ensureCredentialsSealed, unsealRepoUrl } from '../src/services/repoCredentials'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIGRATION = join(MIGRATIONS, '0147_rfc279_database_redundancy_cleanup.sql')
@@ -88,7 +89,7 @@ describe('RFC-279 migration 0147', () => {
       )
   }
 
-  test('preserves data and locks while removing all seven columns', () => {
+  test('preserves data and locks while removing all seven columns', async () => {
     const skillId = ulid()
     const opId = ulid()
     sqlite
@@ -157,13 +158,14 @@ describe('RFC-279 migration 0147', () => {
     expect(escrow.urlEnc?.startsWith('aw-legacy-url-hex-v1:')).toBe(true)
     expect(unsealRepoUrl(escrow, box)).toBeNull()
 
-    const sealed = ensureCredentialsSealed(db, box)
+    const store = composeSqliteRepositoryWorkspaceStore(db)
+    const sealed = await ensureCredentialsSealed(store, box)
     expect(sealed.sealed).toBe(1)
     const current = db.select().from(cachedRepos).get()!
     expect(current.urlEnc?.startsWith('aw-legacy-url-hex-v1:')).toBe(false)
     expect(current.urlRedacted).toBe('https://***@github.com/acme/legacy.git')
     expect(unsealRepoUrl(current, box)).toBe(LEGACY_URL)
-    expect(ensureCredentialsSealed(db, box).sealed).toBe(0)
+    expect((await ensureCredentialsSealed(store, box)).sealed).toBe(0)
   })
 
   const guardCases: Array<{ name: string; seed: (sqlite: Database) => void }> = [
@@ -222,7 +224,7 @@ describe('RFC-279 migration 0147', () => {
     })
   }
 
-  test('corrupt migration escrow fails closed without exposing its payload', () => {
+  test('corrupt migration escrow fails closed without exposing its payload', async () => {
     apply0147()
     sqlite
       .query(
@@ -231,12 +233,12 @@ describe('RFC-279 migration 0147', () => {
         ) VALUES ('bad-escrow', 'bad00000', 'aw-legacy-url-hex-v1:XYZ', NULL, '/tmp/bad', 1, 1)`,
       )
       .run()
-    expect(() => ensureCredentialsSealed(db, box)).toThrow(
-      /cached repo legacy URL escrow is malformed/,
-    )
+    await expect(
+      ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), box),
+    ).rejects.toThrow(/cached repo legacy URL escrow is malformed/)
   })
 
-  test('migration escrow cannot pass the boot gate without a SecretBox', () => {
+  test('migration escrow cannot pass the boot gate without a SecretBox', async () => {
     sqlite
       .query(
         `INSERT INTO cached_repos (
@@ -246,13 +248,13 @@ describe('RFC-279 migration 0147', () => {
       .run(LEGACY_URL)
     apply0147()
 
-    expect(() => ensureCredentialsSealed(db, undefined)).toThrow(
-      /legacy URL escrow requires SecretBox sealing/,
-    )
+    await expect(
+      ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), undefined),
+    ).rejects.toThrow(/legacy URL escrow requires SecretBox sealing/)
     expect(db.select().from(cachedRepos).get()?.urlEnc).toStartWith('aw-legacy-url-hex-v1:')
   })
 
-  test('an already sealed URL survives the migration unchanged', () => {
+  test('an already sealed URL survives the migration unchanged', async () => {
     const sealed = box.seal(LEGACY_URL)
     sqlite
       .query(
@@ -270,7 +272,9 @@ describe('RFC-279 migration 0147', () => {
     const row = db.select().from(cachedRepos).get()!
     expect(row.urlEnc).toBe(sealed)
     expect(unsealRepoUrl(row, box)).toBe(LEGACY_URL)
-    expect(ensureCredentialsSealed(db, box).sealed).toBe(0)
+    expect(
+      (await ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), box)).sealed,
+    ).toBe(0)
   })
 })
 
@@ -288,17 +292,17 @@ describe('RFC-279 source ratchet', () => {
     }
 
     const production = [
-      'services/skill.ts',
-      'services/skillBootVerify.ts',
-      'services/skillVersion.ts',
+      'modules/resource-catalog/infrastructure/legacy/skill.ts',
+      'modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
+      'modules/resource-catalog/infrastructure/legacy/skillVersion.ts',
       'services/taskQuestions.ts',
       // RFC-284 T27 改锚：正体迁 clarify/queue.ts（旧路径只剩 facade，留旧条目会让本扫描空转）。
       'services/clarify/queue.ts',
       'services/gitRepoCache.ts',
       'services/repoCredentials.ts',
       'services/repoGroup.ts',
-      'services/skillOperations.ts',
-      'services/skillIdentityMigration.ts',
+      'modules/resource-catalog/infrastructure/legacy/skillOperations.ts',
+      'modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts',
       'services/webhook/webhookDispatch.ts',
       'cli/start.ts',
     ]

@@ -23,7 +23,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, intentApplyJournal, intentDrafts, intentSessions, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
-import { createIntentSession } from '../src/services/intent/session'
+import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
 import type { IntentContextManifest } from '../src/services/intent/manifest'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 

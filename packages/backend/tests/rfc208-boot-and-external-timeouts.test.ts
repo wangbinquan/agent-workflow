@@ -72,7 +72,16 @@ describe('RFC-208 · external PlantUML host cannot hang the daemon', () => {
 
 describe('RFC-208 · a failed filesystem rollback cannot strand a skill operation lock', () => {
   const skillSource = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'skill.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'legacy',
+      'skill.ts',
+    ),
     'utf8',
   )
 

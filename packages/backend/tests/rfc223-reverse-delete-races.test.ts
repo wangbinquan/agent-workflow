@@ -13,10 +13,23 @@ import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, plugins, skillOperationLocks, skills } from '../src/db/schema'
-import { createMcp, deleteMcp, getMcpById } from '../src/services/mcp'
-import { deletePlugin, getPluginById } from '../src/services/plugin'
-import { createManagedSkill, deleteSkill, getSkillById } from '../src/services/skill'
-import { getActiveOp } from '../src/services/skillOperations'
+import {
+  composeMcpServiceBindingForTest,
+  createMcpForTest as createMcp,
+  deleteMcpForTest as deleteMcp,
+  getMcpByIdForTest as getMcpById,
+} from './helpers/mcpServiceBinding'
+import {
+  composePluginServiceBindingForTest,
+  deletePlugin,
+  getPluginById,
+} from './helpers/pluginServiceBinding'
+import {
+  createManagedSkill,
+  deleteSkill,
+  getSkillById,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { getActiveOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { ConflictError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -76,57 +89,57 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
   })
 
   test('MCP: an agent reference saved after the preliminary scan blocks final DELETE without leaking its name', async () => {
-    const mcp = await createMcp(
-      db,
-      {
-        name: 'race-mcp',
-        description: '',
-        type: 'local',
-        config: { command: ['echo'] },
-        enabled: true,
+    let mcpId = ''
+    const mcpBinding = composeMcpServiceBindingForTest(db, {
+      actor: ACTOR,
+      beforeDelete: async () => {
+        insertReferencingAgent(db, { name: 'private-mcp-user', mcp: [mcpId] })
       },
-      { ownerUserId: ACTOR.user.id },
-    )
+    })
+    const mcp = await createMcp(mcpBinding, {
+      name: 'race-mcp',
+      description: '',
+      type: 'local',
+      config: { command: ['echo'] },
+      enabled: true,
+    })
+    mcpId = mcp.id
 
     let caught: unknown
     try {
-      await deleteMcp(db, mcp.id, ACTOR, {
-        beforeDeleteTx: async () => {
-          insertReferencingAgent(db, { name: 'private-mcp-user', mcp: [mcp.id] })
-        },
-      })
+      await deleteMcp(mcpBinding, mcp.id)
     } catch (error) {
       caught = error
     }
 
     assertHiddenReference(caught, 'mcp-still-referenced', 'private-mcp-user')
-    expect(await getMcpById(db, mcp.id)).not.toBeNull()
+    expect(await getMcpById(mcpBinding, mcp.id)).not.toBeNull()
   })
 
   test('MCP: mutable row/ACL drift in the await window trips the complete operation fence', async () => {
-    const mcp = await createMcp(
-      db,
-      {
-        name: 'fenced-mcp',
-        description: '',
-        type: 'local',
-        config: { command: ['echo'] },
-        enabled: true,
+    let mcpId = ''
+    const mcpBinding = composeMcpServiceBindingForTest(db, {
+      actor: ACTOR,
+      beforeDelete: async () => {
+        await db
+          .update(mcps)
+          .set({ ownerUserId: 'u-other', visibility: 'private', aclRevision: 1 })
+          .where(eq(mcps.id, mcpId))
       },
-      { ownerUserId: ACTOR.user.id },
-    )
+    })
+    const mcp = await createMcp(mcpBinding, {
+      name: 'fenced-mcp',
+      description: '',
+      type: 'local',
+      config: { command: ['echo'] },
+      enabled: true,
+    })
+    mcpId = mcp.id
 
-    await expect(
-      deleteMcp(db, mcp.id, ACTOR, {
-        beforeDeleteTx: async () => {
-          await db
-            .update(mcps)
-            .set({ ownerUserId: 'u-other', visibility: 'private', aclRevision: 1 })
-            .where(eq(mcps.id, mcp.id))
-        },
-      }),
-    ).rejects.toMatchObject({ code: 'resource-operation-stale' })
-    expect(await getMcpById(db, mcp.id)).not.toBeNull()
+    await expect(deleteMcp(mcpBinding, mcp.id)).rejects.toMatchObject({
+      code: 'resource-operation-stale',
+    })
+    expect(await getMcpById(mcpBinding, mcp.id)).not.toBeNull()
   })
 
   test('plugin: an agent reference saved after the preliminary scan blocks the full-row-fenced DELETE', async () => {
@@ -145,21 +158,23 @@ describe('RFC-223 reverse-reference delete transaction races', () => {
     })
 
     let caught: unknown
+    const pluginBinding = composePluginServiceBindingForTest(db, {
+      actor: ACTOR,
+      beforeDelete: async () => {
+        insertReferencingAgent(db, {
+          name: 'private-plugin-user',
+          plugins: [pluginId],
+        })
+      },
+    })
     try {
-      await deletePlugin(db, pluginId, ACTOR, {
-        beforeDeleteTx: async () => {
-          insertReferencingAgent(db, {
-            name: 'private-plugin-user',
-            plugins: [pluginId],
-          })
-        },
-      })
+      await deletePlugin(pluginBinding, pluginId)
     } catch (error) {
       caught = error
     }
 
     assertHiddenReference(caught, 'plugin-still-referenced', 'private-plugin-user')
-    expect(await getPluginById(db, pluginId)).not.toBeNull()
+    expect(await getPluginById(pluginBinding, pluginId)).not.toBeNull()
   })
 
   test('managed skill: a ref appearing after fs-staged restores root, empties trash, and releases op/lock', async () => {

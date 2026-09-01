@@ -20,7 +20,11 @@ import {
   formatManagedInjectionNameConflict,
 } from '../src/services/runtime/injectionIdentity'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
-import { resolveInjection } from '../src/services/execution/resolveInjection'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import {
+  createSqliteLegacyAgentDependencyLookup,
+  resolveInjection,
+} from '../src/services/execution/resolveInjection'
 import { skillFilesRel } from '../src/services/skillIdentityPaths'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -100,7 +104,11 @@ async function seedMcp(
 async function prepareRoot(db: DbClient, rootId: string) {
   const root = await getAgentById(db, rootId)
   if (root === null) throw new Error(`missing root id ${rootId}`)
-  return resolveInjection(db, root, { appHome: '/tmp/aw-rfc223-pr6', log: NOOP_LOG })
+  return resolveInjection(db, root, {
+    appHome: '/tmp/aw-rfc223-pr6',
+    log: NOOP_LOG,
+    agentDependencies: createSqliteLegacyAgentDependencyLookup(db),
+  })
 }
 
 function expectDuplicateFailure(
@@ -194,7 +202,7 @@ describe('RFC-223 PR-6 scheduler wiring is shared by both runtimes', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   })
 
   test('opencode and Claude Code roots both fail before spawn on duplicate closure names', async () => {

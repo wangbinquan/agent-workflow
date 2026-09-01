@@ -24,9 +24,10 @@ import {
   workgroups,
 } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { buildIntentDump, handleBasename } from '../src/services/intent/dumpBuilder'
+import { handleBasename } from '../src/services/intent/dumpBuilder'
+import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { manifestEntryFor } from '../src/services/intent/manifest'
-import { createManagedSkill } from '../src/services/skill'
+import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const SECRET = 'ghp_AAAABBBBCCCCDDDDEEEEFFFF111122223333' // gitleaks:allow — deliberate fake credential fixture

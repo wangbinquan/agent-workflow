@@ -288,7 +288,15 @@ describe('RFC-270 AC-8 · 回填由镜头决定，不由值决定', () => {
 
 describe('RFC-270 · 源码层：落库的是回填后的那份', () => {
   test('prepareWorkflowSave 的字节投影取自 normalizedSnapshot，不取 submittedSnapshot', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services/workflow.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules/resource-catalog/infrastructure/legacy/workflow.ts',
+      ),
+      'utf8',
+    )
     // 回填产物叫 normalizedSnapshot；提交原件叫 submittedSnapshot。两条字节投影
     // 必须描述前者，否则「保存回执 / logical-same 短路 / definition 列」会描述一份
     // 从未落库的定义。

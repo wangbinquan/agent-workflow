@@ -22,6 +22,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
+import { createSqliteHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/sqliteHumanGateTerminalSweep'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { cancelTask } from '../src/services/task'
@@ -136,7 +137,8 @@ describe('RFC-202 T2 — terminal sweep', () => {
     await seedClarifyRound(db, taskId, 'self', selfRun)
     await seedClarifyRound(db, taskId, 'cross', crossRun)
 
-    const result = sealOpenHumanGatesForTask(db, taskId, 'task-canceled')
+    const sweep = createSqliteHumanGateTerminalSweepCommand(db)
+    const result = await sealOpenHumanGatesForTask(sweep, taskId, 'task-canceled')
     expect(result.sealedSelfRounds).toBe(1)
     expect(result.abandonedCrossRounds).toBe(1)
 
@@ -166,7 +168,7 @@ describe('RFC-202 T2 — terminal sweep', () => {
     expect(xsessions[0]?.status).toBe('abandoned')
 
     // idempotent: second sweep is a no-op
-    const again = sealOpenHumanGatesForTask(db, taskId, 'task-canceled')
+    const again = await sealOpenHumanGatesForTask(sweep, taskId, 'task-canceled')
     expect(again.sealedSelfRounds).toBe(0)
     expect(again.abandonedCrossRounds).toBe(0)
     expect(again.canceledRuns.length).toBe(0)
@@ -213,7 +215,11 @@ describe('RFC-202 T3 — cancel from awaiting_*', () => {
     db = createInMemoryDb(MIGRATIONS)
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onTerminalTask(hookDb, taskId) {
-        sealOpenHumanGatesForTask(hookDb, taskId, 'task-canceled')
+        void sealOpenHumanGatesForTask(
+          createSqliteHumanGateTerminalSweepCommand(hookDb),
+          taskId,
+          'task-canceled',
+        )
       },
     })
   })

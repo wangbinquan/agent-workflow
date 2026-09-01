@@ -301,11 +301,10 @@ describe('RFC-212 T4 — every channel declares its revalidation strategy (AC-5)
 
 describe('RFC-212 impl-gate finding 2 — upgrade-race epoch', () => {
   test('a revocation trigger bumps the epoch (so an in-flight upgrade detects the race)', () => {
-    const db = createInMemoryDb(MIGRATIONS)
     const before = currentRevalidationEpoch()
-    triggerRevalidation(db, 'user-patched')
+    triggerRevalidation('user-patched')
     expect(currentRevalidationEpoch()).toBe(before + 1)
-    triggerRevalidation(db, 'session-revoked')
+    triggerRevalidation('session-revoked')
     expect(currentRevalidationEpoch()).toBe(before + 2)
   })
 
@@ -317,7 +316,7 @@ describe('RFC-212 impl-gate finding 2 — upgrade-race epoch', () => {
     expect(src).toContain('currentRevalidationEpoch() !== ws.data.upgradeEpoch')
     // the re-resolve/close happens BEFORE the subscribe (no frame under a stale actor).
     const cmpIdx = src.indexOf('currentRevalidationEpoch() !== ws.data.upgradeEpoch')
-    const subIdx = src.indexOf('await openWsChannel(ws, ch, deps.db)')
+    const subIdx = src.indexOf('await openWsChannel(ws, ch, ws.data.channels)')
     expect(cmpIdx).toBeGreaterThan(0)
     expect(subIdx).toBeGreaterThan(cmpIdx)
   })

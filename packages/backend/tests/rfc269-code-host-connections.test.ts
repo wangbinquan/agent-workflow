@@ -24,6 +24,8 @@ import {
   createCodeHostConnectionsService,
   probeCodeHostConnection,
 } from '../src/services/codeHost/connections'
+import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
+import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
@@ -33,6 +35,17 @@ const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
 const SECRET_TOKEN = 'aw-fixture-not-a-real-token-9999' // gitleaks:allow
 
 type FetchStub = (url: string, init?: RequestInit) => Promise<Response>
+
+function codeHostService(db: ReturnType<typeof createInMemoryDb>) {
+  const repositoryTransport = composeRepositoryTransportCredentials(
+    new SQLiteRepositoryTransportCredentialRepository(db),
+    box,
+  )
+  return createCodeHostConnectionsService({
+    secretBox: box,
+    repositoryTransport: repositoryTransport.adminConnections,
+  })
+}
 
 async function harness(opts?: { role?: 'admin' | 'user' | 'manager'; fetchImpl?: FetchStub }) {
   const db = createInMemoryDb(MIGRATIONS)
@@ -272,9 +285,9 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
     expect(updated.status).toBe(200)
     expect(await updated.json()).toMatchObject({ rejectUnauthorized: false })
 
-    const service = createCodeHostConnectionsService({ db, secretBox: box })
-    expect(service.resolve('gitlab')).toMatchObject({ rejectUnauthorized: false })
-    expect(service.get('gitlab').rejectUnauthorized).toBe(false)
+    const service = codeHostService(db)
+    expect(await service.resolve('gitlab')).toMatchObject({ rejectUnauthorized: false })
+    expect((await service.get('gitlab')).rejectUnauthorized).toBe(false)
   })
 
   test('GitLab 仓库 URL 前缀会归一化、去重并在省略时保留', async () => {
@@ -307,9 +320,7 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
         .where(eq(codeHostConnections.provider, 'gitlab'))
         .all()[0]!.repositoryUrlPrefixesJson,
     ).toBe('["https://mirror.example/platform","https://second.example"]')
-    expect(
-      createCodeHostConnectionsService({ db, secretBox: box }).resolve('gitlab'),
-    ).toMatchObject({
+    expect(await codeHostService(db).resolve('gitlab')).toMatchObject({
       repositoryUrlPrefixes: ['https://mirror.example/platform', 'https://second.example'],
     })
   })
@@ -378,14 +389,14 @@ describe('RFC-269 凭据面 — PUT 保留 / 清除语义', () => {
       baseUrl: 'https://gitlab.corp.example/api/v4',
       token: SECRET_TOKEN,
     })
-    const svc = createCodeHostConnectionsService({ db, secretBox: box })
-    svc.recordTest('gitlab', { ok: true, at: 1, login: 'bot' })
-    expect(svc.get('gitlab').lastTest?.ok).toBe(true)
+    const svc = codeHostService(db)
+    await svc.recordTest('gitlab', { ok: true, at: 1, login: 'bot' })
+    expect((await svc.get('gitlab')).lastTest?.ok).toBe(true)
     await call('PUT', '/api/code-hosts/gitlab', {
       baseUrl: 'https://gitlab.corp.example/api/v4',
       token: 'aw-fixture-rotated-0000', // gitleaks:allow
     })
-    expect(svc.get('gitlab').lastTest).toBeNull()
+    expect((await svc.get('gitlab')).lastTest).toBeNull()
   })
 })
 
@@ -588,17 +599,17 @@ describe('RFC-269 探活 — 四类可区分', () => {
       baseUrl: 'https://gitlab.corp.example/api/v4',
       token: SECRET_TOKEN,
     })
-    const svc = createCodeHostConnectionsService({ db, secretBox: box })
+    const svc = codeHostService(db)
     // 只改 TLS 开关的**草稿**也不是已保存配置，成功不能盖绿勾。
     const draft = await call('POST', '/api/code-hosts/gitlab/test', {
       rejectUnauthorized: false,
     })
     expect(((await draft.json()) as { ok: boolean }).ok).toBe(true)
-    expect(svc.get('gitlab').lastTest).toBeNull()
+    expect((await svc.get('gitlab')).lastTest).toBeNull()
     // 对着已保存的那套探活才回写
     const stored = await call('POST', '/api/code-hosts/gitlab/test')
     expect(((await stored.json()) as { ok: boolean }).ok).toBe(true)
-    expect(svc.get('gitlab').lastTest?.ok).toBe(true)
+    expect((await svc.get('gitlab')).lastTest?.ok).toBe(true)
   })
 
   test('未配置且不带参数的探活给出可读拒绝', async () => {
@@ -622,9 +633,9 @@ describe('RFC-269 凭据面 — 解封失败按未配置处理', () => {
         updatedAt: Date.now(),
       })
       .run()
-    const svc = createCodeHostConnectionsService({ db, secretBox: box })
-    expect(svc.resolve('gitlab')).toBeNull()
+    const svc = codeHostService(db)
+    expect(await svc.resolve('gitlab')).toBeNull()
     // 但列表仍然显示"已配置"，这样管理员能看到它并重录，而不是面对一个空白页。
-    expect(svc.get('gitlab').configured).toBe(true)
+    expect((await svc.get('gitlab')).configured).toBe(true)
   })
 })

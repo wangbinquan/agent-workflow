@@ -20,8 +20,8 @@ import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, plugins, skills, users, workflows, workgroups } from '../src/db/schema'
-import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
+import { exportResourcePackage } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const actorOf = (id: string): Actor =>

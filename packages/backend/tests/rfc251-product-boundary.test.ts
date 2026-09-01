@@ -18,8 +18,10 @@ import { join, resolve } from 'node:path'
 import type { CreateWorkflow } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import type { RuntimeRegistryPersistence } from '../src/platform/runtime-registry/application/runtimeRegistryOperations'
+import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
 import { createAgent, updateAgent } from '../src/services/agent'
-import { createPlugin } from '../src/services/plugin'
+import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
@@ -47,6 +49,9 @@ const AGENT_FIELDS = {
 
 let db: DbClient
 let pluginsDir = ''
+let runtimes: RuntimeRegistryPersistence
+
+const pluginBinding = () => composePluginServiceBindingForTest(db, { pluginsDir, npmBin: FAKE_NPM })
 
 function actor(id: string): Actor {
   return buildActor({
@@ -75,9 +80,10 @@ async function workflowForAgent(agent: { id: string; name: string }, name: strin
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
+  runtimes = new SqliteRuntimeRegistryPersistence(db)
   pluginsDir = await mkdtemp(join(tmpdir(), 'rfc251-plugins-'))
   resetNpmProbeCacheForTests()
-  await createRuntime(db, {
+  await createRuntime(runtimes, {
     name: OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',
@@ -91,11 +97,7 @@ afterEach(async () => {
 
 describe('RFC-251 — saving an OpenCode agent with plugins / collaborators', () => {
   test('create accepts a plugin selection', async () => {
-    const plugin = await createPlugin(
-      db,
-      { name: 'formatter', spec: 'formatter@1' },
-      { pluginsDir, npmBin: FAKE_NPM },
-    )
+    const plugin = await createPlugin(pluginBinding(), { name: 'formatter', spec: 'formatter@1' })
     const agent = await createAgent(db, {
       ...AGENT_FIELDS,
       name: 'worker',
@@ -139,11 +141,7 @@ describe('RFC-251 — saving an OpenCode agent with plugins / collaborators', ()
 describe('RFC-251 — launch surfaces accept the same agent', () => {
   async function agentWithBoth() {
     const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
-    const plugin = await createPlugin(
-      db,
-      { name: 'formatter', spec: 'formatter@1' },
-      { pluginsDir, npmBin: FAKE_NPM },
-    )
+    const plugin = await createPlugin(pluginBinding(), { name: 'formatter', spec: 'formatter@1' })
     return createAgent(db, {
       ...AGENT_FIELDS,
       name: 'worker',
@@ -183,7 +181,7 @@ describe('RFC-251 — launch surfaces accept the same agent', () => {
   })
 
   test('a missing model is accepted and delegated to the runtime CLI default', async () => {
-    await createRuntime(db, { name: 'oc-no-model', protocol: 'opencode', model: null })
+    await createRuntime(runtimes, { name: 'oc-no-model', protocol: 'opencode', model: null })
     const auditor = await createAgent(db, { ...AGENT_FIELDS, name: 'auditor' })
     const agent = await createAgent(db, {
       ...AGENT_FIELDS,

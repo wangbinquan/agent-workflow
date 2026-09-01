@@ -26,6 +26,7 @@ import { sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
+import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const created: string[] = []
@@ -136,7 +137,7 @@ describe('RFC-210 — untouched submodules are left alone', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
 
     // Before the fix: `commit-local-subrepo-failed`, commitSha null, parent
@@ -152,7 +153,10 @@ describe('RFC-210 — untouched submodules are left alone', () => {
     const { parent, sub } = await fixture(true)
     writeFileSync(join(parent, 'README.md'), 'parent only\n')
 
-    await runCommitPush({ ...baseParams, worktreePath: parent }, { db: await db(parent) })
+    await runCommitPush(
+      { ...baseParams, worktreePath: parent },
+      composeSqliteCommitPushDeps(await db(parent)),
+    )
 
     // `git submodule add <path>` makes that path the submodule's origin, so a
     // push from inside the submodule would land here.
@@ -184,7 +188,7 @@ describe('RFC-210 — a submodule pin is never fast-forwarded to upstream', () =
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
 
     // The push is refused, and that is reported — not "repaired".

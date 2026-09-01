@@ -18,6 +18,8 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
+import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import {
   agents,
   mcps,
@@ -30,11 +32,19 @@ import {
   workgroups,
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { createMcp } from '../src/services/mcp'
-import { createPlugin } from '../src/services/plugin'
+import {
+  composePluginServiceBindingForTest,
+  createPlugin,
+  type PluginServiceBinding,
+} from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
+import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import {
+  createMcpForTest as createMcp,
+  type McpCatalogTestBinding as McpServiceBinding,
+} from './helpers/mcpServiceBinding'
 import { nextResourceCopyName } from '../src/services/resourceCopyName'
-import { createManagedSkill } from '../src/services/skill'
+import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   copyWorkflow,
   createWorkflow,
@@ -93,6 +103,33 @@ function grant(db: DbClient, type: AclResourceType, resourceId: string, userId: 
       addedAt: Date.now(),
     })
     .run()
+}
+
+function mcpBinding(db: DbClient, principal: Actor): McpServiceBinding {
+  const catalog = composeMcpCatalog({
+    db,
+    coordinator: new ResourceOperationCoordinator(),
+    nextMutationTimestamp: async (mcp) => mcp.updatedAt + 1,
+    runtime: Object.freeze({
+      prepareDelete: async () => undefined,
+      reconcileDurableIntents: async () => undefined,
+    }),
+    transitionMutationInTx: () => undefined,
+    deletePreparedInTx: () => undefined,
+  })
+  const authority = new AuthorityClaimRegistry().mintDirectAuthority(
+    { userId: principal.user.id, source: principal.source },
+    { ...principal, userId: principal.user.id },
+  ).actor
+  return Object.freeze({ catalog, authority })
+}
+
+function pluginBinding(db: DbClient, principal: Actor, pluginsDir: string): PluginServiceBinding {
+  return composePluginServiceBindingForTest(db, {
+    actor: principal,
+    pluginsDir,
+    npmBin: FAKE_NPM,
+  })
 }
 
 const AGENT_INPUT = {
@@ -203,21 +240,18 @@ describe('RFC-231 private create invariant', () => {
         { ownerUserId: 'alice', actor: alice },
       )
       const createdMcp = await createMcp(
-        db,
+        mcpBinding(db, alice),
         CreateMcpSchema.parse({
           name: 'private-mcp',
           description: '',
           type: 'local',
           config: { command: ['printf'] },
         }),
-        { ownerUserId: 'alice', actor: alice },
       )
-      const createdPlugin = await createPlugin(
-        db,
-        { name: 'private-plugin', spec: 'private-plugin@1' },
-        { pluginsDir: join(appHome, 'plugins'), npmBin: FAKE_NPM },
-        { ownerUserId: 'alice', actor: alice },
-      )
+      const createdPlugin = await createPlugin(pluginBinding(db, alice, join(appHome, 'plugins')), {
+        name: 'private-plugin',
+        spec: 'private-plugin@1',
+      })
       const createdWorkflow = await createWorkflow(
         db,
         { name: 'private-workflow', description: '', definition: EMPTY_DEFINITION },
@@ -254,20 +288,18 @@ describe('RFC-231 private create invariant', () => {
     }
   })
 
-  test('actor-backed creates reject a forged owner', async () => {
+  test('actor-backed creates derive owner from the exact admitted authority', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedUsers(db, ['alice', 'bob'])
-    await expect(
-      createMcp(
-        db,
-        CreateMcpSchema.parse({
-          name: 'forged-owner',
-          type: 'local',
-          config: { command: ['printf'] },
-        }),
-        { ownerUserId: 'alice', actor: actor('bob') },
-      ),
-    ).rejects.toMatchObject({ code: 'resource-owner-mismatch' })
+    const created = await createMcp(
+      mcpBinding(db, actor('bob')),
+      CreateMcpSchema.parse({
+        name: 'authority-owned',
+        type: 'local',
+        config: { command: ['printf'] },
+      }),
+    )
+    expect(db.select().from(mcps).where(eq(mcps.id, created.id)).get()?.ownerUserId).toBe('bob')
   })
 
   test('workflow create rechecks the actor reference gate after public access is tightened', async () => {
@@ -317,33 +349,33 @@ describe('RFC-231 private create invariant', () => {
 
   test('production writer inventory stays classified as user-private or builtin-public', async () => {
     const expectedInserts: Record<string, Record<string, number>> = {
-      agents: { 'services/agent.ts': 1 },
+      agents: { 'modules/resource-catalog/infrastructure/legacy/agent.ts': 1 },
       // RFC-234: stageManagedSkill (intent-bundle pre-stage) is a second
       // reserve-writer in skill.ts — same invisible-until-ready pipeline, same
       // initialPrivateResourceAcl stamp as createManagedSkillWithFiles.
-      skills: { 'services/skill.ts': 2 },
-      mcps: { 'services/mcp.ts': 1 },
-      plugins: { 'services/plugin.ts': 1 },
+      skills: { 'modules/resource-catalog/infrastructure/legacy/skill.ts': 2 },
+      mcps: { 'modules/resource-catalog/infrastructure/sqliteMcpRepository.ts': 1 },
+      plugins: { 'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts': 1 },
       workflows: {
         'services/agentLaunch.ts': 1,
-        'services/workflow.ts': 1,
-        'services/workgroup/launch.ts': 1,
+        'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
+        'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
       },
       workgroups: {
         'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
-        'services/workgroups.ts': 1,
+        'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
       },
     }
     const sourceFiles = [
-      'services/agent.ts',
-      'services/skill.ts',
-      'services/mcp.ts',
-      'services/plugin.ts',
-      'services/workflow.ts',
-      'services/workgroups.ts',
+      'modules/resource-catalog/infrastructure/legacy/agent.ts',
+      'modules/resource-catalog/infrastructure/legacy/skill.ts',
+      'modules/resource-catalog/infrastructure/sqliteMcpRepository.ts',
+      'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts',
+      'modules/resource-catalog/infrastructure/legacy/workflow.ts',
+      'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
       'services/agentLaunch.ts',
-      'services/workgroup/launch.ts',
-      'services/workgroup/dwActions.ts',
+      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
+      'modules/resource-catalog/infrastructure/legacy/workgroup/dwActions.ts',
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts',
     ]
     const sources = new Map(
@@ -363,18 +395,34 @@ describe('RFC-231 private create invariant', () => {
       }
       expect(actual).toEqual(expected)
     }
-    for (const file of sourceFiles.slice(0, 6)) {
+    for (const file of [
+      'modules/resource-catalog/infrastructure/legacy/agent.ts',
+      'modules/resource-catalog/infrastructure/legacy/skill.ts',
+      'modules/resource-catalog/infrastructure/legacy/workflow.ts',
+      'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
+    ]) {
       expect(sources.get(file)).toContain('initialPrivateResourceAcl')
+    }
+    for (const file of [
+      'modules/resource-catalog/application/mcps/mcpApplication.ts',
+      'modules/resource-catalog/application/plugins/pluginApplication.ts',
+    ]) {
+      expect(await readFile(join(BACKEND_SRC, file), 'utf8')).toContain(
+        'initialPrivateResourceAcl(authority.user.id)',
+      )
     }
     expect(
       sources.get('modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts'),
     ).toContain('...input.initialAcl')
-    for (const file of ['services/agentLaunch.ts', 'services/workgroup/launch.ts']) {
+    for (const file of [
+      'services/agentLaunch.ts',
+      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
+    ]) {
       expect(sources.get(file)).toContain('initialBuiltinResourceAcl')
     }
-    expect(sources.get('services/workgroup/dwActions.ts')).toContain(
-      '{ ownerUserId: actor.user.id, actor }',
-    )
+    expect(
+      sources.get('modules/resource-catalog/infrastructure/legacy/workgroup/dwActions.ts'),
+    ).toContain('{ ownerUserId: actor.user.id, actor }')
   })
 })
 

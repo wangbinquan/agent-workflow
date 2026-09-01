@@ -23,7 +23,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { createRuntime, setRuntimeEnabled } from '../src/services/runtimeRegistry'
-import type { ResolvedRuntime } from '../src/services/runtimeRegistry'
 import { RUNTIME_INVENTORY_RULE } from '../src/services/intent/dumpBuilder'
 import {
   emptySystemAgentOutputEvidence,
@@ -34,7 +33,6 @@ import {
   abortIntentTurn,
   cancelIntentTurn,
   classifyMissingEnvelope,
-  runIntentTurn,
   settleReservedIntentTurnStartFailure,
   type IntentTurnConfig,
   requestedArtifactTypeOf,
@@ -46,17 +44,25 @@ import {
 } from '../src/services/intent/maintenance'
 import { sha256Hex } from '../src/util/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '../src/modules/intent/domain/workflowCreateLayout'
+import { insertUserTurn } from '../src/services/intent/session'
 import {
-  createIntentSession,
-  createIntentSessionAndReserveTurn,
-  insertUserTurn,
-} from '../src/services/intent/session'
+  createIntentSessionAndReserveTurnForTest as createIntentSessionAndReserveTurn,
+  createIntentSessionForTest as createIntentSession,
+  intentPersistenceForTest,
+  runIntentTurnForTest as runIntentTurn,
+} from './helpers/intentResourceCatalogBinding'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import type {
+  IntentPersistence,
+  IntentResolvedRuntime,
+} from '../src/modules/intent/public/operations'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_intent_000000000'
 
 let db: DbClient
 let appHome: string
+let persistence: IntentPersistence
 
 const actor: Actor = {
   user: { id: OWNER, username: 'owner', displayName: 'Owner', role: 'user', status: 'active' },
@@ -69,10 +75,16 @@ const runtime = {
   protocol: 'opencode',
   binaryPath: null,
   model: 'anthropic/claude-sonnet-5',
+  variant: null,
+  temperature: null,
+  steps: null,
+  maxSteps: null,
+  isSandbox: true,
+  extraArgs: null,
   // RFC-237: the engine threads the resolved config-dir profile into the
   // system-agent run (P1-2), so the mock carries the real resolved shape.
   configDir: { env: 'OPENCODE_CONFIG_DIR', name: '.opencode' },
-} as unknown as ResolvedRuntime
+} satisfies IntentResolvedRuntime
 
 const config = (over: Partial<IntentTurnConfig> = {}): IntentTurnConfig => ({
   runtime,
@@ -181,6 +193,7 @@ function scriptedRun(
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
+  persistence = intentPersistenceForTest(db)
   appHome = mkdtempSync(join(tmpdir(), 'aw-intent-engine-'))
   await db.insert(users).values({
     id: OWNER,
@@ -202,7 +215,7 @@ describe('runIntentTurn', () => {
       message: 'build with unavailable runtime',
     })
     expect(
-      settleReservedIntentTurnStartFailure(db, {
+      await settleReservedIntentTurnStartFailure(persistence, {
         sessionId: session.id,
         actor,
         reservation,
@@ -224,7 +237,7 @@ describe('runIntentTurn', () => {
       detail: 'runtime profile could not be resolved',
     })
     expect(
-      settleReservedIntentTurnStartFailure(db, {
+      await settleReservedIntentTurnStartFailure(persistence, {
         sessionId: session.id,
         actor,
         reservation,
@@ -237,7 +250,7 @@ describe('runIntentTurn', () => {
     const { session, reservation } = await createIntentSessionAndReserveTurn(db, actor, {
       message: 'cancel before runtime resolution',
     })
-    expect(cancelIntentTurn(db, actor, session.id)).toBe(true)
+    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
 
     const fresh = (
       await db.select().from(intentSessions).where(eq(intentSessions.id, session.id))
@@ -249,7 +262,7 @@ describe('runIntentTurn', () => {
     expect(turn?.kind).toBe('error')
     expect(turn?.captureState).toBe('complete')
     expect(JSON.parse(turn?.contentJson ?? '{}')).toEqual({ code: 'intent-run-aborted' })
-    expect(cancelIntentTurn(db, actor, session.id)).toBe(false)
+    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(false)
   })
 
   test('happy changeset: immutable draft + hash + budget + nonce persisted', async () => {
@@ -590,7 +603,7 @@ describe('runIntentTurn', () => {
       ).questionRounds,
     ).toBe(1)
 
-    await insertUserTurn(db, actor, session.id, 'answers', {
+    await insertUserTurn(persistence, actor, session.id, 'answers', {
       answers: [{ id: 'q1', picked: ['per-file'] }],
     })
 
@@ -797,7 +810,7 @@ describe('runIntentTurn', () => {
       await new Promise((r) => setTimeout(r, 10))
     }
     await expect(
-      insertUserTurn(db, actor, session.id, 'message', { message: 'more' }),
+      insertUserTurn(persistence, actor, session.id, 'message', { message: 'more' }),
     ).rejects.toThrow(/intent-turn-in-flight|generation turn is already running/)
     expect(abortIntentTurn(session.id)).toBe(true)
     releaseRun()
@@ -990,7 +1003,7 @@ describe('maintenance', () => {
       .set({ inFlightTurnId: turnId, turnSeq: 2 })
       .where(eq(intentSessions.id, session.id))
 
-    expect(recoverIntentTurnsOnBoot(db)).toBe(1)
+    expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
     const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
     expect(turn?.kind).toBe('error')
     expect(JSON.parse(turn?.contentJson ?? '{}').code).toBe('intent-run-daemon-restart')
@@ -1027,10 +1040,10 @@ describe('maintenance', () => {
     }
 
     const orphaned = await reserveRunningTurn('previous generation')
-    const bootSnapshot = listIntentTurnIdsForBootRecovery(db)
+    const bootSnapshot = await listIntentTurnIdsForBootRecovery(persistence)
     const current = await reserveRunningTurn('current generation')
 
-    expect(recoverIntentTurnsOnBoot(db, undefined, bootSnapshot)).toBe(1)
+    expect(await recoverIntentTurnsOnBoot(persistence, undefined, bootSnapshot)).toBe(1)
     expect(
       (await db.select().from(intentTurns).where(eq(intentTurns.id, orphaned.turnId)))[0]?.kind,
     ).toBe('error')
@@ -1062,7 +1075,7 @@ describe('maintenance', () => {
       .set({ inFlightTurnId: turnId, turnSeq: 2 })
       .where(eq(intentSessions.id, session.id))
 
-    expect(recoverIntentTurnsOnBoot(db)).toBe(1)
+    expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
     const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
     expect(turn?.kind).toBe('error')
     expect(turn?.captureState).toBe('truncated')
@@ -1111,7 +1124,7 @@ describe('maintenance', () => {
     mk('orphan-unknown', true)
     mk('fresh-terminal', false)
 
-    const removed = sweepIntentScratch(db, appHome, 24)
+    const removed = await sweepIntentScratch(persistence, appHome, 24)
     expect(removed).toBe(2) // terminal-old + unknown-old
     const left = new Set((await import('node:fs')).readdirSync(scratchRoot))
     expect(left.has(runningTurn)).toBe(true)
@@ -1137,7 +1150,8 @@ describe('RFC-237 claude-code intent turn', () => {
       maxSteps: null,
       isSandbox: true,
       configDir: { env: 'CLAUDE_CONFIG_DIR', name: '.claude' },
-    } satisfies ResolvedRuntime
+      extraArgs: null,
+    } satisfies IntentResolvedRuntime
     const { session } = await createIntentSession(db, actor, { message: '构建一个审计 agent' })
     let seen: SystemAgentRunOptions | undefined
     const outcome = await runIntentTurn(
@@ -1313,7 +1327,9 @@ describe('RFC-348 — requested artifact type and inventory additions', () => {
     expect(seenDoc).toContain('## Requested artifact type')
     expect(seenDoc).toContain('The user pre-selected **workflow** in the composer.')
 
-    await insertUserTurn(db, actor, session.id, 'message', { message: 'also add a review step' })
+    await insertUserTurn(persistence, actor, session.id, 'message', {
+      message: 'also add a review step',
+    })
     seenDoc = ''
     await runIntentTurn(
       {
@@ -1331,9 +1347,10 @@ describe('RFC-348 — requested artifact type and inventory additions', () => {
   })
 
   test('inventory/runtimes.md: design §4 format — protocol, ≥2 profiles, disabled, default without a row, rule sentence', async () => {
-    await createRuntime(db, { name: 'custom-oc', protocol: 'opencode' })
-    await createRuntime(db, { name: 'custom-cc', protocol: 'claude-code' })
-    await setRuntimeEnabled(db, 'custom-cc', false, null)
+    const runtimeStore = runtimeRegistryPersistence(db)
+    await createRuntime(runtimeStore, { name: 'custom-oc', protocol: 'opencode' })
+    await createRuntime(runtimeStore, { name: 'custom-cc', protocol: 'claude-code' })
+    await setRuntimeEnabled(runtimeStore, 'custom-cc', false, null)
     const { session } = await createIntentSession(db, actor, { message: 'x' })
     let files: Array<{ path: string; content: string }> = []
     await runIntentTurn(

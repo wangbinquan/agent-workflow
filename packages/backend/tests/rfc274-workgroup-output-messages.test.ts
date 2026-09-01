@@ -8,11 +8,11 @@ import {
   type WorkgroupSystemTemplate,
 } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
-import { buildRoomMessageRow } from '../src/services/workgroup/messages'
+import { buildRoomMessageRow } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/messages'
 import {
   buildSystemMessage,
   parseStoredSystemTemplate,
-} from '../src/services/workgroup/systemMessages'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/systemMessages'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

@@ -41,6 +41,7 @@ import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { resolveRunLiveness } from '../src/services/runLiveness'
 import type { MaterializedSpace, StartTaskDeps } from '../src/services/task'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -335,7 +336,7 @@ describe('RFC-243 §4.1 — liveness delegation to the child task', () => {
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
     const callRun = await seedRun(db, parent, 'call1', { childTaskId: child })
     const deps = {
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1_000,
       taskHasDriver: () => false,
       probeProcessAlive: () => false,

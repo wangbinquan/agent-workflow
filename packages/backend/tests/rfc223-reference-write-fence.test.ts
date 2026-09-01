@@ -31,8 +31,8 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createAgent, getAgentById, updateAgent } from '../src/services/agent'
-import { buildConfigActions } from '../src/services/workgroup/configActions'
-import { buildWorkgroupTaskActions } from '../src/services/workgroup/taskActions'
+import { buildConfigActions } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions'
+import { buildWorkgroupTaskActions } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions'
 import { importWorkflowYaml } from '../src/services/workflow.yaml'
 import {
   createWorkflow,
@@ -47,6 +47,7 @@ import {
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
 import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -610,6 +611,7 @@ describe('RFC-223 ordinary reference final-transaction fences', () => {
       db,
       configPath: '/tmp/rfc223-ref-fence-config.json',
       schedulerDriver: createNoopSchedulerDriver(),
+      taskRecoveryOperations: taskRecoveryOperations(db),
     })
     const actions = buildConfigActions(
       {

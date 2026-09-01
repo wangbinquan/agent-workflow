@@ -21,11 +21,11 @@ import type {
   CommandContext,
   QueryContext,
 } from '../src/modules/identity-access/public/participants'
-import { composeResourcePackageOperations } from '../src/modules/resource-catalog/composition/resourcePackageOperations'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { errorHandler } from '../src/util/errors'
 import { encodeZip } from '../src/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { composeSqliteResourcePackageCatalogForTest } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const utf8 = (value: string): Uint8Array => new TextEncoder().encode(value)
@@ -212,7 +212,7 @@ function appWithResourcePackageRoutes(
   app.use('*', injectActor)
   app.onError(errorHandler)
   registerResourcePackageRoutes(app, {
-    catalog: composeResourcePackageOperations({ db, appHome, box }),
+    catalog: composeSqliteResourcePackageCatalogForTest({ db, appHome, box }),
     commandContextFor: testCommandContext,
     queryContextFor: testQueryContext,
   })

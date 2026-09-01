@@ -206,7 +206,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
-    file: 'services/skillIdentityPaths.ts',
+    file: 'modules/resource-catalog/infrastructure/legacy/skillIdentityPaths.ts',
     match: '`${expectedPrefix}/`',
     count: 1,
     why: 'operand is a skill-archive-relative operation path (`skills/<key>/...`), a wire identifier rather than a filesystem path',
@@ -220,7 +220,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'null-device',
-    file: 'services/skillVersion.ts',
+    file: 'modules/resource-catalog/infrastructure/legacy/skillVersion.ts',
     match: "'/dev/null'",
     count: 2,
     why: 'synthesizes the `--- /dev/null` header of a unified diff — diff-format text, never opened as a device',
@@ -229,7 +229,7 @@ const ALLOWANCES: readonly Allowance[] = [
   // --- pending migration (must only shrink) ----------------------------------
   {
     rule: 'posix-file-identity',
-    file: 'services/skill.ts',
+    file: 'modules/resource-catalog/infrastructure/legacy/skill.ts',
     match: '.dev === ',
     count: 1,
     why: 'NOT a verified-store fence — it detects case-folding collisions in skill dirs. Failing closed here would break skill management on Windows outright, so it needs a non-fail-closed identity notion (own design question)',
@@ -237,7 +237,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-file-identity',
-    file: 'services/skill.ts',
+    file: 'modules/resource-catalog/infrastructure/legacy/skill.ts',
     match: '.ino === ',
     count: 1,
     why: 'NOT a verified-store fence — it detects case-folding collisions in skill dirs. Failing closed here would break skill management on Windows outright, so it needs a non-fail-closed identity notion (own design question)',
@@ -245,7 +245,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-file-identity',
-    file: 'services/skillMigrateOp.ts',
+    file: 'modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts',
     match: '.dev === ',
     count: 1,
     why: 'NOT a verified-store fence — same case-folding role as skill.ts; needs the same non-fail-closed identity notion before it can migrate',
@@ -253,7 +253,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-file-identity',
-    file: 'services/skillMigrateOp.ts',
+    file: 'modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts',
     match: '.ino === ',
     count: 1,
     why: 'NOT a verified-store fence — same case-folding role as skill.ts; needs the same non-fail-closed identity notion before it can migrate',
@@ -381,7 +381,11 @@ describe('RFC-254 platform surface guard', () => {
     // migration silently turns this sanity check into a no-op, which is the
     // exact way a scanner goes blind while still reporting green.
     expect(
-      occurrences.some((o) => o.file === 'services/skillVersion.ts' && o.rule === 'null-device'),
+      occurrences.some(
+        (o) =>
+          o.file === 'modules/resource-catalog/infrastructure/legacy/skillVersion.ts' &&
+          o.rule === 'null-device',
+      ),
     ).toBe(true)
   })
 })

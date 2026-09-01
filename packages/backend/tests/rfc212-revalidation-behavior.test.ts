@@ -18,7 +18,6 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { createLogger } from '../src/util/log'
 import { createSession } from '../src/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
-import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, taskCollaborators, userSessions, workflows } from '../src/db/schema'
 import { createUser } from '../src/services/users'
@@ -43,6 +42,8 @@ import {
 } from './helpers/identityAccessWs'
 import type { IdentityAccessWsBinding } from '../src/ws/registry'
 import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
+import type { RealtimeRuntime } from '../src/modules/runtime-management/public/participants'
+import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test')
@@ -56,21 +57,37 @@ interface FakeWs {
 
 const identityByActor = new WeakMap<
   Actor,
-  { readonly authority: DirectRequestAuthority; readonly identityAccess: IdentityAccessWsBinding }
+  {
+    readonly authority: DirectRequestAuthority
+    readonly identityAccess: IdentityAccessWsBinding
+    readonly realtime: RealtimeRuntime
+  }
 >()
 
-function fakeConn(actor: Actor, credential: WsCredential, channel: AnyChannelParams): FakeWs {
+function fakeConn(
+  actor: Actor,
+  credential: WsCredential,
+  channel: AnyChannelParams,
+  realtime?: RealtimeRuntime,
+): FakeWs {
   const closes: Array<{ code: number; reason: string }> = []
   const sent: unknown[] = []
   const events: string[] = []
-  const identity = identityByActor.get(actor) ?? {
+  const storedIdentity = identityByActor.get(actor)
+  const identity = storedIdentity ?? {
     authority: TEST_DIRECT_AUTHORITY,
     identityAccess: stubIdentityAccessWsBinding(actor.authorityRevision ?? 0),
+  }
+  const selectedRealtime = realtime ?? storedIdentity?.realtime
+  if (selectedRealtime === undefined) {
+    throw new Error('realtime-runtime-not-composed-for-test-connection')
   }
   const data: WsConnectionData = {
     channel,
     actor,
     ...identity,
+    channels: selectedRealtime.channels,
+    credentials: selectedRealtime.credentials,
     credential,
     closing: false,
     revalidating: false,
@@ -106,9 +123,13 @@ async function seedUser(
     password: 'longEnoughPassword',
   })
   const { token } = await createSession({ db, userId: user.id })
-  const identity = await admitWsIdentity(createIdentityAccessRuntime({ db }), user.id)
+  const identityAccessRuntime = createIdentityAccessRuntime({ db })
+  const identity = await admitWsIdentity(identityAccessRuntime, user.id)
   const actor = identity.actor
-  identityByActor.set(actor, identity)
+  identityByActor.set(actor, {
+    ...identity,
+    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess: identityAccessRuntime }),
+  })
   const fp = describeCredential(token)
   const credential: WsCredential =
     fp.kind === 'daemon' ? { kind: 'daemon' } : { ...fp, expiresAt: null }
@@ -145,38 +166,34 @@ afterEach(() => {
 describe('RFC-338 revalidation load containment', () => {
   test('one pass resolves a shared credential once while refreshing every connection', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const actor = buildActor({
-      user: {
-        id: '__system__',
-        username: '__system__',
-        displayName: 'System',
-        role: 'admin',
-        status: 'active',
-      },
-      source: 'daemon',
+    const user = await seedUser(db, 'shared-credential', 'user')
+    const composed = identityByActor.get(user.actor)?.realtime
+    if (composed === undefined) throw new Error('test realtime runtime was not composed')
+    let resolutions = 0
+    const realtime: RealtimeRuntime = Object.freeze({
+      channels: composed.channels,
+      credentials: Object.freeze({
+        allowLegacyDaemonTestAccess: composed.credentials.allowLegacyDaemonTestAccess,
+        async resolveUpgrade(rawToken: string, daemonToken: Buffer, now?: number) {
+          return await composed.credentials.resolveUpgrade(rawToken, daemonToken, now)
+        },
+        async reresolve(credential: WsCredential, now?: number) {
+          resolutions += 1
+          return await composed.credentials.reresolve(credential, now)
+        },
+      }),
     })
-    const first = fakeConn(actor, { kind: 'daemon' }, { kind: 'tasks-list' })
-    const second = fakeConn(actor, { kind: 'daemon' }, { kind: 'tasks-list' })
+    const first = fakeConn(user.actor, user.credential, { kind: 'tasks-list' }, realtime)
+    const second = fakeConn(user.actor, user.credential, { kind: 'tasks-list' }, realtime)
     trackConnection(first.ws)
     trackConnection(second.ws)
-    let resolutions = 0
 
-    const stats = await revalidateAllConnections(
-      {
-        db,
-        log,
-        resolveActor: async () => {
-          resolutions += 1
-          return actor
-        },
-      },
-      'task-members-changed',
-    )
+    const stats = await revalidateAllConnections({ log }, 'task-members-changed')
 
     expect(resolutions).toBe(1)
     expect(stats).toEqual({ scanned: 2, closedAuth: 0, closedGate: 0, refreshed: 2 })
-    expect(first.ws.data.actor).toBe(actor)
-    expect(second.ws.data.actor).toBe(actor)
+    expect(first.ws.data.actor.user.id).toBe(user.id)
+    expect(second.ws.data.actor.user.id).toBe(user.id)
   })
 })
 
@@ -198,7 +215,7 @@ describe('RFC-212 AC-1 — task member removal closes the task socket', () => {
     trackConnection(conn.ws)
 
     // Positive control: while a member, revalidation keeps the socket open.
-    const before = await revalidateAllConnections({ db, log }, 'task-members-changed')
+    const before = await revalidateAllConnections({ log }, 'task-members-changed')
     expect(conn.closes).toEqual([])
     expect(before.refreshed).toBe(1)
     expect(before.closedGate).toBe(0)
@@ -209,7 +226,7 @@ describe('RFC-212 AC-1 — task member removal closes the task socket', () => {
     // (That the service DOES fire the trigger is covered by the T6 ratchet and
     // the AC-1-via-service end-to-end note below.)
     await db.delete(taskCollaborators).where(eq(taskCollaborators.taskId, taskId))
-    const after = await revalidateAllConnections({ db, log }, 'task-members-changed')
+    const after = await revalidateAllConnections({ log }, 'task-members-changed')
     expect(conn.closes).toEqual([{ code: WS_CLOSE_NOT_VISIBLE, reason: 'task-not-visible' }])
     expect(after.closedGate).toBe(1)
     // Closed connections are untracked, so a second pass sees nothing.
@@ -229,7 +246,7 @@ describe('RFC-212 AC-2 — demotion refreshes the actor (admin short-circuit + p
     // The admin can see a task it does not own via tasks:read:all.
     const conn = fakeConn(admin.actor, admin.credential, { kind: 'task', taskId })
     trackConnection(conn.ws)
-    const before = await revalidateAllConnections({ db, log }, 'user-patched')
+    const before = await revalidateAllConnections({ log }, 'user-patched')
     expect(conn.closes).toEqual([])
     // White-box: the actor object was replaced (not merely mutated in place).
     expect(conn.ws.data.actor).not.toBe(admin.actor)
@@ -240,7 +257,7 @@ describe('RFC-212 AC-2 — demotion refreshes the actor (admin short-circuit + p
     await patchUser(db, admin.id, {
       access: { role: 'user', additionalPermissions: [], expectedRevision: 0 },
     })
-    await revalidateAllConnections({ db, log }, 'user-patched')
+    await revalidateAllConnections({ log }, 'user-patched')
     expect(conn.ws.data.actor.user.role).toBe('user')
     expect(conn.ws.data.actor.permissions.has('tasks:read:all')).toBe(false)
     expect(conn.closes).toEqual([{ code: WS_CLOSE_NOT_VISIBLE, reason: 'task-not-visible' }])
@@ -255,7 +272,7 @@ describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () =
     trackConnection(conn.ws)
 
     await revokeSession(db, (await db.select().from(userSessions).limit(1))[0]!.id)
-    await revalidateAllConnections({ db, log }, 'session-revoked')
+    await revalidateAllConnections({ log }, 'session-revoked')
     expect(conn.closes).toEqual([{ code: WS_CLOSE_AUTH_REVOKED, reason: 'auth-revoked' }])
   })
 
@@ -267,7 +284,7 @@ describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () =
     trackConnection(conn.ws)
 
     await disableUser(db, victim.id, Date.now(), admin.id)
-    await revalidateAllConnections({ db, log }, 'user-disabled')
+    await revalidateAllConnections({ log }, 'user-disabled')
     expect(conn.closes).toEqual([{ code: WS_CLOSE_AUTH_REVOKED, reason: 'auth-revoked' }])
   })
 })
@@ -282,7 +299,7 @@ describe('RFC-324 —— 授权面变更要通知客户端让 ACL 判定失效',
     trackConnection(aliceConn.ws)
     trackConnection(bobConn.ws)
 
-    const stats = await revalidateAllConnections({ db, log }, 'resource-acl-changed')
+    const stats = await revalidateAllConnections({ log }, 'resource-acl-changed')
 
     expect(stats).toMatchObject({ scanned: 2, refreshed: 2, closedAuth: 0, closedGate: 0 })
     // 这一帧是「降档后不刷新页面也切只读」的唯一信号：重扫本身只回答「这条连接还能
@@ -301,7 +318,7 @@ describe('RFC-324 —— 授权面变更要通知客户端让 ACL 判定失效',
     const conn = fakeConn(alice.actor, alice.credential, { kind: 'workflows' })
     trackConnection(conn.ws)
 
-    await revalidateAllConnections({ db, log }, 'task-members-changed')
+    await revalidateAllConnections({ log }, 'task-members-changed')
     expect(conn.sent).toEqual([])
   })
 })
@@ -323,7 +340,7 @@ describe('RFC-305 targeted authority refresh', () => {
       )
       .run(alice.id, 'scripts:author', bob.id, 1)
 
-    const stats = await revalidateAllConnections({ db, log }, 'authority-changed', Date.now(), {
+    const stats = await revalidateAllConnections({ log }, 'authority-changed', Date.now(), {
       userId: alice.id,
       revision: 1,
     })
@@ -345,7 +362,7 @@ describe('RFC-305 targeted authority refresh', () => {
     db.$client
       .query("UPDATE users SET role = 'user', access_revision = 1 WHERE id = ?")
       .run(target.id)
-    const stats = await revalidateAllConnections({ db, log }, 'authority-changed', Date.now(), {
+    const stats = await revalidateAllConnections({ log }, 'authority-changed', Date.now(), {
       userId: target.id,
       revision: 1,
     })
@@ -364,7 +381,7 @@ describe('RFC-305 targeted authority refresh', () => {
     } as unknown as AnyChannelParams)
     trackConnection(conn.ws)
     const observed = new Promise<unknown>((resolveFailure) => {
-      triggerAuthorityRevalidation(db, alice.id, 0, resolveFailure)
+      triggerAuthorityRevalidation(alice.id, 0, resolveFailure)
     })
 
     await expect(observed).resolves.toMatchObject({ message: expect.any(String) })
@@ -382,7 +399,7 @@ describe('RFC-212 AC-4 — cache handling by channel kind', () => {
     conn.ws.data.visibilityCache.set('wf:stale', true)
     trackConnection(conn.ws)
 
-    await revalidateAllConnections({ db, log }, 'resource-acl-changed')
+    await revalidateAllConnections({ log }, 'resource-acl-changed')
     expect(conn.ws.data.visibilityCache.size).toBe(0)
     expect(conn.closes).toEqual([])
   })
@@ -393,7 +410,7 @@ describe('RFC-212 AC-4 — cache handling by channel kind', () => {
     const conn = fakeConn(user.actor, user.credential, { kind: 'scheduled-tasks' })
     trackConnection(conn.ws)
 
-    const stats = await revalidateAllConnections({ db, log }, 'resource-acl-changed')
+    const stats = await revalidateAllConnections({ log }, 'resource-acl-changed')
     expect(conn.closes).toEqual([])
     expect(stats.refreshed).toBe(1)
     // Cache stays empty (nothing to clear) — the actor is what got refreshed.
@@ -409,7 +426,7 @@ describe('RFC-212 AC-8 — revalidation does not write last_used_at', () => {
     trackConnection(conn.ws)
     const before = (await db.select().from(userSessions).limit(1))[0]!.lastUsedAt
 
-    await revalidateAllConnections({ db, log }, 'resource-acl-changed', before + 60_000)
+    await revalidateAllConnections({ log }, 'resource-acl-changed', before + 60_000)
     expect((await db.select().from(userSessions).limit(1))[0]!.lastUsedAt).toBe(before)
   })
 })
@@ -437,33 +454,33 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
     // lazy statement regex span from the wrong function into the right one.
     const points: Array<{ file: string; marker: RegExp; reason: string }> = [
       {
-        file: 'auth/sessionStore.ts',
+        file: 'auth/infrastructure/legacySqliteSessionStore.ts',
         marker: /export async function revokeSession\(/,
         reason: 'session-revoked',
       },
       {
-        file: 'auth/sessionStore.ts',
+        file: 'auth/infrastructure/legacySqliteSessionStore.ts',
         marker: /export async function revokeAllSessionsForUser\(/,
         reason: 'sessions-revoked-bulk',
       },
       {
-        file: 'auth/patStore.ts',
+        file: 'auth/infrastructure/legacySqlitePatStore.ts',
         marker: /export async function revokePat\(/,
         reason: 'pat-revoked',
       },
       {
         file: 'services/userIdentities.ts',
-        marker: /export async function deleteIdentity\(/,
+        marker: /function sqliteOperations\(/,
         reason: 'identity-deleted',
       },
       {
-        file: 'services/taskCollab.ts',
+        file: 'modules/collaboration/infrastructure/legacySqliteTaskCollab.ts',
         marker: /export async function updateTaskMembers\(/,
         reason: 'task-members-changed',
       },
       {
-        file: 'services/resourceAcl.ts',
-        marker: /export async function updateResourceAcl\(/,
+        file: 'modules/resource-catalog/composition/resourceAcl.ts',
+        marker: /export function composeResourceAclOperationApplication</,
         reason: 'resource-acl-changed',
       },
     ]

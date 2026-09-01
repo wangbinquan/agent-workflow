@@ -21,6 +21,7 @@ import { createApp } from '@/server'
 import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
 import { getTaskFanoutSem, gcTaskFanoutSem, taskFanoutPoolCount } from '@/services/taskFanoutPools'
 import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import { createLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
@@ -46,8 +47,8 @@ async function harness(slug: string): Promise<Harness> {
   const configPath = join(root, 'config.json')
   loadConfig(configPath)
   const db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
-  await updateRuntime(db, 'opencode', { model: 'openai/gpt-5' })
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+  await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
   const app = createApp({
     token: TOKEN,
     configPath,

@@ -15,7 +15,8 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, users } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
-import { listGrantedResourceIds, listGrantedResourceIdsInTx } from '../src/services/resourceAcl'
+import { listGrantedResourceIdsInTx } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+import { listGrantedResourceIds } from '../src/services/resourceAcl'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src')
@@ -73,7 +74,10 @@ describe('RFC-282 D2 — grant-set query single source', () => {
   })
 
   test('importRefs / resourceRefs no longer carry the grant-set SQL', () => {
-    for (const file of ['services/importRefs.ts', 'services/resourceRefs.ts']) {
+    for (const file of [
+      'modules/resource-catalog/infrastructure/legacy/importRefs.ts',
+      'services/resourceRefs.ts',
+    ]) {
       const text = readFileSync(resolve(SRC, file), 'utf8')
       expect(text).not.toContain('.from(resourceGrants)')
     }

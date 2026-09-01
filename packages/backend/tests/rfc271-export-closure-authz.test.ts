@@ -30,7 +30,7 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { readFileSync } from 'node:fs'
 import { agents, plugins, resourceGrants, users, workflows } from '../src/db/schema'
-import { exportResourcePackage } from '../src/services/resourcePackage/export'
+import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -511,7 +511,7 @@ describe('AC-7 · 第六轮：产物复核自己不能制造误拒 / 盲区', ()
     // ① 摘要把**字节**算进去（`Buffer.from(f.bytes)`），不是只有 path。
     expect(src).toContain("Buffer.from(f.bytes).toString('base64')")
     // ② 复核里重读了树，且比的是新旧两份。
-    expect(src).toContain('freshTrees.set(r.id, await readSkillTree(db, appHome, r.id))')
+    expect(src).toContain('freshTrees.set(r.id, await readPackageSkillTree(r.id))')
     expect(src).toContain('skillTreeDigest(skillTrees.get(r.id)) === skillTreeDigest(')
     // ③ 而且序列化用的是**重读的**那份树（否则包里仍是旧内容）。
     expect(src).toContain('serializeClosure({ ...closure, resources: fresh }, freshTrees)')

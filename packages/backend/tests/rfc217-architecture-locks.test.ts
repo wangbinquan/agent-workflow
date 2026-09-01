@@ -4,7 +4,7 @@
 //   (a) the dependency-cruiser rule exists,
 //   (b) CI actually RUNS depcheck (design-gate finding: the script existed
 //       for months while neither `lint` nor ci.yml ever invoked it), and
-//   (c) services/workgroup/constants.ts stays a ZERO-IMPORT leaf — it was
+//   (c) Resource Catalog's legacy/workgroup/constants.ts stays a ZERO-IMPORT leaf — it was
 //       extracted precisely to cut `launch → task → scheduler → runner →
 //       rounds → launch` (RFC-079 class: top-level const evaluates to
 //       undefined under an unlucky init order; only build:binary caught it).
@@ -30,10 +30,10 @@ const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (p: string): string => readFileSync(resolve(ROOT, p), 'utf8')
 
 // RFC-317 T14 —— 判据提到模块顶层：扫描与「matcher 自证」共用同一份实现。
-// 这条正则是「生产代码不得从 workgroup/launch 取哨兵常量」的全部判据；三种
+// 这条正则是「生产代码不得从 workgroup/launch 取哨兵常量」的全部判据；四种
 // 导入路径写法少认一种，重开重模块环的那条边就能悄悄回来。
 const WG_CONSTANT_IMPORT =
-  /import\s*\{([^}]*)\}\s*from\s*'(?:@\/services\/workgroup\/launch|\.\/launch|\.\.\/workgroup\/launch)'/g
+  /import\s*\{([^}]*)\}\s*from\s*'(?:@\/services\/workgroup\/launch|@\/modules\/resource-catalog\/infrastructure\/legacy\/workgroup\/launch|\.\/launch|\.\.\/workgroup\/launch)'/g
 
 describe('rfc217 G1 — no-circular guard is real', () => {
   test('dependency-cruiser config carries an error-severity no-circular rule', () => {
@@ -62,7 +62,9 @@ describe('rfc217 G1 — no-circular guard is real', () => {
   })
 
   test('workgroup/constants.ts is a zero-import leaf module', () => {
-    const src = read('packages/backend/src/services/workgroup/constants.ts')
+    const src = read(
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/constants.ts',
+    )
     expect(src).not.toMatch(/^\s*import\b/m)
     expect(src).not.toMatch(/\brequire\s*\(/)
     // the sentinels themselves must stay here (wire-frozen values)
@@ -125,11 +127,13 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     expect(offenders).toEqual([])
   })
 
-  test('G2: room-table writes live in services (routes are transport only)', () => {
+  test('G2: room-table writes live in Resource Catalog infrastructure (routes are transport only)', () => {
     // RFC-217 T4 终态：workgroupConfigJson 唯一 UPDATE 写点在 taskActions
     //（config PUT 编排）；routes/ 里任何房间表裸写（messages/assignments/
     // configJson）都是回归。
-    const allow = new Set(['packages/backend/src/services/workgroup/configActions.ts'])
+    const allow = new Set([
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts',
+    ])
     const offenders: string[] = []
     for (const f of walkTs(SRC)) {
       const src = read(f)
@@ -148,9 +152,9 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     }
     expect(offenders).toEqual([])
     const puts =
-      read('packages/backend/src/services/workgroup/configActions.ts').split(
-        '.set({ workgroupConfigJson',
-      ).length - 1
+      read(
+        'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts',
+      ).split('.set({ workgroupConfigJson').length - 1
     expect(puts).toBe(1)
   })
 })
@@ -170,12 +174,14 @@ describe('rfc217 G6 — the protocol-error reprompt has ONE definition site', ()
       }
     }
     walk('packages/backend/src')
-    expect(offenders).toEqual(['packages/backend/src/services/workgroup/turnExecution.ts'])
+    expect(offenders).toEqual([
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
+    ])
   })
 })
 
 describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs', () => {
-  const WG = 'packages/backend/src/services/workgroup'
+  const WG = 'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup'
 
   // RFC-317 T18 / findings G-04 —— 这条棘轮原本是 `<=` + `strategies/ ⇒ Infinity`，
   // 两处都漏水：
@@ -192,7 +198,10 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
     const SNAPSHOT: Record<string, number> = {
       'memberTurns.ts': 6,
       'engine.ts': 4,
-      'rounds.ts': 4,
+      // RFC-345 provider split: DB mechanics keep one mode guard; the three
+      // pure projection branches live in the shared SQLite/PG application owner.
+      'rounds.ts': 1,
+      'application/workgroups/workgroupRoomProjection.ts': 3,
       'prompts.ts': 3,
       'wake.ts': 2,
       'strategies/leaderWorker.ts': 1,
@@ -214,9 +223,15 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       }
     }
     walk(WG)
+    const applicationProjection =
+      'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts'
+    files.push(applicationProjection)
     const actual: Record<string, number> = {}
     for (const f of files) {
-      const rel = f.slice(WG.length + 1)
+      const rel =
+        f === applicationProjection
+          ? 'application/workgroups/workgroupRoomProjection.ts'
+          : f.slice(WG.length + 1)
       const count = read(f).split("mode === '").length - 1
       if (count > 0) actual[rel] = count
     }
@@ -293,7 +308,9 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
       }
     }
     walk('packages/backend/src')
-    expect(offenders).toEqual(['packages/backend/src/services/workgroup/lifecycle.ts'])
+    expect(offenders).toEqual([
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts',
+    ])
   })
 })
 
@@ -384,9 +401,10 @@ describe('RFC-317 T14 —— matcher 自证：伪造的哨兵常量导入必须�
     return false
   }
 
-  test('三种导入路径写法都命中', () => {
+  test('四种导入路径写法都命中', () => {
     for (const fabricated of [
       "import { WG_CLARIFY } from '@/services/workgroup/launch'",
+      "import { WG_CLARIFY } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'",
       "import { WORKGROUP_HOST_ID } from './launch'",
       "import { WG_A, WG_B } from '../workgroup/launch'",
     ]) {

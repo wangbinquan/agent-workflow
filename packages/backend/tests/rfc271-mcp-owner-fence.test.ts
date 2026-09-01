@@ -1,11 +1,10 @@
-// RFC-271 T12 —— `commitMcpUpdateInTx` 的**提交事务内 owner 围栏**。
+// RFC-271 T12 / RFC-345 —— MCP exact application 的 owner 围栏。
 //
 // 这是 RFC 设计期定位到的一条**真实越权面**，不是假想题：
 //
-//   `commitMcpUpdateInTx` 此前只校验 `expectedConfigHash`，**从不校验 owner**——
-//   owner 门只存在于路由层（`requireResourceOwner`）。对经路由的编辑没问题；但
-//   任何**直接到达这条原语**的写路径都绕过了它。intent apply 是一条，配置包导入
-//   将是第二条。
+//   历史裸 `commitMcpUpdateInTx` 只校验 `expectedConfigHash`、不校验 owner。
+//   RFC-345 删除该 service 原语后，所有 active CRUD 都必须经过 Resource Catalog
+//   application：持 stable-id lock 后 reload，再用 exact admitted authority 授权。
 //
 //   攻击形态：拿一个**他人的 public MCP** 的 id（public ⇒ 攻击者看得见，也能读到
 //   它的当前 config，从而算出正确的 hash），伪造一次「overwrite」。hash 对得上、
@@ -15,112 +14,156 @@
 // 权改它」。两件事必须各有各的判据。
 
 import { describe, expect, test } from 'bun:test'
+import { buildActor } from '../src/auth/actor'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { dbTxSync } from '../src/db/txSync'
 import { mcps } from '../src/db/schema'
-import { commitMcpUpdateInTx, createMcp, getMcpById } from '../src/services/mcp'
-import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
+import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
+import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
+import type { McpCatalogModule } from '../src/modules/resource-catalog/public/operations'
+import type { McpOperationContext } from '../src/modules/resource-catalog/public/participants'
+import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
+import {
+  createMcpForTest as createMcp,
+  type McpCatalogTestBinding as McpServiceBinding,
+} from './helpers/mcpServiceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const VICTIM = 'u-victim'
 const ATTACKER = 'u-attacker'
 
-async function seedVictimPublicMcp(db: DbClient): Promise<string> {
-  const created = await createMcp(
+function authorityFor(userId: string): McpOperationContext {
+  const projection = buildActor({
+    user: { id: userId, username: userId, displayName: userId, role: 'user', status: 'active' },
+    source: 'session',
+  })
+  return new AuthorityClaimRegistry().mintDirectAuthority(
+    { userId, source: 'session' },
+    { ...projection, userId },
+  ).actor
+}
+
+function composeTestMcpCatalog(db: DbClient): McpCatalogModule {
+  return composeMcpCatalog({
     db,
-    {
-      name: 'shared-tools',
-      description: 'victim owns this',
-      type: 'remote',
-      config: { url: 'https://example.test/mcp' },
-      enabled: true,
-    } as never,
-    { ownerUserId: VICTIM, actor: null },
-  )
+    coordinator: new ResourceOperationCoordinator(),
+    nextMutationTimestamp: async (mcp) => mcp.updatedAt + 1,
+    runtime: Object.freeze({
+      prepareDelete: async () => undefined,
+      reconcileDurableIntents: async () => undefined,
+    }),
+    transitionMutationInTx: () => undefined,
+    deletePreparedInTx: () => undefined,
+  })
+}
+
+function bindingFor(catalog: McpCatalogModule, userId: string): McpServiceBinding {
+  return Object.freeze({ catalog, authority: authorityFor(userId) })
+}
+
+async function seedVictimPublicMcp(db: DbClient, victim: McpServiceBinding): Promise<string> {
+  const created = await createMcp(victim, {
+    name: 'shared-tools',
+    description: 'victim owns this',
+    type: 'remote',
+    config: { url: 'https://example.test/mcp' },
+    enabled: true,
+  })
   // public ⇒ 攻击者看得见它、读得到 config、算得出 hash。
   await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, created.id)).run()
   return created.id
 }
 
 describe('伪造 overwrite：他人 public 资源 id + 正确 hash', () => {
-  test('带 owner 围栏 ⇒ 事务内拒绝，受害者那一行**一个字节没变**', async () => {
+  test('exact application reload + owner 围栏 ⇒ 拒绝，受害者那一行不变', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedVictimPublicMcp(db)
-    const before = await getMcpById(db, id)
+    const catalog = composeTestMcpCatalog(db)
+    const victim = bindingFor(catalog, VICTIM)
+    const attacker = bindingFor(catalog, ATTACKER)
+    const id = await seedVictimPublicMcp(db, victim)
+    const before = await catalog.queries.get(attacker.authority, { id })
     // 攻击者能读到当前 config，于是能算出**正确**的 hash。
-    const correctHash = mcpOperationConfigHashOf(before!)
+    const correctHash = before!.operationConfigHash
 
-    expect(() =>
-      dbTxSync(db, (tx) =>
-        commitMcpUpdateInTx(tx, {
-          id,
-          set: { description: 'pwned', config: JSON.stringify({ url: 'https://evil.test/mcp' }) },
-          expectedConfigHash: correctHash, // hash 是对的！
-          expectedOwnerUserId: ATTACKER, // 但 owner 不是他
-        }),
-      ),
-    ).toThrow()
+    await expect(
+      catalog.operations.update.invoke(attacker.authority, {
+        id,
+        update: {
+          description: 'pwned',
+          config: { url: 'https://evil.test/mcp' },
+          expectedConfigHash: correctHash,
+        },
+      }),
+    ).rejects.toThrow()
 
-    const after = await getMcpById(db, id)
+    const after = await catalog.queries.get(victim.authority, { id })
     expect(after?.description).toBe(before?.description)
     expect(after?.config).toEqual(before?.config)
   })
 
-  test('**对照组**：不传 owner 围栏时，同一次伪造会成功 —— 这就是修复前的行为', async () => {
+  test('**对照组**：owner 的同一 exact command 正常成功', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedVictimPublicMcp(db)
-    const before = await getMcpById(db, id)
+    const catalog = composeTestMcpCatalog(db)
+    const victim = bindingFor(catalog, VICTIM)
+    const id = await seedVictimPublicMcp(db, victim)
+    const before = await catalog.queries.get(victim.authority, { id })
 
-    dbTxSync(db, (tx) =>
-      commitMcpUpdateInTx(tx, {
-        id,
-        set: { description: 'pwned' },
-        expectedConfigHash: mcpOperationConfigHashOf(before!),
-        // 无 expectedOwnerUserId —— 既有调用方（updateMcp / 路由）的形态
-      }),
-    )
-    const after = await getMcpById(db, id)
-    // 这条**故意**断言旧行为：证明上一条的绿不是因为别的东西挡住了写入，而正是
-    // 围栏在起作用。同时说明「缺席 = 不设围栏」对既有调用方逐字兼容。
-    expect(after?.description).toBe('pwned')
+    await catalog.operations.update.invoke(victim.authority, {
+      id,
+      update: {
+        description: 'owner edit',
+        expectedConfigHash: before!.operationConfigHash,
+      },
+    })
+    const after = await catalog.queries.get(victim.authority, { id })
+    expect(after?.description).toBe('owner edit')
   })
 })
 
-describe('围栏的另一面：授权之后、提交之前的 owner 转移', () => {
-  test('授权时看到 VICTIM，提交前行被转给别人 ⇒ 拒绝', async () => {
+describe('围栏的另一面：读取之后、提交之前的 owner 转移', () => {
+  test('读取时看到 VICTIM，提交前行被转给别人 ⇒ fresh reload 后拒绝', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedVictimPublicMcp(db)
-    const authorizedOwner = VICTIM
+    const catalog = composeTestMcpCatalog(db)
+    const victim = bindingFor(catalog, VICTIM)
+    const id = await seedVictimPublicMcp(db, victim)
+    const before = await catalog.queries.get(victim.authority, { id })
     // 竞态窗口里发生了 owner 转移。
     await db.update(mcps).set({ ownerUserId: 'u-new-owner' }).where(eq(mcps.id, id)).run()
 
-    expect(() =>
-      dbTxSync(db, (tx) =>
-        commitMcpUpdateInTx(tx, {
-          id,
-          set: { description: 'stale authorization' },
-          expectedOwnerUserId: authorizedOwner,
-        }),
-      ),
-    ).toThrow()
-    expect((await getMcpById(db, id))?.description).toBe('victim owns this')
+    await expect(
+      catalog.operations.update.invoke(victim.authority, {
+        id,
+        update: {
+          description: 'stale authorization',
+          expectedConfigHash: before!.operationConfigHash,
+        },
+      }),
+    ).rejects.toThrow()
+    const newOwner = bindingFor(catalog, 'u-new-owner')
+    expect((await catalog.queries.get(newOwner.authority, { id }))?.description).toBe(
+      'victim owns this',
+    )
   })
 
   test('owner 没变 ⇒ 正常放行（围栏不误伤）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const id = await seedVictimPublicMcp(db)
-    dbTxSync(db, (tx) =>
-      commitMcpUpdateInTx(tx, {
-        id,
-        set: { description: 'owner edits own row' },
-        expectedOwnerUserId: VICTIM,
-      }),
+    const catalog = composeTestMcpCatalog(db)
+    const victim = bindingFor(catalog, VICTIM)
+    const id = await seedVictimPublicMcp(db, victim)
+    const before = await catalog.queries.get(victim.authority, { id })
+    await catalog.operations.update.invoke(victim.authority, {
+      id,
+      update: {
+        description: 'owner edits own row',
+        expectedConfigHash: before!.operationConfigHash,
+      },
+    })
+    expect((await catalog.queries.get(victim.authority, { id }))?.description).toBe(
+      'owner edits own row',
     )
-    expect((await getMcpById(db, id))?.description).toBe('owner edits own row')
   })
 })
 

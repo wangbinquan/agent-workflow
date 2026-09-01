@@ -30,8 +30,11 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
   integrationTriggerOptions,
+  scheduledTaskRuntime,
   withIntegrationTriggerResources,
 } from './helpers/integrationTriggerResourceBinding'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
   deps: T,
@@ -866,7 +869,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const { deleteCachedRepo } = await import('@/services/gitRepoCache')
     let code = ''
     try {
-      await deleteCachedRepo({ db }, repoId)
+      await deleteCachedRepo({ store: composeSqliteRepositoryWorkspaceStore(db) }, repoId)
     } catch (err) {
       code = (err as { code?: string }).code ?? (err as Error).message
     }
@@ -954,7 +957,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     } as never)
 
     const created = await createScheduledTask(
-      db2,
+      scheduledTaskRuntime(db2).operations,
       {
         name: 'nightly',
         launchKind: 'workflow',
@@ -970,11 +973,11 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
       } as never,
       integrationTriggerOptions(db2, actor),
     )
-    const row = (await getScheduledTaskRow(db2, created.id))!
+    const row = (await getScheduledTaskRow(scheduledTaskRuntime(db2).operations, created.id))!
 
     // ① 不再抛：接线前，准备在落行之前跑，克隆一失败 fireSchedule 就整个抛出去。
     const { taskId } = await fireSchedule(
-      db2,
+      scheduledTaskRuntime(db2).operations,
       row,
       buildScheduleLaunch(
         db2,
@@ -1014,7 +1017,15 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     // 东西；而两条路径的接线完全同形（都在自己的 launchDeps 里加同一个 flag），
     // 上面那条已经把「打开之后行为对不对」验完了。这里只锁「webhook 也打开了」。
     const src = readSrc(
-      resolve(import.meta.dir, '..', 'src', 'services', 'webhook', 'webhookDispatch.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'integration',
+        'infrastructure',
+        'sqliteWebhookDispatchRuntime.ts',
+      ),
       'utf8',
     )
     const i = src.indexOf('const launchDeps = {')
@@ -1372,14 +1383,15 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
 
     const { autoResumeInterruptedTasks } = await import('@/services/autoResume')
     let resumeCalls = 0
+    const operations = taskRecoveryOperations(db)
     const r = await autoResumeInterruptedTasks({
-      db,
+      operations,
       breaker: { maxPerWindow: 3, windowMs: 60_000 },
       resume: async () => {
         resumeCalls += 1
       },
       now: () => Date.now(),
-    } as never)
+    })
     // 关键：连 resume 都不该被调用——调用了就必然失败、就会被熔断器计数，
     // 每次 boot 烧一次，N 次之后这行任务被隔离，且恢复审计里全是归因错误的告警。
     expect(resumeCalls, 'auto-resume 不得对准备阶段任务发起 resume').toBe(0)
@@ -1391,16 +1403,16 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     const { isAutoRecoverySuspended } = await import('@/services/recoveryBreaker')
     for (let i = 0; i < 4; i++) {
       const again = await autoResumeInterruptedTasks({
-        db,
+        operations,
         breaker: { maxPerWindow: 3, windowMs: 60_000 },
         resume: async () => {
           resumeCalls += 1
         },
         now: () => Date.now(),
-      } as never)
+      })
       expect(again.skipped).toContain(id)
     }
-    expect(await isAutoRecoverySuspended(db, id), '退回跳过时不得烧熔断').toBe(false)
+    expect(await isAutoRecoverySuspended(operations, id), '退回跳过时不得烧熔断').toBe(false)
   }, 120_000)
 
   test('传了 retryRepoPrep 时改重跑准备（plan T13⑥），且不走 resume', async () => {
@@ -1416,8 +1428,9 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     const { autoResumeInterruptedTasks } = await import('@/services/autoResume')
     let resumeCalls = 0
     const prepped: string[] = []
+    const operations = taskRecoveryOperations(db)
     const r = await autoResumeInterruptedTasks({
-      db,
+      operations,
       breaker: { maxPerWindow: 3, windowMs: 60_000 },
       resume: async () => {
         resumeCalls += 1
@@ -1426,7 +1439,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
         prepped.push(taskId)
       },
       now: () => Date.now(),
-    } as never)
+    })
     // 关键：走的是重跑准备那条，**不是** resume（resume 对它必然
     // `task-repo-prep-incomplete`）。
     expect(prepped, '应当重跑准备').toContain(id)
@@ -1440,7 +1453,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
     const before = prepped.length
     for (let i = 0; i < 5; i++) {
       await autoResumeInterruptedTasks({
-        db,
+        operations,
         breaker: { maxPerWindow: 3, windowMs: 60_000 },
         resume: async () => {
           resumeCalls += 1
@@ -1449,9 +1462,9 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
           prepped.push(taskId)
         },
         now: () => Date.now(),
-      } as never)
+      })
     }
-    expect(await isAutoRecoverySuspended(db, id), '超过窗口配额必须隔离').toBe(true)
+    expect(await isAutoRecoverySuspended(operations, id), '超过窗口配额必须隔离').toBe(true)
     expect(prepped.length - before, '隔离之后不得继续白跑克隆').toBeLessThan(5)
   }, 120_000)
 })

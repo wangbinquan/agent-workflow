@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
 import { intentSessions, intentTurnEvents, intentTurns } from '../src/db/schema'
+import { createSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
 import {
   INTENT_TURN_EVENT_BYTE_LIMIT,
   IntentTurnSessionEventSink,
@@ -42,14 +43,14 @@ function seedAgentTurn(id: string) {
       createdAt: 1,
     })
     .run()
-  return db
+  return { db, persistence: createSqliteIntentPersistence(db) }
 }
 
 describe('RFC-235 Intent turn Session capture', () => {
   test('persists ordered runtime rows and projects them through the shared SessionTree', async () => {
-    const db = seedAgentTurn('turn-1')
+    const { db, persistence } = seedAgentTurn('turn-1')
     const observed: number[] = []
-    const sink = new IntentTurnSessionEventSink(db, 'turn-1', (seq) => observed.push(seq))
+    const sink = new IntentTurnSessionEventSink(persistence, 'turn-1', (seq) => observed.push(seq))
     await sink.setRootSessionId('runtime-root')
     await sink.append({
       ts: 2,
@@ -77,7 +78,7 @@ describe('RFC-235 Intent turn Session capture', () => {
     })
     await sink.markTerminal('complete')
 
-    const response = await getIntentTurnSession(db, 'session-1', 'turn-1')
+    const response = await getIntentTurnSession(persistence, 'session-1', 'turn-1')
     expect(response.tree.sessionId).toBe('runtime-root')
     expect(response.tree.captureComplete).toBe(true)
     expect(response.tree.messages).toEqual([
@@ -91,8 +92,8 @@ describe('RFC-235 Intent turn Session capture', () => {
   })
 
   test('conversation reset replaces the captured root without marking evidence incomplete', async () => {
-    const db = seedAgentTurn('turn-reset')
-    const sink = new IntentTurnSessionEventSink(db, 'turn-reset')
+    const { db, persistence } = seedAgentTurn('turn-reset')
+    const sink = new IntentTurnSessionEventSink(persistence, 'turn-reset')
 
     await sink.setRootSessionId('runtime-before-reset')
     await sink.append({
@@ -140,7 +141,7 @@ describe('RFC-235 Intent turn Session capture', () => {
       .where(eq(intentTurns.id, 'turn-reset'))
       .get()
     expect(row).toEqual({ root: 'runtime-after-reset', state: 'complete' })
-    const response = await getIntentTurnSession(db, 'session-1', 'turn-reset')
+    const response = await getIntentTurnSession(persistence, 'session-1', 'turn-reset')
     expect(response.tree.sessionId).toBe('runtime-after-reset')
     expect(response.tree.captureComplete).toBe(true)
     expect(JSON.stringify(response.tree)).toContain('before reset')
@@ -159,8 +160,8 @@ describe('RFC-235 Intent turn Session capture', () => {
   })
 
   test('a reset cannot repaint a capture that was already truncated', async () => {
-    const db = seedAgentTurn('turn-reset-after-cap')
-    const sink = new IntentTurnSessionEventSink(db, 'turn-reset-after-cap')
+    const { db, persistence } = seedAgentTurn('turn-reset-after-cap')
+    const sink = new IntentTurnSessionEventSink(persistence, 'turn-reset-after-cap')
     await sink.setRootSessionId('runtime-cap-old')
     db.update(intentTurns)
       .set({ captureState: 'truncated' })
@@ -181,12 +182,12 @@ describe('RFC-235 Intent turn Session capture', () => {
   })
 
   test('byte cap marks capture truncated without changing the owning turn kind', async () => {
-    const db = seedAgentTurn('turn-cap')
+    const { db, persistence } = seedAgentTurn('turn-cap')
     db.update(intentTurns)
       .set({ captureEventBytes: INTENT_TURN_EVENT_BYTE_LIMIT - 1 })
       .where(eq(intentTurns.id, 'turn-cap'))
       .run()
-    const sink = new IntentTurnSessionEventSink(db, 'turn-cap')
+    const sink = new IntentTurnSessionEventSink(persistence, 'turn-cap')
     await sink.append({
       ts: 2,
       kind: 'text',
@@ -207,7 +208,7 @@ describe('RFC-235 Intent turn Session capture', () => {
       .get()
     expect(row).toEqual({ kind: 'running', captureState: 'truncated', lastEventSeq: 0 })
     expect(db.select().from(intentTurnEvents).all()).toEqual([])
-    const response = await getIntentTurnSession(db, 'session-1', 'turn-cap')
+    const response = await getIntentTurnSession(persistence, 'session-1', 'turn-cap')
     expect(response.tree.captureComplete).toBe(false)
 
     // A generic successful terminal call cannot repaint the cap, but a later
@@ -249,7 +250,7 @@ describe('RFC-235 Intent turn Session capture', () => {
   })
 
   test('terminal business turn derives an unresolved live capture as incomplete', async () => {
-    const db = seedAgentTurn('turn-terminal-live')
+    const { db, persistence } = seedAgentTurn('turn-terminal-live')
     db.update(intentTurns)
       .set({
         kind: 'changeset',
@@ -267,7 +268,7 @@ describe('RFC-235 Intent turn Session capture', () => {
       rootSessionId: null,
       incompleteReason: 'stream-persist-failed',
     })
-    const response = await getIntentTurnSession(db, 'session-1', 'turn-terminal-live')
+    const response = await getIntentTurnSession(persistence, 'session-1', 'turn-terminal-live')
     expect(response.tree.captureComplete).toBe(false)
   })
 })

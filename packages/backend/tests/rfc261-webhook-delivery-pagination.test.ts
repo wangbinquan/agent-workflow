@@ -17,7 +17,8 @@ import { createUser } from '../src/services/users'
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { webhookDeliveries } from '../src/db/schema'
-import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
+import { createSqliteWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence'
+import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { gcDeliveries } from '../src/services/webhook/deliveryStore'
 import { retentionFromConfig, runDeliveryGcSweep } from '../src/services/webhook/webhookGc'
 import type { WebhookDeliveryStatus } from '@agent-workflow/shared'
@@ -234,8 +235,8 @@ describe('RFC-261 · AC-5 /repos distinct 选项源', () => {
 
 describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
   test('索引组齐备：过滤维度组合索引 + body-retention 部分索引；单列 status 索引已退役', async () => {
-    const h = await harness()
-    const rows = h.db.all<{ name: string }>(
+    const db = createInMemoryDb(MIGRATIONS)
+    const rows = db.all<{ name: string }>(
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='webhook_deliveries' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
     )
     expect(rows.map((r) => r.name)).toEqual([
@@ -251,8 +252,8 @@ describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
   })
 
   test('body_json 是末列（列表投影不得穿越大 body 的 overflow 链）', async () => {
-    const h = await harness()
-    const cols = h.db.all<{ name: string }>(sql`PRAGMA table_info(webhook_deliveries)`)
+    const db = createInMemoryDb(MIGRATIONS)
+    const cols = db.all<{ name: string }>(sql`PRAGMA table_info(webhook_deliveries)`)
     expect(cols[cols.length - 1]!.name).toBe('body_json')
   })
 })
@@ -261,18 +262,18 @@ describe("RFC-261 · D9' 保留天数可配", () => {
   const DAY = 24 * 60 * 60 * 1000
 
   test('gcDeliveries 按传入 retention 生效（body 清空 / 整行删除分层）', async () => {
-    const h = await harness()
+    const db = createInMemoryDb(MIGRATIONS)
     const now = 100 * DAY
-    const dead = await seed(h.db, { receivedAt: now - 25 * DAY, bodyJson: '{"a":1}' })
-    const pruned = await seed(h.db, { receivedAt: now - 15 * DAY, bodyJson: '{"b":2}' })
-    const fresh = await seed(h.db, { receivedAt: now - 5 * DAY, bodyJson: '{"c":3}' })
-    const res = await gcDeliveries(h.db, now, {
+    const dead = await seed(db, { receivedAt: now - 25 * DAY, bodyJson: '{"a":1}' })
+    const pruned = await seed(db, { receivedAt: now - 15 * DAY, bodyJson: '{"b":2}' })
+    const fresh = await seed(db, { receivedAt: now - 5 * DAY, bodyJson: '{"c":3}' })
+    const res = await gcDeliveries(createSqliteWebhookDeliveryPersistence(db), now, {
       bodyRetentionMs: 10 * DAY,
       rowRetentionMs: 20 * DAY,
     })
     // dead 行先被 body 段清空再被 row 段删除 → bodiesCleared 计 2（既有段序语义）
     expect(res).toEqual({ bodiesCleared: 2, rowsDeleted: 1 })
-    const rows = await h.db.select().from(webhookDeliveries)
+    const rows = await db.select().from(webhookDeliveries)
     const byId = new Map(rows.map((r) => [r.id, r]))
     expect(byId.has(dead)).toBe(false) // 25 天 > row 20 天 → 删行
     expect(byId.get(pruned)!.bodyJson).toBeNull() // 15 天 > body 10 天 → 置空
@@ -280,36 +281,37 @@ describe("RFC-261 · D9' 保留天数可配", () => {
   })
 
   test('分批清理（评审门 P1-②）：小 batchSize 跨批完整、计数正确、不越界', async () => {
-    const h = await harness()
+    const db = createInMemoryDb(MIGRATIONS)
     const now = 100 * DAY
     for (let i = 0; i < 25; i += 1) {
-      await seed(h.db, { receivedAt: now - 25 * DAY, bodyJson: `{"i":${i}}` })
+      await seed(db, { receivedAt: now - 25 * DAY, bodyJson: `{"i":${i}}` })
     }
-    await seed(h.db, { receivedAt: now - 1 * DAY, bodyJson: '{"keep":1}' })
+    await seed(db, { receivedAt: now - 1 * DAY, bodyJson: '{"keep":1}' })
     const res = await gcDeliveries(
-      h.db,
+      createSqliteWebhookDeliveryPersistence(db),
       now,
       { bodyRetentionMs: 10 * DAY, rowRetentionMs: 20 * DAY },
       10, // 25 行 → 3 批（10/10/5），锁跨批推进与终止条件
     )
     expect(res).toEqual({ bodiesCleared: 25, rowsDeleted: 25 })
-    const left = await h.db.select().from(webhookDeliveries)
+    const left = await db.select().from(webhookDeliveries)
     expect(left.length).toBe(1)
     expect(left[0]!.bodyJson).toBe('{"keep":1}')
   })
 
   test('runDeliveryGcSweep 每次调用热读 getter（评审门 P2-④）', async () => {
-    const h = await harness()
+    const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
-    await seed(h.db, { receivedAt: now - 50 * DAY, bodyJson: '{"old":1}' })
+    await seed(db, { receivedAt: now - 50 * DAY, bodyJson: '{"old":1}' })
     let days = { webhookDeliveryBodyRetentionDays: 3650, webhookDeliveryRowRetentionDays: 3650 }
-    expect(await runDeliveryGcSweep(h.db, () => days)).toEqual({
+    const persistence = createSqliteWebhookDeliveryPersistence(db)
+    expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
       bodiesCleared: 0,
       rowsDeleted: 0,
     })
     // 两次 sweep 之间收缩保留期——不重启、不重建 ticker，直接生效
     days = { webhookDeliveryBodyRetentionDays: 30, webhookDeliveryRowRetentionDays: 40 }
-    expect(await runDeliveryGcSweep(h.db, () => days)).toEqual({
+    expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
       bodiesCleared: 1,
       rowsDeleted: 1,
     })
@@ -327,8 +329,9 @@ describe("RFC-261 · D9' 保留天数可配", () => {
   async function configHarness(initialConfig?: Record<string, unknown>) {
     const db = createInMemoryDb(MIGRATIONS)
     // 打底内置 runtime，避免配置接口测试依赖主机上的 runtime 安装状态。
-    await seedBuiltinRuntimes(db)
-    await updateRuntime(db, 'opencode', { model: 'openai/gpt-5' })
+    const runtimeRegistry = composeSqliteRuntimeRegistryOperations(db)
+    await runtimeRegistry.seedBuiltinRuntimes()
+    await runtimeRegistry.updateRuntime('opencode', { model: 'openai/gpt-5' })
     const adminSession = 'a'.repeat(64) // daemon token（settings:write 全权）
     const configPath = join(mkdtempSync(join(tmpdir(), 'rfc261-cfg-')), 'config.json')
     // 模拟操作者手写的存量 config.json（loadConfig 会把缺省键回填）
@@ -417,8 +420,15 @@ describe('RFC-261 · 源码层文本锁（行为等价面的兜底，CLAUDE.md �
   const SRC = resolve(import.meta.dir, '..', 'src')
 
   test('/repos 必须保持 loose index scan（换回朴素 DISTINCT 行为等价、900 万行下性能塌方——P2-③）', () => {
-    const text = readFileSync(join(SRC, 'routes', 'webhookDeliveries.ts'), 'utf8')
-    expect(text).toContain('WITH RECURSIVE repo_walk')
+    const persistence = readFileSync(
+      join(SRC, 'modules', 'integration', 'infrastructure', 'sqliteWebhookDeliveryQueries.ts'),
+      'utf8',
+    )
+    const route = readFileSync(join(SRC, 'routes', 'webhookDeliveries.ts'), 'utf8')
+    expect(persistence).toContain('WITH RECURSIVE repo_walk')
+    expect(persistence).toContain('SELECT min(repo_path)')
+    expect(route).toContain('runtime.queries.listRepoPaths()')
+    expect(route).not.toContain('@/db/')
   })
 
   test('GC ticker 保有再入闸（收缩后的长 sweep 不叠加——P1-② 附带）', () => {

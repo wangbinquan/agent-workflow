@@ -40,6 +40,7 @@ import { nonInteractiveGitEnv } from '../src/util/git'
 import { DomainError } from '../src/util/errors'
 import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -118,7 +119,7 @@ interface MountSpec {
 
 async function makeGroup(name: string, mounts: MountSpec[]): Promise<string> {
   const g = await createRepoGroup(
-    { db },
+    { store: composeSqliteRepositoryWorkspaceStore(db) },
     {
       name,
       description: '',
@@ -139,7 +140,11 @@ async function makeGroup(name: string, mounts: MountSpec[]): Promise<string> {
 }
 
 async function makeTreeGroup(name: string, nodes: RepoGroupNodeInput[]): Promise<string> {
-  const group = await createRepoGroup({ db }, { name, description: '', nodes }, null)
+  const group = await createRepoGroup(
+    { store: composeSqliteRepositoryWorkspaceStore(db) },
+    { name, description: '', nodes },
+    null,
+  )
   return group.id
 }
 
@@ -450,7 +455,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     ])
 
     await updateRepoGroup(
-      { db },
+      { store: composeSqliteRepositoryWorkspaceStore(db) },
       gid,
       {
         name: '快照树',

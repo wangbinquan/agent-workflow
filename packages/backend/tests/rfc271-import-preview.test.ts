@@ -30,13 +30,13 @@ import { encodeZip } from '../src/util/zip'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { collectPackageRequirements } from '../src/services/resourcePackage/requirements'
 import {
-  buildPackagePreview,
   groupHumanMemberSlots,
   humanMemberBaselineOf,
   previewBaselineOf,
   signPreviewToken,
   verifyPreviewToken,
 } from '../src/services/resourcePackage/preview'
+import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))

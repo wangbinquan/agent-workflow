@@ -24,8 +24,9 @@ import { openDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { maybePreMigrationBackup } from '../src/services/backupScheduler'
 import { rawCopyDb } from '../src/services/rawDbSnapshot'
-import { restoreBackup, validateBackupForStage } from '../src/services/restore'
+import { validateBackupForStage } from '../src/services/restore'
 import { extractTarGz, tarGz } from '../src/util/archive'
+import { restoreSqliteBackupForTest as restoreBackup } from './helpers/sqlitePostRestoreRecovery'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tmps: string[] = []
@@ -34,25 +35,17 @@ describe('RFC-223 PR-5 boot/restore source ordering', () => {
   test('boot barrier is fail-closed immediately after db-ready and before every consumer', () => {
     const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf-8')
     const dbReady = source.indexOf("log.info('db ready'")
-    const barrier = source.indexOf('runSkillIdentityMigrationBarrier', dbReady)
-    const gate = source.indexOf('activateBootReverify()', barrier)
-    const firstUserQuery = source.indexOf('countNonSystemUsers', barrier)
-    const orphanReap = source.indexOf('reapOrphanRuns(db)', barrier)
+    const barrier = source.indexOf('skillCatalogBoot.runIdentityMigrationBarrier()', dbReady)
+    const gate = source.indexOf('skillCatalogBoot.activateAvailabilityGate()', barrier)
+    const orphanReap = source.indexOf('reapOrphanRuns(', barrier)
     const fusionRecovery = source.indexOf('recoverFusionDecisions', barrier)
-    const liveReconcile = source.indexOf('reconcileSkillLiveFiles', barrier)
+    const liveReconcile = source.indexOf('skillCatalogBoot.reconcileLiveFiles()', barrier)
     const fusionSeeder = source.indexOf('seedFusionResources', barrier)
-    const httpCreate = source.indexOf('const app = createApp', barrier)
+    const httpCreate = source.indexOf('const app = createComposedApp', barrier)
     expect(dbReady).toBeGreaterThan(-1)
     expect(barrier).toBeGreaterThan(dbReady)
     expect(gate).toBeGreaterThan(barrier)
-    for (const later of [
-      firstUserQuery,
-      orphanReap,
-      fusionRecovery,
-      liveReconcile,
-      fusionSeeder,
-      httpCreate,
-    ]) {
+    for (const later of [orphanReap, fusionRecovery, liveReconcile, fusionSeeder, httpCreate]) {
       expect(later).toBeGreaterThan(barrier)
     }
     expect(httpCreate).toBeGreaterThan(gate)
@@ -64,21 +57,32 @@ describe('RFC-223 PR-5 boot/restore source ordering', () => {
 
   test('restore copies FS then runs the barrier before restored-state consumers', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'restore.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'systemProviderRestore.ts',
+      ),
       'utf-8',
     )
     const copySkills = source.indexOf('cpSync(stagedSkills, liveSkills')
     const openRestored = source.indexOf('const db = openDb', copySkills)
     const condition = source.indexOf("willMigrate || direction === 'same'", openRestored)
     const barrier = source.indexOf('runSkillIdentityMigrationBarrier', condition)
+    const fusionRecovery = source.indexOf('opts.postOpenRecovery.recover', barrier)
     const suspend = source.indexOf('suspendNonTerminalTasksAfterRestore(db)', barrier)
     const reconstruct = source.indexOf('reconstructWorktrees(db, staging)', barrier)
-    const recoveryEvent = source.indexOf('recordRecoveryEvent(db', barrier)
+    const recoveryEvent = source.indexOf('recordSqliteRestoreRecoveryEvent(db', barrier)
     expect(copySkills).toBeGreaterThan(-1)
     expect(openRestored).toBeGreaterThan(copySkills)
     expect(condition).toBeGreaterThan(openRestored)
     expect(barrier).toBeGreaterThan(condition)
+    expect(fusionRecovery).toBeGreaterThan(barrier)
     expect(suspend).toBeGreaterThan(barrier)
+    expect(suspend).toBeGreaterThan(fusionRecovery)
     expect(reconstruct).toBeGreaterThan(barrier)
     expect(recoveryEvent).toBeGreaterThan(barrier)
   })

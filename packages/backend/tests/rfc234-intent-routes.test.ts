@@ -18,6 +18,7 @@ import { composeIdentityAccess } from '../src/modules/identity-access/compositio
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes, updateRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
@@ -135,8 +136,8 @@ async function waitForCondition(until: () => boolean): Promise<void> {
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
-  await updateRuntime(db, 'opencode', { model: 'openai/gpt-5' })
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+  await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
   root = mkdtempSync(join(tmpdir(), 'rfc234-intent-routes-'))
   process.env.AGENT_WORKFLOW_HOME = root
   app = createApp({

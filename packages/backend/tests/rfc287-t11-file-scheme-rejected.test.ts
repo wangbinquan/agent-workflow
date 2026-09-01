@@ -17,6 +17,7 @@ import { resolve } from 'node:path'
 import { StartTaskSchema } from '@agent-workflow/shared'
 import { selectDueRepos } from '@/services/submoduleRefresh'
 import { createInMemoryDb } from '@/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { cachedRepos } from '@/db/schema'
 import { ulid } from 'ulid'
 
@@ -79,7 +80,11 @@ describe('RFC-287 T11 ② — 后台自动保鲜也不再碰 file:// 存量镜�
         createdAt: now - 1_000,
       })
     }
-    const due = await selectDueRepos(db, { now, intervalMs: 1, onlyRecentDays: 30 })
+    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
+      now,
+      intervalMs: 1,
+      onlyRecentDays: 30,
+    })
     const dueIds = new Set(due.map((d) => d.id))
     for (const [id, keep] of ids) {
       expect(dueIds.has(id), `${id} keep=${String(keep)}`).toBe(keep)
@@ -190,7 +195,7 @@ describe('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', () => {
     } as never)
     let code = ''
     try {
-      await refreshCachedRepo({ db } as never, id)
+      await refreshCachedRepo({ store: composeSqliteRepositoryWorkspaceStore(db) } as never, id)
     } catch (err) {
       code = (err as { code?: string }).code ?? String(err)
     }
@@ -215,7 +220,7 @@ describe('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', () => {
     } as never)
     let code = ''
     try {
-      await refreshCachedRepo({ db } as never, id)
+      await refreshCachedRepo({ store: composeSqliteRepositoryWorkspaceStore(db) } as never, id)
     } catch (err) {
       code = (err as { code?: string }).code ?? String(err)
     }

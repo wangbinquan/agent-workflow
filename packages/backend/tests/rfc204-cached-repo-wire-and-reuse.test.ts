@@ -18,6 +18,7 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { CachedRepoSchema } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { listCachedRepos } from '../src/services/gitRepoCache'
 import { normalizeStartTaskRepos } from '../src/services/task'
@@ -51,7 +52,7 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedCredentialedRepo(db, ulid())
 
-    const items = await listCachedRepos(db)
+    const items = await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))
     expect(items).toHaveLength(1)
 
     // The whole serialized payload — not just the field we remembered to check.
@@ -78,7 +79,7 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
     const row = db.select().from(cachedRepos).all()[0]
     expect(row?.urlRedacted).toBeNull()
 
-    const items = await listCachedRepos(db)
+    const items = await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))
     expect(JSON.stringify(items)).not.toContain(TOKEN)
     expect(items[0]?.urlRedacted).toBe('<url unavailable>')
   })
@@ -99,7 +100,9 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
       })
       .run()
 
-    expect(JSON.stringify(await listCachedRepos(db))).not.toContain(TOKEN)
+    expect(
+      JSON.stringify(await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))),
+    ).not.toContain(TOKEN)
   })
 })
 

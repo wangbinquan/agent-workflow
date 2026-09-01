@@ -12,7 +12,9 @@ import { loadConfig } from '@/config'
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import { createApp } from '@/server'
 import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { resolveIntentTurnConfig } from '@/services/intent/turnEngine'
+import { intentTurnRuntimeResolverForTest } from './helpers/intentResourceCatalogBinding'
 
 const TOKEN = 'c'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -32,9 +34,11 @@ async function makeApp(): Promise<{
   const configPath = join(root, 'config.json')
   loadConfig(configPath)
   const db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
-  await updateRuntime(db, 'opencode', { model: 'openai/gpt-5' })
-  await updateRuntime(db, 'claude-code', { model: 'anthropic/claude-sonnet-5' })
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+  await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
+  await updateRuntime(runtimeRegistryPersistence(db), 'claude-code', {
+    model: 'anthropic/claude-sonnet-5',
+  })
   const app = createApp({
     token: TOKEN,
     configPath,
@@ -93,7 +97,9 @@ describe('RFC-276 natural intentBuilderRuntime admission', () => {
 
   test('resolveIntentTurnConfig admits a claude-code selection naturally', async () => {
     const { db } = await makeApp()
-    const cfg = await resolveIntentTurnConfig(db, { intentBuilderRuntime: 'claude-code' })
+    const cfg = await resolveIntentTurnConfig(intentTurnRuntimeResolverForTest(db), {
+      intentBuilderRuntime: 'claude-code',
+    })
     expect(cfg.runtime.protocol).toBe('claude-code')
     expect(cfg.runtime.configDir.env).toBe('CLAUDE_CONFIG_DIR')
   })

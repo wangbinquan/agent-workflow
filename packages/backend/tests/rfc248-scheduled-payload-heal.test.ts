@@ -24,7 +24,7 @@ import { ulid } from 'ulid'
 import { rejectRetiredStartTaskKeys } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks } from '../src/db/schema'
-import { healScheduledLaunchPayloads } from '../src/services/scheduledTasks'
+import { healScheduledLaunchPayloads } from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

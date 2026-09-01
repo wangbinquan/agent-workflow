@@ -16,7 +16,11 @@ import type {
   WorkgroupMessage,
   WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { deriveWakeSet, type WakeInput, type WakeItem } from '../src/services/workgroup/wake'
+import {
+  deriveWakeSet,
+  type WakeInput,
+  type WakeItem,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
 
 function fcCfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -357,14 +361,35 @@ describe('RFC-215 — source locks', () => {
     // advanceMemberCursor 即回归（双轨并发双推游标 = v1 探针 S1 的竞态）。
     // RFC-217 T3b：批 driver 迁 strategies/freeCollab.ts（整文件即 fc 批域）。
     const fc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'freeCollab.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'strategies',
+        'freeCollab.ts',
+      ),
       'utf-8',
     )
     expect(fc).toContain('async function driveBatchTurn')
     expect(fc).not.toContain('advanceMemberCursor')
     // lw 单卡路径保留推进（AC-5 对照面）：memberTurns 仍有调用。
     const member = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'memberTurns.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'memberTurns.ts',
+      ),
       'utf-8',
     )
     expect(member).toContain('advanceMemberCursor')

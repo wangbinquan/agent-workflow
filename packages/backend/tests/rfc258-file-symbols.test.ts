@@ -14,9 +14,16 @@ import { dirname, join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { taskRepos, tasks, workflows } from '../src/db/schema'
 import { runGit } from '../src/util/git'
-import { getTaskFileSymbols } from '../src/services/codeIntel/fileSymbols'
+import {
+  getTaskFileSymbols as getTaskFileSymbolsWithPort,
+  type FileSymbolsQuery,
+} from '../src/services/codeIntel/fileSymbols'
+import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const getTaskFileSymbols = (db: DbClient, taskId: string, query: FileSymbolsQuery) =>
+  getTaskFileSymbolsWithPort(createSqliteCodeWorkspaceRead(db), taskId, query)
 
 const dirs: string[] = []
 afterAll(() => {

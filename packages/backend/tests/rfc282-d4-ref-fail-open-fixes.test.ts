@@ -88,7 +88,10 @@ describe('RFC-282 D4 — name-domain grandfathering lives in the resolver', () =
 
 describe('RFC-282 D4 — RefCheckGroup.domain is required', () => {
   test('the source shape has no optional domain and no ?? fallback', () => {
-    const text = readFileSync(resolve(SRC, 'services/resourceRefs.ts'), 'utf8')
+    const text = readFileSync(
+      resolve(SRC, 'modules/resource-catalog/infrastructure/legacy/resourceRefs.ts'),
+      'utf8',
+    )
     expect(text).toContain("domain: 'id' | 'name'")
     expect(text).not.toContain("domain?: 'id' | 'name'")
     expect(text).not.toContain("group.domain ?? 'id'")

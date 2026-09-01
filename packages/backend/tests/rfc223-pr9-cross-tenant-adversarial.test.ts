@@ -41,23 +41,39 @@ import {
 } from '../src/services/fusion'
 import type { ProbedMcpClient } from '../src/services/mcpProbe'
 import { buildSiblingOutputsBlock } from '../src/services/review'
-import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
-import { getSkillVersionContent, restoreSkillVersion } from '../src/services/skillVersion'
+import {
+  createManagedSkill,
+  type SkillFsOptions,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import {
+  getSkillVersionContent,
+  restoreSkillVersion,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { buildFrontierMintPlan } from '../src/services/taskQuestionDispatch'
 import { abortAllActiveTasks, getTask, resumeTask } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import {
+  resourceScopeAuthority,
+  TEST_RESOURCE_SCOPE_AUTHORIZATION,
+} from './helpers/resourceScopeAuthority'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
+import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
+import { composeSqliteFusionOperations } from '../src/modules/memory/composition/fusion'
+import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const TOKEN = 'rfc223-pr9-token'
 const TEST_TIMEOUT_MS = 30_000
 
+type TestFusionDeps = FusionDeps & { readonly db: DbClient }
+
 function createFusion(
   input: Parameters<typeof createFusionWithAuthority>[0],
-  deps: Parameters<typeof createFusionWithAuthority>[1],
+  deps: TestFusionDeps,
   actor: Actor,
   launchInitiator: Parameters<typeof createFusionWithAuthority>[3],
 ) {
@@ -298,6 +314,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       process.env.MOCK_OPENCODE_CAPTURE_CONFIG_JSON_TO = capturePath
       await resumeTask(db, taskId, {
         db,
+        taskRecoveryOperations: taskRecoveryOperations(db),
         schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
           .schedulerDriver,
         appHome,
@@ -330,10 +347,20 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
     const appHome = join(root, 'home')
     const db = createInMemoryDb(MIGRATIONS)
     await seedTestDefaultOpencodeRuntime(db)
-    const deps: FusionDeps = {
+    const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
+    const deps: TestFusionDeps = {
       db,
       appHome,
-      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
+      operations: composeSqliteFusionOperations({
+        db,
+        appHome,
+        memories: composeSqliteMemoryCatalogOperations({
+          db,
+          contexts: composeIdentityAccess(db).contexts,
+          authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
+        }),
+        tasks: createSqliteFusionEngineTaskOperations({ db, appHome, schedulerDriver }),
+      }),
       binaryOverride: makeClarifyStub(root),
       awaitScheduler: true,
     }
@@ -671,8 +698,8 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       definition,
       undefined,
     )
-    expect(plan.values.agentOverrideName).toBe('shared-member')
-    expect(plan.values.agentOverrideId).toBe(agentB.id)
-    expect(plan.values.agentOverrideId).not.toBe(agentA.id)
+    expect(plan.input.overrides?.agentOverrideName).toBe('shared-member')
+    expect(plan.input.overrides?.agentOverrideId).toBe(agentB.id)
+    expect(plan.input.overrides?.agentOverrideId).not.toBe(agentA.id)
   })
 })

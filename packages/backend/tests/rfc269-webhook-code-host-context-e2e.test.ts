@@ -32,14 +32,27 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createCodeHostConnectionsService } from '../src/services/codeHost/connections'
+import {
+  composeRepositoryTransportCredentials,
+  SQLiteRepositoryTransportCredentialRepository,
+} from '../src/modules/source-control/composition'
 import { watchExecutionTerminal } from '../src/services/execution/executor'
 import { applyIntentChangeset } from '../src/services/intent/applyChangeset'
 import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
 import { createIntentSession } from '../src/services/intent/session'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { createSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
+import type { ResourceRequestContext } from '../src/modules/resource-catalog/public/participants'
+import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
+import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { createSqliteWebhookOrchestrationRuntime } from '../src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
+import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
@@ -130,10 +143,17 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
     writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBox(Paths.secretKeyFile)
-    createCodeHostConnectionsService({ db, secretBox: box }).upsert('gitlab', {
-      baseUrl: `http://127.0.0.1:${server.port}/api/v4`,
-      token: TOKEN,
-    })
+    const repositoryTransport = composeRepositoryTransportCredentials(
+      new SQLiteRepositoryTransportCredentialRepository(db),
+      box,
+    ).adminConnections
+    await createCodeHostConnectionsService({ repositoryTransport, secretBox: box }).upsert(
+      'gitlab',
+      {
+        baseUrl: `http://127.0.0.1:${server.port}/api/v4`,
+        token: TOKEN,
+      },
+    )
 
     const owner = await createUser(db, {
       username: 'rfc269-context-owner',
@@ -230,12 +250,23 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       repoPath: event.repoPath,
     })
 
-    const dispatcher = createWebhookDispatcher({
+    const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
       db,
-      ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-      configPath,
-      secretBox: box,
-      schedulerDriver: composeTaskExecutionTestRuntime(db).schedulerDriver,
+      createIdentityAccessRuntime({ db }),
+    )
+    const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+    const dispatcher = createWebhookDispatcher({
+      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...createSqliteWebhookOrchestrationRuntime({
+        taskExecutions: createSqliteWebhookTaskExecutionParticipant({
+          db,
+          configPath,
+          secretBox: box,
+          schedulerDriver: taskExecutionRuntime.schedulerDriver,
+          identityAccess: identityDependencies.identityAccess,
+        }),
+      }),
+      ...identityDependencies,
       getDefaultRuntime: async () => null,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })
@@ -268,7 +299,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     const configPath = join(appHome, 'config.json')
     writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
     const db = createInMemoryDb(MIGRATIONS)
-    await createRuntime(db, {
+    await composeSqliteRuntimeRegistryOperations(db).createRuntime({
       name: INTENT_RUNTIME,
       protocol: 'opencode',
       binaryPath: makeStubOpencode(appHome),
@@ -291,9 +322,18 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       },
       source: 'session',
     })
-    const { session } = await createIntentSession(db, actor, {
-      message: 'Create a webhook-driven agent workflow.',
-    })
+    const { session } = await createIntentSession(
+      createSqliteIntentPersistence(db),
+      {
+        currentAuthority: {
+          authority: Object.freeze({}) as ResourceRequestContext,
+          actor: actor as DirectAuthenticatedAuthority,
+        },
+        visible: async () => true,
+      },
+      actor,
+      { message: 'Create a webhook-driven agent workflow.' },
+    )
     const changeset = {
       $schema_version: 1,
       ops: [
@@ -414,12 +454,23 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       eventType: event.eventType,
       repoPath: event.repoPath,
     })
-    const dispatcher = createWebhookDispatcher({
+    const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
       db,
-      ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-      configPath,
-      secretBox: box,
-      schedulerDriver: composeTaskExecutionTestRuntime(db).schedulerDriver,
+      createIdentityAccessRuntime({ db }),
+    )
+    const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+    const dispatcher = createWebhookDispatcher({
+      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...createSqliteWebhookOrchestrationRuntime({
+        taskExecutions: createSqliteWebhookTaskExecutionParticipant({
+          db,
+          configPath,
+          secretBox: box,
+          schedulerDriver: taskExecutionRuntime.schedulerDriver,
+          identityAccess: identityDependencies.identityAccess,
+        }),
+      }),
+      ...identityDependencies,
       getDefaultRuntime: async () => INTENT_RUNTIME,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })

@@ -82,6 +82,11 @@ async function appWithRoute(role: 'admin' | 'user' = 'admin'): Promise<Hono> {
     composeSystemOperations({
       db: {} as DbClient,
       secretBox: undefined,
+      repositoryBackupPreparation: {
+        async prepare() {
+          return { sealed: 0, linked: 0, scrubbed: 0 }
+        },
+      },
       appHome,
       resolveRestoreMigrations: async () => MIGRATIONS,
     }),

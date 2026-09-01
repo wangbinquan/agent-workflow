@@ -72,15 +72,21 @@ describe('RFC-200 source wiring locks', () => {
 
     // RFC-217 T3 — nonce 线程收编进 executeTurn（唯一 load 点），prompt 组装
     // 迁至 memberTurns/strategies；本锁真正关心的「nonce 必须先取再渲染」不变。
-    const skeleton = read('packages/backend/src/services/workgroup/turnExecution.ts')
+    const skeleton = read(
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
+    )
     expect(skeleton.match(/loadRunEnvelopeNonce\(db, runId\)/g)?.length).toBe(1)
     expect(skeleton).toContain('spec.composePrompt(envelopeNonce)')
     expect(skeleton).toContain('renderWgProtocolBlock(')
-    const member = read('packages/backend/src/services/workgroup/memberTurns.ts')
+    const member = read(
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/memberTurns.ts',
+    )
     expect(member).toContain(
       'composeMemberPrompt(state, memberId, [card], envelopeNonce, { singleCard: true })',
     )
-    const fc = read('packages/backend/src/services/workgroup/strategies/freeCollab.ts')
+    const fc = read(
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/freeCollab.ts',
+    )
     expect(fc).toContain('composeMemberPrompt(state, memberId, batch, envelopeNonce)')
 
     const dynamic = read('packages/backend/src/services/dynamicWorkflowRunner.ts')

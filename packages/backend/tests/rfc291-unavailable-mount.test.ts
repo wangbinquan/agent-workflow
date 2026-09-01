@@ -20,7 +20,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, skills, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { buildIntentDump } from '../src/services/intent/dumpBuilder'
+import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
 import { buildIntentDoc } from '../src/services/intent/intentDoc'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')

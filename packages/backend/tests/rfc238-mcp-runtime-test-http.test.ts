@@ -8,6 +8,7 @@ import { loadConfig } from '../src/config'
 import { createInMemoryDb } from '../src/db/client'
 import { runtimes } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
+import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import {
   emptySystemAgentOutputEvidence,
@@ -26,7 +27,7 @@ async function harness(): Promise<{ app: Hono; root: string }> {
   const configPath = join(root, 'config.json')
   loadConfig(configPath)
   const db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
+  await seedBuiltinRuntimes(new SqliteRuntimeRegistryPersistence(db))
   db.update(runtimes).set({ model: 'openai/test-model' }).where(eq(runtimes.name, 'opencode')).run()
   let runIndex = 0
   const runFn = async (opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> => {

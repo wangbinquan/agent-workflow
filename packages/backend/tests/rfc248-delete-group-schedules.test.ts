@@ -18,12 +18,18 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { repoGroups, scheduledTasks } from '../src/db/schema'
 import { RepoGroupHasReferencesError, deleteRepoGroup } from '../src/services/repoGroup'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  type RepositoryWorkspaceStore,
+} from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let db: DbClient
+let store: RepositoryWorkspaceStore
 beforeEach(() => {
   db = createInMemoryDb(MIGRATIONS)
+  store = composeSqliteRepositoryWorkspaceStore(db)
 })
 
 function seedGroup(name = 'g'): string {
@@ -65,7 +71,7 @@ function seedSchedule(opts: { name: string; payload: unknown; enabled?: boolean 
 }
 
 describe('RFC-248 #10 —— 删组 × 定时任务', () => {
-  test('启用中的计划引用本组 ⇒ 默认拒绝删除，并在 details 里列出它', () => {
+  test('启用中的计划引用本组 ⇒ 默认拒绝删除，并在 details 里列出它', async () => {
     const gid = seedGroup()
     const sid = seedSchedule({
       name: '每天审计',
@@ -74,7 +80,7 @@ describe('RFC-248 #10 —— 删组 × 定时任务', () => {
 
     let caught: RepoGroupHasReferencesError | null = null
     try {
-      deleteRepoGroup(db, gid)
+      await deleteRepoGroup(store, gid)
     } catch (e) {
       caught = e as RepoGroupHasReferencesError
     }
@@ -85,14 +91,14 @@ describe('RFC-248 #10 —— 删组 × 定时任务', () => {
     expect(db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(1)
   })
 
-  test('force=1 ⇒ 组被删，引用它的计划被**禁用**（不是删除）且带上原因', () => {
+  test('force=1 ⇒ 组被删，引用它的计划被**禁用**（不是删除）且带上原因', async () => {
     const gid = seedGroup()
     const sid = seedSchedule({
       name: '每天审计',
       payload: { workflowId: 'wf', name: 't', inputs: {}, repoGroupId: gid },
     })
 
-    const res = deleteRepoGroup(db, gid, { force: true })
+    const res = await deleteRepoGroup(store, gid, { force: true })
     expect(res.disabledSchedules).toBe(1)
     expect(db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(0)
 
@@ -105,33 +111,33 @@ describe('RFC-248 #10 —— 删组 × 定时任务', () => {
     expect(row!.lastError).toContain(gid)
   })
 
-  test('**已禁用**的计划不算引用——它本来就不会触发', () => {
+  test('**已禁用**的计划不算引用——它本来就不会触发', async () => {
     const gid = seedGroup()
     seedSchedule({
       name: '停用的',
       payload: { workflowId: 'wf', name: 't', inputs: {}, repoGroupId: gid },
       enabled: false,
     })
-    const res = deleteRepoGroup(db, gid)
+    const res = await deleteRepoGroup(store, gid)
     expect(res.disabledSchedules).toBe(0)
     expect(db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(0)
   })
 
-  test('引用**别的**组的计划不受影响', () => {
+  test('引用**别的**组的计划不受影响', async () => {
     const mine = seedGroup('mine')
     const other = seedGroup('other')
     const sid = seedSchedule({
       name: '指向 other',
       payload: { workflowId: 'wf', name: 't', inputs: {}, repoGroupId: other },
     })
-    const res = deleteRepoGroup(db, mine)
+    const res = await deleteRepoGroup(store, mine)
     expect(res.disabledSchedules).toBe(0)
     expect(db.select().from(scheduledTasks).where(eq(scheduledTasks.id, sid)).get()!.enabled).toBe(
       true,
     )
   })
 
-  test('组 id 只是**出现在提示词里**不算引用（子串筛选后必须逐条 parse 确认）', () => {
+  test('组 id 只是**出现在提示词里**不算引用（子串筛选后必须逐条 parse 确认）', async () => {
     // 这条锁住实现里的 `LIKE %"repoGroupId":"<id>"%` 之后那次 JSON.parse 复核。
     // 只靠子串会把「用户在 prompt 里粘了个组 id」误判成引用，用户会遇到一个
     // 永远删不掉、也解释不清的组。
@@ -146,17 +152,17 @@ describe('RFC-248 #10 —— 删组 × 定时任务', () => {
         repoUrl: 'https://x/r.git',
       },
     })
-    const res = deleteRepoGroup(db, gid)
+    const res = await deleteRepoGroup(store, gid)
     expect(res.disabledSchedules).toBe(0)
     expect(db.select().from(repoGroups).where(eq(repoGroups.id, gid)).all()).toHaveLength(0)
   })
 
-  test('kind-enveloped payload（`{kind, body}`）里的 repoGroupId 同样被认出', () => {
+  test('kind-enveloped payload（`{kind, body}`）里的 repoGroupId 同样被认出', async () => {
     const gid = seedGroup()
     seedSchedule({
       name: '信封形态',
       payload: { kind: 'workflow', body: { workflowId: 'wf', name: 't', repoGroupId: gid } },
     })
-    expect(() => deleteRepoGroup(db, gid)).toThrow(RepoGroupHasReferencesError)
+    await expect(deleteRepoGroup(store, gid)).rejects.toThrow(RepoGroupHasReferencesError)
   })
 })

@@ -6,6 +6,13 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
+import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
+import {
+  composeSqliteMcpRuntimeTestPersistence,
+  composeSqliteMcpRuntimeTestProvider,
+} from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
 import {
   mcps,
   mcpRuntimeTestCreateReceipts,
@@ -15,19 +22,24 @@ import {
   runtimes,
   users,
 } from '../src/db/schema'
-import { getMcpById } from '../src/services/mcp'
 import {
   MCP_RUNTIME_TEST_IDLE_MS,
   MCP_RUNTIME_TEST_TURN_TIMEOUT_MS,
   McpRuntimeTestEventSink,
   McpRuntimeTestService,
+  type McpRuntimeTestDependencies,
 } from '../src/services/mcpRuntimeTest'
+import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { getRuntimeDriver } from '../src/services/runtime'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
 } from '../src/services/systemAgentRun'
+import {
+  getMcpByIdForTest as getMcpById,
+  type McpCatalogTestBinding as McpServiceBinding,
+} from './helpers/mcpServiceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const tempDirs: string[] = []
@@ -42,6 +54,37 @@ const actor = buildActor({
   },
   source: 'daemon',
 })
+
+function mcpBinding(db: DbClient): McpServiceBinding {
+  const catalog = composeMcpCatalog({
+    db,
+    coordinator: new ResourceOperationCoordinator(),
+    nextMutationTimestamp: async (mcp) => mcp.updatedAt + 1,
+    runtime: Object.freeze({
+      prepareDelete: async () => undefined,
+      reconcileDurableIntents: async () => undefined,
+    }),
+    transitionMutationInTx: () => undefined,
+    deletePreparedInTx: () => undefined,
+  })
+  const authority = new AuthorityClaimRegistry().mintDirectAuthority(
+    { userId: actor.user.id, source: actor.source },
+    { ...actor, userId: actor.user.id },
+  ).actor
+  return Object.freeze({ catalog, authority })
+}
+
+function runtimeTestDependencies(db: DbClient, root: string): McpRuntimeTestDependencies {
+  const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
+  const mcp = mcpBinding(db)
+  return {
+    ...composeSqliteMcpRuntimeTestProvider(db),
+    loadMcp: (mcpId) => getMcpById(mcp, mcpId),
+    loadRuntime: (name) => runtimeRegistry.getRuntime(name),
+    configPath: join(root, 'config.json'),
+    appHome: root,
+  }
+}
 
 function successResult(
   opts: SystemAgentRunOptions,
@@ -91,7 +134,7 @@ async function seed(protocol: 'opencode' | 'claude-code' = 'opencode'): Promise<
       visibility: 'private',
     })
     .run()
-  const mcp = await getMcpById(db, 'mcp-1')
+  const mcp = await getMcpById(mcpBinding(db), 'mcp-1')
   if (mcp === null) throw new Error('fixture MCP missing')
   const root = mkdtempSync(join(tmpdir(), 'rfc238-service-'))
   tempDirs.push(root)
@@ -115,9 +158,7 @@ describe('RFC-238 MCP runtime test service', () => {
     const { db, mcp, root } = await seed()
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
         return successResult(opts, 'must-not-run')
@@ -146,9 +187,7 @@ describe('RFC-238 MCP runtime test service', () => {
     let now = 1_000
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
         runs += 1
@@ -187,7 +226,8 @@ describe('RFC-238 MCP runtime test service', () => {
       clientMessageId: 'message-1',
     })
     await waitFor(
-      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
+      async () =>
+        runs === 1 && (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
     )
     let session = await service.get(actor, mcp.id, created.sessionId)
     expect(session.status).toBe('active')
@@ -225,9 +265,7 @@ describe('RFC-238 MCP runtime test service', () => {
     let initialNativeId: string | null = null
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
@@ -290,7 +328,8 @@ describe('RFC-238 MCP runtime test service', () => {
       clientMessageId: 'message-reset-1',
     })
     await waitFor(
-      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
+      async () =>
+        runs === 1 && (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
     )
     let session = await service.get(actor, mcp.id, created.sessionId)
     expect(session.nativeSessionReady).toBe(true)
@@ -308,7 +347,8 @@ describe('RFC-238 MCP runtime test service', () => {
       expectedSessionVersion: session.sessionVersion,
     })
     await waitFor(
-      async () => (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
+      async () =>
+        runs === 2 && (await service.get(actor, mcp.id, created.sessionId)).inFlightTurnId === null,
     )
     session = await service.get(actor, mcp.id, created.sessionId)
     expect(session.nativeSessionReady).toBe(true)
@@ -327,9 +367,7 @@ describe('RFC-238 MCP runtime test service', () => {
     const { db, mcp, root, runtimeName } = await seed('claude-code')
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
@@ -411,9 +449,7 @@ describe('RFC-238 MCP runtime test service', () => {
     const { db, mcp, root, runtimeName } = await seed('claude-code')
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         expect(opts.nativeIdentityAuthoritative).toBe(true)
         runs += 1
@@ -479,9 +515,7 @@ describe('RFC-238 MCP runtime test service', () => {
     let runIndex = 0
     let nativeSessionObserved = false
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
         runIndex += 1
@@ -547,9 +581,7 @@ describe('RFC-238 MCP runtime test service', () => {
   test('canceling the first turn before a native session is ready ends the logical session', async () => {
     const { db, mcp, root } = await seed()
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.onSpawned?.({
           pid: 25,
@@ -603,9 +635,7 @@ describe('RFC-238 MCP runtime test service', () => {
     const { db, mcp, root } = await seed()
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
         await opts.onSpawned?.({
@@ -641,7 +671,7 @@ describe('RFC-238 MCP runtime test service', () => {
     expect(runs).toBe(1)
 
     const turnId = first.acceptedTurnId
-    const sink = new McpRuntimeTestEventSink(db, {
+    const sink = new McpRuntimeTestEventSink(composeSqliteMcpRuntimeTestPersistence(db), {
       sessionId: first.sessionId,
       turnId,
     })
@@ -681,9 +711,7 @@ describe('RFC-238 MCP runtime test service', () => {
     const { db, mcp, root } = await seed()
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
         await opts.onSpawned?.({
@@ -774,9 +802,7 @@ describe('RFC-238 MCP runtime test service', () => {
       additionalPermissions: ['mcp-runtime-tests:audit'],
     })
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.eventSink?.setRootSessionId('native-private')
         await opts.eventSink?.markTerminal('complete')
@@ -818,9 +844,7 @@ describe('RFC-238 MCP runtime test service', () => {
       releasePlan = resolveProceed
     })
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         if (opts.testPlanOverride === undefined) throw new Error('missing test build plan')
         const plan = await opts.testPlanOverride({
@@ -866,9 +890,7 @@ describe('RFC-238 MCP runtime test service', () => {
     let now = 1_000
     let promptDelivered = false
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
         if (opts.testPlanOverride === undefined || opts.onSpawned === undefined) {
@@ -923,9 +945,7 @@ describe('RFC-238 MCP runtime test service', () => {
     let runs = 0
     let reapOutcome: 'kill-failed' | 'not-alive' = 'kill-failed'
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         runs += 1
         await opts.onSpawned?.({
@@ -1061,9 +1081,7 @@ describe('RFC-238 MCP runtime test service', () => {
       .run()
     let reapedPid: number | null = null
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => 1_000,
       killStaleRunProcessTree: async (run) => {
         reapedPid = run.pid
@@ -1147,9 +1165,7 @@ describe('RFC-238 MCP runtime test service', () => {
       .run()
 
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => 1_000,
       killStaleRunProcessTree: async () => 'not-alive',
     })
@@ -1168,9 +1184,7 @@ describe('RFC-238 MCP runtime test service', () => {
     const { db, mcp, root } = await seed()
     let running = false
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.onSpawned?.({
           pid: 6161,
@@ -1223,13 +1237,39 @@ describe('RFC-238 MCP runtime test service', () => {
     ).rejects.toMatchObject({ code: 'mcp-test-service-stopping' })
   })
 
+  test('provider-session pause closes admission and resume reopens the same service', async () => {
+    const { db, mcp, root } = await seed()
+    const service = new McpRuntimeTestService({
+      ...runtimeTestDependencies(db, root),
+      runFn: async (opts) => successResult(opts, 'native-after-resume'),
+    })
+    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
+      mcp,
+    )
+    const request = {
+      expectedMcpConfigHash: hash,
+      runtimeName: 'test-opencode',
+      message: 'provider admission',
+      clientCreateId: 'create-provider-admission',
+      clientMessageId: 'message-provider-admission',
+    }
+
+    await service.pause(1_000)
+    await expect(service.create(actor, mcp, request)).rejects.toMatchObject({
+      code: 'mcp-test-service-stopping',
+    })
+
+    await service.resume()
+    const created = await service.create(actor, mcp, request)
+    expect(created.sessionId).toBeString()
+    await service.stop(1_000)
+  })
+
   test('graceful shutdown also reaps a turn already marked ending by a durable mutation', async () => {
     const { db, mcp, root } = await seed()
     let running = false
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       runFn: async (opts) => {
         await opts.onSpawned?.({
           pid: 6262,
@@ -1284,9 +1324,7 @@ describe('RFC-238 MCP runtime test service', () => {
     let now = 20_000
     let running = false
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
         await opts.onSpawned?.({
@@ -1338,9 +1376,7 @@ describe('RFC-238 MCP runtime test service', () => {
     let now = 100
     let runs = 0
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => now,
       runFn: async (opts) => {
         runs += 1
@@ -1417,7 +1453,7 @@ describe('RFC-238 MCP runtime test service', () => {
         visibility: 'private',
       })
       .run()
-    const secondMcp = await getMcpById(db, 'mcp-2')
+    const secondMcp = await getMcpById(mcpBinding(db), 'mcp-2')
     if (secondMcp === null) throw new Error('second fixture MCP missing')
 
     let now = 100
@@ -1427,9 +1463,7 @@ describe('RFC-238 MCP runtime test service', () => {
       releaseBlockingRun = resolveRun
     })
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => now,
       capacity: 1,
       runFn: async (opts) => {
@@ -1504,9 +1538,7 @@ describe('RFC-238 MCP runtime test service', () => {
     const scratchRoot = join(root, 'mcp-runtime-tests', sessionId)
     mkdirSync(join(scratchRoot, 'session-store'), { recursive: true })
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => 10,
       runFn: async () => {
         throw new Error('blocked queued turn must not run')
@@ -1609,9 +1641,7 @@ describe('RFC-238 MCP runtime test service', () => {
       .run()
 
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => 10,
     })
     await service.start()
@@ -1685,9 +1715,7 @@ describe('RFC-238 MCP runtime test service', () => {
       .run()
 
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => 10,
     })
     await service.start()
@@ -1745,9 +1773,7 @@ describe('RFC-238 MCP runtime test service', () => {
       .run()
 
     const service = new McpRuntimeTestService({
-      db,
-      configPath: join(root, 'config.json'),
-      appHome: root,
+      ...runtimeTestDependencies(db, root),
       now: () => 10,
     })
     await service.start()

@@ -33,13 +33,28 @@ import {
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import {
+  composeIntentDumpAuxiliaryQueries,
+  composeIntentTurnRuntimeResolver,
+} from '../src/modules/intent/composition/auxiliaryQueries'
+import type {
+  IntentContextResourceAuthorization,
+  IntentPersistence,
+} from '../src/modules/intent/public/operations'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
+import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
+import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let db: DbClient
 let actor: Actor
+let persistence: IntentPersistence
+let visibility: IntentContextResourceAuthorization
 
 test('intent builder keeps the ordinary runtime tool surface', () => {
   expect(INTENT_BUILDER_SYSTEM_PROMPT).toContain('ordinary runtime tools')
@@ -50,7 +65,11 @@ test('intent builder keeps the ordinary runtime tool surface', () => {
 
 beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
+  persistence = composeSqliteIntentPersistence({
+    db,
+    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+  })
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   const owner = await createUser(db, {
     username: `owner-${ulid().toLowerCase()}`,
     displayName: 'Owner',
@@ -67,10 +86,11 @@ beforeEach(async () => {
     },
     source: 'session',
   })
+  visibility = intentResourceVisibility(intentResourceCatalogBinding(db, actor))
 })
 
 async function createBareSession(message = 'build it') {
-  return (await createIntentSession(db, actor, { message })).session
+  return (await createIntentSession(persistence, visibility, actor, { message })).session
 }
 
 function seedFakeRoot(sessionId: string): void {
@@ -125,7 +145,14 @@ describe('RFC-293 Intent working state', () => {
       delta: { additions: [], removals: ['res#agent#1'] },
     }
 
-    const submitted = submitIntentWorkingSetChange(db, actor, session.id, input, 50)
+    const submitted = await submitIntentWorkingSetChange(
+      persistence,
+      visibility,
+      actor,
+      session.id,
+      input,
+      50,
+    )
     expect(submitted.change.state).toBe('applied')
     if (submitted.reservation === null) throw new Error('automatic successor was not reserved')
     const fresh = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
@@ -144,7 +171,14 @@ describe('RFC-293 Intent working state', () => {
         .map((t) => t.kind),
     ).toEqual(['message', 'message', 'running'])
 
-    const replay = submitIntentWorkingSetChange(db, actor, session.id, input, 50)
+    const replay = await submitIntentWorkingSetChange(
+      persistence,
+      visibility,
+      actor,
+      session.id,
+      input,
+      50,
+    )
     expect(replay.change.id).toBe(submitted.change.id)
     expect(replay.reservation).toBeNull()
   })
@@ -152,10 +186,18 @@ describe('RFC-293 Intent working state', () => {
   test('running save queues, cancel drains exactly one successor, and a failed delta is replaceable', async () => {
     const session = await createBareSession()
     seedFakeRoot(session.id)
-    await insertUserTurnAndReserve(db, actor, session.id, 'message', { message: 'running' }, 50)
+    await insertUserTurnAndReserve(
+      persistence,
+      actor,
+      session.id,
+      'message',
+      { message: 'running' },
+      50,
+    )
     const running = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
-    const queued = submitIntentWorkingSetChange(
-      db,
+    const queued = await submitIntentWorkingSetChange(
+      persistence,
+      visibility,
       actor,
       session.id,
       {
@@ -169,14 +211,24 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(queued.change.state).toBe('queued')
     expect(queued.reservation).toBeNull()
-    expect(cancelIntentTurn(db, actor, session.id)).toBe(true)
-    const drained = activateIntentWorkingSetChange(db, actor, session.id, 50)
+    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
+    const drained = await activateIntentWorkingSetChange(
+      persistence,
+      visibility,
+      actor,
+      session.id,
+      50,
+    )
     expect(drained.reservation).not.toBeNull()
-    expect(activateIntentWorkingSetChange(db, actor, session.id, 50).reservation).toBeNull()
+    expect(
+      (await activateIntentWorkingSetChange(persistence, visibility, actor, session.id, 50))
+        .reservation,
+    ).toBeNull()
 
     const failedSession = await createBareSession('fail and replace')
-    const failed = submitIntentWorkingSetChange(
-      db,
+    const failed = await submitIntentWorkingSetChange(
+      persistence,
+      visibility,
       actor,
       failedSession.id,
       {
@@ -190,11 +242,21 @@ describe('RFC-293 Intent working state', () => {
     )
     expect(failed.change.state).toBe('failed')
     expect(
-      retryIntentWorkingSetChange(db, actor, failedSession.id, failed.change.id, 50).change?.state,
+      (
+        await retryIntentWorkingSetChange(
+          persistence,
+          visibility,
+          actor,
+          failedSession.id,
+          failed.change.id,
+          50,
+        )
+      ).change?.state,
     ).toBe('failed')
     seedFakeRoot(failedSession.id)
-    const replacement = submitIntentWorkingSetChange(
-      db,
+    const replacement = await submitIntentWorkingSetChange(
+      persistence,
+      visibility,
       actor,
       failedSession.id,
       {
@@ -220,8 +282,8 @@ describe('RFC-293 Intent working state', () => {
   test('refine keeps the source current; discard is permanent across failure retry', async () => {
     const session = await createBareSession()
     const draft = insertDraft(session.id)
-    const refined = reserveIntentIteration(
-      db,
+    const refined = await reserveIntentIteration(
+      persistence,
       actor,
       session.id,
       {
@@ -240,15 +302,15 @@ describe('RFC-293 Intent working state', () => {
       db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()
         ?.currentDraftId,
     ).toBe(draft.id)
-    expect(cancelIntentTurn(db, actor, session.id)).toBe(true)
+    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
 
     const afterRefine = db
       .select()
       .from(intentSessions)
       .where(eq(intentSessions.id, session.id))
       .get()!
-    const regenerated = reserveIntentIteration(
-      db,
+    const regenerated = await reserveIntentIteration(
+      persistence,
       actor,
       session.id,
       {
@@ -273,14 +335,14 @@ describe('RFC-293 Intent working state', () => {
         .where(eq(intentDraftResolutions.draftId, draft.id))
         .get()?.reason,
     ).toBe('discarded')
-    expect(cancelIntentTurn(db, actor, session.id)).toBe(true)
+    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
     const failedTurn = db
       .select()
       .from(intentTurns)
       .where(eq(intentTurns.id, regenerated.receipt.agentTurnId))
       .get()!
-    const retried = reserveExactIntentRetry(
-      db,
+    const retried = await reserveExactIntentRetry(
+      persistence,
       actor,
       session.id,
       {
@@ -308,8 +370,8 @@ describe('RFC-293 Intent working state', () => {
   test('continues from a committed checkpoint with no current candidate', async () => {
     const session = await createBareSession()
     db.update(intentSessions).set({ commitSeq: 3 }).where(eq(intentSessions.id, session.id)).run()
-    const continued = reserveIntentIteration(
-      db,
+    const continued = await reserveIntentIteration(
+      persistence,
       actor,
       session.id,
       {
@@ -367,7 +429,14 @@ describe('RFC-293 Intent working state', () => {
         },
       ],
     }
-    const action = reserveIntentCurrentAction(db, actor, session.id, input, 50)
+    const action = await reserveIntentCurrentAction(
+      persistence,
+      visibility,
+      actor,
+      session.id,
+      input,
+      50,
+    )
     expect(action.reservation).not.toBeNull()
     const fresh = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
     expect(fresh.turnSeq).toBe(4)
@@ -385,7 +454,14 @@ describe('RFC-293 Intent working state', () => {
         .all()
         .map((turn) => turn.kind),
     ).toEqual(['message', 'questions', 'answers', 'running'])
-    const replay = reserveIntentCurrentAction(db, actor, session.id, input, 50)
+    const replay = await reserveIntentCurrentAction(
+      persistence,
+      visibility,
+      actor,
+      session.id,
+      input,
+      50,
+    )
     expect(replay.receipt).toEqual({ ...action.receipt, replayed: true })
     expect(replay.reservation).toBeNull()
   })
@@ -393,10 +469,18 @@ describe('RFC-293 Intent working state', () => {
   test('boot recovery resumes an idle queued working-context successor without a browser', async () => {
     const session = await createBareSession('resume after restart')
     seedFakeRoot(session.id)
-    await insertUserTurnAndReserve(db, actor, session.id, 'message', { message: 'running' }, 50)
+    await insertUserTurnAndReserve(
+      persistence,
+      actor,
+      session.id,
+      'message',
+      { message: 'running' },
+      50,
+    )
     const running = db.select().from(intentSessions).where(eq(intentSessions.id, session.id)).get()!
-    const queued = submitIntentWorkingSetChange(
-      db,
+    const queued = await submitIntentWorkingSetChange(
+      persistence,
+      visibility,
       actor,
       session.id,
       {
@@ -409,7 +493,7 @@ describe('RFC-293 Intent working state', () => {
       50,
     )
     expect(queued.change.state).toBe('queued')
-    expect(cancelIntentTurn(db, actor, session.id)).toBe(true)
+    expect(await cancelIntentTurn(persistence, actor, session.id)).toBe(true)
     const runFn = async (opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> => {
       const nonce = /nonce="([^"]+)"/.exec(opts.prompt)?.[1] ?? ''
       const changeset = JSON.stringify({
@@ -446,10 +530,20 @@ describe('RFC-293 Intent working state', () => {
     }
     expect(
       await resumeQueuedIntentWorkingSets({
-        db,
+        persistence,
         identityAccess: createIdentityAccessRuntime({ db }),
         appHome: '/tmp',
         configSnapshot: DEFAULT_CONFIG,
+        runtimeResolver: composeIntentTurnRuntimeResolver(persistence),
+        dumpAuxiliary: composeIntentDumpAuxiliaryQueries({
+          persistence,
+          platformInventory: Object.freeze({
+            async listRows() {
+              return []
+            },
+          }),
+        }),
+        resourceCatalogFor: (candidate) => intentResourceCatalogBinding(db, candidate),
         runFn,
       }),
     ).toBe(1)

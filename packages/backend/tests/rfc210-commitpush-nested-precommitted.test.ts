@@ -21,6 +21,7 @@ import { sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
+import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const created: string[] = []
@@ -152,7 +153,7 @@ describe('RFC-210 — nested pre-committed submodule push', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
 
     expect(res.meta.pushOutcome).toBe('pushed')
@@ -192,7 +193,7 @@ describe('RFC-210 — nested pre-committed submodule push', () => {
 
     const res = await runCommitPush(
       { ...baseParams, worktreePath: parent },
-      { db: await db(parent) },
+      composeSqliteCommitPushDeps(await db(parent)),
     )
     expect(res.meta.pushOutcome).toBe('pushed')
     expect(res.meta.subrepos).toBeUndefined()

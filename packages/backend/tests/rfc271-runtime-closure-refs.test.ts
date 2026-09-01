@@ -23,7 +23,7 @@ import {
   type Agent,
 } from '@agent-workflow/shared'
 import { createInMemoryDb } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent, getAgentById } from '../src/services/agent'
 import { resolveDependsClosure } from '../src/services/agentDeps'
 import { collectMcpIdsFromClosure } from '../src/services/mcpClosure'
 import { collectPluginIdsFromClosure } from '../src/services/pluginClosure'
@@ -143,7 +143,9 @@ describe('resolveDependsClosure —— onMissing 留在调用级', () => {
 
   test("preview（onMissing:'skip'）跳过查不到的依赖，遍历继续", async () => {
     const { db, top, leaf } = await seed()
-    const r = await resolveDependsClosure(db, top, { call: PREVIEW_CALL_POLICY })
+    const r = await resolveDependsClosure({ get: (id) => getAgentById(db, id) }, top, {
+      call: PREVIEW_CALL_POLICY,
+    })
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.agents.map((a) => a.id)).toEqual([top.id, leaf.id])
   })
@@ -151,9 +153,9 @@ describe('resolveDependsClosure —— onMissing 留在调用级', () => {
   test("validate / dispatch（onMissing:'fail'）硬失败在同一条引用上", async () => {
     const { db, top } = await seed()
     for (const call of [VALIDATE_CALL_POLICY, DISPATCH_CALL_POLICY]) {
-      await expect(resolveDependsClosure(db, top, { call })).rejects.toMatchObject({
-        code: 'agent-dependency-not-found',
-      })
+      await expect(
+        resolveDependsClosure({ get: (id) => getAgentById(db, id) }, top, { call }),
+      ).rejects.toMatchObject({ code: 'agent-dependency-not-found' })
     }
   })
 

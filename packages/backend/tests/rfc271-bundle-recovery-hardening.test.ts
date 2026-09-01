@@ -10,9 +10,12 @@ import { createInMemoryDb } from '../src/db/client'
 import { resourceBundleApplies, skills } from '../src/db/schema'
 import { applyResourceBundle, convergeResourceBundleApplies } from '../src/services/bundle/apply'
 import type { BundleApplyProvider } from '../src/services/bundle/provider'
-import { createManagedSkillWithFiles } from '../src/services/skill'
-import { isSkillBootVerified, resetSkillBootVerifyForTest } from '../src/services/skillBootVerify'
-import { commitSkillVersion } from '../src/services/skillVersion'
+import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import {
+  isSkillBootVerified,
+  resetSkillBootVerifyForTest,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')

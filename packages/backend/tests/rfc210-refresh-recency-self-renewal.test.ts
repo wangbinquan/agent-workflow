@@ -36,6 +36,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { refreshCachedRepo, resolveCachedRepo } from '@/services/gitRepoCache'
 import { refreshDueRepos, selectDueRepos } from '@/services/submoduleRefresh'
@@ -90,7 +91,7 @@ describe('RFC-210 G7 — auto-refresh does not renew its own recency window', ()
     remoteUrl = r.url
     // Cold-clone so there is a real, fetchable mirror on disk.
     const resolved = await resolveCachedRepo(
-      { db, appHome, fetchOnReuse: false },
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
       { url: remoteUrl },
     )
     repoId = resolved.cached.id
@@ -114,9 +115,13 @@ describe('RFC-210 G7 — auto-refresh does not renew its own recency window', ()
 
   test('touchRecency:false holds last_fetched_at but still writes the rest of the row', async () => {
     // Auto-refresh path: fetch succeeds but recency is deliberately NOT renewed.
-    const res = await refreshCachedRepo({ db, appHome, now: () => NOW + 5 * DAY }, repoId, {
-      touchRecency: false,
-    })
+    const res = await refreshCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
+      repoId,
+      {
+        touchRecency: false,
+      },
+    )
     expect(res.fetchOk).toBe(true)
 
     const [row] = (await db.all(
@@ -129,7 +134,10 @@ describe('RFC-210 G7 — auto-refresh does not renew its own recency window', ()
   })
 
   test('default (manual refresh) advances last_fetched_at', async () => {
-    const res = await refreshCachedRepo({ db, appHome, now: () => NOW + 5 * DAY }, repoId)
+    const res = await refreshCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
+      repoId,
+    )
     expect(res.fetchOk).toBe(true)
     const [row] = (await db.all(
       sql`SELECT last_fetched_at AS f FROM cached_repos WHERE id=${repoId}`,
@@ -150,8 +158,15 @@ describe('RFC-210 G7 — auto-refresh does not renew its own recency window', ()
     const outcomes: Array<{ day: number; refreshed: number; due: number }> = []
     for (let day = 0; day <= 5; day++) {
       const at = NOW + day * DAY + 1000
-      const due = await selectDueRepos(db, { now: at, intervalMs: HOUR, onlyRecentDays: 3 })
-      const res = await refreshDueRepos(db, cfg, { now: () => at, appHome })
+      const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
+        now: at,
+        intervalMs: HOUR,
+        onlyRecentDays: 3,
+      })
+      const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), cfg, {
+        now: () => at,
+        appHome,
+      })
       outcomes.push({ day, refreshed: res.refreshed, due: due.length })
     }
 

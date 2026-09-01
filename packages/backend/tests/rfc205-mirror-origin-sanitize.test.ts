@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { runGit } from '../src/util/git'
 
@@ -63,7 +64,10 @@ describe('RFC-205 P0-6 — warm reuse fails closed when the origin cannot be san
     async () => {
       if (typeof process.getuid === 'function' && process.getuid() === 0) return // root ignores 0444
       const url = pathToFileURL(await seedRepo('src')).href
-      const cold = await resolveCachedRepo({ db, appHome }, { url })
+      const cold = await resolveCachedRepo(
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
+        { url },
+      )
       const mirror = cold.cached.localPath
       // Simulate a pre-RFC-205 mirror whose origin STILL carries a credential, then
       // make .git/config read-only so the warm-path set-url scrub can't rewrite it.
@@ -73,9 +77,10 @@ describe('RFC-205 P0-6 — warm reuse fails closed when the origin cannot be san
       // create its lock → the scrub fails, exactly the corrupt/locked-config case.
       chmodSync(join(mirror, '.git'), 0o555)
       try {
-        const err = await resolveCachedRepo({ db, appHome, fetchOnReuse: true }, { url }).catch(
-          (e: unknown) => e,
-        )
+        const err = await resolveCachedRepo(
+          { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: true },
+          { url },
+        ).catch((e: unknown) => e)
         expect((err as { code?: string }).code).toBe('repo-origin-not-sanitized')
       } finally {
         chmodSync(join(mirror, '.git'), 0o755)
@@ -85,8 +90,11 @@ describe('RFC-205 P0-6 — warm reuse fails closed when the origin cannot be san
 
   test('a normal warm reuse (origin scrubbable) does NOT fail closed', async () => {
     const url = pathToFileURL(await seedRepo('ok')).href
-    await resolveCachedRepo({ db, appHome }, { url })
-    const warm = await resolveCachedRepo({ db, appHome, fetchOnReuse: true }, { url })
+    await resolveCachedRepo({ store: composeSqliteRepositoryWorkspaceStore(db), appHome }, { url })
+    const warm = await resolveCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: true },
+      { url },
+    )
     expect(warm.cached.localPath.length).toBeGreaterThan(0)
   })
 })

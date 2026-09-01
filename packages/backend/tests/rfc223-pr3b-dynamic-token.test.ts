@@ -40,7 +40,14 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runtimes, tasks, workflows, workgroupTaskState } from '../src/db/schema'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
-import { DW_GATE_CAUSE, runDynamicWorkflowGenerate } from '../src/services/dynamicWorkflowRunner'
+import {
+  DW_GATE_CAUSE,
+  runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithProvider,
+  type DynamicWorkflowEngineArgs,
+} from '../src/services/dynamicWorkflowRunner'
+import { composeSqliteDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { SqliteNodeRunLifecyclePersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence'
+import { buildWorkflowValidationContext } from '../src/services/workflow.validator'
 import { setNodeRunStatus } from '../src/services/lifecycle'
 import {
   buildDwPoolMembers,
@@ -54,18 +61,33 @@ import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/serv
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createUser } from '../src/services/users'
 import { nodeRuns } from '../src/db/schema'
+import type { WorkgroupHostRunResult } from '../src/services/workgroup/engine'
 import type {
-  WorkgroupEngineHooks,
-  WorkgroupHostRunRequest,
-  WorkgroupHostRunResult,
-} from '../src/services/workgroup/engine'
+  WorkgroupTurnHostOperations,
+  WorkgroupTurnHostRequest,
+} from '../src/modules/task-execution/public/commands'
 import { createLogger } from '../src/util/log'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('rfc223-pr3b-test')
+
+const runDynamicWorkflowGenerate = (
+  args: Omit<DynamicWorkflowEngineArgs, 'persistence' | 'nodeRuns' | 'validationContext'> & {
+    db: DbClient
+  },
+) => {
+  const { db, ...rest } = args
+  return runDynamicWorkflowGenerateWithProvider({
+    ...rest,
+    persistence: composeSqliteDynamicWorkflowPersistence(db),
+    nodeRuns: new SqliteNodeRunLifecyclePersistence(db),
+    validationContext: { load: () => buildWorkflowValidationContext(db) },
+  })
+}
 
 // Distinctive names that ALSO appear inside each agent's own free-text
 // description — so the negative scan can distinguish "name in a framework
@@ -242,14 +264,14 @@ describe('RFC-223 PR-3b — pure token indirection invariants', () => {
 // ---------------------------------------------------------------------------
 
 function scriptedHooks(queue: WorkgroupHostRunResult[]): {
-  hooks: WorkgroupEngineHooks
-  requests: WorkgroupHostRunRequest[]
+  hooks: WorkgroupTurnHostOperations
+  requests: WorkgroupTurnHostRequest[]
 } {
-  const requests: WorkgroupHostRunRequest[] = []
+  const requests: WorkgroupTurnHostRequest[] = []
   return {
     requests,
     hooks: {
-      runHostNode: (req) => {
+      runHost: (req) => {
         requests.push(req)
         const next = queue.shift()
         return Promise.resolve(next ?? { status: 'failed', outputs: {}, errorMessage: 'exhausted' })
@@ -604,6 +626,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
             taskId,
             {
               db,
+              taskRecoveryOperations: taskRecoveryOperations(db),
               schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
                 .schedulerDriver,
               appHome,

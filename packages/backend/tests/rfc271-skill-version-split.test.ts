@@ -25,14 +25,14 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
-import { createManagedSkill } from '../src/services/skill'
+import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   abortStagedSkillVersion,
   commitSkillVersionInTx,
   listSkillVersions,
   publishStagedSkillVersion,
   stageSkillVersion,
-} from '../src/services/skillVersion'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -203,7 +203,16 @@ describe('③ 空写仍是 fence-only 的已暂存 op', () => {
 describe('④ unmarkSkillBootVerified 不在 publish 段里（源码层）', () => {
   test('publish 只负责发布；unmark 归调用方按批次统一做', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'skillVersion.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'skillVersion.ts',
+      ),
       'utf8',
     )
     const start = src.indexOf('export function publishStagedSkillVersion')

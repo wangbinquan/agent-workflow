@@ -400,8 +400,10 @@ describe('RFC-247 — the audit listings are pushed into SQL', () => {
     // A behavioural test cannot tell `WHERE` from `.filter()`; this can, and it
     // is what stops the next refactor from quietly reintroducing the full-table
     // read that the impl-gate flagged.
-    const src = await Bun.file(resolve(import.meta.dir, '..', 'src/services/tokenAudit.ts')).text()
-    const listings = src.slice(src.indexOf('export async function listTokenAuditForUser'))
+    const src = await Bun.file(
+      resolve(import.meta.dir, '..', 'src/auth/infrastructure/sqliteTokenCallAudit.ts'),
+    ).text()
+    const listings = src.slice(src.indexOf('async listForUser'))
     expect(listings).not.toContain('.sort(')
     expect(listings).not.toContain('.filter(')
     expect(listings).not.toContain('.slice(')

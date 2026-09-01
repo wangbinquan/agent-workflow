@@ -27,7 +27,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { agents, mcps, resourceBundleApplies } from '../src/db/schema'
 import { applyResourceBundle, convergeResourceBundleApplies } from '../src/services/bundle/apply'
 import type { BundleApplyProvider } from '../src/services/bundle/provider'
-import { createMcp } from '../src/services/mcp'
+import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -196,7 +196,7 @@ describe('I5 · 预铸 id 早于 preflight —— 同包引用能解析', () => 
 describe('T12 · update 目标必须归 actor 所有', () => {
   test('伪造覆盖他人的 MCP ⇒ 事务内拒绝，且那一行没变', async () => {
     const deps = makeDeps()
-    const victim = await createMcp(
+    const victim = await createMcpFixture(
       deps.db,
       {
         name: 'theirs',
@@ -443,7 +443,15 @@ describe('I9 · 收敛', () => {
 describe('I1 · 串行键与幂等 namespace 是两个概念（源码层）', () => {
   test('引擎按 `serializationKey` 上锁，不是按 `idempotencyKey.scope`', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'bundle', 'apply.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'legacyResourcePackageBundleApply.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('withApplyLock(input.provider.serializationKey')

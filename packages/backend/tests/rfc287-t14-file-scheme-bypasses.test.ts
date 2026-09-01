@@ -18,6 +18,7 @@ import { selectDueRepos } from '@/services/submoduleRefresh'
 import { ulid } from 'ulid'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import { createInMemoryDb } from '@/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { cachedRepos } from '@/db/schema'
 import { MIGRATIONS } from './migration-freeze'
 
@@ -80,7 +81,7 @@ describe('RFC-287 G5 —— 存量 file:// 镜像不可运行（design §10.7 �
       await resolveRepoSourceSingle(
         { cachedRepoId: id } as never,
         {} as never,
-        { db, appHome: '/tmp/aw-t14-g5' } as never,
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome: '/tmp/aw-t14-g5' } as never,
       )
     } catch (err) {
       // 判据必须是 `.code`——码在 `.code`，message 里一个字都没有。原来写的是
@@ -144,7 +145,7 @@ describe('RFC-287 G5 绕过③ — 后台保鲜对 url_redacted=NULL 的存量�
       { id: 'unknown', urlRedacted: null },
       { id: 'blank', urlRedacted: '   ' },
     ])
-    const due = await selectDueRepos(db, {
+    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       now: Date.now(),
       intervalMs: 1,
       onlyRecentDays: 3650,

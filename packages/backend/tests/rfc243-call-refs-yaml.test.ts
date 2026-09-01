@@ -26,7 +26,7 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, resourceGrants, users, workflows } from '../src/db/schema'
-import { resolveImportRefs } from '../src/services/importRefs'
+import { resolveImportRefs } from '../src/modules/resource-catalog/infrastructure/legacy/importRefs'
 import { extractWorkflowWorkflowRefs } from '../src/services/resourceRefs'
 import { copyWorkflow, createWorkflow, getWorkflow, updateWorkflow } from '../src/services/workflow'
 import { importWorkflowYaml, workflowDefinitionToSelectors } from '../src/services/workflow.yaml'
@@ -267,11 +267,21 @@ describe('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15)', () => {
 
   test('route segment: validate-draft diffs NEW call names into the same gate (source lock)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'workflows.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'application',
+        'workflows',
+        'workflowValidation.ts',
+      ),
       'utf8',
     )
-    expect(src).toContain('extractWorkflowWorkflowRefs')
-    expect(src).toContain("{ type: 'workflow', names: addedWorkflowNames, domain: 'name' }")
+    expect(src).toContain('collectWorkflowCallRefs')
+    expect(src).toContain("resourceType: 'workflow' as const")
+    expect(src).toContain("domain: 'name' as const")
   })
 })
 

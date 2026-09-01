@@ -26,10 +26,16 @@ import {
 } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { cancelExecution } from '../src/services/execution/executor'
-import { createRuntime } from '../src/services/runtimeRegistry'
+import { composeSqliteRuntimeRegistryOperations } from '../src/platform/runtime-registry/composition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
+import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { createSqliteWebhookOrchestrationRuntime } from '../src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
+import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
 import { createWorkflow } from '../src/services/workflow'
@@ -60,7 +66,11 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     const configPath = join(appHome, 'config.json')
     writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
     const db = createInMemoryDb(MIGRATIONS)
-    await createRuntime(db, { name: RUNTIME, protocol: 'opencode', model: 'openai/gpt-5.6' })
+    await composeSqliteRuntimeRegistryOperations(db).createRuntime({
+      name: RUNTIME,
+      protocol: 'opencode',
+      model: 'openai/gpt-5.6',
+    })
     const owner = await createUser(db, {
       username: 'rfc268-owner',
       displayName: 'RFC 268 Owner',
@@ -195,12 +205,23 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
       eventType: event.eventType,
       repoPath: event.repoPath,
     })
-    const dispatcher = createWebhookDispatcher({
+    const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
       db,
-      ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-      configPath,
-      secretBox: box,
-      schedulerDriver: composeTaskExecutionTestRuntime(db).schedulerDriver,
+      createIdentityAccessRuntime({ db }),
+    )
+    const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+    const dispatcher = createWebhookDispatcher({
+      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+      ...createSqliteWebhookOrchestrationRuntime({
+        taskExecutions: createSqliteWebhookTaskExecutionParticipant({
+          db,
+          configPath,
+          secretBox: box,
+          schedulerDriver: taskExecutionRuntime.schedulerDriver,
+          identityAccess: identityDependencies.identityAccess,
+        }),
+      }),
+      ...identityDependencies,
       getDefaultRuntime: async () => RUNTIME,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })

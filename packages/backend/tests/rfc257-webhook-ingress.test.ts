@@ -4,13 +4,25 @@
 // /api/* 之外、经 publicReason 声明公开，若有人把它挪进鉴权面，整个文件红）。
 import { afterEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { Hono } from 'hono'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { webhookDeliveries, webhookEndpoints, webhookTriggers } from '../src/db/schema'
-import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
+import type {
+  EventCenterCodeHostDeliveryDispatcher,
+  WebhookDispatcher,
+} from '../src/services/webhook/dispatcherTypes'
 import type { EventCenterModule } from '../src/modules/event-center/composition'
+import { createSqliteWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence'
+import { composeSqliteWebhookIngressPersistence } from '../src/modules/integration/composition/webhookIngress'
+import { composeEventCenter } from '../src/modules/event-center/composition'
+import {
+  createCodeHostWebhookDeliveryConsumer,
+  createCodeHostWebhookRoutingDirectory,
+} from '../src/modules/integration/composition'
+import { codeHostEventCatalogJson } from '../src/modules/integration/public/events'
+import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
 import { createWebhookRateLimiters } from '../src/services/webhook/rateLimiter'
 import { recoverInterruptedDeliveries } from '../src/services/webhook/deliveryStore'
 import { eq } from 'drizzle-orm'
@@ -21,7 +33,9 @@ const box = createSecretBoxFromKey(Buffer.alloc(32, 7))
 
 type DispatchCall = { deliveryId: string }
 
-function fakeDispatcher(): { dispatcher: WebhookDispatcher; calls: DispatchCall[] } {
+type IngressDispatcher = WebhookDispatcher & EventCenterCodeHostDeliveryDispatcher
+
+function fakeDispatcher(): { dispatcher: IngressDispatcher; calls: DispatchCall[] } {
   const calls: DispatchCall[] = []
   return {
     calls,
@@ -40,13 +54,13 @@ afterEach(() => {
 })
 
 async function harness(opts?: {
-  dispatcher?: WebhookDispatcher
+  dispatcher?: IngressDispatcher
   enabled?: boolean
   omitDispatcher?: boolean
   digitalEmployeeEventCenter?: EventCenterModule
 }): Promise<{
   db: DbClient
-  app: ReturnType<typeof createApp>
+  app: Hono
   calls: DispatchCall[]
 }> {
   const db = createInMemoryDb(MIGRATIONS)
@@ -72,17 +86,23 @@ async function harness(opts?: {
     launchPayload: JSON.stringify({ inputs: {}, scratch: true }),
     templateSyntaxVersion: 2,
   })
-  const app = createApp({
-    token: 'a'.repeat(64),
-    configPath: '',
-    opencodeVersion: '1.14.25',
-    dbVersion: 1,
-    db,
+  const dispatcher = opts?.dispatcher ?? fake.dispatcher
+  const eventCenter =
+    opts?.digitalEmployeeEventCenter ??
+    (await composeEventCenter({
+      db,
+      typePackageDescriptorJsons: [codeHostEventCatalogJson],
+      routingSubscriptions: createCodeHostWebhookRoutingDirectory(db),
+      deliveryConsumers: opts?.omitDispatcher
+        ? []
+        : [createCodeHostWebhookDeliveryConsumer(db, dispatcher)],
+    }))
+  const app = new Hono()
+  mountWebhookIngressRoutes(app, {
+    webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
     secretBox: box,
-    ...(opts?.omitDispatcher ? {} : { webhookDispatcher: opts?.dispatcher ?? fake.dispatcher }),
-    ...(opts?.digitalEmployeeEventCenter === undefined
-      ? {}
-      : { digitalEmployeeEventCenter: opts.digitalEmployeeEventCenter }),
+    digitalEmployeeEventCenter: eventCenter,
+    ...(opts?.omitDispatcher ? {} : { webhookDispatcher: dispatcher }),
   })
   return { db, app, calls: fake.calls }
 }
@@ -102,7 +122,7 @@ function pushBody(): string {
 }
 
 function post(
-  app: ReturnType<typeof createApp>,
+  app: Hono,
   path: string,
   body: string,
   headers: Record<string, string> = {},
@@ -377,18 +397,12 @@ describe('RFC-257 T5 · 限流（fake clock）与装配自我跳过', () => {
       enabled: true,
     })
     // 直接用路由模块 + 自建 app 注入 fake clock 限流器
-    const { Hono } = await import('hono')
-    const { mountWebhookIngressRoutes } = await import('../src/routes/webhooks')
     const fake = fakeDispatcher()
     const app = new Hono()
     mountWebhookIngressRoutes(
       app,
       {
-        token: 'a'.repeat(64),
-        configPath: '',
-        opencodeVersion: 'x',
-        dbVersion: 1,
-        db,
+        webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
         secretBox: box,
         webhookDispatcher: fake.dispatcher,
         digitalEmployeeEventCenter: {
@@ -413,7 +427,7 @@ describe('RFC-257 T5 · 限流（fake clock）与装配自我跳过', () => {
             },
           },
         } as unknown as EventCenterModule,
-      } as Parameters<typeof mountWebhookIngressRoutes>[1],
+      },
       { limiters },
     )
     for (let i = 0; i < 300; i++) {
@@ -447,7 +461,7 @@ describe('RFC-257 T5 · daemon 重启恢复（D23）', () => {
       'x-gitlab-token': 'wrong',
       'x-gitlab-event-uuid': 'uuid-X',
     }) // rejected（终态）
-    const n = await recoverInterruptedDeliveries(db)
+    const n = await recoverInterruptedDeliveries(createSqliteWebhookDeliveryPersistence(db))
     expect(n).toBe(1)
     const rows = await deliveryRows(db)
     const byStatus = rows.map((r) => [r.status, r.statusReason]).sort()

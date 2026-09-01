@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -51,7 +52,10 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
 
   test('with a SecretBox: row stores url_enc, has no plaintext column, and round-trips', async () => {
     const url = pathToFileURL(await seedRepo('sealme')).href
-    const res = await resolveCachedRepo({ db, appHome, secretBox: box }, { url })
+    const res = await resolveCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+      { url },
+    )
     const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)).get()
     expect(row).toBeDefined()
     if (row === undefined) return
@@ -72,7 +76,10 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
 
   test('without a SecretBox: persistence is safe and the usable URL is process-client scoped', async () => {
     const url = pathToFileURL(await seedRepo('plain')).href
-    const res = await resolveCachedRepo({ db, appHome }, { url })
+    const res = await resolveCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
+      { url },
+    )
     const row = db.select().from(cachedRepos).where(eq(cachedRepos.id, res.cached.id)).get()
     expect(row).toBeDefined()
     if (row === undefined) return

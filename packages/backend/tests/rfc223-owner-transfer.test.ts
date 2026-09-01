@@ -18,7 +18,8 @@ import {
   workgroups,
 } from '../src/db/schema'
 import { createDigitalEmployeeResourceCatalogAclProviders } from '../src/modules/digital-employee/composition/resourceCatalogAcl'
-import { updateResourceAcl, type AclRow } from '../src/services/resourceAcl'
+import { updateResourceAcl } from '../src/modules/resource-catalog/composition/resourceAcl'
+import type { AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
 import { ConflictError, ForbiddenError, NotFoundError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

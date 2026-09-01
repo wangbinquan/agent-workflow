@@ -36,7 +36,6 @@ type Disposition = 'per-task' | 'inherit' | 'dropped-registered'
 
 const DISPOSITION = {
   taskId: 'per-task',
-  db: 'per-task',
   log: 'per-task',
   signal: 'per-task',
   // RFC-328: every child submits/claims its own intent; parent epoch authority
@@ -45,6 +44,16 @@ const DISPOSITION = {
   // RFC-347: the daemon driver injects the one delegated factory at every
   // drive boundary; it is not serialized through the child run-config bag.
   identityAccess: 'dropped-registered',
+  persistence: 'dropped-registered',
+  memoryInjectionQueries: 'dropped-registered',
+  runtimeSessionLeases: 'dropped-registered',
+  runtimeRegistry: 'dropped-registered',
+  taskDagCollaboration: 'dropped-registered',
+  collaborationRuntime: 'dropped-registered',
+  workgroupTurns: 'dropped-registered',
+  childLaunch: 'dropped-registered',
+  dynamicWorkflow: 'dropped-registered',
+  processConcurrencyScope: 'dropped-registered',
   appHome: 'inherit',
   binaryOverride: 'inherit',
   configPath: 'inherit',
@@ -100,6 +109,16 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
       [
         'fanoutMaxShardTotal',
         'identityAccess',
+        'persistence',
+        'memoryInjectionQueries',
+        'runtimeSessionLeases',
+        'runtimeRegistry',
+        'taskDagCollaboration',
+        'collaborationRuntime',
+        'workgroupTurns',
+        'childLaunch',
+        'dynamicWorkflow',
+        'processConcurrencyScope',
         'codeHostConnections',
         'codeHostFetch',
         'repositoryPublicationTransport',
@@ -119,7 +138,6 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     const full: RunTaskOptions = {
       daemonGeneration: 'gen-1',
       taskId: 't1',
-      db: {} as RunTaskOptions['db'],
       appHome: '/home',
       binaryOverride: ['bin'],
       configPath: '/cfg.json',
@@ -155,7 +173,6 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
 
     const sparse = pickInheritableRunConfig({
       taskId: 't2',
-      db: {} as RunTaskOptions['db'],
       appHome: '/h2',
     })
     expect(Object.keys(sparse)).toEqual(['appHome']) // undefined 不落键（exactOptional 同构）
@@ -178,7 +195,19 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     expect(start).toBeGreaterThan(-1)
     const section = src.slice(start, src.indexOf('async function launchCallChild', start))
     expect(section).toContain('runConfig: pickInheritableRunConfig(state.opts)')
-    expect(section).toContain('...runtime.runConfig')
+    const workflowLaunch = src.slice(
+      src.indexOf('async function launchCallChild', start),
+      src.indexOf('function renderCallGoal', start),
+    )
+    const workgroupLaunch = src.slice(
+      src.indexOf('async function launchCallWorkgroupChild', start),
+      src.indexOf(
+        '// ---------------------------------------------------------------------------\n// RFC-253',
+        start,
+      ),
+    )
+    expect(workflowLaunch).toContain('runtime: buildChildRuntime(state)')
+    expect(workgroupLaunch).toContain('runtime: buildChildRuntime(state)')
     for (const key of INHERITABLE_RUN_CONFIG_KEYS) {
       expect(section.includes(`opts.${key}`)).toBe(false)
       expect(section.includes(`state.opts.${key}`)).toBe(false)

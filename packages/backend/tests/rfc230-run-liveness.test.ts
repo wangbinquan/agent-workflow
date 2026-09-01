@@ -26,13 +26,13 @@ import { createInMemoryDb } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { probeRunProcessAlive, reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { listRecoveryEventsForTask } from '../src/services/recovery'
-import { __setActiveTaskForTesting } from '../src/services/task'
 import {
   classifyRunLiveness,
   livenessSourceOfKind,
   type LivenessRunRow,
   resolveRunLiveness,
 } from '../src/services/runLiveness'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_000_000
@@ -385,7 +385,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     await seedRun(db, taskId, { nodeId: 'a', status: 'running', pid: 777 })
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: ALIVE,
@@ -404,7 +404,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     await seedRun(db, taskId, { nodeId: 'a', status: 'done', pid: 777 })
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: ALIVE,
@@ -422,7 +422,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     await seedRun(db, taskId, { nodeId: 'a', status: 'done', pid: 777 })
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: DEAD,
@@ -437,32 +437,34 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
   })
 
   test('pre-spawn 行：走生产 activeTasks 注册表，有驱动不收 / 无驱动收', async () => {
-    // Codex 设计门 P2-4：这条刻意**不注入** taskHasDriver，用真实的
-    // isTaskActive 接线，证明生产默认路径本身是对的。
+    // RFC-349：driver ownership 是 required composition seam；这里用同一
+    // required participant锁住「有驱动不收 / 无驱动收」。
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db, gitWrapperDef())
     const runId = await seedRun(db, taskId, { nodeId: 'solo', status: 'running' }) // 尚未写 pid
+    let activeTaskId: string | undefined = taskId
     try {
-      __setActiveTaskForTesting(taskId)
       const guarded = await reconcileDeadRunningRuns({
-        db,
+        operations: taskRecoveryOperations(db),
         graceMs: 1000,
         now: NOW,
         probeProcessAlive: DEAD,
+        taskHasDriver: (candidateTaskId) => candidateTaskId === activeTaskId,
       })
       expect(guarded.reapedRuns).toHaveLength(0)
 
-      __setActiveTaskForTesting(undefined)
+      activeTaskId = undefined
       const reaped = await reconcileDeadRunningRuns({
-        db,
+        operations: taskRecoveryOperations(db),
         graceMs: 1000,
         now: NOW,
         probeProcessAlive: DEAD,
+        taskHasDriver: (candidateTaskId) => candidateTaskId === activeTaskId,
       })
       expect(reaped.reapedRuns).toEqual([runId])
       expect(reaped.reasons[runId]).toBe('unowned-never-spawned')
     } finally {
-      __setActiveTaskForTesting(undefined)
+      activeTaskId = undefined
     }
   })
 
@@ -473,7 +475,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     await seedRun(db, taskId, { nodeId: 'a', status: 'done', pid: 777 })
     await seedRun(db, taskId, { nodeId: 'solo', status: 'pending' }) // 任务仍有活
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: ALIVE,
@@ -481,7 +483,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     })
     expect(res.reapedRuns).toEqual([wrapperId])
     expect(res.reapedTasks).toHaveLength(0) // 任务没翻
-    const events = await listRecoveryEventsForTask(db, taskId)
+    const events = await listRecoveryEventsForTask(taskRecoveryOperations(db), taskId)
     const reap = events.find((e) => e.nodeRunId === wrapperId)
     expect(reap?.kind).toBe('periodic-reap')
     expect(reap?.reason).toContain('inner-all-terminal')
@@ -493,7 +495,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     await db.update(tasks).set({ workflowSnapshot: '{ not json' }).where(eq(tasks.id, taskId))
     await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: DEAD,

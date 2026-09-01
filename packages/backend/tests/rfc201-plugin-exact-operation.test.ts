@@ -9,8 +9,19 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, plugins, tasks, workflows } from '../src/db/schema'
-import { createPlugin, getPlugin, reinstallPlugin, updatePlugin } from '../src/services/plugin'
-import { runPluginGenerationGc } from '../src/services/pluginGenerationGc'
+import { composeSqlitePluginGenerationGcCommand } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
+import {
+  composePluginServiceBindingForTest,
+  createPlugin,
+  getPlugin,
+  reinstallPlugin,
+  type PluginServiceBinding,
+  updatePlugin,
+} from './helpers/pluginServiceBinding'
+import {
+  createPluginGenerationFilesystemGcPort,
+  runPluginGenerationGc,
+} from '../src/services/pluginGenerationGc'
 import {
   checkForUpdate,
   garbageCollectPluginGenerations,
@@ -26,6 +37,7 @@ const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
 let db: DbClient
 let pluginsDir = ''
+let binding: PluginServiceBinding
 
 const deps = () => ({ pluginsDir, npmBin: FAKE_NPM })
 
@@ -37,6 +49,7 @@ beforeEach(async () => {
   delete process.env.FAKE_NPM_COMMIT
   delete process.env.FAKE_NPM_COUNTER_FILE
   resetNpmProbeCacheForTests()
+  binding = composePluginServiceBindingForTest(db, deps())
 })
 
 afterEach(async () => {
@@ -49,9 +62,9 @@ afterEach(async () => {
 
 describe('immutable generation publication', () => {
   test('same-version reinstall publishes a distinct cachedPath and exact hash', async () => {
-    const created = await createPlugin(db, { name: 'same', spec: 'same@1' }, deps())
-    const first = await reinstallPlugin(db, created.id, deps())
-    const second = await reinstallPlugin(db, created.id, deps())
+    const created = await createPlugin(binding, { name: 'same', spec: 'same@1' })
+    const first = await reinstallPlugin(binding, created.id)
+    const second = await reinstallPlugin(binding, created.id)
     expect(first.resolvedVersion).toBe(second.resolvedVersion)
     expect(first.cachedPath).not.toBe(second.cachedPath)
     expect(pluginOperationConfigHashOf(first)).not.toBe(pluginOperationConfigHashOf(second))
@@ -60,45 +73,41 @@ describe('immutable generation publication', () => {
   })
 
   test('failed install never changes the current DB/cache generation', async () => {
-    const created = await createPlugin(db, { name: 'safe', spec: 'safe@1' }, deps())
+    const created = await createPlugin(binding, { name: 'safe', spec: 'safe@1' })
     process.env.FAKE_NPM_MODE = 'fail'
-    await expect(updatePlugin(db, created.id, { spec: 'safe@2' }, deps())).rejects.toThrow()
-    const current = await getPlugin(db, created.id)
+    await expect(updatePlugin(binding, created.id, { spec: 'safe@2' })).rejects.toThrow()
+    const current = await getPlugin(binding, created.id)
     expect(current?.cachedPath).toBe(created.cachedPath)
     expect(current?.spec).toBe(created.spec)
     expect(existsSync(created.cachedPath)).toBe(true)
   })
 
   test('full-row null-safe CAS rejects a bypass writer before publication', async () => {
-    const created = await createPlugin(db, { name: 'cas', spec: 'cas@1' }, deps())
+    const created = await createPlugin(binding, { name: 'cas', spec: 'cas@1' })
     let preparedPath = ''
+    const staleBinding = composePluginServiceBindingForTest(db, {
+      ...deps(),
+      beforePublish: async (_captured, prepared) => {
+        preparedPath = prepared.cachedPath
+        await db
+          .update(plugins)
+          .set({
+            name: 'foreign-name',
+            spec: 'foreign@9',
+            description: 'foreign',
+            cachedPath: '/foreign/current',
+          })
+          .where(eq(plugins.id, created.id))
+      },
+    })
     try {
-      await updatePlugin(
-        db,
-        created.id,
-        { spec: 'cas@2' },
-        {
-          ...deps(),
-          beforePublish: async (_captured, prepared) => {
-            preparedPath = prepared.cachedPath
-            await db
-              .update(plugins)
-              .set({
-                name: 'foreign-name',
-                spec: 'foreign@9',
-                description: 'foreign',
-                cachedPath: '/foreign/current',
-              })
-              .where(eq(plugins.id, created.id))
-          },
-        },
-      )
+      await updatePlugin(staleBinding, created.id, { spec: 'cas@2' })
       throw new Error('expected stale CAS')
     } catch (error) {
       expect(error).toBeInstanceOf(ConflictError)
       expect((error as ConflictError).code).toBe('resource-operation-stale')
     }
-    const current = await getPlugin(db, created.id)
+    const current = await getPlugin(binding, created.id)
     expect(current?.name).toBe('foreign-name')
     expect(current?.spec).toBe('foreign@9')
     expect(current?.description).toBe('foreign')
@@ -111,7 +120,7 @@ describe('immutable generation publication', () => {
 describe('source identity update checks', () => {
   test('same package version at a new Git commit is update-ready', async () => {
     process.env.FAKE_NPM_COMMIT = '1111111111111111111111111111111111111111'
-    const created = await createPlugin(db, { name: 'git-source', spec: 'github:org/repo' }, deps())
+    const created = await createPlugin(binding, { name: 'git-source', spec: 'github:org/repo' })
     process.env.FAKE_NPM_COMMIT = '2222222222222222222222222222222222222222'
     const checked = await checkForUpdate(created.id, created.spec, created.cachedPath, deps())
     expect(checked.identityStatus).toBe('known')
@@ -120,7 +129,7 @@ describe('source identity update checks', () => {
   })
 
   test('legacy cachedPath without manifest fails closed as identity unknown', async () => {
-    const created = await createPlugin(db, { name: 'legacy', spec: 'legacy@1' }, deps())
+    const created = await createPlugin(binding, { name: 'legacy', spec: 'legacy@1' })
     const generationDir = dirname(dirname(created.cachedPath))
     await unlink(join(generationDir, PLUGIN_GENERATION_MANIFEST))
     expect(await readGenerationManifestForCachedPath(created.cachedPath)).toBeNull()
@@ -129,7 +138,10 @@ describe('source identity update checks', () => {
   })
 
   test('incomplete or mismatched generation manifest fails closed as identity unknown', async () => {
-    const created = await createPlugin(db, { name: 'corrupt-manifest', spec: 'manifest@1' }, deps())
+    const created = await createPlugin(binding, {
+      name: 'corrupt-manifest',
+      spec: 'manifest@1',
+    })
     const generationDir = dirname(dirname(created.cachedPath))
     const manifestPath = join(generationDir, PLUGIN_GENERATION_MANIFEST)
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
@@ -153,8 +165,11 @@ describe('generation GC safety', () => {
     })
     expect(
       await runPluginGenerationGc({
-        db: dbThatMustNotBeRead,
-        pluginsDir,
+        command: composeSqlitePluginGenerationGcCommand(
+          dbThatMustNotBeRead,
+          createPluginGenerationFilesystemGcPort(pluginsDir),
+        ),
+        executionFence: 'clear',
         graceMs: 1,
         now: Date.now() + 60_000,
       }),
@@ -162,7 +177,7 @@ describe('generation GC safety', () => {
   })
 
   test('keeps referenced generation, removes only aged orphan and crashed check dir', async () => {
-    const created = await createPlugin(db, { name: 'kept', spec: 'kept@1' }, deps())
+    const created = await createPlugin(binding, { name: 'kept', spec: 'kept@1' })
     const orphan = join(pluginsDir, 'orphan-id', 'generations', 'orphan-op')
     const crashedCheck = join(pluginsDir, '.check-crashed')
     await mkdir(orphan, { recursive: true })
@@ -209,16 +224,24 @@ describe('generation GC safety', () => {
     await db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
 
     const now = Date.now() + 60_000
-    expect(await runPluginGenerationGc({ db, pluginsDir, graceMs: 1, now })).toEqual([])
+    const command = composeSqlitePluginGenerationGcCommand(
+      db,
+      createPluginGenerationFilesystemGcPort(pluginsDir),
+    )
+    expect(
+      await runPluginGenerationGc({ command, executionFence: 'clear', graceMs: 1, now }),
+    ).toEqual([])
     expect(existsSync(orphan)).toBe(true)
 
     await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, nodeRunId))
-    expect(await runPluginGenerationGc({ db, pluginsDir, graceMs: 1, now })).toContain(orphan)
+    expect(
+      await runPluginGenerationGc({ command, executionFence: 'clear', graceMs: 1, now }),
+    ).toContain(orphan)
     expect(existsSync(orphan)).toBe(false)
   })
 
   test('generation manifest is complete and ties entry to source identity', async () => {
-    const created = await createPlugin(db, { name: 'manifest', spec: 'manifest@1' }, deps())
+    const created = await createPlugin(binding, { name: 'manifest', spec: 'manifest@1' })
     const manifest = await readGenerationManifestForCachedPath(created.cachedPath)
     expect(manifest).toEqual(
       expect.objectContaining({
@@ -242,10 +265,7 @@ describe('production coordinator callsite ratchet', () => {
       resolve(import.meta.dir, '..', 'src', 'routes', 'plugins.ts'),
       'utf8',
     )
-    const service = await readFile(
-      resolve(import.meta.dir, '..', 'src', 'services', 'plugin.ts'),
-      'utf8',
-    )
+    const retiredFacade = resolve(import.meta.dir, '..', 'src', 'services', 'plugin.ts')
     const application = await readFile(
       resolve(
         import.meta.dir,
@@ -267,6 +287,6 @@ describe('production coordinator callsite ratchet', () => {
     expect(route).toContain('descriptor: operations.checkUpdate')
     expect(route).toContain('descriptor: operations.upgrade')
     expect(route).toContain('loadById: (_db, resourceId) => aclIdentity.load(resourceId)')
-    expect(service).toContain('pluginOperationCoordinator.runExclusive(id')
+    expect(existsSync(retiredFacade)).toBe(false)
   })
 })

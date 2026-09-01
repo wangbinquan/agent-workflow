@@ -4,12 +4,19 @@ import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { mcps, mcpRuntimeTestSessions, resourceGrants, runtimes, users } from '../src/db/schema'
-import { deleteMcp, getMcpById, updateMcp } from '../src/services/mcp'
 import {
   deletePreparedMcpRuntimeTestsInTx,
   transitionMcpAclRuntimeTestsInTx,
+  transitionMcpRuntimeTestsInTx,
 } from '../src/services/mcpRuntimeTestTransitions'
-import { updateResourceAcl } from '../src/services/resourceAcl'
+import { SqliteRuntimeRegistryPersistence } from '../src/platform/runtime-registry/infrastructure/sqliteRuntimeRegistryPersistence'
+import {
+  composeMcpServiceBindingForTest,
+  deleteMcpForTest as deleteMcp,
+  getMcpByIdForTest as getMcpById,
+  updateMcpForTest as updateMcp,
+} from './helpers/mcpServiceBinding'
+import { updateResourceAcl } from '../src/modules/resource-catalog/composition/resourceAcl'
 import {
   invalidateInheritedRuntimeProbeReceipts,
   updateRuntime,
@@ -141,11 +148,18 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
         SELECT RAISE(ABORT, 'forced transition failure');
       END;
     `)
+    const mcp = composeMcpServiceBindingForTest(db, {
+      actor: admin,
+      lifecycle: Object.freeze({
+        transitionMutation: transitionMcpRuntimeTestsInTx,
+        deletePrepared: deletePreparedMcpRuntimeTestsInTx,
+      }),
+    })
 
-    await expect(updateMcp(db, 'mcp-1', { description: 'after' })).rejects.toThrow(
+    await expect(updateMcp(mcp, 'mcp-1', { description: 'after' })).rejects.toThrow(
       'forced transition failure',
     )
-    expect((await getMcpById(db, 'mcp-1'))?.description).toBe('before')
+    expect((await getMcpById(mcp, 'mcp-1'))?.description).toBe('before')
     expect(lifecycle(db, 'session-rollback')).toMatchObject({
       status: 'active',
       endReason: null,
@@ -175,16 +189,18 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
         SELECT RAISE(ABORT, 'forced MCP delete failure');
       END;
     `)
-    const row = await getMcpById(db, 'mcp-1')
+    const mcp = composeMcpServiceBindingForTest(db, {
+      actor: admin,
+      lifecycle: Object.freeze({
+        transitionMutation: transitionMcpRuntimeTestsInTx,
+        deletePrepared: deletePreparedMcpRuntimeTestsInTx,
+      }),
+    })
+    const row = await getMcpById(mcp, 'mcp-1')
     if (row === null) throw new Error('MCP fixture missing')
 
-    await expect(
-      deleteMcp(db, row.id, admin, {
-        existing: row,
-        beforeDeleteInTx: (tx) => deletePreparedMcpRuntimeTestsInTx(tx, row.id),
-      }),
-    ).rejects.toThrow('forced MCP delete failure')
-    expect(await getMcpById(db, row.id)).not.toBeNull()
+    await expect(deleteMcp(mcp, row.id)).rejects.toThrow('forced MCP delete failure')
+    expect(await getMcpById(mcp, row.id)).not.toBeNull()
     expect(lifecycle(db, 'session-delete-rollback')).toMatchObject({
       status: 'ended',
       endReason: 'user',
@@ -207,7 +223,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
       .run()
     insertIdleSession(db, { id: 'session-owner', ownerUserId: 'owner-a' })
     insertIdleSession(db, { id: 'session-viewer', ownerUserId: 'viewer-b' })
-    const row = await getMcpById(db, 'mcp-1')
+    const row = await getMcpById(composeMcpServiceBindingForTest(db, { actor: admin }), 'mcp-1')
     if (row === null) throw new Error('MCP fixture missing')
 
     await updateResourceAcl(
@@ -247,10 +263,11 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
   test('runtime profile, inherited binary, and user disable mutations persist end intent', async () => {
     {
       const db = createInMemoryDb(MIGRATIONS)
+      const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
       insertMcp(db)
       insertRuntime(db)
       insertIdleSession(db, { id: 'session-profile' })
-      await updateRuntime(db, 'opencode', { model: 'openai/new-model' })
+      await updateRuntime(runtimeRegistry, 'opencode', { model: 'openai/new-model' })
       expect(lifecycle(db, 'session-profile')).toMatchObject({
         status: 'ending',
         endReason: 'runtime-profile-changed',
@@ -260,10 +277,11 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
 
     {
       const db = createInMemoryDb(MIGRATIONS)
+      const runtimeRegistry = new SqliteRuntimeRegistryPersistence(db)
       insertMcp(db)
       insertRuntime(db, { binaryPath: null })
       insertIdleSession(db, { id: 'session-inherited' })
-      await invalidateInheritedRuntimeProbeReceipts(db, ['opencode'])
+      await invalidateInheritedRuntimeProbeReceipts(runtimeRegistry, ['opencode'])
       expect(lifecycle(db, 'session-inherited')).toMatchObject({
         status: 'ending',
         endReason: 'runtime-profile-changed',

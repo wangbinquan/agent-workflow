@@ -164,7 +164,17 @@ describe('C4/C5/C6 · 导出与覆盖侧的三条收缩仍然生效', () => {
 
 describe('保留项 —— 下线不得误伤仍被使用的帮手', () => {
   test('`workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` 还在', () => {
-    const yaml = read(resolve(BACKEND, 'src', 'services', 'workflow.yaml.ts'))
+    const yaml = read(
+      resolve(
+        BACKEND,
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workflow.yaml.ts',
+      ),
+    )
     expect(yaml).toContain('workflowDefinitionToSelectors')
     expect(yaml).toContain('stripCallWorkflowNodeIds')
   })

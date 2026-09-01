@@ -41,6 +41,7 @@ import {
 } from '../src/services/execution/executionWatch'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -700,7 +701,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     }
     // boot reap（孤儿收割）把父子与残行翻 interrupted。
     const { reapOrphanRuns } = await import('../src/services/orphans')
-    await reapOrphanRuns(h.db)
+    await reapOrphanRuns(taskRecoveryOperations(h.db))
     // 修好计划再恢复。
     writeFileSync(h.planFile, JSON.stringify({ worker: { output: { out: 'RESUMED', echo: 'x' } } }))
     await resumeTask(h.db, parentTaskId, {

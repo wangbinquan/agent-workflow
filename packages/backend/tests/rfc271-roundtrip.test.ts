@@ -41,14 +41,14 @@ import {
   workgroupMembers,
   workgroups,
 } from '../src/db/schema'
-import { decodeZip } from '../src/services/skill-zip'
+import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
 import { encodeZip } from '../src/util/zip'
-import { createManagedSkillWithFiles } from '../src/services/skill'
-import { exportResourcePackage } from '../src/services/resourcePackage/export'
+import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { MAX_DECLARED_BUILTINS, parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { buildPackagePreview, verifyPreviewToken } from '../src/services/resourcePackage/preview'
+import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { buildPackagePreview, exportResourcePackage } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))

@@ -28,6 +28,7 @@ import { scheduledTasks } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { createAgent, deleteAgent, getAgentById, renameAgent } from '../src/services/agent'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
 import { createWorkgroup, getWorkgroupById } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
@@ -54,7 +55,7 @@ const AGENT_FIELDS = {
 }
 
 async function seedValidOpencodeRuntime(db: DbClient): Promise<void> {
-  await createRuntime(db, {
+  await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',

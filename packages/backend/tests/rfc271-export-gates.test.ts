@@ -24,8 +24,8 @@ import {
   assertNoDuplicateNames,
   assertPrivilegedNodesExportable,
   directRefsOf,
-  walkExportClosure,
 } from '../src/services/resourcePackage/closure'
+import { walkExportClosure } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

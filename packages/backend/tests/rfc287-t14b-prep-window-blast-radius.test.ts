@@ -13,6 +13,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { MIGRATIONS } from './migration-freeze'
 import { openContainedFile } from '@/services/worktreeFileContent'
 import { resolveRepoTarget } from '@/services/codeIntel/fileSymbols'
@@ -126,7 +127,10 @@ describe('G7 —— 身份登记不得堵在克隆锁后面', () => {
         await import('@/services/gitRepoCache')
       // 占锁：故意不 await，让它在后台把克隆锁握满 3 秒。
       let cloneSettled = false
-      const blocking = resolveCachedRepo({ db, appHome, cloneTimeoutMs: 3_000 }, { url })
+      const blocking = resolveCachedRepo(
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, cloneTimeoutMs: 3_000 },
+        { url },
+      )
         .catch(() => null)
         .finally(() => {
           cloneSettled = true
@@ -141,7 +145,10 @@ describe('G7 —— 身份登记不得堵在克隆锁后面', () => {
       expect(cloneSettled, '前置不成立：克隆已经结束、锁没被握住，本用例此刻零预言力').toBe(false)
 
       const t0 = Date.now()
-      const id = await ensureCachedRepoIdentity({ db, appHome }, { url })
+      const id = await ensureCachedRepoIdentity(
+        { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
+        { url },
+      )
       const elapsed = Date.now() - t0
       expect(id.cachedRepoId).not.toBe('')
       // 关键：不得被克隆锁堵住。共用一把锁时这里会是 ~2800ms（剩余的 timeout）。

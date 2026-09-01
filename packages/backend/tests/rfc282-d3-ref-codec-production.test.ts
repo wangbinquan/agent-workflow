@@ -4,7 +4,7 @@
 // is asserted byte-identical against the OLD hand-rolled spelling, hardcoded
 // here so a codec drift cannot silently rewrite persisted/mapped identities.
 
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -17,11 +17,12 @@ import {
   intentHandleType,
   isIntentTempRef,
 } from '@agent-workflow/shared'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { allocateHandle, createHandleAllocator } from '../src/services/intent/manifest'
-import { resolveAgentRefsUsable } from '../src/services/agentRefs'
+import {
+  resolveAgentRefsUsable,
+  type AgentReferenceResolver,
+} from '../src/modules/resource-catalog/application/agents/agentReferences'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SHARED_SRC = resolve(import.meta.dir, '..', '..', 'shared', 'src')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -109,16 +110,19 @@ describe('RFC-282 D3 — call domain', () => {
 })
 
 describe('RFC-282 D3 — leftover second spellings are gone', () => {
-  let db: DbClient
-
-  beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
-  })
-
   test('agentRefs skill de-dup behavior is unchanged after the m:/p: key removal', async () => {
     const managedA = ulid()
     const managedB = ulid()
-    const resolved = await resolveAgentRefsUsable(db, null, {
+    const resolver: AgentReferenceResolver = {
+      async resolveUsableById(_actor, _type, tokens) {
+        const ids = [...new Set(tokens)]
+        return { ids, byToken: new Map(ids.map((id) => [id, id])), missing: [] }
+      },
+      assertNoMissing(missing) {
+        if (missing.length > 0) throw new Error('identity resolver produced missing references')
+      },
+    }
+    const resolved = await resolveAgentRefsUsable(resolver, null, {
       mcp: [],
       plugins: [],
       dependsOn: [],
@@ -138,7 +142,10 @@ describe('RFC-282 D3 — leftover second spellings are gone', () => {
   })
 
   test('the hand-rolled m:/p: prefix pair no longer exists in agentRefs', () => {
-    const text = readFileSync(resolve(BACKEND_SRC, 'services/agentRefs.ts'), 'utf8')
+    const text = readFileSync(
+      resolve(BACKEND_SRC, 'modules/resource-catalog/application/agents/agentReferences.ts'),
+      'utf8',
+    )
     expect(text).not.toContain('`m:${')
     expect(text).not.toContain('`p:${')
   })

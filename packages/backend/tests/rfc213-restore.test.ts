@@ -27,7 +27,6 @@ import { tasks, workflows } from '../src/db/schema'
 import { createBackup } from '../src/services/backup'
 import {
   computeRestoreDirection,
-  restoreBackup,
   swapInDbFile,
   RestoreDowngradeError,
   RestoreIntegrityError,
@@ -40,6 +39,7 @@ import { hasPendingRestore } from '../src/services/pendingRestore'
 import { writePidFileForTest } from '../src/util/lock'
 import { appVersion } from '../src/util/version'
 import { extractTarGz, tarGz } from '../src/util/archive'
+import { restoreSqliteBackupForTest as restoreBackup } from './helpers/sqlitePostRestoreRecovery'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -513,7 +513,15 @@ describe('impl-gate P1-2 — --skip-integrity-check threads through to the post-
     // call must carry the flag (dropping it re-runs the gate the user just
     // explicitly skipped, aborting MID-restore with the DB already swapped).
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'restore.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'systemProviderRestore.ts',
+      ),
       'utf-8',
     )
     const call = src.slice(src.indexOf('// Forward-migrate the swapped-in DB'))

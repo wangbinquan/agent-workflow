@@ -8,7 +8,7 @@
 // rfc099-resource-routes 等既有套件承担；本锁做的是**装配路径在场性**——
 // 三路创建都必须穿过单一 ACL 初值函数。
 //
-//   ① workflow YAML 导入 → services/workflow.ts createWorkflow 单点；
+//   ① workflow YAML 导入 → Resource Catalog legacy workflow createWorkflow 单点；
 //   ② skill ZIP 导入 → skill-zip.ts 全部创建走 createManagedSkillWithFiles
 //     （skill.ts 内 initialPrivateResourceAcl ×2：reserve 与 recreate 两臂）；
 //   ③ bundle apply → resource-catalog aggregate adapter 的 plugin 铸造经 owner-bound
@@ -22,22 +22,24 @@ const src = (rel: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', 'services', rel), 'utf8')
 const moduleSrc = (rel: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', 'modules', rel), 'utf8')
+const legacyResourceSrc = (rel: string): string =>
+  moduleSrc(`resource-catalog/infrastructure/legacy/${rel}`)
 
 describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
   test('① workflow 创建（含 YAML 导入路）经 initialPrivateResourceAcl', () => {
-    const workflow = src('workflow.ts')
+    const workflow = legacyResourceSrc('workflow.ts')
     expect(workflow).toContain('initialPrivateResourceAcl(input.ownerUserId)')
     // 不得出现字面 public 初值铸造（visibility 字面量只允许出现在读取/比较侧）。
     expect(workflow.includes("visibility: 'public'")).toBe(false)
   })
 
   test('② skill ZIP 导入全部创建穿过 createManagedSkillWithFiles 单点', () => {
-    const zip = src('skill-zip.ts')
+    const zip = legacyResourceSrc('skill-zip.ts')
     expect(zip).toContain('createManagedSkillWithFiles')
     // zip 路自身不得另铸 ACL 初值（单点在 skill.ts）。
     expect(zip.includes('initialPrivateResourceAcl')).toBe(false)
     expect(zip.includes("visibility: 'public'")).toBe(false)
-    const skill = src('skill.ts')
+    const skill = legacyResourceSrc('skill.ts')
     expect((skill.match(/initialPrivateResourceAcl\(ownerUserId\)/g) ?? []).length).toBe(2)
   })
 

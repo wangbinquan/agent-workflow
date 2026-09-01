@@ -18,6 +18,7 @@ import { createInMemoryDb, type DbClient } from '@/db/client'
 import { scheduledTasks, webhookMrControlEffects } from '@/db/schema'
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
+import { createSqliteMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/sqliteMrTerminalControlPersistence'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import { pollAndClaim, runDueSchedulesOnce } from '@/services/scheduledTaskScheduler'
@@ -25,7 +26,10 @@ import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { createUser } from '@/services/users'
 import { createWorkflow } from '@/services/workflow'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { withIntegrationTriggerResources } from './helpers/integrationTriggerResourceBinding'
+import {
+  scheduledTaskRuntime,
+  withIntegrationTriggerResources,
+} from './helpers/integrationTriggerResourceBinding'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -67,7 +71,7 @@ describe('RFC-294 managed background compatibility', () => {
 
     let firstDaemonCalls = 0
     const first = new MrTerminalControlWorker(
-      db,
+      createSqliteMrTerminalEffectPersistence(db),
       guards(),
       {
         async apply() {
@@ -92,7 +96,7 @@ describe('RFC-294 managed background compatibility', () => {
 
     let secondDaemonCalls = 0
     const second = new MrTerminalControlWorker(
-      db,
+      createSqliteMrTerminalEffectPersistence(db),
       guards(),
       {
         async apply() {
@@ -124,7 +128,7 @@ describe('RFC-294 managed background compatibility', () => {
       },
     }
     const worker = new MrTerminalControlWorker(
-      db,
+      createSqliteMrTerminalEffectPersistence(db),
       guards(),
       participant,
       mintSourceTerminationEffectCapability,
@@ -181,7 +185,8 @@ describe('RFC-294 managed background compatibility', () => {
     })
 
     // Daemon A crashes after the durable claim and before invoking launch.
-    const claimedByA = await pollAndClaim(db, now, 1)
+    const operations = scheduledTaskRuntime(db).operations
+    const claimedByA = await pollAndClaim(operations, now, 1)
     expect(claimedByA.map((row) => row.id)).toEqual(['schedule-restart'])
 
     const launches: StartTask[] = []
@@ -191,7 +196,7 @@ describe('RFC-294 managed background compatibility', () => {
     }
     // Daemon B re-runs the due scan at the same logical time.  The prior slot
     // was at-most-once claimed, so it must not be fired twice.
-    const claimedByB = await runDueSchedulesOnce(db, {
+    const claimedByB = await runDueSchedulesOnce(operations, {
       now,
       buildLaunch,
       identityAccess: withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),

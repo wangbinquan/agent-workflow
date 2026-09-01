@@ -4,8 +4,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { buildMsgShardKey, type WorkgroupMessage } from '@agent-workflow/shared'
-import { resolveMessageTurnTriggerId } from '../src/services/workgroup/context'
-import { resolveMessageTurnTrigger } from '../src/services/workgroup/memberTurns'
+import { resolveMessageTurnTriggerId } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
+import { resolveMessageTurnTrigger } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/memberTurns'
 
 function message(
   id: string,

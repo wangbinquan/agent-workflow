@@ -15,14 +15,19 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
-import { getAgentResourceStatus } from '../src/services/agentResourceIntegrity'
-import { createMcp } from '../src/services/mcp'
+import { getAgentResourceStatus } from '../src/modules/resource-catalog/application/agents/agentResourceIntegrity'
+import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
 import { startWorkgroupTask, WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/launch'
 import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { composeSqliteAgentResourceInventorySource } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { directOperationAuthority } from '../src/routes/operationAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_RUNTIME = 'rfc228-opencode'
@@ -104,7 +109,16 @@ describe('RFC-228 Agent resource integrity', () => {
   })
 
   test('status shows names, masks hidden rows, and marks deleted rows without using the id as a name', async () => {
-    const mcp = await createMcp(
+    const resourceInventory = composeSqliteAgentResourceInventorySource({
+      db,
+      authorization: composeSqliteResourceCatalog({ db }).authorization,
+    })
+    const viewer = actor()
+    const authority = directOperationAuthority(
+      createIdentityAccessRuntime({ db }).directAuthority,
+      viewer,
+    )
+    const mcp = await createMcpFixture(
       db,
       {
         name: 'docs-server',
@@ -118,21 +132,21 @@ describe('RFC-228 Agent resource integrity', () => {
     await db.update(mcps).set({ visibility: 'public' }).where(eq(mcps.id, mcp.id))
     const root = await createAgent(db, agentInput('root', { mcp: [mcp.id] }))
 
-    const visible = await getAgentResourceStatus(db, actor(), root)
+    const visible = await getAgentResourceStatus(resourceInventory, authority, root)
     expect(visible).toMatchObject({
       ok: true,
       references: [{ kind: 'mcp', refId: mcp.id, name: 'docs-server', state: 'available' }],
     })
 
     await db.update(mcps).set({ visibility: 'private' }).where(eq(mcps.id, mcp.id))
-    const hidden = await getAgentResourceStatus(db, actor(), root)
+    const hidden = await getAgentResourceStatus(resourceInventory, authority, root)
     expect(hidden).toMatchObject({
       ok: true,
       references: [{ kind: 'mcp', refId: mcp.id, name: null, state: 'hidden' }],
     })
 
     await db.delete(mcps).where(eq(mcps.id, mcp.id))
-    const missing = await getAgentResourceStatus(db, actor(), root)
+    const missing = await getAgentResourceStatus(resourceInventory, authority, root)
     expect(missing).toMatchObject({
       ok: false,
       references: [{ kind: 'mcp', refId: mcp.id, name: null, state: 'missing' }],
@@ -142,12 +156,12 @@ describe('RFC-228 Agent resource integrity', () => {
 
   test('workflow and workgroup launch reject a stale member closure before host/task creation', async () => {
     const viewer = actor()
-    await createRuntime(db, {
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: VALID_RUNTIME,
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
     })
-    const mcp = await createMcp(
+    const mcp = await createMcpFixture(
       db,
       {
         name: 'required-mcp',

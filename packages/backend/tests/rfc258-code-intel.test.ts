@@ -24,10 +24,18 @@ import {
 } from '../src/services/structuralDiff/deep/scip'
 import { ScipIndexCache } from '../src/services/structuralDiff/deep/indexCache'
 import { worktreeSnapshotDigest } from '../src/services/codeIntel/snapshot'
-import { getCodeIntel } from '../src/services/codeIntel/codeIntel'
+import {
+  getCodeIntel as getCodeIntelWithPort,
+  type CodeIntelDeps,
+  type CodeIntelQuery,
+} from '../src/services/codeIntel/codeIntel'
+import { createSqliteCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead'
 import type { IndexerProbe } from '../src/services/structuralDiff/deep/indexers'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+const getCodeIntel = (db: DbClient, taskId: string, query: CodeIntelQuery, deps?: CodeIntelDeps) =>
+  getCodeIntelWithPort(createSqliteCodeWorkspaceRead(db), taskId, query, deps)
 
 const dirs: string[] = []
 afterAll(() => {

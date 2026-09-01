@@ -27,8 +27,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { eq } from 'drizzle-orm'
 import { agents, mcps, workflows } from '../src/db/schema'
 import { decodeZip } from '../src/services/skill-zip'
-import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { applyPackageSecretInputs } from '../src/services/resourcePackage/secretInputs'
+import { exportResourcePackage } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 技能内容在文件系统里（`${appHome}/skills/{id}/files/`），所以导出要 appHome。

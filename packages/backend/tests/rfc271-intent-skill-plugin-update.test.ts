@@ -18,9 +18,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
+import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { plugins, skills } from '../src/db/schema'
-import { copyOnlyTargetsFor } from '../src/services/intent/applyChangeset'
+import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants'
+import { createSqliteResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src', 'services', 'intent', 'applyChangeset.ts')
@@ -52,6 +54,22 @@ const actorOf = (id: string) =>
 /** manifest 里的一行：handle → 资源。 */
 const entry = (handle: string, resourceType: string, resourceId: string) =>
   ({ handle, resourceType, resourceId }) as never
+
+async function copyOnlyTargetsFor(
+  db: DbClient,
+  actor: Actor,
+  manifest: Parameters<typeof resolveIntentApplyResourcePreflight>[2],
+  changeset: Parameters<typeof resolveIntentApplyResourcePreflight>[3],
+) {
+  return (
+    await resolveIntentApplyResourcePreflight(
+      createSqliteResourceCatalogAclIdentityReadPort(db),
+      actor.user.id,
+      manifest,
+      changeset,
+    )
+  ).copyOnlyTargets
+}
 
 async function seedSkill(db: DbClient, ownerUserId: string): Promise<string> {
   const id = ulid()

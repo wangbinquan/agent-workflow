@@ -23,13 +23,13 @@ import { openDb, type DbClient } from '../src/db/client'
 import { workflows } from '../src/db/schema'
 import { createBackup } from '../src/services/backup'
 import {
-  applyPendingRestoreIfAny,
   clearPendingRestore,
   hasPendingRestore,
   listFailedRestores,
   readPendingRestore,
   stagePendingRestore,
 } from '../src/services/pendingRestore'
+import { applyPendingSqliteRestoreForTest as applyPendingRestoreIfAny } from './helpers/sqlitePostRestoreRecovery'
 import {
   RestoreDowngradeError,
   RestoreIntegrityError,

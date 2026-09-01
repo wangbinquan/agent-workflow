@@ -40,8 +40,9 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users, workgroups } from '../src/db/schema'
 import { commitResourcePackage } from '../src/services/resourcePackage/commit'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
-import { buildPackagePreview, verifyPreviewToken } from '../src/services/resourcePackage/preview'
+import { verifyPreviewToken } from '../src/services/resourcePackage/preview'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
+import { buildPackagePreview } from './helpers/resourcePackageProvider'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(randomBytes(32))

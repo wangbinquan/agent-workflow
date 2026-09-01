@@ -20,7 +20,10 @@ describe('RFC-257 · source locks', () => {
   })
 
   test('webhookDispatch launches only via the executor facade', () => {
-    const text = readFileSync(resolve(SRC, 'services/webhook/webhookDispatch.ts'), 'utf8')
+    const text = readFileSync(
+      resolve(SRC, 'modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts'),
+      'utf8',
+    )
     expect(text.includes("from '@/services/execution/executor'")).toBe(true)
     for (const banned of ["from '@/services/task'", "from '@/services/agentLaunch'"]) {
       expect(text.includes(banned)).toBe(false)
@@ -31,9 +34,12 @@ describe('RFC-257 · source locks', () => {
     // RFC-339 后 publication transport 已在 bootstrap 组装进同一个 driver；
     // Webhook 必须显式传入该 driver 与 SecretBox，不得在启动时另组 topology
     // 或丢失密封凭据能力。
-    const text = readFileSync(resolve(SRC, 'services/webhook/webhookDispatch.ts'), 'utf8')
+    const text = readFileSync(
+      resolve(SRC, 'modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts'),
+      'utf8',
+    )
     expect(text.replace(/\s+/g, '')).toContain(
-      'buildStartTaskDeps(deps.db,requireSchedulerDriver(deps.schedulerDriver),deps.configPath,actor.user.id,deps.secretBox,deps.identityAccess,)',
+      'buildStartTaskDeps(input.db,requireSchedulerDriver(input.schedulerDriver),input.configPath,actor.user.id,input.secretBox,input.identityAccess,)',
     )
     expect(text).not.toContain('actor.user.id, undefined)')
   })

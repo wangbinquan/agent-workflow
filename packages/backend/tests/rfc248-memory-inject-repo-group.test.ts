@@ -19,6 +19,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
 import { loadInjectableMemories } from '../src/services/memoryInject'
+import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -60,7 +61,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
     seedMemory('repo', fe, 'FE-RULE')
     seedMemory('repo', be, 'BE-RULE')
 
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [fe, be],
@@ -77,7 +78,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
     seedMemory('repo_group', groupId, 'GROUP-RULE')
     seedMemory('repo', fe, 'FE-RULE')
 
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [fe],
@@ -94,7 +95,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
     seedMemory('repo_group', mine, 'MINE')
     seedMemory('repo_group', other, 'OTHER')
 
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [fe],
@@ -112,7 +113,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
         VALUES (${ulid()}, 'repo_group', ${groupId}, ${'NO-' + st}, 'b', '[]', ${st}, 'manual', ${Date.now()}, 1)
       `)
     }
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -124,7 +125,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
   test('删组把记忆置 archived ⇒ 注入立即停止（G5 的闭环验证）', async () => {
     const groupId = ulid()
     seedMemory('repo_group', groupId, 'RULE')
-    const before = await loadInjectableMemories(db, {
+    const before = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -133,7 +134,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
     expect(before.byScope.repoGroup).toHaveLength(1)
 
     db.run(sql`UPDATE memories SET status='archived' WHERE scope_type='repo_group'`)
-    const after = await loadInjectableMemories(db, {
+    const after = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -144,7 +145,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
 
   test('空 repoIds 跳过 repo 档（scratch 任务）', async () => {
     seedMemory('global', null, 'G')
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       repoIds: [],
@@ -157,7 +158,7 @@ describe('RFC-248 D4 —— 仓库组记忆注入', () => {
   test('同一个仓在组里出现两次（D14）不会把它的记忆注入两遍', async () => {
     const app = seedRepo('app')
     seedMemory('repo', app, 'APP-RULE')
-    const set = await loadInjectableMemories(db, {
+    const set = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId: null,
       // 调用方已去重，但即便没去重，IN (...) 也只会命中一次行。

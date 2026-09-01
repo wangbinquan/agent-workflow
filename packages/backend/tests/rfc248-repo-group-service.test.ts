@@ -26,6 +26,10 @@ import {
   repoGroupNodesFromAttachments,
   type RepoGroupAttachmentSpec,
 } from './helpers/repoGroupFixture'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  type RepositoryWorkspaceStore,
+} from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -86,16 +90,6 @@ function makeRepo(db: DbClient, slug: string): string {
   return id
 }
 
-function codeOf(fn: () => unknown): string {
-  try {
-    fn()
-  } catch (err) {
-    if (err instanceof DomainError) return err.code
-    return `unexpected:${String(err)}`
-  }
-  return 'no-throw'
-}
-
 async function codeOfAsync(fn: () => Promise<unknown>): Promise<string> {
   try {
     await fn()
@@ -108,15 +102,17 @@ async function codeOfAsync(fn: () => Promise<unknown>): Promise<string> {
 
 describe('RFC-248 repo group service', () => {
   let db: DbClient
+  let store: RepositoryWorkspaceStore
   let appRepo: string
   let sdkRepo: string
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    store = composeSqliteRepositoryWorkspaceStore(db)
     appRepo = makeRepo(db, 'app')
     sdkRepo = makeRepo(db, 'sdk')
   })
 
-  const deps = () => ({ db })
+  const deps = () => ({ store })
 
   test('建组：挂载路径在落库前就被规范化', async () => {
     const g = await createRepoGroup(
@@ -333,7 +329,7 @@ describe('RFC-248 repo group service', () => {
       },
       null,
     )
-    const layout = getRepoGroupLayoutResponse(db, outer.id)
+    const layout = await getRepoGroupLayoutResponse(store, outer.id)
     expect(layout.totalRepos).toBe(2)
     expect(layout.maxDepth).toBe(1)
     expect(layout.repos.map((r) => r.mountPath)).toEqual(['', 'base'])
@@ -512,18 +508,19 @@ describe('RFC-248 repo group service', () => {
     )
     let caught: unknown
     try {
-      deleteRepoGroup(db, inner.id)
+      await deleteRepoGroup(store, inner.id)
     } catch (err) {
       caught = err
     }
     expect(caught).toBeInstanceOf(RepoGroupHasReferencesError)
     expect((caught as RepoGroupHasReferencesError).referencingGroups[0]?.name).toBe('outer')
 
-    const r = deleteRepoGroup(db, inner.id, { force: true })
+    const r = await deleteRepoGroup(store, inner.id, { force: true })
     expect(r.detachedReferences).toBe(1)
-    expect(listRepoGroups(db).map((g) => g.name)).toEqual(['outer'])
+    expect((await listRepoGroups(store)).map((g) => g.name)).toEqual(['outer'])
     // 外层组与原目录都保留，只解除那个挂载。
-    const outer = getRepoGroup(db, listRepoGroups(db)[0]!.id)
+    const outerGroups = await listRepoGroups(store)
+    const outer = await getRepoGroup(store, outerGroups[0]!.id)
     expect(outer.nodes.every((node) => node.attachment === null)).toBe(true)
     expect(outer.nodes).toEqual([
       { path: '', attachment: null },
@@ -556,9 +553,9 @@ describe('RFC-248 repo group service', () => {
         VALUES (${ulid()}, 'repo_group', ${g.id}, ${title}, 'b', '[]', 'approved', 'manual', ${Date.now()}, 1)
       `)
     }
-    expect(getRepoGroup(db, g.id).boundMemories).toBe(2)
+    expect((await getRepoGroup(store, g.id)).boundMemories).toBe(2)
 
-    const r = deleteRepoGroup(db, g.id)
+    const r = await deleteRepoGroup(store, g.id)
     expect(r.archivedMemories).toBe(2)
     // 不硬删——用户知识保住了。
     const rows = db.select().from(memories).all()
@@ -596,8 +593,8 @@ describe('RFC-248 repo group service', () => {
       INSERT INTO memories (id, scope_type, scope_id, title, body_md, tags, status, source_kind, created_at, version)
       VALUES (${ulid()}, 'repo_group', ${g.id}, 'old', 'b', '[]', 'archived', 'manual', ${Date.now()}, 1)
     `)
-    expect(getRepoGroup(db, g.id).boundMemories).toBe(0)
-    expect(deleteRepoGroup(db, g.id).archivedMemories).toBe(0)
+    expect((await getRepoGroup(store, g.id)).boundMemories).toBe(0)
+    expect((await deleteRepoGroup(store, g.id)).archivedMemories).toBe(0)
   })
 
   test('D13 删仓守卫：groupsReferencingRepo 去重，detach 摘干净', async () => {
@@ -646,11 +643,11 @@ describe('RFC-248 repo group service', () => {
       },
       null,
     )
-    const refs = groupsReferencingRepo(db, appRepo)
+    const refs = await groupsReferencingRepo(store, appRepo)
     expect(refs.map((r) => r.name).sort()).toEqual(['g1', 'g2'])
-    expect(detachRepoFromAllGroups(db, appRepo)).toBe(3) // g1 两行 + g2 一行
-    expect(groupsReferencingRepo(db, appRepo)).toEqual([])
-    const detached = getRepoGroup(db, g1.id)
+    expect(await detachRepoFromAllGroups(store, appRepo)).toBe(3) // g1 两行 + g2 一行
+    expect(await groupsReferencingRepo(store, appRepo)).toEqual([])
+    const detached = await getRepoGroup(store, g1.id)
     expect(detached.nodes.every((node) => node.attachment === null)).toBe(true)
     expect(detached.nodes).toEqual([
       { path: '', attachment: null },
@@ -715,11 +712,13 @@ describe('RFC-248 repo group service', () => {
       })
       .run()
 
-    const items = listRepoGroups(db)
+    const items = await listRepoGroups(store)
     expect(items).toHaveLength(2)
     expect(items.every((i) => i.flatRepoCount === 0)).toBe(true)
     // 但真去展平时必须给出具体错误，而不是空布局。
-    expect(codeOf(() => getRepoGroupLayoutResponse(db, g1.id))).toBe('repo-group-cycle')
+    expect(await codeOfAsync(() => getRepoGroupLayoutResponse(store, g1.id))).toBe(
+      'repo-group-cycle',
+    )
   })
 
   // ── 设计门二轮 P1 回归锁 ───────────────────────────────────────────────
@@ -757,7 +756,7 @@ describe('RFC-248 repo group service', () => {
       ),
     )
     expect(code).toBe('mount-path-duplicate')
-    expect(listRepoGroups(db)).toHaveLength(0)
+    expect(await listRepoGroups(store)).toHaveLength(0)
     expect(db.select().from(repoGroupNodes).all()).toHaveLength(0)
   })
 
@@ -805,7 +804,7 @@ describe('RFC-248 repo group service', () => {
       }),
     )
     expect(code).toBe('mount-path-duplicate')
-    const after = getRepoGroup(db, g.id)
+    const after = await getRepoGroup(store, g.id)
     expect(after.version).toBe(1) // 没有自增
     expect(after.description).toBe('') // 没被改
     expect(after.nodes.filter((node) => node.attachment !== null)).toHaveLength(1)
@@ -868,7 +867,7 @@ describe('RFC-248 repo group service', () => {
       ),
     )
     expect(code).toBe('resource-operation-stale')
-    const after = getRepoGroup(db, g.id)
+    const after = await getRepoGroup(store, g.id)
     expect(after.description).toBe('别人的改动') // 没被静默覆盖
     expect(after.version).toBe(2)
   })
@@ -905,9 +904,9 @@ describe('RFC-248 repo group service', () => {
               'some-skill', ${ulid()})
     `)
     // boundMemories 只数可归档的那条。
-    expect(getRepoGroup(db, g.id).boundMemories).toBe(1)
+    expect((await getRepoGroup(store, g.id)).boundMemories).toBe(1)
 
-    const r = deleteRepoGroup(db, g.id)
+    const r = await deleteRepoGroup(store, g.id)
     expect(r.archivedMemories).toBe(1)
     const rows = db.select().from(memories).all()
     expect(rows).toHaveLength(2)
@@ -916,8 +915,8 @@ describe('RFC-248 repo group service', () => {
     expect(rows.filter((m) => m.status === 'archived')).toHaveLength(1)
   })
 
-  test('删不存在的组 → 404', () => {
-    expect(codeOf(() => deleteRepoGroup(db, 'nope'))).toBe('repo-group-not-found')
+  test('删不存在的组 → 404', async () => {
+    expect(await codeOfAsync(() => deleteRepoGroup(store, 'nope'))).toBe('repo-group-not-found')
   })
 
   test('删组级联清掉自己的成员行', async () => {
@@ -939,7 +938,7 @@ describe('RFC-248 repo group service', () => {
       },
       null,
     )
-    deleteRepoGroup(db, g.id)
+    await deleteRepoGroup(store, g.id)
     expect(db.select().from(repoGroupNodes).all()).toHaveLength(0)
     expect(db.select().from(repoGroups).all()).toHaveLength(0)
   })

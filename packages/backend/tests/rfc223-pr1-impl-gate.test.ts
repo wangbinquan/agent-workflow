@@ -24,8 +24,9 @@ import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, mcps, plugins, skills } from '../src/db/schema'
 import { createApp } from '../src/server'
-import { createMcp } from '../src/services/mcp'
+import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -44,7 +45,7 @@ async function buildHarness(): Promise<Harness> {
   // suite predates that product boundary and isolates RFC-223 identity/ACL
   // behavior, so use an explicit non-OpenCode runtime rather than weakening
   // the production save gate or silently skipping the affected assertions.
-  await createRuntime(db, {
+  await createRuntime(runtimeRegistryPersistence(db), {
     name: 'rfc223-identity-fixture',
     protocol: 'claude-code',
   })
@@ -196,7 +197,7 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
   })
 
   test('referencing a private resource (invisible) → 422 acl-missing-refs, id NEVER persisted', async () => {
-    const m = await createMcp(
+    const m = await createMcpFixture(
       h.db,
       {
         name: 'secret-mcp',
@@ -249,7 +250,7 @@ describe('RFC-223 PR-1 P1-2 — ACL bound to resolved id, grandfathering by id',
   })
 
   test('adding a genuinely NEW invisible ref on update is still rejected', async () => {
-    const m = await createMcp(
+    const m = await createMcpFixture(
       h.db,
       {
         name: 'other-secret',
@@ -284,7 +285,7 @@ describe('RFC-223 PR-1 P2-2 — ACL refusal echoes the INPUT token, never a priv
   })
 
   test('referencing a private mcp BY ID echoes the id, never leaks its name', async () => {
-    const m = await createMcp(
+    const m = await createMcpFixture(
       h.db,
       {
         name: 'top-secret-name',
@@ -310,7 +311,7 @@ describe('RFC-223 PR-1 P2-2 — ACL refusal echoes the INPUT token, never a priv
   })
 
   test('referencing a private mcp echoes the canonical id the caller supplied', async () => {
-    const m = await createMcp(
+    const m = await createMcpFixture(
       h.db,
       {
         name: 'typed-secret',
@@ -339,7 +340,7 @@ describe('RFC-223 PR-1 P2-1 — closure endpoint projects id refs to display NAM
 
   test('managed skill / mcp / plugin ids render as NAMES, not ULIDs', async () => {
     await seedSkill(h.db, 'SKID', 'code-review', 'public', h.alice.id)
-    const m = await createMcp(
+    const m = await createMcpFixture(
       h.db,
       {
         name: 'git-mcp',
@@ -379,7 +380,7 @@ describe('RFC-223 PR-1 P2-1 — closure endpoint projects id refs to display NAM
 
   test('resource refs that become private stay opaque instead of leaking display names', async () => {
     await seedSkill(h.db, 'PRIVATE_SKILL_ID', 'private-skill-name', 'public', h.alice.id)
-    const mcp = await createMcp(
+    const mcp = await createMcpFixture(
       h.db,
       {
         name: 'private-mcp-name',

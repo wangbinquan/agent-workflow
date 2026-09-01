@@ -28,6 +28,7 @@ import {
   selectDueRepos,
   startSubmoduleRefreshLoop,
 } from '@/services/submoduleRefresh'
+import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_800_000_000_000
@@ -55,7 +56,7 @@ describe('RFC-210 background refresh — repo selection', () => {
       { id: 'stale', fetchedAt: NOW - DAY, autoRefreshAt: NOW - 12 * 60 * 60 * 1000 },
       { id: 'fresh', fetchedAt: NOW - DAY, autoRefreshAt: NOW - 60_000 },
     ])
-    const due = await selectDueRepos(db, {
+    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       now: NOW,
       intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
       onlyRecentDays: DEFAULT_ONLY_RECENT_DAYS,
@@ -70,7 +71,7 @@ describe('RFC-210 background refresh — repo selection', () => {
       // Untouched for a year: refreshing it forever serves nobody.
       { id: 'abandoned', fetchedAt: NOW - 365 * DAY, autoRefreshAt: null },
     ])
-    const due = await selectDueRepos(db, {
+    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       now: NOW,
       intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
       onlyRecentDays: DEFAULT_ONLY_RECENT_DAYS,
@@ -81,13 +82,13 @@ describe('RFC-210 background refresh — repo selection', () => {
   test('the recency window is configurable', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, [{ id: 'r', fetchedAt: NOW - 40 * DAY, autoRefreshAt: null }])
-    const narrow = await selectDueRepos(db, {
+    const narrow = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       now: NOW,
       intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
       onlyRecentDays: 30,
     })
     expect(narrow).toHaveLength(0)
-    const wide = await selectDueRepos(db, {
+    const wide = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
       now: NOW,
       intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
       onlyRecentDays: 90,
@@ -100,7 +101,9 @@ describe('RFC-210 background refresh — tick behaviour', () => {
   test('disabled config makes the tick a no-op that touches nothing', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, [{ id: 'r', fetchedAt: NOW - DAY, autoRefreshAt: null }])
-    const res = await refreshDueRepos(db, { submoduleAutoRefresh: { enabled: false } })
+    const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
+      submoduleAutoRefresh: { enabled: false },
+    })
     expect(res).toEqual({ refreshed: 0, failed: 0 })
     const row = (await db.all(
       sql`SELECT last_auto_refresh_at AS a FROM cached_repos WHERE id='r'`,
@@ -113,7 +116,9 @@ describe('RFC-210 background refresh — tick behaviour', () => {
     // broken repo must not abort the whole sweep.
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, [{ id: 'gone', fetchedAt: NOW - DAY, autoRefreshAt: null }])
-    const res = await refreshDueRepos(db, { submoduleAutoRefresh: { enabled: true } })
+    const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
+      submoduleAutoRefresh: { enabled: true },
+    })
     expect(res.failed).toBe(1)
     expect(res.refreshed).toBe(0)
     // Still stamped, so a permanently broken repo cannot spin every tick.
@@ -126,7 +131,9 @@ describe('RFC-210 background refresh — tick behaviour', () => {
   test('nothing due ⟹ no writes at all', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, [{ id: 'fresh', fetchedAt: NOW - DAY, autoRefreshAt: Date.now() }])
-    const res = await refreshDueRepos(db, { submoduleAutoRefresh: { enabled: true } })
+    const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
+      submoduleAutoRefresh: { enabled: true },
+    })
     expect(res).toEqual({ refreshed: 0, failed: 0 })
   })
 })
@@ -136,7 +143,7 @@ describe('RFC-210 background refresh — loop contract', () => {
     const db = createInMemoryDb(MIGRATIONS)
     let ticks = 0
     const loop = startSubmoduleRefreshLoop(
-      db,
+      composeSqliteRepositoryWorkspaceStore(db),
       () => {
         ticks += 1
         return { submoduleAutoRefresh: { enabled: false } }
@@ -157,7 +164,7 @@ describe('RFC-210 background refresh — loop contract', () => {
     let ticks = 0
     let enabled = true
     const loop = startSubmoduleRefreshLoop(
-      db,
+      composeSqliteRepositoryWorkspaceStore(db),
       () => {
         ticks += 1
         return {
