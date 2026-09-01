@@ -59,7 +59,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
   }
 
   return {
-    create(input) {
+    async create(input) {
       db.insert(customEventSourceDefinitions)
         .values({
           id: input.id,
@@ -80,7 +80,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
       )
     },
 
-    get(id) {
+    async get(id) {
       const row = db
         .select()
         .from(customEventSourceDefinitions)
@@ -89,7 +89,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
       return row === undefined ? null : record(row)
     },
 
-    list() {
+    async list() {
       return db
         .select()
         .from(customEventSourceDefinitions)
@@ -101,7 +101,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
         .map(record)
     },
 
-    update(input) {
+    async update(input) {
       const changed = db
         .update(customEventSourceDefinitions)
         .set({ draftJson: JSON.stringify(input.draft), updatedAt: input.now })
@@ -121,7 +121,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
       return row === undefined ? null : record(row)
     },
 
-    publish(input) {
+    async publish(input) {
       db.transaction((tx) => {
         const current = tx
           .select()
@@ -187,7 +187,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
       }
     },
 
-    retire(id, now) {
+    async retire(id, now) {
       const result = db
         .update(customEventSourceDefinitions)
         .set({ retiredAt: now, updatedAt: now })
@@ -201,7 +201,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
       return (result as unknown as { changes?: number }).changes === 1
     },
 
-    getPublished(ref) {
+    async getPublished(ref) {
       const row = db
         .select()
         .from(customEventSourceRevisions)
@@ -221,7 +221,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
       } satisfies PublishedCustomEventSource
     },
 
-    acceptsNewSubscriptions(ref) {
+    async acceptsNewSubscriptions(ref) {
       const definition = db
         .select({ retiredAt: customEventSourceDefinitions.retiredAt })
         .from(customEventSourceDefinitions)

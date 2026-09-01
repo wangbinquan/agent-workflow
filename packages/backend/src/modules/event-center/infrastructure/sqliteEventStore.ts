@@ -195,7 +195,7 @@ function rotatingSubjectBatch(
 
 export function createSqliteEventStore(db: DbClient): EventStorePort {
   return {
-    registerSource(descriptor, digest, now) {
+    async registerSource(descriptor, digest, now) {
       const existing = db
         .select({ digest: eventSources.descriptorDigest })
         .from(eventSources)
@@ -221,7 +221,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         .run()
     },
 
-    registerEventType(descriptor, digest, now) {
+    async registerEventType(descriptor, digest, now) {
       const existing = db
         .select({
           descriptorJson: eventTypeCatalog.descriptorJson,
@@ -264,14 +264,14 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         .run()
     },
 
-    getSource(ref) {
+    async getSource(ref) {
       const row = db.select().from(eventSources).where(sourceWhere(ref)).get()
       return row === undefined
         ? null
         : eventSourceDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown)
     },
 
-    getEventType(ref) {
+    async getEventType(ref) {
       const row = db.select().from(eventTypeCatalog).where(typeWhere(ref)).get()
       if (row === undefined) return null
       const descriptor = eventTypeDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown)
@@ -283,7 +283,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       })
     },
 
-    listSources() {
+    async listSources() {
       return db
         .select()
         .from(eventSources)
@@ -293,7 +293,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         .map((row) => eventSourceDescriptorSchema.parse(JSON.parse(row.descriptorJson) as unknown))
     },
 
-    listEventTypes() {
+    async listEventTypes() {
       return db
         .select()
         .from(eventTypeCatalog)
@@ -313,7 +313,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         })
     },
 
-    subscribe(input) {
+    async subscribe(input) {
       const existing = db
         .select()
         .from(eventSubscriptions)
@@ -464,7 +464,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       })
     },
 
-    cancelSubscription(id, now) {
+    async cancelSubscription(id, now) {
       const current = db
         .select()
         .from(eventSubscriptions)
@@ -535,7 +535,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       })
     },
 
-    nudgeObserver(sourceRef, now) {
+    async nudgeObserver(sourceRef, now) {
       return (
         changes(
           db
@@ -558,7 +558,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       )
     },
 
-    listSubscriptions(subscriberRef) {
+    async listSubscriptions(subscriberRef) {
       const subscriberCondition =
         subscriberRef === undefined
           ? sql`1 = 1`
@@ -572,7 +572,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         .map(subscriptionRecord)
     },
 
-    listSubscriptionPage(input) {
+    async listSubscriptionPage(input) {
       const where = and(
         eq(eventSubscriptions.mode, 'exact'),
         ...(input.subscriberRef === undefined
@@ -596,7 +596,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       return { items, total }
     },
 
-    activeSubscriptionCountsBySource() {
+    async activeSubscriptionCountsBySource() {
       return new Map(
         db
           .select({
@@ -612,7 +612,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       )
     },
 
-    recordObservation(input) {
+    async recordObservation(input) {
       const existing = db
         .select({ id: eventRecords.id })
         .from(eventRecords)
@@ -768,7 +768,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       })
     },
 
-    listPendingDeliveries(subscriber, limit) {
+    async listPendingDeliveries(subscriber, limit) {
       return db
         .select({
           deliveryId: eventDeliveries.id,
@@ -826,7 +826,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         })
     },
 
-    listDeliveryStatusPage(input) {
+    async listDeliveryStatusPage(input) {
       const where = and(
         ...(input.state === undefined ? [] : [eq(eventDeliveries.state, input.state)]),
         ...(input.subscriberRef === undefined
@@ -891,7 +891,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       return { items, total }
     },
 
-    listEventRecordPage(input) {
+    async listEventRecordPage(input) {
       const where = and(
         eq(eventTypeCatalog.catalogVisibility, 'public'),
         ...(input.sourceId === undefined ? [] : [eq(eventRecords.sourceId, input.sourceId)]),
@@ -950,7 +950,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       return { items, total }
     },
 
-    acceptDelivery(deliveryId, now) {
+    async acceptDelivery(deliveryId, now) {
       const result = db
         .update(eventDeliveries)
         .set({
@@ -972,7 +972,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       )
     },
 
-    claimNotificationDelivery(input) {
+    async claimNotificationDelivery(input) {
       if (input.subscriberKinds.length === 0) return null
       const due = or(
         and(eq(eventDeliveries.state, 'pending'), lte(eventDeliveries.nextAttemptAt, input.now)),
@@ -1016,7 +1016,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       return null
     },
 
-    settleNotificationDelivery(input) {
+    async settleNotificationDelivery(input) {
       const terminal = input.state !== 'pending'
       const result = db
         .update(eventDeliveries)
@@ -1035,13 +1035,14 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
             eq(eventDeliveries.id, input.deliveryId),
             eq(eventDeliveries.state, 'claimed'),
             eq(eventDeliveries.claimedBy, input.leaseOwner),
+            eq(eventDeliveries.attemptCount, input.attemptCount),
           ),
         )
         .run()
       return changes(result) === 1
     },
 
-    listObserverActivations() {
+    async listObserverActivations() {
       return db
         .select()
         .from(observerActivations)
@@ -1050,7 +1051,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         .map(activationRecord)
     },
 
-    claimDueObserver(input) {
+    async claimDueObserver(input) {
       const candidates = db
         .select()
         .from(observerActivations)
@@ -1175,7 +1176,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
       return null
     },
 
-    settleObserver(input) {
+    async settleObserver(input) {
       return db.transaction((tx) => {
         const activation = tx
           .select()

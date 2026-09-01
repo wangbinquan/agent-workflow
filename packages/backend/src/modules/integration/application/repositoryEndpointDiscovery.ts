@@ -35,7 +35,9 @@ function headersFor(provider: CodeHostProvider, token: string): Record<string, s
 }
 
 export function createRepositoryEndpointDiscovery(input: {
-  readonly resolveConnection: (provider: CodeHostProvider) => RepositoryEndpointConnection | null
+  readonly resolveConnection: (
+    provider: CodeHostProvider,
+  ) => RepositoryEndpointConnection | null | Promise<RepositoryEndpointConnection | null>
   readonly fetchImpl?: RepositoryEndpointFetch
 }) {
   return {
@@ -44,7 +46,7 @@ export function createRepositoryEndpointDiscovery(input: {
       readonly project: string
       readonly connectionGeneration: string
     }) {
-      const connection = input.resolveConnection(request.provider)
+      const connection = await input.resolveConnection(request.provider)
       if (
         connection === null ||
         connection.provider !== request.provider ||

@@ -17,16 +17,21 @@ export interface ProtectedMrLaunchGuard {
   readonly id: string
   readonly signal: AbortSignal
   readonly snapshot: SourceTerminationSnapshot
-  /** Second durable gate. Safe to call both before materialization and in the task INSERT tx. */
+  /**
+   * Process-local final guard used by the legacy task INSERT callback.  The
+   * provider-neutral durable check is `verifyCanCommit`; bootstrap must run it
+   * immediately before handing control to the task owner.
+   */
   assertCanCommit(): void
-  taskCommitted(taskId: string): void
-  launchSettled(taskId: string): void
-  failed(errorCode: string): void
+  verifyCanCommit(): Promise<void>
+  taskCommitted(taskId: string): Promise<void>
+  launchSettled(taskId: string): Promise<void>
+  failed(errorCode: string): Promise<void>
   release(): void
 }
 
 export interface MrTerminalControl {
-  reserveLaunch(input: ProtectedMrLaunchGuardInput): ProtectedMrLaunchGuard
+  reserveLaunch(input: ProtectedMrLaunchGuardInput): Promise<ProtectedMrLaunchGuard>
   /** Wake is idempotent; effectId only narrows the first scan. */
   wake(effectId?: string | null): void
   /** Boot barrier: reconcile stale guards and drain every currently due effect. */

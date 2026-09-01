@@ -108,6 +108,7 @@ export class EventCenterService {
   readonly #workerId: string
   readonly #observerLeaseMs: number
   readonly #deliveryLeaseMs: number
+  readonly #typePackageDescriptorJsons: readonly string[]
 
   constructor(deps: EventCenterServiceDependencies) {
     this.#store = deps.store
@@ -122,8 +123,11 @@ export class EventCenterService {
     this.#workerId = deps.workerId ?? `event-center-${ulid()}`
     this.#observerLeaseMs = deps.observerLeaseMs ?? 60_000
     this.#deliveryLeaseMs = deps.deliveryLeaseMs ?? 60_000
+    this.#typePackageDescriptorJsons = deps.typePackageDescriptorJsons
+  }
 
-    for (const descriptorJson of deps.typePackageDescriptorJsons) {
+  async initialize(): Promise<void> {
+    for (const descriptorJson of this.#typePackageDescriptorJsons) {
       const catalog = packageEventCatalogSchema.parse(JSON.parse(descriptorJson) as unknown)
       const now = this.#now()
       for (const source of catalog.eventSources) {
@@ -138,7 +142,7 @@ export class EventCenterService {
           pollIntervalMs: source.pollIntervalMs,
           batchSize: source.batchSize,
         })
-        this.#store.registerSource(descriptor, eventContentDigest(descriptor), now)
+        await this.#store.registerSource(descriptor, eventContentDigest(descriptor), now)
       }
       for (const eventType of catalog.eventTypes) {
         const descriptor = eventTypeDescriptorSchema.parse({
@@ -157,17 +161,17 @@ export class EventCenterService {
             : { catalogVisibility: eventType.catalogVisibility }),
           triggerParameters: eventType.triggerParameters ?? null,
         })
-        if (this.#store.getSource(descriptor.sourceRef) === null) {
+        if ((await this.#store.getSource(descriptor.sourceRef)) === null) {
           throw new Error(
             `event type ${descriptor.eventTypeRef.id} references missing source ${descriptor.sourceRef.id}@${descriptor.sourceRef.revision}`,
           )
         }
-        this.#store.registerEventType(descriptor, eventTypeContentDigest(descriptor), now)
+        await this.#store.registerEventType(descriptor, eventTypeContentDigest(descriptor), now)
       }
     }
   }
 
-  subscribe(input: unknown) {
+  async subscribe(input: unknown) {
     const parsed = z
       .object({
         eventTypeRef: eventExactRefSchema,
@@ -177,7 +181,7 @@ export class EventCenterService {
       })
       .strict()
       .parse(input)
-    const eventType = this.#store.getEventType(parsed.eventTypeRef)
+    const eventType = await this.#store.getEventType(parsed.eventTypeRef)
     if (eventType === null) {
       throw new NotFoundError(
         'event-type-not-found',
@@ -190,17 +194,17 @@ export class EventCenterService {
         `${eventType.eventTypeRef.id} expects ${eventType.subjectTypeId}`,
       )
     }
-    const source = this.#store.getSource(eventType.sourceRef)
+    const source = await this.#store.getSource(eventType.sourceRef)
     if (source === null) {
       throw new NotFoundError('event-source-not-found', 'event source is unavailable')
     }
-    if (!this.#customSources.acceptsNewSubscriptions(source.sourceRef)) {
+    if (!(await this.#customSources.acceptsNewSubscriptions(source.sourceRef))) {
       throw new ConflictError(
         'event-source-retired',
         `event source is retired: ${source.sourceRef.id}@${source.sourceRef.revision}`,
       )
     }
-    const result = this.#store.subscribe({
+    const result = await this.#store.subscribe({
       id: this.#id(),
       eventType,
       source,
@@ -217,12 +221,12 @@ export class EventCenterService {
     } as const
   }
 
-  unsubscribe(subscriptionId: string) {
-    const result = this.#store.cancelSubscription(subscriptionId, this.#now())
+  async unsubscribe(subscriptionId: string) {
+    const result = await this.#store.cancelSubscription(subscriptionId, this.#now())
     if (result === null) {
-      const existing = this.#store
-        .listSubscriptions()
-        .find((subscription) => subscription.id === subscriptionId)
+      const existing = (await this.#store.listSubscriptions()).find(
+        (subscription) => subscription.id === subscriptionId,
+      )
       if (existing === undefined) {
         throw new NotFoundError(
           'event-subscription-not-found',
@@ -242,9 +246,9 @@ export class EventCenterService {
     } as const
   }
 
-  nudgeSource(input: unknown): boolean {
+  async nudgeSource(input: unknown): Promise<boolean> {
     const sourceRef = eventExactRefSchema.parse(input)
-    const source = this.#store.getSource(sourceRef)
+    const source = await this.#store.getSource(sourceRef)
     if (source === null) {
       throw new NotFoundError(
         'event-source-not-found',
@@ -257,10 +261,10 @@ export class EventCenterService {
         `event source is passive: ${sourceRef.id}@${sourceRef.revision}`,
       )
     }
-    return this.#store.nudgeObserver(sourceRef, this.#now())
+    return await this.#store.nudgeObserver(sourceRef, this.#now())
   }
 
-  observe(input: EventObservationInput) {
+  async observe(input: EventObservationInput) {
     let routingFacts: unknown = null
     if (input.routingFactsJson !== undefined && input.routingFactsJson !== null) {
       try {
@@ -274,7 +278,7 @@ export class EventCenterService {
     }
     const { routingFactsJson: _routingFactsJson, ...transport } = input
     const observation = eventObservationSchema.parse({ ...transport, routingFacts })
-    const eventType = this.#store.getEventType(observation.eventTypeRef)
+    const eventType = await this.#store.getEventType(observation.eventTypeRef)
     if (eventType === null) {
       throw new NotFoundError('event-type-not-found', 'event type is unavailable')
     }
@@ -293,44 +297,43 @@ export class EventCenterService {
         `${eventType.eventTypeRef.id} expects ${eventType.subjectTypeId}`,
       )
     }
-    return this.#store.recordObservation({
+    return await this.#store.recordObservation({
       eventId: this.#id(),
       observation,
       eventType,
       observedAt: this.#now(),
       nextId: this.#id,
-      routingSubscriptions: this.#matchedRoutingSubscriptions(observation),
+      routingSubscriptions: await this.#matchedRoutingSubscriptions(observation),
       triggerContext: this.#triggerContext(eventType, observation),
     })
   }
 
-  pendingDeliveries(input: unknown, limit: number) {
+  async pendingDeliveries(input: unknown, limit: number) {
     const subscriber = eventSubscriberSchema.parse(input)
-    return this.#store.listPendingDeliveries(subscriber, limit)
+    return await this.#store.listPendingDeliveries(subscriber, limit)
   }
 
-  acceptDelivery(deliveryId: string): void {
-    if (!this.#store.acceptDelivery(deliveryId, this.#now())) {
+  async acceptDelivery(deliveryId: string): Promise<void> {
+    if (!(await this.#store.acceptDelivery(deliveryId, this.#now()))) {
       throw new NotFoundError('event-delivery-not-found', `event delivery not found: ${deliveryId}`)
     }
   }
 
-  listCatalog() {
-    const subscriptionCounts = new Map(this.#store.activeSubscriptionCountsBySource())
-    for (const subscription of this.#routingSubscriptions.list()) {
+  async listCatalog() {
+    const subscriptionCounts = new Map(await this.#store.activeSubscriptionCountsBySource())
+    for (const subscription of await this.#routingSubscriptions.list()) {
       if (subscription.state !== 'active') continue
       const key = `${subscription.sourceRef.id}@${subscription.sourceRef.revision}`
       subscriptionCounts.set(key, (subscriptionCounts.get(key) ?? 0) + 1)
     }
-    const eventTypes = this.#store
-      .listEventTypes()
-      .filter((eventType) => (eventType.catalogVisibility ?? 'public') === 'public')
+    const eventTypes = (await this.#store.listEventTypes()).filter(
+      (eventType) => (eventType.catalogVisibility ?? 'public') === 'public',
+    )
     const publicSourceKeys = new Set(
       eventTypes.map((eventType) => `${eventType.sourceRef.id}@${eventType.sourceRef.revision}`),
     )
     return {
-      sources: this.#store
-        .listSources()
+      sources: (await this.#store.listSources())
         .filter((source) =>
           publicSourceKeys.has(`${source.sourceRef.id}@${source.sourceRef.revision}`),
         )
@@ -343,21 +346,21 @@ export class EventCenterService {
     }
   }
 
-  listSubscriptions(subscriberRef?: string) {
-    const exact = this.#store.listSubscriptions(subscriberRef)
-    const filtered = this.#filteredSubscriptions(subscriberRef)
+  async listSubscriptions(subscriberRef?: string) {
+    const exact = await this.#store.listSubscriptions(subscriberRef)
+    const filtered = await this.#filteredSubscriptions(subscriberRef)
     return [...exact, ...filtered].sort((left, right) => right.updatedAt - left.updatedAt)
   }
 
-  listSubscriptionPage(input: { page: number; limit: number; subscriberRef?: string }) {
-    const filtered = this.#filteredSubscriptions(input.subscriberRef)
+  async listSubscriptionPage(input: { page: number; limit: number; subscriberRef?: string }) {
+    const filtered = await this.#filteredSubscriptions(input.subscriberRef)
     const offset = (input.page - 1) * input.limit
     // At most every filtered definition can sort ahead of the requested page.
     // Fetch only that bounded displacement window from the large exact ledger,
     // then merge the complete (already materialized) routing directory in
     // memory. No scan of the exact subscription table is needed.
     const exactOffset = Math.max(0, offset - filtered.length)
-    const exact = this.#store.listSubscriptionPage({
+    const exact = await this.#store.listSubscriptionPage({
       limit: input.limit + filtered.length,
       offset: exactOffset,
       ...(input.subscriberRef === undefined ? {} : { subscriberRef: input.subscriberRef }),
@@ -375,9 +378,8 @@ export class EventCenterService {
     }
   }
 
-  #filteredSubscriptions(subscriberRef?: string) {
-    return this.#routingSubscriptions
-      .list()
+  async #filteredSubscriptions(subscriberRef?: string) {
+    return (await this.#routingSubscriptions.list())
       .filter(
         (subscription) =>
           subscriberRef === undefined || subscription.subscriber.subscriberRef === subscriberRef,
@@ -402,17 +404,17 @@ export class EventCenterService {
       }))
   }
 
-  listDeliveryStatuses(limit = 200) {
-    return this.#store.listDeliveryStatusPage({ limit, offset: 0 }).items
+  async listDeliveryStatuses(limit = 200) {
+    return (await this.#store.listDeliveryStatusPage({ limit, offset: 0 })).items
   }
 
-  listDeliveryStatusPage(input: {
+  async listDeliveryStatusPage(input: {
     page: number
     limit: number
     state?: EventDeliveryStatusRecord['state']
     subscriberRef?: string
   }) {
-    const result = this.#store.listDeliveryStatusPage({
+    const result = await this.#store.listDeliveryStatusPage({
       limit: input.limit,
       offset: (input.page - 1) * input.limit,
       ...(input.state === undefined ? {} : { state: input.state }),
@@ -425,8 +427,8 @@ export class EventCenterService {
     }
   }
 
-  listEventRecordPage(input: { page: number; limit: number; sourceId?: string }) {
-    const result = this.#store.listEventRecordPage({
+  async listEventRecordPage(input: { page: number; limit: number; sourceId?: string }) {
+    const result = await this.#store.listEventRecordPage({
       limit: input.limit,
       offset: (input.page - 1) * input.limit,
       ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
@@ -438,12 +440,12 @@ export class EventCenterService {
     }
   }
 
-  observerHealth() {
-    return this.#store.listObserverActivations()
+  async observerHealth() {
+    return await this.#store.listObserverActivations()
   }
 
-  listCustomSources() {
-    return this.#customSources.list().map((record) => {
+  async listCustomSources() {
+    return (await this.#customSources.list()).map((record) => {
       const draftDigest = customEventSourceDraftDigest(record.draft)
       return {
         id: record.id,
@@ -467,8 +469,8 @@ export class EventCenterService {
     })
   }
 
-  getCustomSource(id: string) {
-    const record = this.#customSources.get(id)
+  async getCustomSource(id: string) {
+    const record = await this.#customSources.get(id)
     if (record === null) {
       throw new NotFoundError(
         'custom-event-source-not-found',
@@ -478,16 +480,21 @@ export class EventCenterService {
     return record
   }
 
-  createCustomSource(input: unknown, ownerUserId: string | null) {
+  async createCustomSource(input: unknown, ownerUserId: string | null) {
     const draft = customEventSourceDraftSchema.parse(input)
-    return this.#customSources.create({ id: this.#id(), draft, ownerUserId, now: this.#now() })
+    return await this.#customSources.create({
+      id: this.#id(),
+      draft,
+      ownerUserId,
+      now: this.#now(),
+    })
   }
 
-  updateCustomSource(id: string, input: unknown) {
+  async updateCustomSource(id: string, input: unknown) {
     const draft = customEventSourceDraftSchema.parse(input)
-    const updated = this.#customSources.update({ id, draft, now: this.#now() })
+    const updated = await this.#customSources.update({ id, draft, now: this.#now() })
     if (updated === null) {
-      const existing = this.#customSources.get(id)
+      const existing = await this.#customSources.get(id)
       if (existing === null) {
         throw new NotFoundError(
           'custom-event-source-not-found',
@@ -500,7 +507,7 @@ export class EventCenterService {
   }
 
   async validateCustomSource(id: string) {
-    const record = this.getCustomSource(id)
+    const record = await this.getCustomSource(id)
     if (record.retiredAt !== null) {
       throw new ConflictError('custom-event-source-retired', 'retired event sources are read-only')
     }
@@ -520,7 +527,7 @@ export class EventCenterService {
   }
 
   async publishCustomSource(id: string, actorUserId: string | null) {
-    const record = this.getCustomSource(id)
+    const record = await this.getCustomSource(id)
     if (record.retiredAt !== null) {
       throw new ConflictError('custom-event-source-retired', 'retired event sources are read-only')
     }
@@ -559,7 +566,7 @@ export class EventCenterService {
         triggerParameters: event.triggerParameters,
       }),
     )
-    return this.#customSources.publish({
+    return await this.#customSources.publish({
       id,
       revision,
       draft: record.draft,
@@ -572,9 +579,9 @@ export class EventCenterService {
     })
   }
 
-  retireCustomSource(id: string) {
-    if (!this.#customSources.retire(id, this.#now())) {
-      if (this.#customSources.get(id) === null) {
+  async retireCustomSource(id: string): Promise<void> {
+    if (!(await this.#customSources.retire(id, this.#now()))) {
+      if ((await this.#customSources.get(id)) === null) {
         throw new NotFoundError(
           'custom-event-source-not-found',
           `custom event source not found: ${id}`,
@@ -584,7 +591,7 @@ export class EventCenterService {
   }
 
   async runOneDueObserver(): Promise<'completed' | 'failed' | 'obsolete' | 'idle'> {
-    const run = this.#store.claimDueObserver({
+    const run = await this.#store.claimDueObserver({
       now: this.#now(),
       leaseOwner: this.#workerId,
       leaseMs: this.#observerLeaseMs,
@@ -592,7 +599,7 @@ export class EventCenterService {
     })
     if (run === null) return 'idle'
     try {
-      const custom = this.#customSources.getPublished(run.source.sourceRef)
+      const custom = await this.#customSources.getPublished(run.source.sourceRef)
       const observer = custom === null ? this.#observer : this.#customObserver
       const batch = observerBatchSchema.parse(
         await observer.run({
@@ -604,44 +611,46 @@ export class EventCenterService {
       const subjectKeys = new Set(
         run.subjects.map((subject) => `${subject.typeId}\u0000${subject.subjectRef}`),
       )
-      const observations = batch.observations.map((observation) => {
-        if (
-          observation.sourceRef.id !== run.source.sourceRef.id ||
-          observation.sourceRef.revision !== run.source.sourceRef.revision
-        ) {
-          throw new ValidationError(
-            'observer-source-mismatch',
-            'observer returned an observation for another source',
-          )
-        }
-        if (
-          !subjectKeys.has(`${observation.subject.typeId}\u0000${observation.subject.subjectRef}`)
-        ) {
-          throw new ValidationError(
-            'observer-subject-out-of-batch',
-            'observer returned an observation outside its subscribed subject batch',
-          )
-        }
-        const eventType = this.#store.getEventType(observation.eventTypeRef)
-        if (
-          eventType === null ||
-          eventType.sourceRef.id !== run.source.sourceRef.id ||
-          eventType.sourceRef.revision !== run.source.sourceRef.revision
-        ) {
-          throw new ValidationError(
-            'observer-event-type-invalid',
-            'observer returned an unregistered event type for this source',
-          )
-        }
-        return {
-          eventId: this.#id(),
-          observation,
-          eventType,
-          routingSubscriptions: this.#matchedRoutingSubscriptions(observation),
-          triggerContext: this.#triggerContext(eventType, observation),
-        }
-      })
-      return this.#store.settleObserver({
+      const observations = await Promise.all(
+        batch.observations.map(async (observation) => {
+          if (
+            observation.sourceRef.id !== run.source.sourceRef.id ||
+            observation.sourceRef.revision !== run.source.sourceRef.revision
+          ) {
+            throw new ValidationError(
+              'observer-source-mismatch',
+              'observer returned an observation for another source',
+            )
+          }
+          if (
+            !subjectKeys.has(`${observation.subject.typeId}\u0000${observation.subject.subjectRef}`)
+          ) {
+            throw new ValidationError(
+              'observer-subject-out-of-batch',
+              'observer returned an observation outside its subscribed subject batch',
+            )
+          }
+          const eventType = await this.#store.getEventType(observation.eventTypeRef)
+          if (
+            eventType === null ||
+            eventType.sourceRef.id !== run.source.sourceRef.id ||
+            eventType.sourceRef.revision !== run.source.sourceRef.revision
+          ) {
+            throw new ValidationError(
+              'observer-event-type-invalid',
+              'observer returned an unregistered event type for this source',
+            )
+          }
+          return {
+            eventId: this.#id(),
+            observation,
+            eventType,
+            routingSubscriptions: await this.#matchedRoutingSubscriptions(observation),
+            triggerContext: this.#triggerContext(eventType, observation),
+          }
+        }),
+      )
+      return await this.#store.settleObserver({
         run,
         now: this.#now(),
         cursorJson: batch.cursorJson,
@@ -651,7 +660,7 @@ export class EventCenterService {
         errorDetail: null,
       })
     } catch (error) {
-      return this.#store.settleObserver({
+      return await this.#store.settleObserver({
         run,
         now: this.#now(),
         cursorJson: run.cursorJson,
@@ -669,7 +678,7 @@ export class EventCenterService {
     const subscriberKinds = [
       ...new Set(this.#deliveryConsumers.map((consumer) => consumer.subscriberKind)),
     ]
-    const delivery = this.#store.claimNotificationDelivery({
+    const delivery = await this.#store.claimNotificationDelivery({
       ...(deliveryId === undefined ? {} : { deliveryId }),
       subscriberKinds,
       now: this.#now(),
@@ -678,14 +687,20 @@ export class EventCenterService {
     })
     if (delivery === null) return 'idle'
 
-    const consumer = this.#deliveryConsumers.find(
-      (candidate) =>
+    let consumer: EventDeliveryConsumerPort | undefined
+    for (const candidate of this.#deliveryConsumers) {
+      if (
         candidate.subscriberKind === delivery.subscriber.kind &&
-        candidate.canConsume(delivery.subscriber.subscriberRef),
-    )
+        (await candidate.canConsume(delivery.subscriber.subscriberRef))
+      ) {
+        consumer = candidate
+        break
+      }
+    }
     if (consumer === undefined) {
-      this.#settleDelivery({
+      await this.#settleDelivery({
         deliveryId: delivery.deliveryId,
+        attemptCount: delivery.attemptCount,
         state: 'dead-letter',
         nextAttemptAt: this.#now(),
         error: `event delivery consumer unavailable: ${delivery.subscriber.kind}/${delivery.subscriber.subscriberRef}`,
@@ -695,8 +710,9 @@ export class EventCenterService {
 
     try {
       await consumer.consume(delivery)
-      this.#settleDelivery({
+      await this.#settleDelivery({
         deliveryId: delivery.deliveryId,
+        attemptCount: delivery.attemptCount,
         state: 'accepted',
         nextAttemptAt: this.#now(),
         error: null,
@@ -713,8 +729,9 @@ export class EventCenterService {
       const nextAttemptAt = terminal
         ? now
         : now + Math.min(30_000, 1_000 * 2 ** Math.max(0, delivery.attemptCount - 1))
-      this.#settleDelivery({
+      await this.#settleDelivery({
         deliveryId: delivery.deliveryId,
+        attemptCount: delivery.attemptCount,
         state: terminal ? 'dead-letter' : 'pending',
         nextAttemptAt,
         error: (error instanceof Error ? error.message : String(error)).slice(0, 2_000),
@@ -723,18 +740,19 @@ export class EventCenterService {
     }
   }
 
-  #settleDelivery(input: {
+  async #settleDelivery(input: {
     readonly deliveryId: string
+    readonly attemptCount: number
     readonly state: 'accepted' | 'pending' | 'dead-letter'
     readonly nextAttemptAt: number
     readonly error: string | null
-  }): void {
+  }): Promise<void> {
     if (
-      !this.#store.settleNotificationDelivery({
+      !(await this.#store.settleNotificationDelivery({
         ...input,
         leaseOwner: this.#workerId,
         now: this.#now(),
-      })
+      }))
     ) {
       throw new ConflictError(
         'event-delivery-lease-lost',
@@ -743,8 +761,8 @@ export class EventCenterService {
     }
   }
 
-  #matchedRoutingSubscriptions(observation: z.infer<typeof eventObservationSchema>) {
-    const matches = this.#routingSubscriptions.match(observation)
+  async #matchedRoutingSubscriptions(observation: z.infer<typeof eventObservationSchema>) {
+    const matches = await this.#routingSubscriptions.match(observation)
     const seen = new Set<string>()
     return matches.map((match) => {
       const definition = match.definition

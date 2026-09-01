@@ -6,27 +6,27 @@ import type {
 } from './types'
 
 export interface EventCenterCatalogQueryPort {
-  catalogJson(): string
-  subscriptionsJson(subscriberRef: string | null): string
+  catalogJson(): Promise<string>
+  subscriptionsJson(subscriberRef: string | null): Promise<string>
   subscriptionPageJson(input: {
     readonly page: number
     readonly limit: number
     readonly subscriberRef: string | null
-  }): string
+  }): Promise<string>
 }
 
 export interface EventCenterOperationsQueryPort {
-  deliveryStatuses(): readonly EventDeliveryStatusDocument[]
+  deliveryStatuses(): Promise<readonly EventDeliveryStatusDocument[]>
   deliveryStatusPage(input: {
     readonly page: number
     readonly limit: number
     readonly state: EventDeliveryStatusDocument['state'] | null
     readonly subscriberRef: string | null
-  }): EventDeliveryStatusPageDocument
+  }): Promise<EventDeliveryStatusPageDocument>
   eventRecordPage(input: {
     readonly page: number
     readonly limit: number
     readonly sourceId: string | null
-  }): EventRecordAuditPageDocument
-  observerHealth(): readonly ObserverHealthDocument[]
+  }): Promise<EventRecordAuditPageDocument>
+  observerHealth(): Promise<readonly ObserverHealthDocument[]>
 }

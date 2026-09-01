@@ -44,15 +44,17 @@ function fail(code: string): { readonly ok: false; readonly failure: AdapterFail
 }
 
 export function createApprovalExecutionAdapter(deps: {
-  readonly resolveBinding: (ref: string) => DevelopmentAdapterContent | null
+  readonly resolveBinding: (
+    ref: string,
+  ) => DevelopmentAdapterContent | null | Promise<DevelopmentAdapterContent | null>
   readonly extraEnv?: Record<string, string>
   readonly secretSource?: Readonly<Record<string, string | undefined>>
 }): ApprovalExecution {
-  const resolve = (
+  const resolve = async (
     ref: string,
     operation: 'submit' | 'lookup-by-idempotency-key' | 'observe',
-  ): DevelopmentAdapterContent | null => {
-    const content = deps.resolveBinding(ref)
+  ): Promise<DevelopmentAdapterContent | null> => {
+    const content = await deps.resolveBinding(ref)
     return content?.purpose === 'approval-gateway' && content.operations.includes(operation)
       ? content
       : null
@@ -67,7 +69,7 @@ export function createApprovalExecutionAdapter(deps: {
   }
   return {
     async submit(input) {
-      const content = resolve(input.adapterBindingRef, 'submit')
+      const content = await resolve(input.adapterBindingRef, 'submit')
       if (content === null) return fail('approval-adapter-submit-unavailable')
       return await inSink((stagedRoot) =>
         runApprovalSubmit({
@@ -87,7 +89,7 @@ export function createApprovalExecutionAdapter(deps: {
       )
     },
     async lookup(input) {
-      const content = resolve(input.adapterBindingRef, 'lookup-by-idempotency-key')
+      const content = await resolve(input.adapterBindingRef, 'lookup-by-idempotency-key')
       if (content === null) return fail('approval-adapter-lookup-unavailable')
       return await inSink((stagedRoot) =>
         runApprovalLookup({
@@ -100,7 +102,7 @@ export function createApprovalExecutionAdapter(deps: {
       )
     },
     async observe(input) {
-      const content = resolve(input.adapterBindingRef, 'observe')
+      const content = await resolve(input.adapterBindingRef, 'observe')
       if (content === null) return fail('approval-adapter-observe-unavailable')
       return await inSink((stagedRoot) =>
         runApprovalObserve({

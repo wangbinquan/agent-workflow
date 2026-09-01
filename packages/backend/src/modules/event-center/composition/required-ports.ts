@@ -33,14 +33,14 @@ export interface CustomEventObserverProgramPort extends EventObserverProgramPort
 
 /** Integration-owned selectors stay outside the Event Center bounded context. */
 export interface EventRoutingSubscriptionDirectoryPort {
-  list(): readonly FilteredEventSubscriptionDefinition[]
-  match(observation: EventObservation): readonly MatchedFilteredEventSubscription[]
+  list(): Promise<readonly FilteredEventSubscriptionDefinition[]>
+  match(observation: EventObservation): Promise<readonly MatchedFilteredEventSubscription[]>
 }
 
 /** A subscriber adapter consumes one durable transport delivery, never an ingress callback. */
 export interface EventDeliveryConsumerPort {
   readonly subscriberKind: EventSubscriber['kind']
-  canConsume(subscriberRef: string): boolean
+  canConsume(subscriberRef: string): Promise<boolean>
   consume(delivery: EventDeliveryRecord): Promise<void>
 }
 

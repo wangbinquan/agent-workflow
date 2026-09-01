@@ -12,14 +12,14 @@ export interface CustomEventSourceStorePort {
     readonly draft: CustomEventSourceDraft
     readonly ownerUserId: string | null
     readonly now: number
-  }): CustomEventSourceAuthoringRecord
-  get(id: string): CustomEventSourceAuthoringRecord | null
-  list(): CustomEventSourceAuthoringRecord[]
+  }): Promise<CustomEventSourceAuthoringRecord>
+  get(id: string): Promise<CustomEventSourceAuthoringRecord | null>
+  list(): Promise<CustomEventSourceAuthoringRecord[]>
   update(input: {
     readonly id: string
     readonly draft: CustomEventSourceDraft
     readonly now: number
-  }): CustomEventSourceAuthoringRecord | null
+  }): Promise<CustomEventSourceAuthoringRecord | null>
   publish(input: {
     readonly id: string
     readonly revision: number
@@ -30,11 +30,11 @@ export interface CustomEventSourceStorePort {
     readonly eventTypes: readonly EventTypeDescriptor[]
     readonly actorUserId: string | null
     readonly now: number
-  }): PublishedCustomEventSource
-  retire(id: string, now: number): boolean
+  }): Promise<PublishedCustomEventSource>
+  retire(id: string, now: number): Promise<boolean>
   getPublished(ref: {
     readonly id: string
     readonly revision: number
-  }): PublishedCustomEventSource | null
-  acceptsNewSubscriptions(ref: { readonly id: string; readonly revision: number }): boolean
+  }): Promise<PublishedCustomEventSource | null>
+  acceptsNewSubscriptions(ref: { readonly id: string; readonly revision: number }): Promise<boolean>
 }

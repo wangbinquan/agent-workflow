@@ -1,14 +1,14 @@
-// RFC-303 — lease/retry worker for durable MR/PR terminal effects.
-import { and, asc, eq, inArray, lt, lte, ne, or } from 'drizzle-orm'
+// RFC-303 / RFC-349 — lease/retry worker for durable MR/PR terminal effects.
+// The worker owns retry behavior; provider-specific lease/CAS persistence is
+// supplied through an exact Promise port.
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
-import {
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-  webhookMrLaunchGuards,
-} from '@/db/schema'
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
+import type {
+  MrControlEffectClaim,
+  MrControlEffectStatus,
+  MrTerminalEffectPersistencePort,
+} from './ports/mrTerminalControlPersistence'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { createLogger } from '@/util/log'
@@ -19,7 +19,6 @@ const RECOVERY_SCAN_MS = 5_000
 const WAITING_RETRY_MS = 250
 const MAX_BACKOFF_MS = 60_000
 
-type EffectRow = typeof webhookMrControlEffects.$inferSelect
 type Receipt = Awaited<ReturnType<TaskSourceTerminationParticipant['apply']>>[number]
 
 function retryDelay(attempt: number): number {
@@ -39,7 +38,7 @@ export class MrTerminalControlWorker {
   private timer: ReturnType<typeof setInterval> | null = null
 
   constructor(
-    private readonly db: DbClient,
+    private readonly persistence: MrTerminalEffectPersistencePort,
     private readonly launchGuards: MrLaunchGuardCoordinator,
     private readonly participant: TaskSourceTerminationParticipant,
     private readonly mintCapability: typeof mintSourceTerminationEffectCapability,
@@ -62,7 +61,7 @@ export class MrTerminalControlWorker {
   }
 
   async reconcileOnBoot(): Promise<void> {
-    this.launchGuards.reconcileStaleOnBoot()
+    await this.launchGuards.reconcileStaleOnBoot()
     await this.drainAllDue()
     this.start()
   }
@@ -78,82 +77,28 @@ export class MrTerminalControlWorker {
   private async drain(): Promise<void> {
     do {
       this.requested = false
-      this.launchGuards.abortRevoked()
+      await this.launchGuards.abortRevoked()
       await this.drainAllDue()
     } while (this.requested && !this.stopped)
   }
 
   private async drainAllDue(): Promise<void> {
     for (;;) {
-      const effect = this.claimNextDue()
+      const effect = await this.claimNextDue()
       if (effect === null) return
       await this.applyClaimed(effect)
     }
   }
 
-  private claimNextDue(): EffectRow | null {
-    const now = Date.now()
-    // RFC-311 (audit L3-11): the redundant outer `ne(status,'succeeded')` is
-    // dropped — the inner OR already enumerates the exact claimable statuses
-    // (pending/waiting-launches/retryable ∪ expired leased, all ≠ succeeded),
-    // and a `ne` predicate defeats status-index range planning on this 5s tick
-    // while succeeded history accumulates.
-    const candidates = this.db
-      .select()
-      .from(webhookMrControlEffects)
-      .where(
-        and(
-          lte(webhookMrControlEffects.nextAttemptAt, now),
-          or(
-            inArray(webhookMrControlEffects.status, ['pending', 'waiting-launches', 'retryable']),
-            and(
-              eq(webhookMrControlEffects.status, 'leased'),
-              lte(webhookMrControlEffects.leaseExpiresAt, now),
-            ),
-          ),
-        ),
-      )
-      .orderBy(asc(webhookMrControlEffects.createdAt), asc(webhookMrControlEffects.revision))
-      .all()
-
-    for (const candidate of candidates) {
-      const older = this.db
-        .select({ id: webhookMrControlEffects.id })
-        .from(webhookMrControlEffects)
-        .where(
-          and(
-            eq(webhookMrControlEffects.endpointId, candidate.endpointId),
-            eq(webhookMrControlEffects.streamKey, candidate.streamKey),
-            lt(webhookMrControlEffects.revision, candidate.revision),
-            ne(webhookMrControlEffects.status, 'succeeded'),
-          ),
-        )
-        .limit(1)
-        .all()[0]
-      if (older !== undefined) continue
-      const claimed = this.db
-        .update(webhookMrControlEffects)
-        .set({
-          status: 'leased',
-          leaseOwner: this.workerId,
-          leaseExpiresAt: now + LEASE_MS,
-          attemptCount: candidate.attemptCount + 1,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(webhookMrControlEffects.id, candidate.id),
-            ne(webhookMrControlEffects.status, 'succeeded'),
-          ),
-        )
-        .returning()
-        .all()[0]
-      if (claimed !== undefined) return claimed
-    }
-    return null
+  private async claimNextDue(): Promise<MrControlEffectClaim | null> {
+    return await this.persistence.claimNextDue({
+      workerId: this.workerId,
+      now: Date.now(),
+      leaseMs: LEASE_MS,
+    })
   }
 
-  private async applyClaimed(effect: EffectRow): Promise<void> {
+  private async applyClaimed(effect: MrControlEffectClaim): Promise<void> {
     const input = {
       effectId: effect.id,
       binding: effect.binding,
@@ -164,29 +109,12 @@ export class MrTerminalControlWorker {
     try {
       // Stop visible tasks immediately; a slow pre-task launch must not delay
       // cancellation of work that already has an execution owner.
-      this.launchGuards.abortRevoked()
+      await this.launchGuards.abortRevoked()
       const first = await this.participant.apply(this.mintCapability(input), input)
-      this.persistReceipts(effect.id, first)
+      await this.persistReceipts(effect.id, first)
 
-      const barrier = this.db
-        .select({ id: webhookMrLaunchGuards.id })
-        .from(webhookMrLaunchGuards)
-        .where(
-          and(
-            eq(webhookMrLaunchGuards.binding, effect.binding),
-            lt(webhookMrLaunchGuards.launchRevision, effect.revision),
-            inArray(webhookMrLaunchGuards.status, [
-              'reserved',
-              'launching',
-              'revoking-terminal',
-              'task-committed',
-            ]),
-          ),
-        )
-        .limit(1)
-        .all()[0]
-      if (barrier !== undefined) {
-        this.finishAttempt(effect.id, {
+      if (await this.launchGuards.hasLaunchBarrier(effect.binding, effect.revision)) {
+        await this.finishAttempt(effect.id, {
           status: 'waiting-launches',
           nextAttemptAt: Date.now() + WAITING_RETRY_MS,
           lastError: null,
@@ -197,21 +125,17 @@ export class MrTerminalControlWorker {
       // Fixed-point sweep after the guard barrier closes. A task committed in
       // the second-gate→INSERT seam is now guaranteed to be visible.
       const final = await this.participant.apply(this.mintCapability(input), input)
-      this.persistReceipts(effect.id, final)
-      const all = this.db
-        .select({ releaseOutcome: webhookMrControlTargets.releaseOutcome })
-        .from(webhookMrControlTargets)
-        .where(eq(webhookMrControlTargets.effectId, effect.id))
-        .all()
-      if (all.some((target) => target.releaseOutcome === 'unreaped')) {
-        this.finishAttempt(effect.id, {
+      await this.persistReceipts(effect.id, final)
+      const releaseOutcomes = await this.persistence.listReleaseOutcomes(effect.id)
+      if (releaseOutcomes.some((outcome) => outcome === 'unreaped')) {
+        await this.finishAttempt(effect.id, {
           status: 'retryable',
           nextAttemptAt: Date.now() + retryDelay(effect.attemptCount),
           lastError: 'task-driver-unreaped',
         })
         return
       }
-      this.finishAttempt(effect.id, {
+      await this.finishAttempt(effect.id, {
         status: 'succeeded',
         nextAttemptAt: Date.now(),
         lastError: null,
@@ -223,7 +147,7 @@ export class MrTerminalControlWorker {
         attempt: effect.attemptCount,
         error: message,
       })
-      this.finishAttempt(effect.id, {
+      await this.finishAttempt(effect.id, {
         status: 'retryable',
         nextAttemptAt: Date.now() + retryDelay(effect.attemptCount),
         lastError: message,
@@ -231,58 +155,37 @@ export class MrTerminalControlWorker {
     }
   }
 
-  private persistReceipts(effectId: string, receipts: readonly Receipt[]): void {
+  private async persistReceipts(effectId: string, receipts: readonly Receipt[]): Promise<void> {
     const now = Date.now()
-    for (const receipt of receipts) {
-      const releaseOutcome =
-        receipt.releaseOutcome === 'not-required' ? 'no-active-owner' : receipt.releaseOutcome
-      this.db
-        .insert(webhookMrControlTargets)
-        .values({
-          effectId,
-          taskId: receipt.taskId,
-          priorStatus: receipt.priorStatus,
-          fenceOutcome: receipt.fenceOutcome,
-          cancelOutcome: receipt.cancelOutcome,
-          releaseOutcome,
-          error: receipt.errorCode,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [webhookMrControlTargets.effectId, webhookMrControlTargets.taskId],
-          set: {
-            // The first sweep owns the durable cancellation/fence audit.  The
-            // fixed-point sweep may observe the same row after it has already
-            // become terminal; it may refine release settlement, but must not
-            // rewrite `canceled` into `already-terminal`.
-            releaseOutcome,
-            error: receipt.errorCode,
-            updatedAt: now,
-          },
-        })
-        .run()
-    }
+    await this.persistence.recordReceipts(
+      effectId,
+      receipts.map((receipt) => ({
+        taskId: receipt.taskId,
+        priorStatus: receipt.priorStatus,
+        fenceOutcome: receipt.fenceOutcome,
+        cancelOutcome: receipt.cancelOutcome,
+        releaseOutcome:
+          receipt.releaseOutcome === 'not-required' ? 'no-active-owner' : receipt.releaseOutcome,
+        errorCode: receipt.errorCode,
+      })),
+      now,
+    )
   }
 
-  private finishAttempt(
+  private async finishAttempt(
     effectId: string,
-    state: Pick<EffectRow, 'status' | 'nextAttemptAt' | 'lastError'>,
-  ): void {
-    this.db
-      .update(webhookMrControlEffects)
-      .set({
-        ...state,
-        leaseOwner: null,
-        leaseExpiresAt: null,
-        updatedAt: Date.now(),
-      })
-      .where(
-        and(
-          eq(webhookMrControlEffects.id, effectId),
-          eq(webhookMrControlEffects.leaseOwner, this.workerId),
-        ),
-      )
-      .run()
+    state: Readonly<{
+      status: MrControlEffectStatus
+      nextAttemptAt: number
+      lastError: string | null
+    }>,
+  ): Promise<void> {
+    await this.persistence.finishAttempt({
+      effectId,
+      workerId: this.workerId,
+      ...state,
+      now: Date.now(),
+    })
     if (state.status === 'waiting-launches' || state.status === 'retryable') {
       const delay = Math.max(0, state.nextAttemptAt - Date.now())
       const timeout = setTimeout(() => this.wake(effectId), delay)

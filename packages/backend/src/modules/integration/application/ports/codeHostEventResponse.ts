@@ -6,9 +6,9 @@ import type {
 } from '../../domain/codeHostWebhookEvent'
 
 export interface CodeHostEventResponseDirectoryPort {
-  list(): readonly CodeHostEventResponseDefinition[]
-  matching(facts: CodeHostWebhookRoutingFacts): readonly CodeHostEventResponseDefinition[]
-  has(ruleId: string): boolean
+  list(): Promise<readonly CodeHostEventResponseDefinition[]>
+  matching(facts: CodeHostWebhookRoutingFacts): Promise<readonly CodeHostEventResponseDefinition[]>
+  has(ruleId: string): Promise<boolean>
 }
 
 export interface CodeHostEventWorkStartPort {
@@ -23,14 +23,18 @@ export interface CodeHostEventWorkStartPort {
 
 /** Optional owner adapter for code-host events that resume existing work. */
 export interface CodeHostEventContinuationPort {
-  match(input: { readonly provider: string; readonly repoPath: string; readonly mrIid: string }): {
+  match(input: {
+    readonly provider: string
+    readonly repoPath: string
+    readonly mrIid: string
+  }): Promise<{
     readonly continuationRef: string
     readonly definitionRevision: string
     readonly displayName: { readonly 'zh-CN': string; readonly 'en-US': string }
-  } | null
+  } | null>
   consume(input: {
     readonly continuationRef: string
     readonly eventDeliveryId: string
     readonly occurredAt: number
-  }): void
+  }): Promise<void>
 }

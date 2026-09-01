@@ -15,7 +15,7 @@ import { codeHostWebhookRoutingFactsSchema } from '../../domain/codeHostWebhookE
 import { CODE_HOST_EVENT_SOURCE_REF, codeHostEventTypeRef } from '../../public/events'
 
 function eventCenterDefinition(
-  definition: ReturnType<CodeHostEventResponseDirectoryPort['list']>[number],
+  definition: Awaited<ReturnType<CodeHostEventResponseDirectoryPort['list']>>[number],
 ): FilteredEventSubscriptionDefinition {
   return {
     id: definition.id,
@@ -41,8 +41,10 @@ export function createCodeHostEventRoutingAdapter(
   continuation?: CodeHostEventContinuationPort,
 ): EventRoutingSubscriptionDirectoryPort {
   return {
-    list: () => directory.list().map(eventCenterDefinition),
-    match(observation: EventObservation) {
+    async list() {
+      return (await directory.list()).map(eventCenterDefinition)
+    },
+    async match(observation: EventObservation) {
       if (
         observation.sourceRef.id !== CODE_HOST_EVENT_SOURCE_REF.id ||
         observation.sourceRef.revision !== CODE_HOST_EVENT_SOURCE_REF.revision ||
@@ -58,7 +60,7 @@ export function createCodeHostEventRoutingAdapter(
       ) {
         return []
       }
-      const starts = directory.matching(facts).map((definition) => ({
+      const starts = (await directory.matching(facts)).map((definition) => ({
         definition: eventCenterDefinition(definition),
         eventTypeRef: codeHostEventTypeRef(facts.eventType),
         materializedSubscriptionId: `route:${definition.id}:${sha256Hex(
@@ -66,7 +68,7 @@ export function createCodeHostEventRoutingAdapter(
         )}`,
       }))
       if (continuation === undefined || facts.mrIid === undefined) return starts
-      const matched = continuation.match({
+      const matched = await continuation.match({
         provider: facts.provider,
         repoPath: facts.repoPath,
         mrIid: facts.mrIid,
@@ -113,16 +115,19 @@ export function createCodeHostEventDeliveryAdapter(
   const continuationPrefix = 'development-mission:'
   return {
     subscriberKind: 'automation',
-    canConsume: (subscriberRef) =>
-      directory.has(subscriberRef) ||
-      (continuation !== undefined && subscriberRef.startsWith(continuationPrefix)),
+    async canConsume(subscriberRef) {
+      return (
+        (await directory.has(subscriberRef)) ||
+        (continuation !== undefined && subscriberRef.startsWith(continuationPrefix))
+      )
+    },
     async consume(delivery) {
       const facts = codeHostWebhookRoutingFactsSchema.parse(delivery.routingFacts)
       if (delivery.subscriber.subscriberRef.startsWith(continuationPrefix)) {
         if (continuation === undefined) {
           throw new Error('code-host event continuation consumer is unavailable')
         }
-        continuation.consume({
+        await continuation.consume({
           continuationRef: delivery.subscriber.subscriberRef.slice(continuationPrefix.length),
           eventDeliveryId: delivery.deliveryId,
           occurredAt: delivery.occurredAt,

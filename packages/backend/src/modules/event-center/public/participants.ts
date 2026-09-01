@@ -8,7 +8,7 @@ import type {
   EventSubscriptionReceipt,
 } from './types'
 export interface EventObservationParticipant {
-  observe(input: EventObservationInput): EventObservationReceipt
+  observe(input: EventObservationInput): Promise<EventObservationReceipt>
 }
 
 export interface EventSubscriptionParticipant {
@@ -18,18 +18,21 @@ export interface EventSubscriptionParticipant {
     readonly subscriber: EventSubscriberRef
     /** Defaults to true. Reactivated durable consumers may start from new facts only. */
     readonly replayLatest?: boolean
-  }): EventSubscriptionReceipt
-  unsubscribe(subscriptionId: string): EventSubscriptionReceipt
+  }): Promise<EventSubscriptionReceipt>
+  unsubscribe(subscriptionId: string): Promise<EventSubscriptionReceipt>
 }
 
 export interface EventObserverControlParticipant {
   /** Passive hint for a hybrid source; facts still come only from its observer program. */
-  nudgeSource(sourceRef: EventExactRef): boolean
+  nudgeSource(sourceRef: EventExactRef): Promise<boolean>
 }
 
 export interface EventDeliveryParticipant {
-  pendingDeliveries(subscriber: EventSubscriberRef, limit: number): readonly EventDeliveryEnvelope[]
-  acceptDelivery(deliveryId: string): void
+  pendingDeliveries(
+    subscriber: EventSubscriberRef,
+    limit: number,
+  ): Promise<readonly EventDeliveryEnvelope[]>
+  acceptDelivery(deliveryId: string): Promise<void>
 }
 
 /**

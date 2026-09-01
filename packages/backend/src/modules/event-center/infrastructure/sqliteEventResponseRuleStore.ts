@@ -38,12 +38,12 @@ function matchesSubject(rule: EventResponseRuleRecord, subjectRef: string): bool
 }
 
 export function createSqliteEventResponseRuleStore(db: DbClient): EventResponseRuleStorePort {
-  const get = (id: string): EventResponseRuleRecord | null => {
+  const getSync = (id: string): EventResponseRuleRecord | null => {
     const row = db.select().from(eventResponseRules).where(eq(eventResponseRules.id, id)).get()
     return row === undefined ? null : recordOf(row)
   }
   return {
-    list() {
+    async list() {
       return db
         .select()
         .from(eventResponseRules)
@@ -51,8 +51,10 @@ export function createSqliteEventResponseRuleStore(db: DbClient): EventResponseR
         .all()
         .map(recordOf)
     },
-    get,
-    matching(observation) {
+    async get(id) {
+      return getSync(id)
+    },
+    async matching(observation) {
       return db
         .select()
         .from(eventResponseRules)
@@ -70,7 +72,7 @@ export function createSqliteEventResponseRuleStore(db: DbClient): EventResponseR
         .map(recordOf)
         .filter((rule) => matchesSubject(rule, observation.subject.subjectRef))
     },
-    create(input) {
+    async create(input) {
       const draft = eventResponseRuleDraftSchema.parse(input.draft)
       db.insert(eventResponseRules)
         .values({
@@ -90,10 +92,10 @@ export function createSqliteEventResponseRuleStore(db: DbClient): EventResponseR
           updatedAt: input.now,
         })
         .run()
-      return get(input.id)!
+      return getSync(input.id)!
     },
-    update(input) {
-      const current = get(input.id)
+    async update(input) {
+      const current = getSync(input.id)
       if (current === null) return null
       const draft = eventResponseRuleDraftSchema.parse(input.draft)
       // updatedAt is also the immutable routing-definition revision. Two edits
@@ -116,14 +118,14 @@ export function createSqliteEventResponseRuleStore(db: DbClient): EventResponseR
         })
         .where(eq(eventResponseRules.id, input.id))
         .run()
-      return get(input.id)
+      return getSync(input.id)
     },
-    remove(id) {
-      if (get(id) === null) return false
+    async remove(id) {
+      if (getSync(id) === null) return false
       db.delete(eventResponseRules).where(eq(eventResponseRules.id, id)).run()
       return true
     },
-    recordResult(input) {
+    async recordResult(input) {
       db.update(eventResponseRules)
         .set({
           lastFiredAt: input.now,

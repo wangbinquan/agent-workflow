@@ -11,22 +11,44 @@
 // connectionRef 与 daemon-boot secretProjection。
 
 import type { DbClient } from '@/db/client'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
+  createAsyncDbAdapterBindingResolver,
   createDbAdapterBindingResolver,
   createRequirementSourceAdapter,
   type RequirementSourceExecution,
 } from '../infrastructure/developmentRequirementSourceAdapter'
+import { createPostgresqlDevelopmentAdapterRevisionStore } from '../infrastructure/postgresqlDevelopmentAdapterRevisionStore'
 import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDevelopmentAdapterStore'
 
-export function composeRequirementSourceRunner(db: DbClient): RequirementSourceExecution {
-  const store = createSqliteDevelopmentAdapterStore(db)
+function runner(input: {
+  readonly resolveBinding: Parameters<typeof createRequirementSourceAdapter>[0]['resolveBinding']
+}): RequirementSourceExecution {
   const secretSource = Object.freeze({ ...process.env })
   const mockUrl = process.env.AW_REQUIREMENT_MOCK_URL
   return createRequirementSourceAdapter({
+    resolveBinding: input.resolveBinding,
+    secretSource,
+    ...(mockUrl === undefined ? {} : { extraEnv: { AW_REQUIREMENT_MOCK_URL: mockUrl } }),
+  })
+}
+
+export function composeSqliteRequirementSourceRunner(db: DbClient): RequirementSourceExecution {
+  const store = createSqliteDevelopmentAdapterStore(db)
+  return runner({
     resolveBinding: createDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),
     ),
-    secretSource,
-    ...(mockUrl === undefined ? {} : { extraEnv: { AW_REQUIREMENT_MOCK_URL: mockUrl } }),
+  })
+}
+
+export function composePostgresqlRequirementSourceRunner(
+  db: PostgresqlDatabaseClient,
+): RequirementSourceExecution {
+  const store = createPostgresqlDevelopmentAdapterRevisionStore(db)
+  return runner({
+    resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
+      store.getRevision(id, revision),
+    ),
   })
 }

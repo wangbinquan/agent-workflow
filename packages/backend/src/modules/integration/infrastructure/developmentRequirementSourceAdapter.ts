@@ -64,7 +64,9 @@ export interface RequirementSourceExecution {
 
 export interface RequirementSourceAdapterDeps {
   /** `id@revision` → 已发布 adapter 内容；未发布/不存在 → null。 */
-  readonly resolveBinding: (adapterBindingRef: string) => DevelopmentAdapterContent | null
+  readonly resolveBinding: (
+    adapterBindingRef: string,
+  ) => DevelopmentAdapterContent | null | Promise<DevelopmentAdapterContent | null>
   /** 测试/装配注入的额外子进程 env（如 mock 上游 URL）；不含 daemon 环境。 */
   readonly extraEnv?: Record<string, string>
   readonly secretSource?: Readonly<Record<string, string | undefined>>
@@ -82,14 +84,15 @@ function fail(
   }
 }
 
-function resolveFor(
+async function resolveFor(
   deps: RequirementSourceAdapterDeps,
   adapterBindingRef: string,
   operation: 'acquire' | 'questions.writeback' | 'answers.collect',
-):
+): Promise<
   | { readonly ok: true; readonly content: DevelopmentAdapterContent }
-  | { readonly ok: false; readonly failure: AdapterFailureReceipt } {
-  const content = deps.resolveBinding(adapterBindingRef)
+  | { readonly ok: false; readonly failure: AdapterFailureReceipt }
+> {
+  const content = await deps.resolveBinding(adapterBindingRef)
   if (content === null) {
     return fail(
       'configuration',
@@ -122,7 +125,7 @@ export function createRequirementSourceAdapter(
 ): RequirementSourceExecution {
   return {
     async acquire(input) {
-      const resolved = resolveFor(deps, input.adapterBindingRef, 'acquire')
+      const resolved = await resolveFor(deps, input.adapterBindingRef, 'acquire')
       if (!resolved.ok) return resolved
       const run = await runRequirementAcquire({
         adapterContent: resolved.content,
@@ -142,7 +145,7 @@ export function createRequirementSourceAdapter(
     },
 
     async publishQuestions(input) {
-      const resolved = resolveFor(deps, input.adapterBindingRef, 'questions.writeback')
+      const resolved = await resolveFor(deps, input.adapterBindingRef, 'questions.writeback')
       if (!resolved.ok) return resolved
       const run = await runQuestionsWriteback({
         adapterContent: resolved.content,
@@ -160,7 +163,7 @@ export function createRequirementSourceAdapter(
     },
 
     async collectAnswers(input) {
-      const resolved = resolveFor(deps, input.adapterBindingRef, 'answers.collect')
+      const resolved = await resolveFor(deps, input.adapterBindingRef, 'answers.collect')
       if (!resolved.ok) return resolved
       const run = await runAnswersCollect({
         adapterContent: resolved.content,
@@ -194,6 +197,22 @@ export function createDbAdapterBindingResolver(
     const revision = Number(adapterBindingRef.slice(at + 1))
     if (!Number.isInteger(revision) || revision <= 0) return null
     const row = getRevision(adapterBindingRef.slice(0, at), revision)
+    if (row === null) return null
+    const parsed = developmentAdapterContentSchema.safeParse(JSON.parse(row.contentJson))
+    return parsed.success ? parsed.data : null
+  }
+}
+
+/** PostgreSQL/remote-store variant; parsing remains identical to SQLite. */
+export function createAsyncDbAdapterBindingResolver(
+  getRevision: (id: string, revision: number) => Promise<{ readonly contentJson: string } | null>,
+): (adapterBindingRef: string) => Promise<DevelopmentAdapterContent | null> {
+  return async (adapterBindingRef) => {
+    const at = adapterBindingRef.lastIndexOf('@')
+    if (at <= 0) return null
+    const revision = Number(adapterBindingRef.slice(at + 1))
+    if (!Number.isInteger(revision) || revision <= 0) return null
+    const row = await getRevision(adapterBindingRef.slice(0, at), revision)
     if (row === null) return null
     const parsed = developmentAdapterContentSchema.safeParse(JSON.parse(row.contentJson))
     return parsed.success ? parsed.data : null

@@ -9,6 +9,7 @@ import type {
   VerifiedWebhookDeliveryInput,
   VerifiedWebhookDeliveryStore,
 } from '@/modules/integration/application/acceptVerifiedWebhookDelivery'
+import type { VerifiedWebhookDeliveryPersistencePort } from '@/modules/integration/application/ports/verifiedWebhookDeliveryPersistence'
 import {
   linearizeMrEvent,
   isMrAssociatedEvent,
@@ -18,6 +19,7 @@ import {
   webhookStreamKeyOf,
   type MrStreamState,
 } from '@/modules/integration/domain/mrTerminalControl'
+import { truncateDeliveryBody } from '@/modules/integration/domain/webhookDelivery'
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
@@ -26,7 +28,6 @@ import {
   webhookMrLaunchGuards,
   webhookMrStreamStates,
 } from '@/db/schema'
-import { truncateDeliveryBody } from '@/services/webhook/deliveryStore'
 
 /** The exported class is instance-owned so tests/daemons never share ambient state. */
 export class SqliteVerifiedWebhookDeliveryStore implements VerifiedWebhookDeliveryStore {
@@ -242,5 +243,18 @@ export class SqliteVerifiedWebhookDeliveryStore implements VerifiedWebhookDelive
         streamRevision,
       }
     })
+  }
+}
+
+/** Async facade used by provider-neutral bootstrap without changing SQLite's
+ * single-connection transaction semantics. */
+export function createSqliteVerifiedWebhookDeliveryPersistence(
+  db: DbClient,
+): VerifiedWebhookDeliveryPersistencePort {
+  const store = new SqliteVerifiedWebhookDeliveryStore(db)
+  return {
+    async accept(input) {
+      return store.accept(input)
+    },
   }
 }

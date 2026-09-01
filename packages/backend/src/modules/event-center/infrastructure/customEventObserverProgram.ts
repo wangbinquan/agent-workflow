@@ -153,7 +153,7 @@ export function createCustomEventObserverProgram(input: {
   const now = input.now ?? Date.now
   return {
     async run(request) {
-      const published = input.store.getPublished(request.source.sourceRef)
+      const published = await input.store.getPublished(request.source.sourceRef)
       if (published === null) {
         throw new Error(
           `custom observer source not found: ${request.source.sourceRef.id}@${request.source.sourceRef.revision}`,

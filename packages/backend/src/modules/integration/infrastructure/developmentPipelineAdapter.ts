@@ -64,7 +64,9 @@ export interface PipelineEvidenceExecution {
 
 export interface PipelineEvidenceAdapterDeps {
   /** `id@revision` → 已发布 adapter 内容；未发布/不存在 → null。 */
-  readonly resolveBinding: (adapterBindingRef: string) => DevelopmentAdapterContent | null
+  readonly resolveBinding: (
+    adapterBindingRef: string,
+  ) => DevelopmentAdapterContent | null | Promise<DevelopmentAdapterContent | null>
   /** 测试/装配注入的额外子进程 env（如 mock 上游 URL）；不含 daemon 环境。 */
   readonly extraEnv?: Record<string, string>
   readonly secretSource?: Readonly<Record<string, string | undefined>>
@@ -82,14 +84,15 @@ function fail(
   }
 }
 
-function resolveFor(
+async function resolveFor(
   deps: PipelineEvidenceAdapterDeps,
   adapterBindingRef: string,
   operation: 'collect' | 'trigger' | 'rerun',
-):
+): Promise<
   | { readonly ok: true; readonly content: DevelopmentAdapterContent }
-  | { readonly ok: false; readonly failure: AdapterFailureReceipt } {
-  const content = deps.resolveBinding(adapterBindingRef)
+  | { readonly ok: false; readonly failure: AdapterFailureReceipt }
+> {
+  const content = await deps.resolveBinding(adapterBindingRef)
   if (content === null) {
     return fail(
       'configuration',
@@ -122,7 +125,7 @@ export function createPipelineEvidenceAdapter(
 ): PipelineEvidenceExecution {
   return {
     async collect(input) {
-      const resolved = resolveFor(deps, input.adapterBindingRef, 'collect')
+      const resolved = await resolveFor(deps, input.adapterBindingRef, 'collect')
       if (!resolved.ok) return resolved
       const run = await runPipelineCollect({
         adapterContent: resolved.content,
@@ -141,7 +144,7 @@ export function createPipelineEvidenceAdapter(
     },
 
     async trigger(input) {
-      const resolved = resolveFor(deps, input.adapterBindingRef, 'trigger')
+      const resolved = await resolveFor(deps, input.adapterBindingRef, 'trigger')
       if (!resolved.ok) return resolved
       return await runPipelineTrigger({
         adapterContent: resolved.content,
@@ -158,7 +161,7 @@ export function createPipelineEvidenceAdapter(
     },
 
     async rerun(input) {
-      const resolved = resolveFor(deps, input.adapterBindingRef, 'rerun')
+      const resolved = await resolveFor(deps, input.adapterBindingRef, 'rerun')
       if (!resolved.ok) return resolved
       return await runPipelineRerun({
         adapterContent: resolved.content,

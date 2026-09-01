@@ -1,20 +1,22 @@
 import type { DbClient } from '@/db/client'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { sha256Hex } from '@/util/hash'
 import { createApprovalExecutionAdapter } from '../infrastructure/developmentApprovalAdapter'
-import { createDbAdapterBindingResolver } from '../infrastructure/developmentRequirementSourceAdapter'
+import {
+  createAsyncDbAdapterBindingResolver,
+  createDbAdapterBindingResolver,
+} from '../infrastructure/developmentRequirementSourceAdapter'
+import { createPostgresqlDevelopmentAdapterRevisionStore } from '../infrastructure/postgresqlDevelopmentAdapterRevisionStore'
 import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDevelopmentAdapterStore'
 
-export function composeApprovalGatewayRunner(
-  db: DbClient,
-  options: { readonly approvalMockUrl?: string } = {},
-) {
-  const store = createSqliteDevelopmentAdapterStore(db)
+function gateway(input: {
+  readonly resolveBinding: Parameters<typeof createApprovalExecutionAdapter>[0]['resolveBinding']
+  readonly approvalMockUrl?: string
+}) {
   const secretSource = Object.freeze({ ...process.env })
-  const mockUrl = options.approvalMockUrl ?? process.env.AW_APPROVAL_MOCK_URL
+  const mockUrl = input.approvalMockUrl ?? process.env.AW_APPROVAL_MOCK_URL
   const execution = createApprovalExecutionAdapter({
-    resolveBinding: createDbAdapterBindingResolver((id, revision) =>
-      store.getRevision(id, revision),
-    ),
+    resolveBinding: input.resolveBinding,
     secretSource,
     ...(mockUrl === undefined ? {} : { extraEnv: { AW_APPROVAL_MOCK_URL: mockUrl } }),
   })
@@ -84,4 +86,30 @@ export function composeApprovalGatewayRunner(
       return { ok: true as const, receipt }
     },
   }
+}
+
+export function composeSqliteApprovalGatewayRunner(
+  db: DbClient,
+  options: { readonly approvalMockUrl?: string } = {},
+) {
+  const store = createSqliteDevelopmentAdapterStore(db)
+  return gateway({
+    resolveBinding: createDbAdapterBindingResolver((id, revision) =>
+      store.getRevision(id, revision),
+    ),
+    ...options,
+  })
+}
+
+export function composePostgresqlApprovalGatewayRunner(
+  db: PostgresqlDatabaseClient,
+  options: { readonly approvalMockUrl?: string } = {},
+) {
+  const store = createPostgresqlDevelopmentAdapterRevisionStore(db)
+  return gateway({
+    resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
+      store.getRevision(id, revision),
+    ),
+    ...options,
+  })
 }

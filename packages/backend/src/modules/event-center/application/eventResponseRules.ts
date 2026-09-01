@@ -102,12 +102,12 @@ export class EventResponseRuleService {
     this.#id = input.id ?? ulid
   }
 
-  list(): readonly EventResponseRuleRecord[] {
-    return this.#rules.list()
+  async list(): Promise<readonly EventResponseRuleRecord[]> {
+    return await this.#rules.list()
   }
 
-  get(id: string): EventResponseRuleRecord {
-    const rule = this.#rules.get(id)
+  async get(id: string): Promise<EventResponseRuleRecord> {
+    const rule = await this.#rules.get(id)
     if (rule === null) {
       throw new NotFoundError(
         'event-response-rule-not-found',
@@ -117,11 +117,14 @@ export class EventResponseRuleService {
     return rule
   }
 
-  create(input: unknown, principal: ResponseRuleWritePrincipal): EventResponseRuleRecord {
-    const draft = this.#validatedDraft(input)
+  async create(
+    input: unknown,
+    principal: ResponseRuleWritePrincipal,
+  ): Promise<EventResponseRuleRecord> {
+    const draft = await this.#validatedDraft(input)
     this.#requireTargetLaunchPermission(draft, principal)
-    const eventType = this.#events.getEventType(draft.eventTypeRef)!
-    return this.#rules.create({
+    const eventType = (await this.#events.getEventType(draft.eventTypeRef))!
+    return await this.#rules.create({
       id: this.#id(),
       ownerUserId: principal.userId,
       sourceRef: eventType.sourceRef,
@@ -131,16 +134,16 @@ export class EventResponseRuleService {
     })
   }
 
-  update(
+  async update(
     id: string,
     input: unknown,
     principal: ResponseRuleWritePrincipal,
-  ): EventResponseRuleRecord {
-    this.#requireOwnedRule(id, principal)
-    const draft = this.#validatedDraft(input)
+  ): Promise<EventResponseRuleRecord> {
+    await this.#requireOwnedRule(id, principal)
+    const draft = await this.#validatedDraft(input)
     this.#requireTargetLaunchPermission(draft, principal)
-    const eventType = this.#events.getEventType(draft.eventTypeRef)!
-    const updated = this.#rules.update({
+    const eventType = (await this.#events.getEventType(draft.eventTypeRef))!
+    const updated = await this.#rules.update({
       id,
       sourceRef: eventType.sourceRef,
       subjectTypeId: eventType.subjectTypeId,
@@ -156,9 +159,9 @@ export class EventResponseRuleService {
     return updated
   }
 
-  remove(id: string, principal: ResponseRuleWritePrincipal): void {
-    this.#requireOwnedRule(id, principal)
-    if (!this.#rules.remove(id)) {
+  async remove(id: string, principal: ResponseRuleWritePrincipal): Promise<void> {
+    await this.#requireOwnedRule(id, principal)
+    if (!(await this.#rules.remove(id))) {
       throw new NotFoundError(
         'event-response-rule-not-found',
         `event response rule not found: ${id}`,
@@ -166,8 +169,11 @@ export class EventResponseRuleService {
     }
   }
 
-  #requireOwnedRule(id: string, principal: ResponseRuleWritePrincipal): EventResponseRuleRecord {
-    const rule = this.#rules.get(id)
+  async #requireOwnedRule(
+    id: string,
+    principal: ResponseRuleWritePrincipal,
+  ): Promise<EventResponseRuleRecord> {
+    const rule = await this.#rules.get(id)
     if (rule === null || (rule.ownerUserId !== principal.userId && !principal.canOverrideOwner)) {
       throw new NotFoundError(
         'event-response-rule-not-found',
@@ -188,7 +194,7 @@ export class EventResponseRuleService {
     })
   }
 
-  #validatedDraft(input: unknown): EventResponseRuleDraft {
+  async #validatedDraft(input: unknown): Promise<EventResponseRuleDraft> {
     const parsed = eventResponseRuleDraftSchema.safeParse(input)
     if (!parsed.success) {
       throw new ValidationError(
@@ -198,7 +204,7 @@ export class EventResponseRuleService {
       )
     }
     const draft = parsed.data
-    const eventType = this.#events.getEventType(draft.eventTypeRef)
+    const eventType = await this.#events.getEventType(draft.eventTypeRef)
     if (eventType === null) {
       throw new NotFoundError(
         'event-type-not-found',
@@ -229,9 +235,11 @@ export function createEventResponseRoutingDirectory(
   rules: EventResponseRuleStorePort,
 ): EventRoutingSubscriptionDirectoryPort {
   return {
-    list: () => rules.list().map(definitionOf),
-    match(observation: EventObservation) {
-      return rules.matching(observation).map((rule) => ({
+    async list() {
+      return (await rules.list()).map(definitionOf)
+    },
+    async match(observation: EventObservation) {
+      return (await rules.matching(observation)).map((rule) => ({
         definition: definitionOf(rule),
         eventTypeRef: observation.eventTypeRef,
         materializedSubscriptionId: materializedSubscriptionId(rule, observation.subject),
@@ -248,10 +256,12 @@ export function createEventResponseDeliveryConsumer(input: {
   const now = input.now ?? Date.now
   return {
     subscriberKind: 'automation',
-    canConsume: (ref) => ref.startsWith(subscriberPrefix),
+    async canConsume(ref) {
+      return ref.startsWith(subscriberPrefix)
+    },
     async consume(delivery) {
       const ruleId = delivery.subscriber.subscriberRef.slice(subscriberPrefix.length)
-      const rule = input.rules.get(ruleId)
+      const rule = await input.rules.get(ruleId)
       if (rule === null || !rule.enabled) return
       // A rule edit is a new deterministic definition. A delivery selected by
       // an older definition must never run the newly edited target. The old
@@ -271,9 +281,14 @@ export function createEventResponseDeliveryConsumer(input: {
           eventDeliveryId: delivery.deliveryId,
           triggerContext: delivery.triggerContext,
         })
-        input.rules.recordResult({ id: rule.id, state: 'launched', error: null, now: now() })
+        await input.rules.recordResult({
+          id: rule.id,
+          state: 'launched',
+          error: null,
+          now: now(),
+        })
       } catch (error) {
-        input.rules.recordResult({
+        await input.rules.recordResult({
           id: rule.id,
           state: 'failed',
           error: (error instanceof Error ? error.message : String(error)).slice(0, 2_000),

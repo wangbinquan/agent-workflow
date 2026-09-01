@@ -10,22 +10,46 @@
 // daemon-boot secretProjection。
 
 import type { DbClient } from '@/db/client'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createPipelineEvidenceAdapter,
   type PipelineEvidenceExecution,
 } from '../infrastructure/developmentPipelineAdapter'
-import { createDbAdapterBindingResolver } from '../infrastructure/developmentRequirementSourceAdapter'
+import {
+  createAsyncDbAdapterBindingResolver,
+  createDbAdapterBindingResolver,
+} from '../infrastructure/developmentRequirementSourceAdapter'
+import { createPostgresqlDevelopmentAdapterRevisionStore } from '../infrastructure/postgresqlDevelopmentAdapterRevisionStore'
 import { createSqliteDevelopmentAdapterStore } from '../infrastructure/sqliteDevelopmentAdapterStore'
 
-export function composePipelineEvidenceRunner(db: DbClient): PipelineEvidenceExecution {
-  const store = createSqliteDevelopmentAdapterStore(db)
+function runner(input: {
+  readonly resolveBinding: Parameters<typeof createPipelineEvidenceAdapter>[0]['resolveBinding']
+}): PipelineEvidenceExecution {
   const secretSource = Object.freeze({ ...process.env })
   const mockUrl = process.env.AW_PIPELINE_MOCK_URL
   return createPipelineEvidenceAdapter({
+    resolveBinding: input.resolveBinding,
+    secretSource,
+    ...(mockUrl === undefined ? {} : { extraEnv: { AW_PIPELINE_MOCK_URL: mockUrl } }),
+  })
+}
+
+export function composeSqlitePipelineEvidenceRunner(db: DbClient): PipelineEvidenceExecution {
+  const store = createSqliteDevelopmentAdapterStore(db)
+  return runner({
     resolveBinding: createDbAdapterBindingResolver((id, revision) =>
       store.getRevision(id, revision),
     ),
-    secretSource,
-    ...(mockUrl === undefined ? {} : { extraEnv: { AW_PIPELINE_MOCK_URL: mockUrl } }),
+  })
+}
+
+export function composePostgresqlPipelineEvidenceRunner(
+  db: PostgresqlDatabaseClient,
+): PipelineEvidenceExecution {
+  const store = createPostgresqlDevelopmentAdapterRevisionStore(db)
+  return runner({
+    resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
+      store.getRevision(id, revision),
+    ),
   })
 }

@@ -41,5 +41,5 @@ export interface DigitalEmployeeWorkStartPort {
     }
     readonly actorUserId: string | null
     readonly origin: EventWorkStartOrigin
-  }): { readonly caseId: string }
+  }): Promise<{ readonly caseId: string }>
 }

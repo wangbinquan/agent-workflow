@@ -39,12 +39,12 @@ export interface ClaimedObserverRun {
 }
 
 export interface EventStorePort {
-  registerSource(descriptor: EventSourceDescriptor, digest: string, now: number): void
-  registerEventType(descriptor: EventTypeDescriptor, digest: string, now: number): void
-  getSource(ref: EventExactRef): EventSourceDescriptor | null
-  getEventType(ref: EventExactRef): EventTypeDescriptor | null
-  listSources(): EventSourceDescriptor[]
-  listEventTypes(): EventTypeDescriptor[]
+  registerSource(descriptor: EventSourceDescriptor, digest: string, now: number): Promise<void>
+  registerEventType(descriptor: EventTypeDescriptor, digest: string, now: number): Promise<void>
+  getSource(ref: EventExactRef): Promise<EventSourceDescriptor | null>
+  getEventType(ref: EventExactRef): Promise<EventTypeDescriptor | null>
+  listSources(): Promise<EventSourceDescriptor[]>
+  listEventTypes(): Promise<EventTypeDescriptor[]>
   subscribe(input: {
     readonly id: string
     readonly eventType: EventTypeDescriptor
@@ -54,16 +54,16 @@ export interface EventStorePort {
     readonly identityKey: string
     readonly replayLatest: boolean
     readonly now: number
-  }): SubscriptionStoreReceipt
-  cancelSubscription(id: string, now: number): SubscriptionStoreReceipt | null
-  nudgeObserver(sourceRef: EventExactRef, now: number): boolean
-  listSubscriptions(subscriberRef?: string): EventSubscriptionRecord[]
+  }): Promise<SubscriptionStoreReceipt>
+  cancelSubscription(id: string, now: number): Promise<SubscriptionStoreReceipt | null>
+  nudgeObserver(sourceRef: EventExactRef, now: number): Promise<boolean>
+  listSubscriptions(subscriberRef?: string): Promise<EventSubscriptionRecord[]>
   listSubscriptionPage(input: {
     readonly limit: number
     readonly offset: number
     readonly subscriberRef?: string
-  }): { readonly items: EventSubscriptionRecord[]; readonly total: number }
-  activeSubscriptionCountsBySource(): ReadonlyMap<string, number>
+  }): Promise<{ readonly items: EventSubscriptionRecord[]; readonly total: number }>
+  activeSubscriptionCountsBySource(): Promise<ReadonlyMap<string, number>>
   recordObservation(input: {
     readonly eventId: string
     readonly observation: EventObservation
@@ -72,42 +72,43 @@ export interface EventStorePort {
     readonly nextId: () => string
     readonly routingSubscriptions: readonly MatchedFilteredEventSubscription[]
     readonly triggerContext: TriggerContext | null
-  }): ObservationStoreReceipt
-  listPendingDeliveries(subscriber: EventSubscriber, limit: number): EventDeliveryRecord[]
+  }): Promise<ObservationStoreReceipt>
+  listPendingDeliveries(subscriber: EventSubscriber, limit: number): Promise<EventDeliveryRecord[]>
   listDeliveryStatusPage(input: {
     readonly limit: number
     readonly offset: number
     readonly state?: EventDeliveryStatusRecord['state']
     readonly subscriberRef?: string
-  }): { readonly items: EventDeliveryStatusRecord[]; readonly total: number }
+  }): Promise<{ readonly items: EventDeliveryStatusRecord[]; readonly total: number }>
   listEventRecordPage(input: {
     readonly limit: number
     readonly offset: number
     readonly sourceId?: string
-  }): { readonly items: EventRecordAuditRecord[]; readonly total: number }
-  acceptDelivery(deliveryId: string, now: number): boolean
+  }): Promise<{ readonly items: EventRecordAuditRecord[]; readonly total: number }>
+  acceptDelivery(deliveryId: string, now: number): Promise<boolean>
   claimNotificationDelivery(input: {
     readonly deliveryId?: string
     readonly subscriberKinds: readonly EventSubscriber['kind'][]
     readonly now: number
     readonly leaseOwner: string
     readonly leaseMs: number
-  }): EventDeliveryRecord | null
+  }): Promise<EventDeliveryRecord | null>
   settleNotificationDelivery(input: {
     readonly deliveryId: string
     readonly leaseOwner: string
+    readonly attemptCount: number
     readonly now: number
     readonly state: 'accepted' | 'pending' | 'dead-letter'
     readonly nextAttemptAt: number
     readonly error: string | null
-  }): boolean
-  listObserverActivations(): ObserverActivationRecord[]
+  }): Promise<boolean>
+  listObserverActivations(): Promise<ObserverActivationRecord[]>
   claimDueObserver(input: {
     readonly now: number
     readonly leaseOwner: string
     readonly leaseMs: number
     readonly runId: string
-  }): ClaimedObserverRun | null
+  }): Promise<ClaimedObserverRun | null>
   settleObserver(input: {
     readonly run: ClaimedObserverRun
     readonly now: number
@@ -122,5 +123,5 @@ export interface EventStorePort {
     readonly nextId: () => string
     readonly errorCode: string | null
     readonly errorDetail: string | null
-  }): 'completed' | 'failed' | 'obsolete'
+  }): Promise<'completed' | 'failed' | 'obsolete'>
 }

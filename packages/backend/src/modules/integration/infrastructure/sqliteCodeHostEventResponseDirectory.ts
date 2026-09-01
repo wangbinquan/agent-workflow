@@ -59,7 +59,7 @@ export function createSqliteCodeHostEventResponseDirectory(
   db: DbClient,
 ): CodeHostEventResponseDirectoryPort {
   return {
-    list() {
+    async list() {
       return db
         .select()
         .from(webhookTriggers)
@@ -67,7 +67,7 @@ export function createSqliteCodeHostEventResponseDirectory(
         .all()
         .map(definitionOf)
     },
-    matching(facts) {
+    async matching(facts) {
       const event = codeHostSelectorEvent(facts)
       return db
         .select()
@@ -83,7 +83,7 @@ export function createSqliteCodeHostEventResponseDirectory(
             : []
         })
     },
-    has(ruleId) {
+    async has(ruleId) {
       return (
         db
           .select({ id: webhookTriggers.id })

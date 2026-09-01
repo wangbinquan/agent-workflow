@@ -18,13 +18,19 @@ import { createCustomEventObserverProgram } from './infrastructure/customEventOb
 import { createSqliteCustomEventSourceStore } from './infrastructure/sqliteCustomEventSourceStore'
 import { createSqliteEventStore } from './infrastructure/sqliteEventStore'
 import { createSqliteEventResponseRuleStore } from './infrastructure/sqliteEventResponseRuleStore'
+import { createPostgresqlEventStore } from './infrastructure/postgresqlEventStore'
+import { createPostgresqlCustomEventSourceStore } from './infrastructure/postgresqlCustomEventSourceStore'
+import { createPostgresqlEventResponseRuleStore } from './infrastructure/postgresqlEventResponseRuleStore'
+import type { CustomEventSourceStorePort } from './application/ports/customEventSourceStore'
+import type { EventStorePort } from './application/ports/eventStore'
+import type { EventResponseRuleStorePort } from './application/ports/responseRuleStore'
 import type { EventObservationCommandPort } from './public/commands'
 import type { EventCenterParticipant, EventObserverControlParticipant } from './public/participants'
 import type { EventCenterCatalogQueryPort, EventCenterOperationsQueryPort } from './public/queries'
-import {
-  committedEventDeliveryPage,
-  retryCommittedEventDelivery,
-} from '@/platform/events/committed/sqliteStore'
+import type { CommittedEventDeliveryPersistencePort } from '@/platform/events/committed/persistence'
+import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createPostgresqlCommittedEventDeliveryPersistence } from '@/platform/events/committed/postgresqlPersistence'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   CommittedEventDeliveryPage,
   CommittedEventDeliveryState,
@@ -56,7 +62,7 @@ export interface EventCenterModule {
         id: string,
         actorUserId: string | null,
       ): ReturnType<EventCenterService['publishCustomSource']>
-      retire(id: string): void
+      retire(id: string): ReturnType<EventCenterService['retireCustomSource']>
     }
     readonly queries: {
       list(): ReturnType<EventCenterService['listCustomSources']>
@@ -74,7 +80,10 @@ export interface EventCenterModule {
         input: unknown,
         principal: ResponseRuleWritePrincipal,
       ): ReturnType<EventResponseRuleService['update']>
-      remove(id: string, principal: ResponseRuleWritePrincipal): void
+      remove(
+        id: string,
+        principal: ResponseRuleWritePrincipal,
+      ): ReturnType<EventResponseRuleService['remove']>
     }
     readonly queries: {
       list(): ReturnType<EventResponseRuleService['list']>
@@ -98,12 +107,106 @@ export interface EventCenterModule {
         family: CommittedEventFamily | null
         aggregateId: string | null
         consumerId: string | null
-      }): CommittedEventDeliveryPage
+      }): Promise<CommittedEventDeliveryPage>
     }
     readonly commands: {
-      retry(input: ManualCommittedEventRetryInput): ManualCommittedEventRetryReceipt
+      retry(input: ManualCommittedEventRetryInput): Promise<ManualCommittedEventRetryReceipt>
     }
   }
+}
+
+/**
+ * Keep the legacy synchronous HTTP app factory usable while Event Center
+ * persistence performs its asynchronous catalog registration. Production
+ * bootstrap awaits and injects the concrete module; direct SQLite route tests
+ * use this facade, whose every operation waits for the same initialization
+ * promise before touching the service.
+ */
+export function deferEventCenterModule(pending: Promise<EventCenterModule>): EventCenterModule {
+  const resolve = async (): Promise<EventCenterModule> => await pending
+  const participant: EventCenterParticipant = {
+    subscribe: async (input) => await (await resolve()).participant.subscribe(input),
+    unsubscribe: async (subscriptionId) =>
+      await (await resolve()).participant.unsubscribe(subscriptionId),
+    observe: async (input) => await (await resolve()).participant.observe(input),
+    pendingDeliveries: async (subscriber, limit) =>
+      await (await resolve()).participant.pendingDeliveries(subscriber, limit),
+    acceptDelivery: async (deliveryId) =>
+      await (await resolve()).participant.acceptDelivery(deliveryId),
+  }
+
+  const deferred: EventCenterModule = {
+    commands: {
+      observe: async (input) => await participant.observe(input),
+    },
+    participant: Object.freeze(participant),
+    observerControl: {
+      nudgeSource: async (sourceRef) =>
+        await (await resolve()).observerControl.nudgeSource(sourceRef),
+    },
+    queries: {
+      catalog: {
+        catalogJson: async () => await (await resolve()).queries.catalog.catalogJson(),
+        subscriptionsJson: async (subscriberRef) =>
+          await (await resolve()).queries.catalog.subscriptionsJson(subscriberRef),
+        subscriptionPageJson: async (input) =>
+          await (await resolve()).queries.catalog.subscriptionPageJson(input),
+      },
+      operations: {
+        deliveryStatuses: async () => await (await resolve()).queries.operations.deliveryStatuses(),
+        deliveryStatusPage: async (input) =>
+          await (await resolve()).queries.operations.deliveryStatusPage(input),
+        eventRecordPage: async (input) =>
+          await (await resolve()).queries.operations.eventRecordPage(input),
+        observerHealth: async () => await (await resolve()).queries.operations.observerHealth(),
+      },
+    },
+    customSources: {
+      commands: {
+        create: async (input, ownerUserId) =>
+          await (await resolve()).customSources.commands.create(input, ownerUserId),
+        update: async (id, input) =>
+          await (await resolve()).customSources.commands.update(id, input),
+        validate: async (id) => await (await resolve()).customSources.commands.validate(id),
+        publish: async (id, actorUserId) =>
+          await (await resolve()).customSources.commands.publish(id, actorUserId),
+        retire: async (id) => await (await resolve()).customSources.commands.retire(id),
+      },
+      queries: {
+        list: async () => await (await resolve()).customSources.queries.list(),
+        get: async (id) => await (await resolve()).customSources.queries.get(id),
+      },
+    },
+    responseRules: {
+      commands: {
+        create: async (input, principal) =>
+          await (await resolve()).responseRules.commands.create(input, principal),
+        update: async (id, input, principal) =>
+          await (await resolve()).responseRules.commands.update(id, input, principal),
+        remove: async (id, principal) =>
+          await (await resolve()).responseRules.commands.remove(id, principal),
+      },
+      queries: {
+        list: async () => await (await resolve()).responseRules.queries.list(),
+        get: async (id) => await (await resolve()).responseRules.queries.get(id),
+      },
+    },
+    worker: {
+      runOneDueObserver: async () => await (await resolve()).worker.runOneDueObserver(),
+      runOneNotification: async (deliveryId) =>
+        await (await resolve()).worker.runOneNotification(deliveryId),
+    },
+    committedEvents: {
+      queries: {
+        deliveryPage: async (input) =>
+          await (await resolve()).committedEvents.queries.deliveryPage(input),
+      },
+      commands: {
+        retry: async (input) => await (await resolve()).committedEvents.commands.retry(input),
+      },
+    },
+  }
+  return Object.freeze(deferred)
 }
 
 /**
@@ -146,10 +249,23 @@ export interface ComposeEventCenterOptions {
   readonly deliveryLeaseMs?: number
 }
 
-export function composeEventCenter(options: ComposeEventCenterOptions): EventCenterModule {
-  const eventStore = createSqliteEventStore(options.db)
-  const customSources = createSqliteCustomEventSourceStore(options.db)
-  const responseRuleStore = createSqliteEventResponseRuleStore(options.db)
+export interface EventCenterPersistence {
+  readonly events: EventStorePort
+  readonly customSources: CustomEventSourceStorePort
+  readonly responseRules: EventResponseRuleStorePort
+  readonly committedEvents: CommittedEventDeliveryPersistencePort
+}
+
+export type ComposeEventCenterWithPortsOptions = Omit<ComposeEventCenterOptions, 'db'> & {
+  readonly persistence: EventCenterPersistence
+}
+
+export async function composeEventCenterWithPorts(
+  options: ComposeEventCenterWithPortsOptions,
+): Promise<EventCenterModule> {
+  const eventStore = options.persistence.events
+  const customSources = options.persistence.customSources
+  const responseRuleStore = options.persistence.responseRules
   const responseRules = new EventResponseRuleService({
     rules: responseRuleStore,
     events: eventStore,
@@ -162,7 +278,16 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
     ...(options.now === undefined ? {} : { now: options.now }),
   })
   const responseDirectory = createEventResponseRoutingDirectory(responseRuleStore)
-  const externalDirectory = options.routingSubscriptions ?? { list: () => [], match: () => [] }
+  const externalDirectory =
+    options.routingSubscriptions ??
+    ({
+      async list() {
+        return []
+      },
+      async match() {
+        return []
+      },
+    } satisfies EventRoutingSubscriptionDirectoryPort)
   const service = new EventCenterService({
     store: eventStore,
     customSources,
@@ -176,11 +301,15 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
     },
     customObserver,
     routingSubscriptions: {
-      list: () => [...responseDirectory.list(), ...externalDirectory.list()],
-      match: (observation) => [
-        ...responseDirectory.match(observation),
-        ...externalDirectory.match(observation),
-      ],
+      async list() {
+        return [...(await responseDirectory.list()), ...(await externalDirectory.list())]
+      },
+      async match(observation) {
+        return [
+          ...(await responseDirectory.match(observation)),
+          ...(await externalDirectory.match(observation)),
+        ]
+      },
     },
     deliveryConsumers: [
       ...(options.automationWorkStart === undefined
@@ -203,13 +332,14 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
     ...(options.observerLeaseMs === undefined ? {} : { observerLeaseMs: options.observerLeaseMs }),
     ...(options.deliveryLeaseMs === undefined ? {} : { deliveryLeaseMs: options.deliveryLeaseMs }),
   })
+  await service.initialize()
 
   const participant: EventCenterParticipant = {
-    subscribe: (input) => service.subscribe(input),
-    unsubscribe: (subscriptionId) => service.unsubscribe(subscriptionId),
-    observe: (input) => service.observe(input),
-    pendingDeliveries: (subscriber, limit) =>
-      service.pendingDeliveries(subscriber, limit).map((delivery) => ({
+    subscribe: async (input) => await service.subscribe(input),
+    unsubscribe: async (subscriptionId) => await service.unsubscribe(subscriptionId),
+    observe: async (input) => await service.observe(input),
+    pendingDeliveries: async (subscriber, limit) =>
+      (await service.pendingDeliveries(subscriber, limit)).map((delivery) => ({
         deliveryId: delivery.deliveryId,
         eventId: delivery.eventId,
         subscriptionId: delivery.subscriptionId,
@@ -221,21 +351,21 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
         summary: delivery.summary,
         payloadArtifactRef: delivery.payloadArtifactRef,
       })),
-    acceptDelivery: (deliveryId) => service.acceptDelivery(deliveryId),
+    acceptDelivery: async (deliveryId) => await service.acceptDelivery(deliveryId),
   }
 
   return {
     commands: { observe: participant.observe },
     participant,
-    observerControl: { nudgeSource: (sourceRef) => service.nudgeSource(sourceRef) },
+    observerControl: { nudgeSource: async (sourceRef) => await service.nudgeSource(sourceRef) },
     queries: {
       catalog: {
-        catalogJson: () => JSON.stringify(service.listCatalog()),
-        subscriptionsJson: (subscriberRef) =>
-          JSON.stringify(service.listSubscriptions(subscriberRef ?? undefined)),
-        subscriptionPageJson: (input) =>
+        catalogJson: async () => JSON.stringify(await service.listCatalog()),
+        subscriptionsJson: async (subscriberRef) =>
+          JSON.stringify(await service.listSubscriptions(subscriberRef ?? undefined)),
+        subscriptionPageJson: async (input) =>
           JSON.stringify(
-            service.listSubscriptionPage({
+            await service.listSubscriptionPage({
               page: input.page,
               limit: input.limit,
               ...(input.subscriberRef === null ? {} : { subscriberRef: input.subscriberRef }),
@@ -243,8 +373,8 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
           ),
       },
       operations: {
-        deliveryStatuses: () =>
-          service.listDeliveryStatuses().map((delivery) => ({
+        deliveryStatuses: async () =>
+          (await service.listDeliveryStatuses()).map((delivery) => ({
             deliveryId: delivery.deliveryId,
             eventId: delivery.eventId,
             subscriptionId: delivery.subscriptionId,
@@ -257,8 +387,8 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
             lastError: delivery.lastError,
             createdAt: delivery.createdAt,
           })),
-        deliveryStatusPage: (input) => {
-          const page = service.listDeliveryStatusPage({
+        deliveryStatusPage: async (input) => {
+          const page = await service.listDeliveryStatusPage({
             page: input.page,
             limit: input.limit,
             ...(input.state === null ? {} : { state: input.state }),
@@ -281,8 +411,8 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
             })),
           }
         },
-        eventRecordPage: (input) => {
-          const page = service.listEventRecordPage({
+        eventRecordPage: async (input) => {
+          const page = await service.listEventRecordPage({
             page: input.page,
             limit: input.limit,
             ...(input.sourceId === null ? {} : { sourceId: input.sourceId }),
@@ -301,8 +431,8 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
             })),
           }
         },
-        observerHealth: () =>
-          service.observerHealth().map((activation) => ({
+        observerHealth: async () =>
+          (await service.observerHealth()).map((activation) => ({
             sourceRef: activation.sourceRef,
             subscriberCount: activation.subscriberCount,
             state: activation.state,
@@ -342,11 +472,44 @@ export function composeEventCenter(options: ComposeEventCenterOptions): EventCen
     },
     committedEvents: {
       queries: {
-        deliveryPage: (input) => committedEventDeliveryPage(options.db, input),
+        deliveryPage: async (input) =>
+          await options.persistence.committedEvents.deliveryPage(input),
       },
       commands: {
-        retry: (input) => retryCommittedEventDelivery(options.db, input),
+        retry: async (input) => await options.persistence.committedEvents.retry(input),
       },
     },
   }
+}
+
+export async function composeEventCenter(
+  options: ComposeEventCenterOptions,
+): Promise<EventCenterModule> {
+  const { db, ...shared } = options
+  return await composeEventCenterWithPorts({
+    ...shared,
+    persistence: {
+      events: createSqliteEventStore(db),
+      customSources: createSqliteCustomEventSourceStore(db),
+      responseRules: createSqliteEventResponseRuleStore(db),
+      committedEvents: createSqliteCommittedEventDeliveryPersistence(db),
+    },
+  })
+}
+
+export async function composePostgresqlEventCenter(
+  options: Omit<ComposeEventCenterOptions, 'db'> & {
+    readonly db: PostgresqlDatabaseClient
+  },
+): Promise<EventCenterModule> {
+  const { db, ...shared } = options
+  return await composeEventCenterWithPorts({
+    ...shared,
+    persistence: {
+      events: createPostgresqlEventStore(db),
+      customSources: createPostgresqlCustomEventSourceStore(db),
+      responseRules: createPostgresqlEventResponseRuleStore(db),
+      committedEvents: createPostgresqlCommittedEventDeliveryPersistence(db),
+    },
+  })
 }

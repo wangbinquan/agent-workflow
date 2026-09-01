@@ -214,7 +214,9 @@ export function advanceDevelopmentCodeHostObserverCursor(input: {
 }
 
 export function composeDevelopmentCodeHostEventObserver(input: {
-  readonly binding: (repositoryId: string) => MrEnsureConnectionDeps | null
+  readonly binding: (
+    repositoryId: string,
+  ) => MrEnsureConnectionDeps | null | Promise<MrEnsureConnectionDeps | null>
   readonly now?: () => number
   readonly activationRef?: () => string
 }) {
@@ -246,7 +248,7 @@ export function composeDevelopmentCodeHostEventObserver(input: {
         if (subject.typeId !== 'merge-request') continue
         const parsed = splitMrSubject(subject.subjectRef)
         if (parsed === null) throw new Error(`invalid merge-request subject: ${subject.subjectRef}`)
-        const binding = input.binding(parsed.repositoryId)
+        const binding = await input.binding(parsed.repositoryId)
         if (binding === null) {
           throw new Error(`no code-host connection for repository ${parsed.repositoryId}`)
         }
