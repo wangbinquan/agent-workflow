@@ -488,12 +488,12 @@ describe('RFC-181 C — 源级契约锁', () => {
     // live read: a turn that carried no invite may not ask just because the roster
     // gained a human while it ran.
     expect(scheduler).toContain('req.clarifyEnabled === false')
-    expect(scheduler).toContain('isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey)')
-    const preCheck = scheduler.indexOf(
-      'await isTaskClarifySuppressed(db, taskId, req.nodeId, runShardKey)',
-    )
+    expect(scheduler).toContain('collaboration.isTaskClarifySuppressed({')
+    const preCheck = scheduler.indexOf('await collaboration.isTaskClarifySuppressed({')
     const create = scheduler.indexOf('await collaboration.openAgentClarify(')
-    const compensate = scheduler.indexOf('await dismissOpenClarifyParksForAutonomous(db, taskId)')
+    const compensate = scheduler.indexOf(
+      'await collaboration.dismissOpenClarifyParksForAutonomous({',
+    )
     expect(preCheck).toBeGreaterThan(-1)
     expect(create).toBeGreaterThan(preCheck)
     // 建 session 之后必须再查一次并以 A2 原语补偿（关死 check→insert TOCTOU）。

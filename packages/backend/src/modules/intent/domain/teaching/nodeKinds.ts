@@ -35,7 +35,8 @@ import {
 import type { NodeTeachingOf } from './types'
 import { WORKFLOW_PORT_REF_TEACHING } from './workflowParts'
 
-const VALIDATOR = 'packages/backend/src/services/workflow.validator.ts'
+const VALIDATOR =
+  'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts'
 const RESOLVE_SEAM = 'packages/backend/src/services/intent/resolveChangeset.ts'
 
 const LIMITS_TEACHING = {

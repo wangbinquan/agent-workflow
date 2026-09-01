@@ -27,7 +27,16 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const VALIDATOR_TS = resolve(import.meta.dir, '..', 'src', 'services', 'workflow.validator.ts')
+const VALIDATOR_TS = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'resource-catalog',
+  'infrastructure',
+  'legacy',
+  'workflow.validator.ts',
+)
 
 describe('RFC-069 C3 — pre-pass single source of truth grep guard', () => {
   test('validateAgentClarifyMultiplicity is defined exactly once', () => {

@@ -20,27 +20,39 @@
 
 UPDATE agents SET mcp = COALESCE(
   (
-    SELECT json_group_array(m.id ORDER BY je.key)
-    FROM json_each(agents.mcp) je
-    JOIN mcps m ON m.name = je.value
+    SELECT json_group_array(ordered.id)
+    FROM (
+      SELECT m.id AS id
+      FROM json_each(agents.mcp) je
+      JOIN mcps m ON m.name = je.value
+      ORDER BY je.key
+    ) ordered
   ),
   '[]'
 );
 --> statement-breakpoint
 UPDATE agents SET plugins = COALESCE(
   (
-    SELECT json_group_array(p.id ORDER BY je.key)
-    FROM json_each(agents.plugins) je
-    JOIN plugins p ON p.name = je.value
+    SELECT json_group_array(ordered.id)
+    FROM (
+      SELECT p.id AS id
+      FROM json_each(agents.plugins) je
+      JOIN plugins p ON p.name = je.value
+      ORDER BY je.key
+    ) ordered
   ),
   '[]'
 );
 --> statement-breakpoint
 UPDATE agents SET depends_on = COALESCE(
   (
-    SELECT json_group_array(a2.id ORDER BY je.key)
-    FROM json_each(agents.depends_on) je
-    JOIN agents a2 ON a2.name = je.value
+    SELECT json_group_array(ordered.id)
+    FROM (
+      SELECT a2.id AS id
+      FROM json_each(agents.depends_on) je
+      JOIN agents a2 ON a2.name = je.value
+      ORDER BY je.key
+    ) ordered
   ),
   '[]'
 );
@@ -49,13 +61,17 @@ UPDATE agents SET skills = COALESCE(
   (
     SELECT json_group_array(
       CASE
-        WHEN s.id IS NOT NULL THEN json_object('kind', 'managed', 'skillId', s.id)
-        ELSE json_object('kind', 'project', 'name', je.value)
+        WHEN ordered.skill_id IS NOT NULL
+          THEN json_object('kind', 'managed', 'skillId', ordered.skill_id)
+        ELSE json_object('kind', 'project', 'name', ordered.skill_name)
       END
-      ORDER BY je.key
     )
-    FROM json_each(agents.skills) je
-    LEFT JOIN skills s ON s.name = je.value
+    FROM (
+      SELECT s.id AS skill_id, je.value AS skill_name
+      FROM json_each(agents.skills) je
+      LEFT JOIN skills s ON s.name = je.value
+      ORDER BY je.key
+    ) ordered
   ),
   '[]'
 );

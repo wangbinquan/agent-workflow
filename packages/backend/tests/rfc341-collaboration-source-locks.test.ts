@@ -26,15 +26,15 @@ describe('RFC-341 collaboration owner source locks', () => {
   test('compiled restart barriers stop after commit and before every immediate event wake', () => {
     const cases = [
       {
-        path: 'services/review.ts',
+        path: 'modules/collaboration/infrastructure/legacySqliteReview.ts',
         publish: 'publishCommittedEventsAfterCommit(committed.eventRefs)',
       },
       {
-        path: 'services/clarify/autoDispatch.ts',
+        path: 'modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
         publish: 'publishCommittedEventsAfterCommit(prepared.capture.eventRefs)',
       },
       {
-        path: 'services/taskQuestionDispatch.ts',
+        path: 'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
         publish: 'publishCommittedEventsAfterCommit(committedEventRefs)',
       },
     ] as const
@@ -55,8 +55,10 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('clarify commit barrier precedes nested dispatch and replay never enters the seam', () => {
-    const autoDispatch = source('services/clarify/autoDispatch.ts')
-    const seal = source('services/clarify/seal.ts')
+    const autoDispatch = source(
+      'modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+    )
+    const seal = source('modules/collaboration/infrastructure/legacySqliteClarify/seal.ts')
     const wrapperAt = autoDispatch.indexOf(
       'export async function autoDispatchClarifyRoundWithDecision',
     )
@@ -74,10 +76,7 @@ describe('RFC-341 collaboration owner source locks', () => {
     )
     const sealCallAt = autoDispatch.indexOf('const sealResult = await sealRoundQuestions({')
     const forwardedBarrierAt = autoDispatch.indexOf('afterCommit: args.afterSealCommit', sealCallAt)
-    const distillAt = autoDispatch.indexOf(
-      'await args.memoryDistillEnqueuer.enqueue(',
-      forwardedBarrierAt,
-    )
+    const distillAt = autoDispatch.indexOf('await args.memoryDistillEnqueuer', forwardedBarrierAt)
     const askerReadAt = autoDispatch.indexOf('const askerRows =', roundAt)
     const nestedDispatchAt = autoDispatch.indexOf('dispatchTaskQuestions(', askerReadAt)
     const txAt = seal.indexOf('const committed = dbTxSync(args.db, (tx) => {')
@@ -104,9 +103,17 @@ describe('RFC-341 collaboration owner source locks', () => {
   })
 
   test('fresh, replay and claimed pre-drive share durable clarify convergence', () => {
-    const autoDispatch = source('services/clarify/autoDispatch.ts')
+    const autoDispatch = source(
+      'modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+    )
     const preDrive = source('services/humanGateContinuationEffects.ts')
-    const seal = source('services/clarify/seal.ts')
+    const convergence = source(
+      'modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts',
+    )
+    const preDrivePersistence = source(
+      'modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts',
+    )
+    const seal = source('modules/collaboration/infrastructure/legacySqliteClarify/seal.ts')
     const replayAt = autoDispatch.indexOf('if (replay !== null)')
     const freshAt = autoDispatch.indexOf('committedOperationId: prepared.operationId')
     const finishAt = autoDispatch.indexOf(
@@ -122,10 +129,11 @@ describe('RFC-341 collaboration owner source locks', () => {
       autoDispatch.indexOf('await finishCommittedClarifyAutoDispatch({', freshAt),
     ).toBeGreaterThan(freshAt)
     expect(autoDispatch).not.toContain('dispatch: EMPTY_DISPATCH,')
-    expect(preDrive).toContain('await finishCommittedClarifyAutoDispatch({')
-    expect(preDrive).toContain("state: 'pending'")
-    expect(preDrive).toContain(
-      'eq(taskExecutionIntents.claimedEpoch, context.execution.token.epoch)',
+    expect(preDrive).toContain('await input.clarifyConvergence.finish({')
+    expect(convergence).toContain('await finishCommittedClarifyAutoDispatch({')
+    expect(preDrivePersistence).toContain("state: 'pending'")
+    expect(preDrivePersistence).toContain(
+      'eq(taskExecutionIntents.claimedEpoch, input.token.epoch)',
     )
     expect(seal).toContain('freezeAnswerAttributions({')
     expect(seal).toContain('setNodeClarifyDirectiveTx(')
@@ -139,11 +147,11 @@ describe('RFC-341 collaboration owner source locks', () => {
 
   test('covered collaboration writers have no legacy direct broadcaster', () => {
     for (const path of [
-      'services/review.ts',
-      'services/clarify/service.ts',
-      'services/clarify/seal.ts',
-      'services/clarifyDecision.ts',
-      'services/taskQuestionDispatch.ts',
+      'modules/collaboration/infrastructure/legacySqliteReview.ts',
+      'modules/collaboration/infrastructure/legacySqliteClarify/service.ts',
+      'modules/collaboration/infrastructure/legacySqliteClarify/seal.ts',
+      'modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts',
+      'modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
     ]) {
       const value = source(path)
       expect(value).not.toContain("from '@/ws/broadcaster'")

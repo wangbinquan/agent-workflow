@@ -118,7 +118,8 @@ describe('RFC-074 §8 / D3 — fan-out wrapper provenance is atomic (B5)', () =>
     )
     expect(strategy).toContain('this.data.recordConsumed(wrapperRunId, wrapperConsumed)')
     expect(adapter).toContain('consumedUpstreamRunsJson: JSON.stringify(consumed)')
-    expect(adapter).toContain('.where(eq(nodeRuns.id, runId))')
+    expect(adapter).toContain('nodeRunId: runId')
+    expect(adapter).toContain('state.opts.persistence.nodeExecution.patch({')
   })
 })
 

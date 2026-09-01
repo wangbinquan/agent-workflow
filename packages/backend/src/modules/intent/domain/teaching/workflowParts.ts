@@ -92,7 +92,8 @@ export type WorkflowInputKindTeaching<K extends WorkflowInputKind> = {
   ? { readonly extraSources?: never }
   : { readonly extraSources: { readonly [F in InputExtraKeyOf<K>]: IntentPassthroughFieldSource } })
 
-const LAUNCH_INPUTS = 'packages/backend/src/services/workflowLaunchInputs.ts'
+const LAUNCH_INPUTS =
+  'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflowLaunchInputs.ts'
 
 export const WORKFLOW_INPUT_BASE_TEACHING = {
   kind: { form: 'kind', required: true },

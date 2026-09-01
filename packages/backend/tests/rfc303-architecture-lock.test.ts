@@ -36,14 +36,21 @@ describe('RFC-303 architecture locks', () => {
   })
 
   test('the cross-context command cannot select arbitrary task ids', () => {
-    const file = join(SRC, 'modules', 'task-execution', 'public', 'participants.ts')
-    const source = readFileSync(file, 'utf8')
-    const input = source.match(
+    const publicSource = readFileSync(
+      join(SRC, 'modules', 'task-execution', 'public', 'participants.ts'),
+      'utf8',
+    )
+    const definitionSource = readFileSync(
+      join(SRC, 'modules', 'task-execution', 'application', 'applySourceTerminationEffect.ts'),
+      'utf8',
+    )
+    const input = definitionSource.match(
       /export type TaskSourceTerminationEffectInput = Readonly<\{[\s\S]*?\n\}>/,
     )?.[0]
     expect(input).toBeDefined()
     expect(input).not.toContain('taskId')
-    expect(source).not.toMatch(/\b(?:retry|resume|delete)Task\b/)
+    expect(publicSource).toContain('TaskSourceTerminationEffectInput,')
+    expect(input).not.toMatch(/\b(?:retry|resume|delete)Task\b/)
   })
 
   test('task HTTP wire schemas expose no internal binding, fence, capability, or effect revision', () => {

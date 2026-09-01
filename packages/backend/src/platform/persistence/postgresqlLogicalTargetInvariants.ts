@@ -467,14 +467,14 @@ WHERE mission."current_action_run_id" IS NOT NULL
       const validResource = resourceBranches
         .map(
           ([type, table]) =>
-            `(grant."resource_type" = '${type}' AND EXISTS (SELECT 1 FROM ${tables.sql(table)} AS resource WHERE resource."id" = grant."resource_id"))`,
+            `(resource_grant."resource_type" = '${type}' AND EXISTS (SELECT 1 FROM ${tables.sql(table)} AS resource WHERE resource."id" = resource_grant."resource_id"))`,
         )
         .join('\n      OR ')
       return `/* rfc349-invariant:auth-resource-grant-reference */
 SELECT 'resource_grants' AS invariant_table,
-       (grant."resource_type" || '/' || grant."resource_id" || '/' || grant."user_id")::text AS invariant_key
-FROM ${tables.sql('resource_grants')} AS grant
-LEFT JOIN ${tables.sql('users')} AS principal ON principal."id" = grant."user_id"
+       (resource_grant."resource_type" || '/' || resource_grant."resource_id" || '/' || resource_grant."user_id")::text AS invariant_key
+FROM ${tables.sql('resource_grants')} AS resource_grant
+LEFT JOIN ${tables.sql('users')} AS principal ON principal."id" = resource_grant."user_id"
 WHERE principal."id" IS NULL
    OR NOT (
       ${validResource}

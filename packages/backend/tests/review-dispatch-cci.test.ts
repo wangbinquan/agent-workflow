@@ -46,7 +46,15 @@ import { dispatchReviewNode, pickFreshestReviewRun } from '../src/services/revie
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const REVIEW_SOURCE_PATH = resolve(import.meta.dir, '..', 'src', 'services', 'review.ts')
+const REVIEW_SOURCE_PATH = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'collaboration',
+  'infrastructure',
+  'legacySqliteReview.ts',
+)
 const PATCH_MD_PATH = resolve(
   import.meta.dir,
   '..',

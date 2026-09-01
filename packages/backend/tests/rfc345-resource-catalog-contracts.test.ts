@@ -612,8 +612,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(realtimeAccess).toContain('policy.memoryVisibility.canViewMemory(')
     expect(memoryRoute).toContain('directRequestAuthority(identityAccess.directAuthority, actor)')
     expect(overviewRoute).toContain('directRequestAuthority(authorization.directAuthority, actor)')
-    expect(fusionRoute).toContain('directRequestAuthority(authorization.directAuthority, actor)')
-    expect(fusionRoute).toContain('fusion-resource-scope-authorization-not-composed')
+    expect(fusionRoute).toContain('directRequestAuthority(deps.directAuthority, actor)')
+    expect(fusionRoute).toContain('readonly operations: FusionOperations')
+    expect(fusionRoute).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient/)
 
     const resolveContext = memory.indexOf('contexts.resolveCommandContext(context)')
     const firstScopeGate = memory.indexOf(
@@ -734,7 +735,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
     const triggerValidation = readFileSync(
-      resolve(sourceRoot, 'modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts'),
+      resolve(sourceRoot, 'modules/integration/composition/webhookAdmission.ts'),
       'utf8',
     )
     const scheduledPersistence = readFileSync(
@@ -887,6 +888,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       ),
       'utf8',
     )
+    const postgresqlLaunch = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts',
+      ),
+      'utf8',
+    )
 
     expect(publicParticipants).toContain('TaskExecutionResourceSnapshotInTx')
     for (const kind of ['workflow-launch', 'agent-injection', 'call-workflow', 'call-workgroup']) {
@@ -923,9 +931,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(taskRoute).not.toContain('modules/resource-catalog/composition/taskExecution')
     expect(multipart).not.toContain('modules/identity-access/composition')
     expect(multipart).not.toContain('modules/resource-catalog/composition/taskExecution')
-    expect(taskRoute).toContain('taskExecutionResourceAuthority(c, identityAccess)')
+    expect(taskRoute).toContain('readonly operations: TaskRouteOperations')
+    expect(postgresqlLaunch).toContain('resources: dependencies.resourceAuthorityFor(actor)')
     expect(schedules).toContain('resourceAuthority.taskExecutionResources.freezeCallClosure(')
-    expect(webhook).toContain('launchResources,')
+    expect(webhook).toContain('const taskExecutionAuthority = Object.freeze({')
+    expect(webhook).toContain('taskExecutionAuthority,')
 
     const execution = `${node}\n${wrapper}\n${scheduler}`
     for (const legacyResourceImport of [
@@ -950,7 +960,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       fanout.indexOf('agentFailures.get(innerAgentId)'),
     )
     expect(identity).toContain('forTaskExecution(input:')
-    expect(taskRoute).toContain('task-execution-resources-not-composed')
+    expect(taskRoute).toContain('task-route-operations-not-composed')
   })
 
   test('T5-M/T8 descriptor-backed HTTP and MCP bindings execute the owned aggregate', () => {
@@ -1686,7 +1696,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(postgresqlEngine).toContain(
       'await session.compensate({ artifacts, databaseCommitted: false })',
     )
-    expect(postgresqlEngine).toContain('activeJournalIds()')
+    expect(postgresqlEngine).toContain('activeApplyIds()')
 
     for (const legacyWriter of [
       "@/services/agent'",

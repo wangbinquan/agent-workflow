@@ -33,6 +33,12 @@ describe('migration 0111 (RFC-223) — fresh install is a no-op', () => {
     const rows = db.$client.query('SELECT COUNT(*) AS n FROM agents').all() as { n: number }[]
     expect(rows[0]!.n).toBe(0)
   })
+
+  test('orders rows before aggregation instead of requiring aggregate ORDER BY syntax', () => {
+    const sql = readFileSync(join(MIGRATIONS, '0111_rfc223_agent_refs_to_id.sql'), 'utf-8')
+    expect(sql).not.toMatch(/json_group_array\([^\n]*\bORDER BY\b/u)
+    expect(sql.match(/^\s+ORDER BY je\.key$/gmu)).toHaveLength(4)
+  })
 })
 
 describe('migration 0111 (RFC-223) — name→id backfill (frozen at 0110)', () => {

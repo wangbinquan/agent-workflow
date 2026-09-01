@@ -44,9 +44,15 @@ describe('终态集合单源化（flag-audit W0）', () => {
     expect(QUESTION_DISPATCH_CLOSED_TASK_STATUSES.size).toBeLessThan(TERMINAL_TASK_STATUSES.length)
   })
 
-  test('daemon-restart 标记双端共用 shared 常量（写改字瘫痪 autoResume 的病根拆除）', () => {
+  test('daemon-restart 标记的 writers 与 provider recovery readers 共用 shared 常量', () => {
     expect(DAEMON_RESTART_ERROR_SUMMARY).toBe('daemon-restart')
-    for (const rel of ['services/orphans.ts', 'services/autoResume.ts']) {
+    for (const rel of [
+      'services/orphans.ts',
+      'modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts',
+      'modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts',
+      'modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts',
+      'modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts',
+    ]) {
       const src = SRC(rel)
       expect(src).toContain('DAEMON_RESTART_ERROR_SUMMARY')
       // 生产代码不得再出现裸字面量（注释里允许）。

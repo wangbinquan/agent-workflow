@@ -1,4 +1,4 @@
-import { createPostgresqlDigitalEmployeeIntegrationTriggerParticipant } from '@/modules/digital-employee/infrastructure/postgresqlIntegrationTriggerParticipant'
+import { createPostgresqlDigitalEmployeeIntegrationTriggerParticipant } from '@/modules/digital-employee/composition'
 import type { PostgresqlIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,

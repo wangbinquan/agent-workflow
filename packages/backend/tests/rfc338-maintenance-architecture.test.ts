@@ -39,14 +39,20 @@ describe('RFC-338 maintenance architecture', () => {
     expect(MAINTENANCE_JOB_CATALOG.find((spec) => spec.key === 'humanGateRecovery')).toBeUndefined()
   })
 
-  test('production bootstrap admits heavy work to one maintenance service and keeps only memory GC on main', () => {
+  test('each selected provider owns one maintenance service and keeps only memory GC on main', () => {
     const start = readBackend('src/cli/start.ts')
-    expect(start.match(/startMaintenanceService\(\{/g)).toHaveLength(1)
+    expect(start.match(/startMaintenanceService\(\{/g)).toHaveLength(2)
+    expect(start).toMatch(
+      /startMaintenanceService\(\{[\s\S]*?provider: 'postgresql',[\s\S]*?createPostgresqlMaintenanceRunStore\(db\)/u,
+    )
+    expect(start).toMatch(
+      /startMaintenanceService\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
+    )
     expect(start).toContain('maintenanceStatus: maintenanceService.status')
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")
     expect(start).toContain('maintenanceRuntimeBindings.runtimeFactory')
-    expect(start).toContain('activeProviderRuntimeHandles[index]!.stop()')
-    expect(start).toContain('activeProviderRuntimeHandles[index]!.drain()')
+    expect(start).toContain('await input.bootstrap.stop()')
+    expect(start).toContain('await daemonProviderBootstrap.stop()')
     expect(start).toContain('startBatchImportGc(')
     expect(start).toMatch(
       /const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory\(\{[\s\S]*?employeeWriterCutover\.refresh\(\)[\s\S]*?onError\(err\) \{[\s\S]*?development writer refresh failed/u,

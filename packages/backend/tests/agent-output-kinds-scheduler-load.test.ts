@@ -72,9 +72,10 @@ describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045
       'utf8',
     )
 
-    // ① 唯一读取点用的是同一个 canonical module 的 getAgentById。
-    expect(runtimeRef).toMatch(/import \{[^}]*\bgetAgentById\b[^}]*\} from '@\/services\/agent'/)
-    expect(runtimeRef).toContain('await getAgentById(db,')
+    // ① 唯一读取点经 provider-neutral lookup 进入同一个 Agent 投影。
+    expect(runtimeRef).toContain('export interface RuntimeAgentLookup')
+    expect(runtimeRef).toContain('getById(agentId: string): Promise<Agent | null>')
+    expect(runtimeRef).toContain('await agents.getById(')
 
     // ② scheduler 不再自己查 agent 行（收口后比原来更严）。
     expect(src).not.toMatch(/await getAgentById\(db, (aid|agentIdRef)\b/)

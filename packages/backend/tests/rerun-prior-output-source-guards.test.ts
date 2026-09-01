@@ -63,6 +63,7 @@ describe('RFC-119 — node mechanics source guards', () => {
     const start = NODE_MECHANICS_SRC.indexOf('async function priorDoneGenerationsForRun')
     expect(start).toBeGreaterThan(-1)
     const region = NODE_MECHANICS_SRC.slice(start, start + 700)
-    expect(region).toContain("eq(nodeRuns.status, 'done')")
+    expect(region).toContain("status: 'done'")
+    expect(region).toContain('persistence.list({')
   })
 })

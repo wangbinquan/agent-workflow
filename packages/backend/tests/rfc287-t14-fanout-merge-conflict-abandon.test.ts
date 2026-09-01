@@ -69,7 +69,7 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
     // 是「库里留下一句没人兑现的承诺」，落库时序就是全部。只锁三个片段依次出现的
     // 话，`void` 版本照样全绿。
     expect(decl).toMatch(
-      /onConflictHuman:[\s\S]{0,800}await tryTransitionMergeState\([\s\S]{0,300}fanout-shard-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
+      /onConflictHuman:[\s\S]{0,800}await state\.opts\.persistence\.mergeStates\.tryTransition\(\{[\s\S]{0,300}fanout-shard-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
     )
   })
 
@@ -80,7 +80,7 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
     // 是「库里留下一句没人兑现的承诺」，落库时序就是全部。只锁三个片段依次出现的
     // 话，`void` 版本照样全绿。
     expect(decl).toMatch(
-      /onConflictHuman:[\s\S]{0,800}await tryTransitionMergeState\([\s\S]{0,300}fanout-agg-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
+      /onConflictHuman:[\s\S]{0,800}await state\.opts\.persistence\.mergeStates\.tryTransition\(\{[\s\S]{0,300}fanout-agg-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
     )
   })
 

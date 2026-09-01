@@ -247,6 +247,7 @@ import { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import {
   composeDigitalEmployee,
+  composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeIntegrationTriggerParticipant,
   composeDigitalEmployeeTaskCatalogSource,
@@ -254,7 +255,6 @@ import {
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
-import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { rowToAgent } from '@/services/agent'
 import { rowToWorkflowDetail } from '@/services/workflow'
 import { rowToWorkgroup } from '@/services/workgroups'

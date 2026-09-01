@@ -7,7 +7,7 @@
 // being imported by a child process. Uncertainty retains data.
 
 import type { Dirent } from 'node:fs'
-import { readdir } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PluginGenerationGcCommand } from '@/modules/resource-catalog/public/commands'
 import { createLogger } from '@/util/log'
@@ -30,8 +30,13 @@ function missingDirectory(error: unknown): boolean {
  * unreadable existing directory is treated as a candidate so uncertainty can
  * never bypass the active-run safety proof.
  */
-export async function hasPluginGenerationGcCandidates(pluginsDir?: string): Promise<boolean> {
+export async function hasPluginGenerationGcCandidates(
+  pluginsDir?: string,
+  input: { readonly graceMs?: number; readonly now?: number } = {},
+): Promise<boolean> {
   const root = pluginsDir ?? Paths.pluginsDir
+  const graceMs = input.graceMs ?? DEFAULT_GRACE_MS
+  const now = input.now ?? Date.now()
   let plugins: Dirent[]
   try {
     plugins = await readdir(root, { withFileTypes: true })
@@ -40,12 +45,29 @@ export async function hasPluginGenerationGcCandidates(pluginsDir?: string): Prom
   }
   for (const plugin of plugins) {
     if (!plugin.isDirectory()) continue
-    if (plugin.name.startsWith('.check-')) return true
+    if (plugin.name.startsWith('.check-')) {
+      try {
+        if (now - (await stat(join(root, plugin.name))).mtimeMs >= graceMs) return true
+      } catch (error) {
+        if (!missingDirectory(error)) return true
+      }
+      continue
+    }
+    const generationsRoot = join(root, plugin.name, 'generations')
     try {
-      const generations = await readdir(join(root, plugin.name, 'generations'), {
+      const generations = await readdir(generationsRoot, {
         withFileTypes: true,
       })
-      if (generations.some((generation) => generation.isDirectory())) return true
+      for (const generation of generations) {
+        if (!generation.isDirectory()) continue
+        try {
+          if (now - (await stat(join(generationsRoot, generation.name))).mtimeMs >= graceMs) {
+            return true
+          }
+        } catch (error) {
+          if (!missingDirectory(error)) return true
+        }
+      }
     } catch (error) {
       if (!missingDirectory(error)) return true
     }
@@ -66,7 +88,7 @@ export interface PluginGenerationFilesystemGcInput {
 }
 
 export interface PluginGenerationFilesystemGcAdapter {
-  hasCandidates(): Promise<boolean>
+  hasCandidates(input: { readonly graceMs?: number; readonly now?: number }): Promise<boolean>
   collect(input: PluginGenerationFilesystemGcInput): Promise<readonly string[]>
 }
 
@@ -74,7 +96,8 @@ export function createPluginGenerationFilesystemGcPort(
   pluginsDir?: string,
 ): PluginGenerationFilesystemGcAdapter {
   return Object.freeze({
-    hasCandidates: () => hasPluginGenerationGcCandidates(pluginsDir),
+    hasCandidates: (input: { readonly graceMs?: number; readonly now?: number }) =>
+      hasPluginGenerationGcCandidates(pluginsDir, input),
     collect: (input: PluginGenerationFilesystemGcInput) =>
       garbageCollectPluginGenerations({
         pluginsDir,

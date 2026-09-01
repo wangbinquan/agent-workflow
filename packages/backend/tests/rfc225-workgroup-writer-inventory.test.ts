@@ -1,8 +1,8 @@
 // RFC-225 / RFC-345 T5-WG — raw workgroup content writes stay behind the two
-// exact version-fenced authorities during compatibility cutover: the active
-// resource-catalog repository and its moved legacy provider implementation.
-// Tests and migrations are out of scope; this inventory must shrink when T9
-// retires the remaining legacy consumers.
+// exact version-fenced Resource Catalog authorities: the selected-provider
+// repositories, transaction-bound Intent/ResourcePackage aggregate arms, and
+// the moved SQLite compatibility implementation. Tests and migrations are out
+// of scope; this inventory must shrink when the compatibility tail retires.
 
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -35,14 +35,21 @@ describe('RFC-225 workgroup writer inventory', () => {
   test('workgroup row insert/update/delete has only the active and compatibility authorities', () => {
     expect(inventory(/\.insert\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.update\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.delete\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
   })
@@ -50,10 +57,16 @@ describe('RFC-225 workgroup writer inventory', () => {
   test('member replacement writes cannot grow a second path', () => {
     expect(inventory(/\.insert\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 2,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.delete\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/postgresqlWorkgroupRepository.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.update\s*\(\s*workgroupMembers\s*\)/g)).toEqual({})

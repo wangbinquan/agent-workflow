@@ -1,7 +1,6 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
-import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { Buffer } from 'node:buffer'
 import { createSecretBox } from '@/auth/secretBox'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
@@ -156,13 +155,14 @@ import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/m
 import { composeEventCenter, runEventCenterCycle } from '@/modules/event-center/composition'
 import {
   composeSqliteDigitalEmployeeWriterCutover,
+  composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployee,
   composeDigitalEmployeeIntegrationTriggerParticipant,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
+  runDigitalEmployeeOsCycle,
 } from '@/modules/digital-employee/composition'
-import { runDigitalEmployeeOsCycle } from '@/modules/digital-employee/application/osWorker'
 import { rowToAgent } from '@/services/agent'
 import { rowToWorkflowDetail } from '@/services/workflow'
 import { rowToWorkgroup } from '@/services/workgroups'

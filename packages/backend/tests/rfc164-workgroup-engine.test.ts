@@ -937,7 +937,7 @@ describe('RFC-164 engine — source locks', () => {
     expect(TASK_ENGINE_APPLICATION_SRC).toContain('isWorkgroupTask(task)')
     expect(TASK_ENGINE_APPLICATION_SRC).toContain('resolveTaskEngineSelection(')
     expect(TASK_ENGINE_APPLICATION_SRC).toContain("'workgroup-turns': new WorkgroupTaskEngine")
-    expect(TASK_ENGINE_APPLICATION_SRC).toContain('runWorkgroupEngine(')
+    expect(TASK_ENGINE_APPLICATION_SRC).toContain('opts.workgroupTurns.drive({')
   })
 
   test('renderUserPrompt: workgroup protocol REPLACES the agent-outputs block (else-if chain)', () => {

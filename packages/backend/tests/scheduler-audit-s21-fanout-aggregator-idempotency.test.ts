@@ -356,8 +356,8 @@ describe('scheduler-audit S-21 — fanout aggregator idempotency + done-filter (
     const segEnd = body.indexOf('if (scope.perShard.has(edge.source.nodeId))')
     expect(segEnd).toBeGreaterThan(segStart)
     const segment = body.slice(segStart, segEnd)
-    expect(segment).toContain('eq(nodeRuns.iteration, iteration)')
-    expect(segment).toContain('isNotNull(nodeRuns.parentNodeRunId)')
+    expect(segment).toContain('iteration,')
+    expect(segment).toContain('childOnly: true')
 
     // (c) aggregator 自身的复用分支存在：同代非终态残留原地 reset 重跑
     //     （reason 'fanout-aggregator-resume'），铸新行不再是无条件路径。

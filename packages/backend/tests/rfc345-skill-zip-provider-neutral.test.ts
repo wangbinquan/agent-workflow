@@ -39,7 +39,7 @@ describe('RFC-345 Skill ZIP provider-neutral participant', () => {
     const repository = source('infrastructure/postgresqlSkillRepository.ts')
 
     expect(sqlite).toContain("from './legacy/skill-zip'")
-    expect(sqlite).toContain('createSkillZipImportParticipant(port)')
+    expect(sqlite).toContain('createSkillZipImportParticipant(Object.freeze(port))')
 
     expect(postgresql).toContain('createPostgresqlSkillZipImportParticipant')
     expect(postgresql).toContain('runPostgresqlResourceCatalogTransaction')

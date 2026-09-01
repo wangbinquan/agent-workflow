@@ -55,7 +55,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     // RFC-132 (PR-C): one flat injector replaces the former self/questioner + designer split.
     // selectAgentQueue queries every role in one shot, so there is no per-role consumerKind SELECT
     // fork and no round-grouped buildPromptContext call in node mechanics anymore.
-    expect(src).toContain('await buildClarifyQueueContext(')
+    expect(src).toContain('await collaboration.buildClarifyQueueContext({')
     expect(src).not.toContain('await buildPromptContext(')
     expect(src).not.toContain("consumerKind: 'self'")
     expect(src).not.toContain("consumerKind: 'cross-questioner'")
@@ -67,9 +67,9 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     expect(src).toContain('agentHasClarifyChannel')
   })
 
-  test('nodeExecution.ts wires createClarifyRound into the agent execution path', () => {
+  test('nodeExecution.ts wires the Collaboration clarify command into the agent execution path', () => {
     const src = readFileSync(NODE_EXECUTION_SRC, 'utf8')
-    expect(src).toContain('createClarifyRound')
+    expect(src).toContain('await mechanics.openAgentClarify({')
   })
 
   test('runner.ts threads the clarifyChannel ADT into renderUserPrompt', () => {
@@ -130,7 +130,18 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     expect(src).not.toContain('clarifyContext?.directive')
     // RFC-284 T27 改锚：正体已迁 services/clarify/rounds.ts（旧路径是 facade，
     // 读它只会看到 4 行转口）。锁的意图不变：oracle 的 stop 门必须在场。
-    const oracleSrc = readFileSync(join(BACKEND_SRC, 'clarify', 'rounds.ts'), 'utf8')
+    const oracleSrc = readFileSync(
+      join(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteClarifyRounds.ts',
+      ),
+      'utf8',
+    )
     expect(oracleSrc).toContain("args.contextDirective !== 'stop'")
     const occurrences = src.match(/effectiveHasClarifyChannel/g) ?? []
     expect(occurrences.length).toBeGreaterThanOrEqual(2)
@@ -150,7 +161,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     // RFC-132 (PR-C §7): the per-round directive plumbing (applyLatestDirective) is gone; the
     // directive is nodeDirective (getNodeClarifyDirectiveRow) + nodeStopOverride.
     expect(src).not.toContain('applyLatestDirective')
-    expect(src).toContain('const nodeDirective = nodeDirectiveRow?.directive')
+    expect(src).toContain('const nodeDirective = nodeDirectiveRow')
     expect(src).toContain('const nodeStopOverride = nodeDirective === ')
   })
 

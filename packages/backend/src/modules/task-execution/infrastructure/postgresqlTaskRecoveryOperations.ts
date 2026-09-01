@@ -20,6 +20,7 @@ import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   CANCELABLE_TASK_STATUSES,
+  DAEMON_RESTART_ERROR_SUMMARY,
   REPO_PREP_NODE_ID,
   TERMINAL_NODE_RUN_STATUSES,
 } from '@agent-workflow/shared'
@@ -554,7 +555,12 @@ export function createPostgresqlTaskRecoveryOperations(
       const interrupted = await db
         .select(projection)
         .from(tasks)
-        .where(and(eq(tasks.status, 'interrupted'), eq(tasks.errorSummary, 'daemon-restart')))
+        .where(
+          and(
+            eq(tasks.status, 'interrupted'),
+            eq(tasks.errorSummary, DAEMON_RESTART_ERROR_SUMMARY),
+          ),
+        )
       const wedged = await db
         .select(projection)
         .from(tasks)

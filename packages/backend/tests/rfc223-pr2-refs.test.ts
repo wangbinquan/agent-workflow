@@ -355,7 +355,8 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
 
     // ① 单一读取点仍然是 id-first：从节点上只取 agentId，再按 id 查行。
     expect(runtimeRef).toContain('const raw = node.agentId')
-    expect(runtimeRef).toContain('getAgentById(db,')
+    expect(runtimeRef).toContain('getById(agentId: string): Promise<Agent | null>')
+    expect(runtimeRef).toContain('agents.getById(')
     // ② 绝不回退 name-only —— 两个文件都不许出现按名字查 agent。
     expect(runtimeRef).not.toContain('agentName')
     expect(wrapperMechanics).not.toContain('await getAgent(db, agentName)')

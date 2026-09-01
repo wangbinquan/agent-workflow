@@ -1,4 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm'
+import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
 import { taskExecutionOwners, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -37,7 +38,7 @@ export class PostgresqlTaskExecutionShutdownOperations implements TaskExecutionS
         .set({
           status: 'interrupted',
           finishedAt: input.now,
-          errorSummary: 'daemon-restart',
+          errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
           errorMessage: input.errorMessage,
           lifecycleEventRevision: nextRevision,
         })
@@ -61,7 +62,7 @@ export class PostgresqlTaskExecutionShutdownOperations implements TaskExecutionS
         lifecycleRevision: nextRevision,
         previousStatus: 'running',
         status: 'interrupted',
-        errorSummary: 'daemon-restart',
+        errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
         workspacePruneClaim: null,
         occurredAt: input.now,
       })

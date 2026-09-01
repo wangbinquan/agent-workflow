@@ -1135,8 +1135,10 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
 
   test('source — lock order A ≻ B + no B reentry: the self rollback holds A OUTER + B INNER around the preflight+rollback, then RELEASES B before dispatchTaskQuestions re-takes a fresh B (round-10 atomicity)', () => {
     const src = readFileSync(
-      // RFC-284 T27 改锚：正体迁 services/clarify/autoDispatch.ts（旧路径为 facade）。
-      resolve(import.meta.dir, '../src/services/clarify/autoDispatch.ts'),
+      resolve(
+        import.meta.dir,
+        '../src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+      ),
       'utf8',
     )
     const fn = src.slice(src.indexOf('export async function autoDispatchClarifyRound'))
@@ -1246,7 +1248,7 @@ describe('RFC-128 P5-D all-role deferred park (same-home deadlock fix)', () => {
       resolve(import.meta.dir, '../src/modules/task-execution/composition/taskDagScope.ts'),
       'utf8',
     )
-    expect(src).toContain('loadUndispatchedParkTargets(db, taskId)')
+    expect(src).toContain('opts.taskDagCollaboration.loadUndispatchedParkTargets(taskId)')
   })
 })
 
@@ -1504,7 +1506,10 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
   test('source — the decision service pumps committed refs from a finally path on dispatch error', () => {
     const src = readFileSync(resolve(import.meta.dir, '../src/routes/clarify.ts'), 'utf8')
     const service = readFileSync(
-      resolve(import.meta.dir, '../src/services/clarify/autoDispatch.ts'),
+      resolve(
+        import.meta.dir,
+        '../src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+      ),
       'utf8',
     )
     expect(src).not.toContain('emitAutoAnswered')

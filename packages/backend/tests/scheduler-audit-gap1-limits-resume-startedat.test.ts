@@ -33,6 +33,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows } from '../src/db/schema'
 import { enforceLimits } from '../src/services/limits'
 import { resumeTask } from '../src/services/task'
+import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const ulid = monotonicFactory()
@@ -148,6 +149,7 @@ describe('gap1 — pause time counts toward maxDurationMs wall clock (current-be
 
     const returned = await resumeTask(h.db, taskId, {
       db: h.db,
+      taskRecoveryOperations: createSqliteTaskExecutionPersistence(h.db).recoveryAdministration,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,

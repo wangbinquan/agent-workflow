@@ -46,7 +46,10 @@ function assertOperationId(operationId: string): void {
 }
 
 function fsyncFile(path: string): void {
-  const handle = openSync(path, 'r')
+  // FlushFileBuffers on Windows rejects a read-only handle. The file was
+  // already created exclusively, so reopening it r+ changes no write/CAS
+  // semantics while keeping the durability barrier real on every platform.
+  const handle = openSync(path, 'r+')
   try {
     fsyncSync(handle)
   } finally {

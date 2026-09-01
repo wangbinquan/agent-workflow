@@ -60,7 +60,8 @@ describe('RFC-047 source-level grep guard', () => {
     const finalization = src.slice(finalBlockStart, finalBlockEnd)
     // RFC-224 moved non-status JSON out of setNodeRunStatus. Keep the follow-up
     // write in the same successful finalization region and after the status CAS.
-    expect(finalization).toContain('.update(nodeRuns)')
+    expect(finalization).toContain('opts.persistence.nodeExecution.patch({')
+    expect(finalization).toContain('values: {')
     expect(finalization).toContain('injectedMemoriesJson:')
     expect(finalization.indexOf('.update(nodeRuns)')).toBeLessThan(
       finalization.indexOf('injectedMemoriesJson:'),

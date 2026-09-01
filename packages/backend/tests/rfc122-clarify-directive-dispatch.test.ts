@@ -606,7 +606,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
       'utf8',
     )
     // Dispatch read (parallel to hasPersistentStop) gated on hasClarifyChannel.
-    expect(src).toContain('getNodeClarifyDirectiveRow(db, taskId, node.id)')
+    expect(src).toContain('collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })')
     expect(src).toContain('const nodeStopOverride =')
     // RFC-132 (PR-C): TWO threads now — the effective-channel oracle + the runNode stop notice. The
     // per-round injector override thread is gone (the flat context carries no directive; the node
@@ -653,9 +653,10 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
     expect(attemptFnIdx, '每 attempt 机身函数应存在（重试边界）').toBeGreaterThan(0)
     expect(keepIfIdx, 'keepIf 回调应存在（每轮重试各调一次）').toBeGreaterThan(0)
     const reads: number[] = []
-    for (let i = src.indexOf('getNodeClarifyDirectiveRow(db, taskId, node.id)'); i >= 0; ) {
+    const directiveRead = 'collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })'
+    for (let i = src.indexOf(directiveRead); i >= 0; ) {
       reads.push(i)
-      i = src.indexOf('getNodeClarifyDirectiveRow(db, taskId, node.id)', i + 1)
+      i = src.indexOf(directiveRead, i + 1)
     }
     expect(reads.length, '至少要有一个 directive 读点').toBeGreaterThan(0)
     expect(

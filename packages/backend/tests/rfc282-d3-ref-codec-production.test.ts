@@ -94,7 +94,10 @@ describe('RFC-282 D3 — call domain', () => {
   })
 
   test('freezeCallClosure walks on the call codec (source wiring)', () => {
-    const text = readFileSync(resolve(BACKEND_SRC, 'services/execution/closure.ts'), 'utf8')
+    const text = readFileSync(
+      resolve(BACKEND_SRC, 'modules/task-execution/infrastructure/legacyCallClosure.ts'),
+      'utf8',
+    )
     expect(text).toContain('decodeCallRef')
     // Both walk layers (root seed + BFS descend) and the workgroup pass go
     // through the wire→AST converters; the freeze walk reads AST fields.

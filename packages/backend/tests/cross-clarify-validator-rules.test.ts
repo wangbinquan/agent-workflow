@@ -11,7 +11,7 @@
 //
 // LOCKS:
 //   1. All 7 rule codes are referenced by literal in
-//      `packages/backend/src/services/workflow.validator.ts`.
+//      `packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts`.
 //   2. All 7 rule codes appear as `toContain('<code>')` assertions in
 //      `packages/backend/tests/workflow-validator-cross-clarify-rfc056.test.ts`.
 //   3. The literal `topology-cycle` whitelist exemption for cross-clarify
@@ -26,7 +26,15 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const BACKEND_ROOT = resolve(import.meta.dir, '..')
-const VALIDATOR_TS = resolve(BACKEND_ROOT, 'src', 'services', 'workflow.validator.ts')
+const VALIDATOR_TS = resolve(
+  BACKEND_ROOT,
+  'src',
+  'modules',
+  'resource-catalog',
+  'infrastructure',
+  'legacy',
+  'workflow.validator.ts',
+)
 const VALIDATOR_TEST_TS = resolve(
   BACKEND_ROOT,
   'tests',

@@ -257,7 +257,7 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
     expect(fn.length).toBeGreaterThan(0)
     // 收敛集恰为两员。多一个成员（尤其 done / failed）就会把真正的数据不一致
     // 变成静默通过 —— 那是本 RFC 明确拒绝的方向。
-    const statuses = [...fn.matchAll(/current\?\.status === '([a-z_]+)'/g)].map((m) => m[1])
+    const statuses = [...fn.matchAll(/current === '([a-z_]+)'/g)].map((m) => m[1])
     expect(statuses.sort()).toEqual(['canceled', 'interrupted'])
     // 收敛路径必须原样抛出非收敛错误。
     expect(fn.includes('return null')).toBe(true)

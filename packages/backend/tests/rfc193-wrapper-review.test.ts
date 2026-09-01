@@ -434,7 +434,16 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     'taskEngineApplication.ts',
   )
   const REVIEW = resolve(import.meta.dir, '..', 'src', 'services', 'review.ts')
-  const S1 = resolve(import.meta.dir, '..', 'src', 'services', 'lifecycleRepair', 'options-S1.ts')
+  const S1 = resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'platform',
+    'persistence',
+    'sqlite',
+    'taskLifecycleRepair',
+    'options-S1.ts',
+  )
 
   test('review.ts never touches task.worktreePath (AC-7)', () => {
     const src = readFileSync(REVIEW, 'utf8')

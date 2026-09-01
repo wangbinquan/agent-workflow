@@ -29,27 +29,29 @@ describe('仓库准备重试 / boot 恢复必须带上 secretBox', () => {
     expect(unsealRepoUrl(sealed, undefined)).toBeNull()
   })
 
-  test('routes/tasks.ts 的重试入口把 secretBox 递进了 deps', () => {
-    const src = read('routes/tasks.ts')
-    // 锚在路由声明上，而不是 `retryRepoPreparation`——那个名字只出现在 services/task.ts，
-    // 在本文件里 indexOf 会返回 -1，切出来的是最后一个字符，测试会红得毫无意义。
-    const at = src.indexOf("path: '/api/tasks/:id/nodes/:nodeRunId/retry'")
-    expect(at, '重试路由的声明找不到了 ⇒ 这条锁已失去锚点，请改锚点而不是删测试').toBeGreaterThan(0)
-    const handler = src.slice(at)
-    const depsBlock = handler.slice(0, handler.indexOf('return c.json'))
-    expect(
-      depsBlock.includes('secretBox'),
-      '重试仓库准备手搓 deps 时漏了 secretBox ⇒ 凡配了 secret.key 的部署重试必然 409',
-    ).toBe(true)
+  test('routes/tasks.ts 只调用 provider-neutral operation，SQLite adapter 复用完整 start deps', () => {
+    const route = read('routes/tasks.ts')
+    const sqlite = read('modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts')
+    expect(route).toContain("path: '/api/tasks/:id/nodes/:nodeRunId/retry'")
+    expect(route).toContain('await operations.retry({')
+    expect(route).not.toMatch(/\bsecretBox\b|\bDbClient\b/)
+    expect(sqlite).toContain('...dependencies.startDepsFor(actor)')
+    expect(sqlite).toContain('taskRecoveryOperations: dependencies.recovery')
   })
 
-  test('cli/start.ts 的 resumeDeps 把 secretBox 递进了 deps', () => {
+  test('bootstrap 只构造一次带 secretBox 的 start deps，重试与 boot 恢复复用 closed command', () => {
     const src = read('cli/start.ts')
-    const block = src.slice(src.indexOf('const resumeDeps'))
-    const depsBlock = block.slice(0, block.indexOf('autoResumeInterruptedTasks'))
-    expect(
-      depsBlock.includes('secretBox'),
-      'boot 自动恢复手搓 deps 时漏了 secretBox ⇒ 这类任务每次 boot 白撞一次直到被熔断隔离',
-    ).toBe(true)
+    const runtime = read('modules/task-execution/composition/providerRuntime.ts')
+    const autoResume = read('modules/task-execution/composition/taskAutoResume.ts')
+    const startDeps = src.slice(
+      src.indexOf('const taskStartDepsFor'),
+      src.indexOf('const fusionStartDeps'),
+    )
+    expect(startDeps).toContain('buildStartTaskDeps(')
+    expect(startDeps).toContain('secretBox')
+    expect(src).toContain('repositoryPreparationRetry: Object.freeze({')
+    expect(src).toContain('taskStartDepsFor(SYSTEM_USER_ID)')
+    expect(runtime).toContain('repositoryPreparation: dependencies.repositoryPreparationRetry')
+    expect(autoResume).toContain('input.repositoryPreparation.retry(taskId)')
   })
 })

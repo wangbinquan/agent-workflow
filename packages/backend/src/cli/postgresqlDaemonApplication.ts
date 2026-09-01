@@ -18,7 +18,6 @@ import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { loadConfig } from '@/config'
 import { resolveIdentity } from '@/auth/session'
-import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import {
   createPostgresqlIdentityAccessCrossContextBindings,
   composePostgresqlOidcIdentityOperations,
@@ -105,10 +104,13 @@ import {
 import { createPostgresqlCollaborationTaskAccessPort } from '@/modules/collaboration/infrastructure/postgresqlCollaborationTaskAccess'
 import { composePostgresqlWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
-import { composeExecutionContract } from '@/modules/execution-contract/composition'
-import { createPostgresqlExecutionContractResourceAdapter } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
+import {
+  composeExecutionContract,
+  createPostgresqlExecutionContractResourceAdapter,
+} from '@/modules/execution-contract/composition'
 import {
   composeDigitalEmployeePlatformInventoryParticipant,
+  composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployeeTaskCatalogSource,
   composePostgresqlDigitalEmployee,
   composePostgresqlDigitalEmployeeBootstrapReads,

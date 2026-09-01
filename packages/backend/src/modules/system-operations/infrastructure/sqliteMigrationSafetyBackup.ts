@@ -73,7 +73,8 @@ export function createSqliteMigrationSafetyBackup(): DatabaseMigrationSafetyBack
       }
       try {
         verifySqlite(temporary)
-        const handle = openSync(temporary, 'r')
+        // Windows FlushFileBuffers requires a write-capable file handle.
+        const handle = openSync(temporary, 'r+')
         try {
           fsyncSync(handle)
         } finally {

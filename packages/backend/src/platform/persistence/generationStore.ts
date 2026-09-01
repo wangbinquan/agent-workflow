@@ -213,7 +213,8 @@ export function writeDatabaseGenerationAtomic(options: WriteDatabaseGenerationOp
       mode: 0o600,
       flag: 'wx',
     })
-    const handle = openSync(temporary, 'r')
+    // Windows FlushFileBuffers requires a write-capable file handle.
+    const handle = openSync(temporary, 'r+')
     try {
       fsyncSync(handle)
     } finally {

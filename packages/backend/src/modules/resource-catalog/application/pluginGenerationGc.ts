@@ -14,7 +14,13 @@ export function createPluginGenerationGcCommand(input: {
 }): PluginGenerationGcCommand {
   return Object.freeze({
     async run(command: PluginGenerationGcInput): Promise<PluginGenerationGcReceipt> {
-      if (command.executionFence === 'busy' || !(await input.filesystem.hasCandidates())) {
+      if (
+        command.executionFence === 'busy' ||
+        !(await input.filesystem.hasCandidates({
+          ...(command.graceMs === undefined ? {} : { graceMs: command.graceMs }),
+          ...(command.now === undefined ? {} : { now: command.now }),
+        }))
+      ) {
         return Object.freeze({ removedGenerationPaths: Object.freeze([]) })
       }
       const referencedCachedPaths = new Set(await input.references.listReferencedCachedPaths())

@@ -105,7 +105,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       // neither route nor Agent can call startTask directly.
       'modules/task-execution/composition/digitalEmployeeExecution.ts': 2,
       'services/execution/executor.ts': 1,
-      'services/fusion.ts': 2,
+      'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts': 1,
       'services/task.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 2,
     })
@@ -121,23 +121,42 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     expect(Object.fromEntries(identifierCalls('directTaskInitiatorFromActorSource'))).toEqual({
       'routes/fusions.ts': 2,
       'services/execution/executor.ts': 1,
+      'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts': 1,
     })
   })
 
   test('direct launch adapters declare their exact JSON or multipart transport lane', () => {
-    const agentsRoute = readFileSync(resolve(BACKEND_SRC, 'routes', 'agents.ts'), 'utf8')
-    const tasksRoute = readFileSync(resolve(BACKEND_SRC, 'routes', 'tasks.ts'), 'utf8')
-    const workgroupsRoute = readFileSync(resolve(BACKEND_SRC, 'routes', 'workgroups.ts'), 'utf8')
+    const sqliteLaunch = readFileSync(
+      resolve(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'sqliteTaskRouteLaunchOperations.ts',
+      ),
+      'utf8',
+    )
+    const postgresqlLaunch = readFileSync(
+      resolve(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'postgresqlTaskRouteLaunchOperations.ts',
+      ),
+      'utf8',
+    )
     const multipartTaskStart = readFileSync(
       resolve(BACKEND_SRC, 'services', 'multipartTaskStart.ts'),
       'utf8',
     )
 
-    expect(agentsRoute).toContain(
-      "launchKind: uploads === undefined ? 'direct-json' : 'direct-multipart'",
-    )
-    expect(tasksRoute).toContain("launchKind: 'direct-json'")
-    expect(workgroupsRoute).toContain("launchKind: 'direct-json'")
+    for (const launch of [sqliteLaunch, postgresqlLaunch]) {
+      expect(launch).toContain(
+        "launchKind: command.uploads === undefined ? 'direct-json' : 'direct-multipart'",
+      )
+      expect(launch).toContain("launchKind: 'direct-json'")
+    }
     expect((multipartTaskStart.match(/launchKind: 'direct-multipart'/g) ?? []).length).toBe(2)
   })
 

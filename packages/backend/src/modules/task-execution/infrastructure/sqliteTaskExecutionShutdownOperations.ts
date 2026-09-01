@@ -1,4 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm'
+import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
 import { taskExecutionOwners, tasks } from '@/db/schema'
@@ -30,7 +31,7 @@ export class SqliteTaskExecutionShutdownOperations implements TaskExecutionShutd
         allowedFrom: ['running'],
         extra: {
           finishedAt: input.now,
-          errorSummary: 'daemon-restart',
+          errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
           errorMessage: input.errorMessage,
         },
         now: input.now,

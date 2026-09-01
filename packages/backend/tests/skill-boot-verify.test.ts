@@ -330,7 +330,15 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     // to a typed failure (node-level, like every sibling fence) — registered
     // §7-7 change; behavior lock in rfc282-b2-resolve-injection.test.ts.
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'resolveInjection.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'legacyTaskExecutionInjectionResolver.ts',
+      ),
       'utf8',
     )
     // The pre-spawn resolver still gates managed skills on the injection
@@ -378,8 +386,8 @@ describe('RFC-170 T-BOOT — skillBootVerify', () => {
     // The legacy v1 backfill (+ husk sweep — backfillLegacySkillVersions) must
     // precede runBootSnapshotReverify (so a backfilled skill is
     // authoritative+verified when the gate activates).
-    const backfillIdx = src.indexOf('backfillLegacySkillVersions(db')
-    const reverifyIdx = src.indexOf('runBootSnapshotReverify(db')
+    const backfillIdx = src.indexOf('skillCatalogBoot.backfillLegacyVersions()')
+    const reverifyIdx = src.indexOf('skillCatalogBoot.reverifySnapshots()')
     expect(backfillIdx).toBeGreaterThan(0)
     expect(backfillIdx).toBeLessThan(reverifyIdx)
   })

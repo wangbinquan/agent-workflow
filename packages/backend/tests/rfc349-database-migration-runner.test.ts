@@ -329,6 +329,18 @@ describe('RFC-349 database migration runner', () => {
       detailCode: '40001',
       retryable: true,
     })
+    expect(
+      classifyDatabaseMigrationFailure(
+        Object.assign(new Error('terminating connection due to administrator command'), {
+          code: 'ERR_POSTGRES_SERVER_ERROR',
+        }),
+        'copying',
+      ),
+    ).toEqual({
+      category: 'copy-transient',
+      detailCode: 'err_postgres_server_error',
+      retryable: true,
+    })
     for (const code of ['23505', '53100']) {
       expect(classify(code, 'copying')).toEqual({
         category: 'copy-permanent',

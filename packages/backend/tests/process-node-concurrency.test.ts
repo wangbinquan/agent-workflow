@@ -143,7 +143,7 @@ describe('process node concurrency', () => {
       ['code-host', 'maxConcurrentCodeHostCalls'],
     ] as const) {
       const call = new RegExp(
-        `getNodePoolSemaphore\\(\\s*db,\\s*'${kind}',\\s*opts\\.${cfgKey}[^)]*'seed-only'`,
+        `getNodePoolSemaphore\\(\\s*opts\\.processConcurrencyScope,\\s*'${kind}',\\s*opts\\.${cfgKey}[^)]*'seed-only'`,
       )
       expect(
         call.test(application),

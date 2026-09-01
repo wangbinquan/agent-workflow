@@ -50,6 +50,7 @@ export type {
   TaskDriveRuntimeOptions,
   TaskExecutionContextRef,
 } from '../application/ports/taskExecutionTopology'
+export type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 export {
   INHERITABLE_RUN_CONFIG_KEYS,
   pickInheritableRunConfig,

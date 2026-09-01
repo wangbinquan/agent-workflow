@@ -77,12 +77,20 @@ describe('RFC-132 ③ — TaskExecution 无 borrow 应用(source-level lock)', (
     // 直接是编译错（必填布尔）。两处一起锁——node mechanics 表态 + 收编函数落实。
     expect(src).toMatch(/clearAgentOverride: true/)
     const mint = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'nodeRunMint.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'resolveSchedulerRunRow.ts',
+      ),
       'utf8',
     )
     expect(mint).toContain('agentOverrideName: null')
     // 多账本冲突 reject 仍在(resolveBorrowForNode 的残余职责)。
-    expect(src).toContain('await resolveBorrowForNode(')
+    expect(src).toContain('await collaboration.resolveBorrowForNode(')
   })
 })
 
@@ -90,11 +98,19 @@ describe('RFC-132 ③ — TaskExecution 无 borrow 应用(source-level lock)', (
 describe('RFC-127 AC-9 — borrow 残余 prompt isolation(attribution never enters)', () => {
   test('source: resolveBorrowForNode 区域无归属列引用', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'taskQuestionDispatch.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteTaskQuestionDispatch.ts',
+      ),
       'utf8',
     )
     const i = src.indexOf('export async function resolveBorrowForNode')
-    const j = src.indexOf('async function buildFrontierMintPlan')
+    const j = src.indexOf('function buildFrontierMintPlan')
     expect(i).toBeGreaterThan(-1)
     expect(j).toBeGreaterThan(i)
     const region = src.slice(i, j)

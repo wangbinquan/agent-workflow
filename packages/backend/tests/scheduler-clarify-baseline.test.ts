@@ -25,7 +25,7 @@ describe('RFC-058 baseline T5 — TaskExecution dispatch gate grep guards', () =
     // RFC-132 (PR-C): the per-role buildPromptContext consumerKind dispatch (+ the questioner SELECT
     // fork) is replaced by the single flat injector — selectAgentQueue queries self/questioner/designer
     // in one shot.
-    expect(txt).toContain('await buildClarifyQueueContext(')
+    expect(txt).toContain('await collaboration.buildClarifyQueueContext({')
     expect(txt).not.toContain('await buildPromptContext(')
     expect(txt).not.toContain("consumerKind: 'cross-questioner'")
     expect(txt).not.toContain('isQuestionerCrossClarifyRerun')

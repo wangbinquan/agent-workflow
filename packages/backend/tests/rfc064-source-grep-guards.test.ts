@@ -111,13 +111,16 @@ describe('RFC-064 C9 / RFC-132 PR-C — applyLatestDirective plumbing removed (d
 })
 
 describe('RFC-064 C4 — services exports', () => {
-  test('services/clarify/service.ts is the canonical home for clarify lifecycle helpers', () => {
+  test('Collaboration owns the SQLite clarify lifecycle helpers', () => {
     // RFC-217 T9 completed the merge RFC-064 anticipated: clarify.ts +
     // crossClarify.ts → services/clarify/service.ts, kind-generalized create.
     // (RFC-132 PR-E2: the legacy quick-channel submit export is no longer part
     // of the locked surface — answers flow through services/clarifyAutoDispatch.)
     const src = readFileSync(
-      resolve(REPO_ROOT, 'packages/backend/src/services/clarify/service.ts'),
+      resolve(
+        REPO_ROOT,
+        'packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('export async function createClarifyRound')

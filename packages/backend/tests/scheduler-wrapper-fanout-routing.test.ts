@@ -51,7 +51,15 @@ const taskEngineApplicationSrc = readFileSync(
   'utf8',
 )
 const taskEngineRuntimeOptionsSrc = readFileSync(
-  resolve(import.meta.dirname, '..', 'src', 'services', 'execution', 'taskEngineRuntimeOptions.ts'),
+  resolve(
+    import.meta.dirname,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'composition',
+    'taskEngineRuntimeOptions.ts',
+  ),
   'utf8',
 )
 const nodeExecutionCompositionSrc = readFileSync(
@@ -166,7 +174,7 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
     expect(wrapperMechanicsSrc).not.toContain("pickStringArray(node, 'nodeIds')")
   })
 
-  test('opts.fanoutMaxShardTotal field exists on RunTaskOptions', () => {
+  test('opts.fanoutMaxShardTotal field exists on the provider-neutral task-engine options', () => {
     expect(taskEngineRuntimeOptionsSrc).toContain('fanoutMaxShardTotal?:')
   })
 })
@@ -183,8 +191,8 @@ describe('D.T3 — aggregator dispatch helper exists + collects per-shard raw li
     // generation's replayed done children; per-row picking moved to the shared
     // done-only picker (pickReusableShardRun). The child rows stay
     // frontier-invisible because parent is still non-null.
-    expect(wrapperMechanicsSrc).toMatch(/isNotNull\(nodeRuns\.parentNodeRunId\)/)
-    expect(wrapperMechanicsSrc).toMatch(/eq\(nodeRuns\.iteration, iteration\)/)
+    expect(wrapperMechanicsSrc).toContain('iteration,')
+    expect(wrapperMechanicsSrc).toContain('childOnly: true')
     expect(wrapperMechanicsSrc).toMatch(/pickReusableShardRun\(innerRows, \{/)
   })
 
@@ -261,9 +269,9 @@ describe('D.T8 — RFC-053 wrapper lifecycle compatibility', () => {
   })
 
   test('wrapper lifecycle handles resumable fanout generations', () => {
-    expect(wrapperLifecycleSrc).toContain(
-      'findResumableWrapperRun(state, request.node.id, request.iteration)',
-    )
+    expect(wrapperLifecycleSrc).toContain('state.opts.persistence.wrapperRuns.findResumable({')
+    expect(wrapperLifecycleSrc).toContain('nodeId: request.node.id')
+    expect(wrapperLifecycleSrc).toContain('iteration: request.iteration')
     expect(wrapperLifecycleSrc).toContain("'wrapper-fanout-resume'")
   })
 

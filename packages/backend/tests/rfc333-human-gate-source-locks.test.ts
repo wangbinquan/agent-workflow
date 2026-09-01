@@ -73,21 +73,21 @@ describe('RFC-333 T2 current human-gate inventory', () => {
   const routes = [
     {
       file: 'packages/backend/src/routes/reviews.ts',
-      command: 'submitReviewDecision',
+      command: 'submitDecision',
       path: "path: '/api/reviews/:nodeRunId/decision'",
       tool: 'submit_review',
       toolPath: 'ctx.operations.reviewSubmit({',
     },
     {
       file: 'packages/backend/src/routes/clarify.ts',
-      command: 'submitClarifyDecision',
+      command: 'submitDecision',
       path: "path: '/api/clarify/:nodeRunId/answers'",
       tool: 'answer_clarify',
       toolPath: 'ctx.operations.clarifyAnswer({',
     },
     {
       file: 'packages/backend/src/routes/taskQuestions.ts',
-      command: 'dispatchTaskQuestions',
+      command: 'dispatch',
       path: "path: '/api/tasks/:id/questions/dispatch'",
       tool: 'dispatch_task_questions',
       toolPath: 'ctx.operations.taskQuestionsDispatch({',
@@ -176,11 +176,27 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(participant).toContain('tx.insert(docVersions)')
     expect(participant).toContain('tx.insert(nodeRunEvents)')
 
-    const parkTx = read(
+    const parkCommand = read(
       'packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts',
     )
-    expect(parkTx.indexOf('consumePreparedGateTx({')).toBeLessThan(
-      parkTx.indexOf('this.lifecycle.transitionTx({'),
+    expect(parkCommand).toContain('return await persistence.parkPrepared({')
+    const sqliteLifecycle = read(
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
+    )
+    expect(sqliteLifecycle.indexOf('consumePreparedGateTx({')).toBeLessThan(
+      sqliteLifecycle.indexOf('this.lifecycle.transitionTx({'),
+    )
+    expect(sqliteLifecycle.indexOf('this.lifecycle.transitionTx({')).toBeLessThan(
+      sqliteLifecycle.indexOf('publishCommittedEventsAfterCommit(result.eventRefs)'),
+    )
+    const postgresqlLifecycle = read(
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts',
+    )
+    expect(postgresqlLifecycle.indexOf('consumePreparedGateTx({')).toBeLessThan(
+      postgresqlLifecycle.indexOf('transitionPostgresqlHumanGateTaskTx(tx, {'),
+    )
+    expect(postgresqlLifecycle.indexOf('transitionPostgresqlHumanGateTaskTx(tx, {')).toBeLessThan(
+      postgresqlLifecycle.indexOf('publishCommittedEventsAfterCommit(result.eventRefs)'),
     )
   })
 
@@ -224,10 +240,12 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
         'appendHumanGateOpenedCommittedEventTx',
       ),
     ).toBe(2)
-    const parkTx = read(
-      'packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts',
-    )
-    expect(parkTx).toContain('this.lifecycle.publishAfterCommit(result.eventRefs)')
+    for (const file of [
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts',
+    ]) {
+      expect(read(file)).toContain('publishCommittedEventsAfterCommit(result.eventRefs)')
+    }
   })
 
   test('T7 new rounds project eager questions while historical lazy reconciliation remains', () => {
@@ -267,9 +285,8 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     const engine = read(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
-    expect(engine.match(/settleManualQuestionParkObligations\(\{/g)).toHaveLength(4)
-    expect(engine).toContain('onTransitionTx: (tx) =>')
-    expect(engine).toContain('assertNoManualQuestionParkObligationTx(tx, taskId, humanGates)')
+    expect(engine.match(/humanGateLifecycle\.settleManualQuestionParks\(\{/g)).toHaveLength(4)
+    expect(engine.match(/humanGateLifecycle\.trySetWhenNoManualQuestionParks\(\{/g)).toHaveLength(4)
     expect(engine).toContain("if (statusBeforeReviewPark === 'awaiting_human')")
     expect(engine).toContain("reason: 'active-clarify-released-before-review'")
     expect(engine).toContain('task review outcome yielded to a durable manual question')
@@ -298,6 +315,6 @@ describe('RFC-333 T2 canonical continuation authority lock', () => {
     )
     expect(task).toContain('submitTaskContinuationTx(input.tx, input)')
     expect(task.match(/intentKind: 'gate-continuation'/g)?.length).toBe(2)
-    expect(submit).toContain('taskExecutionModule.intents.submitTx({')
+    expect(submit).toContain('return await persistence.submitContinuation(input)')
   })
 })

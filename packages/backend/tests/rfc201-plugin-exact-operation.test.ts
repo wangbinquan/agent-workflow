@@ -61,11 +61,16 @@ afterEach(async () => {
 })
 
 describe('immutable generation publication', () => {
-  test('same-version reinstall publishes a distinct cachedPath and exact hash', async () => {
+  test('successive available upgrades publish distinct cached paths and exact hashes', async () => {
     const created = await createPlugin(binding, { name: 'same', spec: 'same@1' })
+    process.env.FAKE_NPM_VERSION = '2.0.0'
+    resetNpmProbeCacheForTests()
     const first = await reinstallPlugin(binding, created.id)
+    process.env.FAKE_NPM_VERSION = '3.0.0'
+    resetNpmProbeCacheForTests()
     const second = await reinstallPlugin(binding, created.id)
-    expect(first.resolvedVersion).toBe(second.resolvedVersion)
+    expect(first.resolvedVersion).toBe('2.0.0')
+    expect(second.resolvedVersion).toBe('3.0.0')
     expect(first.cachedPath).not.toBe(second.cachedPath)
     expect(pluginOperationConfigHashOf(first)).not.toBe(pluginOperationConfigHashOf(second))
     expect(existsSync(first.cachedPath)).toBe(true)
@@ -176,6 +181,28 @@ describe('generation GC safety', () => {
     ).toEqual([])
   })
 
+  test('fresh filesystem generations bypass the reference scan until grace expires', async () => {
+    const fresh = join(pluginsDir, 'fresh-id', 'generations', 'fresh-op')
+    await mkdir(fresh, { recursive: true })
+    const dbThatMustNotBeRead = new Proxy({} as DbClient, {
+      get() {
+        throw new Error('unexpected-database-read')
+      },
+    })
+    expect(
+      await runPluginGenerationGc({
+        command: composeSqlitePluginGenerationGcCommand(
+          dbThatMustNotBeRead,
+          createPluginGenerationFilesystemGcPort(pluginsDir),
+        ),
+        executionFence: 'clear',
+        graceMs: 60_000,
+        now: Date.now(),
+      }),
+    ).toEqual([])
+    expect(existsSync(fresh)).toBe(true)
+  })
+
   test('keeps referenced generation, removes only aged orphan and crashed check dir', async () => {
     const created = await createPlugin(binding, { name: 'kept', spec: 'kept@1' })
     const orphan = join(pluginsDir, 'orphan-id', 'generations', 'orphan-op')
@@ -229,7 +256,7 @@ describe('generation GC safety', () => {
       createPluginGenerationFilesystemGcPort(pluginsDir),
     )
     expect(
-      await runPluginGenerationGc({ command, executionFence: 'clear', graceMs: 1, now }),
+      await runPluginGenerationGc({ command, executionFence: 'busy', graceMs: 1, now }),
     ).toEqual([])
     expect(existsSync(orphan)).toBe(true)
 
@@ -286,7 +313,9 @@ describe('production coordinator callsite ratchet', () => {
     expect(application).toContain('staleConflictError(')
     expect(route).toContain('descriptor: operations.checkUpdate')
     expect(route).toContain('descriptor: operations.upgrade')
-    expect(route).toContain('loadById: (_db, resourceId) => aclIdentity.load(resourceId)')
+    expect(route).toContain('queries.get(module.authorityFor(actor), { id })')
+    expect(route).toContain('context: (c) => module.authorityFor(actorOf(c))')
+    expect(route).not.toContain('DbClient')
     expect(existsSync(retiredFacade)).toBe(false)
   })
 })

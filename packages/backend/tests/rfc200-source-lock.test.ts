@@ -13,12 +13,18 @@ const read = (path: string): string => readFileSync(resolve(ROOT, path), 'utf8')
 describe('RFC-200 source wiring locks', () => {
   test('one persisted run nonce drives prompt emit and every runner parse API', () => {
     const mint = read('packages/backend/src/services/nodeRunMint.ts')
-    expect(mint).toContain("return randomBytes(8).toString('hex')")
-    expect(mint).toContain('envelopeNonce: o.envelopeNonce ?? generateEnvelopeNonce()')
+    const mintRecord = read(
+      'packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts',
+    )
+    expect(mint).toContain('return generateNodeRunEnvelopeNonce()')
+    expect(mintRecord).toContain("return randomBytes(8).toString('hex')")
+    expect(mintRecord).toContain(
+      'envelopeNonce: overrides.envelopeNonce ?? generateNodeRunEnvelopeNonce()',
+    )
 
     const runner = read('packages/backend/src/services/runner.ts')
     expect(runner).toContain(
-      'const envelopeNonce = await loadRunEnvelopeNonce(opts.db, opts.nodeRunId)',
+      'const envelopeNonce = await opts.persistence.nodeRuns.loadEnvelopeNonce(opts.nodeRunId)',
     )
     for (const marker of [
       'renderEnvelopeFollowupPrompt({\n          envelopeNonce,',
@@ -62,7 +68,10 @@ describe('RFC-200 source wiring locks', () => {
     expect(wrapperMechanics).toContain('inputs: aggInputs')
     expect(nodeMechanics).toContain("values.join('\\n\\n---\\n\\n')")
     expect(wrapperMechanics).toContain('composePriorOutputBlock(')
-    expect(nodeMechanics).toContain('loadRunEnvelopeNonce(db, nodeRunId)')
+    expect(nodeMechanics).toContain('state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)')
+    expect(wrapperMechanics).toContain(
+      "(await state.opts.persistence.nodeExecution.read(aggRunId))?.envelopeNonce ?? ''",
+    )
 
     const memory = read('packages/backend/src/services/memoryInject.ts')
     // RFC-317 T39（CC-13）—— 围栏的 nonce 现在来自**必传的判别式**而不是默认参数：
@@ -90,7 +99,7 @@ describe('RFC-200 source wiring locks', () => {
     expect(fc).toContain('composeMemberPrompt(state, memberId, batch, envelopeNonce)')
 
     const dynamic = read('packages/backend/src/services/dynamicWorkflowRunner.ts')
-    expect(dynamic).toContain('const envelopeNonce = await loadRunEnvelopeNonce(db, runId)')
+    expect(dynamic).toContain('const envelopeNonce = await nodeRuns.loadEnvelopeNonce(runId)')
     expect(dynamic).toContain('buildOrchestratorPrompt({')
     expect(dynamic).toContain('envelopeNonce,')
   })

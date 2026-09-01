@@ -162,12 +162,14 @@ describe('task catalog internal execution boundary', () => {
       'utf8',
     )
 
-    for (const source of [commonService, catalogAdapter, legacyRoute]) {
+    for (const source of [commonService, catalogAdapter]) {
       expect(source).not.toContain('digitalEmployee')
       expect(source).not.toContain('digital_employee')
     }
+    expect(legacyRoute).not.toMatch(/catalogVisibility\s*===?\s*['"]digital_employee['"]/)
+    expect(legacyRoute).not.toMatch(/digitalEmployee[\s\S]{0,120}catalogVisibility/)
     expect(commonService).toContain('catalogVisibility')
-    expect(catalogAdapter).toContain("catalogVisibility: 'public'")
+    expect(catalogAdapter).toContain("(['agent', 'workflow', 'workgroup'] as const)")
     expect(legacyRoute).toContain("catalogVisibility: 'public'")
   })
 })

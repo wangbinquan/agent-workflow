@@ -140,6 +140,7 @@ export function classifyDatabaseMigrationFailure(
   phase?: DatabaseMigrationPhase,
 ): Pick<DatabaseMigrationFailure, 'category' | 'detailCode' | 'retryable'> {
   const codes: string[] = []
+  const messages: string[] = []
   let current: unknown = error
   const seen = new Set<object>()
   for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
@@ -151,6 +152,9 @@ export function classifyDatabaseMigrationFailure(
         codes.push(String(candidate))
       }
     }
+    if ('message' in current && typeof current.message === 'string') {
+      messages.push(current.message)
+    }
     current = 'cause' in current ? current.cause : undefined
   }
   const code = codes[0] ?? (error instanceof Error ? error.name : 'unknown')
@@ -161,6 +165,7 @@ export function classifyDatabaseMigrationFailure(
       .replaceAll(/^-+|-+$/g, '')
       .slice(0, 128) || 'internal'
   const normalized = codes.length > 0 ? codes.join(' ').toLowerCase() : code.toLowerCase()
+  const normalizedMessages = messages.join(' ').toLowerCase()
   if (normalized.includes('drain') && normalized.includes('timeout')) {
     return { category: 'drain-timeout', detailCode, retryable: true }
   }
@@ -206,6 +211,10 @@ export function classifyDatabaseMigrationFailure(
     normalized.includes('ehostunreach') ||
     normalized.includes('enetunreach') ||
     normalized.includes('epipe') ||
+    (normalized.includes('err_postgres_server_error') &&
+      (normalizedMessages.includes('terminating connection') ||
+        normalizedMessages.includes('terminated connection') ||
+        normalizedMessages.includes('administrator command'))) ||
     codes.some((candidate) => /^08[0-9a-z]{3}$/i.test(candidate)) ||
     codes.some((candidate) =>
       ['40001', '40P01', '57014', '57P01', '57P02', '57P03'].includes(candidate.toUpperCase()),

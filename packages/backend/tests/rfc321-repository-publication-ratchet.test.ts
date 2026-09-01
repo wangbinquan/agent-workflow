@@ -56,44 +56,6 @@ function backendTypeScriptFiles(): string[] {
   return files.sort()
 }
 
-interface DirectFunctionCall {
-  readonly file: string
-  readonly line: number
-  readonly argumentCount: number
-}
-
-function directFunctionCalls(
-  functionNames: readonly string[],
-): ReadonlyMap<string, readonly DirectFunctionCall[]> {
-  const callsByFunction = new Map<string, DirectFunctionCall[]>(
-    functionNames.map((functionName) => [functionName, []]),
-  )
-  for (const file of backendTypeScriptFiles()) {
-    const parsed = ts.createSourceFile(
-      file,
-      read(file),
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    )
-    const visit = (node: ts.Node): void => {
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-        const calls = callsByFunction.get(node.expression.text)
-        if (calls) {
-          calls.push({
-            file,
-            line: parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
-            argumentCount: node.arguments.length,
-          })
-        }
-      }
-      ts.forEachChild(node, visit)
-    }
-    visit(parsed)
-  }
-  return callsByFunction
-}
-
 export function gitNetworkCommandsInSource(file: string, source: string): GitNetworkCommand[] {
   const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
   const commands = new Set<GitNetworkCommand>()
@@ -332,9 +294,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       cli.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
     ).toBeGreaterThanOrEqual(4)
     expect(cli).toContain('const repositoryTransportModule = composeRepositoryTransportCredentials')
-    expect(cli).toContain('participant: repositoryTransportModule.adminConnections')
+    expect(cli).toContain('repositoryTransport: repositoryTransportModule.adminConnections')
     expect(
-      cli.indexOf('reconcileRepositoryTransportConnectionProjections(\n    db') <
+      cli.indexOf('reconcileRepositoryTransportConnectionProjections(') <
         cli.indexOf('const repositoryPublicationTransport = createRepositoryPublicationTransport'),
     ).toBe(true)
     expect(
@@ -358,46 +320,45 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     // participant, so SSH publication skipped provider API discovery and went
     // straight to mapping/SaaS URL rules even though RFC-321 requires API first.
     const startTaskDeps = read('packages/backend/src/services/startTaskDeps.ts')
-    const server = read('packages/backend/src/server.ts')
     const cli = read('packages/backend/src/cli/start.ts')
     const taskRoutes = read('packages/backend/src/routes/tasks.ts')
     const scheduleLaunch = read('packages/backend/src/services/scheduleLaunch.ts')
+    const providerRuntime = read(
+      'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
+    )
+    const sqliteParticipants = read(
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+    )
+    const postgresqlParticipants = read(
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+    )
     const webhookDispatch = read(
       'packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts',
     )
 
     expect(startTaskDeps).toContain('schedulerDriver: SchedulerDriverPort')
     expect(startTaskDeps).not.toContain('createLegacyTaskExecutionTopology')
-    expect(server).toContain(
-      'repositoryPublicationTransport?: ReturnType<typeof createRepositoryPublicationTransport>',
-    )
-    expect(server).toContain('deps.repositoryPublicationTransport ??')
-    expect(server).toMatch(
-      /const routeDeps = \{\s*\.\.\.deps,\s*identityAccess,\s*repositoryPublicationTransport,\s*schedulerDriver,/,
-    )
-    expect(taskRoutes).toContain('requireSchedulerDriver(deps.schedulerDriver)')
+    expect(taskRoutes).toContain('readonly operations: TaskRouteOperations')
+    expect(taskRoutes).not.toMatch(/RepositoryPublicationTransport|SchedulerDriverPort/)
     expect(scheduleLaunch).toContain('schedulerDriver: SchedulerDriverPort')
     expect(scheduleLaunch).not.toContain('TaskRepositoryPublicationTransport')
-    expect(webhookDispatch).toContain('schedulerDriver: SchedulerDriverPort')
+    expect(webhookDispatch).toContain(
+      "readonly taskExecutions: WebhookExecutionRuntimeDependencies['taskExecutions']",
+    )
     expect(webhookDispatch).not.toContain('TaskRepositoryPublicationTransport')
     expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
-    expect(cli).toMatch(
-      /composeTaskExecutionRuntime\(\{\s*db,\s*identityAccess: integrationIdentityAccess,\s*repositoryPublicationTransport,?\s*\}\)/,
+    expect(providerRuntime).toContain('createSqliteTaskExecutionRuntimeParticipants({')
+    expect(providerRuntime).toContain('createPostgresqlTaskExecutionRuntimeParticipants(db, {')
+    expect(
+      providerRuntime.match(/composeTaskExecutionRuntime\(\{ participants, readModels:/g)?.length,
+    ).toBe(2)
+    expect(sqliteParticipants).toContain(
+      'readonly repositoryPublicationTransport: RepositoryPublicationTransport',
     )
-
-    const callsByFunction = directFunctionCalls([
-      'composeTaskExecutionRuntime',
-      'buildStartTaskDeps',
-    ])
-    const topologyCalls = callsByFunction.get('composeTaskExecutionRuntime') ?? []
-    const startDepsCalls = callsByFunction.get('buildStartTaskDeps') ?? []
-    expect(topologyCalls.map((call) => call.file).sort()).toEqual([
-      'packages/backend/src/cli/start.ts',
-      'packages/backend/src/server.ts',
-    ])
-    expect(startDepsCalls.length).toBeGreaterThan(0)
-    expect(topologyCalls.filter((call) => call.argumentCount !== 1)).toEqual([])
-    expect(startDepsCalls.filter((call) => call.argumentCount < 4)).toEqual([])
+    expect(postgresqlParticipants).toContain(
+      'readonly repositoryPublicationTransport: RepositoryPublicationTransport',
+    )
+    expect(cli).toContain('repositoryPublicationTransport,')
   })
 
   test('personal credentials stay inside Git publication and their explicit identity probe', () => {
@@ -423,23 +384,28 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(publication).toContain('password: credential.token')
     expect(publication).not.toContain('token: credential.token')
     expect(publication).not.toContain('globalLookupToken')
-    expect(server).toContain('const connection = codeHostConnections.resolve(provider)')
+    expect(server).toContain('const connection = await codeHostConnections.resolve(provider)')
     expect(server).toContain('token: connection.token')
     expect(endpointDiscovery).toContain(
-      'const connection = input.resolveConnection(request.provider)',
+      'const connection = await input.resolveConnection(request.provider)',
     )
     expect(endpointDiscovery).toContain(
       'headers: headersFor(connection.provider, connection.token)',
     )
     expect(endpointDiscovery).not.toContain('RepositoryCredentialSubject')
-    expect(nodeMechanics).toContain(
-      'resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)',
-    )
-    expect(developmentRest).toContain('resolveCodeHostConnectionsFromKeyFile(')
+    expect(nodeMechanics).not.toContain('resolveCodeHostConnectionsFromKeyFile')
+    expect(developmentRest).not.toContain('resolveCodeHostConnectionsFromKeyFile')
     expect(integrationRest).not.toContain('RepositoryCredentialSubject')
     expect(reconcilerPorts).not.toContain('RepositoryCredentialSubject')
     expect(nodeMechanics).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
     expect(developmentRest).not.toContain('resolveRepositoryTransportCredentialsFromKeyFile')
+
+    const cli = read('packages/backend/src/cli/start.ts')
+    expect(cli).toContain('const repositoryTransportModule = composeRepositoryTransportCredentials')
+    expect(cli).toContain('repositoryTransport: repositoryTransportModule.adminConnections')
+    expect(cli).toContain(
+      'const repositoryPublicationTransport = createRepositoryPublicationTransport',
+    )
   })
 
   test('publication public contracts stay secret-free', () => {

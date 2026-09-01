@@ -183,7 +183,16 @@ describe('RFC-199 strict workflow validation targets', () => {
 
   test('source ratchet: every emitted issue has a strict target and all targets parse', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workflow.validator.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workflow.validator.ts',
+      ),
       'utf8',
     )
     // RFC-282 B3: two plugin-disabled emissions now spell their code via the

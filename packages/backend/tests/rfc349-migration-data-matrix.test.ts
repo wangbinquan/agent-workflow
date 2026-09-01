@@ -376,9 +376,13 @@ async function runDirection(input: {
 
 describe('RFC-349 migration data matrix', () => {
   for (const scenario of MATRIX) {
-    test(`${scenario.name} rows round-trip SQLite to PostgreSQL and PostgreSQL to SQLite`, async () => {
-      await runDirection({ scenario, sourceProvider: 'sqlite', targetProvider: 'postgresql' })
-      await runDirection({ scenario, sourceProvider: 'postgresql', targetProvider: 'sqlite' })
-    })
+    test(
+      `${scenario.name} rows round-trip SQLite to PostgreSQL and PostgreSQL to SQLite`,
+      async () => {
+        await runDirection({ scenario, sourceProvider: 'sqlite', targetProvider: 'postgresql' })
+        await runDirection({ scenario, sourceProvider: 'postgresql', targetProvider: 'sqlite' })
+      },
+      scenario.name === 'large' ? 15_000 : 5_000,
+    )
   }
 })

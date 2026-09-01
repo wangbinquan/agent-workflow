@@ -123,6 +123,11 @@ describe('RFC-349 PostgreSQL logical-target business invariants', () => {
       'auth-resource-grant-reference',
       'intent-session-reference',
     ])
+    const resourceGrantInvariant = statements.find((statement) =>
+      statement.includes('rfc349-invariant:auth-resource-grant-reference'),
+    )
+    expect(resourceGrantInvariant).toContain('AS resource_grant')
+    expect(resourceGrantInvariant).not.toMatch(/\bAS grant\b/)
   })
 
   test('a partially present invariant family fails closed before SQL runs', async () => {

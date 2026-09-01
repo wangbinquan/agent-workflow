@@ -34,80 +34,48 @@ import { join, relative, resolve, sep } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
-/** 永久 allowlist：唯一合法的 tasks.status 直写者（setTaskStatus 的 CAS 写）。 */
+/**
+ * Provider-owned lifecycle kernels are the only legal direct task-status writers.
+ * SQLite retains its synchronous CAS kernel; PostgreSQL owns equivalent atomic
+ * transactions in its infrastructure adapters. Exact counts make this a frozen
+ * authority ledger rather than a growth allowance.
+ */
 const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
   'platform/persistence/sqlite/taskLifecycle.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 2,
+  'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts': 3,
+  'modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts': 2,
+  'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts': 2,
 }
 
 /**
  * 非 status 的 `.update(tasks)` 写点快照（精确计数）。
- * 当前唯一一处：limits.ts 在 cancelTask 失败 fallback 后，对已 canceled
- * 任务的 errorSummary/errorMessage 条件覆写（`WHERE status='canceled'`，
- * RFC-097 §2 第 10 行——不翻状态，故不进 status 棘轮）。
+ * These are provider-owned companion-column writes; none changes `status`.
+ * The exact per-file snapshot catches a new write authority in either provider.
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
-  // RFC-303: source termination applies four CAS-scoped companion updates:
-  // close/merge fence, reopen clear, target cancellation metadata, and the
-  // fixed-point settlement stamp. Task status itself still goes exclusively
-  // through lifecycle's transition helper.
-  'modules/task-execution/application/applySourceTerminationEffect.ts': 4,
-  // RFC-164: persistGate writes workgroup_config_json only (gate state on the
-  // task's config copy) — never the status column.
-  // 2026-07-21 +1: writeWgPauseReason —— awaiting_human 成因写进同一 config
-  // copy 的 wgPause 槽（json_set 单键，永不触碰 status 列；房间 API 只在任务
-  // 当前停在 awaiting_human 时读出）。
-  // RFC-204 T7: the credential sealing gate backfills tasks.cached_repo_id and
-  // re-redacts a legacy tasks.repo_url. Both are credential-hygiene columns —
-  // the gate never reads or writes `status`.
-  'services/repoCredentials.ts': 2,
-  'services/limits.ts': 1,
-  // RFC-108 T11 (AR-09): circuit-breaker accounting — recordAutoRecoveryAttempt
-  // updates auto_recovery_{attempts,window_started_at,suspended};
-  // clearAutoRecoverySuspension resets them. Neither touches `status`.
-  'services/recoveryBreaker.ts': 2,
-  // RFC-165: two-phase workspace tombstone — every writer touches ONLY
-  // workspace_pruning_at / workspace_pruned_at (workspace claim /
-  // heal-missing-dir / finalize / boot reconcile / iso transient claim +
-  // CAS-scoped release). Status flips stay in setTaskStatus; its revive gate
-  // READS these columns inside the status CAS.
-  // RFC-300 +1 net: claimed Webhook recovery takes over an existing durable
-  // workspace_pruning_at lease by exact-stamp CAS; physical deletion and the
-  // status transition remain in their existing single writers.
-  // RFC-328 +1 net: terminal-maintenance finalization/recovery only completes
-  // or releases the same workspace tombstone; lifecycle status is untouched.
-  'services/gc.ts': 8,
-  // RFC-165 (R3-2-r4): the revive gate stamps workspace_pruned_at when the
-  // dir vanished pre-tombstone (heal-forward) — companion-column write only.
-  'platform/persistence/sqlite/taskLifecycle.ts': 1,
-  // RFC-164 PR-3: gate approve/reject + mid-run config edit both rewrite
-  // workgroup_config_json (the task-owned runtime copy) — never `status`
-  // (the gate's status flip rides transitionTaskStatusByEvent separately).
-  // RFC-167 dw-confirm adds NO direct write: approve + reject ride the dw
-  // slot through resumeKick's status CAS, and the reject-exhausted round
-  // rides it through setTaskStatus extra (Codex impl-gate P1 — the phase
-  // and the status can never tear).
-  // RFC-217 T2 — gate 写改走 workgroup_task_state CAS，仅剩 config PUT 一处；
-  // T4/T6 把该写点随 handler 本体下沉 Resource Catalog workgroup compatibility owner
-  // （updateTaskConfig 是 workgroupConfigJson 的唯一 UPDATE 属主）。
-  // RFC-311 —— 删除路径上的祖先链 branchStartedAt 重算（与 task.ts 的维护写点
-  // 同族：单伴随列，永不触碰 status；归属 RFC-311 session，锁由 RFC-310
-  // session 顺手同步）。
-  // RFC-328 +1: crash recovery of a claimed delete repeats that same ancestor
-  // branchStartedAt recomputation after the member rows are removed.
-  'services/taskDelete.ts': 2,
   'modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts': 1,
-  // RFC-243 §4.3 — cancelTask 的级联标记补写：cascade 收尾在行已 canceled
-  // （status 由调度器或 fallback CAS 落定）之后，把 errorMessage 幂等改写为
-  // 'canceled-by-parent-cascade'（WHERE status='canceled' 守卫，绝不翻状态）。
-  // RFC-287 G7 — 延后仓库准备成功后，在同一事务只回填 worktreePath / branch /
-  // baseCommit / repoPath；任务状态仍由 lifecycle CAS 写点独占。
-  // RFC-311 PR-4 — 祖先链 branchStartedAt 维护（MAX(branchStartedAt, now) 单
-  // 伴随列，keyset 快路径的排序锚），永不触碰 status（归属 51e15833，锁由
-  // RFC-310 session 顺手同步）。
+  'modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts': 1,
+  'modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts': 1,
+  'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts': 1,
+  'modules/system-operations/infrastructure/sqliteResourceLimitPersistence.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 2,
+  'modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts': 2,
+  'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts': 1,
+  'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts': 4,
+  'modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts': 2,
+  'platform/persistence/sqlite/systemWorkspaceGc.ts': 8,
+  'platform/persistence/sqlite/taskLifecycle.ts': 1,
   'services/task.ts': 3,
-  // RFC-167: persistDwState writes workgroup_config_json only (dw phase /
-  // attempts / generatedDef on the task's config copy) — never `status`
-  // (workgroupRunner persistGate 同款).
+  'services/taskDelete.ts': 2,
 }
 
 function walkTsFiles(dir: string): string[] {
@@ -174,7 +142,7 @@ function countUpdateTasksSites(): SiteCounts {
   return { status, nonStatus }
 }
 
-describe('S-14 ratchet: direct tasks.status writes confined to SQLite lifecycle persistence', () => {
+describe('S-14 ratchet: direct tasks.status writes confined to provider lifecycle persistence', () => {
   const counts = countUpdateTasksSites()
 
   test('status writes: exactly the allowlist, pending-migration files only ratchet DOWN', () => {
@@ -189,10 +157,10 @@ describe('S-14 ratchet: direct tasks.status writes confined to SQLite lifecycle 
         }
         continue
       }
-      // RFC-097 migration complete — the ratchet is final: any status write
-      // outside the allowlist is a violation, full stop.
+      // The ratchet is final: any status writer outside a reviewed provider
+      // lifecycle kernel is a violation, full stop.
       violations.push(
-        `${file}: ${n} direct tasks.status write(s) outside the allowlist — use setTaskStatus/trySetTaskStatus (services/lifecycle.ts)`,
+        `${file}: ${n} direct tasks.status write(s) outside the provider lifecycle allowlist`,
       )
     }
     expect(violations).toEqual([])

@@ -13,13 +13,20 @@
       ],
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
+        "cli/postgresqlDaemonApplication.ts -> composition",
+        "cli/postgresqlDaemonApplication.ts -> public/events",
         "cli/start.ts -> composition",
         "cli/start.ts -> public/events",
         "modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts -> public/types",
         "modules/development-automation/composition/digitalEmployeeWorkspace.ts -> public/types",
         "modules/development-automation/composition/employeeCaseDetailProjection.ts -> public/types",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
+        "modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts -> composition",
+        "modules/intent/composition/platformInventory.ts -> public/participants",
+        "modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts -> public/participants",
         "modules/resource-catalog/composition/integrationTrigger.ts -> public/participants",
+        "modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntegrationTriggerResourceSnapshots.ts -> public/participants",
+        "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/participants",
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
         "modules/task-execution/composition/required-ports.ts -> public/types",
@@ -29,9 +36,9 @@
         "routes/digitalEmployees.ts -> composition",
         "server.ts -> composition",
         "server.ts -> public/events",
+        "server.ts -> public/participants",
         "server.ts -> public/types",
-        "services/intent/platformInventory.ts -> composition",
-        "services/intent/platformInventory.ts -> public/types"
+        "services/digitalEmployeeAgentTemplates.ts -> public/participants"
       ]
     },
     "event-center": {
@@ -46,6 +53,7 @@
       ],
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
+        "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/start.ts -> composition",
         "modules/digital-employee/application/ports/runtimeStore.ts -> public/types",
         "modules/digital-employee/application/runtimeService.ts -> public/participants",
@@ -57,6 +65,8 @@
         "modules/task-execution/application/taskLifecycleConsumers.ts -> public/participants",
         "modules/task-execution/public/events.ts -> public/types",
         "routes/eventCenter.ts -> composition",
+        "routes/webhookDeliveries.ts -> composition",
+        "routes/webhooks.ts -> composition",
         "server.ts -> composition",
         "services/webhook/dispatcherTypes.ts -> public/types",
         "services/webhook/webhookDispatch.ts -> public/types"
@@ -67,16 +77,20 @@
       "topLevelEntries": ["application", "composition.ts", "domain", "infrastructure", "public"],
       "publicEntries": ["commands.ts", "types.ts"],
       "externalImports": [
+        "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/start.ts -> composition",
         "modules/development-automation/composition/digitalEmployeeToolContractsV2.ts -> public/types",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
         "modules/digital-employee/application/authoringService.ts -> public/types",
         "modules/digital-employee/application/runtimeService.ts -> public/types",
         "modules/digital-employee/composition.ts -> public/types",
+        "modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts -> public/commands",
+        "modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts -> public/commands",
+        "modules/resource-catalog/infrastructure/legacy/agent.ts -> public/commands",
+        "modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts -> public/commands",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
         "routes/executionContracts.ts -> public/types",
-        "server.ts -> composition",
-        "services/agent.ts -> public/commands"
+        "server.ts -> composition"
       ]
     }
   },

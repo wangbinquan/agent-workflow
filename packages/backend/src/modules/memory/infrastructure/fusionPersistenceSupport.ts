@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   cpSync,
   existsSync,
@@ -18,6 +17,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { ConflictError, ValidationError } from '@/util/errors'
+import { createSha256DigestBuilder } from '@/util/hash'
 
 export { QUARANTINED_FUSION_SKILL_ID }
 
@@ -175,14 +175,14 @@ function hashRegularTree(root: string): string {
   const files: string[] = []
   collectFiles(root, '', files)
   files.sort()
-  const hash = createHash('sha256')
+  const hash = createSha256DigestBuilder()
   for (const file of files) {
     hash.update(file)
     hash.update('\x00')
     hash.update(readFileSync(join(root, file)))
     hash.update('\x00')
   }
-  return hash.digest('hex')
+  return hash.digestHex()
 }
 
 function copyProposal(source: string, destination: string): void {

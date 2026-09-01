@@ -1,9 +1,9 @@
 // RFC-053 PR-B P-1 — source-grep guard against direct node_runs.status writes.
 //
 // Forbids any future code from doing `db.update(nodeRuns).set({ status: ... })`
-// outside the single allowlisted SQLite writer (`platform/persistence/sqlite/taskLifecycle.ts`).
-// Forces consumers through `transitionNodeRunStatus()` or `setNodeRunStatus()`,
-// which enforce the state machine and CAS predicate.
+// outside reviewed provider-owned lifecycle persistence. Business/application
+// consumers still route through the public lifecycle operations; concrete
+// SQLite and PostgreSQL CAS writers remain infrastructure-only.
 //
 // Tests:
 //   - production source files (packages/backend/src) must contain ZERO direct
@@ -170,7 +170,22 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   'modules/collaboration/infrastructure/postgresqlHumanGateTerminalSweep.ts': 2,
   // clarify 封存：把已回答的澄清 run 收成 'done'。
   'modules/collaboration/infrastructure/legacySqliteClarify/seal.ts': 1,
+  // PostgreSQL task-execution lifecycle kernels. Each owns a closed transition
+  // in its provider transaction; exact counts prevent this from becoming a
+  // general-purpose write escape hatch.
+  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts': 2,
+  'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts': 1,
 }
+
+const LIFECYCLE_KERNEL_FILES: ReadonlySet<string> = new Set([
+  'platform/persistence/sqlite/taskLifecycle.ts',
+  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
+  'modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts',
+  'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
+  'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts',
+])
 
 describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件精确账本', () => {
   const matches = findDirectStatusWrites()
@@ -200,9 +215,7 @@ describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件�
     // 标记还有价值——它让读代码的人知道「这是有意的，不是漏改」。
     // 它失去的只是「让扫描器闭眼」这项权力。
     const unmarked = matches
-      .filter(
-        (match) => match.file !== 'platform/persistence/sqlite/taskLifecycle.ts' && !match.marked,
-      )
+      .filter((match) => !LIFECYCLE_KERNEL_FILES.has(match.file) && !match.marked)
       .map((match) => `${match.file}:${match.line}`)
     expect(unmarked, '非内核直写没有写明意图标记').toEqual([])
   })

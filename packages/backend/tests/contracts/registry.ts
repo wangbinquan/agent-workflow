@@ -297,8 +297,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   // RFC-309 T16 — the T64 upstream link, read and acted on.
   { method: 'GET', path: '/api/capability-templates/:id/upstream' },
   { method: 'POST', path: '/api/capability-templates/:id/upstream/merge' },
-  { method: 'GET', path: '/api/capability-templates/:id/acl' },
-  { method: 'PUT', path: '/api/capability-templates/:id/acl' },
 
   // RFC-310 Digital Employee OS — the authoring hierarchy is intentionally
   // fixed at employee area -> employee type -> work item -> tool.  Tool routes
@@ -942,13 +940,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   // 上游扫描器的字面量正则看不见它们，于是它们从未被要求登记（findings.md ACL-03
   // 的同一处结构性盲区；RFC-317 T9b 已把**入网**判据换成运行时预言，本清单的
   // 补齐属 TP-01 的契约覆盖扫描器改造，另批处理）。
-  { method: 'GET', path: '/api/digital-employees/:id/acl' },
-  { method: 'PUT', path: '/api/digital-employees/:id/acl' },
-  // RFC-330 —— 工具注册 / 岗位模版（第 14 / 15 类）的 `/acl`，与案例成员面。
-  { method: 'GET', path: '/api/digital-employee-tools/:id/acl' },
-  { method: 'PUT', path: '/api/digital-employee-tools/:id/acl' },
-  { method: 'GET', path: '/api/digital-employee-job-templates/:id/acl' },
-  { method: 'PUT', path: '/api/digital-employee-job-templates/:id/acl' },
   { method: 'GET', path: '/api/employee-cases/:id/members' },
   { method: 'PUT', path: '/api/employee-cases/:id/members' },
   // RFC-324 §7 —— 定时任务借用同一张 grants 表拿到两档授权，但它**不是** ACL 资源

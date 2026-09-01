@@ -105,7 +105,8 @@ export { createPostgresqlDigitalEmployeeIntegrationTriggerParticipant } from './
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
-export { startDigitalEmployeeOsWorker } from './application/osWorker'
+export { runDigitalEmployeeOsCycle, startDigitalEmployeeOsWorker } from './application/osWorker'
+export { composeDigitalEmployeeAgentTemplateCatalogParticipant } from './composition/agentTemplateCatalog'
 export type {
   DigitalEmployeeMigrationStatus,
   DigitalEmployeeWriterCutoverOperations,

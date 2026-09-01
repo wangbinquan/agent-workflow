@@ -131,6 +131,31 @@ function countNonCommentMatches(content: string, re: RegExp): number {
 }
 
 /**
+ * This guard is intentionally about Bun's synchronous SQLite transaction
+ * wrapper. PostgreSQL transactions are asynchronous by contract, so counting
+ * their `.transaction(async ...)` calls here would turn the SQLite safety lock
+ * into a provider-name allowlist. Keep the corpus source-backed instead: a file
+ * is in scope only when it imports the concrete SQLite client/runtime (or is
+ * itself a named SQLite adapter).
+ */
+function sqliteTransactionSource(relativePath: string, content: string): string | null {
+  if (/(^|\/)postgresql[^/]*\.ts$/i.test(relativePath)) return null
+  const ownsSqlite =
+    /(^|\/)sqlite[^/]*\.ts$/i.test(relativePath) ||
+    /from\s+['"](?:@\/db\/client|[^'"]*\/db\/client)['"]/.test(content) ||
+    /from\s+['"](?:bun:sqlite|drizzle-orm\/bun-sqlite)['"]/.test(content)
+  if (!ownsSqlite) return null
+
+  // A few provider-private infrastructure modules colocate two explicitly
+  // named factories. Only the SQLite half is subject to Bun's synchronous
+  // transaction rule; the PostgreSQL half deliberately owns async tx bodies.
+  const postgresqlFactory = content.search(
+    /(?:export\s+)?(?:async\s+)?function\s+\w*Postgresql\w*\s*\(/,
+  )
+  return postgresqlFactory < 0 ? content : content.slice(0, postgresqlFactory)
+}
+
+/**
  * RFC-093 已落地（WP-7）：调研基线的五处装饰性 async 事务（mcp.ts / memory.ts ×2 /
  * plugin.ts / review.ts）已全部改写为 `dbTxSync`（src/db/txSync.ts）的同步执行面。
  * 守卫从此零容忍：src 内任何非注释行出现 `.transaction(async` 即红。
@@ -141,12 +166,13 @@ describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', (
   test('ZERO decorative async transactions — any occurrence turns this red (use dbTxSync)', () => {
     const actual: Record<string, number> = {}
     for (const file of walkTsFiles(BACKEND_SRC)) {
-      const count = countNonCommentMatches(
-        readFileSync(file, 'utf8'),
-        /\.transaction\s*\(\s*async\b/g,
-      )
+      const rel = relative(BACKEND_SRC, file).split(sep).join('/')
+      const content = readFileSync(file, 'utf8')
+      const sqliteSource = sqliteTransactionSource(rel, content)
+      if (sqliteSource === null) continue
+      const count = countNonCommentMatches(sqliteSource, /\.transaction\s*\(\s*async\b/g)
       if (count > 0) {
-        actual[relative(BACKEND_SRC, file).split(sep).join('/')] = count
+        actual[rel] = count
       }
     }
     // 任何命中 → 此断言红。处置：不要写 async 事务体——它在 bun:sqlite 下
@@ -175,18 +201,15 @@ describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', (
  * 必然出现的一行数字变化，而不是淹没在几百行 store 代码里的一次静默新增。
  */
 const RAW_TRANSACTION_SITES: Record<string, number> = {
-  'modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts': 1,
-  'modules/development-automation/infrastructure/sqliteMissionStore.ts': 7,
+  'modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts': 1,
+  'modules/development-automation/infrastructure/sqliteMissionStore.ts': 8,
   'modules/development-automation/infrastructure/sqliteUploadSessionStore.ts': 1,
-  'modules/digital-employee/composition/writerCutover.ts': 2,
   'modules/digital-employee/infrastructure/sqliteAuthoringStore.ts': 5,
   // RFC-330：+1 replaceCaseMembers；RFC-336：+1 recordMetering exact-once receipt + Case totals。
   'modules/digital-employee/infrastructure/sqliteRuntimeStore.ts': 14,
+  'modules/digital-employee/infrastructure/writerCutoverPersistence.ts': 3,
   'modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts': 1,
   'modules/event-center/infrastructure/sqliteEventStore.ts': 4,
-  'modules/development-automation/composition/missionOperations.ts': 1,
-  // RFC-349: Bun.SQL owns the provider transaction/session boundary.
-  'platform/persistence/postgresqlDatabaseClient.ts': 1,
 }
 
 describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必须逐处可见', () => {
@@ -195,14 +218,18 @@ describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必�
     for (const file of walkTsFiles(BACKEND_SRC)) {
       const rel = relative(BACKEND_SRC, file).split(sep).join('/')
       if (rel === 'db/txSync.ts') continue
-      const count = countNonCommentMatches(readFileSync(file, 'utf8'), /\.transaction\s*\(/g)
+      const content = readFileSync(file, 'utf8')
+      const sqliteSource = sqliteTransactionSource(rel, content)
+      if (sqliteSource === null) continue
+      const count = countNonCommentMatches(sqliteSource, /\.transaction\s*\(/g)
       if (count > 0) actual[rel] = count
     }
     return actual
   }
 
   test('语料非空：确实扫得到一批站点（扫成空说明判据失效，此刻零预言力）', () => {
-    expect(Object.keys(RAW_TRANSACTION_SITES).length).toBeGreaterThanOrEqual(9)
+    expect(Object.keys(RAW_TRANSACTION_SITES).length).toBeGreaterThanOrEqual(8)
+    expect(Object.values(RAW_TRANSACTION_SITES).reduce((sum, count) => sum + count, 0)).toBe(37)
     expect(walkTsFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
   })
 

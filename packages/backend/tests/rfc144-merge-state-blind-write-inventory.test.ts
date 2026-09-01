@@ -25,9 +25,13 @@ import { join, relative, resolve, sep } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
-/** 永久 allowlist：唯一合法的 merge_state 直写者（lifecycle.ts 的两个 helper）。 */
+/** Provider-owned merge-state kernels, pinned by exact file/count. */
 const MERGE_STATE_WRITE_ALLOWLIST: Record<string, number> = {
   'platform/persistence/sqlite/taskLifecycle.ts': 2,
+  'modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts': 1,
+  'modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts': 1,
 }
 
 function walkTsFiles(dir: string): string[] {
@@ -102,7 +106,7 @@ function countMergeStateSites(): Counts {
   return { updateWrites, insertWrites }
 }
 
-describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to SQLite lifecycle persistence', () => {
+describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to provider lifecycle persistence', () => {
   const counts = countMergeStateSites()
 
   test('update writes: exactly the allowlist — everything else routes through transitionMergeState', () => {

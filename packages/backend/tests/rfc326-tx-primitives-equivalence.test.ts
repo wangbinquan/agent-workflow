@@ -315,6 +315,15 @@ describe('RFC-326 AC-19 — hasActingMembership ≡ hasActingMembershipTx', () =
 
 describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers untouched)', () => {
   const SRC = resolve(import.meta.dir, '..', 'src', 'services')
+  const SQLITE_TASK_LIFECYCLE = resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'platform',
+    'persistence',
+    'sqlite',
+    'taskLifecycle.ts',
+  )
 
   function bodyOf(source: string, signature: string): string {
     const start = source.indexOf(signature)
@@ -324,7 +333,7 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
   }
 
   test('transitionNodeRunStatus delegates to transitionNodeRunStatusTx and writes nothing itself', () => {
-    const src = readFileSync(resolve(SRC, 'lifecycle.ts'), 'utf8')
+    const src = readFileSync(SQLITE_TASK_LIFECYCLE, 'utf8')
     const body = bodyOf(src, 'export async function transitionNodeRunStatus(')
     expect(body).toContain('transitionNodeRunStatusTx({ tx: args.db, ...args })')
     expect(body).not.toContain('.update(nodeRuns)')
@@ -342,9 +351,11 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
   test('mintNodeRun delegates to mintNodeRunTx and inserts nothing itself', () => {
     const src = readFileSync(resolve(SRC, 'nodeRunMint.ts'), 'utf8')
     const body = bodyOf(src, 'export async function mintNodeRun(')
-    expect(body).toContain('dbTxSync(db, (tx) => mintNodeRunTx(tx, args))')
+    expect(body).toContain('createLegacySqliteNodeRunOperations(db).lifecycle.mint(args)')
     expect(body).not.toContain('.insert(nodeRuns)')
     // No new raw `.transaction(` site (s10 ledger) — the wrapper goes through dbTxSync.
     expect(body).not.toContain('.transaction(')
+    const twin = bodyOf(src, 'export function mintNodeRunTx(')
+    expect(twin).toContain('mintLegacySqliteNodeRunInTx(tx, args)')
   })
 })
