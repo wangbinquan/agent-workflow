@@ -69,15 +69,21 @@
       "id": "rfc294-public-surface-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
-      "baseline": 1,
-      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离；RFC-347 又清偿一条，剩余一条继续按后续 consumer cutover 删除。"
+      "baseline": 12,
+      "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离；RFC-347 又清偿一条，剩余条目继续按后续 consumer cutover 删除。",
+      "allowGrowth": {
+        "why": "RFC-349 将 SQLite 隐式依赖改成具名 provider-neutral contracts；新增的 exact public 兼容条目只用于历史 transport 迁移，并由本账本逐项锁定。"
+      }
     },
     {
       "id": "rfc294-god-surface-allowlist",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "GOD_SURFACE_ALLOWLIST",
-      "baseline": 1,
-      "why": "RFC-294 public god-surface ceiling 的逐符号精确例外；每一项都必须保持超限且写明清偿波次，形状降到预算内时 stale 检查会要求删账。"
+      "baseline": 8,
+      "why": "RFC-294 public god-surface ceiling 的逐符号精确例外；每一项都必须保持超限且写明清偿波次，形状降到预算内时 stale 检查会要求删账。",
+      "allowGrowth": {
+        "why": "RFC-349 为双 provider cutover 暂时显式化七个大型 closed port surfaces；每个 symbol 均精确登记并在 owner contract 拆分后删除。"
+      }
     },
     {
       "id": "rfc317-no-corpus-floor",
@@ -126,16 +132,13 @@
       "file": "packages/backend/tests/architecture/rfc317-table-ownership.test.ts",
       "symbol": "OWNERSHIP_DEBT",
       "baseline": 19,
-      "why": "一张表被两个 bounded context 直查的存量。R5 的目标终值是 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）",
-      "allowGrowth": {
-        "why": "RFC-349 双 provider cutover 把原 composition 隐式读写展开为 SQLite/PostgreSQL infrastructure 适配器；17 个 foreign-table 站点逐表逐文件钉死，业务层新增访问仍会直接失败。"
-      }
+      "why": "一张表被两个 bounded context 直查的存量。R5 的目标终值是 0（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
       "id": "node-run-direct-status-writes",
       "file": "packages/backend/tests/lifecycle-grep-guard.test.ts",
       "symbol": "DIRECT_STATUS_WRITE_ALLOWLIST",
-      "baseline": 4,
+      "baseline": 8,
       "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）",
       "allowGrowth": {
         "why": "RFC-349 为 PostgreSQL lifecycle repair 增加一个与 SQLite repair command 对称、具名且受 CAS 约束的 provider-owned 写点；不得扩散到业务调用方。"
@@ -145,8 +148,11 @@
       "id": "merge-state-blind-writes",
       "file": "packages/backend/tests/rfc144-merge-state-blind-write-inventory.test.ts",
       "symbol": "MERGE_STATE_WRITE_ALLOWLIST",
-      "baseline": 1,
-      "why": "merge_state 的盲写站点（C9 点名的 blind-write marker 家族）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "baseline": 5,
+      "why": "merge_state 的盲写站点（C9 点名的 blind-write marker 家族）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）",
+      "allowGrowth": {
+        "why": "RFC-349 为 PostgreSQL task lifecycle 补齐四个与 SQLite 对称的 provider-owned merge-state 写点；新增业务层写点仍被精确拒绝。"
+      }
     },
     {
       "id": "safejson-local-definitions",
@@ -187,8 +193,11 @@
       "id": "tasks-status-blind-writes",
       "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
       "symbol": "STATUS_WRITE_ALLOWLIST",
-      "baseline": 1,
-      "why": "tasks.status 的直写站点（s14 钉恰好 1 处，C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "baseline": 10,
+      "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）",
+      "allowGrowth": {
+        "why": "RFC-349 将九个存量 SQLite task lifecycle 写点展开为 owner-native SQLite/PostgreSQL persistence；业务与 transport 直写仍由专门守卫归零。"
+      }
     },
     {
       "id": "shared-schema-any-allowlist",
@@ -201,8 +210,11 @@
       "id": "test-suite-allowed-skips",
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
-      "baseline": 36,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight 与 schema-contract 两组集成测试只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 必须保留 env-gated skip，于是 34 → 36。"
+      "baseline": 37,
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。",
+      "allowGrowth": {
+        "why": "RFC-349 新增一个必须连接真实 PostgreSQL 的 compiled provider integration gate；普通分片显式 skip，正式 PostgreSQL workflow 必须执行。"
+      }
     },
     {
       "id": "frontend-inline-loading-allowlist",
@@ -314,20 +326,14 @@
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
       "baseline": 392,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。",
-      "allowGrowth": {
-        "why": "RFC-349 新增 12 条数据库迁移与 provider 运维系统端点；它们逐叶登记为 SYSTEM_DOMAIN_POINTS 控制面，不向 PAT/MCP 暴露。"
-      }
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
     },
     {
       "id": "rfc294-review-off-dag-offered-edges",
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
       "baseline": 38,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。",
-      "allowGrowth": {
-        "why": "RFC-349 one-shot provider cutover 将跨 context 的真实 closed participants 显式化；尚未更新 shared design DAG 的 30 个新 pair 逐文件精确入账，后续只能随 DAG/ownership 收敛下降。"
-      }
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。"
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -341,10 +347,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
       "baseline": 149,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。",
-      "allowGrowth": {
-        "why": "RFC-349 provider cutover 把原先隐含在 SQLite service facade 中的 closed ports 显式化；本次按 current-source 精确登记新增零 consumer public symbol，后续只能随真实 consumer 接线或 internalize 而下降。"
-      }
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。"
     },
     {
       "id": "rfc294-review-dead-required-ports",
@@ -357,8 +360,11 @@
       "id": "rfc345-resource-acl-facade-compatibility",
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 58,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。"
+      "baseline": 63,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。",
+      "allowGrowth": {
+        "why": "RFC-349 为双 provider 启动保留五个明确的 SQLite compatibility consumers；PostgreSQL 路径不经过 facade，条目须随 legacy server composition 退休。"
+      }
     },
     {
       "id": "rfc349-provider-specific-business-dependencies",
@@ -366,6 +372,20 @@
       "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
       "baseline": 73,
       "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。"
+    },
+    {
+      "id": "rfc328-cross-context-provider-bridge-debt",
+      "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
+      "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
+      "baseline": 15,
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。"
+    },
+    {
+      "id": "rfc294-capability-compatibility-debt",
+      "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
+      "symbol": "CAPABILITY_COMPATIBILITY_DEBT",
+      "baseline": 29,
+      "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。"
     },
     {
       "id": "rfc348-teaching-validator-allowlist",
@@ -386,10 +406,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1908,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-349 将数据库迁移、provider 切换与恢复控制面收为具名 operation/command；新增写入口由同一 provider admission 与 operation catalog 精确约束。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -423,7 +440,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6239,
+      "baseline": 6246,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
         "why": "RFC-349 把 SQLite-only 隐式依赖展开为 provider-neutral closed ports 与显式 composition edges；新增边逐 symbol 进入 canonical owner/consumer 投影且业务层 concrete-provider edge 已由专门守卫归零。"
@@ -447,7 +464,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6035,
+      "baseline": 6042,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
         "why": "RFC-349 one-shot provider cutover 新增少量 bootstrap 到 owner composition 的精确过渡边；每条均具名两端与清偿波次，且 provider-specific business dependency 独立守卫禁止继续扩散。"
@@ -465,20 +482,14 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 946,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-349 为数据库 provider 切换把业务访问收敛到 application-owned closed contracts；新增 public surface 是替代 concrete SQLite/PostgreSQL 依赖的显式端口，并由零 consumer 账本逐项跟踪。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
       "file": "packages/backend/tests/architecture/rfc294Canonical.ts",
       "symbol": "PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST",
       "baseline": 14,
-      "why": "RFC-294 N1：递归 public surface 仍无法在仓内解析的精确 opaque type reference；每一项必须有意保留且不得静默扩张。",
-      "allowGrowth": {
-        "why": "RFC-349 为打断 SQLite lifecycle 与 TaskExecution composition 的值环，把存量 mutation bridge 暂置于精确 public operations；其泛型返回中的 TypeScript ReturnType 是唯一新增 opaque utility，provider-specific guard 同时逐边锁住该兼容面。"
-      }
+      "why": "RFC-294 N1：递归 public surface 仍无法在仓内解析的精确 opaque type reference；每一项必须有意保留且不得静默扩张。"
     },
     {
       "id": "rfc294-governed-field-surfaces",
@@ -491,7 +502,7 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25596,
+      "baseline": 25605,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
         "why": "RFC-349 新增 SQLite/PostgreSQL infrastructure adapters、provider-neutral ports 与唯一 bootstrap composition；所有新增 symbol 均映射到既有 bounded context owner，不引入 unassigned owner。"
@@ -499,7 +510,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5f1e8cd641882bd3fe95e5411af0ae4431eee2a9ad48f659bc8f7218c1d1dc7d",
+    "sourceDigest": "sha256:968e878572ae404ee46629cee8aa34386ad5227eebdd57b9dcc671fe44f23040",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -512,8 +523,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "6a5bd9817cfd4a835293a3321caa155d65bbd3c4",
-    "contentDigest": "sha256:4057f2366a34e562bcded04a8f69e04ea1913cf24fee198fde792256269b9e15",
+    "currentSnapshotSha": "b203d75ebb53a9f4687a736ee95ad7eba13d67ad",
+    "contentDigest": "sha256:e7516d4855016be3c1e70f937255abe5ff65095795a4c6822c0517220209dd76",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

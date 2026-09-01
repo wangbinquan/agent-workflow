@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2655,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25596
+    "symbolsIncludingFileRoots": 25605
   },
   "entries": [
     {
@@ -121332,6 +121332,30 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskExecutionEffectStore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionEffectStore.ts#WorkspacePreparationRepositoryProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkspacePreparationRepositoryProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskExecutionEffectStore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionEffectStore.ts#WorkspacePreparationSettlementProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkspacePreparationSettlementProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskExecutionIntentPersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionIntentPersistence.ts#$file",
@@ -135194,6 +135218,18 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#chunksOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "chunksOf",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#CLARIFY_RERUN_CAUSES",
       "removeAfterWave": null,
       "status": "current-module",
@@ -135266,6 +135302,18 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#loadLifecycleInvariantSnapshots",
       "removeAfterWave": null,
       "status": "current-module",
@@ -135282,6 +135330,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "loadStuckTaskSnapshots",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts#rowsByTask",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "rowsByTask",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -139598,6 +139658,18 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts#chunksOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "chunksOf",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts#CLARIFY_RERUN_CAUSES",
       "removeAfterWave": null,
       "status": "current-module",
@@ -139670,6 +139742,18 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts#LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts#loadLifecycleInvariantSnapshots",
       "removeAfterWave": null,
       "status": "current-module",
@@ -139686,6 +139770,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "loadStuckTaskSnapshots",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts#rowsByTask",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "rowsByTask",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -197827,6 +197923,18 @@
       "symbol": "WorkspaceMaterializationDependencies",
       "targetContext": "source-control",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/task.ts",
+      "id": "owner:packages/backend/src/services/task.ts#WorkspacePreparationRepositoryProjection",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "WorkspacePreparationRepositoryProjection",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
     },
     {
       "currentContext": "legacy",
@@ -307824,5 +307932,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5f1e8cd641882bd3fe95e5411af0ae4431eee2a9ad48f659bc8f7218c1d1dc7d"
+  "sourceDigest": "sha256:968e878572ae404ee46629cee8aa34386ad5227eebdd57b9dcc671fe44f23040"
 }
